@@ -1376,4 +1376,99 @@ Probes added this session:
 - `examples/directory_class_lookup.rs` — tries record bodies as
   class-tag lookups; 0/131 match, confirming they're not tags.
 
+## Addendum — Q6.4 progress: directory is not a cross-stream reference (2026-04-19)
+
+Follow-on investigation to the Q6.3 refutation. Two findings tighten
+the problem space without yet resolving it.
+
+### Finding Q6.4-A: directory u16 values are NOT references into other streams
+
+Hypothesis tested: if the directory at `Global/Latest` offset 0x363
+is a reference pool indexing into another stream, the u16 body
+values should appear at higher-than-uniform-random rate in that
+target stream. (Method established by Phase D, which found class
+tags appear in `Global/Latest` at ~340× uniform rate.)
+
+Byte-level scan (probe: `examples/directory_bytewise_scan.rs`) of
+the 130 unique u16 body values against every decompressed stream:
+
+| Target stream | Hit ratio vs uniform (2024) | Hit ratio (2016) |
+|---|---|---|
+| `Global/ElemTable` | 2.2× | 3.8× |
+| `Global/ContentDocuments` | 0.0× | 0.0× |
+| `Global/DocumentIncrementTable` | 2.2× | 1.9× |
+| `Global/History` | 2.1× | 1.7× |
+| `Global/PartitionTable` | 27.3× | 30.6× |
+| `Formats/Latest` | 1.1× | 3.0× |
+| `Global/Latest` (post-directory) | 0.8× | 3.2× |
+
+All ratios are ≤5× except `Global/PartitionTable`, whose apparent
+30× is the artefact of a small sample (167 bytes, 1–2 unique hits).
+None approach Phase D's 340× threshold. **The directory is self-
+contained** — its u16 body values do not meaningfully cross-reference
+any other stream.
+
+### Finding Q6.4-B: Table B (post-directory) exists but is smaller than first estimated
+
+`examples/second_table_probe.rs` initially suggested a "Table B"
+starting around offset 0x8a1 spanning ~935 KB. With a larger
+look-ahead window (probe: `examples/table_b_structure.rs`), the
+more-rigorous measurement finds **141 sequential records totalling
+only ~1754 bytes**:
+
+| Region | Start (2024) | Records | Bytes |
+|---|---|---|---|
+| Upgrade-history UTF-16LE | 0x053 | — | 784 |
+| Table A (directory) | 0x363 | 131 | ≈1342 |
+| Table B (second directory?) | ≈0x8a1 | 141 | ≈1754 |
+| Remainder of stream | ≈0xf44 | — | ≈935 000 |
+
+Table B's record-length distribution is strongly bimodal: 134 of
+141 records are exactly 12 bytes (`[u32 id][u32 ffffffff][u32
+ffffffff]` — a "null entry" pattern common in C++ as "-1 = unset").
+The non-null exceptions are records 1 (28 bytes), 2 (70 bytes),
+and a small cluster of medium-size outliers.
+
+### Open question: what do both tables index?
+
+- Table A's values are not class tags, not ElementId references,
+  not offsets (non-monotonic, range 100–5000).
+- Table B is mostly null-stubs with a few populated entries.
+- The **~935 KB of content after Table B ends** is where the actual
+  object data must live, but neither table obviously indexes into
+  it by the usual means (byte offsets, ElementIds, hash indices).
+
+Remaining candidate interpretations:
+1. **Element-kind enumeration**. The tables list "which slots of an
+   implicit array are populated," and the body values are
+   type-discriminants or small-integer payloads, with the real
+   per-slot data stored positionally in the 935 KB region.
+2. **Serialization cursors**. Each record body is a byte-offset
+   modulo something (hash? scramble?) into the remaining region.
+   Would require a transform we haven't identified.
+3. **Per-document serial numbers**. The u16 values are internal
+   "save-cursor" IDs with no format-level meaning, present for
+   incremental-save merge logic. The 935 KB region is the actual
+   payload and its structure is read differently.
+
+Each hypothesis is falsifiable with a bounded probe. The next
+contributor to touch this area should (a) run the probes listed
+below on a non-`rac_basic_sample_family` `.rvt` to see whether
+record counts vary with document content or stay format-fixed,
+and (b) structurally scan the 935 KB post-Table-B region for
+class-tag density (Phase D method at a different offset) to find
+where the schema-driven instance data actually begins.
+
+Probes added (all under `examples/`):
+
+- `directory_vs_elemtable.rs` — cross-reference against ElemTable
+  records. Refutes "directory is ElemTable index" hypothesis.
+- `directory_bytewise_scan.rs` — byte-level scan of directory u16s
+  across every decompressed stream with expected-vs-observed
+  ratios. Basis for Finding Q6.4-A.
+- `second_table_probe.rs` — finds all sequential-id tables in
+  `Global/Latest`.
+- `table_b_structure.rs` — walks Table B with large look-ahead;
+  produces the record-length distribution for Finding Q6.4-B.
+
 **End of report.**
