@@ -82,23 +82,45 @@ pub struct FieldEntry {
 
 /// Best-effort classification of a field's type encoding (the byte block
 /// that follows a field name in `Formats/Latest`). Derived from the
-/// 2026-04-19 Phase 4c.2 sweep — see the §Q5 addendum in
-/// `docs/rvt-moat-break-reconnaissance.md` for the evidence.
+/// 2026-04-19 Phase 4c.2 sweeps (Q5 + Q5.1) — see the §Q5 / §Q5.1
+/// addenda in `docs/rvt-moat-break-reconnaissance.md` for evidence.
+///
+/// The primary discriminator is the first byte of the encoding:
+///
+/// | Byte | Semantic | Wire size |
+/// |---|---|---|
+/// | `0x01` | `bool` | 1 (padded) |
+/// | `0x02` | `u16` / `i16` | 2 |
+/// | `0x04` | `u32` / `i32` (legacy) | 4 |
+/// | `0x05` | `u32` / `i32` | 4 |
+/// | `0x06` | `f32` | 4 |
+/// | `0x07` | `f64` (double) | 8 |
+/// | `0x08` | UTF-16LE string, length-prefixed | variable |
+/// | `0x09` | `GUID` (UUID) | 16 |
+/// | `0x0b` | `u64` / `i64` | 8 |
+/// | `0x0e` | reference / pointer / container | variable (see sub-type) |
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FieldType {
-    /// `0x04` prefix. Fixed-size primitive (integer-like). The tail
-    /// bytes encode size / default / flags — not fully decoded yet.
-    Primitive { size_hint: u32 },
+    /// A fixed-size numeric or boolean primitive. `size` is the wire
+    /// size in bytes; `kind` is the type category byte (0x01, 0x02,
+    /// 0x04, 0x05, 0x06, 0x07, 0x0b).
+    Primitive { kind: u8, size: u8 },
+    /// UTF-16LE string, length-prefixed. `0x08` family.
+    String,
+    /// 16-byte GUID / UUID. `0x09` family.
+    Guid,
     /// `0x0e 0x00 0x00 0x00 0x14 0x00` — 6-byte pattern for ElementId.
     ElementId,
     /// `0x0e 0xNN 0x00 0x00` where NN ∈ {0x01, 0x02, 0x03} — a pointer
     /// or singular reference to another class instance. The low byte
     /// marks the reference-kind (e.g. pointer vs. non-owning ref).
     Pointer { kind: u8 },
-    /// `0x0e 0x10 0x00 0x00 ...` — a vector/array. Body (not fully
-    /// decoded) contains an element-count hint and a reference to
-    /// the element class's tag.
+    /// `0x0e 0x10 0x00 0x00 ...` OR `0x07 0x10 0x00 0x00 ...` — a
+    /// vector/array. Body (not fully decoded) contains an
+    /// element-count hint and a reference to the element class's tag.
     Vector {
+        /// The outer type byte — `0x0e` (refs) or `0x07` (doubles) etc.
+        kind: u8,
         /// Raw body bytes after the 4-byte header.
         body: Vec<u8>,
     },
@@ -123,56 +145,64 @@ impl FieldType {
         if bytes.is_empty() {
             return FieldType::Unknown { bytes: Vec::new() };
         }
+        let sub = if bytes.len() >= 3 {
+            u16::from_le_bytes([bytes[1], bytes[2]])
+        } else {
+            0
+        };
         match bytes[0] {
-            0x04 => {
-                // Numeric primitive. The next u32 is the size hint.
-                if bytes.len() >= 4 {
-                    let size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                    FieldType::Primitive { size_hint: size }
-                } else {
-                    FieldType::Unknown { bytes: bytes.to_vec() }
+            // Scalar primitives — 4-byte header `XX 00 00 00`
+            0x01 if sub == 0x0000 => FieldType::Primitive { kind: 0x01, size: 1 }, // bool
+            0x02 if sub == 0x0000 => FieldType::Primitive { kind: 0x02, size: 2 }, // u16
+            0x04 if sub == 0x0000 => FieldType::Primitive { kind: 0x04, size: 4 }, // legacy u32
+            0x05 if sub == 0x0000 => FieldType::Primitive { kind: 0x05, size: 4 }, // u32
+            0x06 if sub == 0x0000 => FieldType::Primitive { kind: 0x06, size: 4 }, // f32
+            0x07 if sub == 0x0000 => FieldType::Primitive { kind: 0x07, size: 8 }, // f64 / double
+            0x0b if sub == 0x0000 => FieldType::Primitive { kind: 0x0b, size: 8 }, // u64
+            // Container modifiers for a given scalar base
+            0x07 if sub == 0x0010 => FieldType::Vector {
+                kind: 0x07,
+                body: bytes[4..].to_vec(),
+            }, // vector<double>
+            0x08 if sub == 0x6000 => FieldType::String, // UTF-16LE string
+            0x09 if sub == 0x0000 => FieldType::Guid,
+            // Reference / pointer family
+            0x0e if bytes.len() >= 4 => match sub {
+                0x0000 if bytes.len() >= 6 && bytes[4] == 0x14 && bytes[5] == 0x00 => {
+                    FieldType::ElementId
                 }
-            }
-            0x0e if bytes.len() >= 4 => {
-                let sub = u16::from_le_bytes([bytes[1], bytes[2]]);
-                match sub {
-                    0x0000 if bytes.len() >= 6 && bytes[4] == 0x14 && bytes[5] == 0x00 => {
-                        FieldType::ElementId
-                    }
-                    0x0001 | 0x0002 | 0x0003 => FieldType::Pointer { kind: bytes[1] },
-                    0x0010 => FieldType::Vector {
-                        body: bytes[4..].to_vec(),
-                    },
-                    0x0050 => {
-                        // Extract any embedded ASCII C++ signature
-                        let body = &bytes[4..];
-                        let mut cpp_signature = None;
-                        let mut k = 0;
-                        while k + 2 < body.len() {
-                            let slen = u16::from_le_bytes([body[k], body[k + 1]]) as usize;
-                            if (3..=120).contains(&slen) && k + 2 + slen <= body.len() {
-                                let sig = &body[k + 2..k + 2 + slen];
-                                if sig.iter().all(|b| b.is_ascii_graphic() || *b == b' ')
-                                    && sig.iter().any(|b| *b == b':' || *b == b'<')
-                                {
-                                    cpp_signature = Some(
-                                        std::str::from_utf8(sig).unwrap_or("").to_string(),
-                                    );
-                                    break;
-                                }
-                            }
-                            k += 1;
-                        }
-                        FieldType::Container {
-                            cpp_signature,
-                            body: bytes[4..].to_vec(),
-                        }
-                    }
-                    _ => FieldType::Unknown { bytes: bytes.to_vec() },
-                }
-            }
+                0x0001 | 0x0002 | 0x0003 => FieldType::Pointer { kind: bytes[1] },
+                0x0010 | 0x0011 => FieldType::Vector {
+                    kind: 0x0e,
+                    body: bytes[4..].to_vec(),
+                },
+                0x0050 | 0x0051 => extract_container(&bytes[4..]),
+                _ => FieldType::Unknown { bytes: bytes.to_vec() },
+            },
             _ => FieldType::Unknown { bytes: bytes.to_vec() },
         }
+    }
+}
+
+fn extract_container(body: &[u8]) -> FieldType {
+    let mut cpp_signature = None;
+    let mut k = 0;
+    while k + 2 < body.len() {
+        let slen = u16::from_le_bytes([body[k], body[k + 1]]) as usize;
+        if (3..=120).contains(&slen) && k + 2 + slen <= body.len() {
+            let sig = &body[k + 2..k + 2 + slen];
+            if sig.iter().all(|b| b.is_ascii_graphic() || *b == b' ')
+                && sig.iter().any(|b| *b == b':' || *b == b'<')
+            {
+                cpp_signature = Some(std::str::from_utf8(sig).unwrap_or("").to_string());
+                break;
+            }
+        }
+        k += 1;
+    }
+    FieldType::Container {
+        cpp_signature,
+        body: body.to_vec(),
     }
 }
 
@@ -611,11 +641,46 @@ mod tests {
     }
 
     #[test]
-    fn decodes_field_type_primitive() {
-        // 4-byte pattern for int-like primitive: 04 00 00 00
-        let bytes = [0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    fn decodes_field_type_primitive_u32_legacy() {
+        // Legacy 0x04 pattern (pre-2021 u32 discriminator)
+        let bytes = [0x04, 0x00, 0x00, 0x00];
         let ft = FieldType::decode(&bytes);
-        assert!(matches!(ft, FieldType::Primitive { size_hint: 4 }));
+        assert!(matches!(ft, FieldType::Primitive { kind: 0x04, size: 4 }));
+    }
+
+    #[test]
+    fn decodes_field_type_primitive_bool() {
+        let bytes = [0x01, 0x00, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(ft, FieldType::Primitive { kind: 0x01, size: 1 }));
+    }
+
+    #[test]
+    fn decodes_field_type_primitive_f64() {
+        let bytes = [0x07, 0x00, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(ft, FieldType::Primitive { kind: 0x07, size: 8 }));
+    }
+
+    #[test]
+    fn decodes_field_type_string() {
+        let bytes = [0x08, 0x00, 0x60, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(ft, FieldType::String));
+    }
+
+    #[test]
+    fn decodes_field_type_guid() {
+        let bytes = [0x09, 0x00, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(ft, FieldType::Guid));
+    }
+
+    #[test]
+    fn decodes_field_type_u64() {
+        let bytes = [0x0b, 0x00, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(ft, FieldType::Primitive { kind: 0x0b, size: 8 }));
     }
 
     #[test]
