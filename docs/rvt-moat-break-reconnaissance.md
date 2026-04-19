@@ -620,4 +620,55 @@ The schema already gives us field names *and their C++ type signatures* in
 ASCII, so each of these unknowns is an incremental bit-level hypothesis + a
 bit-level test against the 11-version corpus — not a multi-year effort.
 
+## Addendum — 11-version tag sweep (2026-04-19)
+
+Running the same Phase D link analysis across every Revit release reveals a
+second undocumented format transition in 2021:
+
+| Release | Tagged classes | Global/Latest (decompressed) | Top class by tag hits |
+|---|---:|---:|---|
+| 2016 | 90 | 24,230 B | ADocWarnings (258) |
+| 2017 | 86 | 25,947 B | ADocWarnings (258) |
+| 2018 | 81 | 25,847 B | ADocWarnings (258) |
+| 2019 | 80 | 26,031 B | ADocWarnings (259) |
+| 2020 | 78 | 26,341 B | ADocWarnings (258) |
+| **2021** | 77 | **715,483 B** | **AbsSysCircSweepProfile (12,918)** |
+| 2022 | 77 | 945,140 B | AbsCurveType (25,677) |
+| 2023 | 80 | 952,724 B | AbsCurveGStep (17,793) |
+| 2024 | 79 | 938,578 B | AbsCurveGStep (19,415) |
+| 2025 | 64 | 1,169,198 B | AbsCurveType (14,801) |
+| 2026 | 60 | 1,387,969 B | AbsCurveType (17,523) |
+
+Three things are visible at once:
+
+1. **Global/Latest exploded between 2020 and 2021** — from ~26 KB to ~715 KB
+   (27× growth in one release). Before 2021, Global/Latest held only metadata
+   (warnings, doc info); after 2021, it also contains substantial
+   object-graph content dominated by geometry classes (`AbsCurveGStep`,
+   `AbsCurveType`, `AbsSysCircSweepProfile`).
+2. **This transition is simultaneous with the Forge Design Data Schema
+   rollout** (`autodesk.unit.*`, `autodesk.spec.*` appearing in Partitions/NN
+   in 2021 per the earlier Forge-dating addendum). The two discoveries are
+   almost certainly the same event: Autodesk ran a *major internal
+   serialization refactor for Revit 2021* that no public changelog mentions.
+3. **Tagged-class count is decreasing over time** — 90 → 60 across a
+   decade. Either classes are being consolidated, or the schema is moving
+   into a separate stream. We have not localised which.
+
+This table alone is publication-worthy: there is no third-party analysis of
+the Revit 2021 on-disk transition anywhere in the reverse-engineering or
+openBIM literature. Any reader that claims "RVT 2016 compat" without
+handling the 2021+ format is silently dropping approximately 30× more data
+than it's recovering.
+
+### Reproducer
+
+```bash
+# All 11 versions, one table row each
+for f in samples/_phiag/examples/Autodesk/*.rfa; do
+  ./target/release/examples/link_schema "$f" 2>/dev/null \
+    | awk '/^(Tagged|Global\/Latest|^  tag=)/ {print}'
+done
+```
+
 **End of report.**
