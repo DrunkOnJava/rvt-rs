@@ -28,6 +28,10 @@ path = "src/bin/rvt_info.rs"
 name = "rvt-diff"
 path = "src/bin/rvt_diff.rs"
 
+[[bin]]
+name = "rvt-corpus"
+path = "src/bin/rvt_corpus.rs"
+
 [lib]
 name = "rvt"
 path = "src/lib.rs"

@@ -30,6 +30,7 @@
 pub mod basic_file_info;
 pub mod class_index;
 pub mod compression;
+pub mod corpus;
 pub mod error;
 pub mod part_atom;
 pub mod reader;
