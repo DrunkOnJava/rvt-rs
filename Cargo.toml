@@ -44,6 +44,10 @@ path = "src/bin/rvt_history.rs"
 name = "rvt-dump"
 path = "src/bin/rvt_dump.rs"
 
+[[bin]]
+name = "rvt-analyze"
+path = "src/bin/rvt_analyze.rs"
+
 [lib]
 name = "rvt"
 path = "src/lib.rs"

@@ -1,0 +1,489 @@
+{
+  "identity": {
+    "file_path": "../../samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa",
+    "file_size_bytes": 397312,
+    "revit_version": 2024,
+    "build_tag": null,
+    "creator_path": "C:\\Users\\<redacted>\\Desktop\\Revit - <redacted project id>\\2024\\racbasicsamplefamily.rfa",
+    "file_guid": null,
+    "locale": null,
+    "format_version_counter": 3052,
+    "partition_stream": "Partitions/67"
+  },
+  "history": [
+    "Revit 2018 - Preview Pre-Release 2018 (2018.000) : 20170106_1515(x64)",
+    "Revit 2019 2019 (2019.000) : 20180123_1515(x64)",
+    "Revit 2020 2020 (2020.000) : 20190207_1515(x64)",
+    "Revit 2021 2021 (2021.000) : 20200131_1515(x64)E",
+    "Revit 2022 - Preview Pre-Release 2022 (2022.000) : 20210129_1515(x64)",
+    "Revit 2023 2023 (2023.000) : 20220401_1515(x64)",
+    "Revit 2024 2024 (2024.000) : 20230308_1635(x64)￿￿׵",
+    "Revit Default DB Server"
+  ],
+  "format_anchors": {
+    "partition_table_bytes": 167,
+    "partition_table_invariant_bytes": 165,
+    "format_identifier_guid": "3529342d-e51e-11d4-92d8-0000863f27ad",
+    "partition_description": "Family  : Section Heads : Section Tail - Upgrade\u0001",
+    "contents_wrapper_magic": "62 19 22 05"
+  },
+  "schema": {
+    "total_class_candidates": 398,
+    "tagged_class_count": 79,
+    "sample_tagged_classes": [
+      {
+        "name": "A3PartyAImage",
+        "tag": 13
+      },
+      {
+        "name": "ADTGridImportVocabulary",
+        "tag": 18
+      },
+      {
+        "name": "ADocWarnings",
+        "tag": 27
+      },
+      {
+        "name": "APIVSTAMacroElem",
+        "tag": 37
+      },
+      {
+        "name": "APIVSTAMacroElemTracking",
+        "tag": 40
+      },
+      {
+        "name": "AProperties",
+        "tag": 42
+      },
+      {
+        "name": "ATFProvenanceBaseCell",
+        "tag": 70
+      },
+      {
+        "name": "Cell",
+        "tag": 71
+      },
+      {
+        "name": "ATFRevitObjectStylesOverride",
+        "tag": 76
+      },
+      {
+        "name": "AbsCurveDriver",
+        "tag": 88
+      },
+      {
+        "name": "AbsCurveGStep",
+        "tag": 97
+      },
+      {
+        "name": "GeomStep",
+        "tag": 98
+      },
+      {
+        "name": "AbsCurveType",
+        "tag": 106
+      },
+      {
+        "name": "HostObjAttr",
+        "tag": 107
+      },
+      {
+        "name": "AbsDbViewPressureLossReport",
+        "tag": 109
+      },
+      {
+        "name": "AbsSysCircSweepProfile",
+        "tag": 126
+      },
+      {
+        "name": "AdaptiveCurveElementData",
+        "tag": 136
+      },
+      {
+        "name": "AdaptiveCurveGeomData",
+        "tag": 138
+      },
+      {
+        "name": "AdaptiveInstanceCSysPointRef",
+        "tag": 140
+      },
+      {
+        "name": "Alignment",
+        "tag": 159
+      },
+      {
+        "name": "LinearConstraint",
+        "tag": 160
+      },
+      {
+        "name": "DimWithSegRefs",
+        "tag": 161
+      },
+      {
+        "name": "AlignmentStationLabelState",
+        "tag": 171
+      },
+      {
+        "name": "AlignmentStationLabelType",
+        "tag": 174
+      },
+      {
+        "name": "SpotElevationStyle",
+        "tag": 175
+      },
+      {
+        "name": "AllPlanTopologies",
+        "tag": 179
+      },
+      {
+        "name": "AllScheduleInstanceRegenData",
+        "tag": 193
+      },
+      {
+        "name": "AllowGStyleDrawFilter",
+        "tag": 197
+      },
+      {
+        "name": "AlphanumericRevisionSettings",
+        "tag": 199
+      },
+      {
+        "name": "AnalyticalBeamSlabWarning",
+        "tag": 220
+      },
+      {
+        "name": "AnalyticalBusData",
+        "tag": 222
+      },
+      {
+        "name": "AnalyticalSingleVoltagePropertyData",
+        "tag": 223
+      },
+      {
+        "name": "AnalyticalCurveCell",
+        "tag": 235
+      },
+      {
+        "name": "AnalyticalCurveConnectorPosition",
+        "tag": 237
+      },
+      {
+        "name": "ConnectorPositionModifier",
+        "tag": 238
+      },
+      {
+        "name": "AnalyticalCurvedPanel",
+        "tag": 240
+      },
+      {
+        "name": "AnalyticalPanel",
+        "tag": 241
+      },
+      {
+        "name": "AnalyticalSurfaceBase",
+        "tag": 242
+      },
+      {
+        "name": "AnalyticalEndConnectorConstraint",
+        "tag": 250
+      },
+      {
+        "name": "AnalyticalLevelAssociationCell",
+        "tag": 256
+      },
+      {
+        "name": "AnalyticalLineAutoConnectData",
+        "tag": 258
+      },
+      {
+        "name": "AnalyticalLinkElemTypeInfo",
+        "tag": 261
+      },
+      {
+        "name": "AnalyticalLoadCaseParamElem",
+        "tag": 272
+      },
+      {
+        "name": "AnalyticalMemberMoveAlongMultiDirControl",
+        "tag": 286
+      },
+      {
+        "name": "MoveAlongMultiDirControl",
+        "tag": 287
+      },
+      {
+        "name": "AnalyticalModelBeam",
+        "tag": 292
+      },
+      {
+        "name": "AnalyticalModelStick",
+        "tag": 293
+      },
+      {
+        "name": "AnalyticalModelFamilyInstance",
+        "tag": 294
+      },
+      {
+        "name": "AnalyticalModelEditModeMgr",
+        "tag": 299
+      },
+      {
+        "name": "AnalyticalModelFamilyInstanceMoveAlongMultiDirControl",
+        "tag": 301
+      },
+      {
+        "name": "AnalyticalModelSlab",
+        "tag": 306
+      },
+      {
+        "name": "AnalyticalNodeCell",
+        "tag": 312
+      },
+      {
+        "name": "AnalyticalOpeningNodeConnectorConstraint",
+        "tag": 322
+      },
+      {
+        "name": "AnalyticalOpeningNodeConnectorPosition",
+        "tag": 324
+      },
+      {
+        "name": "AnalyticalPanelPatternHelper",
+        "tag": 329
+      },
+      {
+        "name": "AnalyticalParamDefAlignmentMethod",
+        "tag": 333
+      },
+      {
+        "name": "ParamDefCombo",
+        "tag": 334
+      },
+      {
+        "name": "AnalyticalReferencePointGridNetTrackerCell",
+        "tag": 339
+      },
+      {
+        "name": "ReferencePointGridNetTrackerCell",
+        "tag": 340
+      },
+      {
+        "name": "AnalyticalSlabAdjustmentGStep",
+        "tag": 350
+      },
+      {
+        "name": "AnalyticalSupportCurve",
+        "tag": 353
+      },
+      {
+        "name": "AppearanceAsset",
+        "tag": 391
+      },
+      {
+        "name": "AppearanceAssetElemGroupHelper",
+        "tag": 397
+      },
+      {
+        "name": "AppearanceAssetTable",
+        "tag": 399
+      },
+      {
+        "name": "ArcAlignment",
+        "tag": 403
+      },
+      {
+        "name": "ArcRef",
+        "tag": 408
+      },
+      {
+        "name": "CurveSegInPlaneRef",
+        "tag": 409
+      },
+      {
+        "name": "ArcWall",
+        "tag": 412
+      },
+      {
+        "name": "VWall",
+        "tag": 413
+      },
+      {
+        "name": "ArcWallCGDriver",
+        "tag": 417
+      },
+      {
+        "name": "WallCGDriver",
+        "tag": 418
+      },
+      {
+        "name": "ArcWallRectOpening",
+        "tag": 423
+      },
+      {
+        "name": "VWallRectOpening",
+        "tag": 424
+      },
+      {
+        "name": "ArcWallRectOpeningGStep",
+        "tag": 426
+      },
+      {
+        "name": "AreaBasedLoadData",
+        "tag": 431
+      },
+      {
+        "name": "AreaLoad",
+        "tag": 433
+      },
+      {
+        "name": "LoadBase",
+        "tag": 434
+      },
+      {
+        "name": "AreaLoadType",
+        "tag": 438
+      },
+      {
+        "name": "AreaMeasureCurveData",
+        "tag": 440
+      }
+    ]
+  },
+  "link": {
+    "global_latest_bytes": 938578,
+    "total_tag_hits": 37197,
+    "expected_if_uniform_per_tag": 57.28619384765625,
+    "top_classes": [
+      {
+        "name": "AbsCurveGStep",
+        "tag": 97,
+        "hits": 19415,
+        "ratio_vs_uniform": 338.91237479716636
+      },
+      {
+        "name": "HostObjAttr",
+        "tag": 107,
+        "hits": 6599,
+        "ratio_vs_uniform": 115.19354938380123
+      },
+      {
+        "name": "AbsDbViewPressureLossReport",
+        "tag": 109,
+        "hits": 5444,
+        "ratio_vs_uniform": 95.0316234043664
+      },
+      {
+        "name": "GeomStep",
+        "tag": 98,
+        "hits": 2274,
+        "ratio_vs_uniform": 39.695428291978175
+      },
+      {
+        "name": "AnalyticalLevelAssociationCell",
+        "tag": 256,
+        "hits": 1245,
+        "ratio_vs_uniform": 21.732985146663513
+      },
+      {
+        "name": "ATFProvenanceBaseCell",
+        "tag": 70,
+        "hits": 1119,
+        "ratio_vs_uniform": 19.53350231254335
+      },
+      {
+        "name": "ADocWarnings",
+        "tag": 27,
+        "hits": 261,
+        "ratio_vs_uniform": 4.5560715849631945
+      },
+      {
+        "name": "ATFRevitObjectStylesOverride",
+        "tag": 76,
+        "hits": 154,
+        "ratio_vs_uniform": 2.6882567972579765
+      },
+      {
+        "name": "APIVSTAMacroElemTracking",
+        "tag": 40,
+        "hits": 113,
+        "ratio_vs_uniform": 1.9725520655204634
+      },
+      {
+        "name": "Cell",
+        "tag": 71,
+        "hits": 111,
+        "ratio_vs_uniform": 1.937639639582048
+      },
+      {
+        "name": "AbsCurveType",
+        "tag": 106,
+        "hits": 86,
+        "ratio_vs_uniform": 1.501234315351857
+      },
+      {
+        "name": "APIVSTAMacroElem",
+        "tag": 37,
+        "hits": 76,
+        "ratio_vs_uniform": 1.3266721856597807
+      },
+      {
+        "name": "AProperties",
+        "tag": 42,
+        "hits": 43,
+        "ratio_vs_uniform": 0.7506171576759285
+      },
+      {
+        "name": "AllPlanTopologies",
+        "tag": 179,
+        "hits": 37,
+        "ratio_vs_uniform": 0.6458798798606827
+      },
+      {
+        "name": "AnalyticalModelSlab",
+        "tag": 306,
+        "hits": 16,
+        "ratio_vs_uniform": 0.27929940750732224
+      }
+    ]
+  },
+  "content_metadata": {
+    "global_latest_string_records": 1215,
+    "partitions_nn_string_records": 3746,
+    "autodesk_units": 55,
+    "autodesk_specs": 40,
+    "autodesk_parameter_groups": 43,
+    "uniformat_codes": 1928,
+    "omniclass_codes": 3,
+    "revit_categories_misc": 1367,
+    "example_uniformat": [
+      "A1010",
+      "A1020",
+      "A1030",
+      "A2010",
+      "A2020",
+      "A1010100"
+    ],
+    "example_categories": [
+      "C:\\Users\\<redacted>\\<redacted autodesk internal path>",
+      "ModelIdentity",
+      "Path",
+      "PathType",
+      "1/6/2018 8:30:36 PM",
+      "C:\\ProgramData\\Autodesk\\RVT 2024\\Libraries\\English-Imperial\\US\\UniformatClassifications.txt",
+      "ModelIdentity",
+      "Path",
+      "PathType",
+      "12/15/2022 4:37:56 PM"
+    ]
+  },
+  "disclosures": {
+    "creator_paths": [
+      "<redacted path>"
+    ],
+    "embedded_personal_names": [
+      "<redacted>"
+    ],
+    "autodesk_internal_paths": [],
+    "build_server_paths": []
+  }
+}

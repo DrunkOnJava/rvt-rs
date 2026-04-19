@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn extracts_version_2024_pattern() {
-        let text = "2024  20230308_1635(x64)Z C:\\Users\\<redacted>\\Desktop\\racbasicsamplefamily.rfa";
+        let text = "2024  20230308_1635(x64)Z C:\\Users\\testuser\\Desktop\\racbasicsamplefamily.rfa";
         let v = extract_version(text).unwrap();
         assert_eq!(v, 2024);
     }
