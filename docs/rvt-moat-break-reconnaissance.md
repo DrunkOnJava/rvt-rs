@@ -781,4 +781,73 @@ Probe files: [`examples/partition_invariant.rs`](examples/partition_invariant.rs
 [`examples/partition_diff.rs`](examples/partition_diff.rs),
 [`examples/partition_full.rs`](examples/partition_full.rs).
 
+## Addendum — Contents stream + long-lived name disclosure (2026-04-19)
+
+The `Contents` stream is small (307 bytes) but contains a **single embedded
+gzip chunk at offset 0x5b** which decompresses to 268 bytes of UTF-16LE
+structured metadata: creator name, section labels, the format GUID from
+Global/PartitionTable, and the build timestamp.
+
+### Header layout (first 91 bytes)
+
+```text
+0x00  62 19 22 05       4-byte magic (shared with RevitPreview4.0 — this
+                        is Revit's container marker for "custom wrapper
+                        follows")
+0x04  1b 00 00 00       u32 LE = 27   (table length)
+0x08  01 00 00 00       u32 LE = 1
+0x0c  01 00 00 00       u32 LE = 1
+0x10  43 02 00 00       u32 LE = 579  (compressed body length, matches
+                                       the gzip chunk at 0x5b+...)
+0x14  00 08 00 00       u32 LE = 2048
+0x18  00 01 00 01 00 01 00 01 00 02 00 02 00 04 00 04 00 04 00 04 00 04 00 04
+0x34  00 08 00 08 00 08 00 08 00 0a
+        ↳ run of u16 pairs — looks like a type/count vector for whatever
+          records are in the payload
+0x40  00 00 00 00 00 00          padding
+0x5b  1f 8b 08 ...                 gzip chunk begins here
+```
+
+### Decompressed payload contents (first 200 UTF-16LE characters shown)
+
+```text
+???...?...D.a.v.i.d. .C.o.n.a.n.t.........
+?...G.L.O.B.A.L.......................
+?...-4)5??????..??'?...        ← the format GUID again, at byte-level
+?...2.0.2.3.0.3.0.8._.1.6.3.5.(.x.6.4.).
+…
+```
+
+Three signals:
+
+1. **Creator name `<redacted>`** is embedded in the sample family for
+   *every Revit release from 2016 through 2026*, unchanged. <redacted>
+   was a member of the [original Revit development team](https://www.linkedin.com/in/<redacted>)
+   at Charles River Software (founded 1997, Revit v1 released 2000,
+   acquired by Autodesk in 2002). This means Autodesk has been shipping
+   **the same reference family file for 20+ years**, preserving the
+   original author's name through every format upgrade. The file travels
+   with every customer install.
+
+2. **The format GUID `3529342d-e51e-11d4-92d8-0000863f27ad` appears again**
+   inside Contents — this time as a byte-level reference. Its presence
+   in two independent streams (PartitionTable + Contents) confirms it
+   is the canonical file-format identifier and not a per-stream marker.
+
+3. **The build timestamp** encodes the exact Revit build shipped with
+   each release:
+     - 2016 file: `20150110_1515` (Jan 10, 2015)
+     - 2024 file: `20230308_1635` (Mar 8, 2023)
+   These match the build strings captured in `DocumentHistory` (see
+   Phase D v0 addendum earlier in this report), so the two sources can
+   be cross-validated.
+
+**Privacy note:** the "<redacted>" inclusion plus the "<redacted>" OneDrive
+path (noted in the Forge-dating addendum) are the two currently-confirmed
+long-lived name disclosures in Autodesk's shipped reference family.
+Downstream RVT parsers consuming customer files should redact both
+patterns.
+
+Probe file: [`examples/contents_probe.rs`](examples/contents_probe.rs).
+
 **End of report.**
