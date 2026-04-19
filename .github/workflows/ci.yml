@@ -45,6 +45,15 @@ jobs:
             rust: "1.85"  # MSRV (Rust 2024 edition minimum)
     steps:
       - uses: actions/checkout@v4
+      # Fetch the Autodesk-owned `rac_basic_sample_family` corpus from
+      # phi-ag/rvt. rvt-rs intentionally does not redistribute these
+      # files (see SECURITY.md §Scope); they're pulled at build time.
+      - name: Fetch phi-ag/rvt sample corpus
+        uses: actions/checkout@v4
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
+          lfs: true
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
@@ -55,10 +64,20 @@ jobs:
         run: cargo test --release --lib --bins
       - name: Doc tests
         run: cargo test --release --doc
-      # Integration tests require the phi-ag/rvt sample corpus via LFS,
-      # which we don't auto-fetch in CI to keep runs fast. The unit
-      # tests + doctests cover the library surface; the integration
-      # suite is run locally before release via tests/samples.rs.
+      # Regression-proof the Q5.2 100%-classification claim. Fails if
+      # any field in any release decodes to FieldType::Unknown, or if
+      # any expected corpus file is missing (guarantees non-vacuous
+      # coverage).
+      - name: Coverage gate — 100% field-type classification
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+        run: cargo test --release --test field_type_coverage -- --nocapture
+      # Broader integration suite (round-trips, part-atom parsing, history
+      # extraction, etc.) also runs against the corpus.
+      - name: Integration tests
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+        run: cargo test --release --test samples
 
   doc:
     name: cargo doc

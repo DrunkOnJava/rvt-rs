@@ -4,9 +4,17 @@ All notable changes will be documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [semver](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] — 2026-04-19
 
 ### Added
+- **CI-enforced 100% schema-field classification.** New integration
+  test `tests/field_type_coverage.rs` opens every file in the 11-version
+  `rac_basic_sample_family` corpus, parses the schema, and asserts zero
+  fields decode to `FieldType::Unknown`. Fails if any release regresses
+  or if the corpus is incomplete — no silent-skip. CI job fetches the
+  corpus from [phi-ag/rvt](https://github.com/phi-ag/rvt) at build time
+  via `actions/checkout@v4` with LFS (rvt-rs does not redistribute the
+  Autodesk-owned sample files; see SECURITY.md).
 - `FieldType` enum with 8 variants (`Primitive`, `String`, `Guid`,
   `ElementId`, `ElementIdRef`, `Pointer`, `Vector`, `Container`) —
   classifies **100.00% of all 13,570 schema fields** across the 11-version
@@ -83,11 +91,48 @@ All notable changes will be documented here. This project follows
 - **Q6.1**: Instance data is **schema-directed** (tag-less, protobuf-
   style). Decoding requires schema-first sequential walk from a known
   entry point.
-- **Q6.2**: Entry point located at offset `0x363` in the 2024 sample
-  (right after the document-upgrade-history UTF-16LE block).
+- **Q6.2**: Initial hypothesis — entry point located at offset `0x363`
+  in the 2024 sample (right after the document-upgrade-history
+  UTF-16LE block). Confidence 0.6. **Refuted by Q6.3.**
+- **Q6.3 CORRECTION**: The Q6.2 entry-point hypothesis is refuted by
+  rigorous validation against the 11-version corpus. The bytes at the
+  post-history boundary are NOT ADocument's 13-field instance — they
+  are a multi-table directory / reference-pool with ~131 sequentially
+  numbered records per release (stable count across all 11 years,
+  unchanged from the 13 that would be expected if this were
+  ADocument). Body-size does not correlate with FieldType; body u16
+  values do not resolve to schema class tags (0/131 hit). ADocument's
+  actual location in `Global/Latest` (or another stream) is not yet
+  known — decoding the directory table format is the next open
+  research question (Q6.4+). Probes: `examples/adocument_walk.rs`,
+  `examples/post_directory.rs`, `examples/directory_class_lookup.rs`.
+  See `docs/rvt-moat-break-reconnaissance.md` §Q6.3 for full evidence.
 - **Q7**: `Partitions/NN` trailer u32 fields are **not** per-chunk
   offsets. Gzip-magic scan remains correct.
 
-## [0.1.0] — not yet released
+## [0.1.0] — 2026-04-19
 
 Initial public release.
+
+- OLE2/MS-CFB container reader (via `cfb`) — Layer 1.
+- Truncated-gzip decompression (via `flate2`) — Layer 2.
+- Per-stream framing for `Formats/Latest`, `Global/Latest`,
+  `Global/ElemTable`, `Partitions/NN`, `Contents`, `PartitionTable`,
+  `RevitPreview4.0` — Layer 3.
+- Schema table parser: class names + fields + tags + parent classes
+  + declared field counts + cross-release tag-drift map — Layer 4a.
+- Phase D moat proof: class tags from `Formats/Latest` occur in
+  `Global/Latest` at ~340× uniform-random rate — Layer 4b.
+- `FieldType` enum with 7 initial variants (Primitive, ElementId,
+  Pointer, Vector, Container, String, Guid). **84% field-type
+  classification** on a typical Revit 2024 sample family — Layer 4c.
+- Stream-level modifying writer (`write_with_patches`) with
+  byte-preserving round-trips verified on all 13 streams — Layer 6.
+- Seven shipped CLIs: `rvt-analyze`, `rvt-info`, `rvt-schema`,
+  `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`.
+- Full PII-redaction (`--redact`) across every CLI.
+- First publicly-documented Revit format-identifier GUID
+  (`3529342d-e51e-11d4-92d8-0000863f27ad`), stable across every
+  Revit release 2016–2026.
+- First public RVT tag-drift table: 122 classes × 11 releases CSV
+  plus SVG heatmap.

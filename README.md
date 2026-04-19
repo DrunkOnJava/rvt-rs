@@ -1,13 +1,15 @@
 # rvt-rs
 
-**Open reader for Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) — no Autodesk software required.**
+**The first complete, open documentation and tooling for the Autodesk Revit on-disk format — 395 classes, 13,570 fields, 100% type classification across Revit 2016–2026.** No Autodesk software required.
 
-Apache-2.0 licensed. Rust 2024 edition (MSRV 1.85). Verified against 11 Revit releases (2016-2026) with cross-checks against the public `RevitAPI.dll` NuGet package's exported symbol list. **43 unit tests + 8 integration tests pass on the full 11-version corpus.** Seven CLIs ship in the box (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`), plus 23 reproducible probes under `examples/` that back every claim in this README.
+Apache-2.0 licensed. Rust 2024 edition (MSRV 1.85). Reads `.rvt`, `.rfa`, `.rte`, `.rft` directly from bytes — zero API calls, zero cloud, zero Revit install. Seven CLIs ship (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`) plus 23+ reproducible probes under `examples/` that back every claim in this README. **71 tests pass** (57 unit + 9 integration + 5 doctest), including a **CI-enforced regression gate** that fails if any field in any of the 11 corpus files decodes to `FieldType::Unknown`.
+
+**Schema-directed instance extraction is an active research frontier.** The Q6.2 entry-point hypothesis (that the post-history bytes in `Global/Latest` are ADocument's 13-field instance) was refuted by the Q6.3 validation walk — see [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md) §Q6 for the current state, including the documented correction and the open directory-table decoding question. The full type dictionary (Layer 4c) is complete and regression-proofed; the instance walker (Layer 5) is where collaborative contributions are most welcome.
 
 ### TL;DR — what's in the box
 
-- **No Autodesk dependency.** Reads .rvt / .rfa / .rte / .rft directly from bytes. Zero API calls, zero cloud, zero Revit install.
-- **Every Revit release 2016-2026.** 11-year corpus in CI; integration tests run on each.
+- **No Autodesk dependency.** Reads .rvt / .rfa / .rte / .rft directly from bytes.
+- **Every Revit release 2016–2026.** 11-year corpus fetched from [`phi-ag/rvt`](https://github.com/phi-ag/rvt) at build time; CI enforces 100% schema-field classification across every release.
 - **Phase D moat proved:** class tags from `Formats/Latest` occur in `Global/Latest` at **~340× uniform-random rate** (`AbsCurveGStep` = 19,415 hits in 938 KB). Schema IS the live type dictionary.
 - **First public RVT tag-drift table** — 122 classes × 11 releases, CSV + SVG heatmap.
 - **First publicly-documented Revit format-identifier GUID** — `3529342d-e51e-11d4-92d8-0000863f27ad`, stable in 98.8% of `Global/PartitionTable` bytes since 2000.
@@ -15,13 +17,13 @@ Apache-2.0 licensed. Rust 2024 edition (MSRV 1.85). Verified against 11 Revit re
 - **Byte-preserving round-trip writer works today** — 13/13 streams identical after read-modify-write.
 - **Hands-clean by default.** Every CLI has `--redact` that scrubs usernames, Autodesk-internal paths, and project IDs while preserving path shape so claims remain verifiable. Committed demo output is pre-scrubbed.
 - **Fast.** `rvt-analyze` produces the full forensic report in **27 ms** on a 400 KB RFA (20 ms/file over the 11-version corpus). Full benchmark table: [`docs/benchmarks.md`](docs/benchmarks.md).
-- **Modifying writer works.** `writer::write_with_patches` reads a file, patches any stream's decompressed bytes, re-compresses with truncated-gzip, and writes a new file. Unpatched streams remain byte-identical; patched bytes survive round-trip. Field-level patching is gated on the remaining Layer 4c.2 work but stream-level already unblocks a range of tools.
+- **Modifying writer works.** `writer::write_with_patches` reads a file, patches any stream's decompressed bytes, re-compresses with truncated-gzip, and writes a new file. Stream-level patching is end-to-end; field-level patching is unblocked by Q5.2's 100% type coverage and ready for implementation.
 
 ## Why this exists — the openBIM gap
 
 For over a decade the openBIM community — anchored by [buildingSMART International](https://www.buildingsmart.org/) and the IFC standard — has worked to break Autodesk's Revit lock-in. The official answer, Autodesk's [revit-ifc](https://github.com/Autodesk/revit-ifc) exporter, runs **inside** Revit using the Revit API, so it can only emit what the API chooses to expose. That's why real-world IFC exports from Revit are described, routinely and publicly, as *"very limited"* (thinkmoult.com), *"data loss"* (Reddit r/bim), and *"out of the box, just crap"* (the [OSArch Wiki's guide to Revit for openBIM](https://wiki.osarch.org/index.php?title=Revit_setup_for_OpenBIM)). BIM coordinators have spent years working around lossy IFC exports — private families, complex assemblies, proprietary parameter types, and internal geometric relationships are all dropped by the API-surface exporter.
 
-`rvt-rs` reads the actual on-disk RVT bytes. That is a *strict superset* of what Revit's API exposes. An rvt-rs → IFC pipeline built on top of it (exporter scaffolded in [`src/ifc/`](src/ifc/); full emission gated on Layer 4c completion) is the full-fidelity path to IFC that the openBIM movement has been waiting for — and a natural partner for [IfcOpenShell](https://ifcopenshell.org/), [BIMvision](https://bimvision.eu/), and anyone participating in buildingSMART's annual openBIM Hackathon.
+`rvt-rs` reads the actual on-disk RVT bytes. That is a *strict superset* of what Revit's API exposes. An rvt-rs → IFC pipeline built on top of it (exporter scaffolded in [`src/ifc/`](src/ifc/); full emission is the natural next milestone now that the schema is fully typed) is the full-fidelity path to IFC that the openBIM movement has been waiting for — and a natural partner for [IfcOpenShell](https://ifcopenshell.org/), [BIMvision](https://bimvision.eu/), and anyone participating in buildingSMART's annual openBIM Hackathon.
 
 ## Quick demo
 
