@@ -10,7 +10,7 @@
 //! ADocument entry offset in the 2016–2023 samples where the
 //! heuristic-based detector fails.
 
-#![allow(clippy::needless_range_loop)]
+#![allow(clippy::needless_range_loop, clippy::type_complexity)]
 
 use rvt::{RevitFile, compression, formats, streams};
 
