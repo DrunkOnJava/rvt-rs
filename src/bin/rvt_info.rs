@@ -30,6 +30,12 @@ struct Cli {
     /// Extract the PNG preview thumbnail to this path.
     #[arg(long = "extract-preview")]
     extract_preview: Option<PathBuf>,
+
+    /// Redact PII — Windows usernames, Autodesk-internal paths, and
+    /// project-ID folder names — before rendering. Safe default for
+    /// sharing output publicly.
+    #[arg(long)]
+    redact: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -51,7 +57,10 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> anyhow::Result<()> {
     let mut rf = RevitFile::open(&cli.file)?;
-    let summary = rf.summarize()?;
+    let mut summary = rf.summarize()?;
+    if cli.redact {
+        redact_summary(&mut summary);
+    }
 
     if let Some(preview_path) = &cli.extract_preview {
         let png = rf.preview_png()?;
@@ -76,6 +85,12 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn redact_summary(s: &mut rvt::reader::Summary) {
+    if let Some(p) = &s.original_path {
+        s.original_path = Some(rvt::redact::redact_sensitive(p));
+    }
 }
 
 fn print_text(s: &rvt::reader::Summary, show_classes: bool) {
