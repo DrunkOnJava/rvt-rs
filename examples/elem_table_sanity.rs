@@ -41,7 +41,7 @@ fn main() -> anyhow::Result<()> {
                 }
             }
             let mut sorted: Vec<_> = tag_candidates.iter().collect();
-            sorted.sort_by(|a, b| b.1.cmp(a.1));
+            sorted.sort_by_key(|e| std::cmp::Reverse(*e.1));
             print!("  top 10 u32-in-tag-range values: ");
             for (v, c) in sorted.iter().take(10) {
                 print!("0x{:04x}×{} ", v, c);

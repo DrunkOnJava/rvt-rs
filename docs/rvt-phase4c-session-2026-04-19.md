@@ -236,8 +236,8 @@ Net code: 9 new files, +1,077 lines, 28 unit tests passing (up from
 
 - **DECISION:** Proceed static-only for this session. Rationale: all
   samples are Autodesk-shipped reference families; no need for dynamic
-  execution to answer structural questions. Recorded by Griffin
-  Radcliffe on 2026-04-19 via AskUserQuestion.
+  execution to answer structural questions. Recorded on 2026-04-19 via
+  AskUserQuestion.
 
 ## Artifacts
 

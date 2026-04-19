@@ -67,7 +67,7 @@ fn run() -> anyhow::Result<()> {
         classes.retain(|c| !c.fields.is_empty());
     }
     if let Some(n) = cli.top {
-        classes.sort_by(|a, b| b.fields.len().cmp(&a.fields.len()));
+        classes.sort_by_key(|c| std::cmp::Reverse(c.fields.len()));
         classes.truncate(n);
     }
 
