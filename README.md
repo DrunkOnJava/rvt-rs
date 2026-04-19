@@ -4,6 +4,12 @@
 
 Apache-2.0 licensed. Rust 2024 edition. Verified against 11 Revit releases (2016-2026) with a real RevitAPI.dll native-symbol grep (100% field-name accuracy on the validation set).
 
+## Why this exists — the openBIM gap
+
+For over a decade the openBIM community — anchored by [buildingSMART International](https://www.buildingsmart.org/) and the IFC standard — has worked to break Autodesk's Revit lock-in. The official answer, Autodesk's [revit-ifc](https://github.com/Autodesk/revit-ifc) exporter, runs **inside** Revit using the Revit API, so it can only emit what the API chooses to expose. That's why real-world IFC exports from Revit are described, routinely and publicly, as *"very limited"* (thinkmoult.com), *"data loss"* (Reddit r/bim), and *"out of the box, just crap"* (the [OSArch Wiki's guide to Revit for openBIM](https://wiki.osarch.org/index.php?title=Revit_setup_for_OpenBIM)). BIM coordinators have spent years working around lossy IFC exports — private families, complex assemblies, proprietary parameter types, and internal geometric relationships are all dropped by the API-surface exporter.
+
+`rvt-rs` reads the actual on-disk RVT bytes. That is a *strict superset* of what Revit's API exposes. An rvt-rs → IFC pipeline built on top of it (planned; not yet shipped) is the full-fidelity path to IFC that the openBIM movement has been waiting for — and a natural partner for [IfcOpenShell](https://ifcopenshell.org/), [BIMvision](https://bimvision.eu/), and anyone participating in buildingSMART's annual openBIM Hackathon.
+
 ## Results at a glance
 
 Running `rvt-info` + `rvt-schema` + `rvt-history` on one 400 KB RFA fixture:
