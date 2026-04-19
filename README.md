@@ -12,20 +12,40 @@ For over a decade the openBIM community — anchored by [buildingSMART Internati
 
 ## Results at a glance
 
-Running `rvt-info` + `rvt-schema` + `rvt-history` on one 400 KB RFA fixture:
+Running the shipped CLIs against one 400 KB RFA fixture:
 
-- Extracts version, build tag, creator path, file GUID, locale
-- Parses the embedded `PartAtom` Atom XML (title, OmniClass code, taxonomies)
-- Dumps the embedded PNG thumbnail
-- Pulls out **395 classes with 1,156 fields** from Autodesk's serialization schema
-- Recovers the **complete document-migration history** — every Revit release that has ever saved the file (forensic timeline)
+- **Metadata**: version, build tag, creator path, file GUID, locale (`rvt-info`)
+- **Atom XML**: title, OmniClass code, taxonomies (`rvt-info` parses `PartAtom`)
+- **Preview**: clean PNG thumbnail, 300-byte Revit wrapper stripped (`rvt-info --extract-preview`)
+- **Schema**: 395 classes + 1,156 fields + C++ type signatures (`rvt-schema`)
+- **History**: every Revit release that ever saved this file (`rvt-history`)
+- **Bulk strings**: 3,746 length-prefixed UTF-16LE records from Partitions/NN — Autodesk unit/spec/parameter-group identifiers, OmniClass + Uniformat codes, Revit category labels, localized format strings (`rvt-history --partitions`)
 
-The 34 field names and 395 classes that `rvt-schema` extracts were cross-validated:
+The 34 field names and ~400 classes that `rvt-schema` extracts were cross-validated:
 
 - 100% (34/34) appear byte-for-byte in the raw decompressed `Formats/Latest` stream
-- All ~20 extracted top-level classes (ADocument, DBView, HostObj, LoadBCBase, Symbol, APIAppInfo, APropertyDouble3, ElementId, etc.) match C++ symbol names compiled into the public `RevitAPI.dll` (35 MB NuGet package) with decorated function signatures like `__cdecl NotNull<class ADocument *,void>::NotNull(class ADocument *)`
+- ~20 extracted top-level classes (ADocument, DBView, HostObj, LoadBCBase, Symbol, APIAppInfo, APropertyDouble3, ElementId, etc.) match C++ symbol names compiled into the public `RevitAPI.dll` (35 MB NuGet package) with decorated function signatures like `__cdecl NotNull<class ADocument *,void>::NotNull(class ADocument *)`
 
 The Autodesk build path `F:\Ship\2026_px64\Source\API\RevitAPI\Objects\Elements\*.cpp` also leaks through C++ assertion strings in the DLL, confirming the schema names come from the same codebase.
+
+## Phase D findings (what makes this project different)
+
+Four reproducible discoveries, all documented in `docs/rvt-moat-break-reconnaissance.md` and reproducible from `examples/`:
+
+1. **The schema indexes the data.** Class names do not appear as ASCII in `Global/Latest`; class tags from `Formats/Latest` (u16 after class name, with 0x8000 flag set) occur ~340× the uniform-random rate. The top tag, `AbsCurveGStep`, appears 19,415 times in 938 KB of decompressed Global/Latest. [`examples/link_schema.rs`]
+
+2. **Tags drift across releases** but are stable-sort-assigned. `ADocWarnings` = 0x001b 2016→2026 because no class sorted alphabetically before it has ever been added. `AbsCurveGStep` shifted 0x0053 → 0x0066 across the decade as 19 new A-class entries were inserted. Full 122-class × 11-release drift table: [`docs/data/tag-drift-2016-2026.csv`](docs/data/tag-drift-2016-2026.csv). This is the first publicly-available version of this data. [`examples/tag_drift.rs`]
+
+3. **Revit 2021 was a major undocumented format transition.** Global/Latest grew 27× (~26 KB → ~715 KB) while simultaneously the Forge Design Data Schema namespaces (`autodesk.unit.*`, `autodesk.spec.*`) debuted in Partitions/NN. Two symptoms, one event. Any reader built for 2016-2020 silently drops 30× more data when pointed at 2021+.
+
+4. **Parameter-group namespace shipped separately in Revit 2024.** `autodesk.parameter.group.*` identifiers appear in 2024+ only — three releases after units/specs. Dating the Forge schema rollout from on-disk bytes: [`examples/tag_drift.rs`](examples/tag_drift.rs), [`src/object_graph.rs`](src/object_graph.rs).
+
+Two unintended disclosures also surfaced:
+
+- The shipped 2024 Autodesk reference family leaks an Autodesk employee's OneDrive path verbatim (`C:\Users\<redacted>\OneDrive - Autodesk\FY-20XX Projects\...`) — RVT does not sanitize authoring paths.
+- The DLL ships with the build-server path `F:\Ship\2026_px64\Source\API\RevitAPI\...` embedded in assertion strings.
+
+Downstream tools consuming rvt-rs output should redact `C:\Users\*\` paths from extracted strings.
 
 ---
 
@@ -40,22 +60,47 @@ The Autodesk build path `F:\Ship\2026_px64\Source\API\RevitAPI\Objects\Elements\
 - Extract class/schema inventory from `Formats/Latest` (8-10K class names per file)
 - Find the version-specific `Partitions/NN` stream (58, 60-69 for 2016-2026, skipping 59)
 
-Two CLIs ship in the box:
+Six CLIs ship in the box:
 
 ```bash
 cargo build --release
 
-# Quick metadata dump
+# Quick metadata + schema summary
 ./target/release/rvt-info --show-classes my-project.rvt
 
-# Machine-readable
+# Machine-readable (JSON)
 ./target/release/rvt-info -f json my-project.rvt > meta.json
 
 # Pull the embedded thumbnail
 ./target/release/rvt-info --extract-preview preview.png my-project.rvt
 
-# Compare two versions of the same file
+# Compare two versions of the same file (cross-version byte diff)
 ./target/release/rvt-diff --decompress 2018.rfa 2024.rfa
+
+# Dump the full class schema (395 classes, 1156 fields)
+./target/release/rvt-schema my-project.rvt
+
+# Document upgrade history (which Revit releases have opened this file)
+./target/release/rvt-history my-project.rvt
+
+# Pull every UTF-16LE string record out of Partitions/NN
+# (categories, OmniClass, Uniformat, Autodesk unit identifiers, …)
+./target/release/rvt-history --partitions my-project.rvt
+
+# Hex-dump any decompressed stream (for Phase D work)
+./target/release/rvt-dump my-project.rvt --stream Global/Latest
+```
+
+A handful of reproduction/probe binaries live in `examples/`:
+
+```bash
+cargo build --release --examples
+
+./target/release/examples/probe_link      <file>           # null-hypothesis: class names absent from Global/Latest
+./target/release/examples/tag_bytes       <file>           # hex around known class names in Formats/Latest
+./target/release/examples/tag_dump        <file>           # statistical sweep of post-name u16 patterns
+./target/release/examples/link_schema     <file>           # tag-frequency histogram in Global/Latest (340× non-uniformity)
+./target/release/examples/tag_drift       <sample-dir> <out.csv>   # per-class drift table across all 11 Revit releases
 ```
 
 ## Format overview
@@ -96,16 +141,25 @@ these streams. The fix is to skip the 10-byte header manually and use
 | 1 · Container | OLE2 / Microsoft Compound File ([MS-CFB]) | **Done** |
 | 2 · Compression | Truncated gzip → raw DEFLATE | **Done** |
 | 3 · Stream framing | Per-stream custom headers, `Partitions/NN` chunk layout, `Contents`/`Preview` wrappers | **80% mapped** (from 11-version corpus) |
-| 4 · Object graph | Autodesk-proprietary serialization inside decompressed payloads | **Open problem** |
+| 4a · Schema table | Class names + fields + C++ type signatures from `Formats/Latest`, plus per-class tag and the cross-release tag-drift map | **Done** |
+| 4b · Schema→data link | Tags from `Formats/Latest` occur at ~340× the noise rate in `Global/Latest`; schema IS the live type dictionary for the object graph | **Done** |
+| 4c · Object records | Record framing, field encoding (double / int / ElementId / std::pair / std::vector / std::map), alignment, inter-instance references | **In progress** |
+| 5 · IFC export | rvt-rs → IfcOpenShell bridge, buildingSMART certification | **Planned** |
 
-Layer 4 is the real work — reverse-engineering the `Global/Latest`,
-`Global/ElemTable`, and `Partitions/NN` binary object graphs. This is
-*tractable* because Autodesk ships the class schema as plaintext in
-`Formats/Latest` (10K+ named classes), and the schema is consistent
-across 11 years of release.
+Layer 4c is where the remaining focused work is — and it's now narrow,
+incremental bit-level hypothesis testing against the 11-version corpus,
+not a multi-year effort. Every unknown has a specific falsifiable test:
 
-For analysis methodology see `docs/rvt-moat-break-reconnaissance.md`
-in the repo root.
+- *"Does a class record start with `[u16 tag][u32 length]`?"* — take the
+  `link_schema` histogram's top tag, look at the bytes around each
+  occurrence, compare 11 versions of the same field.
+- *"Is double encoded as 8-byte IEEE 754 little-endian?"* — pick a class
+  with `double` fields (`APropertyDouble3` has three), find its instances,
+  compare extracted values to values visible through the Revit API.
+
+The full analysis narrative lives in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md)
+with four dated addenda covering Phase D link proof, Forge schema dating,
+the 2021 format transition, and the 122-class tag drift table.
 
 ## Sample corpus
 
@@ -145,14 +199,15 @@ is absent, so partial corpora are okay — you'll just see
 
 The things below are tractable but deferred. Issues / PRs welcome.
 
-- Proper length-prefixed parse of `Formats/Latest` (instead of the
-  heuristic regex extractor)
-- `Global/ElemTable` record format — we decompress but don't parse
-  individual element records
-- `Partitions/NN` internal chunk headers — there's a 44-byte prefix then
-  10 concatenated gzips; the prefix encodes chunk offsets + sizes
-- IFC export (far future — requires layer 4)
-- Write path — fully dependent on layer 4
+- Record framing inside `Global/Latest` — we know tags delimit instance
+  classes, still need to recognise the boundary between adjacent records
+- Per-field byte decoding (see Layer 4c in the previous section)
+- `Global/ElemTable` element-by-element parse — we decompress but don't
+  parse individual element records
+- `Partitions/NN` internal chunk headers — there's a ~44-byte prefix then
+  5-10 concatenated gzips; the prefix encodes chunk offsets + sizes
+- IFC export (Layer 5 — natural successor once Layer 4c is done)
+- Write path — fully dependent on Layer 4c
 
 ## Running the tests
 
@@ -160,11 +215,11 @@ The things below are tractable but deferred. Issues / PRs welcome.
 cargo test --release
 ```
 
-Expected output:
+Expected output (as of commit `f043e72`):
 
 ```
-test result: ok. 9 passed; 0 failed   (unit tests, in-tree)
-test result: ok. 6 passed; 0 failed   (integration tests, 11-version corpus)
+test result: ok. 21 passed; 0 failed   (unit tests, in-tree)
+test result: ok.  8 passed; 0 failed   (integration tests, 11-version corpus)
 ```
 
 Integration tests are skipped if the sample RFAs are absent.
