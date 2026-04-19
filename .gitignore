@@ -1,4 +1,25 @@
+# Build artifacts
 /target
+
+# Rustfmt backups
 **/*.rs.bk
-Cargo.lock
+
+# macOS
 .DS_Store
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.nvim/
+.zed/
+
+# Environment-specific overrides
+*.local.toml
+.env
+.env.local
+
+# Note: Cargo.lock IS committed. This is an application crate shipping
+# 7 binaries — a committed lockfile gives reproducible builds for end
+# users and is the standard guidance from the Cargo book.

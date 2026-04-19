@@ -1,11 +1,27 @@
 #!/bin/bash
 # Benchmark every rvt-rs CLI against the 11-version sample family corpus.
 # Writes both a machine-readable CSV and a human-readable table.
+#
+# Run from the crate root (i.e. the directory containing Cargo.toml).
+# Samples dir is configurable via RVT_SAMPLES_DIR (defaults to
+# ../../samples/_phiag/examples/Autodesk — the layout the phi-ag/rvt
+# git submodule uses when dropped under samples/).
 set -e
-cd /home/user/Developer/re/rvt-recon-2026-04-19/tools/rvt-rs
 
-SAMPLE_2024="../../samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa"
-SAMPLES_GLOB="../../samples/_phiag/examples/Autodesk/rac*.rfa"
+if [ ! -f "Cargo.toml" ] || ! grep -q '^name = "rvt"' Cargo.toml 2>/dev/null; then
+  echo "error: run this from the rvt-rs crate root (where Cargo.toml lives)" >&2
+  exit 1
+fi
+
+SAMPLES_DIR="${RVT_SAMPLES_DIR:-../../samples/_phiag/examples/Autodesk}"
+SAMPLE_2024="${SAMPLES_DIR}/racbasicsamplefamily-2024.rfa"
+SAMPLES_GLOB="${SAMPLES_DIR}/rac*.rfa"
+
+if [ ! -f "$SAMPLE_2024" ]; then
+  echo "error: sample file not found: $SAMPLE_2024" >&2
+  echo "       set RVT_SAMPLES_DIR to override the sample location" >&2
+  exit 1
+fi
 
 echo "=== rvt-rs CLI benchmarks (2024 sample) ==="
 echo

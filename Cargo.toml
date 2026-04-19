@@ -2,35 +2,58 @@
 name = "rvt"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 license = "Apache-2.0"
-description = "Open reader for Autodesk Revit (.rvt, .rfa, .rte, .rft) files. No Revit installation required."
+description = "Open reader for Autodesk Revit (.rvt, .rfa, .rte, .rft) files. No Revit installation required. Verified against 11 Revit releases (2016-2026)."
 authors = ["Griffin Radcliffe <151978260+DrunkOnJava@users.noreply.github.com>"]
 repository = "https://github.com/DrunkOnJava/rvt-rs"
-keywords = ["revit", "bim", "cad", "autodesk", "rfa"]
-categories = ["parser-implementations", "compression"]
+homepage = "https://github.com/DrunkOnJava/rvt-rs"
+documentation = "https://docs.rs/rvt"
+readme = "README.md"
+keywords = ["revit", "bim", "autodesk", "ifc", "rfa"]
+categories = ["parser-implementations", "compression", "command-line-utilities"]
+exclude = [
+    ".github/*",
+    ".gitignore",
+    "tools/bench.sh",
+    "docs/outreach/*",
+    "docs/announcement-draft.md",
+    "docs/demo/*",
+    "docs/data/*.csv",
+]
+
+# The SPDX identifier `Apache-2.0` is set above. The full license text
+# is in LICENSE at the crate root.
 
 [dependencies]
-cfb = "0.11"                          # Microsoft Compound File Binary (OLE)
-flate2 = "1.0"                        # DEFLATE / raw inflate
-encoding_rs = "0.8"                   # UTF-16LE decode
+# Microsoft Compound File Binary (OLE) container — reads the outer
+# wrapper Revit uses for every on-disk file.
+cfb = "0.11"
+# DEFLATE / raw inflate — for the truncated-gzip streams Revit ships.
+flate2 = "1.0"
+# UTF-16LE decoder — robust enough to recover from Revit's malformed
+# surrogate pairs (encoding_rs doesn't panic where stdlib does).
+encoding_rs = "0.8"
+# PartAtom XML parser.
 quick-xml = { version = "0.36", features = ["serialize"] }
+# Serialisation for JSON output + test fixtures.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-anyhow = "1"
+# CLI argument parsing for every shipped binary.
 clap = { version = "4", features = ["derive"] }
+# Error ergonomics.
+anyhow = "1"
 thiserror = "1"
+
+# Seven shipped binaries. All depend on the `rvt` library crate.
+
+[[bin]]
+name = "rvt-analyze"
+path = "src/bin/rvt_analyze.rs"
 
 [[bin]]
 name = "rvt-info"
 path = "src/bin/rvt_info.rs"
-
-[[bin]]
-name = "rvt-diff"
-path = "src/bin/rvt_diff.rs"
-
-[[bin]]
-name = "rvt-corpus"
-path = "src/bin/rvt_corpus.rs"
 
 [[bin]]
 name = "rvt-schema"
@@ -41,12 +64,16 @@ name = "rvt-history"
 path = "src/bin/rvt_history.rs"
 
 [[bin]]
-name = "rvt-dump"
-path = "src/bin/rvt_dump.rs"
+name = "rvt-diff"
+path = "src/bin/rvt_diff.rs"
 
 [[bin]]
-name = "rvt-analyze"
-path = "src/bin/rvt_analyze.rs"
+name = "rvt-corpus"
+path = "src/bin/rvt_corpus.rs"
+
+[[bin]]
+name = "rvt-dump"
+path = "src/bin/rvt_dump.rs"
 
 [lib]
 name = "rvt"
@@ -56,3 +83,8 @@ path = "src/lib.rs"
 lto = true
 codegen-units = 1
 strip = true
+
+# Docs.rs build configuration — see https://docs.rs/about/metadata
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
