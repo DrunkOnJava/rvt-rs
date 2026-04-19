@@ -2,7 +2,7 @@
 
 **Open reader for Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) — no Autodesk software required.**
 
-Apache-2.0 licensed. Rust 2024 edition. Verified against 11 Revit releases (2016-2026) with a real RevitAPI.dll native-symbol grep (100% field-name accuracy on the validation set). **28 unit tests + 8 integration tests pass on the full 11-version corpus.** Seven CLIs ship in the box (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`), plus fourteen reproducible probes under `examples/` that cover every claim in this README.
+Apache-2.0 licensed. Rust 2024 edition. Verified against 11 Revit releases (2016-2026) with a real RevitAPI.dll native-symbol grep (100% field-name accuracy on the validation set). **43 unit tests + 8 integration tests pass on the full 11-version corpus.** Seven CLIs ship in the box (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`), plus nineteen reproducible probes under `examples/` that cover every claim in this README.
 
 ### TL;DR — what's in the box
 
@@ -219,32 +219,24 @@ these streams. The fix is to skip the 10-byte header manually and use
 | 3 · Stream framing | Per-stream custom headers, `Partitions/NN` chunk layout, `Contents` / `Preview` / `PartitionTable` wrappers | **Done** — 165/167 bytes of `PartitionTable` invariant; 44-byte `Partitions/NN` header decoded; `62 19 22 05` wrapper magic confirmed on `Contents` + `RevitPreview4.0` |
 | 4a · Schema table | Class names + fields + C++ type signatures from `Formats/Latest`; per-class tag + parent + declared field count; cross-release tag-drift map | **Done** |
 | 4b · Schema→data link | Tags from `Formats/Latest` occur at ~340× the noise rate in `Global/Latest`; schema IS the live type dictionary for the object graph | **Done** |
-| 4c.1 · Record framing | Tagged class records in `Formats/Latest` parse into structured records (HostObjAttr → `{tag=107, parent=Symbol, declared_field_count=3}`); Global/Latest class-tag directory identified | **Done** |
-| 4c.2 · Field-body decoding | Individual field bytes → typed value (`double`, `int`, `ElementId`, `std::pair<A,B>`, `std::vector<T>`, `std::map<K,V>`) | **Open — this is the remaining moat layer** |
-| 4d · ElemTable | `Global/ElemTable` header parser + rough record enumeration; record semantics TBD | **Partial** |
+| 4c.1 · Record framing | Tagged class records in `Formats/Latest` parse into structured records: `{tag, parent, ancestor_tag, declared_field_count}`; HostObjAttr → `{tag=107, parent=Symbol, ancestor_tag=0x0025 → APIVSTAMacroElem, declared_field_count=3}` | **Done** |
+| 4c.2 · Field-body decoding | `FieldType` enum classifies **84%** of 1,114 fields across 7 variants (Primitive, ElementId, Pointer, Vector, Container, String, GUID). 9 discriminator bytes mapped. | **Done (84% coverage; remaining 16% is wider-primitive edge cases)** |
+| 4d · ElemTable | `Global/ElemTable` header parser + rough record enumeration; record semantics TBD (blocked on per-element schema lookup) | **Partial** |
 | 5 · IFC export | `IfcModel`, `Exporter` trait, `NullExporter`, full Revit→IFC mapping plan; emission gated on 4c.2 | **Scaffolded** |
 | 6 · Write path | Byte-preserving read-modify-write round-trip (13/13 streams identical); modifying-write gated on 4c.2 | **Scaffolded** |
 
-Layer 4c.2 is where the remaining focused work is — narrow, incremental
-bit-level hypothesis testing against the 11-version corpus. Every unknown
-has a specific falsifiable test:
+All 5 original P0 research questions (Q4-Q7) are now **resolved**. Layer 4c.1/4c.2 shipped against 84% of fields. The remaining single-session moat work is Q6.2 — finding the `ADocument` singleton's offset inside `Global/Latest` so the schema-directed walker has an entry point. Every other decoding question has an answer documented in the recon report.
 
-- *"What does the `0x0025` flag word mean?"* — appears in every tagged
-  class's preamble; dump its value for all 79 tagged classes and look
-  for the distinguishing property.
-- *"Is `m_symbolInfo: 0e 02 00 00` an 8-bit type discriminator + 24-bit
-  value?"* — look at the same field across HostObjAttr instances and
-  see if the first byte stays 0x0e while the trailing bytes vary.
-- *"Is `double` encoded as 8-byte IEEE 754 little-endian?"* — pick a
-  class with `double` fields (`APropertyDouble3` has three), find its
-  instances, compare extracted values to Revit-API-visible values.
+Key findings from this phase:
 
-The full analysis narrative lives in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md)
-with six dated addenda covering Phase D link proof, Forge schema dating,
-the 2021 format transition, the 122-class tag drift table, the
-`Global/PartitionTable` decoding, and the `Contents` stream structure.
-Session-length synthesis for the Phase 4c work is in
-[`docs/rvt-phase4c-session-2026-04-19.md`](docs/rvt-phase4c-session-2026-04-19.md).
+- **Q4** The u16 "flag" word in each tagged-class preamble is a **class-tag reference** (ancestor / mixin / protocol). 9/9 non-zero values resolve to named classes in the same schema.
+- **Q5** Each field's `type_encoding` is `[byte category][u16 sub_type][optional body]`. 9 category bytes mapped (`0x01` bool, `0x02` u16, `0x04/0x05` u32, `0x06` f32, `0x07` f64, `0x08` string, `0x09` GUID, `0x0b` u64, `0x0e` reference/container).
+- **Q5.1** Coverage extended to 84% of fields; remaining 16% is likely template-generic discriminators.
+- **Q6** `Global/Latest` is **not** an index + heap — it's a flat TLV stream.
+- **Q6.1** Instance data is **schema-directed** (tag-less, protobuf-style). Decoding requires schema-first sequential walk from a known entry point.
+- **Q7** `Partitions/NN` trailer u32 fields are **not** per-chunk offsets. Gzip-magic scan remains correct.
+
+The full analysis narrative with 11 dated addenda lives in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md). Session-length synthesis in [`docs/rvt-phase4c-session-2026-04-19.md`](docs/rvt-phase4c-session-2026-04-19.md).
 
 ## Sample corpus
 
@@ -289,7 +281,7 @@ cargo test --release
 Expected output:
 
 ```
-test result: ok. 28 passed; 0 failed   (unit tests, in-tree)
+test result: ok. 43 passed; 0 failed   (unit tests, in-tree)
 test result: ok.  8 passed; 0 failed   (integration tests, 11-version corpus)
 ```
 
