@@ -33,6 +33,7 @@ pub mod compression;
 pub mod corpus;
 pub mod error;
 pub mod formats;
+pub mod object_graph;
 pub mod part_atom;
 pub mod reader;
 pub mod streams;
