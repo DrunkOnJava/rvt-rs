@@ -36,6 +36,10 @@ path = "src/bin/rvt_corpus.rs"
 name = "rvt-schema"
 path = "src/bin/rvt_schema.rs"
 
+[[bin]]
+name = "rvt-history"
+path = "src/bin/rvt_history.rs"
+
 [lib]
 name = "rvt"
 path = "src/lib.rs"
