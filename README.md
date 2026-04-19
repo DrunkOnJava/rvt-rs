@@ -217,19 +217,34 @@ is absent, so partial corpora are okay — you'll just see
 - **BTreeSet for class names** — deterministic ordering in output (plus
   sorted JSON) matters for diffable CLI output.
 
-## Not yet implemented
+## In progress — Phase 4c/5/6 scaffolds
 
-The things below are tractable but deferred. Issues / PRs welcome.
+Every item previously listed here as "not yet implemented" now has a
+working Rust module and a reproducible probe under `examples/`:
 
-- Record framing inside `Global/Latest` — we know tags delimit instance
-  classes, still need to recognise the boundary between adjacent records
-- Per-field byte decoding (see Layer 4c in the previous section)
-- `Global/ElemTable` element-by-element parse — we decompress but don't
-  parse individual element records
-- `Partitions/NN` internal chunk headers — there's a ~44-byte prefix then
-  5-10 concatenated gzips; the prefix encodes chunk offsets + sizes
-- IFC export (Layer 5 — natural successor once Layer 4c is done)
-- Write path — fully dependent on Layer 4c
+- **Record framing inside `Global/Latest`** — `examples/record_framing.rs`
+  surfaces the class-tag directory structure in the first ~1,800 bytes
+  of Global/Latest. FACTs F3–F6 captured in the recon report addendum.
+- **Per-field byte decoding** — `src/formats.rs` now parses tag, parent
+  class, and declared field count for tagged classes. HostObjAttr
+  resolves correctly to `{tag=107, parent=Symbol, declared_field_count=3}`.
+  Field-body byte decoding (e.g. mapping `m_symbolInfo: 0e 02 00 00` to a
+  typed value) is still the open problem.
+- **`Global/ElemTable` parser** — `src/elem_table.rs` with
+  `parse_header()` + `parse_records_rough()`. Header confirmed across 4
+  releases (element_count, record_count, 0x0011 flag).
+- **`Partitions/NN` internal chunk header** — `src/partitions.rs` with
+  `parse_header()` decoding the fixed 44-byte prefix and
+  `chunks_from_stream()` splitting the concatenated gzip chunks. FACT F7/F8
+  in the recon report.
+- **IFC export (Layer 5 scaffold)** — `src/ifc/` with `IfcModel`,
+  `Exporter` trait, `NullExporter`, and the full Revit-class → IFC-entity
+  mapping plan. Aligned for IfcOpenShell + buildingSMART IFC
+  certification.
+- **Write path (Layer 6 scaffold)** — `src/writer.rs::copy_file` does a
+  byte-preserving read-modify-write round-trip through the `cfb` crate.
+  Verified on the 2024 sample: 13 streams identical after round-trip.
+  `write_with_patch` returns `NotYetImplemented` pending Layer 4c.
 
 ## Running the tests
 
@@ -237,10 +252,10 @@ The things below are tractable but deferred. Issues / PRs welcome.
 cargo test --release
 ```
 
-Expected output (as of commit `f043e72`):
+Expected output:
 
 ```
-test result: ok. 21 passed; 0 failed   (unit tests, in-tree)
+test result: ok. 28 passed; 0 failed   (unit tests, in-tree)
 test result: ok.  8 passed; 0 failed   (integration tests, 11-version corpus)
 ```
 
