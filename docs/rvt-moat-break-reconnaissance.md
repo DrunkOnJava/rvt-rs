@@ -1027,4 +1027,56 @@ offset-table scavenging. The moat reduces to:
 - **Q6.2** — identify the Global/Latest entry point (ADocument
   instance) and its size. That's the seed for the schema walker.
 
+## Addendum — Q4 flag-word is an ancestor-class reference (2026-04-19)
+
+The u16 word sitting between the parent-class name and the
+field-count pair in a tagged-class record (called "flag" in earlier
+addenda) is **a class-tag reference** — it names another class in
+the same schema, distinct from the direct parent.
+
+### Evidence (9/9 cases resolve to real classes)
+
+| Class | ancestor_tag | Resolves to |
+|---|---|---|
+| `APIVSTAMacroElemTracking` | `0x001b` | `ADocWarnings` |
+| `HostObjAttr` | `0x0025` | `APIVSTAMacroElem` |
+| `AnalyticalLineAutoConnectData` | `0x00ee` | `ConnectorPositionModifier` |
+| `AnalyticalPanelPatternHelper` | `0x0046` | `ATFProvenanceBaseCell` |
+| `ReferencePointGridNetTrackerCell` | `0x0046` | `ATFProvenanceBaseCell` |
+| `AnalyticalSlabAdjustmentGStep` | `0x0061` | `AbsCurveGStep` |
+| `AppearanceAssetElemGroupHelper` | `0x0046` | `ATFProvenanceBaseCell` |
+| `ArcWallRectOpeningGStep` | `0x0061` | `AbsCurveGStep` |
+| `AreaMeasureCurveData` | `0x0047` | `Cell` |
+
+Observations:
+
+- Every non-zero value resolves to a known class tag from the same
+  file. No misses. Statistically implausible if this were a flag.
+- Multiple sibling classes can share the same ancestor (three
+  classes reference `ATFProvenanceBaseCell`; two reference
+  `AbsCurveGStep`). That matches the shape of a mixin or trait
+  reference.
+- The relationship is distinct from direct `parent`: e.g. HostObjAttr's
+  parent is `Symbol`, but its ancestor_tag is `APIVSTAMacroElem`.
+  Both exist simultaneously.
+
+### Most likely interpretation
+
+The `ancestor_tag` identifies a **mixin / protocol / category**
+class that participates in the serializable class's layout. In C++
+terms, this is probably a non-public base class used for
+implementation detail, or an interface reference the class conforms
+to. The stable-tag property (values match across tag-drift) suggests
+this is NOT a per-version cache but a true structural field.
+
+### Implementation
+
+`ClassEntry.ancestor_tag: Option<u16>` (None when the slot is 0x0000,
+55% of tagged classes). Populated at parse time, serialized to JSON.
+Downstream tools can follow the reference through
+`SchemaTable.classes` by matching `ancestor_tag` to another class's
+`tag`.
+
+Probe: `examples/flag_word_probe.rs`.
+
 **End of report.**
