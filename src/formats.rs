@@ -231,7 +231,7 @@ fn scan_fields_until_next_class(
 
                 // Optional C++ type follows. Try u32 prefix first, then u16.
                 let mut cpp_type = None;
-                let mut consumed = post_name;
+                let consumed = post_name;
 
                 // Type signatures in the corpus sometimes have u16 prefix,
                 // sometimes u32. Try u32 first.
