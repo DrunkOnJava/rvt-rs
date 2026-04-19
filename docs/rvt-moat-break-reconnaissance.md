@@ -932,4 +932,55 @@ bytes other than `0x04` / `0x0e`. A follow-up session should:
 Once classification reaches ≥95%, the modifying writer (Layer 6) and
 real IFC exporter (Layer 5) become implementable end-to-end.
 
+## Addendum — Q6 inversion (2026-04-19)
+
+An earlier working hypothesis was that `Global/Latest` begins with a
+sorted class-tag directory whose payloads point at instance data
+elsewhere in the stream (the "index + heap" model). This is now
+**rejected** by evidence.
+
+Running `examples/directory_probe.rs` against the 2024 sample surfaced
+483 "directory entries" in the first ~8 KB of Global/Latest. The tag
+values are a mix of:
+
+- Known class tags (e.g. `0x000d` = `A3PartyAImage`)
+- Known field-type discriminators (e.g. `0x0004` = `Primitive`,
+  `0x000e` = `Pointer` — per the Q5 addendum above)
+- Values never seen as class tags in `Formats/Latest` (e.g. `0x0002`,
+  `0x180c`, `0x240e`, `0x2706`)
+
+That overlap rules out the index interpretation. The correct model:
+
+### FACT F10 — Global/Latest is a TLV-encoded serialized stream
+
+`Global/Latest` is not an index+heap layout. It is a flat
+Type-Length-Value stream where:
+
+- Each record begins with a type/tag token (`u32` or `u16+u16`).
+- The length of the record is determined by the token (either via a
+  fixed size-per-type, or via an explicit length field immediately
+  after the token — Q6.1 unresolved).
+- Class instances, field values, and ElementId references are all
+  inline; they are *not* pointed at from a separate directory.
+
+### What this means for decoding
+
+To find the first HostObjAttr instance (tag `0x006b`), we need to
+parse the stream sequentially from offset 0, starting after the
+document-upgrade-history UTF-16LE block, walking records one at a
+time using the schema as a typing guide. There is no O(1) directory
+lookup.
+
+The good news: the FieldType enum from the Q5 addendum already
+decodes the per-record content. The remaining Q6.1 work is figuring
+out how many bytes each token consumes so sequential walking
+terminates correctly.
+
+### Reproducer
+
+```bash
+./target/release/examples/directory_probe \
+  samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa
+```
+
 **End of report.**
