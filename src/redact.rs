@@ -115,13 +115,16 @@ mod tests {
         assert_eq!(redact_path_str(input), input);
     }
 
+    // Test fixtures use synthetic username + project-id values. The
+    // real-world patterns these match (seen in Autodesk-shipped reference
+    // content) are deliberately NOT reproduced here.
     #[test]
     fn redacts_onedrive_autodesk_path() {
-        let input = "C:\\Users\\alice\\OneDrive - Autodesk\\FY-20XX Projects\\Revit - 111111 Update\\2021\\UniformatClassifications.txt";
+        let input = "C:\\Users\\testuser\\OneDrive - Autodesk\\FY-20XX Projects\\Revit - 111111 Update\\20XX\\UniformatClassifications.txt";
         let out = redact_sensitive(input);
         assert!(out.contains("<redacted>"));
         assert!(out.contains("<redacted autodesk internal path>"));
-        assert!(!out.contains("alice"));
+        assert!(!out.contains("testuser"));
         assert!(!out.contains("OneDrive - Autodesk"));
     }
 
