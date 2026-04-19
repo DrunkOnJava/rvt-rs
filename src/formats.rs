@@ -148,8 +148,8 @@ pub enum FieldType {
     /// `0x01` bool, `0x02` u16, `0x04` u32-legacy, `0x05` u32, `0x06`
     /// f32, `0x07` f64, `0x0b` u64, `0x0d` point/transform, `0x0e` ref.
     Vector {
-        /// The outer type byte — e.g. `0x07` (vector<double>), `0x0e`
-        /// (vector<reference>), `0x0d` (vector<point>).
+        /// The outer type byte — e.g. `0x07` (`vector<double>`), `0x0e`
+        /// (`vector<reference>`), `0x0d` (`vector<point>`).
         kind: u8,
         /// Raw body bytes after the 4-byte header.
         body: Vec<u8>,
