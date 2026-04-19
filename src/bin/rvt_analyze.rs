@@ -48,6 +48,11 @@ struct Cli {
     /// Safe default for sharing output publicly.
     #[arg(long)]
     redact: bool,
+
+    /// Suppress the banner and empty-section spacing. Useful when piping
+    /// output to other tools.
+    #[arg(short = 'q', long)]
+    quiet: bool,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -217,7 +222,7 @@ fn run() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    print_report(&report, &s, cli.section);
+    print_report(&report, &s, cli.section, cli.quiet);
     Ok(())
 }
 
@@ -514,7 +519,7 @@ fn looks_like_class_name(bytes: &[u8]) -> bool {
         && bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
-fn print_report(report: &Report, s: &Style, section: Option<Section>) {
+fn print_report(report: &Report, s: &Style, section: Option<Section>, quiet: bool) {
     let should_print = |want: Section| -> bool {
         match section {
             None => true,
@@ -522,8 +527,10 @@ fn print_report(report: &Report, s: &Style, section: Option<Section>) {
         }
     };
 
-    println!("{}", s.bold(&banner()));
-    println!();
+    if !quiet {
+        println!("{}", s.bold(&banner()));
+        println!();
+    }
 
     if should_print(Section::Identity) {
         print_identity(&report.identity, s);
@@ -853,83 +860,6 @@ fn redact_report(r: &mut Report) {
         .collect();
 }
 
-/// Scrub a free-form string for leaked paths (`C:\Users\...`), Autodesk
-/// OneDrive paths, build-server paths (`F:\Ship\...`), and Autodesk
-/// internal project-ID folder names (`Revit - <digits> ...`). Leaves
-/// the surrounding structure intact so the output still communicates
-/// intent.
-fn redact_sensitive(s: &str) -> String {
-    let mut out = redact_path_str(s);
-    // Autodesk employee-owned OneDrive: "OneDrive - Autodesk" plus any
-    // trailing personal-project path.
-    if let Some(idx) = out.find("OneDrive - Autodesk") {
-        let tail = &out[idx..];
-        if let Some(end) = tail.find(".txt").or_else(|| tail.find(".rfa")).or_else(|| tail.find(".rvt")) {
-            let before = &out[..idx];
-            let ext_end = idx + end + 4;
-            let after = &out[ext_end..];
-            out = format!("{before}<redacted autodesk internal path>{after}");
-        } else {
-            let before = &out[..idx];
-            out = format!("{before}<redacted autodesk internal path>");
-        }
-    }
-    // Build-server paths like F:\Ship\...
-    for prefix in &["F:\\Ship", "F:/Ship", "D:\\build", "D:/build"] {
-        if let Some(idx) = out.find(prefix) {
-            let before = &out[..idx];
-            out = format!("{before}<redacted build-server path>");
-        }
-    }
-    // Autodesk internal project-ID folders: "Revit - NNNNNN [words]"
-    // where NNNNNN is 4+ digits. Replace the whole segment with a marker.
-    out = redact_autodesk_project_ids(&out);
-    out
-}
-
-fn redact_autodesk_project_ids(s: &str) -> String {
-    // Find any occurrence of "Revit - " followed by a run of digits.
-    // Replace "Revit - <digits> ..." up to the next path separator with
-    // a single marker, preserving structure.
-    let mut out = String::with_capacity(s.len());
-    let mut rest = s;
-    while let Some(idx) = rest.find("Revit - ") {
-        out.push_str(&rest[..idx]);
-        let after_prefix = &rest[idx + "Revit - ".len()..];
-        // Must start with at least 3 digits to qualify as a project ID
-        let digit_len: usize = after_prefix.chars().take_while(|c| c.is_ascii_digit()).count();
-        if digit_len < 3 {
-            out.push_str("Revit - ");
-            rest = after_prefix;
-            continue;
-        }
-        // Extend to the end of this path segment (stop at \ or / )
-        let tail = after_prefix;
-        let seg_end = tail
-            .find(|c: char| c == '\\' || c == '/')
-            .unwrap_or(tail.len());
-        out.push_str("Revit - <redacted project id>");
-        rest = &tail[seg_end..];
-    }
-    out.push_str(rest);
-    out
-}
-
-/// Swap the username segment of any `\\Users\\<name>\\` pattern with
-/// `<redacted>` but leave the path shape visible.
-fn redact_path_str(p: &str) -> String {
-    let mut out = p.to_string();
-    let needles = ["\\Users\\", "/Users/"];
-    for n in needles {
-        if let Some(idx) = out.find(n) {
-            let tail_start = idx + n.len();
-            let tail = &out[tail_start..];
-            if let Some(end) = tail.find(|c: char| c == '\\' || c == '/') {
-                let before = &out[..tail_start];
-                let after = &tail[end..];
-                out = format!("{before}<redacted>{after}");
-            }
-        }
-    }
-    out
-}
+// Redaction helpers moved to `rvt::redact` for reuse by other CLIs.
+// (rvt-info, rvt-history, and rvt-analyze all share them now.)
+use rvt::redact::redact_sensitive;
