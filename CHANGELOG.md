@@ -4,6 +4,47 @@ All notable changes will be documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [semver](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Layer 5a walker + rvt-doc CLI
+
+- **`src/walker.rs` module** — first end-to-end schema-directed
+  instance reader. Exposes `read_adocument(&mut RevitFile) ->
+  Result<Option<ADocumentInstance>>` returning `ADocumentInstance {
+  entry_offset, version, fields }` where each field is one of
+  `InstanceField::{Pointer, ElementId, RefContainer, Bytes}`.
+- **`rvt-doc` CLI** — eighth shipped binary. Dumps ADocument's
+  instance fields as human-readable text or machine-readable JSON
+  with `--json`. Respects `--redact` for user-path scrubbing.
+- **Cross-version detection** — hybrid entry-point finder that
+  combines a sequential-id-table heuristic with a scoring-based
+  brute-force fallback. Works on all 11 releases (Revit 2016–2026)
+  with five cross-version-consistent bands:
+  2016–17 / 2018 (solo) / 2019–20 / 2021–23 / 2024–26.
+- **`RevitFile::missing_required_streams()`** — diagnostic form of
+  `has_revit_signature`. Returns the list of required stream names
+  not found in the file, so "signature invalid" errors can point
+  at the specific missing stream.
+
+### Research progress
+
+- **Q6.3**: refuted Q6.2's "post-history bytes are ADocument"
+  hypothesis. The 131-record table at the post-history boundary
+  is a multi-table directory, not ADocument's instance.
+- **Q6.4**: directory u16 body values are not cross-stream
+  references. Two sequential-id tables (Table A + Table B) exist
+  in Global/Latest.
+- **Q6.5-A/B**: post-Table-B region at 0x0f67 (2024) is where
+  ADocument's actual instance data lives. 33× class-tag density
+  vs uniform-random baseline.
+- **Q6.5-C**: first-pass walker drifts after field 2 because
+  Container wire encoding was wrong.
+- **Q6.5-D**: Container wire is two-column `[u32 count][12 × 6B
+  ids][u32 count][12 × 6B masks]` = 152 bytes for count=12.
+- **Q6.5-E**: walker reads 8/13 fields cleanly on Revit 2024.
+- **Q6.5-F**: walker reads ADocument on all 11 releases with
+  cross-version-byte-identical output within each version band.
+
 ## [0.1.1] — 2026-04-19
 
 ### Added
