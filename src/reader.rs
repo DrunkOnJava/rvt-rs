@@ -130,6 +130,15 @@ impl RevitFile {
         class_index::extract_class_names(&decompressed)
     }
 
+    /// Decompress `Formats/Latest` and parse it into a full schema table —
+    /// classes + fields + C++ type signatures. This is the structured
+    /// version of `class_names()`.
+    pub fn schema(&mut self) -> Result<crate::formats::SchemaTable> {
+        let bytes = self.read_stream(FORMATS_LATEST)?;
+        let decompressed = compression::inflate_at(&bytes, 0)?;
+        crate::formats::parse_schema(&decompressed)
+    }
+
     /// Find the version-specific `Partitions/NN` stream name.
     pub fn partition_stream_name(&self) -> Option<String> {
         self.stream_names()
