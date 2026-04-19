@@ -176,6 +176,32 @@ pub fn string_records_from_file(rf: &mut crate::RevitFile) -> Result<Vec<StringR
     Ok(extract_string_records(&decomp))
 }
 
+/// Pull string records from the version-specific `Partitions/NN` stream.
+/// That stream contains 5-10 concatenated gzip chunks; we decompress all of
+/// them and search across the concatenation. Partitions/NN is where the
+/// bulk Revit content lives — category names, OmniClass/Uniformat codes,
+/// Autodesk parameter-group + spec identifiers, localized format strings,
+/// timestamps, asset-library references, etc.
+pub fn string_records_from_partitions(rf: &mut crate::RevitFile) -> Result<Vec<StringRecord>> {
+    let partition_name = rf
+        .partition_stream_name()
+        .ok_or_else(|| crate::Error::StreamNotFound("no Partitions/NN stream".into()))?;
+    let bytes = rf.read_stream(&partition_name)?;
+    // Concatenate all gzip chunks with an FF-sentinel separator so the
+    // extractor sees clear boundaries between them (in case record scans
+    // cross chunks accidentally).
+    let chunks = compression::inflate_all_chunks(&bytes);
+    let sep = [0xFFu8; 16];
+    let mut joined = Vec::new();
+    for (i, c) in chunks.iter().enumerate() {
+        if i > 0 {
+            joined.extend_from_slice(&sep);
+        }
+        joined.extend_from_slice(c);
+    }
+    Ok(extract_string_records(&joined))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
