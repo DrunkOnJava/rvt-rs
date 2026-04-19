@@ -31,12 +31,17 @@ pub mod basic_file_info;
 pub mod class_index;
 pub mod compression;
 pub mod corpus;
+pub mod elem_table;
 pub mod error;
 pub mod formats;
 pub mod object_graph;
 pub mod part_atom;
+pub mod partitions;
 pub mod reader;
 pub mod streams;
+pub mod writer;
+
+pub mod ifc;
 
 pub use error::{Error, Result};
 pub use reader::RevitFile;
