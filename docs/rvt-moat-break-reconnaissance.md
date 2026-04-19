@@ -1079,4 +1079,45 @@ Downstream tools can follow the reference through
 
 Probe: `examples/flag_word_probe.rs`.
 
+## Addendum — Q7 Partitions/NN trailer fields are NOT chunk offsets (2026-04-19)
+
+Followup to FACT F7/F8. Tested the hypothesis that the four u32 fields
+at Partitions/NN header offset 0x14..0x24 encode per-chunk byte
+offsets (so a reader could use the header as a random-access chunk
+table). **Rejected** — zero matches across all 6 releases tested.
+
+Observed values (2016 → 2026):
+
+| Release | trailer_u32 | gzip offsets (first 4) |
+|---|---|---|
+| 2016 | [400, 1240, 14436, 131060] | [44, 14504, 17010, 37528, …] |
+| 2018 | [4, 1288, 15011, 131036] | [44, 15079, 17812, 37184, …] |
+| 2020 | [4, 1138, 14021, 117382] | [44, 14089, 18368, 37750, …] |
+| 2022 | [4, 1133, 14196, 117443] | [44, 14264, 19327, 41288, …] |
+| 2024 | [4, 729, 12330, 119319] | [44, 12398, 19074, 21706, …] |
+| 2026 | [4, 728, 12378, 119384] | [44, 12446, 19117, 21872, …] |
+
+No trailer value equals any gzip-chunk offset.
+
+### What the values probably are (unconfirmed)
+
+- `trailer_u32[0]` ≈ small constant (4 in 2018+, 400 in 2016) — possibly
+  a layout-version counter that jumped once post-2016.
+- `trailer_u32[1]` ≈ 700-1300 — correlates with element/record count
+  from Global/ElemTable (see FACT F9).
+- `trailer_u32[2]` ≈ 12-15K — roughly matches the decompressed size
+  of the FIRST gzip chunk across all releases.
+- `trailer_u32[3]` ≈ 117-131K — close to but not equal to
+  `raw_len - header_size`.
+
+### Practical impact: none
+
+`partitions::find_chunks()` already works correctly using gzip-magic
+scan. The trailer table would have been a small optimisation for
+pathological cases (many chunks, long streams), not a correctness
+prerequisite. Q7 is marked **resolved negatively** — the hypothesis
+was worth testing, the answer is "no table, keep scanning."
+
+Probe: `examples/partitions_q7.rs`.
+
 **End of report.**
