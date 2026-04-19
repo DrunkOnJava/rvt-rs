@@ -494,7 +494,7 @@ Findings:
 2. **Parameter groups namespace** (`autodesk.parameter.group.*`) landed in **Revit 2024** — three releases later than units/specs. Before 2024, parameter groups were still enum-encoded.
 3. Counts stabilise 2024→2026 because the reference family uses a fixed set of identifiers, not because Autodesk stopped adding them. Real-world project files likely show continued growth.
 4. **Backward-compat implication**: any open reader (rvt-rs, phi-ag/rvt, ODA BimRv SDK) that only supports pre-2021 files will silently drop all Forge-era metadata on round-trip. Any writer targeting 2021+ must emit these identifiers or Revit will refuse to open the file or recompute them lossily.
-5. **Partitions/NN also leaks internal Autodesk build paths** — the 2024 reference file embeds `C:\Users\<redacted>\OneDrive - Autodesk\FY-20XX Projects\Revit - 111111 Update ...` verbatim. This is evidence that Autodesk's own content team used production OneDrive paths when authoring the shipped reference family, and that the format stores those paths without redaction. Customer files fed through this parser can leak the same class of data; downstream tools should redact `C:\Users\*\` paths from any extracted string record.
+5. **Partitions/NN also leaks internal Autodesk authoring paths** — the 2024 reference family embeds a customer-facing OneDrive path of the form `C:\Users\<redacted>\OneDrive - Autodesk\FY-20XX Projects\Revit - <internal-project-id> Update ...` verbatim. This is evidence that Autodesk's content team uses production OneDrive paths when authoring the shipped reference family, and the format stores those paths without redaction. Customer files fed through this parser can leak the same class of data; downstream tools should redact `C:\Users\*\` paths from any extracted string record. The `rvt-analyze --redact` flag does this automatically on every output field; the verbatim username and project ID are intentionally omitted from this public report to avoid re-broadcasting them.
 
 Extraction command used:
 
@@ -842,11 +842,14 @@ Three signals:
    Phase D v0 addendum earlier in this report), so the two sources can
    be cross-validated.
 
-**Privacy note:** the "<redacted>" inclusion plus the "<redacted>" OneDrive
-path (noted in the Forge-dating addendum) are the two currently-confirmed
-long-lived name disclosures in Autodesk's shipped reference family.
-Downstream RVT parsers consuming customer files should redact both
-patterns.
+**Privacy note:** the <redacted> creator-name inclusion (kept in this
+report for historical context — <redacted> is a public figure in BIM history)
+plus the redacted OneDrive-path pattern (noted in the Forge-dating
+addendum) are the two currently-confirmed long-lived name disclosures in
+Autodesk's shipped reference family. Downstream RVT parsers consuming
+customer files should redact both patterns. The `rvt-analyze --redact`
+flag handles this automatically; the committed demo output in
+`docs/demo/` is pre-scrubbed.
 
 Probe file: [`examples/contents_probe.rs`](examples/contents_probe.rs).
 
