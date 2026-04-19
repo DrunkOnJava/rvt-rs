@@ -1610,4 +1610,73 @@ starting at 0x0f6f (the `[u32 12]` marker isn't the first field's
 position either). Serves as a concrete baseline for the next
 contributor to improve.
 
+### Finding Q6.5-D: Container wire is two-column, not one; walker now reads half of ADocument cleanly
+
+Iterated the walker through three Container wire-encoding hypotheses:
+
+| Version | Container header | Per-element | Total for count=12 | m_oContentTable reads |
+|---|---|---|---|---|
+| v2 | `[u32 count][u32 meta]` (8B) | 6B | 80B | garbage u64, array drift |
+| v3 | `[u32 count]` (4B) | 6B | 76B | ANOTHER `[u32 12]` — there's a second array |
+| **v4** | **2 × `[u32 count][12 × 6B]`** (2-col) | — | **152B** | **plausible small integers (50, 60, 8)** |
+
+v4 confirms `m_appInfoArr`'s Container is serialized as TWO parallel
+columns of 12 elements each: `[u32 count][12 × [u16 id][u32 mask]][u32
+count][12 × [u16 id][u32 mask]]`. Column 1 has ids 0x0bc8 repeated;
+column 2 has ids 0x0bc7 repeated. Both with `0xffffffff` masks.
+Almost certainly a `[column_a][column_b]` layout for a 2-field
+element struct (e.g. `{id_a, id_b}` per APIAppInfo entry).
+
+With v4 applied, the walker's output for ADocument's 13 declared
+fields becomes:
+
+| # | Field | Type | Walker read | Interpretation |
+|---|---|---|---|---|
+| 0 | `m_elemTable` | Pointer{2} | `0x0...0` | **NULL ✓** |
+| 1 | `m_appInfoArr` | Container | 12 × id=0x0bc8 / 0x0bc7 | **12-element 2-col Container ✓** |
+| 2 | `m_oContentTable` | Pointer{2} | `0x4020000000000000` | f64 8.0 bit pattern — likely APIAppInfo payload |
+| 3 | `m_pHostDocument` | Pointer{3} | `0x4008000000000000` | f64 3.0 bit pattern — likely APIAppInfo payload |
+| 4 | `m_pAppInfoManager` | Pointer{2} | `0xff...f` | all-ones NULL |
+| 5 | `m_pStyleSettings` | Pointer{2} | `[0xfffffffd][10]` | possible pointer |
+| 6 | `m_pHistory` | Pointer{2} | `[50][1]` | **plausible small-id pointer ✓** |
+| 7 | `m_pSteelModelInfo` | Pointer{2} | `[60][0]` | **plausible small-id pointer ✓** |
+| 8 | `m_pPartitionTable` | Pointer{2} | `0xff...f` | all-ones NULL |
+| 9 | `m_oNobleSecondaryData` | Pointer{1} | `[8][23]` | **plausible small-id pointer ✓** |
+| 10 | `m_ownerFamilyId` | ElementIdRef{20,30} | `[0][27]` | **clean ElementId = 27 ✓** |
+| 11 | `m_ownerFamilyContainingGroupId` | ElementIdRef{20,15} | `[0][31]` | **clean ElementId = 31 ✓** |
+| 12 | `m_devBranchInfo` | ElementIdRef{32797,0} | `[0][35]` | **clean ElementId = 35 ✓** |
+
+Fields 0, 1, 6, 7, 9, 10, 11, 12 — **8 of 13 read cleanly**. The last
+three form a monotonic-by-4 sequence (27, 31, 35) which is exactly
+what you'd expect for three consecutive ElementIds pointing at
+related objects (an owner family + containing group + dev branch,
+probably all residing near each other in the element table).
+
+### What's still misaligned
+
+Fields 2–5 read bytes that **look exactly like IEEE-754 f64 values
+for 8.0 and 3.0**, not pointer-shaped. Strongly suggests the data
+between the Container's 152-byte end and `m_pHistory`'s start is
+APIAppInfo **element-payload data** (the per-element body for the
+container's 12 entries), not framework fields. Each APIAppInfo
+likely carries scalar fields (timestamps, dimensions, etc.) that
+are laid out immediately after the 2-column id+mask tables.
+
+Concrete next probe: compute the exact byte-gap between the end of
+m_appInfoArr's 2-column data (0x1007 in 2024) and the start of the
+`[50][1]` / `[60][0]` sequence at 0x1027 (which aligns with
+m_pHistory). That 32-byte gap is plausibly "3 × f64 + 1 × u64" or
+similar — 3 implicit APIAppInfo scalar slots per entry across 12
+entries would be 288 bytes total, too many; so more likely this is
+just ONE APIAppInfo instance's payload (the others have
+null/sentinel values that collapse to a single serialised record).
+
+### Status
+
+Layer 5a walker is now **~60% complete for ADocument specifically**
+(8 / 13 fields read with plausible values). Remaining work is
+decoding the Container's per-element payload serialisation — a
+separate sub-question that affects any class with reference
+containers, not just ADocument.
+
 **End of report.**
