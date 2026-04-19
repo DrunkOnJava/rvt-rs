@@ -1,30 +1,17 @@
-//! Integration tests against the 11-version RFA corpus in `../../samples/`.
-//! These are the public `rac_basic_sample_family` fixtures from phi-ag/rvt (LFS).
+//! Integration tests against the 11-version RFA corpus. Corpus is the
+//! public `rac_basic_sample_family` fixtures from phi-ag/rvt (LFS);
+//! rvt-rs does not redistribute these files (see `SECURITY.md`).
+//! Corpus path is resolved via `tests/common::samples_dir()` which
+//! respects the `RVT_SAMPLES_DIR` env var used by CI.
 
+mod common;
+
+use common::{ALL_YEARS, sample_for_year};
 use rvt::RevitFile;
 use std::collections::HashSet;
-use std::path::PathBuf;
-
-fn sample_path(name: &str) -> PathBuf {
-    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.push("../../samples");
-    p.push(name);
-    p
-}
-
-fn sample_for_year(year: u32) -> PathBuf {
-    let filename = match year {
-        2016..=2019 => format!("rac_basic_sample_family-{year}.rfa"),
-        2020..=2026 => format!("racbasicsamplefamily-{year}.rfa"),
-        _ => panic!("unknown sample year {year}"),
-    };
-    sample_path(&filename)
-}
 
 fn all_years() -> Vec<u32> {
-    vec![
-        2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
-    ]
+    ALL_YEARS.to_vec()
 }
 
 #[test]
