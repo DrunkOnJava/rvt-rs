@@ -457,6 +457,7 @@ fn looks_like_cpp_type(bytes: &[u8]) -> bool {
 ///         06 00 00 00  6d 5f 70 41 43 44                     u32=6, "m_pACD" (field name)
 ///         0e 03 00 00 00 00 00 00 00 00                      field type code block
 /// ```
+#[allow(dead_code)]
 fn scan_fields_until_next_class(
     data: &[u8],
     start: usize,
