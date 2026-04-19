@@ -95,6 +95,7 @@ pub mod partitions;
 pub mod reader;
 pub mod redact;
 pub mod streams;
+pub mod walker;
 pub mod writer;
 
 pub use error::{Error, Result};

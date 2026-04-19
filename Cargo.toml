@@ -75,6 +75,10 @@ path = "src/bin/rvt_corpus.rs"
 name = "rvt-dump"
 path = "src/bin/rvt_dump.rs"
 
+[[bin]]
+name = "rvt-doc"
+path = "src/bin/rvt_doc.rs"
+
 [lib]
 name = "rvt"
 path = "src/lib.rs"
