@@ -74,7 +74,7 @@ pub fn read_adocument(rf: &mut RevitFile) -> Result<Option<ADocumentInstance>> {
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
     let d = compression::inflate_at(&raw, 8)?;
-    let Some(entry) = find_adocument_start(&d) else {
+    let Some(entry) = find_adocument_start_with_schema(&d, Some(adoc)) else {
         return Ok(None);
     };
 
@@ -102,11 +102,54 @@ pub fn read_adocument(rf: &mut RevitFile) -> Result<Option<ADocumentInstance>> {
     }))
 }
 
+#[cfg(test)]
 fn find_adocument_start(d: &[u8]) -> Option<usize> {
-    // Use the same hybrid detector as
-    // `examples/adocument_walker_v1.rs`: find the LAST long
-    // sequential-id table, then look for the 8-zero ADocument
-    // signature after it.
+    find_adocument_start_with_schema(d, None)
+}
+
+/// Locate ADocument's entry point. When an ADocument class schema is
+/// supplied, also runs a scoring-based brute-force scan that picks
+/// the offset whose trial walk produces the most-sensible values for
+/// the last three fields (small distinct `ElementId` ids with tag=0).
+/// That's strong enough to find the entry point on Revit 2021–2026,
+/// where the heuristic-only path misses 2021–2023.
+fn find_adocument_start_with_schema(
+    d: &[u8],
+    adoc_schema: Option<&formats::ClassEntry>,
+) -> Option<usize> {
+    // Strategy 1: sequential-id-table end + 8-zero signature scan.
+    if let Some(h) = heuristic_find(d) {
+        if let Some(cls) = adoc_schema {
+            if trial_walk(cls, &d[h..]).is_some_and(|w| walk_score(&w) >= 90) {
+                return Some(h);
+            }
+        } else {
+            return Some(h);
+        }
+    }
+    // Strategy 2: score-based byte-aligned brute-force scan. Only
+    // runs when a schema is supplied.
+    if let Some(cls) = adoc_schema {
+        let mut best: Option<(i64, usize)> = None;
+        let end = d.len().saturating_sub(256);
+        for offset in 0x100..end {
+            if let Some(walk) = trial_walk(cls, &d[offset..]) {
+                let sc = walk_score(&walk);
+                if best.as_ref().is_none_or(|(bs, _)| sc > *bs) {
+                    best = Some((sc, offset));
+                }
+            }
+        }
+        if let Some((sc, off)) = best
+            && sc >= 80
+        {
+            return Some(off);
+        }
+    }
+    None
+}
+
+fn heuristic_find(d: &[u8]) -> Option<usize> {
     let mut last_table_end = 0usize;
     let mut i = 0;
     while i + 4 < d.len() {
@@ -146,6 +189,111 @@ fn find_adocument_start(d: &[u8]) -> Option<usize> {
         k += 1;
     }
     None
+}
+
+fn trial_walk(adoc: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u32)>> {
+    let mut cursor = 0;
+    let mut out = Vec::new();
+    for field in &adoc.fields {
+        let ft = field.field_type.as_ref()?;
+        let (consumed, tag_id) = match ft {
+            formats::FieldType::Pointer { .. } => {
+                if cursor + 8 > bytes.len() {
+                    return None;
+                }
+                (8, (u32::MAX, u32::MAX))
+            }
+            formats::FieldType::ElementId | formats::FieldType::ElementIdRef { .. } => {
+                if cursor + 8 > bytes.len() {
+                    return None;
+                }
+                let tag = u32::from_le_bytes([
+                    bytes[cursor],
+                    bytes[cursor + 1],
+                    bytes[cursor + 2],
+                    bytes[cursor + 3],
+                ]);
+                let id = u32::from_le_bytes([
+                    bytes[cursor + 4],
+                    bytes[cursor + 5],
+                    bytes[cursor + 6],
+                    bytes[cursor + 7],
+                ]);
+                (8, (tag, id))
+            }
+            formats::FieldType::Container { kind: 0x0e, .. } => {
+                if cursor + 4 > bytes.len() {
+                    return None;
+                }
+                let count = u32::from_le_bytes([
+                    bytes[cursor],
+                    bytes[cursor + 1],
+                    bytes[cursor + 2],
+                    bytes[cursor + 3],
+                ]) as usize;
+                if count > 1000 {
+                    return None;
+                }
+                let col_bytes = 4 + count * 6;
+                if cursor + col_bytes + 4 > bytes.len() {
+                    return None;
+                }
+                let col2_count = u32::from_le_bytes([
+                    bytes[cursor + col_bytes],
+                    bytes[cursor + col_bytes + 1],
+                    bytes[cursor + col_bytes + 2],
+                    bytes[cursor + col_bytes + 3],
+                ]) as usize;
+                if col2_count != count {
+                    return None;
+                }
+                (2 * col_bytes, (u32::MAX, u32::MAX))
+            }
+            _ => return None,
+        };
+        out.push(tag_id);
+        cursor += consumed;
+    }
+    Some(out)
+}
+
+fn walk_score(walk: &[(u32, u32)]) -> i64 {
+    if walk.len() < 3 {
+        return i64::MIN;
+    }
+    let last3 = &walk[walk.len() - 3..];
+    let real_ids: Vec<u32> = last3
+        .iter()
+        .filter(|(t, _)| *t != u32::MAX)
+        .map(|(_, i)| *i)
+        .collect();
+    if real_ids.is_empty() || real_ids.iter().all(|i| *i == 0) {
+        return i64::MIN;
+    }
+    let mut s: i64 = 0;
+    for (t, i) in last3 {
+        if *t == u32::MAX {
+            continue;
+        }
+        if *t == 0 {
+            s += 10;
+        }
+        if (1..=10000).contains(i) {
+            s += 20;
+        } else if (1..=0xffff).contains(i) {
+            s += 5;
+        } else {
+            s -= 10;
+        }
+    }
+    if real_ids.len() >= 2 {
+        let max = *real_ids.iter().max().unwrap();
+        let min = *real_ids.iter().min().unwrap();
+        if max > 0 && max - min <= 50 {
+            s += 25;
+        }
+    }
+    s
 }
 
 fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> Option<(usize, InstanceField)> {
