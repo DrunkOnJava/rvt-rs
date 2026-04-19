@@ -506,4 +506,118 @@ Extraction command used:
 See `src/object_graph.rs::string_records_from_partitions` and
 `src/bin/rvt_history.rs` for the extractor and classification.
 
+## Addendum — Phase D link proof (2026-04-19, same day)
+
+The first direct evidence that the Phase C schema table *indexes the Phase D
+data*. We knew 395 class names were declared in `Formats/Latest`; this section
+shows the class IDs appear at non-random density inside `Global/Latest`,
+proving the schema is the live type dictionary for the object graph.
+
+### Tag encoding
+
+After every class-name record in `Formats/Latest`, there is a `u16 LE` with
+two distinct meanings:
+
+- **High bit set** (`0x8000` flag) → this record is a class definition, and
+  the low 15 bits are the class's serialization tag ID.
+- **High bit clear** → this is a type *reference* (appears inside a field
+  signature), pointing back to an already-declared class tag.
+
+In a 2024 family file, 398 class-name candidates are found. **79** (19.8%) are
+class definitions with the 0x8000 flag set; the remaining ~80% are reference
+entries inside fields and type signatures. The 79 tagged tags are
+monotonically ordered:
+
+```text
+0x000d A3PartyAImage
+0x0012 ADTGridImportVocabulary
+0x001b ADocWarnings
+0x0025 APIVSTAMacroElem
+0x0028 APIVSTAMacroElemTracking
+0x002a AProperties
+0x0046 ATFProvenanceBaseCell
+0x0047 Cell
+0x004c ATFRevitObjectStylesOverride
+0x0058 AbsCurveDriver
+0x0061 AbsCurveGStep
+0x0062 GeomStep
+0x006a AbsCurveType
+0x006b HostObjAttr
+0x006d AbsDbViewPressureLossReport
+…
+0x01b8 AreaMeasureCurveData   (last in this file)
+```
+
+### The 340× non-uniformity proof
+
+In the 2024 family file, decompressed `Global/Latest` is 938,578 bytes (~917
+KB). If class tags were uniformly random across the sampled range (0 to
+0x4000), each tag would occur ~57 times. The actual distribution is extremely
+skewed:
+
+| Tag | Class | u16 LE hits | Ratio vs uniform |
+|---|---|---:|---:|
+| 0x0061 | AbsCurveGStep | 19,415 | **340×** |
+| 0x006b | HostObjAttr | 6,599 | **115×** |
+| 0x006d | AbsDbViewPressureLossReport | 5,444 | 95× |
+| 0x0062 | GeomStep | 2,274 | 40× |
+| 0x0100 | AnalyticalLevelAssociationCell | 1,245 | 22× |
+| 0x0046 | ATFProvenanceBaseCell | 1,119 | 20× |
+| 0x001b | ADocWarnings | 261 | 4.6× |
+| (tail of 70+ tags) | | 1–10 each | 0.02×–0.17× |
+
+The 340× concentration on geometry/curve classes is exactly what a tagged
+object stream should look like for a family file dominated by curve-driven
+hosted geometry. This is **not** something a random-walk false positive rate
+can produce.
+
+### Tags are NOT stable across Revit releases
+
+Cross-checking the same analysis against the 2016 family file:
+
+| Class | 2016 tag | 2024 tag |
+|---|---|---|
+| A3PartyAImage | 0x000d | 0x000d (stable!) |
+| ADTGridImportVocabulary | 0x0012 | 0x0012 (stable!) |
+| ADocWarnings | 0x001b | 0x001b (stable!) |
+| APIVSTAMacroElemTracking | 0x0028 | 0x0028 (stable!) |
+| AbsCurveGStep | 0x0053 | 0x0061 (shifted +14) |
+| AbsDbViewPressureLossReport | 0x005f | 0x006d (shifted +14) |
+| HostObjAttr | — | 0x006b |
+
+Tags are assigned by a stable-sort enumeration that shifts every time new
+classes are inserted into the schema. Early-enumerated classes keep the same
+tag across versions; later ones drift. **Consequence:** any parser (including
+rvt-rs) must re-read `Formats/Latest` per file — tag values cannot be
+hard-coded into the reader's Rust structs. This is a *good* property of the
+format: it means there is no version-keyed registry to reverse-engineer; each
+file ships its own type table.
+
+### Files producing this finding
+
+- `examples/tag_dump.rs` — statistical sweep of post-name u16 patterns
+- `examples/link_schema.rs` — schema-to-global linkage with histogram
+- `examples/probe_link.rs` — null-hypothesis check (class names do not appear
+  as ASCII strings in Global/Latest; confirms tag-indexing design)
+
+These examples are shipped in-repo so future contributors can reproduce the
+finding without rebuilding the probe.
+
+### What this unlocks
+
+With schema tags linked to data, Phase D can now focus on one goal: **given a
+tag T and the schema table, walk Global/Latest to materialize every instance
+of class T as a structured record.** The remaining unknowns are:
+
+1. Record framing — how is one instance boundary delimited from the next?
+2. Field serialization — how are `double`, `int`, `ElementId`,
+   `std::pair< A, B >`, `std::vector< T >`, and `std::map< K, V >` encoded?
+3. Alignment / padding — does the format align records?
+4. References — how does one instance point at another (by offset? by tag?
+   by a separate ID table like `Global/ElemTable`?)
+
+The schema already gives us field names *and their C++ type signatures* in
+ASCII, so each of these unknowns is an incremental bit-level hypothesis + a
+bit-level test against the 11-version corpus — not a multi-year effort.
+
 **End of report.**
