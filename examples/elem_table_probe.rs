@@ -91,7 +91,7 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 let mut sorted: Vec<_> = freq.iter().collect();
-                sorted.sort_by(|a, b| b.1.cmp(a.1));
+                sorted.sort_by_key(|e| std::cmp::Reverse(*e.1));
                 print!("  top u32 LE values (first 512 bytes):");
                 for (v, c) in sorted.iter().take(5) {
                     print!(" 0x{:08x}×{}", v, c);

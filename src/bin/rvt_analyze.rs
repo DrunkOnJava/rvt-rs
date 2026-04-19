@@ -423,7 +423,7 @@ fn build_link(rf: &mut RevitFile, tagged: &[TaggedClass]) -> anyhow::Result<Link
             }
         })
         .collect();
-    entries.sort_by(|a, b| b.hits.cmp(&a.hits));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.hits));
 
     let total_hits: u32 = entries.iter().map(|e| e.hits).sum();
     Ok(LinkSummary {

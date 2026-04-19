@@ -71,4 +71,4 @@ All notable changes will be documented here. This project follows
 
 ## [0.1.0] — not yet released
 
-Initial public release (pending Griffin's stealth-flip decision).
+Initial public release.
