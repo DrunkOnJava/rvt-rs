@@ -95,19 +95,21 @@ fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> (usize, String) {
             };
             (s, format!("[{hex:<24}] {decoded}"))
         }
-        // Guess: Pointer wire = u32 (target ref or NULL marker)
+        // Refined guess (v2): Pointer wire = 8 bytes. Motivation: 8-byte
+        // preamble at ADocument entry + subsequent `0c 00 00 00 ff ff ff ff`
+        // pair reads cleanly as two 8-byte words where the second is
+        // [u32 count=12][u32 metadata] — consistent with Pointer-then-
+        // Container sequence.
         Pointer { kind } => {
-            if bytes.len() < 4 {
+            if bytes.len() < 8 {
                 return (0, format!("<short buffer for Pointer kind={kind}>"));
             }
-            let v = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-            (
-                4,
-                format!(
-                    "[{:02x} {:02x} {:02x} {:02x}] Pointer{{kind:{kind}}} -> 0x{v:08x}",
-                    bytes[0], bytes[1], bytes[2], bytes[3]
-                ),
-            )
+            let v = u64::from_le_bytes([
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            ]);
+            let hex: ::std::string::String =
+                bytes[..8].iter().map(|b| format!("{b:02x} ")).collect();
+            (8, format!("[{hex}] Pointer{{kind:{kind}}} -> 0x{v:016x}"))
         }
         // Guess: ElementId wire = 8 bytes (full u64 or [u32 tag][u32 id])
         ElementId | ElementIdRef { .. } => {
@@ -123,8 +125,16 @@ fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> (usize, String) {
                 format!("[{hex}] ElementId{{tag:0x{tag:08x}, id:0x{id:08x}}}"),
             )
         }
-        // Guess: Container wire = [u32 count][count * ...] — but element
-        // size depends on kind. Try [u32 count][count * 6-byte records].
+        // Refined guess (v4): Container wire = TWO parallel columns of
+        // [u32 count][count × 6B records]. Observed in the 2024 sample:
+        // m_appInfoArr's data at 0x0f6f is
+        //     [u32 count=12][12×[u16 0x0bc8][u32 ff]][u32 count=12][12×[u16 0x0bc7][u32 ff]]
+        // That's 2 × (4 + 72) = 152 bytes, which when consumed lands
+        // field 2 (m_oContentTable) at 0x1007 where a pair of NULL
+        // Pointers (0x0000000040200000-ish bytes) appear, consistent
+        // with Pointer wire = 8 bytes, null-first-u32.
+        // Hypothesis: every reference-container (kind=0x0e) serializes
+        // as a 2-column [id-array][mask-array] table.
         Container { kind, .. } => {
             if bytes.len() < 4 {
                 return (0, format!("<short buffer for Container kind={kind}>"));
@@ -139,36 +149,68 @@ fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> (usize, String) {
                     ),
                 );
             }
-            // Assume each element is 6 bytes `[u16 id][u32 sentinel_or_data]`.
             let elem_size = 6;
-            let total = 4 + count * elem_size;
+            // Two-column layout: header + col1 + header + col2
+            let col_bytes = 4 + count * elem_size;
+            let total = 2 * col_bytes;
             if bytes.len() < total {
                 return (
                     0,
                     format!(
-                        "Container{{kind:{kind}, count={count}}} — need {total} bytes, have {}",
+                        "Container{{kind:{kind}, count={count}}} — need {total} bytes for 2-column layout, have {}",
                         bytes.len()
                     ),
                 );
             }
-            let mut summary = Vec::new();
+            // Verify second column starts with the same count marker
+            // (supports the hypothesis; if mismatched, fall back to
+            // single-column 4+6*count bytes and warn).
+            let col2_count = u32::from_le_bytes([
+                bytes[col_bytes],
+                bytes[col_bytes + 1],
+                bytes[col_bytes + 2],
+                bytes[col_bytes + 3],
+            ]) as usize;
+            if col2_count != count {
+                // Single-column fallback.
+                let fallback_total = col_bytes;
+                let mut summary = Vec::new();
+                for k in 0..count.min(3) {
+                    let base = 4 + k * elem_size;
+                    let id = u16::from_le_bytes([bytes[base], bytes[base + 1]]);
+                    let mask = u32::from_le_bytes([
+                        bytes[base + 2],
+                        bytes[base + 3],
+                        bytes[base + 4],
+                        bytes[base + 5],
+                    ]);
+                    summary.push(format!("[0x{id:04x}, 0x{mask:08x}]"));
+                }
+                return (
+                    fallback_total,
+                    format!(
+                        "Container{{kind:{kind}, count:{count}, 1-col}} = [{}{}] ({fallback_total}B, no 2nd col)",
+                        summary.join(", "),
+                        if count > 3 { ", ..." } else { "" }
+                    ),
+                );
+            }
+            let mut col1 = Vec::new();
+            let mut col2 = Vec::new();
             for k in 0..count.min(3) {
                 let base = 4 + k * elem_size;
-                let id = u16::from_le_bytes([bytes[base], bytes[base + 1]]);
-                let mask = u32::from_le_bytes([
-                    bytes[base + 2],
-                    bytes[base + 3],
-                    bytes[base + 4],
-                    bytes[base + 5],
-                ]);
-                summary.push(format!("[0x{id:04x}, 0x{mask:08x}]"));
+                let id1 = u16::from_le_bytes([bytes[base], bytes[base + 1]]);
+                let base2 = col_bytes + 4 + k * elem_size;
+                let id2 = u16::from_le_bytes([bytes[base2], bytes[base2 + 1]]);
+                col1.push(format!("0x{id1:04x}"));
+                col2.push(format!("0x{id2:04x}"));
             }
             (
                 total,
                 format!(
-                    "Container{{kind:{kind}, count:{count}}} = [{}{}]",
-                    summary.join(", "),
-                    if count > 3 { ", ..." } else { "" }
+                    "Container{{kind:{kind}, count:{count}, 2-col}} col1=[{}] col2=[{}] ({total}B)",
+                    col1.join(","),
+                    col2.join(","),
                 ),
             )
         }
@@ -243,9 +285,10 @@ fn main() -> anyhow::Result<()> {
     println!("Post-Table-B entry point: 0x{cutoff:06x}");
     println!();
 
-    // Try two attack shapes: (a) start reading fields DIRECTLY at
-    // cutoff; (b) skip an 8-byte preamble first.
-    for skip in [0usize, 8] {
+    // Try several attack shapes. The instance data may have an
+    // implicit serialization-framework header (version word, refcount,
+    // etc.) before the schema-declared fields begin. Test N=0,8,16,24.
+    for skip in [0usize, 8, 16, 24] {
         let start = cutoff + skip;
         if start >= d.len() {
             continue;
