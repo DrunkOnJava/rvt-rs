@@ -1679,4 +1679,62 @@ decoding the Container's per-element payload serialisation — a
 separate sub-question that affects any class with reference
 containers, not just ADocument.
 
+### Finding Q6.5-E: cross-version validation on 2024–2026
+
+Ran walker v5 (v4 decoders + a hybrid entry-point detector that
+combines the last sequential-id-table end with the 8-zero
+ADocument-start signature search) across all 11 corpus files:
+
+| Release | Entry offset | Fields read | m_ownerFamilyId | m_ownerFamilyContainingGroupId | m_devBranchInfo |
+|---|---|---|---|---|---|
+| 2016 | 0x00549 | 12 | garbage | garbage | garbage |
+| 2017 | 0x005c1 | 12 | garbage | garbage | garbage |
+| 2018 | 0x00657 | 12 | garbage | garbage | garbage |
+| 2019 | 0x00613 | 13 | garbage | garbage | garbage |
+| 2020 | 0x00675 | 13 | garbage | garbage | garbage |
+| 2021 | 0x006ed | 13 | garbage | garbage | garbage |
+| 2022 | 0x00795 | 13 | garbage | garbage | garbage |
+| 2023 | 0x007f7 | 13 | garbage | garbage | garbage |
+| **2024** | **0x00f67** | **13** | **27 (0x1b)** | **31 (0x1f)** | **35 (0x23)** |
+| **2025** | **0x01005** | **13** | **27 (0x1b)** | **31 (0x1f)** | **35 (0x23)** |
+| **2026** | **0x0105f** | **13** | **27 (0x1b)** | **31 (0x1f)** | **35 (0x23)** |
+
+**2024, 2025, and 2026 all produce identical values for the last
+three ElementIdRef fields.** Three different Revit releases of the
+same family document reading the same three element-id pointers is
+the strongest single piece of validation the walker's decoders and
+entry-point detector can produce. The values (27, 31, 35) are
+sequential-by-4, exactly matching the expected pattern for three
+consecutive family-graph references (owner-family + containing-group
++ dev-branch info).
+
+2016–2023 produce garbage not because the walker is wrong but
+because the entry-point detector lands inside earlier structures in
+those releases' stream layouts. The stream body in those releases
+is organised differently — likely Table A/B sizing, record-count
+scaling, or a different pre-ADocument header — and the signature
+match is falsely triggered before reaching ADocument's actual
+start.
+
+### Concrete open tasks
+
+1. **Fix entry-point detection for 2016–2023.** Exclude false-
+   positive matches by requiring the 8-zero signature to fall after
+   a minimum offset proportional to stream size, or add a
+   version-aware dispatch keyed on the first few bytes of the
+   decompression prefix.
+2. **Decode fields 2–5 of ADocument** (m_oContentTable through
+   m_pStyleSettings). These currently read IEEE-754 bit patterns
+   for 8.0 and 3.0; most likely APIAppInfo element-payload data
+   lives immediately after the 2-column Container's id+mask tables.
+3. **Promote the walker probe to `src/walker.rs`** as a proper
+   library module, with `InstanceField` enum variants and a
+   `Walker::read_adocument()` entry point — unblocking task #83.
+
+Probes added:
+- `examples/adocument_walker_v1.rs` — four hypothesis iterations
+  (v1 4B Pointer / 4+6B Container → v2 8B Pointer / 8+6B Container →
+  v3 8B Pointer / 4+6B Container → v4 8B Pointer / 2-column 152B
+  Container). Latest includes hybrid entry detection for v5.
+
 **End of report.**
