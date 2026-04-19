@@ -17,8 +17,21 @@
 
 use rvt::{RevitFile, compression, formats, streams};
 
-fn find_table_b_end(d: &[u8]) -> usize {
-    let mut last_end = 0usize;
+/// Locate ADocument's instance start. Two strategies, in order:
+///   (1) Scan for the ADocument signature — 8 zero bytes followed by a
+///       small u32 count ≤ 100 and a plausible mask. This is the
+///       strongest cross-version signal IF it's unique.
+///   (2) If (1) finds multiple candidates, prefer the one AFTER the
+///       end of the longest sequential-id run (Table A or Table B).
+///
+/// Today (2026-04-19) this works reliably on 2024 only; for other
+/// releases, the candidate search finds additional false positives
+/// inside the history block. Cross-version detection is documented
+/// in §Q6.5-D of the recon report as the next open sub-task.
+fn find_adocument_start(d: &[u8]) -> usize {
+    // Fallback: reuse the old sequential-id-table detector — for 2024
+    // it returns the right offset (0x0f67).
+    let mut last_table_end = 0usize;
     let mut i = 0;
     while i + 4 < d.len() {
         if d[i..i + 4] == [1, 0, 0, 0] {
@@ -42,14 +55,27 @@ fn find_table_b_end(d: &[u8]) -> usize {
                 }
             }
             if expect >= 6 {
-                last_end = end + 32;
+                last_table_end = end + 32;
                 i = end;
                 continue;
             }
         }
         i += 1;
     }
-    last_end
+    // Search for the 8-zero signature AFTER the last table's end.
+    let min_start = last_table_end.max(0x200);
+    let mut k = min_start;
+    while k + 16 <= d.len() {
+        if d[k..k + 8].iter().all(|&b| b == 0) {
+            let next_u32 = u32::from_le_bytes([d[k + 8], d[k + 9], d[k + 10], d[k + 11]]);
+            let next_next = u32::from_le_bytes([d[k + 12], d[k + 13], d[k + 14], d[k + 15]]);
+            if (1..=100).contains(&next_u32) && (next_next == 0xffffffff || next_next <= 0x10000) {
+                return k;
+            }
+        }
+        k += 1;
+    }
+    last_table_end
 }
 
 /// Attempt to read one field. Returns the number of bytes consumed
@@ -281,14 +307,17 @@ fn main() -> anyhow::Result<()> {
 
     let raw_gl = rf.read_stream(streams::GLOBAL_LATEST)?;
     let d = compression::inflate_at(&raw_gl, 8)?;
-    let cutoff = find_table_b_end(&d);
-    println!("Post-Table-B entry point: 0x{cutoff:06x}");
+    let cutoff = find_adocument_start(&d);
+    if cutoff == 0 {
+        println!("ADocument-start signature not found.");
+        return Ok(());
+    }
+    println!("ADocument entry point: 0x{cutoff:06x}");
     println!();
 
-    // Try several attack shapes. The instance data may have an
-    // implicit serialization-framework header (version word, refcount,
-    // etc.) before the schema-declared fields begin. Test N=0,8,16,24.
-    for skip in [0usize, 8, 16, 24] {
+    // Single attempt now that find_adocument_start lands exactly on
+    // m_elemTable (the 8-zero signature). No preamble to skip.
+    for skip in [0usize] {
         let start = cutoff + skip;
         if start >= d.len() {
             continue;
