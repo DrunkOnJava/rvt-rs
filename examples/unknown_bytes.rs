@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut rows: Vec<_> = hist.iter().collect();
-    rows.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    rows.sort_by_key(|r| std::cmp::Reverse(r.1.0));
 
     println!(
         "Unknown field_type first-4-byte histogram (top 30 patterns, {} distinct):",

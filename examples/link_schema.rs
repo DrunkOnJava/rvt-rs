@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .map(|(n, t)| (n.as_str(), *t, *hits_u16.get(t).unwrap_or(&0)))
         .collect();
-    counts.sort_by(|a, b| b.2.cmp(&a.2));
+    counts.sort_by_key(|c| std::cmp::Reverse(c.2));
 
     println!("\nTop 25 tagged classes by u16 LE occurrences in Global/Latest:");
     println!(

@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         let mut entries: Vec<_> = freq.iter().collect();
-        entries.sort_by(|a, b| b.1.cmp(a.1));
+        entries.sort_by_key(|e| std::cmp::Reverse(e.1));
         let (mode_b, mode_c) = entries.first().map(|(b, c)| (**b, **c)).unwrap_or((0, 0));
         let mode_pct = 100.0 * mode_c as f64 / total.max(1) as f64;
         print!("  +{delta:2}      0x{mode_b:02x}   {mode_c:5}  {mode_pct:5.1}%   ");

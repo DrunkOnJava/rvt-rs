@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
     println!("Total class candidates: {}", classes.len());
     println!("\nDistribution of u16 immediately after class name:");
     let mut freq: Vec<_> = tag_frequency.iter().collect();
-    freq.sort_by(|a, b| b.1.cmp(a.1));
+    freq.sort_by_key(|e| std::cmp::Reverse(*e.1));
     for (val, count) in freq.iter().take(20) {
         let flag = if **val & 0x8000 != 0 {
             " [0x8000 SET]"

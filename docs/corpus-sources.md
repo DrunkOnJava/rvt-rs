@@ -72,5 +72,5 @@ Suggested probabilistic targets:
 - 1× project with extensive parameter customisation
 - 1× "broken" / minimal-viable file (for error-handling tests)
 
-This is the track we'd recommend Griffin pursue once public adoption
-starts — early adopters' broken files become the test corpus.
+This is the recommended track once public adoption starts — early
+adopters' broken files become the test corpus organically.
