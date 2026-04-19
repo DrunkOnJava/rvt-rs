@@ -52,6 +52,15 @@ pub struct ClassEntry {
     pub offset: usize,
     /// Fields declared by this class (best-effort).
     pub fields: Vec<FieldEntry>,
+    /// Serialization tag if this class has one set (u16, 0x8000 flag stripped).
+    /// Absent = the class is not top-level serializable; it's an embedded type.
+    pub tag: Option<u16>,
+    /// Parent / superclass name if present. Determined by the `[u16 len][name]`
+    /// block that follows the tag. For e.g. HostObjAttr → Some("Symbol").
+    pub parent: Option<String>,
+    /// Field-count value the schema itself declares (may disagree with
+    /// `fields.len()` if the walker missed one).
+    pub declared_field_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +121,67 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
         // Move cursor past the class name header.
         let mut cursor = str_start + len;
 
+        // Try to parse the tag word (u16) immediately after the name.
+        // If its 0x8000 bit is set, this is a TAGGED (top-level) class.
+        // For tagged classes we also try to recognise the following
+        // `[u16 pad=0][u16 parent_name_len][parent_name]` block and the
+        // `[u16 flag][u32 field_count][u32 field_count]` preamble that
+        // precede the field list. See FACT F3 in
+        // docs/rvt-moat-break-reconnaissance.md §Phase 4c findings.
+        let mut tag: Option<u16> = None;
+        let mut parent: Option<String> = None;
+        let mut declared_field_count: Option<u32> = None;
+        if cursor + 2 <= data.len() {
+            let raw_tag = u16::from_le_bytes([data[cursor], data[cursor + 1]]);
+            if raw_tag & 0x8000 != 0 {
+                tag = Some(raw_tag & 0x7fff);
+                cursor += 2;
+                // Skip the 2-byte pad, then read u16 parent-name-length.
+                if cursor + 4 <= data.len() {
+                    let pad = u16::from_le_bytes([data[cursor], data[cursor + 1]]);
+                    let plen = u16::from_le_bytes([data[cursor + 2], data[cursor + 3]]) as usize;
+                    if pad == 0 && (3..=40).contains(&plen) && cursor + 4 + plen <= data.len() {
+                        let p = &data[cursor + 4..cursor + 4 + plen];
+                        if looks_like_class_name(p) {
+                            // Peek at what follows the candidate parent name
+                            // to confirm the preamble validates. Only commit
+                            // (record parent, advance cursor) if both the
+                            // parent name AND the following
+                            // `[u16 flag][u32 fc][u32 fc_dup]` preamble look
+                            // plausible. This avoids misreading the NEXT
+                            // class's declaration as this class's parent.
+                            let preamble_at = cursor + 4 + plen;
+                            if preamble_at + 10 <= data.len() {
+                                let flag = u16::from_le_bytes([
+                                    data[preamble_at],
+                                    data[preamble_at + 1],
+                                ]);
+                                let fc = u32::from_le_bytes([
+                                    data[preamble_at + 2],
+                                    data[preamble_at + 3],
+                                    data[preamble_at + 4],
+                                    data[preamble_at + 5],
+                                ]);
+                                let fc2 = u32::from_le_bytes([
+                                    data[preamble_at + 6],
+                                    data[preamble_at + 7],
+                                    data[preamble_at + 8],
+                                    data[preamble_at + 9],
+                                ]);
+                                if flag & 0x8000 == 0 && fc == fc2 && fc <= 200 {
+                                    parent = Some(
+                                        std::str::from_utf8(p).unwrap().to_string(),
+                                    );
+                                    declared_field_count = Some(fc);
+                                    cursor = preamble_at + 10;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Walk forward until we find the next class-name candidate OR end
         // of stream. While walking, pick up any embedded field records.
         let mut fields = Vec::new();
@@ -128,6 +198,9 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
                 name: class_name,
                 offset: class_offset,
                 fields,
+                tag,
+                parent,
+                declared_field_count,
             });
         }
         i = cursor.max(i + 1);
@@ -336,5 +409,43 @@ mod tests {
             "expected field m_pACD, got {:?}",
             class.fields.iter().map(|f| &f.name).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn parses_tagged_class_with_parent() {
+        // Mirrors the observed HostObjAttr record at offset 0x7238 in the
+        // 2024 reference file:
+        //   [u16 11] "HostObjAttr"
+        //   [u16 0x806b]          (tag 0x006b, 0x8000 flag set)
+        //   [u16 0]               (pad)
+        //   [u16 6] "Symbol"      (parent class)
+        //   [u16 0x0025]          (flag)
+        //   [u32 3] [u32 3]       (field count x 2)
+        //   [u32 12] "m_symbolInfo" [u32 0x0000020e]        (field 1)
+        let mut buf = Vec::<u8>::new();
+        buf.extend_from_slice(&[0x0b, 0x00]);
+        buf.extend_from_slice(b"HostObjAttr");
+        buf.extend_from_slice(&[0x6b, 0x80]);        // tag 0x006b with 0x8000 flag
+        buf.extend_from_slice(&[0x00, 0x00]);        // pad
+        buf.extend_from_slice(&[0x06, 0x00]);        // parent name len = 6
+        buf.extend_from_slice(b"Symbol");            // parent
+        buf.extend_from_slice(&[0x25, 0x00]);        // flag
+        buf.extend_from_slice(&[0x03, 0x00, 0x00, 0x00]); // field count = 3
+        buf.extend_from_slice(&[0x03, 0x00, 0x00, 0x00]); // duplicate
+        buf.extend_from_slice(&[0x0c, 0x00, 0x00, 0x00]); // field 1 name len = 12
+        buf.extend_from_slice(b"m_symbolInfo");      // field 1 name
+        buf.extend_from_slice(&[0x0e, 0x02, 0x00, 0x00]); // type encoding
+        // pad out to 64KB-ish so schema parser doesn't bail on the last record
+        buf.resize(512, 0);
+
+        let schema = parse_schema(&buf).unwrap();
+        let class = schema
+            .classes
+            .iter()
+            .find(|c| c.name == "HostObjAttr")
+            .expect("HostObjAttr class not parsed");
+        assert_eq!(class.tag, Some(0x006b));
+        assert_eq!(class.parent.as_deref(), Some("Symbol"));
+        assert_eq!(class.declared_field_count, Some(3));
     }
 }
