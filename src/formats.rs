@@ -115,29 +115,53 @@ pub enum FieldType {
     /// size in bytes; `kind` is the type category byte (0x01, 0x02,
     /// 0x04, 0x05, 0x06, 0x07, 0x0b).
     Primitive { kind: u8, size: u8 },
-    /// UTF-16LE string, length-prefixed. `0x08` family.
+    /// UTF-16LE string, length-prefixed. `0x08` family. Two equivalent
+    /// wire encodings exist: `0x08 0x00 0x60 0x00` (sub=0x6000) and
+    /// `0x08 0x60 0x00 0x00` (sub=0x0060). Both decode to `String`.
     String,
     /// 16-byte GUID / UUID. `0x09` family.
     Guid,
-    /// `0x0e 0x00 0x00 0x00 0x14 0x00` — 6-byte pattern for ElementId.
+    /// `0x0e 0x00 0x00 0x00 0x14 0x00 0x00 0x00` — the canonical ElementId,
+    /// referencing the root `ElementId` class (tag 0x0014). This is the
+    /// common case; see `ElementIdRef` for references that carry a
+    /// specific referenced-class tag.
     ElementId,
+    /// `0x0e 0x00 0x00 0x00 <tag:u16> <sub:u16>` where `<tag>` is the
+    /// referenced class's 15-bit tag (high bit stripped). Revit encodes
+    /// "pointer to element of known class" by embedding the target's
+    /// tag here. The `sub` u16 refines the reference kind (0x0000
+    /// bare-ref, 0x0009/0x0014/0x0080 observed modifiers).
+    ElementIdRef {
+        /// The tag of the referenced class, as it appears in the schema.
+        referenced_tag: u16,
+        /// Secondary discriminator (meaning unknown; empirically varies
+        /// per-field and per-version).
+        sub: u16,
+    },
     /// `0x0e 0xNN 0x00 0x00` where NN ∈ {0x01, 0x02, 0x03} — a pointer
     /// or singular reference to another class instance. The low byte
     /// marks the reference-kind (e.g. pointer vs. non-owning ref).
     Pointer { kind: u8 },
-    /// `0x0e 0x10 0x00 0x00 ...` OR `0x07 0x10 0x00 0x00 ...` — a
-    /// vector/array. Body (not fully decoded) contains an
-    /// element-count hint and a reference to the element class's tag.
+    /// `{kind} 0x10 0x00 0x00 ...` — a vector/array. Body (not fully
+    /// decoded) contains an element-count hint and, for reference
+    /// vectors, a reference to the element class's tag. Handled bases:
+    /// `0x01` bool, `0x02` u16, `0x04` u32-legacy, `0x05` u32, `0x06`
+    /// f32, `0x07` f64, `0x0b` u64, `0x0d` point/transform, `0x0e` ref.
     Vector {
-        /// The outer type byte — `0x0e` (refs) or `0x07` (doubles) etc.
+        /// The outer type byte — e.g. `0x07` (vector<double>), `0x0e`
+        /// (vector<reference>), `0x0d` (vector<point>).
         kind: u8,
         /// Raw body bytes after the 4-byte header.
         body: Vec<u8>,
     },
-    /// `0x0e 0x50 0x00 0x00 ...` — a map / set. Body typically embeds
-    /// a class-tag reference AND an ASCII C++ type signature
-    /// (`std::pair< K, V >`, `std::map< K, V >`).
+    /// `{kind} 0x50 0x00 0x00 ...` — a map / set / other associative
+    /// container. Body for reference-containers (`kind == 0x0e`)
+    /// typically embeds an ASCII C++ type signature
+    /// (`std::pair< K, V >`, `std::map< K, V >`); scalar-base
+    /// containers (e.g. `kind == 0x04` for `Container<u32>`) rarely do.
     Container {
+        /// The outer type byte marking the element base type.
+        kind: u8,
         /// Embedded ASCII C++ signature, if one was recovered.
         cpp_signature: Option<String>,
         /// Raw body bytes after the 4-byte header.
@@ -155,59 +179,93 @@ impl FieldType {
         if bytes.is_empty() {
             return FieldType::Unknown { bytes: Vec::new() };
         }
+        // `sub` is the two bytes following the outer-kind byte, little-
+        // endian. The schema parser occasionally delivers a 2-byte slice
+        // (kind + modifier only) at a record boundary — treat a single
+        // trailing byte as the low byte of sub, high byte implied zero.
         let sub = if bytes.len() >= 3 {
             u16::from_le_bytes([bytes[1], bytes[2]])
+        } else if bytes.len() == 2 {
+            bytes[1] as u16
         } else {
             0
         };
+        // Scalar base types share a single "base → size" table used by
+        // both the plain-primitive arm (sub == 0x0000) and the
+        // vector/container modifier arms (sub == 0x0010 / 0x0050). The
+        // `0x0d` base only appears inside Vector/Container — its bare
+        // wire size is unobserved in the corpus, so we do not emit it
+        // as a plain Primitive.
+        fn scalar_size(kind: u8) -> Option<u8> {
+            match kind {
+                0x01 => Some(1), // bool
+                0x02 => Some(2), // u16
+                0x03 => Some(4), // deprecated i32-alias (seen in 2016–2018 only,
+                // fields `UserID.m_id` and `ElementRegenerationInfo.m_nAtomType`;
+                // superseded by `0x05` from 2019 onward)
+                0x04 => Some(4), // legacy u32
+                0x05 => Some(4), // u32
+                0x06 => Some(4), // f32
+                0x07 => Some(8), // f64 / double
+                0x0b => Some(8), // u64
+                _ => None,
+            }
+        }
+        let is_vector_capable = matches!(
+            bytes[0],
+            0x01 | 0x02 | 0x04 | 0x05 | 0x06 | 0x07 | 0x0b | 0x0d
+        );
+        // Body-after-header is bytes[4..], but the schema parser
+        // occasionally delivers 2- or 3-byte slices where a record
+        // boundary clipped the header mid-word. Use a safe slice.
+        let body_after_header: Vec<u8> = bytes.get(4..).unwrap_or(&[]).to_vec();
+
         match bytes[0] {
             // Scalar primitives — 4-byte header `XX 00 00 00`
-            0x01 if sub == 0x0000 => FieldType::Primitive {
-                kind: 0x01,
-                size: 1,
-            }, // bool
-            0x02 if sub == 0x0000 => FieldType::Primitive {
-                kind: 0x02,
-                size: 2,
-            }, // u16
-            0x04 if sub == 0x0000 => FieldType::Primitive {
-                kind: 0x04,
-                size: 4,
-            }, // legacy u32
-            0x05 if sub == 0x0000 => FieldType::Primitive {
-                kind: 0x05,
-                size: 4,
-            }, // u32
-            0x06 if sub == 0x0000 => FieldType::Primitive {
-                kind: 0x06,
-                size: 4,
-            }, // f32
-            0x07 if sub == 0x0000 => FieldType::Primitive {
-                kind: 0x07,
-                size: 8,
-            }, // f64 / double
-            0x0b if sub == 0x0000 => FieldType::Primitive {
-                kind: 0x0b,
-                size: 8,
-            }, // u64
-            // Container modifiers for a given scalar base
-            0x07 if sub == 0x0010 => FieldType::Vector {
-                kind: 0x07,
-                body: bytes[4..].to_vec(),
-            }, // vector<double>
-            0x08 if sub == 0x6000 => FieldType::String, // UTF-16LE string
+            k if scalar_size(k).is_some() && sub == 0x0000 => FieldType::Primitive {
+                kind: k,
+                size: scalar_size(k).unwrap(),
+            },
+            // Scalar vectors — `XX 10 00 00 ...` for each scalar base,
+            // plus the composite `0x0d` point/transform base.
+            k if is_vector_capable && sub == 0x0010 => FieldType::Vector {
+                kind: k,
+                body: body_after_header.clone(),
+            },
+            // Scalar containers — `XX 50 00 00 ...`. Reference containers
+            // (0x0e 0x50 / 0x0e 0x51) are handled further down because
+            // they may carry embedded C++ signatures.
+            k if is_vector_capable && sub == 0x0050 => extract_container(k, &body_after_header),
+            // UTF-16LE string. Two equivalent wire encodings are known:
+            //   `08 00 60 00` (sub=0x6000)  — common form
+            //   `08 60 00 00` (sub=0x0060)  — alternate form
+            0x08 if sub == 0x6000 || sub == 0x0060 => FieldType::String,
             0x09 if sub == 0x0000 => FieldType::Guid,
-            // Reference / pointer family
-            0x0e if bytes.len() >= 4 => match sub {
+            // Reference / pointer family (`0x0e` base). Per §Q5.2 of the
+            // recon report, truncated 2-byte headers (`0e 50`, `0e 10`)
+            // are accepted as Container / Vector with empty bodies.
+            0x0e => match sub {
+                0x0000 if bytes.len() >= 8 => {
+                    let ref_tag = u16::from_le_bytes([bytes[4], bytes[5]]);
+                    let sub2 = u16::from_le_bytes([bytes[6], bytes[7]]);
+                    if ref_tag == 0x0014 && sub2 == 0x0000 {
+                        FieldType::ElementId
+                    } else {
+                        FieldType::ElementIdRef {
+                            referenced_tag: ref_tag,
+                            sub: sub2,
+                        }
+                    }
+                }
                 0x0000 if bytes.len() >= 6 && bytes[4] == 0x14 && bytes[5] == 0x00 => {
                     FieldType::ElementId
                 }
-                0x0001..=0x0003 => FieldType::Pointer { kind: bytes[1] },
+                0x0001..=0x0003 if bytes.len() >= 4 => FieldType::Pointer { kind: bytes[1] },
                 0x0010 | 0x0011 => FieldType::Vector {
                     kind: 0x0e,
-                    body: bytes[4..].to_vec(),
+                    body: body_after_header.clone(),
                 },
-                0x0050 | 0x0051 => extract_container(&bytes[4..]),
+                0x0050 | 0x0051 => extract_container(0x0e, &body_after_header),
                 _ => FieldType::Unknown {
                     bytes: bytes.to_vec(),
                 },
@@ -219,7 +277,7 @@ impl FieldType {
     }
 }
 
-fn extract_container(body: &[u8]) -> FieldType {
+fn extract_container(kind: u8, body: &[u8]) -> FieldType {
     let mut cpp_signature = None;
     let mut k = 0;
     while k + 2 < body.len() {
@@ -236,6 +294,7 @@ fn extract_container(body: &[u8]) -> FieldType {
         k += 1;
     }
     FieldType::Container {
+        kind,
         cpp_signature,
         body: body.to_vec(),
     }
@@ -774,10 +833,163 @@ mod tests {
         bytes.extend_from_slice(sig);
         let ft = FieldType::decode(&bytes);
         match ft {
-            FieldType::Container { cpp_signature, .. } => {
+            FieldType::Container {
+                kind,
+                cpp_signature,
+                ..
+            } => {
+                assert_eq!(kind, 0x0e);
                 assert_eq!(cpp_signature.as_deref(), Some("std::pair< int, X >"));
             }
             other => panic!("expected Container, got {other:?}"),
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Pattern pins: every FieldType::decode arm added in Phase Q5.2 has
+    // a unit test that captures its exact byte signature. If the decoder
+    // ever regresses, these tests fail with a single precise diff.
+    // Evidence for each pattern is in examples/unknown_bytes_deep.rs,
+    // which runs against the 11-version corpus.
+    // ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn decodes_field_type_string_alt_encoding() {
+        // `08 60 00 00` — alternate string discriminator seen in 2016–2026,
+        // e.g. `Identifier.second`, `AStringWrapper.m_str`.
+        let bytes = [0x08, 0x60, 0x00, 0x00];
+        assert!(matches!(FieldType::decode(&bytes), FieldType::String));
+    }
+
+    #[test]
+    fn decodes_field_type_primitive_deprecated_0x03() {
+        // `03 00 00 00` — deprecated i32-alias; seen in 2016–2018 only.
+        // Fields: `UserID.m_id`, `ElementRegenerationInfo.m_nAtomType`.
+        let bytes = [0x03, 0x00, 0x00, 0x00];
+        assert!(matches!(
+            FieldType::decode(&bytes),
+            FieldType::Primitive {
+                kind: 0x03,
+                size: 4,
+            }
+        ));
+    }
+
+    #[test]
+    fn decodes_field_type_scalar_vector_f32() {
+        // `06 10 00 00 03 00 00 00` — vector<f32>, e.g. APropertyFloat3.m_value
+        let bytes = [0x06, 0x10, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        match ft {
+            FieldType::Vector { kind, body } => {
+                assert_eq!(kind, 0x06);
+                assert_eq!(body, [0x03, 0x00, 0x00, 0x00]);
+            }
+            other => panic!("expected Vector<f32>, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decodes_field_type_scalar_vector_i32() {
+        // `04 10 00 00` — vector<u32/i32>, e.g. Int64Wrapper.m_value
+        let bytes = [0x04, 0x10, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(&ft, FieldType::Vector { kind: 0x04, .. }));
+    }
+
+    #[test]
+    fn decodes_field_type_scalar_vector_bool() {
+        // `01 10 00 00` — vector<bool>, e.g. AnalyticalAdjustmentGStep.m_bLock
+        let bytes = [0x01, 0x10, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(&ft, FieldType::Vector { kind: 0x01, .. }));
+    }
+
+    #[test]
+    fn decodes_field_type_point_vector_0x0d() {
+        // `0d 10 00 00` — vector<point3d>, e.g. Outline.m_minmax (3D pair)
+        let bytes = [0x0d, 0x10, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(&ft, FieldType::Vector { kind: 0x0d, .. }));
+    }
+
+    #[test]
+    fn decodes_field_type_point_container_0x0d() {
+        // `0d 50 00 00` — container<point3d>, e.g. Dimension.m_refPnts
+        let bytes = [0x0d, 0x50, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(&ft, FieldType::Container { kind: 0x0d, .. }));
+    }
+
+    #[test]
+    fn decodes_field_type_scalar_container_u32() {
+        // `04 50 00 00` — container<u32>, e.g. RbsSystemNavigatorColumn.m_rgColWidths
+        let bytes = [0x04, 0x50, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(&ft, FieldType::Container { kind: 0x04, .. }));
+    }
+
+    #[test]
+    fn decodes_field_type_scalar_container_f64() {
+        // `07 50 00 00` — container<f64>, e.g. AnalysisResultSchema.m_unitsMultipliers
+        let bytes = [0x07, 0x50, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(&ft, FieldType::Container { kind: 0x07, .. }));
+    }
+
+    #[test]
+    fn decodes_field_type_element_id_ref() {
+        // `0e 00 00 00 58 00 09 00` — reference to class with tag=0x58, sub=0x09
+        // e.g. ADocument.m_devBranchInfo (2026 sample)
+        let bytes = [0x0e, 0x00, 0x00, 0x00, 0x58, 0x00, 0x09, 0x00];
+        let ft = FieldType::decode(&bytes);
+        match ft {
+            FieldType::ElementIdRef {
+                referenced_tag,
+                sub,
+            } => {
+                assert_eq!(referenced_tag, 0x0058);
+                assert_eq!(sub, 0x0009);
+            }
+            other => panic!("expected ElementIdRef, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decodes_field_type_element_id_tag_0x14_8byte_still_canonical() {
+        // The canonical ElementId (tag=0x0014, sub=0x0000) in 8-byte form
+        // should still resolve to the unit `ElementId` variant, not
+        // `ElementIdRef`.
+        let bytes = [0x0e, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00];
+        assert_eq!(FieldType::decode(&bytes), FieldType::ElementId);
+    }
+
+    #[test]
+    fn decodes_field_type_truncated_ref_container() {
+        // `0e 50` — 2-byte clipped `0x0e 0x50` header seen once in 2025
+        // (RadialConstraint.m_witnessRefs). Schema parser clipped at a
+        // record boundary. Still valid Container<ref>, empty body.
+        let bytes = [0x0e, 0x50];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(&ft, FieldType::Container { kind: 0x0e, .. }));
+    }
+
+    #[test]
+    fn decodes_field_type_truncated_point_vector() {
+        // `0d 10` — 2-byte clipped `0x0d 0x10` header seen once in 2018
+        // (BoundedSpace.m_boundActive). Still valid Vector<point>.
+        let bytes = [0x0d, 0x10];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(&ft, FieldType::Vector { kind: 0x0d, .. }));
+    }
+
+    #[test]
+    fn decode_is_safe_on_short_inputs() {
+        // Pathological short inputs must never panic. 0, 1, 2, 3-byte
+        // slices should all produce either Unknown or a typed variant.
+        for len in 0..=3 {
+            let input: Vec<u8> = (0..len).map(|_| 0xff).collect();
+            let _ = FieldType::decode(&input); // must not panic
         }
     }
 

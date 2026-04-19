@@ -11,7 +11,8 @@ edge cases we want confidence on.
   engineering projects with hundreds of levels, sheets, views,
   elements. Tests: does `rvt-analyze` still finish in seconds? Are
   there tag values we haven't seen? Does Layer 4c.2 classification
-  coverage hold at 84%?
+  coverage hold at 100% (as verified against the 11-version sample-
+  family corpus)?
 - **`.rte` project templates** (~1-20 MB). Tests the template-file
   code paths.
 - **`.rft` family templates** (~100 KB - 2 MB). Tests families not

@@ -138,6 +138,7 @@ fn main() -> anyhow::Result<()> {
                 let sz = match ft {
                     formats::FieldType::Primitive { size, .. } => *size as usize,
                     formats::FieldType::ElementId => 8, // guess: 8 bytes for ElementId
+                    formats::FieldType::ElementIdRef { .. } => 8, // same wire size as ElementId
                     formats::FieldType::Pointer { .. } => 4, // guess: 4 bytes for a pointer
                     formats::FieldType::Guid => 16,
                     formats::FieldType::String => 0, // variable

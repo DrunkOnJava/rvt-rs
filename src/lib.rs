@@ -35,7 +35,7 @@
 //! | 3 · Stream framing | Per-stream custom headers | **Done** |
 //! | 4a · Schema table | Class names + fields + tags | **Done** ([`formats`]) |
 //! | 4b · Schema→data link | Tags index instance data at 340× | **Done** |
-//! | 4c · Field decoding | 9 discriminators mapped, 84% coverage | **Done** ([`formats::FieldType`]) |
+//! | 4c · Field decoding | 11 discriminators mapped, **100% coverage** (13,570 fields across the 11-version corpus; zero `Unknown`) | **Done** ([`formats::FieldType`]) |
 //! | 4d · ElemTable records | Header done; body TBD | **Partial** ([`elem_table`]) |
 //! | 5 · IFC export | Scaffold + mapping plan | **Scaffolded** ([`ifc`]) |
 //! | 6 · Write path | Byte-preserving round-trip verified | **Scaffolded** ([`writer`]) |
