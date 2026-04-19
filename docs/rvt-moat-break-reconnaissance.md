@@ -1079,6 +1079,71 @@ Downstream tools can follow the reference through
 
 Probe: `examples/flag_word_probe.rs`.
 
+## Addendum — Q6.2 Global/Latest entry point located (2026-04-19)
+
+After the document-upgrade-history UTF-16LE block (offsets 0x53..0x363
+in the 2024 sample), the binary payload begins with a sequential-ID
+TLV table:
+
+```text
+0x0363  01 00 00 00 00 00 00 00 01 00 00 00 dc 00 00 00   [big first record]
+0x0373  02 00 00 00 6e 07        id=2 val=0x076e = 1902
+0x0379  03 00 00 00 a7 0e        id=3 val=0x0ea7 = 3751
+0x037f  04 00 00 00 da 0f        id=4 val=0x0fda = 4058
+0x0385  05 00 00 00 3f 04 00 00 00 00   id=5 val=0x043f, extra 4 bytes
+0x0391  06 00 00 00 af 0e        id=6 val=0x0eaf
+0x0397  07 00 00 00 2e 04        id=7 val=0x042e
+0x039d  08 00 00 00 a9 04 00 00 00 00   id=8 val=0x04a9, extra 4 bytes
+0x03a9  09 00 00 00 91 01        id=9 val=0x0191
+0x03af  0a 00 00 00 6f 0e 00 00 00 00   id=10 val=0x0e6f
+0x03b9  0b 00 00 00 83 09 00 00 00 00   id=11 val=0x0983
+0x03c3  0c 00 00 00 b0 05 00 00 00 00   id=12 val=0x05b0
+0x03cd  0d 00 00 00 9d 00        id=13 val=0x009d
+```
+
+### Key signals
+
+- Sequential IDs starting at 1, counting up (the probe saw 1-15
+  contiguously).
+- Record size **varies** between 6 and 16 bytes — some records have
+  a trailing 4-byte block, matching the vector/container fields we'd
+  expect for ADocument (`m_appInfoArr` is a container; the extra
+  bytes probably encode its length or class ref).
+- Values are non-monotonic → they are NOT byte offsets into the
+  stream. Most likely: ElementId references, hash codes, or indices
+  into a separate reference pool (ElemTable?).
+- ADocument has **13 declared fields** and the first 13 IDs appear
+  in sequence. Strong circumstantial evidence that this TLV table is
+  ADocument's serialized form, keyed by field index (0-indexed or
+  1-indexed).
+
+### Hypothesis (confidence 0.6)
+
+The TLV table is ADocument's instance — 13 fields encoded as:
+
+```text
+[u32 field_index][value encoded per that field's FieldType]
+```
+
+where `value` for Pointer fields (ADocument has 9 of them) is a
+single u32 or ElementId reference into a separate pool, and for
+Container fields (like m_appInfoArr) carries a length prefix +
+references.
+
+### Remaining work (Q6.3 and beyond)
+
+- Validate the hypothesis: for each record in the table, look up
+  ADocument's nth field in the schema and confirm its FieldType
+  matches the record's byte layout (e.g. record 5 is a Pointer; does
+  its value look like a valid reference?).
+- Resolve the "value" semantics — are these pointers into ElemTable?
+  Partitions? A separate reference-pool?
+- Walk past the 13-record block to find the NEXT instance (which
+  should be one of ADocument's referenced classes, starting the full
+  object graph).
+
+Probe: `examples/adocument_entry.rs`.
+
 ## Addendum — Q7 Partitions/NN trailer fields are NOT chunk offsets (2026-04-19)
 
 Followup to FACT F7/F8. Tested the hypothesis that the four u32 fields
