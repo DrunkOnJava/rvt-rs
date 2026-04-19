@@ -671,4 +671,43 @@ for f in samples/_phiag/examples/Autodesk/*.rfa; do
 done
 ```
 
+## Addendum — Full tag-drift table 2016–2026 (`docs/data/tag-drift-2016-2026.csv`)
+
+`examples/tag_drift.rs` pivots the per-release class lists into a single
+table: one row per class name, one column per Revit release, cell = tag in
+that release (or blank if the class doesn't exist that year).
+
+Dataset totals:
+
+- **122 distinct tagged classes** across all 11 releases
+- **6 classes (4.9%) are tag-stable** (present in every release with the
+  same tag): `A3PartyAImage` (0x000d), `ADTGridImportVocabulary` (0x0012),
+  `ADocWarnings` (0x001b), `APIVSTAMacroElem` (0x0025),
+  `APIVSTAMacroElemTracking` (0x0028), `AProperties` (0x002a). All
+  alphabetically early — their tags hold because no new class has ever
+  been inserted before them in the sort order.
+- **101 classes (82.8%) shift tag values** across releases
+- **22 classes were introduced after 2016** (e.g. `ATFProvenanceBaseCell`,
+  `AnalyticalAutomationEditModeMgr`) — the tracked surface for "new Revit
+  features over a decade"
+- **52 classes were removed by 2026** (e.g. `ActiveGeoLocationTrackingElement`,
+  `AllowGStyleDrawFilter`, `AngularDimensionType`, several
+  `AnalyticalModel*`). Confirms the long-running schema consolidation trend
+  visible in the release-size table.
+
+Illustrative shift pattern for `AbsCurveGStep`:
+
+```text
+2016 0x0053  →  2021 0x0056  →  2022 0x0060  →  2024 0x0061  →  2025 0x0066
+```
+
+The jump between 2021 (0x0056) and 2022 (0x0060) is +10 positions — ten new
+classes were inserted alphabetically earlier during the 2021→2022 schema
+refresh. Same pattern affects every post-`A` class.
+
+**Downstream use**: any project that wants to maintain cross-release
+compatibility on the tag level — e.g. Autodesk Forge mirroring, BIM
+interoperability tools — can consume the CSV directly. This is the first
+publicly-available version of this data.
+
 **End of report.**
