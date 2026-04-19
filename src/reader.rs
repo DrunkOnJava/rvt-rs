@@ -215,6 +215,16 @@ impl RevitFile {
     /// if any of these is missing, the file is either corrupt or not a Revit file
     /// despite having a valid CFB container.
     pub fn has_revit_signature(&self) -> bool {
+        self.missing_required_streams().is_empty()
+    }
+
+    /// Diagnostic form of `has_revit_signature` — returns the list of
+    /// required streams that are missing, or an empty vec if all are
+    /// present. Much more useful than the bool when triaging: "why does
+    /// this 2016 file work on Linux but not Windows?" gets a concrete
+    /// answer ("missing Global/DocumentIncrementTable") instead of "yes
+    /// or no".
+    pub fn missing_required_streams(&self) -> Vec<&'static str> {
         let names: BTreeSet<String> = self.stream_names().into_iter().collect();
         let required = [
             BASIC_FILE_INFO,
@@ -230,6 +240,10 @@ impl RevitFile {
             REVIT_PREVIEW_4_0,
             TRANSMISSION_DATA,
         ];
-        required.iter().all(|r| names.contains(*r))
+        required
+            .iter()
+            .copied()
+            .filter(|r| !names.contains(*r))
+            .collect()
     }
 }

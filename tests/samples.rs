@@ -33,7 +33,13 @@ fn opens_all_11_versions() {
             "{year}: class count {} unexpectedly low",
             s.class_name_count
         );
-        assert!(rf.has_revit_signature(), "{year}: missing required stream");
+        let missing = rf.missing_required_streams();
+        assert!(
+            missing.is_empty(),
+            "{year}: missing required streams: {missing:?}\n  \
+             stream names present: {:?}",
+            rf.stream_names()
+        );
     }
 }
 
