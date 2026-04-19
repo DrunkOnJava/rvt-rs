@@ -23,7 +23,7 @@
 //!   Strings look like `"Revit 2024  20230308_1635(x64)"` or
 //!   `"Revit 2018 - Preview Pre-Release 2018 (2018.000) : 20170106_1515(x64)/"`.
 
-use crate::{compression, reader::RevitFile, streams::GLOBAL_LATEST, Result};
+use crate::{Result, compression, reader::RevitFile, streams::GLOBAL_LATEST};
 use encoding_rs::UTF_16LE;
 use serde::{Deserialize, Serialize};
 
@@ -53,19 +53,19 @@ impl DocumentHistory {
         // terminator (null or non-printable), dedupe.
         const PROBE: [u8; 12] = [b'R', 0, b'e', 0, b'v', 0, b'i', 0, b't', 0, b' ', 0];
         let mut entries = Vec::new();
-        let first = decomp.windows(PROBE.len()).position(|w| w == PROBE).ok_or_else(|| {
-            crate::Error::Decompress(
-                "no 'Revit ' UTF-16LE marker found in decompressed Global/Latest".into(),
-            )
-        })?;
+        let first = decomp
+            .windows(PROBE.len())
+            .position(|w| w == PROBE)
+            .ok_or_else(|| {
+                crate::Error::Decompress(
+                    "no 'Revit ' UTF-16LE marker found in decompressed Global/Latest".into(),
+                )
+            })?;
         let string_section_offset = first.saturating_sub(8);
 
         let mut scan = 0usize;
         while scan + PROBE.len() <= decomp.len() {
-            let idx = match decomp[scan..]
-                .windows(PROBE.len())
-                .position(|w| w == PROBE)
-            {
+            let idx = match decomp[scan..].windows(PROBE.len()).position(|w| w == PROBE) {
                 Some(p) => scan + p,
                 None => break,
             };
@@ -93,7 +93,10 @@ impl DocumentHistory {
             scan = end.max(idx + 1);
         }
 
-        Ok(Self { entries, string_section_offset })
+        Ok(Self {
+            entries,
+            string_section_offset,
+        })
     }
 }
 
@@ -109,7 +112,7 @@ impl DocumentHistory {
 /// - `0x0000_0007` — the original "Revit version" tag (first entry only)
 /// - `0x0029_0034` (2,687,028) — later document-version string
 /// - `0x0000_0001` — sheet / level / elevation identifiers
-///     (examples: `"Level 1"`, `"A100"`, `"Elevation 0"`)
+///   (examples: `"Level 1"`, `"A100"`, `"Elevation 0"`)
 /// - `0xFFFF_FFFF` — tombstone / sentinel marker
 /// - Many record-specific tags
 ///
@@ -157,7 +160,9 @@ pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
                     out.push(StringRecord {
                         offset: i,
                         tag,
-                        value: text.trim_end_matches(&['\0', '/', ' ', '\t'] as &[_]).to_string(),
+                        value: text
+                            .trim_end_matches(&['\0', '/', ' ', '\t'] as &[_])
+                            .to_string(),
                     });
                     i += 8 + 2 * cnt;
                     continue;
@@ -216,10 +221,13 @@ mod tests {
     fn parses_contrived_single_entry() {
         // The scanner looks for UTF-16LE "Revit " and reads until NULL.
         let version_str = "Revit 2024  20230308_1635(x64)";
-        let utf16: Vec<u8> = version_str.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+        let utf16: Vec<u8> = version_str
+            .encode_utf16()
+            .flat_map(|c| c.to_le_bytes())
+            .collect();
 
         let mut buf = Vec::new();
-        buf.extend(std::iter::repeat(0u8).take(64)); // header padding
+        buf.extend(std::iter::repeat_n(0u8, 64)); // header padding
         buf.extend_from_slice(&7u32.to_le_bytes()); // tag
         buf.extend_from_slice(&(version_str.chars().count() as u32).to_le_bytes()); // length
         buf.extend_from_slice(&utf16);
@@ -237,7 +245,10 @@ mod tests {
     #[test]
     fn parses_multiple_entries() {
         fn push_entry(buf: &mut Vec<u8>, version: &str) {
-            let utf16: Vec<u8> = version.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+            let utf16: Vec<u8> = version
+                .encode_utf16()
+                .flat_map(|c| c.to_le_bytes())
+                .collect();
             buf.extend_from_slice(&7u32.to_le_bytes());
             buf.extend_from_slice(&(version.chars().count() as u32).to_le_bytes());
             buf.extend_from_slice(&utf16);
@@ -246,7 +257,7 @@ mod tests {
             buf.extend_from_slice(&[0xff, 0xff, 0xab, 0xcd]);
         }
         let mut buf = Vec::new();
-        buf.extend(std::iter::repeat(0u8).take(64));
+        buf.extend(std::iter::repeat_n(0u8, 64));
         push_entry(&mut buf, "Revit 2018 (Build X)");
         push_entry(&mut buf, "Revit 2024 (Build Y)");
 

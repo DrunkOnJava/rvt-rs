@@ -9,10 +9,15 @@
 //! references. Run it before `link_schema.rs` to understand why tag-based
 //! linkage is the correct approach.
 
-use rvt::{compression, streams::{FORMATS_LATEST, GLOBAL_LATEST}, RevitFile};
+use rvt::{
+    RevitFile, compression,
+    streams::{FORMATS_LATEST, GLOBAL_LATEST},
+};
 
 fn main() -> anyhow::Result<()> {
-    let path = std::env::args().nth(1).expect("usage: probe_link <file.rvt|.rfa>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: probe_link <file.rvt|.rfa>");
     let mut rf = RevitFile::open(&path)?;
 
     let raw = rf.read_stream(GLOBAL_LATEST)?;
@@ -26,8 +31,14 @@ fn main() -> anyhow::Result<()> {
     );
 
     let probes = [
-        "ADocument", "DBView", "Symbol", "HostObj", "Category",
-        "ElementId", "ModelIdentity", "PathType",
+        "ADocument",
+        "DBView",
+        "Symbol",
+        "HostObj",
+        "Category",
+        "ElementId",
+        "ModelIdentity",
+        "PathType",
     ];
     for p in probes {
         let bytes = p.as_bytes();

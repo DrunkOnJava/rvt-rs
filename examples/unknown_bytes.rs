@@ -3,7 +3,14 @@
 //! per byte so we can reason about which C++ type each discriminator
 //! represents.
 
-use rvt::{compression, formats, streams::FORMATS_LATEST, RevitFile};
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::collapsible_if,
+    clippy::collapsible_match
+)]
+
+use rvt::{RevitFile, compression, formats, streams::FORMATS_LATEST};
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
@@ -33,7 +40,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut rows: Vec<_> = hist.iter().collect();
-    rows.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+    rows.sort_by(|a, b| b.1.0.cmp(&a.1.0));
 
     println!(
         "Unknown field_type first-4-byte histogram (top 30 patterns, {} distinct):",
@@ -44,10 +51,7 @@ fn main() -> anyhow::Result<()> {
         let sig_hex: Vec<String> = sig.iter().map(|b| format!("{b:02x}")).collect();
         let joined = sig_hex.join(" ");
         let padded = format!("{joined:<23}");
-        let sample_str: Vec<String> = samples
-            .iter()
-            .map(|(c, f)| format!("{c}.{f}"))
-            .collect();
+        let sample_str: Vec<String> = samples.iter().map(|(c, f)| format!("{c}.{f}")).collect();
         println!("  {padded} {count:5}   {}", sample_str.join(", "));
     }
 

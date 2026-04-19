@@ -18,7 +18,7 @@
 //! gzip-magic scanner is conservative enough to work across all 11
 //! releases we have samples for.
 
-use crate::{streams, Result, RevitFile};
+use crate::{Result, RevitFile, streams};
 
 /// Size of the Partitions/NN header in bytes. Constant across all Revit
 /// releases observed (2016–2026).
@@ -58,8 +58,7 @@ pub fn parse_header(raw: &[u8]) -> Option<PartitionHeader> {
     if raw.len() < HEADER_SIZE {
         return None;
     }
-    let declared_count_plus_one =
-        u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
+    let declared_count_plus_one = u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
     let reserved_zero = u32::from_le_bytes([raw[4], raw[5], raw[6], raw[7]]);
     let mut size_block = [0u8; 12];
     size_block.copy_from_slice(&raw[8..20]);
@@ -97,10 +96,7 @@ pub fn find_chunks(raw: &[u8]) -> Vec<PartitionChunk> {
     }
     let mut chunks = Vec::with_capacity(positions.len());
     for (n, &start) in positions.iter().enumerate() {
-        let end = positions
-            .get(n + 1)
-            .copied()
-            .unwrap_or(raw.len());
+        let end = positions.get(n + 1).copied().unwrap_or(raw.len());
         chunks.push(PartitionChunk {
             raw_offset: start,
             raw_len: end - start,
@@ -111,7 +107,7 @@ pub fn find_chunks(raw: &[u8]) -> Vec<PartitionChunk> {
 
 /// Header-bytes preview: everything before the first gzip magic.
 /// Reserved for when we decode the explicit chunk table.
-pub fn header_bytes<'a>(raw: &'a [u8]) -> &'a [u8] {
+pub fn header_bytes(raw: &[u8]) -> &[u8] {
     for i in 0..raw.len().saturating_sub(3) {
         if raw[i] == 0x1f && raw[i + 1] == 0x8b && raw[i + 2] == 0x08 {
             return &raw[..i];

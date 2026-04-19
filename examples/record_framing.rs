@@ -4,13 +4,24 @@
 //! become visible together.
 //!
 //! Static-only: no execution, no network, no disk writes beyond stdout.
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::collapsible_if,
+    clippy::collapsible_match
+)]
 
-use rvt::{compression, streams::{FORMATS_LATEST, GLOBAL_LATEST}, RevitFile};
+use rvt::{
+    RevitFile, compression,
+    streams::{FORMATS_LATEST, GLOBAL_LATEST},
+};
 
 fn looks_like_class_name(bytes: &[u8]) -> bool {
     !bytes.is_empty()
         && bytes[0].is_ascii_uppercase()
-        && bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        && bytes[1..]
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 fn dump_hex(label: &str, bytes: &[u8], offset: usize, len: usize) {
@@ -28,14 +39,23 @@ fn dump_hex(label: &str, bytes: &[u8], offset: usize, len: usize) {
         print!(" |");
         for i in row_start..row_end {
             let b = bytes[i];
-            print!("{}", if (0x20..0x7f).contains(&b) { b as char } else { '.' });
+            print!(
+                "{}",
+                if (0x20..0x7f).contains(&b) {
+                    b as char
+                } else {
+                    '.'
+                }
+            );
         }
         println!("|");
     }
 }
 
 fn main() -> anyhow::Result<()> {
-    let path = std::env::args().nth(1).expect("usage: record_framing <file.rfa>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: record_framing <file.rfa>");
     let mut rf = RevitFile::open(&path)?;
 
     // Parse Formats/Latest → list of (name, tag, offset_of_name_header)
@@ -77,7 +97,13 @@ fn main() -> anyhow::Result<()> {
     println!();
 
     // Inspect 5 tagged classes — top of distribution + one simple (ADocWarnings)
-    let targets = ["AbsCurveGStep", "HostObjAttr", "AbsDbViewPressureLossReport", "ADocWarnings", "ATFProvenanceBaseCell"];
+    let targets = [
+        "AbsCurveGStep",
+        "HostObjAttr",
+        "AbsDbViewPressureLossReport",
+        "ADocWarnings",
+        "ATFProvenanceBaseCell",
+    ];
     for target_name in targets {
         let (name, tag, off) = match tagged.iter().find(|t| t.0 == target_name) {
             Some(t) => t.clone(),
@@ -92,12 +118,7 @@ fn main() -> anyhow::Result<()> {
         println!("═══════════════════════════════════════════════════════════════════════");
 
         // Schema-side: class definition
-        dump_hex(
-            "\n  [A] Schema record (Formats/Latest)",
-            &formats,
-            off,
-            128,
-        );
+        dump_hex("\n  [A] Schema record (Formats/Latest)", &formats, off, 128);
 
         // Also annotate: where name starts, where tag lives, what's immediately after tag
         let name_start = off + 2;

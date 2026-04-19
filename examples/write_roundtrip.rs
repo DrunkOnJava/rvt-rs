@@ -2,8 +2,8 @@
 //! (BasicFileInfo), write to /tmp, re-open, verify the decompressed
 //! bytes match.
 
-use rvt::writer::{write_with_patches, StreamPatch, StreamFraming};
-use rvt::{compression, streams, RevitFile};
+use rvt::writer::{StreamFraming, StreamPatch, write_with_patches};
+use rvt::{RevitFile, compression, streams};
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
@@ -14,8 +14,11 @@ fn main() -> anyhow::Result<()> {
     let mut rf_src = RevitFile::open(&src)?;
     let src_formats_raw = rf_src.read_stream(streams::FORMATS_LATEST)?;
     let src_formats_decomp = compression::inflate_at(&src_formats_raw, 0)?;
-    println!("src Formats/Latest: {} raw bytes, {} decompressed",
-        src_formats_raw.len(), src_formats_decomp.len());
+    println!(
+        "src Formats/Latest: {} raw bytes, {} decompressed",
+        src_formats_raw.len(),
+        src_formats_decomp.len()
+    );
 
     // Build a patch: replace the first 16 bytes with a known marker so
     // we can verify it survives the round-trip.
@@ -37,8 +40,11 @@ fn main() -> anyhow::Result<()> {
     let dst_formats_raw = rf_dst.read_stream(streams::FORMATS_LATEST)?;
     let dst_formats_decomp = compression::inflate_at(&dst_formats_raw, 0)?;
 
-    println!("dst Formats/Latest: {} raw bytes, {} decompressed",
-        dst_formats_raw.len(), dst_formats_decomp.len());
+    println!(
+        "dst Formats/Latest: {} raw bytes, {} decompressed",
+        dst_formats_raw.len(),
+        dst_formats_decomp.len()
+    );
 
     let first_16 = &dst_formats_decomp[..16];
     let first_16_str = std::str::from_utf8(first_16).unwrap_or("<non-utf8>");
@@ -46,7 +52,8 @@ fn main() -> anyhow::Result<()> {
 
     assert_eq!(first_16, marker, "marker did not survive round-trip!");
     assert_eq!(
-        dst_formats_decomp.len(), patched.len(),
+        dst_formats_decomp.len(),
+        patched.len(),
         "decompressed length should match patched source"
     );
     assert_eq!(
@@ -58,7 +65,10 @@ fn main() -> anyhow::Result<()> {
     // Verify the UNPATCHED streams still round-trip byte-for-byte.
     let src_contents = rf_src.read_stream(streams::CONTENTS)?;
     let dst_contents = rf_dst.read_stream(streams::CONTENTS)?;
-    assert_eq!(src_contents, dst_contents, "Contents stream must be identical");
+    assert_eq!(
+        src_contents, dst_contents,
+        "Contents stream must be identical"
+    );
 
     println!("\n✓ round-trip PATCH verified:");
     println!("  - Formats/Latest was patched with marker bytes, survived re-compression");

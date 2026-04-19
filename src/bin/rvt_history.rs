@@ -5,7 +5,10 @@
 //! ever opened and saved this file, in chronological order.
 
 use clap::Parser;
-use rvt::{object_graph::{self, DocumentHistory}, RevitFile};
+use rvt::{
+    RevitFile,
+    object_graph::{self, DocumentHistory},
+};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -72,7 +75,10 @@ fn run() -> anyhow::Result<()> {
             Vec::new()
         };
         if cli.redact {
-            for r in global_records.iter_mut().chain(partition_records.iter_mut()) {
+            for r in global_records
+                .iter_mut()
+                .chain(partition_records.iter_mut())
+            {
                 r.value = rvt::redact::redact_sensitive(&r.value);
             }
         }
@@ -93,16 +99,17 @@ fn run() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        println!(
-            "Global/Latest · {} string records",
-            global_records.len()
-        );
+        println!("Global/Latest · {} string records", global_records.len());
         if !partition_records.is_empty() {
             println!("Partitions/NN · {} string records", partition_records.len());
         }
 
         // Interesting samples from global
-        let tag1_samples: Vec<_> = global_records.iter().filter(|r| r.tag == 1 && !r.value.is_empty()).take(20).collect();
+        let tag1_samples: Vec<_> = global_records
+            .iter()
+            .filter(|r| r.tag == 1 && !r.value.is_empty())
+            .take(20)
+            .collect();
         if !tag1_samples.is_empty() {
             println!("\nGlobal tag=0x01 records (sheets, levels, elevations):");
             for r in tag1_samples {
@@ -149,9 +156,7 @@ fn run() -> anyhow::Result<()> {
                 }
             }
 
-            println!(
-                "\nPartitions/NN content classified:"
-            );
+            println!("\nPartitions/NN content classified:");
             println!("  Autodesk unit  identifiers: {}", units.len());
             println!("  Autodesk spec  identifiers: {}", specs.len());
             println!("  Autodesk param groups     : {}", groups.len());

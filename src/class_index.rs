@@ -59,7 +59,10 @@ pub fn extract_class_names(decompressed: &[u8]) -> Result<BTreeSet<String>> {
 
 fn is_noise(s: &str) -> bool {
     // All-caps run >= 7 chars that looks like a hex string or acronym
-    if s.len() >= 7 && s.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()) {
+    if s.len() >= 7
+        && s.chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+    {
         return true;
     }
     // 4+ same-letter run like "AAAAAA" or "Aaaaaaa"

@@ -6,12 +6,18 @@
 //!
 //! Full writeup in `docs/rvt-moat-break-reconnaissance.md` §Phase D link
 //! proof.
-use rvt::{compression, streams::{FORMATS_LATEST, GLOBAL_LATEST}, RevitFile};
+use rvt::{
+    RevitFile, compression,
+    streams::{FORMATS_LATEST, GLOBAL_LATEST},
+};
 use std::collections::HashMap;
 
 fn looks_like_class_name(bytes: &[u8]) -> bool {
-    !bytes.is_empty() && bytes[0].is_ascii_uppercase()
-        && bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+    !bytes.is_empty()
+        && bytes[0].is_ascii_uppercase()
+        && bytes[1..]
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 fn main() -> anyhow::Result<()> {
@@ -72,30 +78,42 @@ fn main() -> anyhow::Result<()> {
         if v > 0 && v < 0x4000 {
             *hits_u16.entry(v).or_insert(0) += 1;
         }
-        u16_pos += 1;  // overlapping search
+        u16_pos += 1; // overlapping search
     }
 
     // Show top 20 classes by u16-tag occurrence
-    let mut counts: Vec<(&str, u16, u32)> = tagged_classes.iter()
+    let mut counts: Vec<(&str, u16, u32)> = tagged_classes
+        .iter()
         .map(|(n, t)| (n.as_str(), *t, *hits_u16.get(t).unwrap_or(&0)))
         .collect();
     counts.sort_by(|a, b| b.2.cmp(&a.2));
 
     println!("\nTop 25 tagged classes by u16 LE occurrences in Global/Latest:");
-    println!("  (reminder: overlapping u16 search yields a noise floor; look at relative distribution)");
+    println!(
+        "  (reminder: overlapping u16 search yields a noise floor; look at relative distribution)"
+    );
     for (name, tag, hits) in counts.iter().take(25) {
         println!("  tag=0x{:04x} ({:5})  hits={:6}  {}", tag, tag, hits, name);
     }
 
     let total_tagged_hits: u32 = counts.iter().map(|c| c.2).sum();
-    println!("\nTotal u16 hits across all {} tagged classes: {}", tagged_classes.len(), total_tagged_hits);
-    println!("Global/Latest has {} possible u16 positions; {:.2}% are tagged-class hits",
+    println!(
+        "\nTotal u16 hits across all {} tagged classes: {}",
+        tagged_classes.len(),
+        total_tagged_hits
+    );
+    println!(
+        "Global/Latest has {} possible u16 positions; {:.2}% are tagged-class hits",
         global.len().saturating_sub(1),
-        100.0 * total_tagged_hits as f64 / global.len().saturating_sub(1) as f64);
+        100.0 * total_tagged_hits as f64 / global.len().saturating_sub(1) as f64
+    );
 
     // Baseline noise: how often does a random u16 in the same range appear?
     let expected_per_tag_if_random = (global.len() as f64 - 1.0) / (0x4000 as f64);
-    println!("Expected hits per tag if uniform random over [0, 0x4000): {:.1}", expected_per_tag_if_random);
+    println!(
+        "Expected hits per tag if uniform random over [0, 0x4000): {:.1}",
+        expected_per_tag_if_random
+    );
 
     Ok(())
 }

@@ -6,14 +6,23 @@
 //! one column per release.
 //!
 //! Output formats: human-readable text table + CSV for reuse in other tools.
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::collapsible_if,
+    clippy::collapsible_match
+)]
 
-use rvt::{compression, streams::FORMATS_LATEST, RevitFile};
+use rvt::{RevitFile, compression, streams::FORMATS_LATEST};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 fn looks_like_class_name(bytes: &[u8]) -> bool {
-    !bytes.is_empty() && bytes[0].is_ascii_uppercase()
-        && bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+    !bytes.is_empty()
+        && bytes[0].is_ascii_uppercase()
+        && bytes[1..]
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 fn extract_tagged_classes(bytes: &[u8]) -> Vec<(String, u16)> {
@@ -88,17 +97,27 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .filter(|(_, tags)| {
             tags.len() == releases.len()
-                && tags.values().collect::<std::collections::HashSet<_>>().len() == 1
+                && tags
+                    .values()
+                    .collect::<std::collections::HashSet<_>>()
+                    .len()
+                    == 1
         })
         .map(|(name, _)| name.clone())
         .collect();
     let shifting: Vec<_> = grid
         .iter()
         .filter(|(_, tags)| {
-            tags.values().collect::<std::collections::HashSet<_>>().len() > 1
+            tags.values()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                > 1
         })
         .map(|(name, tags)| {
-            let distinct = tags.values().collect::<std::collections::HashSet<_>>().len();
+            let distinct = tags
+                .values()
+                .collect::<std::collections::HashSet<_>>()
+                .len();
             (name.clone(), distinct)
         })
         .collect();
@@ -138,25 +157,39 @@ fn main() -> anyhow::Result<()> {
     // Classes that disappear / appear
     let appeared: Vec<_> = grid
         .iter()
-        .filter(|(_, tags)| !tags.contains_key(&releases[0]) && tags.contains_key(releases.last().unwrap()))
+        .filter(|(_, tags)| {
+            !tags.contains_key(&releases[0]) && tags.contains_key(releases.last().unwrap())
+        })
         .map(|(n, _)| n.clone())
         .collect();
     let disappeared: Vec<_> = grid
         .iter()
-        .filter(|(_, tags)| tags.contains_key(&releases[0]) && !tags.contains_key(releases.last().unwrap()))
+        .filter(|(_, tags)| {
+            tags.contains_key(&releases[0]) && !tags.contains_key(releases.last().unwrap())
+        })
         .map(|(n, _)| n.clone())
         .collect();
     println!(
         "\nClasses introduced after {}: {} (e.g. {})",
         releases[0],
         appeared.len(),
-        appeared.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+        appeared
+            .iter()
+            .take(5)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     println!(
         "Classes removed by {}: {} (e.g. {})",
         releases.last().unwrap(),
         disappeared.len(),
-        disappeared.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+        disappeared
+            .iter()
+            .take(5)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
     // CSV output

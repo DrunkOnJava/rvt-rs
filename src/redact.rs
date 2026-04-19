@@ -30,7 +30,7 @@ pub fn redact_path_str(p: &str) -> String {
         if let Some(idx) = out.find(n) {
             let tail_start = idx + n.len();
             let tail = &out[tail_start..];
-            if let Some(end) = tail.find(|c: char| c == '\\' || c == '/') {
+            if let Some(end) = tail.find(['\\', '/']) {
                 let before = &out[..tail_start];
                 let after = &tail[end..];
                 out = format!("{before}<redacted>{after}");
@@ -91,9 +91,7 @@ fn redact_autodesk_project_ids(s: &str) -> String {
             continue;
         }
         let tail = after_prefix;
-        let seg_end = tail
-            .find(|c: char| c == '\\' || c == '/')
-            .unwrap_or(tail.len());
+        let seg_end = tail.find(['\\', '/']).unwrap_or(tail.len());
         out.push_str("Revit - <redacted project id>");
         rest = &tail[seg_end..];
     }

@@ -7,11 +7,19 @@
 //! Strategy: enumerate directory entries, then look at what the payload
 //! value lands on if interpreted as a file offset into the decompressed
 //! Global/Latest stream.
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::collapsible_if,
+    clippy::collapsible_match
+)]
 
-use rvt::{compression, streams::GLOBAL_LATEST, RevitFile};
+use rvt::{RevitFile, compression, streams::GLOBAL_LATEST};
 
 fn main() -> anyhow::Result<()> {
-    let path = std::env::args().nth(1).expect("usage: directory_probe <file>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: directory_probe <file>");
     let mut rf = RevitFile::open(&path)?;
     let raw = rf.read_stream(GLOBAL_LATEST)?;
     let d = compression::inflate_at(&raw, 8)?;
@@ -54,7 +62,9 @@ fn main() -> anyhow::Result<()> {
                 break;
             }
             j += 2;
-            if j - i > 40 { break; }
+            if j - i > 40 {
+                break;
+            }
         }
         let span = next_at.map(|n| n - i).unwrap_or(6);
         // Payload: the first 2 bytes after the tag

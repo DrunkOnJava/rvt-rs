@@ -22,7 +22,7 @@
 //! Currently exposes a header-only parser; full record decoding is a
 //! Phase 4d task tracked in `docs/rvt-moat-break-reconnaissance.md`.
 
-use crate::{compression, streams::GLOBAL_ELEM_TABLE, Error, Result, RevitFile};
+use crate::{Error, Result, RevitFile, compression, streams::GLOBAL_ELEM_TABLE};
 use serde::{Deserialize, Serialize};
 
 /// Header extracted from the first 32 bytes of decompressed Global/ElemTable.
@@ -119,7 +119,6 @@ pub fn parse_records_rough(rf: &mut RevitFile, max_records: usize) -> Result<Vec
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn header_has_element_count() {

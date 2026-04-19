@@ -11,18 +11,28 @@
 //!    - 32 bytes of raw type_encoding (trimmed at the next field start)
 //!
 //! Output: a deterministic table we can diff across releases.
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::collapsible_if,
+    clippy::collapsible_match
+)]
 
-use rvt::{compression, streams::FORMATS_LATEST, RevitFile};
+use rvt::{RevitFile, compression, streams::FORMATS_LATEST};
 
 fn looks_like_class_name(bytes: &[u8]) -> bool {
     !bytes.is_empty()
         && bytes[0].is_ascii_uppercase()
-        && bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        && bytes[1..]
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 fn looks_like_field_name(bytes: &[u8]) -> bool {
     !bytes.is_empty()
         && (bytes[0].is_ascii_alphanumeric() || bytes[0] == b'_')
-        && bytes.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        && bytes
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 #[allow(dead_code)]
@@ -38,7 +48,9 @@ struct FieldSite {
 }
 
 fn main() -> anyhow::Result<()> {
-    let path = std::env::args().nth(1).expect("usage: field_type_probe <file.rfa>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: field_type_probe <file.rfa>");
     let mut rf = RevitFile::open(&path)?;
     let raw = rf.read_stream(FORMATS_LATEST)?;
     let d = compression::inflate_at(&raw, 0)?;
@@ -159,13 +171,10 @@ fn main() -> anyhow::Result<()> {
                     break;
                 }
                 // Check for next class candidate (u16 len + class-name-like bytes)
-                let maybe_u16_len =
-                    u16::from_le_bytes([data[enc_end], data[enc_end + 1]]) as usize;
+                let maybe_u16_len = u16::from_le_bytes([data[enc_end], data[enc_end + 1]]) as usize;
                 if (3..=40).contains(&maybe_u16_len)
                     && enc_end + 2 + maybe_u16_len + 2 <= data.len()
-                    && looks_like_class_name(
-                        &data[enc_end + 2..enc_end + 2 + maybe_u16_len],
-                    )
+                    && looks_like_class_name(&data[enc_end + 2..enc_end + 2 + maybe_u16_len])
                     && u16::from_le_bytes([
                         data[enc_end + 2 + maybe_u16_len],
                         data[enc_end + 2 + maybe_u16_len + 1],
@@ -191,9 +200,7 @@ fn main() -> anyhow::Result<()> {
                 ]) as usize;
                 if (3..=120).contains(&tlen) && k + 4 + tlen <= type_enc.len() {
                     let body = &type_enc[k + 4..k + 4 + tlen];
-                    if body.iter().all(|b| {
-                        b.is_ascii_graphic() || *b == b' '
-                    }) {
+                    if body.iter().all(|b| b.is_ascii_graphic() || *b == b' ') {
                         let s = std::str::from_utf8(body).unwrap_or_default();
                         if s.chars().any(|c| c.is_ascii_uppercase())
                             || s.contains("std::")
@@ -272,9 +279,7 @@ fn main() -> anyhow::Result<()> {
 
     // Dump the first 25 classes with fields.
     for (class_name, tag, parent, declared) in seen_classes.iter().take(25) {
-        println!(
-            "═══ {class_name} (tag=0x{tag:04x}, parent={parent:?}, declared={declared}) ═══"
-        );
+        println!("═══ {class_name} (tag=0x{tag:04x}, parent={parent:?}, declared={declared}) ═══");
         for f in results.iter().filter(|f| f.class_name == *class_name) {
             print!("  '{}' [enc {}]: ", f.field_name, f.type_enc.len());
             for b in f.type_enc.iter().take(24) {

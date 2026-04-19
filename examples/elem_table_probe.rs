@@ -2,7 +2,14 @@
 //! Goal: learn the record layout (length-prefixed? fixed-size? indexed by
 //! ElementId?) enough to scaffold a parser module.
 
-use rvt::{compression, streams::GLOBAL_ELEM_TABLE, RevitFile};
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::collapsible_if,
+    clippy::collapsible_match
+)]
+
+use rvt::{RevitFile, compression, streams::GLOBAL_ELEM_TABLE};
 use std::path::PathBuf;
 
 fn dump_hex_at(bytes: &[u8], offset: usize, len: usize, label: &str) {
@@ -11,12 +18,23 @@ fn dump_hex_at(bytes: &[u8], offset: usize, len: usize, label: &str) {
     for row_start in (offset..end).step_by(16) {
         let row_end = (row_start + 16).min(end);
         print!("    0x{row_start:06x}  ");
-        for i in row_start..row_end { print!("{:02x} ", bytes[i]); }
-        for _ in row_end..row_start + 16 { print!("   "); }
+        for i in row_start..row_end {
+            print!("{:02x} ", bytes[i]);
+        }
+        for _ in row_end..row_start + 16 {
+            print!("   ");
+        }
         print!(" |");
         for i in row_start..row_end {
             let b = bytes[i];
-            print!("{}", if (0x20..0x7f).contains(&b) { b as char } else { '.' });
+            print!(
+                "{}",
+                if (0x20..0x7f).contains(&b) {
+                    b as char
+                } else {
+                    '.'
+                }
+            );
         }
         println!("|");
     }
@@ -32,7 +50,9 @@ fn main() -> anyhow::Result<()> {
             format!("rac_basic_sample_family-{year}.rfa"),
         ] {
             let path = PathBuf::from(&sample_dir).join(&filename);
-            if !path.exists() { continue; }
+            if !path.exists() {
+                continue;
+            }
             println!("\n═══ Revit {year} — {filename} ═══");
             let mut rf = RevitFile::open(&path)?;
             let raw = rf.read_stream(GLOBAL_ELEM_TABLE)?;
@@ -62,10 +82,11 @@ fn main() -> anyhow::Result<()> {
             // Look for repeating 4-byte or 8-byte patterns
             if d.len() >= 32 {
                 // Most common u32 LE value in first 256 bytes
-                let mut freq: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+                let mut freq: std::collections::HashMap<u32, u32> =
+                    std::collections::HashMap::new();
                 for i in (0..d.len().min(512)).step_by(4) {
                     if i + 4 <= d.len() {
-                        let v = u32::from_le_bytes([d[i], d[i+1], d[i+2], d[i+3]]);
+                        let v = u32::from_le_bytes([d[i], d[i + 1], d[i + 2], d[i + 3]]);
                         *freq.entry(v).or_insert(0) += 1;
                     }
                 }

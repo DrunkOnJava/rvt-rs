@@ -7,7 +7,7 @@
 //!   - building a corpus for future Phase D work
 
 use clap::Parser;
-use rvt::{compression, RevitFile};
+use rvt::{RevitFile, compression};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -47,7 +47,11 @@ fn run() -> anyhow::Result<()> {
     fs::create_dir_all(&cli.out)?;
 
     let streams = rf.stream_names();
-    println!("Dumping {} streams from {}", streams.len(), cli.file.display());
+    println!(
+        "Dumping {} streams from {}",
+        streams.len(),
+        cli.file.display()
+    );
 
     for name in &streams {
         let safe = name.replace('/', "_");
@@ -65,7 +69,11 @@ fn run() -> anyhow::Result<()> {
                 short_path(&path)
             );
         } else {
-            println!("  {:<30}  raw={} bytes  (no gzip magic found)", name, raw.len());
+            println!(
+                "  {:<30}  raw={} bytes  (no gzip magic found)",
+                name,
+                raw.len()
+            );
         }
 
         if cli.raw {

@@ -1,6 +1,6 @@
 //! Show the 2 bytes of Global/PartitionTable that DO differ across
 //! releases and report what each release writes there.
-use rvt::{compression, streams::GLOBAL_PARTITION_TABLE, RevitFile};
+use rvt::{RevitFile, compression, streams::GLOBAL_PARTITION_TABLE};
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
@@ -15,7 +15,9 @@ fn main() -> anyhow::Result<()> {
             format!("rac_basic_sample_family-{v}.rfa"),
         ] {
             let path = PathBuf::from(&sample_dir).join(&filename);
-            if !path.exists() { continue; }
+            if !path.exists() {
+                continue;
+            }
             let mut rf = RevitFile::open(&path)?;
             let raw = rf.read_stream(GLOBAL_PARTITION_TABLE)?;
             let d = compression::inflate_at(&raw, 8)?;

@@ -93,11 +93,7 @@ impl Exporter for NullExporter {
             .part_atom()
             .ok()
             .and_then(|pa| pa.title)
-            .or_else(|| {
-                rf.basic_file_info()
-                    .ok()
-                    .and_then(|bfi| bfi.original_path)
-            });
+            .or_else(|| rf.basic_file_info().ok().and_then(|bfi| bfi.original_path));
         Ok(IfcModel {
             project_name,
             description: Some(

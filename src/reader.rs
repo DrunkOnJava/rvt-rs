@@ -2,6 +2,7 @@
 //! and exposes its streams + parsed metadata.
 
 use crate::{
+    Error, Result,
     basic_file_info::BasicFileInfo,
     class_index, compression,
     part_atom::PartAtom,
@@ -10,7 +11,6 @@ use crate::{
         GLOBAL_DOC_INCREMENT_TABLE, GLOBAL_ELEM_TABLE, GLOBAL_HISTORY, GLOBAL_LATEST,
         GLOBAL_PARTITION_TABLE, PART_ATOM, REVIT_PREVIEW_4_0, TRANSMISSION_DATA,
     },
-    Error, Result,
 };
 use cfb::CompoundFile;
 use serde::{Deserialize, Serialize};
@@ -78,8 +78,7 @@ impl RevitFile {
         if bytes.len() < 8 || bytes[..8] != [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] {
             return Err(Error::NotACfbFile);
         }
-        let cfb =
-            CompoundFile::open(Cursor::new(bytes)).map_err(|e| Error::Cfb(e.to_string()))?;
+        let cfb = CompoundFile::open(Cursor::new(bytes)).map_err(|e| Error::Cfb(e.to_string()))?;
         Ok(Self { cfb })
     }
 
@@ -89,7 +88,13 @@ impl RevitFile {
             .cfb
             .walk()
             .filter(|e| e.is_stream())
-            .map(|e| e.path().display().to_string().trim_start_matches('/').to_string())
+            .map(|e| {
+                e.path()
+                    .display()
+                    .to_string()
+                    .trim_start_matches('/')
+                    .to_string()
+            })
             .collect();
         streams.sort();
         streams
@@ -179,10 +184,7 @@ impl RevitFile {
         let class_name_count = class_names.len();
         let class_name_sample: Vec<String> = class_names.into_iter().take(30).collect();
 
-        let file_size: u64 = streams
-            .iter()
-            .filter_map(|n| self.stream_size(n))
-            .sum();
+        let file_size: u64 = streams.iter().filter_map(|n| self.stream_size(n)).sum();
 
         Ok(Summary {
             file_size,

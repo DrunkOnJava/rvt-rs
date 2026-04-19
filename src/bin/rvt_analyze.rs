@@ -14,7 +14,7 @@
 //! ```
 
 use clap::{Parser, ValueEnum};
-use rvt::{compression, object_graph, streams, RevitFile};
+use rvt::{RevitFile, compression, object_graph, streams};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -150,7 +150,8 @@ struct Disclosures {
     build_server_paths: Vec<String>,
 }
 
-const DIVIDER: &str = "─────────────────────────────────────────────────────────────────────────────";
+const DIVIDER: &str =
+    "─────────────────────────────────────────────────────────────────────────────";
 
 struct Style {
     color: bool,
@@ -158,22 +159,46 @@ struct Style {
 
 impl Style {
     fn bold(&self, s: &str) -> String {
-        if self.color { format!("\x1b[1m{s}\x1b[0m") } else { s.into() }
+        if self.color {
+            format!("\x1b[1m{s}\x1b[0m")
+        } else {
+            s.into()
+        }
     }
     fn dim(&self, s: &str) -> String {
-        if self.color { format!("\x1b[2m{s}\x1b[0m") } else { s.into() }
+        if self.color {
+            format!("\x1b[2m{s}\x1b[0m")
+        } else {
+            s.into()
+        }
     }
     fn cyan(&self, s: &str) -> String {
-        if self.color { format!("\x1b[36m{s}\x1b[0m") } else { s.into() }
+        if self.color {
+            format!("\x1b[36m{s}\x1b[0m")
+        } else {
+            s.into()
+        }
     }
     fn yellow(&self, s: &str) -> String {
-        if self.color { format!("\x1b[33m{s}\x1b[0m") } else { s.into() }
+        if self.color {
+            format!("\x1b[33m{s}\x1b[0m")
+        } else {
+            s.into()
+        }
     }
     fn red(&self, s: &str) -> String {
-        if self.color { format!("\x1b[31m{s}\x1b[0m") } else { s.into() }
+        if self.color {
+            format!("\x1b[31m{s}\x1b[0m")
+        } else {
+            s.into()
+        }
     }
     fn green(&self, s: &str) -> String {
-        if self.color { format!("\x1b[32m{s}\x1b[0m") } else { s.into() }
+        if self.color {
+            format!("\x1b[32m{s}\x1b[0m")
+        } else {
+            s.into()
+        }
     }
 }
 
@@ -307,11 +332,7 @@ fn build_anchors(rf: &mut RevitFile) -> anyhow::Result<FormatAnchors> {
         if end > start {
             let (cow, _, _) = encoding_rs::UTF_16LE.decode(&d[start..end]);
             let s = cow.into_owned().trim().to_string();
-            if !s.is_empty() {
-                Some(s)
-            } else {
-                None
-            }
+            if !s.is_empty() { Some(s) } else { None }
         } else {
             None
         }
@@ -319,9 +340,10 @@ fn build_anchors(rf: &mut RevitFile) -> anyhow::Result<FormatAnchors> {
 
     // Contents stream wrapper magic
     let contents_raw = rf.read_stream(streams::CONTENTS).ok();
-    let contents_magic = contents_raw.as_ref().filter(|d| d.len() >= 4).map(|d| {
-        format!("{:02x} {:02x} {:02x} {:02x}", d[0], d[1], d[2], d[3])
-    });
+    let contents_magic = contents_raw
+        .as_ref()
+        .filter(|d| d.len() >= 4)
+        .map(|d| format!("{:02x} {:02x} {:02x} {:02x}", d[0], d[1], d[2], d[3]));
 
     Ok(FormatAnchors {
         partition_table_bytes,
@@ -373,10 +395,7 @@ fn build_schema(rf: &mut RevitFile) -> anyhow::Result<SchemaSummary> {
     })
 }
 
-fn build_link(
-    rf: &mut RevitFile,
-    tagged: &[TaggedClass],
-) -> anyhow::Result<LinkSummary> {
+fn build_link(rf: &mut RevitFile, tagged: &[TaggedClass]) -> anyhow::Result<LinkSummary> {
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
     let global = compression::inflate_at(&raw, 8)?;
     let total_positions = global.len().saturating_sub(1).max(1);
@@ -419,8 +438,7 @@ fn build_content(rf: &mut RevitFile) -> ContentMetadata {
     let global_records = object_graph::string_records_from_file(rf)
         .map(|r| r.len())
         .unwrap_or(0);
-    let partition_records =
-        object_graph::string_records_from_partitions(rf).unwrap_or_default();
+    let partition_records = object_graph::string_records_from_partitions(rf).unwrap_or_default();
     let total_partition = partition_records.len();
 
     let mut units = 0usize;
@@ -516,7 +534,9 @@ fn build_disclosures(
 fn looks_like_class_name(bytes: &[u8]) -> bool {
     !bytes.is_empty()
         && bytes[0].is_ascii_uppercase()
-        && bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        && bytes[1..]
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 fn print_report(report: &Report, s: &Style, section: Option<Section>, quiet: bool) {
@@ -605,7 +625,10 @@ fn print_history(h: &[String], s: &Style) {
     } else {
         println!(
             "  {}",
-            s.dim(&format!("{} entries in Global/Latest, oldest first", h.len()))
+            s.dim(&format!(
+                "{} entries in Global/Latest, oldest first",
+                h.len()
+            ))
         );
         for (i, entry) in h.iter().enumerate() {
             println!("  {:>2}.  {}", i + 1, entry);
@@ -697,10 +720,7 @@ fn print_link(link: &LinkSummary, s: &Style) {
         "  {}",
         s.dim("Top tagged classes in this file's Global/Latest (ratio = hits / uniform):")
     );
-    println!(
-        "    {}",
-        s.dim("tag    hits     ratio  class")
-    );
+    println!("    {}", s.dim("tag    hits     ratio  class"));
     for e in &link.top_classes {
         let ratio_str = if e.ratio_vs_uniform >= 50.0 {
             s.red(&format!("{:>6.0}×", e.ratio_vs_uniform))
@@ -733,10 +753,16 @@ fn print_content(c: &ContentMetadata, s: &Style) {
     println!("  {}", s.dim("Namespace breakdown:"));
     println!("    autodesk.unit.*          {:>6}", c.autodesk_units);
     println!("    autodesk.spec.*          {:>6}", c.autodesk_specs);
-    println!("    autodesk.parameter.group {:>6}", c.autodesk_parameter_groups);
+    println!(
+        "    autodesk.parameter.group {:>6}",
+        c.autodesk_parameter_groups
+    );
     println!("    OmniClass codes          {:>6}", c.omniclass_codes);
     println!("    Uniformat codes          {:>6}", c.uniformat_codes);
-    println!("    Revit categories / misc  {:>6}", c.revit_categories_misc);
+    println!(
+        "    Revit categories / misc  {:>6}",
+        c.revit_categories_misc
+    );
 
     if !c.example_uniformat.is_empty() {
         println!();
@@ -763,9 +789,8 @@ fn print_disclosures(d: &Disclosures, s: &Style) {
         && d.build_server_paths.is_empty()
     {
         println!(
-            "  {} {}",
-            s.green("✓"),
-            "No creator-path or Autodesk-internal paths detected in BasicFileInfo."
+            "  {} No creator-path or Autodesk-internal paths detected in BasicFileInfo.",
+            s.green("✓")
         );
         println!();
         return;
@@ -782,9 +807,8 @@ fn print_disclosures(d: &Disclosures, s: &Style) {
     }
     if !d.creator_paths.is_empty() {
         println!(
-            "  {} {}",
-            s.yellow("!"),
-            "Creator-system paths (may leak user identity):"
+            "  {} Creator-system paths (may leak user identity):",
+            s.yellow("!")
         );
         for p in &d.creator_paths {
             println!("    {}", s.yellow(p));
@@ -792,9 +816,8 @@ fn print_disclosures(d: &Disclosures, s: &Style) {
     }
     if !d.embedded_personal_names.is_empty() {
         println!(
-            "  {} {}",
-            s.yellow("!"),
-            "Usernames extracted from embedded paths:"
+            "  {} Usernames extracted from embedded paths:",
+            s.yellow("!")
         );
         for n in &d.embedded_personal_names {
             println!("    {}", s.yellow(n));
@@ -821,7 +844,11 @@ fn fmt_opt_u32(o: &Option<u32>) -> String {
 /// preserved (same hex / path structure) so the claims remain verifiable.
 fn redact_report(r: &mut Report) {
     r.identity.file_path = redact_sensitive(&r.identity.file_path);
-    r.identity.creator_path = r.identity.creator_path.as_ref().map(|p| redact_sensitive(p));
+    r.identity.creator_path = r
+        .identity
+        .creator_path
+        .as_ref()
+        .map(|p| redact_sensitive(p));
     r.identity.file_guid = r
         .identity
         .file_guid
@@ -855,9 +882,8 @@ fn redact_report(r: &mut Report) {
     r.disclosures.autodesk_internal_paths = (0..n_autodesk)
         .map(|_| "<redacted autodesk path>".to_string())
         .collect();
-    r.disclosures.embedded_personal_names = (0..n_names)
-        .map(|_| "<redacted>".to_string())
-        .collect();
+    r.disclosures.embedded_personal_names =
+        (0..n_names).map(|_| "<redacted>".to_string()).collect();
 }
 
 // Redaction helpers moved to `rvt::redact` for reuse by other CLIs.
