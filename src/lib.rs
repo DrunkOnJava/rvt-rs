@@ -38,6 +38,7 @@ pub mod object_graph;
 pub mod part_atom;
 pub mod partitions;
 pub mod reader;
+pub mod redact;
 pub mod streams;
 pub mod writer;
 

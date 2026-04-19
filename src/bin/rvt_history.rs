@@ -33,6 +33,12 @@ struct Cli {
     /// Implies --all-strings.
     #[arg(long = "partitions")]
     partitions: bool,
+
+    /// Redact PII — Windows usernames, Autodesk-internal paths, and
+    /// project-ID folder names — from every string record before
+    /// display. Safe default for sharing output publicly.
+    #[arg(long)]
+    redact: bool,
 }
 
 fn main() -> ExitCode {
@@ -59,12 +65,17 @@ fn run() -> anyhow::Result<()> {
     let mut rf = RevitFile::open(&cli.file)?;
 
     if cli.all_strings || cli.partitions {
-        let global_records = object_graph::string_records_from_file(&mut rf)?;
-        let partition_records = if cli.partitions {
+        let mut global_records = object_graph::string_records_from_file(&mut rf)?;
+        let mut partition_records = if cli.partitions {
             object_graph::string_records_from_partitions(&mut rf).unwrap_or_default()
         } else {
             Vec::new()
         };
+        if cli.redact {
+            for r in global_records.iter_mut().chain(partition_records.iter_mut()) {
+                r.value = rvt::redact::redact_sensitive(&r.value);
+            }
+        }
 
         if cli.format == "json" {
             #[derive(serde::Serialize)]
@@ -170,7 +181,12 @@ fn run() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let history = DocumentHistory::from_revit_file(&mut rf)?;
+    let mut history = DocumentHistory::from_revit_file(&mut rf)?;
+    if cli.redact {
+        for e in history.entries.iter_mut() {
+            *e = rvt::redact::redact_sensitive(e);
+        }
+    }
 
     if cli.format == "json" {
         println!("{}", serde_json::to_string_pretty(&history)?);
