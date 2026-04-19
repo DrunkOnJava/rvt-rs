@@ -1553,4 +1553,61 @@ Probes added:
 - `post_table_b_head.rs` — hex dump + class-tag annotation of the
   first 384 bytes. Basis for Finding Q6.5-B.
 
+### Finding Q6.5-C: first-pass walker — 13 fields read, but Container encoding is wrong
+
+Ran a first-pass ADocument walker (probe:
+`examples/adocument_walker_v1.rs`) starting at 0x0f67 with simple
+wire-encoding guesses: `Pointer` = `u32`, `ElementIdRef` = `u64`,
+`Container` = `[u32 count][count × 6-byte records]`.
+
+Result — all 13 ADocument fields were read to completion, but the
+middle fields clearly drift into the array payload, producing
+obvious junk:
+
+| # | Field | FieldType | Read value | Interpretation |
+|---|---|---|---|---|
+| 0 | `m_elemTable` | Pointer{2} | `0x00000000` | plausible NULL |
+| 1 | `m_appInfoArr` | Container | count=0 → empty | **wrong** — array is clearly non-empty in the bytes |
+| 2 | `m_oContentTable` | Pointer{2} | `0x0000000c` | plausible small id but probably reading array body |
+| 3 | `m_pHostDocument` | Pointer{3} | `0xffffffff` | matches a `ff ff ff ff` word inside the array |
+| 4 | `m_pAppInfoManager` | Pointer{2} | `0xffff0bc8` | misaligned word — walker is definitely reading array body |
+| 5..9 | various pointers | Pointer | `0x0bc8ffff` / `0xffffffff` alternating | confirms drift into the repeating `[u16 0x0bc8][u32 ff]` pattern |
+
+So the walker is clearly NOT reading ADocument's fields after
+the first one or two. The Container encoding `[u32 count][elements]`
+that I guessed is wrong: the bytes at offset +4 of `m_appInfoArr`'s
+position are `00 00 00 00` (count=0), so the walker skips the
+element-body advance — and then every subsequent field reads from
+inside the array payload instead of from after the array.
+
+Actual byte structure in the first 24 bytes at 0x0f67:
+
+```text
+0x0f67  00 00 00 00   ← u32=0 (possibly m_elemTable NULL)
+0x0f6b  00 00 00 00   ← u32=0 (second zero — preamble word or Container leading size?)
+0x0f6f  0c 00 00 00   ← u32=12 (almost certainly m_appInfoArr's actual element count)
+0x0f73  ff ff ff ff   ← u32=0xffffffff (terminator or per-array-type metadata)
+0x0f77  c8 0b ff ff ff ff     ← first element [u16 0x0bc8][u32 ffffffff]
+0x0f7d  c8 0b ff ff ff ff     ← second element (and so on, 12 total)
+```
+
+This means **Container wire encoding is probably `[u32 zero_preamble][u32 count][u32 metadata_or_terminator][count × 6-byte [u16 id][u32 unset] records]`** — 12-byte header plus 6 bytes per element. Not yet airtight, but a concrete falsifiable hypothesis for the next iteration.
+
+### Concrete next probe for Layer 5a
+
+Adjust the walker's Container decoder to the 12-byte-header model,
+re-run, see if fields 3–12 align with sensible values. If they do,
+ADocument is readable end-to-end. If they still drift, the
+Container encoding has another wrinkle (compressed element size,
+variable field framing per array kind, etc.) — isolate by reading
+ONLY `m_appInfoArr` in a dedicated probe and iterating until its
+length consumed matches the byte gap to whatever comes after.
+
+Probe: `examples/adocument_walker_v1.rs` — the scaffold for a walker
+plus two trial runs (with and without 8-byte preamble skip). 13
+fields read when starting directly at 0x0f67, 1 field read when
+starting at 0x0f6f (the `[u32 12]` marker isn't the first field's
+position either). Serves as a concrete baseline for the next
+contributor to improve.
+
 **End of report.**
