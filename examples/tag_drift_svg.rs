@@ -25,9 +25,7 @@ fn main() -> anyhow::Result<()> {
 
     let f = BufReader::new(File::open(&csv_path)?);
     let mut lines = f.lines();
-    let header_line = lines
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("empty csv"))??;
+    let header_line = lines.next().ok_or_else(|| anyhow::anyhow!("empty csv"))??;
     let releases: Vec<String> = header_line
         .split(',')
         .skip(1)
@@ -111,7 +109,9 @@ fn main() -> anyhow::Result<()> {
         };
         svg.push_str(&format!(
             "<text x=\"{x}\" y=\"{y}\" fill=\"{fill}\" font-size=\"9\">{name}</text>\n",
-            x = margin, y = y + 5, fill = name_fill,
+            x = margin,
+            y = y + 5,
+            fill = name_fill,
             name = xml_escape(&row.name)
         ));
 
@@ -135,7 +135,11 @@ fn main() -> anyhow::Result<()> {
             };
             svg.push_str(&format!(
                 "<rect x=\"{cx}\" y=\"{y}\" width=\"{cw}\" height=\"{ch}\" fill=\"{color}\"/>\n",
-                cx = cx, y = y, cw = cell_w - 2, ch = cell_h - 1, color = color
+                cx = cx,
+                y = y,
+                cw = cell_w - 2,
+                ch = cell_h - 1,
+                color = color
             ));
         }
     }

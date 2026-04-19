@@ -8,8 +8,14 @@
 //!   m_renderStyleId (ElementId)
 //!   m_previewElemId (ElementId)
 //! Expected instance size: ~20 bytes (4-byte tag + 3 fields × ~5-8 bytes).
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::collapsible_if,
+    clippy::collapsible_match
+)]
 
-use rvt::{compression, streams::GLOBAL_LATEST, RevitFile};
+use rvt::{RevitFile, compression, streams::GLOBAL_LATEST};
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
@@ -39,7 +45,9 @@ fn main() -> anyhow::Result<()> {
     // Dump 32 bytes of context after the FIRST 30 occurrences
     let show = positions.len().min(30);
     println!("\nFirst {show} occurrences (hex of 24 bytes AFTER the tag):");
-    println!("    offset    tag   |  +0           +4           +8           +12          +16          +20");
+    println!(
+        "    offset    tag   |  +0           +4           +8           +12          +16          +20"
+    );
     for &pos in positions.iter().take(show) {
         print!("  0x{pos:06x}  {tag:04x}  |  ");
         let end = (pos + 4 + 24).min(d.len());
@@ -54,7 +62,10 @@ fn main() -> anyhow::Result<()> {
 
     // Byte-column consistency: for each offset delta (0..24), what is
     // the mode (most common byte value) and how often does it appear?
-    println!("\nByte-column consistency across all {} hits:", positions.len());
+    println!(
+        "\nByte-column consistency across all {} hits:",
+        positions.len()
+    );
     println!("  offset  mode  count  freq   (all values that appear ≥5% of the time)");
     for delta in 0..24 {
         let mut freq: std::collections::HashMap<u8, u32> = std::collections::HashMap::new();

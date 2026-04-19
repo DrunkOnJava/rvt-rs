@@ -111,7 +111,11 @@ fn print_text(s: &rvt::reader::Summary, show_classes: bool) {
     if let Some(p) = &s.partition_stream {
         println!("  partition:     {}", p);
     }
-    println!("  streams:       {} ({} total bytes)", s.streams.len(), s.file_size);
+    println!(
+        "  streams:       {} ({} total bytes)",
+        s.streams.len(),
+        s.file_size
+    );
 
     if let Some(pa) = &s.partatom {
         println!("\nPartAtom ·");

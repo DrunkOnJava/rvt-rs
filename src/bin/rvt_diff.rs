@@ -7,12 +7,16 @@
 //! graph inference tractable without a spec.
 
 use clap::Parser;
-use rvt::{compression, RevitFile};
+use rvt::{RevitFile, compression};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser, Debug)]
-#[command(name = "rvt-diff", version, about = "Compare Revit files stream-by-stream")]
+#[command(
+    name = "rvt-diff",
+    version,
+    about = "Compare Revit files stream-by-stream"
+)]
 struct Cli {
     /// Two or more Revit files to compare.
     #[arg(required = true, num_args = 2..)]
@@ -46,10 +50,8 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         .collect::<Result<_, _>>()?;
 
     // Collect stream name union
-    let all_streams: std::collections::BTreeSet<String> = files
-        .iter()
-        .flat_map(|(_, rf)| rf.stream_names())
-        .collect();
+    let all_streams: std::collections::BTreeSet<String> =
+        files.iter().flat_map(|(_, rf)| rf.stream_names()).collect();
 
     println!("=== comparing {} files ===", files.len());
     for (p, rf) in &files {
@@ -63,7 +65,21 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     println!();
-    println!("{:<34} {}", "stream", files.iter().map(|(p, _)| p.file_stem().unwrap().to_string_lossy().chars().take(12).collect::<String>()).collect::<Vec<_>>().join("  "));
+    println!(
+        "{:<34} {}",
+        "stream",
+        files
+            .iter()
+            .map(|(p, _)| p
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .chars()
+                .take(12)
+                .collect::<String>())
+            .collect::<Vec<_>>()
+            .join("  ")
+    );
     println!("{}", "-".repeat(34 + files.len() * 14));
 
     for name in &all_streams {
@@ -97,11 +113,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         println!("\n=== byte-level diff (shared streams) ===");
         let shared: Vec<String> = all_streams
             .iter()
-            .filter(|name| {
-                files
-                    .iter_mut()
-                    .all(|(_, rf)| rf.read_stream(name).is_ok())
-            })
+            .filter(|name| files.iter_mut().all(|(_, rf)| rf.read_stream(name).is_ok()))
             .cloned()
             .collect();
         for name in shared {
@@ -134,7 +146,9 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                     diffs,
                     min_len,
                     pct,
-                    first_diff.map(|i| format!("0x{i:x}")).unwrap_or_else(|| "—".into())
+                    first_diff
+                        .map(|i| format!("0x{i:x}"))
+                        .unwrap_or_else(|| "—".into())
                 );
                 if let Some(off) = first_diff {
                     let preview = cli.preview.min(min_len - off);

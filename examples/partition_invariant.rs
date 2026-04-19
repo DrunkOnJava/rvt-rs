@@ -6,7 +6,7 @@
 //! invariant block "byte-for-byte identical 2016→2026", likely a format
 //! GUID. This probe locates that block and renders candidates.
 
-use rvt::{compression, streams::GLOBAL_PARTITION_TABLE, RevitFile};
+use rvt::{RevitFile, compression, streams::GLOBAL_PARTITION_TABLE};
 use std::path::PathBuf;
 
 fn decompress(path: &PathBuf) -> anyhow::Result<Vec<u8>> {
@@ -38,7 +38,10 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    println!("Loaded {} releases of Global/PartitionTable", per_release.len());
+    println!(
+        "Loaded {} releases of Global/PartitionTable",
+        per_release.len()
+    );
     for (v, bytes) in &per_release {
         println!("  {v}: {} bytes decompressed", bytes.len());
     }
@@ -50,18 +53,14 @@ fn main() -> anyhow::Result<()> {
     // Walk from offset 0 and find the longest run of fully-invariant bytes
     // across all streams. Print every run ≥ 8 bytes long with offset + hex.
     let mut i = 0;
-    let mut invariant_runs: Vec<(usize, usize, Vec<u8>)> = Vec::new();  // (start, length, bytes)
+    let mut invariant_runs: Vec<(usize, usize, Vec<u8>)> = Vec::new(); // (start, length, bytes)
     while i < min_len {
         let first = per_release[0].1[i];
         let is_invariant = per_release.iter().all(|(_, b)| b[i] == first);
         if is_invariant {
             let start = i;
             let mut run = Vec::new();
-            while i < min_len
-                && per_release
-                    .iter()
-                    .all(|(_, b)| b[i] == per_release[0].1[i])
-            {
+            while i < min_len && per_release.iter().all(|(_, b)| b[i] == per_release[0].1[i]) {
                 run.push(per_release[0].1[i]);
                 i += 1;
             }
@@ -93,17 +92,41 @@ fn main() -> anyhow::Result<()> {
             // fields. Try both.
             let be = format!(
                 "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                uuid_bytes[0], uuid_bytes[1], uuid_bytes[2], uuid_bytes[3],
-                uuid_bytes[4], uuid_bytes[5], uuid_bytes[6], uuid_bytes[7],
-                uuid_bytes[8], uuid_bytes[9], uuid_bytes[10], uuid_bytes[11],
-                uuid_bytes[12], uuid_bytes[13], uuid_bytes[14], uuid_bytes[15],
+                uuid_bytes[0],
+                uuid_bytes[1],
+                uuid_bytes[2],
+                uuid_bytes[3],
+                uuid_bytes[4],
+                uuid_bytes[5],
+                uuid_bytes[6],
+                uuid_bytes[7],
+                uuid_bytes[8],
+                uuid_bytes[9],
+                uuid_bytes[10],
+                uuid_bytes[11],
+                uuid_bytes[12],
+                uuid_bytes[13],
+                uuid_bytes[14],
+                uuid_bytes[15],
             );
             let le = format!(
                 "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                uuid_bytes[3], uuid_bytes[2], uuid_bytes[1], uuid_bytes[0],
-                uuid_bytes[5], uuid_bytes[4], uuid_bytes[7], uuid_bytes[6],
-                uuid_bytes[8], uuid_bytes[9], uuid_bytes[10], uuid_bytes[11],
-                uuid_bytes[12], uuid_bytes[13], uuid_bytes[14], uuid_bytes[15],
+                uuid_bytes[3],
+                uuid_bytes[2],
+                uuid_bytes[1],
+                uuid_bytes[0],
+                uuid_bytes[5],
+                uuid_bytes[4],
+                uuid_bytes[7],
+                uuid_bytes[6],
+                uuid_bytes[8],
+                uuid_bytes[9],
+                uuid_bytes[10],
+                uuid_bytes[11],
+                uuid_bytes[12],
+                uuid_bytes[13],
+                uuid_bytes[14],
+                uuid_bytes[15],
             );
             println!("    as UUID (BE): {be}");
             println!("    as GUID (LE): {le}");
@@ -111,7 +134,10 @@ fn main() -> anyhow::Result<()> {
         // Try to decode as ASCII if printable
         let printable = bytes.iter().all(|&b| b.is_ascii_graphic() || b == b' ');
         if printable && bytes.len() >= 4 {
-            println!("    as ASCII: \"{}\"", std::str::from_utf8(bytes).unwrap_or("?"));
+            println!(
+                "    as ASCII: \"{}\"",
+                std::str::from_utf8(bytes).unwrap_or("?")
+            );
         }
     }
 

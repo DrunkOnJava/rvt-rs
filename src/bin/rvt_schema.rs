@@ -85,9 +85,15 @@ fn run() -> anyhow::Result<()> {
             println!("Schema · {} classes", schema.classes.len());
             let total_fields: usize = schema.classes.iter().map(|c| c.fields.len()).sum();
             println!("          {} fields total", total_fields);
-            println!("          {} unique C++ type signatures", schema.cpp_types.len());
+            println!(
+                "          {} unique C++ type signatures",
+                schema.cpp_types.len()
+            );
             if schema.skipped_records > 0 {
-                println!("          ({} records skipped during parse)", schema.skipped_records);
+                println!(
+                    "          ({} records skipped during parse)",
+                    schema.skipped_records
+                );
             }
             println!();
 
@@ -101,7 +107,12 @@ fn run() -> anyhow::Result<()> {
             }
 
             for c in &classes {
-                println!("\n  {}  [offset 0x{:x}, {} fields]", c.name, c.offset, c.fields.len());
+                println!(
+                    "\n  {}  [offset 0x{:x}, {} fields]",
+                    c.name,
+                    c.offset,
+                    c.fields.len()
+                );
                 for f in c.fields.iter().take(8) {
                     match &f.cpp_type {
                         Some(t) => println!("    . {} : {}", f.name, t),

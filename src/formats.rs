@@ -162,13 +162,34 @@ impl FieldType {
         };
         match bytes[0] {
             // Scalar primitives — 4-byte header `XX 00 00 00`
-            0x01 if sub == 0x0000 => FieldType::Primitive { kind: 0x01, size: 1 }, // bool
-            0x02 if sub == 0x0000 => FieldType::Primitive { kind: 0x02, size: 2 }, // u16
-            0x04 if sub == 0x0000 => FieldType::Primitive { kind: 0x04, size: 4 }, // legacy u32
-            0x05 if sub == 0x0000 => FieldType::Primitive { kind: 0x05, size: 4 }, // u32
-            0x06 if sub == 0x0000 => FieldType::Primitive { kind: 0x06, size: 4 }, // f32
-            0x07 if sub == 0x0000 => FieldType::Primitive { kind: 0x07, size: 8 }, // f64 / double
-            0x0b if sub == 0x0000 => FieldType::Primitive { kind: 0x0b, size: 8 }, // u64
+            0x01 if sub == 0x0000 => FieldType::Primitive {
+                kind: 0x01,
+                size: 1,
+            }, // bool
+            0x02 if sub == 0x0000 => FieldType::Primitive {
+                kind: 0x02,
+                size: 2,
+            }, // u16
+            0x04 if sub == 0x0000 => FieldType::Primitive {
+                kind: 0x04,
+                size: 4,
+            }, // legacy u32
+            0x05 if sub == 0x0000 => FieldType::Primitive {
+                kind: 0x05,
+                size: 4,
+            }, // u32
+            0x06 if sub == 0x0000 => FieldType::Primitive {
+                kind: 0x06,
+                size: 4,
+            }, // f32
+            0x07 if sub == 0x0000 => FieldType::Primitive {
+                kind: 0x07,
+                size: 8,
+            }, // f64 / double
+            0x0b if sub == 0x0000 => FieldType::Primitive {
+                kind: 0x0b,
+                size: 8,
+            }, // u64
             // Container modifiers for a given scalar base
             0x07 if sub == 0x0010 => FieldType::Vector {
                 kind: 0x07,
@@ -181,15 +202,19 @@ impl FieldType {
                 0x0000 if bytes.len() >= 6 && bytes[4] == 0x14 && bytes[5] == 0x00 => {
                     FieldType::ElementId
                 }
-                0x0001 | 0x0002 | 0x0003 => FieldType::Pointer { kind: bytes[1] },
+                0x0001..=0x0003 => FieldType::Pointer { kind: bytes[1] },
                 0x0010 | 0x0011 => FieldType::Vector {
                     kind: 0x0e,
                     body: bytes[4..].to_vec(),
                 },
                 0x0050 | 0x0051 => extract_container(&bytes[4..]),
-                _ => FieldType::Unknown { bytes: bytes.to_vec() },
+                _ => FieldType::Unknown {
+                    bytes: bytes.to_vec(),
+                },
             },
-            _ => FieldType::Unknown { bytes: bytes.to_vec() },
+            _ => FieldType::Unknown {
+                bytes: bytes.to_vec(),
+            },
         }
     }
 }
@@ -300,10 +325,8 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
                             // class's declaration as this class's parent.
                             let preamble_at = cursor + 4 + plen;
                             if preamble_at + 10 <= data.len() {
-                                let flag = u16::from_le_bytes([
-                                    data[preamble_at],
-                                    data[preamble_at + 1],
-                                ]);
+                                let flag =
+                                    u16::from_le_bytes([data[preamble_at], data[preamble_at + 1]]);
                                 let fc = u32::from_le_bytes([
                                     data[preamble_at + 2],
                                     data[preamble_at + 3],
@@ -317,9 +340,7 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
                                     data[preamble_at + 9],
                                 ]);
                                 if flag & 0x8000 == 0 && fc == fc2 && fc <= 200 {
-                                    parent = Some(
-                                        std::str::from_utf8(p).unwrap().to_string(),
-                                    );
+                                    parent = Some(std::str::from_utf8(p).unwrap().to_string());
                                     declared_field_count = Some(fc);
                                     if flag != 0 {
                                         ancestor_tag = Some(flag);
@@ -371,10 +392,8 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
     // schema table closed over the class graph.
     let declared_names: std::collections::BTreeSet<String> =
         classes.iter().map(|c| c.name.clone()).collect();
-    let parent_names: std::collections::BTreeSet<String> = classes
-        .iter()
-        .filter_map(|c| c.parent.clone())
-        .collect();
+    let parent_names: std::collections::BTreeSet<String> =
+        classes.iter().filter_map(|c| c.parent.clone()).collect();
     for parent_name in parent_names.difference(&declared_names) {
         classes.push(ClassEntry {
             name: parent_name.clone(),
@@ -405,7 +424,9 @@ fn looks_like_class_name(bytes: &[u8]) -> bool {
         return false;
     }
     // Remaining chars: alphanumeric or underscore only
-    bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+    bytes[1..]
+        .iter()
+        .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 fn looks_like_field_name(bytes: &[u8]) -> bool {
@@ -418,7 +439,9 @@ fn looks_like_field_name(bytes: &[u8]) -> bool {
     if !(first.is_ascii_alphanumeric() || first == b'_') {
         return false;
     }
-    bytes.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+    bytes
+        .iter()
+        .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 fn looks_like_cpp_type(bytes: &[u8]) -> bool {
@@ -432,7 +455,10 @@ fn looks_like_cpp_type(bytes: &[u8]) -> bool {
     // Basic sanity: must be printable ASCII, reasonable chars
     s.chars().all(|c| {
         c.is_ascii_alphanumeric()
-            || matches!(c, ':' | '<' | '>' | ',' | ' ' | '_' | '*' | '&' | '[' | ']' | '(' | ')')
+            || matches!(
+                c,
+                ':' | '<' | '>' | ',' | ' ' | '_' | '*' | '&' | '[' | ']' | '(' | ')'
+            )
     }) && (s.chars().any(|c| c.is_ascii_uppercase())
         || s.contains("std::")
         || s.contains("int")
@@ -524,8 +550,11 @@ fn scan_fields_until_next_class_bounded(
                     } else {
                         u16::from_le_bytes([data[consumed], data[consumed + 1]]) as usize
                     };
-                    if (3..=120).contains(&type_len) && consumed + prefix_len + type_len <= hard_stop {
-                        let type_slice = &data[consumed + prefix_len..consumed + prefix_len + type_len];
+                    if (3..=120).contains(&type_len)
+                        && consumed + prefix_len + type_len <= hard_stop
+                    {
+                        let type_slice =
+                            &data[consumed + prefix_len..consumed + prefix_len + type_len];
                         if looks_like_cpp_type(type_slice) {
                             let ts = std::str::from_utf8(type_slice)
                                 .unwrap_or_default()
@@ -556,8 +585,10 @@ fn scan_fields_until_next_class_bounded(
                 // strings (e.g. "std::pair< int, X >") in the schema
                 // stream. Preserves the `cpp_types` set that was broken
                 // when we stopped reading explicit type prefixes.
-                if let Some(FieldType::Container { cpp_signature: Some(sig), .. }) =
-                    &field_type
+                if let Some(FieldType::Container {
+                    cpp_signature: Some(sig),
+                    ..
+                }) = &field_type
                 {
                     cpp_types.insert(sig.clone());
                     if cpp_type.is_none() {
@@ -570,7 +601,11 @@ fn scan_fields_until_next_class_bounded(
                     cpp_type,
                     field_type,
                 });
-                i = if type_consumed_bytes > 0 { consumed + type_consumed_bytes } else { post_name };
+                i = if type_consumed_bytes > 0 {
+                    consumed + type_consumed_bytes
+                } else {
+                    post_name
+                };
                 continue;
             }
         }
@@ -607,7 +642,7 @@ mod tests {
         assert!(looks_like_cpp_type(b"std::pair< ElementId, double >"));
         assert!(looks_like_cpp_type(b"ElementId"));
         assert!(looks_like_cpp_type(b"int"));
-        assert!(!looks_like_cpp_type(b"m_id"));   // lowercase only = field name territory
+        assert!(!looks_like_cpp_type(b"m_id")); // lowercase only = field name territory
     }
 
     #[test]
@@ -620,13 +655,13 @@ mod tests {
         //  [u32 LE 6] "m_pACD"            (field name with u32 prefix)
         //  [u32 LE 0]                     (no cpp type)
         let mut buf = Vec::<u8>::new();
-        buf.extend_from_slice(&[0x0d, 0x00]);     // u16 len=13
-        buf.extend_from_slice(b"ACDPtrWrapper");  // 13 ASCII bytes
-        buf.extend_from_slice(&[0x00, 0x00]);     // class tag
+        buf.extend_from_slice(&[0x0d, 0x00]); // u16 len=13
+        buf.extend_from_slice(b"ACDPtrWrapper"); // 13 ASCII bytes
+        buf.extend_from_slice(&[0x00, 0x00]); // class tag
         buf.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]); // field count u32
         buf.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]); // index u32
         buf.extend_from_slice(&[0x06, 0x00, 0x00, 0x00]); // field name len u32
-        buf.extend_from_slice(b"m_pACD");        // 6 ASCII bytes
+        buf.extend_from_slice(b"m_pACD"); // 6 ASCII bytes
 
         let schema = parse_schema(&buf).unwrap();
         assert!(
@@ -634,7 +669,11 @@ mod tests {
             "expected class ACDPtrWrapper, got {:?}",
             schema.classes.iter().map(|c| &c.name).collect::<Vec<_>>()
         );
-        let class = schema.classes.iter().find(|c| c.name == "ACDPtrWrapper").unwrap();
+        let class = schema
+            .classes
+            .iter()
+            .find(|c| c.name == "ACDPtrWrapper")
+            .unwrap();
         assert!(
             class.fields.iter().any(|f| f.name == "m_pACD"),
             "expected field m_pACD, got {:?}",
@@ -662,21 +701,39 @@ mod tests {
         // Legacy 0x04 pattern (pre-2021 u32 discriminator)
         let bytes = [0x04, 0x00, 0x00, 0x00];
         let ft = FieldType::decode(&bytes);
-        assert!(matches!(ft, FieldType::Primitive { kind: 0x04, size: 4 }));
+        assert!(matches!(
+            ft,
+            FieldType::Primitive {
+                kind: 0x04,
+                size: 4
+            }
+        ));
     }
 
     #[test]
     fn decodes_field_type_primitive_bool() {
         let bytes = [0x01, 0x00, 0x00, 0x00];
         let ft = FieldType::decode(&bytes);
-        assert!(matches!(ft, FieldType::Primitive { kind: 0x01, size: 1 }));
+        assert!(matches!(
+            ft,
+            FieldType::Primitive {
+                kind: 0x01,
+                size: 1
+            }
+        ));
     }
 
     #[test]
     fn decodes_field_type_primitive_f64() {
         let bytes = [0x07, 0x00, 0x00, 0x00];
         let ft = FieldType::decode(&bytes);
-        assert!(matches!(ft, FieldType::Primitive { kind: 0x07, size: 8 }));
+        assert!(matches!(
+            ft,
+            FieldType::Primitive {
+                kind: 0x07,
+                size: 8
+            }
+        ));
     }
 
     #[test]
@@ -697,7 +754,13 @@ mod tests {
     fn decodes_field_type_u64() {
         let bytes = [0x0b, 0x00, 0x00, 0x00];
         let ft = FieldType::decode(&bytes);
-        assert!(matches!(ft, FieldType::Primitive { kind: 0x0b, size: 8 }));
+        assert!(matches!(
+            ft,
+            FieldType::Primitive {
+                kind: 0x0b,
+                size: 8
+            }
+        ));
     }
 
     #[test]
@@ -732,15 +795,15 @@ mod tests {
         let mut buf = Vec::<u8>::new();
         buf.extend_from_slice(&[0x0b, 0x00]);
         buf.extend_from_slice(b"HostObjAttr");
-        buf.extend_from_slice(&[0x6b, 0x80]);        // tag 0x006b with 0x8000 flag
-        buf.extend_from_slice(&[0x00, 0x00]);        // pad
-        buf.extend_from_slice(&[0x06, 0x00]);        // parent name len = 6
-        buf.extend_from_slice(b"Symbol");            // parent
-        buf.extend_from_slice(&[0x25, 0x00]);        // flag
+        buf.extend_from_slice(&[0x6b, 0x80]); // tag 0x006b with 0x8000 flag
+        buf.extend_from_slice(&[0x00, 0x00]); // pad
+        buf.extend_from_slice(&[0x06, 0x00]); // parent name len = 6
+        buf.extend_from_slice(b"Symbol"); // parent
+        buf.extend_from_slice(&[0x25, 0x00]); // flag
         buf.extend_from_slice(&[0x03, 0x00, 0x00, 0x00]); // field count = 3
         buf.extend_from_slice(&[0x03, 0x00, 0x00, 0x00]); // duplicate
         buf.extend_from_slice(&[0x0c, 0x00, 0x00, 0x00]); // field 1 name len = 12
-        buf.extend_from_slice(b"m_symbolInfo");      // field 1 name
+        buf.extend_from_slice(b"m_symbolInfo"); // field 1 name
         buf.extend_from_slice(&[0x0e, 0x02, 0x00, 0x00]); // type encoding
         // pad out to 64KB-ish so schema parser doesn't bail on the last record
         buf.resize(512, 0);

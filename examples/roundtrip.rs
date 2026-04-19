@@ -7,8 +7,8 @@
 //! This probe backs the "byte-preserving read-modify-write round-trip
 //! (13/13 streams identical)" claim in the README's RE-state table.
 
-use rvt::writer;
 use rvt::RevitFile;
+use rvt::writer;
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
@@ -23,7 +23,12 @@ fn main() -> anyhow::Result<()> {
     for name in a.stream_names() {
         let ba = a.read_stream(&name)?;
         let bb = b.read_stream(&name)?;
-        if ba == bb { ok += 1; } else { mismatch += 1; println!("DIFF: {name} ({} vs {} bytes)", ba.len(), bb.len()); }
+        if ba == bb {
+            ok += 1;
+        } else {
+            mismatch += 1;
+            println!("DIFF: {name} ({} vs {} bytes)", ba.len(), bb.len());
+        }
     }
     println!("round-trip check: {ok} streams identical, {mismatch} mismatches");
     std::fs::remove_file(dst)?;

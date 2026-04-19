@@ -66,9 +66,8 @@ pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
         for n in 1..parts.len() {
             let parent = format!("/{}", parts[..n].join("/"));
             if created.insert(parent.clone()) {
-                out.create_storage(&parent).map_err(|e| {
-                    crate::Error::Cfb(format!("create_storage {parent}: {e}"))
-                })?;
+                out.create_storage(&parent)
+                    .map_err(|e| crate::Error::Cfb(format!("create_storage {parent}: {e}")))?;
             }
         }
     }
@@ -126,11 +125,7 @@ pub enum StreamFraming {
 ///
 /// Success criterion: the round-trip preserves every unpatched stream
 /// byte-for-byte; patched streams round-trip with their new content.
-pub fn write_with_patches(
-    src: &Path,
-    dst: &Path,
-    patches: &[StreamPatch],
-) -> Result<()> {
+pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Result<()> {
     use crate::compression;
     let mut rf = RevitFile::open(src)?;
     let streams = rf.stream_names();
@@ -144,17 +139,19 @@ pub fn write_with_patches(
         .map_err(|e| crate::Error::Cfb(format!("create dst: {e}")))?;
 
     // Pre-create parent storages (same logic as copy_file).
-    let mut created: std::collections::BTreeSet<String> =
-        std::collections::BTreeSet::new();
+    let mut created: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for name in &streams {
-        let norm = if name.starts_with('/') { name.clone() } else { format!("/{name}") };
+        let norm = if name.starts_with('/') {
+            name.clone()
+        } else {
+            format!("/{name}")
+        };
         let parts: Vec<&str> = norm.split('/').filter(|s| !s.is_empty()).collect();
         for n in 1..parts.len() {
             let parent = format!("/{}", parts[..n].join("/"));
             if created.insert(parent.clone()) {
-                out.create_storage(&parent).map_err(|e| {
-                    crate::Error::Cfb(format!("create_storage {parent}: {e}"))
-                })?;
+                out.create_storage(&parent)
+                    .map_err(|e| crate::Error::Cfb(format!("create_storage {parent}: {e}")))?;
             }
         }
     }
@@ -174,7 +171,11 @@ pub fn write_with_patches(
         } else {
             rf.read_stream(&name)?
         };
-        let path = if name.starts_with('/') { name.clone() } else { format!("/{name}") };
+        let path = if name.starts_with('/') {
+            name.clone()
+        } else {
+            format!("/{name}")
+        };
         let mut s = out
             .create_stream(&path)
             .map_err(|e| crate::Error::Cfb(format!("create_stream {path}: {e}")))?;
