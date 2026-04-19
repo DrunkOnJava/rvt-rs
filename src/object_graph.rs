@@ -97,6 +97,85 @@ impl DocumentHistory {
     }
 }
 
+/// A length-prefixed UTF-16LE string record discovered in the decompressed
+/// `Global/Latest` stream. These appear to be the canonical "string value"
+/// record format in Revit's object graph — found as:
+///
+/// ```text
+/// [u32 LE tag]  [u32 LE char_count]  [char_count * u16 LE]
+/// ```
+///
+/// Tags observed in the 2024 reference file include:
+/// - `0x0000_0007` — the original "Revit version" tag (first entry only)
+/// - `0x0029_0034` (2,687,028) — later document-version string
+/// - `0x0000_0001` — sheet / level / elevation identifiers
+///     (examples: `"Level 1"`, `"A100"`, `"Elevation 0"`)
+/// - `0xFFFF_FFFF` — tombstone / sentinel marker
+/// - Many record-specific tags
+///
+/// The tag value is almost certainly the class-ID that binds the record
+/// to an entry in `Formats/Latest`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StringRecord {
+    pub offset: usize,
+    pub tag: u32,
+    pub value: String,
+}
+
+/// Extract every length-prefixed UTF-16LE string record from the decompressed
+/// `Global/Latest` bytes. Returns records sorted by offset.
+///
+/// Heuristic: at every byte position, try to read `[u32 tag][u32 char_count]`
+/// and validate that the following `2 * char_count` bytes decode as mostly
+/// printable UTF-16LE. False-positive rate is low in practice because
+/// binary bytes rarely satisfy both the length bound and the printable-text
+/// check simultaneously.
+pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i + 8 < decomp.len() {
+        let tag = u32::from_le_bytes([decomp[i], decomp[i + 1], decomp[i + 2], decomp[i + 3]]);
+        let cnt = u32::from_le_bytes([decomp[i + 4], decomp[i + 5], decomp[i + 6], decomp[i + 7]])
+            as usize;
+        if (1..=400).contains(&cnt) && i + 8 + 2 * cnt <= decomp.len() {
+            let body = &decomp[i + 8..i + 8 + 2 * cnt];
+            // decode UTF-16LE
+            let (cow, _, _) = UTF_16LE.decode(body);
+            let text = cow.into_owned();
+            if !text.contains('\0') {
+                let printable = text
+                    .chars()
+                    .filter(|c| c.is_ascii_graphic() || *c == ' ' || *c == '\t' || *c == '\n')
+                    .count();
+                // Require EVERY char to be printable (strict). The prior
+                // 90%/integer-division check false-positived on length-1
+                // records where 9/10 == 0, letting `\xFF\xFF` + a single
+                // control character through and consuming the cursor past
+                // real adjacent records like "Elevation 0", "A100", etc.
+                let total_chars = text.chars().count();
+                if total_chars >= 1 && printable == total_chars {
+                    out.push(StringRecord {
+                        offset: i,
+                        tag,
+                        value: text.trim_end_matches(&['\0', '/', ' ', '\t'] as &[_]).to_string(),
+                    });
+                    i += 8 + 2 * cnt;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Pull all string records from a Revit file's `Global/Latest` stream.
+pub fn string_records_from_file(rf: &mut crate::RevitFile) -> Result<Vec<StringRecord>> {
+    let bytes = rf.read_stream(GLOBAL_LATEST)?;
+    let decomp = compression::inflate_at(&bytes, 8)?;
+    Ok(extract_string_records(&decomp))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
