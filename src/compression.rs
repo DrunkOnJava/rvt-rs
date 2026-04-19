@@ -8,7 +8,7 @@
 
 use crate::{Error, Result};
 use flate2::read::DeflateDecoder;
-use std::io::Read;
+use std::io::{Read, Write};
 
 pub const GZIP_MAGIC: [u8; 3] = [0x1F, 0x8B, 0x08];
 
@@ -86,6 +86,40 @@ pub fn inflate_all_chunks(data: &[u8]) -> Vec<Vec<u8>> {
         .into_iter()
         .filter_map(|off| inflate_at(data, off).ok())
         .collect()
+}
+
+/// Encode `bytes` as Revit's "truncated-gzip" stream format: a minimal
+/// 10-byte gzip header (magic `1F 8B 08`, no FNAME / FCOMMENT / FHCRC),
+/// followed by raw DEFLATE output, and **without** the conforming
+/// trailing CRC32+ISIZE that a true gzip writer would append.
+///
+/// This is the inverse of `inflate_at(_, 0)` and is what Revit writes
+/// for streams like `Formats/Latest`.
+pub fn truncated_gzip_encode(bytes: &[u8]) -> Result<Vec<u8>> {
+    use flate2::{write::DeflateEncoder, Compression};
+    let mut out = Vec::with_capacity(bytes.len());
+    // 10-byte minimal gzip header: magic, deflate method, no flags, 0
+    // mtime, XFL=0 (unknown), OS=255 (unknown).
+    out.extend_from_slice(&[0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff]);
+    let mut enc = DeflateEncoder::new(&mut out, Compression::default());
+    enc.write_all(bytes)
+        .map_err(|e| Error::Decompress(format!("deflate write: {e}")))?;
+    enc.finish()
+        .map_err(|e| Error::Decompress(format!("deflate finish: {e}")))?;
+    Ok(out)
+}
+
+/// Encode `bytes` with Revit's 8-byte custom prefix (used by
+/// `Global/*` streams) followed by truncated gzip. The custom prefix
+/// appears as `[u32 LE 0][u32 LE 0]` in every file we've inspected;
+/// its semantic meaning is not yet reverse-engineered, but it's
+/// byte-for-byte invariant, so we replay it verbatim.
+pub fn truncated_gzip_encode_with_prefix8(bytes: &[u8]) -> Result<Vec<u8>> {
+    let body = truncated_gzip_encode(bytes)?;
+    let mut out = Vec::with_capacity(8 + body.len());
+    out.extend_from_slice(&[0u8; 8]);
+    out.extend_from_slice(&body);
+    Ok(out)
 }
 
 #[cfg(test)]
