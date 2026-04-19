@@ -32,6 +32,10 @@ path = "src/bin/rvt_diff.rs"
 name = "rvt-corpus"
 path = "src/bin/rvt_corpus.rs"
 
+[[bin]]
+name = "rvt-schema"
+path = "src/bin/rvt_schema.rs"
+
 [lib]
 name = "rvt"
 path = "src/lib.rs"
