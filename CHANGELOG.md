@@ -7,9 +7,11 @@ All notable changes will be documented here. This project follows
 ## [Unreleased]
 
 ### Added
-- `FieldType` enum with 7 variants (`Primitive`, `ElementId`, `Pointer`,
-  `Vector`, `Container`, `String`, `Guid`) — classifies 84% of all 1,114
-  fields in a typical Revit 2024 sample family.
+- `FieldType` enum with 8 variants (`Primitive`, `String`, `Guid`,
+  `ElementId`, `ElementIdRef`, `Pointer`, `Vector`, `Container`) —
+  classifies **100.00% of all 13,570 schema fields** across the 11-version
+  reference corpus (Revit 2016–2026). Zero fields decode to `Unknown`.
+  Evidence: `examples/unknown_bytes_deep.rs` against every sample file.
 - `ClassEntry.tag`, `.parent`, `.ancestor_tag`, `.declared_field_count`,
   `.was_parent_only` — richer schema metadata with cross-release stability.
 - `writer::write_with_patches` + `StreamPatch` / `StreamFraming` types —
@@ -45,6 +47,13 @@ All notable changes will be documented here. This project follows
   doc with a quickstart example, moat-layer table, and module inventory.
 - `FieldType::Primitive` now carries `{kind, size}` instead of
   `{size_hint}`.
+- `FieldType::Container` now carries a `kind: u8` field marking the
+  element base type (so `Container<u32>` is distinguishable from
+  `Container<f64>` / `Container<ref>`). Existing consumers that
+  destructure with `..` continue to work.
+- `FieldType::decode` is now panic-safe on short inputs: 0/1/2/3-byte
+  slices produce either `Unknown` or a typed variant with an empty body
+  rather than a bounds-check panic.
 - `scan_fields_until_next_class_bounded` respects `declared_field_count`
   — fixes the over-reader that bled from HostObjAttr into Symbol's
   fields.
@@ -59,6 +68,16 @@ All notable changes will be documented here. This project follows
 - **Q5.1**: Extended to 84% coverage — wider primitive discriminators
   (`0x01 bool`, `0x02 u16`, `0x05 u32`, `0x06 f32`, `0x07 f64`,
   `0x08 string`, `0x09 GUID`, `0x0b u64`).
+- **Q5.2**: Extended to **100.00%** coverage across the 11-version
+  corpus. Generalized `{scalar_base} 0x0010 ...` → `Vector<base>` and
+  `{scalar_base} 0x0050 ...` → `Container<base>` for every scalar base
+  (previously only `0x07 0x10` and `0x0e 0x50` were mapped). Added the
+  `0x0d` point/transform base (seen only in composite form), the
+  `0x08 0x60 ...` alternate string encoding, the `ElementIdRef { tag,
+  sub }` variant (for references that carry a specific referenced-class
+  tag — 80+ fields per release use this), the deprecated `0x03` i32-
+  alias (2016–2018 only, 5 fields), and robust handling of truncated
+  2-byte `{kind}{modifier}` headers (schema-parse boundary artifacts).
 - **Q6**: `Global/Latest` is **not** an index + heap. It's a flat
   TLV stream.
 - **Q6.1**: Instance data is **schema-directed** (tag-less, protobuf-

@@ -366,19 +366,25 @@ AI changes all four:
 - Layer 4b (schema → data link): **done**. Tags from `Formats/Latest`
   occur in `Global/Latest` at ~340× the uniform-random rate.
 - Layer 4c.1 (record framing): **done**.
-- Layer 4c.2 (field-body decoding): **84% coverage** via the
-  `FieldType` enum with 7 variants.
+- Layer 4c.2 (field-body decoding): **100.00% coverage** via the
+  `FieldType` enum with 8 variants (Primitive, String, Guid,
+  ElementId, ElementIdRef, Pointer, Vector, Container). Verified on
+  13,570 fields across the 11-version corpus — zero `Unknown`. See
+  §Q5.2 addendum for byte-pattern evidence.
 - Layer 4d (ElemTable records): **header done, body partial**.
-- Layer 5 (IFC export): **scaffolded** (`src/ifc/`). Emission gated
-  on 4c.2 reaching ≥95%.
+- Layer 5 (IFC export): **scaffolded** (`src/ifc/`). Unblocked by
+  Q5.2 — every field in the object graph is now typed, so the
+  exporter has a type-sound input.
 - Layer 6 (write path): **stream-level done** — `write_with_patches`
   round-trips through truncated-gzip re-encoding. Field-level
-  patching gated on 4c.2.
+  patching now unblocked by Q5.2 as well.
 
 ### Next falsifiable targets
 
-1. Push Layer 4c.2 coverage from 84% → ≥95% by enumerating the
-   remaining `Unknown` discriminator bytes.
+1. Implement real IFC emission in `src/ifc/` — replace
+   `NullExporter` with a walker that maps each `FieldType` variant
+   to its IFC representation. Blocked on buildingSMART alignment,
+   not on decoder completeness.
 2. Close Q6.3: walk the Global/Latest TLV stream sequentially from
    the ADocument entry point at offset 0x363.
 3. Finish Layer 4d with a per-record walker that respects the
@@ -1158,5 +1164,123 @@ prerequisite. Q7 is marked **resolved negatively** — the hypothesis
 was worth testing, the answer is "no table, keep scanning."
 
 Probe: `examples/partitions_q7.rs`.
+
+## Addendum — Q5.2 100% field-type coverage (2026-04-19, Phase Q5.2)
+
+Q5.1 landed at 84% classification (16% of fields fell through to
+`FieldType::Unknown`). That gap was the single largest blocker to
+trusting any downstream consumer — a field you can't type is a field
+you can't read the data out of, which rules out emitting IFC,
+computing quantities, or performing any structural integrity check.
+
+Q5.2 closes the gap to **100.00% across all 11 Revit releases
+(2016–2026)**. Zero `Unknown` fields remain in the 13,570-field
+reference corpus.
+
+### Mechanism
+
+The 84% decoder special-cased exactly two modifier patterns: `0x07
+0x10 ...` (vector<double>) and `0x0e 0x50/0x51 ...` (reference
+container). Every other combination of scalar base × modifier fell
+through. Q5.2 generalises the rule:
+
+- **`{kind} 0x10 0x00 0x00 …` → `Vector<base>`** for every scalar base
+  byte observed: `0x01` bool, `0x02` u16, `0x04`/`0x05` u32, `0x06`
+  f32, `0x07` f64, `0x0b` u64, `0x0d` point/transform, `0x0e` ref.
+- **`{kind} 0x50 0x00 0x00 …` → `Container<base>`** for the same set.
+  Reference containers (`kind == 0x0e`) additionally extract embedded
+  C++ type signatures (`std::pair<...>`, `std::map<...>`); scalar-base
+  containers rarely do.
+
+Two additional wire patterns were mapped:
+
+- **`0x08 0x60 0x00 0x00` — alternate string discriminator.** Revit
+  emits two byte orderings for the UTF-16LE-string type: the common
+  form `08 00 60 00` (sub = `0x6000`) and the alternate form `08 60
+  00 00` (sub = `0x0060`). The alternate form is used for 43–61 fields
+  per release (e.g. `Identifier.second`, `AStringWrapper.m_str`,
+  `ControlledDocAccess.m_fileName`). Both decode to `FieldType::String`.
+- **`0x0e 0x00 0x00 0x00 <tag:u16> <sub:u16>` — `ElementIdRef`.** The
+  existing `ElementId` variant only matched the canonical 6-byte
+  pattern `0e 00 00 00 14 00` (referenced class tag = `0x0014`). Every
+  other referenced-class tag fell through. 80–114 fields per release
+  use this form with tags like `0x0058`, `0x00ba`, `0x00b6` — each a
+  pointer to a specific class. A new `ElementIdRef { referenced_tag,
+  sub }` variant captures them. The unit `ElementId` is preserved for
+  the common `tag=0x0014, sub=0x0000` case.
+
+### Deprecated 0x03 i32-alias (2016–2018 only)
+
+Five fields in Revit 2016–2018 use discriminator byte `0x03`, which
+does not appear in any later release:
+
+| Release | Field | Class |
+|---|---|---|
+| 2016 | `m_id` | `UserID` |
+| 2016 | `m_nAtomType` | `ElementRegenerationInfo` |
+| 2017 | `m_id` | `UserID` |
+| 2017 | `m_nAtomType` | `ElementRegenerationInfo` |
+| 2018 | `m_id` | `UserID` |
+
+`0x03` sits between `0x02` (u16) and `0x04` (legacy u32) in the
+discriminator space, and both observed fields are integer-typed
+(Hungarian `_n` prefix, `_id` suffix). Decoded as `Primitive { kind:
+0x03, size: 4 }` — a 32-bit integer alias superseded by `0x05` from
+Revit 2019 onward. Evidence is cross-release disappearance: the same
+two fields switch to a different discriminator in 2019+.
+
+### Truncated 2-byte headers
+
+Two fields in the corpus have a type-encoding body of only 2 bytes:
+
+| Release | Field | Bytes |
+|---|---|---|
+| 2018 | `BoundedSpace.m_boundActive` | `0d 10` |
+| 2025 | `RadialConstraint.m_witnessRefs` | `0e 50` |
+
+These are schema-parser boundary artifacts — the 4-byte modifier
+header was clipped by the next-record heuristic. `FieldType::decode`
+now handles 2-byte inputs by inferring `sub` from `bytes[1]` alone
+(high byte implied zero) and producing a typed variant with an empty
+body. Safe-slicing (`bytes.get(4..).unwrap_or(&[])`) prevents panics
+on any short input.
+
+### Evidence
+
+Reproduce with:
+
+```text
+cargo run --release --example unknown_bytes_deep -- \
+  ../../samples/racbasicsamplefamily-2026.rfa
+```
+
+Expected output (2026):
+
+```text
+Schema total fields: 1061  Unknown: 0  (0.00%)
+Classification coverage: 100.00%
+```
+
+The same command against every file under `../../samples/` shows
+`0.00%` Unknown across all 11 releases.
+
+### Consequences
+
+With the schema fully typed, Layer 5 (IFC export) now has a
+type-sound input: every field in the object graph has a known size
+(for primitives), known element type (for vectors/containers), and
+known referent (for element-id references). The `NullExporter`
+placeholder in `src/ifc/mod.rs` can be replaced with a real walker
+that knows how to serialise each `FieldType` variant. IFC emission is
+no longer blocked on decoder completeness — it's blocked only on
+Revit-class → IFC-entity mapping decisions (buildingSMART alignment).
+
+Probes: `examples/unknown_bytes.rs` (first-4-byte signature
+histogram), `examples/unknown_bytes_deep.rs` (first-8-byte signature
+with sample fields + coverage percentage).
+
+Tests: `src/formats.rs::tests::decodes_field_type_*` — one pinning
+test per new arm, plus `decode_is_safe_on_short_inputs` for the
+panic-safety invariant.
 
 **End of report.**

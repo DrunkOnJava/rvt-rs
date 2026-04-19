@@ -219,18 +219,19 @@ these streams. The fix is to skip the 10-byte header manually and use
 | 4a · Schema table | Class names + fields + C++ type signatures from `Formats/Latest`; per-class tag + parent + declared field count; cross-release tag-drift map | **Done** |
 | 4b · Schema→data link | Tags from `Formats/Latest` occur at ~340× the noise rate in `Global/Latest`; schema IS the live type dictionary for the object graph | **Done** |
 | 4c.1 · Record framing | Tagged class records in `Formats/Latest` parse into structured records: `{tag, parent, ancestor_tag, declared_field_count}`; HostObjAttr → `{tag=107, parent=Symbol, ancestor_tag=0x0025 → APIVSTAMacroElem, declared_field_count=3}` | **Done** |
-| 4c.2 · Field-body decoding | `FieldType` enum classifies **84%** of 1,114 fields across 7 variants (Primitive, ElementId, Pointer, Vector, Container, String, GUID). 9 discriminator bytes mapped. | **Done (84% coverage; remaining 16% is wider-primitive edge cases)** |
+| 4c.2 · Field-body decoding | `FieldType` enum classifies **100%** of schema fields across 8 variants (Primitive, String, Guid, ElementId, ElementIdRef, Pointer, Vector, Container). 11 discriminator bytes mapped, including generalized scalar-base Vector/Container (`{kind} 0x10 ...` / `{kind} 0x50 ...`) and the `0x0d` point-type base. | **Done (100.00% on 13,570 fields across the 11-version corpus; zero `Unknown`)** |
 | 4d · ElemTable | `Global/ElemTable` header parser + rough record enumeration; record semantics TBD (blocked on per-element schema lookup) | **Partial** |
-| 5 · IFC export | `IfcModel`, `Exporter` trait, `NullExporter`, full Revit→IFC mapping plan; emission gated on 4c.2 | **Scaffolded** |
+| 5 · IFC export | `IfcModel`, `Exporter` trait, `NullExporter`, full Revit→IFC mapping plan; emission unblocked by Q5.2 (100% field typing) | **Scaffolded (IFC emission the next frontier)** |
 | 6 · Write path | Byte-preserving read-modify-write round-trip (13/13 streams identical); **stream-level `write_with_patches` works end-to-end** — patch a stream, re-compress with truncated-gzip, re-embed. Field-level patching gated on 4c.2. | **Partial (stream-level done)** |
 
-All 5 original P0 research questions (Q4-Q7) are now **resolved**. Layer 4c.1/4c.2 shipped against 84% of fields. The remaining single-session moat work is Q6.2 — finding the `ADocument` singleton's offset inside `Global/Latest` so the schema-directed walker has an entry point. Every other decoding question has an answer documented in the recon report.
+All 5 original P0 research questions (Q4-Q7) are now **resolved**. Layer 4c.2 reaches **100.00% field-type classification** on the 11-version reference corpus (13,570 total schema fields, zero `Unknown`). The remaining single-session moat work is emitting IFC from the now-fully-typed schema graph. Every decoding question has an answer documented in the recon report.
 
 Key findings from this phase:
 
 - **Q4** The u16 "flag" word in each tagged-class preamble is a **class-tag reference** (ancestor / mixin / protocol). 9/9 non-zero values resolve to named classes in the same schema.
 - **Q5** Each field's `type_encoding` is `[byte category][u16 sub_type][optional body]`. 9 category bytes mapped (`0x01` bool, `0x02` u16, `0x04/0x05` u32, `0x06` f32, `0x07` f64, `0x08` string, `0x09` GUID, `0x0b` u64, `0x0e` reference/container).
-- **Q5.1** Coverage extended to 84% of fields; remaining 16% is likely template-generic discriminators.
+- **Q5.1** Coverage extended to 84% of fields.
+- **Q5.2** Coverage reaches **100%** of fields (13,570 across 11 releases). Generalized `{scalar_base} 0x10 ...` / `{scalar_base} 0x50 ...` as vector/container modifiers; added `0x0d` point-type base; added `0x08 0x60 ...` alternate string encoding; added `ElementIdRef { referenced_tag, sub }` for references that carry a specific target-class tag; added deprecated `0x03` i32-alias seen only in 2016–2018. See `docs/rvt-moat-break-reconnaissance.md` §Q5.2.
 - **Q6** `Global/Latest` is **not** an index + heap — it's a flat TLV stream.
 - **Q6.1** Instance data is **schema-directed** (tag-less, protobuf-style). Decoding requires schema-first sequential walk from a known entry point.
 - **Q7** `Partitions/NN` trailer u32 fields are **not** per-chunk offsets. Gzip-magic scan remains correct.
