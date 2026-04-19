@@ -983,4 +983,48 @@ terminates correctly.
   samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa
 ```
 
+## Addendum — Q6.1 second inversion (2026-04-19)
+
+Follow-up probe (`examples/instance_scan.rs`) searched for every
+aligned `u32 LE` occurrence of HostObjAttr's tag `0x006b` in
+Global/Latest. Result: **2 hits**, not the ~6,599 the u16-overlap
+scan had suggested.
+
+Conclusion — **class instances are not tag-delimited**. The stream
+is schema-directed serialization: fields are laid out in declaration
+order with no per-instance prefix. This is the same design protobuf
+uses with "packed" fields or that Cap'n Proto uses at the wire level.
+
+### Implication for decoders
+
+You cannot find an instance by searching for its tag. You have to
+walk the stream starting from a known entry point (likely a
+singleton `ADocument` record near offset 0) and use the schema to
+compute the size of each record as you go. The schema gives:
+
+- Fixed-size primitives (per FieldType::Primitive.size_hint)
+- ElementId → 4 or 8 bytes (to be determined in Q5.1)
+- Pointer → typically an ElementId reference or a 32-bit instance
+  index
+- Vector/Container → length-prefixed
+
+### Why this is actually easier
+
+Schema-directed encoding looks scarier but has a compensating
+property: once the per-type sizes are known, walking the stream is
+deterministic and reversible. No heuristics, no pattern-matching, no
+offset-table scavenging. The moat reduces to:
+
+1. Finish Q5.1 (classify remaining 40% of field types with sizes)
+2. Write a schema-directed walker that consumes `byte_size(field)`
+   bytes per field and yields typed values
+3. Done
+
+### Remaining work
+
+- **Q5.1** (task #57) — classify every `Unknown` type discriminator
+  into its FieldType variant with byte-size.
+- **Q6.2** — identify the Global/Latest entry point (ADocument
+  instance) and its size. That's the seed for the schema walker.
+
 **End of report.**
