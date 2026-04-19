@@ -44,6 +44,15 @@ jobs:
           - os: ubuntu-latest
             rust: "1.85"  # MSRV (Rust 2024 edition minimum)
     steps:
+      # Windows' git default `core.autocrlf=true` mangles binary files
+      # that aren't explicitly marked `binary` in `.gitattributes`.
+      # The phi-ag/rvt corpus stores some `.rfa` files outside LFS
+      # without binary attribution — Windows checkout therefore
+      # silently CRLF-converts them and CFB parsing fails on affected
+      # streams. Disable autocrlf globally before any checkout runs.
+      - name: Disable autocrlf on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       # Fetch the Autodesk-owned `rac_basic_sample_family` corpus from
       # phi-ag/rvt. rvt-rs intentionally does not redistribute these
