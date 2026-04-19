@@ -14,6 +14,7 @@ Apache-2.0 licensed. Rust 2024 edition. Verified against 11 Revit releases (2016
 - **Revit 2021 was a silent format rewrite** — Global/Latest grew 27× and Forge Design Data Schema namespaces debuted. No public changelog mentions this.
 - **Byte-preserving round-trip writer works today** — 13/13 streams identical after read-modify-write.
 - **Hands-clean by default.** Every CLI has `--redact` that scrubs usernames, Autodesk-internal paths, and project IDs while preserving path shape so claims remain verifiable. Committed demo output is pre-scrubbed.
+- **Fast.** `rvt-analyze` produces the full forensic report in **27 ms** on a 400 KB RFA (20 ms/file over the 11-version corpus). Full benchmark table: [`docs/benchmarks.md`](docs/benchmarks.md).
 
 ## Why this exists — the openBIM gap
 

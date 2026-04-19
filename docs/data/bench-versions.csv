@@ -1,0 +1,2 @@
+command,mean,stddev,median,user,system,min,max
+"for f in ../../samples/_phiag/examples/Autodesk/rac*.rfa; do ./target/release/rvt-analyze --redact --json --quiet ""$f"" > /dev/null; done",0.22719324176769234,0.002110543417082803,0.22732297546000002,0.19600554615384613,0.02416290923076923,0.22477297546000002,0.23074060046000003
