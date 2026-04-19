@@ -61,6 +61,14 @@ pub struct ClassEntry {
     /// Field-count value the schema itself declares (may disagree with
     /// `fields.len()` if the walker missed one).
     pub declared_field_count: Option<u32>,
+    /// True when this entry was synthesized from a parent-class
+    /// reference inside another class's record rather than from a
+    /// dedicated top-level declaration. Such entries carry the name
+    /// (and possibly offset where the reference appeared) but no
+    /// fields or tag — the full declaration may appear elsewhere in
+    /// `Formats/Latest`, or may be implicit.
+    #[serde(default)]
+    pub was_parent_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,11 +289,18 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
             }
         }
 
-        // Walk forward until we find the next class-name candidate OR end
-        // of stream. While walking, pick up any embedded field records.
+        // Walk forward until we find the next class-name candidate OR
+        // we've seen the declared number of fields, whichever comes
+        // first. The declared_field_count bound prevents bleeding into
+        // the parent class's field list when a subclass has few own
+        // fields but the parent has many.
         let mut fields = Vec::new();
-        let (next_class_offset, found_fields) =
-            scan_fields_until_next_class(data, cursor, &mut cpp_types);
+        let (next_class_offset, found_fields) = scan_fields_until_next_class_bounded(
+            data,
+            cursor,
+            &mut cpp_types,
+            declared_field_count,
+        );
         fields.extend(found_fields);
         cursor = next_class_offset;
 
@@ -300,9 +315,31 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
                 tag,
                 parent,
                 declared_field_count,
+                was_parent_only: false,
             });
         }
         i = cursor.max(i + 1);
+    }
+
+    // Second pass: for every `parent` reference that doesn't appear as its
+    // own top-level declaration, synthesize a stub entry. Keeps the
+    // schema table closed over the class graph.
+    let declared_names: std::collections::BTreeSet<String> =
+        classes.iter().map(|c| c.name.clone()).collect();
+    let parent_names: std::collections::BTreeSet<String> = classes
+        .iter()
+        .filter_map(|c| c.parent.clone())
+        .collect();
+    for parent_name in parent_names.difference(&declared_names) {
+        classes.push(ClassEntry {
+            name: parent_name.clone(),
+            offset: 0,
+            fields: Vec::new(),
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: true,
+        });
     }
 
     Ok(SchemaTable {
@@ -379,11 +416,29 @@ fn scan_fields_until_next_class(
     start: usize,
     cpp_types: &mut std::collections::BTreeSet<String>,
 ) -> (usize, Vec<FieldEntry>) {
+    scan_fields_until_next_class_bounded(data, start, cpp_types, None)
+}
+
+/// Same as `scan_fields_until_next_class` but stops early once
+/// `max_fields` fields have been emitted. Used when the caller already
+/// knows the declared field count from the class's preamble, preventing
+/// the scanner from bleeding into the parent class's field list.
+fn scan_fields_until_next_class_bounded(
+    data: &[u8],
+    start: usize,
+    cpp_types: &mut std::collections::BTreeSet<String>,
+    max_fields: Option<u32>,
+) -> (usize, Vec<FieldEntry>) {
     let mut fields = Vec::new();
     let mut i = start;
     let hard_stop = (start + 4096).min(data.len());
 
     while i + 4 < hard_stop {
+        if let Some(max) = max_fields {
+            if fields.len() as u32 >= max {
+                return (i, fields);
+            }
+        }
         // First: is this a u16-prefixed class-name candidate?
         let u16_len = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
         if (4..=60).contains(&u16_len) && i + 2 + u16_len <= hard_stop {
@@ -448,6 +503,20 @@ fn scan_fields_until_next_class(
                 } else {
                     None
                 };
+
+                // Harvest embedded C++ signatures from Container fields —
+                // they contain the only reliable source of ASCII C++ type
+                // strings (e.g. "std::pair< int, X >") in the schema
+                // stream. Preserves the `cpp_types` set that was broken
+                // when we stopped reading explicit type prefixes.
+                if let Some(FieldType::Container { cpp_signature: Some(sig), .. }) =
+                    &field_type
+                {
+                    cpp_types.insert(sig.clone());
+                    if cpp_type.is_none() {
+                        cpp_type = Some(sig.clone());
+                    }
+                }
 
                 fields.push(FieldEntry {
                     name: field_name,
