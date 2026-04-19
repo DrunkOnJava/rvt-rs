@@ -132,6 +132,64 @@ fn preview_is_valid_png() {
 }
 
 #[test]
+fn document_history_extracts_full_timeline() {
+    // The 2026 sample has been migrated through every Revit version
+    // since Revit 2018 preview. We should find >= 8 entries.
+    let p = sample_for_year(2026);
+    if !p.exists() {
+        return;
+    }
+    let mut rf = RevitFile::open(&p).unwrap();
+    let history = rvt::object_graph::DocumentHistory::from_revit_file(&mut rf).unwrap();
+    assert!(
+        history.entries.len() >= 8,
+        "expected >= 8 history entries for the 2026 sample, got {}: {:?}",
+        history.entries.len(),
+        history.entries
+    );
+    // The entries should include markers for at least 2018 and 2026.
+    assert!(history.entries.iter().any(|e| e.contains("2018")));
+    assert!(history.entries.iter().any(|e| e.contains("2026")));
+}
+
+#[test]
+fn schema_field_names_round_trip_byte_for_byte() {
+    // Every field name rvt-schema emits should be findable byte-for-byte
+    // in the raw decompressed Formats/Latest.
+    let p = sample_for_year(2024);
+    if !p.exists() {
+        return;
+    }
+    let mut rf = RevitFile::open(&p).unwrap();
+    let schema = rf.schema().unwrap();
+
+    // Decompress Formats/Latest manually to grep field names.
+    use rvt::compression;
+    use rvt::streams::FORMATS_LATEST;
+    let raw = rf.read_stream(FORMATS_LATEST).unwrap();
+    let decompressed = compression::inflate_at(&raw, 0).unwrap();
+
+    let classes_with_fields: Vec<_> = schema.classes.iter().filter(|c| !c.fields.is_empty()).collect();
+    assert!(!classes_with_fields.is_empty(), "expected at least some classes with fields");
+
+    // Check 10 fields (avoid exhaustively scanning to keep test fast)
+    let sample_fields: Vec<_> = classes_with_fields
+        .iter()
+        .flat_map(|c| c.fields.iter())
+        .take(10)
+        .collect();
+    for f in &sample_fields {
+        assert!(
+            decompressed
+                .windows(f.name.len())
+                .any(|w| w == f.name.as_bytes()),
+            "field {:?} extracted by schema parser but not found in raw bytes",
+            f.name
+        );
+    }
+}
+
+#[test]
 fn rejects_non_cfb_input() {
     let bytes = b"not a cfb file at all".to_vec();
     assert!(matches!(
