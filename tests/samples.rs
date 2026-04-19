@@ -22,7 +22,9 @@ fn sample_for_year(year: u32) -> PathBuf {
 }
 
 fn all_years() -> Vec<u32> {
-    vec![2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+    vec![
+        2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
+    ]
 }
 
 #[test]
@@ -33,8 +35,10 @@ fn opens_all_11_versions() {
             eprintln!("skipping {year}: sample not present (LFS not pulled?)");
             continue;
         }
-        let mut rf = RevitFile::open(&p).expect(&format!("{year}: open failed"));
-        let s = rf.summarize().expect(&format!("{year}: summarize failed"));
+        let mut rf = RevitFile::open(&p).unwrap_or_else(|_| panic!("{year}: open failed"));
+        let s = rf
+            .summarize()
+            .unwrap_or_else(|_| panic!("{year}: summarize failed"));
         assert_eq!(s.version, year, "version mismatch for {year}");
         assert_eq!(s.streams.len(), 13, "{year}: expected 13 streams");
         assert!(
@@ -72,7 +76,9 @@ fn part_atom_parses_furniture_omniclass() {
             continue;
         }
         let mut rf = RevitFile::open(&p).unwrap();
-        let pa = rf.part_atom().expect(&format!("{year}: part atom"));
+        let pa = rf
+            .part_atom()
+            .unwrap_or_else(|_| panic!("{year}: part atom"));
         // These fixtures are a Furniture table across all years.
         assert!(
             pa.categories
@@ -169,8 +175,15 @@ fn schema_field_names_round_trip_byte_for_byte() {
     let raw = rf.read_stream(FORMATS_LATEST).unwrap();
     let decompressed = compression::inflate_at(&raw, 0).unwrap();
 
-    let classes_with_fields: Vec<_> = schema.classes.iter().filter(|c| !c.fields.is_empty()).collect();
-    assert!(!classes_with_fields.is_empty(), "expected at least some classes with fields");
+    let classes_with_fields: Vec<_> = schema
+        .classes
+        .iter()
+        .filter(|c| !c.fields.is_empty())
+        .collect();
+    assert!(
+        !classes_with_fields.is_empty(),
+        "expected at least some classes with fields"
+    );
 
     // Check 10 fields (avoid exhaustively scanning to keep test fast)
     let sample_fields: Vec<_> = classes_with_fields

@@ -1,7 +1,7 @@
 //! Q7: test whether the 44-byte Partitions/NN header encodes per-chunk
 //! byte offsets. Compare trailer_u32 values to gzip-magic-scan positions.
 
-use rvt::{partitions, RevitFile};
+use rvt::{RevitFile, partitions};
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
@@ -15,11 +15,19 @@ fn main() -> anyhow::Result<()> {
             format!("rac_basic_sample_family-{year}.rfa"),
         ] {
             let path = PathBuf::from(&sample_dir).join(&filename);
-            if !path.exists() { continue; }
+            if !path.exists() {
+                continue;
+            }
             let mut rf = RevitFile::open(&path)?;
-            let stream = match rf.partition_stream_name() { Some(n) => n, None => break };
+            let stream = match rf.partition_stream_name() {
+                Some(n) => n,
+                None => break,
+            };
             let raw = rf.read_stream(&stream)?;
-            let header = match partitions::parse_header(&raw) { Some(h) => h, None => break };
+            let header = match partitions::parse_header(&raw) {
+                Some(h) => h,
+                None => break,
+            };
             let chunks = partitions::find_chunks(&raw);
             let scan_offsets: Vec<usize> = chunks.iter().map(|c| c.raw_offset).collect();
 
@@ -27,12 +35,16 @@ fn main() -> anyhow::Result<()> {
             println!("  declared_count+1: {}", header.declared_count_plus_one);
             println!("  reserved_zero:    {}", header.reserved_zero);
             print!("  size_block:       ");
-            for b in header.size_block { print!("{b:02x} "); }
+            for b in header.size_block {
+                print!("{b:02x} ");
+            }
             println!();
             println!("  trailer_u32[0..4]: {:?}", header.trailer_u32);
             println!("  chunks found by gzip-magic scan: {}", scan_offsets.len());
             print!("  gzip offsets: ");
-            for o in &scan_offsets { print!("{o} "); }
+            for o in &scan_offsets {
+                print!("{o} ");
+            }
             println!();
 
             // Test: do any trailer_u32 values match any chunk offset?
@@ -64,7 +76,11 @@ fn main() -> anyhow::Result<()> {
             // How do the chunks' sizes compare to trailer_u32 values?
             let mut chunk_sizes: Vec<usize> = Vec::new();
             for i in 0..chunks.len() {
-                let next = if i + 1 < chunks.len() { chunks[i + 1].raw_offset } else { raw.len() };
+                let next = if i + 1 < chunks.len() {
+                    chunks[i + 1].raw_offset
+                } else {
+                    raw.len()
+                };
                 chunk_sizes.push(next - chunks[i].raw_offset);
             }
             println!("  chunk sizes (bytes): {chunk_sizes:?}");

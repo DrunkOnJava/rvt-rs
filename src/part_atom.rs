@@ -4,8 +4,8 @@
 //! Namespace: `urn:schemas-autodesk-com:partatom`
 
 use crate::{Error, Result};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -39,7 +39,10 @@ impl PartAtom {
             .map_err(|e| Error::PartAtom(format!("invalid UTF-8: {e}")))?
             .to_string();
 
-        let mut atom = PartAtom { raw_xml: raw_xml.clone(), ..Default::default() };
+        let mut atom = PartAtom {
+            raw_xml: raw_xml.clone(),
+            ..Default::default()
+        };
         let mut reader = Reader::from_str(&raw_xml);
         reader.config_mut().trim_text(true);
 
@@ -71,7 +74,12 @@ impl PartAtom {
                         "title" => state = State::InTitle,
                         "id" => state = State::InId,
                         "updated" => state = State::InUpdated,
-                        "taxonomy" => current_taxonomy = Some(Taxonomy { term: String::new(), label: String::new() }),
+                        "taxonomy" => {
+                            current_taxonomy = Some(Taxonomy {
+                                term: String::new(),
+                                label: String::new(),
+                            })
+                        }
                         "term" => {
                             if current_taxonomy.is_some() {
                                 state = State::InTaxonomyTerm;
@@ -139,7 +147,9 @@ impl PartAtom {
                         "category" => {
                             if let Some(term) = last_category_term.take() {
                                 // OmniClass codes are numeric dotted identifiers like "23.40.20.14.17"
-                                if term.chars().all(|c| c.is_ascii_digit() || c == '.') && term.contains('.') {
+                                if term.chars().all(|c| c.is_ascii_digit() || c == '.')
+                                    && term.contains('.')
+                                {
                                     atom.omniclass.get_or_insert(term.clone());
                                 }
                                 atom.categories.push(Category {

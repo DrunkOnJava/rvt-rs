@@ -2,7 +2,7 @@
 //! count against what parse_records_rough actually returns. Look at
 //! patterns in the presumptive_u32_triple to form hypotheses.
 
-use rvt::{elem_table, RevitFile};
+use rvt::{RevitFile, elem_table};
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
@@ -16,7 +16,9 @@ fn main() -> anyhow::Result<()> {
             format!("rac_basic_sample_family-{year}.rfa"),
         ] {
             let path = PathBuf::from(&sample_dir).join(&filename);
-            if !path.exists() { continue; }
+            if !path.exists() {
+                continue;
+            }
             let mut rf = RevitFile::open(&path)?;
             let header = elem_table::parse_header(&mut rf)?;
             let records = elem_table::parse_records_rough(&mut rf, 100_000)?;
@@ -29,7 +31,8 @@ fn main() -> anyhow::Result<()> {
 
             // Histogram: how often does each class-tag-like value (u32 < 0x4000)
             // appear in the presumptive_u32_triple?
-            let mut tag_candidates: std::collections::BTreeMap<u32, u32> = std::collections::BTreeMap::new();
+            let mut tag_candidates: std::collections::BTreeMap<u32, u32> =
+                std::collections::BTreeMap::new();
             for r in &records {
                 for v in r.presumptive_u32_triple {
                     if v > 0 && v < 0x4000 {

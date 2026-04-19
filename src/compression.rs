@@ -34,11 +34,17 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
     }
     if flags & 0x08 != 0 {
         // FNAME: null-terminated string
-        pos = data[pos..].iter().position(|&b| b == 0).map(|i| pos + i + 1)?;
+        pos = data[pos..]
+            .iter()
+            .position(|&b| b == 0)
+            .map(|i| pos + i + 1)?;
     }
     if flags & 0x10 != 0 {
         // FCOMMENT: null-terminated string
-        pos = data[pos..].iter().position(|&b| b == 0).map(|i| pos + i + 1)?;
+        pos = data[pos..]
+            .iter()
+            .position(|&b| b == 0)
+            .map(|i| pos + i + 1)?;
     }
     if flags & 0x02 != 0 {
         // FHCRC: 2-byte header CRC
@@ -110,7 +116,7 @@ pub fn inflate_all_chunks(data: &[u8]) -> Vec<Vec<u8>> {
 /// This is the inverse of `inflate_at(_, 0)` and is what Revit writes
 /// for streams like `Formats/Latest`.
 pub fn truncated_gzip_encode(bytes: &[u8]) -> Result<Vec<u8>> {
-    use flate2::{write::DeflateEncoder, Compression};
+    use flate2::{Compression, write::DeflateEncoder};
     let mut out = Vec::with_capacity(bytes.len());
     // 10-byte minimal gzip header: magic, deflate method, no flags, 0
     // mtime, XFL=0 (unknown), OS=255 (unknown).

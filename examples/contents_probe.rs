@@ -1,11 +1,19 @@
 //! Probe the `Contents` stream. Memory note says it starts with the same
 //! 4-byte magic as RevitPreview4.0 (`62 19 22 05`), followed by some
 //! unknown structure before the real payload. Let's see what's inside.
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::collapsible_if,
+    clippy::collapsible_match
+)]
 
 use rvt::{compression, streams::CONTENTS};
 
 fn main() -> anyhow::Result<()> {
-    let path = std::env::args().nth(1).expect("usage: contents_probe <file>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: contents_probe <file>");
     let mut rf = rvt::RevitFile::open(&path)?;
     let raw = rf.read_stream(CONTENTS)?;
     println!("Contents stream: {} raw bytes", raw.len());
@@ -21,7 +29,14 @@ fn main() -> anyhow::Result<()> {
         print!(" |");
         for i in chunk_start..chunk_end {
             let b = raw[i];
-            print!("{}", if (0x20..0x7f).contains(&b) { b as char } else { '.' });
+            print!(
+                "{}",
+                if (0x20..0x7f).contains(&b) {
+                    b as char
+                } else {
+                    '.'
+                }
+            );
         }
         println!("|");
     }
@@ -43,7 +58,10 @@ fn main() -> anyhow::Result<()> {
     for (i, offset) in positions.iter().take(3).enumerate() {
         match compression::inflate_at(&raw, *offset) {
             Ok(d) => {
-                println!("\nGzip #{i} @ 0x{offset:04x}: {} bytes decompressed", d.len());
+                println!(
+                    "\nGzip #{i} @ 0x{offset:04x}: {} bytes decompressed",
+                    d.len()
+                );
                 // First 200 bytes as ASCII-ish
                 let preview_len = d.len().min(200);
                 print!("  preview: ");
@@ -59,9 +77,18 @@ fn main() -> anyhow::Result<()> {
                 println!();
 
                 // Check for UTF-16LE-ish content
-                let zeros_in_odd = d.iter().skip(1).step_by(2).take(100).filter(|&&b| b == 0).count();
+                let zeros_in_odd = d
+                    .iter()
+                    .skip(1)
+                    .step_by(2)
+                    .take(100)
+                    .filter(|&&b| b == 0)
+                    .count();
                 if zeros_in_odd > 40 {
-                    println!("  (looks like UTF-16LE — {}% zeros in odd positions)", zeros_in_odd);
+                    println!(
+                        "  (looks like UTF-16LE — {}% zeros in odd positions)",
+                        zeros_in_odd
+                    );
                 }
             }
             Err(e) => println!("\nGzip #{i} @ 0x{offset:04x}: decompress failed: {e}"),

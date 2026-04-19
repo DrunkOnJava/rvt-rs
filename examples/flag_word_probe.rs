@@ -3,13 +3,15 @@
 //! Look for a distinguishing property that explains why the value
 //! differs between classes.
 
-use rvt::{compression, streams::FORMATS_LATEST, RevitFile};
+use rvt::{RevitFile, compression, streams::FORMATS_LATEST};
 use std::path::PathBuf;
 
 fn looks_like_class_name(bytes: &[u8]) -> bool {
     !bytes.is_empty()
         && bytes[0].is_ascii_uppercase()
-        && bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        && bytes[1..]
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 fn parse_flag_words(d: &[u8]) -> Vec<(String, u16, u16)> {
@@ -96,7 +98,9 @@ fn main() -> anyhow::Result<()> {
             format!("rac_basic_sample_family-{year}.rfa"),
         ] {
             let path = PathBuf::from(&sample_dir).join(&filename);
-            if !path.exists() { continue; }
+            if !path.exists() {
+                continue;
+            }
             let mut rf = RevitFile::open(&path)?;
             let raw = rf.read_stream(FORMATS_LATEST)?;
             let d = compression::inflate_at(&raw, 0)?;
@@ -113,7 +117,10 @@ fn main() -> anyhow::Result<()> {
         *freq.entry(*flag).or_insert(0) += 1;
     }
     let total: u32 = freq.values().sum();
-    println!("Flag-word distribution across {} tagged-class records:", total);
+    println!(
+        "Flag-word distribution across {} tagged-class records:",
+        total
+    );
     for (flag, c) in &freq {
         let pct = 100.0 * *c as f64 / total.max(1) as f64;
         println!("  0x{flag:04x} ({flag:5}): {c:4}  ({pct:.1}%)");

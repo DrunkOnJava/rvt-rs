@@ -1,6 +1,6 @@
 // Dump the raw 32 bytes immediately around each class-name occurrence in
 // Formats/Latest so we can learn the tag encoding.
-use rvt::{compression, streams::FORMATS_LATEST, RevitFile};
+use rvt::{RevitFile, compression, streams::FORMATS_LATEST};
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("path");
@@ -14,11 +14,17 @@ fn main() -> anyhow::Result<()> {
             let end = (pos + bytes.len() + 16).min(decomp.len());
             println!("\n{name} @ {pos} (0x{pos:x})");
             print!("  pre: ");
-            for b in &decomp[start..pos] { print!("{:02x} ", b); }
+            for b in &decomp[start..pos] {
+                print!("{:02x} ", b);
+            }
             print!("| name: ");
-            for b in &decomp[pos..pos+bytes.len()] { print!("{:02x} ", b); }
+            for b in &decomp[pos..pos + bytes.len()] {
+                print!("{:02x} ", b);
+            }
             print!("| post: ");
-            for b in &decomp[pos+bytes.len()..end] { print!("{:02x} ", b); }
+            for b in &decomp[pos + bytes.len()..end] {
+                print!("{:02x} ", b);
+            }
             println!();
         } else {
             println!("\n{name}: NOT FOUND");

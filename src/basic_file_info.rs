@@ -50,7 +50,14 @@ impl BasicFileInfo {
         let guid = extract_guid(&raw);
         let locale = extract_locale(&raw);
 
-        Ok(Self { version, build, original_path, guid, locale, raw_text: raw })
+        Ok(Self {
+            version,
+            build,
+            original_path,
+            guid,
+            locale,
+            raw_text: raw,
+        })
     }
 }
 
@@ -87,8 +94,11 @@ fn extract_build(text: &str) -> Option<String> {
         }
     }
     // Pattern 2: plain "20170130_1515(x64)" after year
-    for (i, _) in text.match_indices("_1515(x64)") {
-        let start = text[..i].rfind(|c: char| !c.is_ascii_digit()).map(|j| j + 1).unwrap_or(0);
+    if let Some((i, _)) = text.match_indices("_1515(x64)").next() {
+        let start = text[..i]
+            .rfind(|c: char| !c.is_ascii_digit())
+            .map(|j| j + 1)
+            .unwrap_or(0);
         return Some(text[start..i + "_1515(x64)".len()].to_string());
     }
     // Pattern 3: "Development Build"
@@ -101,7 +111,7 @@ fn extract_build(text: &str) -> Option<String> {
 fn extract_path(text: &str) -> Option<String> {
     // Windows paths like C:\Users\...\...rfa
     // UTF-16LE-decoded text has these as plain chars.
-    let needle_start = text.find(|c: char| c == 'C' || c == 'D');
+    let needle_start = text.find(['C', 'D']);
     let start = needle_start?;
     let tail = &text[start..];
     // Must be "C:\" or "D:\" pattern
@@ -156,7 +166,9 @@ fn is_guid(s: &str) -> bool {
 
 fn extract_locale(text: &str) -> Option<String> {
     // Locale codes appear as 3-letter ASCII blocks like ENU, FRA, DEU, ESP, RUS, JPN, CHS
-    for code in &["ENU", "FRA", "DEU", "ESP", "ITA", "RUS", "JPN", "CHS", "CHT", "KOR", "PLK", "PTB", "CSY"] {
+    for code in &[
+        "ENU", "FRA", "DEU", "ESP", "ITA", "RUS", "JPN", "CHS", "CHT", "KOR", "PLK", "PTB", "CSY",
+    ] {
         if text.contains(*code) {
             return Some(code.to_string());
         }
@@ -170,7 +182,8 @@ mod tests {
 
     #[test]
     fn extracts_version_2024_pattern() {
-        let text = "2024  20230308_1635(x64)Z C:\\Users\\testuser\\Desktop\\racbasicsamplefamily.rfa";
+        let text =
+            "2024  20230308_1635(x64)Z C:\\Users\\testuser\\Desktop\\racbasicsamplefamily.rfa";
         let v = extract_version(text).unwrap();
         assert_eq!(v, 2024);
     }

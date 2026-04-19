@@ -9,7 +9,7 @@
 //! structural hypotheses automatically.
 
 use clap::{Parser, ValueEnum};
-use rvt::corpus::{analyze_corpus, Sample};
+use rvt::corpus::{Sample, analyze_corpus};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -69,7 +69,10 @@ fn run() -> anyhow::Result<()> {
             for s in &report.samples {
                 println!("  · {}", s);
             }
-            println!("partition-number → year mapping: {} entries", report.partition_mapping.len());
+            println!(
+                "partition-number → year mapping: {} entries",
+                report.partition_mapping.len()
+            );
             for (num, year) in &report.partition_mapping {
                 let y = year.map(|n| n.to_string()).unwrap_or_else(|| "?".into());
                 println!("  Partitions/{}  → Revit {}", num, y);

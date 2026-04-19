@@ -7,13 +7,13 @@
 //! - **Invariant** — same byte across every version (magic / structural)
 //! - **LowVariance** — 2..=5 distinct values across versions (type tag, enum)
 //! - **SizeCorrelated** — monotonically non-decreasing across versions
-//!    (likely a length field or count)
+//!   (likely a length field or count)
 //! - **MonotonicInt** — strictly increasing integer sequence (IDs, timestamps)
 //! - **Variable** — genuinely varies (payload data)
 //!
 //! Output: per-stream region maps that feed Phase D's object-graph inference.
 
-use crate::{compression, reader::RevitFile, streams::year_for_partition, Result};
+use crate::{Result, compression, reader::RevitFile, streams::year_for_partition};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
 
@@ -41,9 +41,9 @@ impl Sample {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ByteClass {
     Invariant,
-    LowVariance(u8),   // 2..=5 distinct values
-    SizeCorrelated,    // monotonic non-decreasing
-    MonotonicInt,      // strictly increasing integer-like
+    LowVariance(u8), // 2..=5 distinct values
+    SizeCorrelated,  // monotonic non-decreasing
+    MonotonicInt,    // strictly increasing integer-like
     Variable,
 }
 
@@ -98,7 +98,9 @@ pub fn analyze_corpus(samples: &mut [Sample]) -> Result<CorpusReport> {
     let mut partition_mapping = BTreeMap::new();
     for s in samples.iter() {
         if let Some(pname) = s.file.partition_stream_name() {
-            if let Some(num) = pname.strip_prefix("Partitions/").and_then(|n| n.parse::<u32>().ok())
+            if let Some(num) = pname
+                .strip_prefix("Partitions/")
+                .and_then(|n| n.parse::<u32>().ok())
             {
                 partition_mapping.insert(num, year_for_partition(num));
             }
@@ -128,24 +130,32 @@ pub fn analyze_corpus(samples: &mut [Sample]) -> Result<CorpusReport> {
         //   - plain data (BasicFileInfo, TransmissionData)
         //   - PartAtom is text XML; skip decompression
         //   - Partitions/NN: multi-chunk, use find_gzip_offsets + first chunk
-        let decompressed: Vec<Option<Vec<u8>>> = raws
-            .iter()
-            .map(|data| try_decompress(data))
-            .collect();
+        let decompressed: Vec<Option<Vec<u8>>> =
+            raws.iter().map(|data| try_decompress(data)).collect();
 
         let (bytes_for_alignment, used_decompressed, decomp_size_min, decomp_size_max) =
             if decompressed.iter().all(|d| d.is_some()) {
-                let decomped: Vec<&Vec<u8>> = decompressed.iter().map(|d| d.as_ref().unwrap()).collect();
+                let decomped: Vec<&Vec<u8>> =
+                    decompressed.iter().map(|d| d.as_ref().unwrap()).collect();
                 let min = decomped.iter().map(|v| v.len()).min().unwrap_or(0);
                 let max = decomped.iter().map(|v| v.len()).max().unwrap_or(0);
-                (decomped.iter().map(|v| v.as_slice()).collect(), true, Some(min), Some(max))
+                (
+                    decomped.iter().map(|v| v.as_slice()).collect(),
+                    true,
+                    Some(min),
+                    Some(max),
+                )
             } else {
                 let all: Vec<&[u8]> = raws.iter().map(|v| v.as_slice()).collect();
                 (all, false, None, None)
             };
 
         // Align on the common prefix length.
-        let aligned_len = bytes_for_alignment.iter().map(|s| s.len()).min().unwrap_or(0);
+        let aligned_len = bytes_for_alignment
+            .iter()
+            .map(|s| s.len())
+            .min()
+            .unwrap_or(0);
 
         // Per-byte classification.
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
