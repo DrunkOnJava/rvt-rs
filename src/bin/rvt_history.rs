@@ -6,7 +6,6 @@
 
 use clap::Parser;
 use rvt::{object_graph::{self, DocumentHistory}, RevitFile};
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -27,6 +26,13 @@ struct Cli {
     /// sheet names, elevation labels, and other user-visible BIM metadata.
     #[arg(long = "all-strings")]
     all_strings: bool,
+
+    /// Also scan the version-specific `Partitions/NN` stream — where the
+    /// bulk Revit content lives (categories, OmniClass codes, Uniformat
+    /// codes, Autodesk spec namespaces, asset references, localized strings).
+    /// Implies --all-strings.
+    #[arg(long = "partitions")]
+    partitions: bool,
 }
 
 fn main() -> ExitCode {
@@ -39,37 +45,128 @@ fn main() -> ExitCode {
     }
 }
 
+fn fmt_trunc(s: &str, n: usize) -> String {
+    let c: Vec<char> = s.chars().collect();
+    if c.len() <= n {
+        s.to_string()
+    } else {
+        format!("{}...", c[..n.saturating_sub(3)].iter().collect::<String>())
+    }
+}
+
 fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let mut rf = RevitFile::open(&cli.file)?;
 
-    if cli.all_strings {
-        let records = object_graph::string_records_from_file(&mut rf)?;
-        if cli.format == "json" {
-            println!("{}", serde_json::to_string_pretty(&records)?);
+    if cli.all_strings || cli.partitions {
+        let global_records = object_graph::string_records_from_file(&mut rf)?;
+        let partition_records = if cli.partitions {
+            object_graph::string_records_from_partitions(&mut rf).unwrap_or_default()
         } else {
-            println!("Global/Latest string records · {} entries", records.len());
-            let mut by_tag: BTreeMap<u32, usize> = BTreeMap::new();
-            for r in &records {
-                *by_tag.entry(r.tag).or_insert(0) += 1;
+            Vec::new()
+        };
+
+        if cli.format == "json" {
+            #[derive(serde::Serialize)]
+            struct Out<'a> {
+                global_latest: &'a [object_graph::StringRecord],
+                partitions: &'a [object_graph::StringRecord],
             }
-            println!("\nTag histogram (most common first):");
-            let mut pairs: Vec<_> = by_tag.iter().collect();
-            pairs.sort_by(|a, b| b.1.cmp(a.1));
-            for (tag, count) in pairs.iter().take(10) {
-                println!("  tag=0x{:08x}  {} records", tag, count);
-            }
-            println!("\nSample of records with tag=0x01 (often sheets, levels, elevations):");
-            let sample: Vec<_> = records.iter().filter(|r| r.tag == 1).take(40).collect();
-            for r in sample {
-                let v = if r.value.len() > 60 {
-                    format!("{}...", &r.value[..57])
-                } else {
-                    r.value.clone()
-                };
-                println!("  off=0x{:06x}  '{}'", r.offset, v);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&Out {
+                    global_latest: &global_records,
+                    partitions: &partition_records,
+                })?
+            );
+            return Ok(());
+        }
+
+        println!(
+            "Global/Latest · {} string records",
+            global_records.len()
+        );
+        if !partition_records.is_empty() {
+            println!("Partitions/NN · {} string records", partition_records.len());
+        }
+
+        // Interesting samples from global
+        let tag1_samples: Vec<_> = global_records.iter().filter(|r| r.tag == 1 && !r.value.is_empty()).take(20).collect();
+        if !tag1_samples.is_empty() {
+            println!("\nGlobal tag=0x01 records (sheets, levels, elevations):");
+            for r in tag1_samples {
+                println!("  off=0x{:06x}  '{}'", r.offset, fmt_trunc(&r.value, 60));
             }
         }
+
+        if !partition_records.is_empty() {
+            // Classify partitions content
+            let mut units = Vec::new();
+            let mut specs = Vec::new();
+            let mut groups = Vec::new();
+            let mut omniclass = Vec::new();
+            let mut uniformat = Vec::new();
+            let mut categories = Vec::new();
+            for r in &partition_records {
+                let v = &r.value;
+                if v.starts_with("autodesk.unit.") {
+                    units.push(v);
+                } else if v.starts_with("autodesk.spec.") {
+                    specs.push(v);
+                } else if v.starts_with("autodesk.parameter.group") {
+                    groups.push(v);
+                } else if v.chars().all(|c| c.is_ascii_digit() || c == '.') && v.contains('.') {
+                    omniclass.push(v);
+                } else if (v.starts_with('A')
+                    || v.starts_with('B')
+                    || v.starts_with('C')
+                    || v.starts_with('D')
+                    || v.starts_with('E')
+                    || v.starts_with('F')
+                    || v.starts_with('G')
+                    || v.starts_with('Z'))
+                    && v.len() >= 4
+                    && v[1..].chars().all(|c| c.is_ascii_digit())
+                {
+                    uniformat.push(v);
+                } else if v.len() >= 4
+                    && !v.starts_with("autodesk.")
+                    && !v.starts_with('%')
+                    && v.chars().any(|c| c.is_ascii_alphabetic())
+                {
+                    categories.push(v);
+                }
+            }
+
+            println!(
+                "\nPartitions/NN content classified:"
+            );
+            println!("  Autodesk unit  identifiers: {}", units.len());
+            println!("  Autodesk spec  identifiers: {}", specs.len());
+            println!("  Autodesk param groups     : {}", groups.len());
+            println!("  OmniClass-shaped codes    : {}", omniclass.len());
+            println!("  Uniformat-shaped codes    : {}", uniformat.len());
+            println!("  Revit categories / misc   : {}", categories.len());
+
+            fn pick<'a>(v: &[&'a String], n: usize) -> Vec<&'a String> {
+                v.iter().take(n).copied().collect()
+            }
+            for (label, sample) in [
+                ("Autodesk unit identifiers", pick(&units, 6)),
+                ("Autodesk spec identifiers", pick(&specs, 6)),
+                ("Autodesk parameter groups", pick(&groups, 6)),
+                ("Uniformat codes", pick(&uniformat, 6)),
+                ("Revit categories / misc", pick(&categories, 12)),
+            ] {
+                if !sample.is_empty() {
+                    println!("\n  {}:", label);
+                    for v in sample {
+                        println!("    · {}", fmt_trunc(v, 80));
+                    }
+                }
+            }
+        }
+
         return Ok(());
     }
 
