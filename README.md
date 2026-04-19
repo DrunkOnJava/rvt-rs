@@ -15,6 +15,7 @@ Apache-2.0 licensed. Rust 2024 edition. Verified against 11 Revit releases (2016
 - **Byte-preserving round-trip writer works today** — 13/13 streams identical after read-modify-write.
 - **Hands-clean by default.** Every CLI has `--redact` that scrubs usernames, Autodesk-internal paths, and project IDs while preserving path shape so claims remain verifiable. Committed demo output is pre-scrubbed.
 - **Fast.** `rvt-analyze` produces the full forensic report in **27 ms** on a 400 KB RFA (20 ms/file over the 11-version corpus). Full benchmark table: [`docs/benchmarks.md`](docs/benchmarks.md).
+- **Modifying writer works.** `writer::write_with_patches` reads a file, patches any stream's decompressed bytes, re-compresses with truncated-gzip, and writes a new file. Unpatched streams remain byte-identical; patched bytes survive round-trip. Field-level patching is gated on the remaining Layer 4c.2 work but stream-level already unblocks a range of tools.
 
 ## Why this exists — the openBIM gap
 
@@ -224,7 +225,7 @@ these streams. The fix is to skip the 10-byte header manually and use
 | 4c.2 · Field-body decoding | `FieldType` enum classifies **84%** of 1,114 fields across 7 variants (Primitive, ElementId, Pointer, Vector, Container, String, GUID). 9 discriminator bytes mapped. | **Done (84% coverage; remaining 16% is wider-primitive edge cases)** |
 | 4d · ElemTable | `Global/ElemTable` header parser + rough record enumeration; record semantics TBD (blocked on per-element schema lookup) | **Partial** |
 | 5 · IFC export | `IfcModel`, `Exporter` trait, `NullExporter`, full Revit→IFC mapping plan; emission gated on 4c.2 | **Scaffolded** |
-| 6 · Write path | Byte-preserving read-modify-write round-trip (13/13 streams identical); modifying-write gated on 4c.2 | **Scaffolded** |
+| 6 · Write path | Byte-preserving read-modify-write round-trip (13/13 streams identical); **stream-level `write_with_patches` works end-to-end** — patch a stream, re-compress with truncated-gzip, re-embed. Field-level patching gated on 4c.2. | **Partial (stream-level done)** |
 
 All 5 original P0 research questions (Q4-Q7) are now **resolved**. Layer 4c.1/4c.2 shipped against 84% of fields. The remaining single-session moat work is Q6.2 — finding the `ADocument` singleton's offset inside `Global/Latest` so the schema-directed walker has an entry point. Every other decoding question has an answer documented in the recon report.
 
