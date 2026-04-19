@@ -1283,4 +1283,97 @@ Tests: `src/formats.rs::tests::decodes_field_type_*` — one pinning
 test per new arm, plus `decode_is_safe_on_short_inputs` for the
 panic-safety invariant.
 
+## Addendum — Q6.3 CORRECTION to Q6.2: post-history bytes are a directory, not ADocument (2026-04-19, Phase 5a.1)
+
+**Q6.2 hypothesis refuted.** The original §Q6.2 addendum claimed the
+sequential-ID TLV block at the post-history boundary (offset 0x363 in
+the 2024 sample) was ADocument's 13-field instance with records keyed
+by field-number. Confidence was flagged at 0.6. Q5.2 closed the type
+decoder to 100%, which unblocked a rigorous Q6.3 walk — and the walk
+refutes the hypothesis.
+
+### Evidence against
+
+1. **Sequential IDs extend to ~131, not 13.** ADocument has 13
+   declared fields. If records corresponded to fields, the table
+   should terminate at id=13. Instead it runs contiguously from id=1
+   through id=131 (2024 sample) — stable across all 11 releases
+   (129–131 records; count varies slightly by sample but not by year).
+2. **Body-size / FieldType correlation fails.** Under the hypothesis,
+   same-FieldType fields should have same-sized bodies. Observed: of
+   the records that map to ADocument's 9 `Pointer { kind: 2 }` fields,
+   some have 2-byte bodies, others 6-byte bodies, others 12-byte
+   bodies. Record 1 (which would be `m_elemTable :: Pointer {kind:2}`)
+   has a 12-byte body; record 3 (`m_oContentTable`, same FieldType)
+   has a 2-byte body. FieldType does not predict body length.
+3. **Body values are not schema class tags.** Cross-referenced each
+   record's body u16 against the schema's 79 tagged classes: 0 of 131
+   resolved (`examples/directory_class_lookup.rs`). The u16 values
+   (0x076e, 0x0ea7, 0x0fda, …) are in a range (≈100–5000) consistent
+   with ElementIds, not class tags.
+
+### What the structure probably is
+
+A **multi-table directory/reference-pool** immediately following the
+upgrade-history strings in Global/Latest. Each table runs
+contiguously with 1-indexed sequential IDs; once one terminates, the
+next starts fresh from id=1. At least two such tables are visible in
+the 2024 sample:
+
+```text
+0x0363  table 1 start (id=1..131)
+0x07e7  table 1 ends; body-style changes to [u16 val][u32 0xffffffff]
+0x081b  section of `00`-padded dead space
+0x0881  another multi-u32 structure begins
+0x08b1  table 2 starts (id=1..N again)
+```
+
+Body encoding per record (provisional):
+
+```text
+[u32 sequential_id]
+[u16 value_or_ref]           // always present
+[optional u16 0 padding]     // some records
+[optional u32 extra]         // some records (usually zero)
+```
+
+The trailing sentinel pattern `ff ff ff ff` shows up in later records,
+matching Revit's convention for "undefined" or "null" references.
+
+### Practical impact
+
+**Layer 5a's original scope was underestimated.** The ADocument
+singleton is NOT at the post-history boundary. It lives somewhere
+else in Global/Latest (or possibly another stream), referenced
+through this directory. Reaching ADocument therefore requires:
+
+1. Decoding the directory table format (what the u16 values are —
+   ElementIds? entry indices into ElemTable? reference-pool indices?).
+2. Understanding Global/ElemTable's structure — parser exists
+   (`src/elem_table.rs`) but record semantics are partial.
+3. Resolving a directory entry → actual object-data offset.
+4. Only then can the schema-directed walker (the Layer 5a "write the
+   walker" work) run.
+
+Each of those is a separate open question. This is genuine
+reconnaissance, not implementation of a known design.
+
+### Status of Layer 5a going forward
+
+- **Layer 4c (schema decoding, 100% coverage):** complete and
+  verified. Not affected by this correction.
+- **Layer 5a (ADocument instance extraction):** re-opened. The
+  original Q6.2 entry-point claim is retracted; a new entry-point
+  question is posed.
+- **Layer 5b (full object graph walker):** remains blocked on 5a
+  plus directory resolution.
+
+Probes added this session:
+- `examples/adocument_walk.rs` — tabulates sequential-ID records
+  against ADocument's declared fields. Output refutes Q6.2.
+- `examples/post_directory.rs` — locates where the first directory
+  terminates and dumps the structure that follows.
+- `examples/directory_class_lookup.rs` — tries record bodies as
+  class-tag lookups; 0/131 match, confirming they're not tags.
+
 **End of report.**
