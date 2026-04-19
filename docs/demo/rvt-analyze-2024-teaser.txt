@@ -1,0 +1,56 @@
+  1 · File Identity
+─────────────────────────────────────────────────────────────────────────────
+  Path                            ../../samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa
+  Size                            397312 bytes
+  Revit version                   2024
+  Build tag                       —
+  Creator path                    C:\Users\<redacted>\Desktop\Revit - <redacted project id>\2024\racbasicsamplefamily.rfa
+  File GUID                       —
+  Locale                          —
+  Partition stream                Partitions/67
+  Internal format counter         3052 (Global/PartitionTable[0..2])
+
+─────────────────────────────────────────────────────────────────────────────
+  3 · Format Anchors
+─────────────────────────────────────────────────────────────────────────────
+  Global/PartitionTable size      167 bytes decompressed
+  Invariant region size           165 bytes (byte-for-byte identical 2016→2026)
+  Format identifier GUID          3529342d-e51e-11d4-92d8-0000863f27ad
+  Partition description           "Family  : Section Heads : Section Tail - Upgrade"
+  Contents wrapper magic          62 19 22 05
+
+─────────────────────────────────────────────────────────────────────────────
+  5 · Schema → Data Linkage (Phase D proof)
+─────────────────────────────────────────────────────────────────────────────
+  Global/Latest size              938578 bytes decompressed
+  Expected hits per tag if uniform  57.3
+  Total tag hits observed         37197
+
+  Top tagged classes in this file's Global/Latest (ratio = hits / uniform):
+    tag    hits     ratio  class
+    0x0061   19415      339×  AbsCurveGStep
+    0x006b    6599      115×  HostObjAttr
+    0x006d    5444       95×  AbsDbViewPressureLossReport
+    0x0062    2274       40×  GeomStep
+    0x0100    1245       22×  AnalyticalLevelAssociationCell
+    0x0046    1119       20×  ATFProvenanceBaseCell
+    0x001b     261      4.6×  ADocWarnings
+    0x004c     154      2.7×  ATFRevitObjectStylesOverride
+    0x0028     113      2.0×  APIVSTAMacroElemTracking
+    0x0047     111      1.9×  Cell
+    0x006a      86      1.5×  AbsCurveType
+    0x0025      76      1.3×  APIVSTAMacroElem
+    0x002a      43      0.8×  AProperties
+    0x00b3      37      0.6×  AllPlanTopologies
+    0x0132      16      0.3×  AnalyticalModelSlab
+
+─────────────────────────────────────────────────────────────────────────────
+  7 · Disclosure Scan
+─────────────────────────────────────────────────────────────────────────────
+  ! Creator-system paths (may leak user identity):
+    <redacted path>
+  ! Usernames extracted from embedded paths:
+    <redacted>
+
+  Downstream tools should redact these before forwarding.
+
