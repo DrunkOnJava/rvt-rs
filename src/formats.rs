@@ -69,6 +69,16 @@ pub struct ClassEntry {
     /// `Formats/Latest`, or may be implicit.
     #[serde(default)]
     pub was_parent_only: bool,
+    /// Class-tag reference found in the preamble's "flag" word slot
+    /// (the u16 immediately before the field count). Non-zero values
+    /// match known class tags — likely a mixin / protocol / category
+    /// ancestor distinct from the direct `parent`. See §Q4 addendum
+    /// in `docs/rvt-moat-break-reconnaissance.md`.
+    ///
+    /// `None` when the slot was 0x0000 (no reference). 55% of tagged
+    /// classes in the 2024 sample have no ancestor_tag.
+    #[serde(default)]
+    pub ancestor_tag: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -268,6 +278,7 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
         let mut tag: Option<u16> = None;
         let mut parent: Option<String> = None;
         let mut declared_field_count: Option<u32> = None;
+        let mut ancestor_tag: Option<u16> = None;
         if cursor + 2 <= data.len() {
             let raw_tag = u16::from_le_bytes([data[cursor], data[cursor + 1]]);
             if raw_tag & 0x8000 != 0 {
@@ -310,6 +321,9 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
                                         std::str::from_utf8(p).unwrap().to_string(),
                                     );
                                     declared_field_count = Some(fc);
+                                    if flag != 0 {
+                                        ancestor_tag = Some(flag);
+                                    }
                                     cursor = preamble_at + 10;
                                 }
                             }
@@ -346,6 +360,7 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
                 parent,
                 declared_field_count,
                 was_parent_only: false,
+                ancestor_tag,
             });
         }
         i = cursor.max(i + 1);
@@ -369,6 +384,7 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
             parent: None,
             declared_field_count: None,
             was_parent_only: true,
+            ancestor_tag: None,
         });
     }
 
