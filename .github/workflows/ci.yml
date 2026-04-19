@@ -82,22 +82,26 @@ jobs:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_REQUIRE_CORPUS: "1"
         run: cargo test --release --test field_type_coverage -- --nocapture
-      # Broader integration suite (round-trips, part-atom parsing, history
-      # extraction, etc.) runs against the corpus on Linux + macOS. On
-      # Windows, 2 of 8 samples tests currently fail on the 2016 sample —
-      # symptom: `has_revit_signature()` reports "missing required stream"
-      # and `partition_stream_name()` returns `None`, but only on Windows
-      # CI runners. Disabling autocrlf did not resolve it; suspected
-      # interaction with how phi-ag/rvt's pre-LFS binary files are
-      # checked out on Windows. Tracked as an open investigation (not a
-      # library bug — the coverage gate passes on Windows, proving the
-      # schema decoder is correct there). The other 6 samples tests and
-      # every other CI job still run on Windows.
-      - name: Integration tests (corpus-dependent)
+      # Broader integration suite runs against the corpus on all three
+      # OSes. Windows currently fails 2 of 8 samples tests on the 2016
+      # sample ONLY — `has_revit_signature` reports missing streams that
+      # are empirically present on Linux/macOS. Ruled out: autocrlf
+      # corruption (phi-ag/rvt marks all .rfa LFS + `-text`). Kept
+      # enabled with `continue-on-error` so the next Windows run
+      # surfaces the missing_required_streams diagnostic — without
+      # that data we can't debug remotely. When the diagnostic comes
+      # back, we can convert this to a pass.
+      - name: Integration tests (corpus-dependent) — Linux + macOS
         if: runner.os != 'Windows'
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
         run: cargo test --release --test samples
+      - name: Integration tests (corpus-dependent) — Windows diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+        run: cargo test --release --test samples -- --nocapture
 
   doc:
     name: cargo doc
