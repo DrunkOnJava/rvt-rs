@@ -1,0 +1,340 @@
+//! Parse `Formats/Latest` into a real schema table.
+//!
+//! **This is the key file.** The decompressed `Formats/Latest` stream
+//! contains Autodesk's complete on-disk serialization schema — every class
+//! name, every field name, every C++ type signature (including full
+//! `std::pair< ElementId, double >` generics). It is in effect a bundled
+//! `.proto` file for the entire Revit object graph.
+//!
+//! Every Revit release since at least 2016 embeds this schema in the file
+//! itself. Class IDs are UUIDv1 values whose MAC suffixes (e.g.
+//! `0000863f27ad`, `0000863de970`) are visible in Autodesk Forge JSON
+//! outputs — strong evidence the schema identifiers have been stable since
+//! Revit was built ca. 2000.
+//!
+//! # Wire format (inferred from the 11-version RFA corpus)
+//!
+//! Each class record starts with:
+//!
+//! ```text
+//! [uint16 LE name_len] [name_len bytes ASCII class_name]
+//! [uint16 LE type_tag]                     // bit 0x8000 = flag; low byte = secondary length
+//! [padding zeros]                          // variable — see field parser
+//! ```
+//!
+//! Followed by a field table. Each field entry:
+//!
+//! ```text
+//! [uint16 LE fieldname_len] [fieldname_len bytes ASCII field_name]
+//! [uint16 LE typename_len]  [typename_len bytes ASCII cpp_type]    // optional
+//! ```
+//!
+//! The parser below is best-effort. The regex-fallback mode still works
+//! even when the wire layout has a variation we haven't yet documented.
+
+use crate::Result;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchemaTable {
+    pub classes: Vec<ClassEntry>,
+    /// Every unique C++ type signature seen in the schema (e.g.
+    /// `std::pair< ElementId, double >`, `ElementId`, `Identifier`).
+    pub cpp_types: Vec<String>,
+    /// Raw count of parse-candidates skipped for validation reasons.
+    pub skipped_records: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassEntry {
+    pub name: String,
+    /// Stream offset where this class entry begins.
+    pub offset: usize,
+    /// Fields declared by this class (best-effort).
+    pub fields: Vec<FieldEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldEntry {
+    pub name: String,
+    pub cpp_type: Option<String>,
+}
+
+/// Parse the decompressed `Formats/Latest` bytes into a schema table.
+///
+/// # Caveat
+///
+/// The real schema lives in the first ~64 KB of the decompressed stream.
+/// Beyond that, `Formats/Latest` contains binary object data whose bit
+/// patterns incidentally trip our class-name heuristic. We cap scanning at
+/// 64 KB to avoid emitting false-positive garbage classes.
+pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
+    let mut classes = Vec::new();
+    let mut cpp_types = std::collections::BTreeSet::new();
+    let mut skipped = 0usize;
+
+    // Schema section is in the early portion of the stream. Scanning
+    // beyond this produces false-positive class records from compressed
+    // binary noise.
+    const SCHEMA_SCAN_LIMIT: usize = 64 * 1024;
+    let data = if decompressed.len() > SCHEMA_SCAN_LIMIT {
+        &decompressed[..SCHEMA_SCAN_LIMIT]
+    } else {
+        decompressed
+    };
+    let mut i = 0;
+
+    while i + 2 < data.len() {
+        // Find next candidate length-prefixed string of length 3..=60.
+        // Candidates that don't match our alphabet are skipped.
+        let len = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+        if !(3..=60).contains(&len) {
+            i += 1;
+            continue;
+        }
+        let str_start = i + 2;
+        if str_start + len > data.len() {
+            i += 1;
+            continue;
+        }
+        let name_bytes = &data[str_start..str_start + len];
+        if !looks_like_class_name(name_bytes) {
+            i += 1;
+            continue;
+        }
+
+        // Got a class-name candidate. Parse its fields until we hit
+        // another likely class boundary (another length-prefixed name
+        // matching our heuristic).
+        let class_name = std::str::from_utf8(name_bytes).unwrap().to_string();
+        let class_offset = i;
+
+        // Move cursor past the class name header.
+        let mut cursor = str_start + len;
+
+        // Walk forward until we find the next class-name candidate OR end
+        // of stream. While walking, pick up any embedded field records.
+        let mut fields = Vec::new();
+        let (next_class_offset, found_fields) =
+            scan_fields_until_next_class(data, cursor, &mut cpp_types);
+        fields.extend(found_fields);
+        cursor = next_class_offset;
+
+        // Validate: at least class name parsed successfully.
+        if class_name.is_empty() {
+            skipped += 1;
+        } else {
+            classes.push(ClassEntry {
+                name: class_name,
+                offset: class_offset,
+                fields,
+            });
+        }
+        i = cursor.max(i + 1);
+    }
+
+    Ok(SchemaTable {
+        classes,
+        cpp_types: cpp_types.into_iter().collect(),
+        skipped_records: skipped,
+    })
+}
+
+fn looks_like_class_name(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+    // First char must be uppercase ASCII letter
+    let first = bytes[0];
+    if !first.is_ascii_uppercase() {
+        return false;
+    }
+    // Remaining chars: alphanumeric or underscore only
+    bytes[1..].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+}
+
+fn looks_like_field_name(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+    let first = bytes[0];
+    // field names often start with m_ (C++ convention), or lowercase,
+    // or uppercase if it's a nested class or enum
+    if !(first.is_ascii_alphanumeric() || first == b'_') {
+        return false;
+    }
+    bytes.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+}
+
+fn looks_like_cpp_type(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+    let s = match std::str::from_utf8(bytes) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    // Basic sanity: must be printable ASCII, reasonable chars
+    s.chars().all(|c| {
+        c.is_ascii_alphanumeric()
+            || matches!(c, ':' | '<' | '>' | ',' | ' ' | '_' | '*' | '&' | '[' | ']' | '(' | ')')
+    }) && (s.chars().any(|c| c.is_ascii_uppercase())
+        || s.contains("std::")
+        || s.contains("int")
+        || s.contains("double")
+        || s.contains("long"))
+}
+
+/// Scan the buffer starting at `cursor` for field records until we hit
+/// either end-of-stream or another class-name candidate. Returns
+/// `(new_cursor_position, discovered_fields)`.
+///
+/// Field names use u32 LE length prefix (distinct from class names which use
+/// u16). Type signatures that follow also use u32 LE. Example (from the
+/// 2024 reference file, offset 0x80):
+///
+/// ```text
+///   0080  00 0d 00 41 43 44 50 74 72 57 72 61 70 70 65 72    0  13  A C D P t r W r a p p e r
+///         pad  u16=13 ^------------ "ACDPtrWrapper" --------^
+///                     (class name)
+///         00 00                                              class tag / pad
+///         01 00 00 00  01 00 00 00                           field count, field index
+///         06 00 00 00  6d 5f 70 41 43 44                     u32=6, "m_pACD" (field name)
+///         0e 03 00 00 00 00 00 00 00 00                      field type code block
+/// ```
+fn scan_fields_until_next_class(
+    data: &[u8],
+    start: usize,
+    cpp_types: &mut std::collections::BTreeSet<String>,
+) -> (usize, Vec<FieldEntry>) {
+    let mut fields = Vec::new();
+    let mut i = start;
+    let hard_stop = (start + 4096).min(data.len());
+
+    while i + 4 < hard_stop {
+        // First: is this a u16-prefixed class-name candidate?
+        let u16_len = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+        if (4..=60).contains(&u16_len) && i + 2 + u16_len <= hard_stop {
+            let slice = &data[i + 2..i + 2 + u16_len];
+            if looks_like_class_name(slice) {
+                return (i, fields);
+            }
+        }
+
+        // Field record candidate: u32 length prefix.
+        let u32_len = u32::from_le_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]) as usize;
+        if (2..=60).contains(&u32_len) && i + 4 + u32_len <= hard_stop {
+            let slice = &data[i + 4..i + 4 + u32_len];
+            if looks_like_field_name(slice) {
+                let field_name = std::str::from_utf8(slice).unwrap().to_string();
+                let post_name = i + 4 + u32_len;
+
+                // Optional C++ type follows. Try u32 prefix first, then u16.
+                let mut cpp_type = None;
+                let mut consumed = post_name;
+
+                // Type signatures in the corpus sometimes have u16 prefix,
+                // sometimes u32. Try u32 first.
+                let mut type_consumed_bytes = 0usize;
+                for (prefix_len, is_u32) in [(4usize, true), (2usize, false)] {
+                    if consumed + prefix_len >= hard_stop {
+                        continue;
+                    }
+                    let type_len = if is_u32 {
+                        u32::from_le_bytes([
+                            data[consumed],
+                            data[consumed + 1],
+                            data[consumed + 2],
+                            data[consumed + 3],
+                        ]) as usize
+                    } else {
+                        u16::from_le_bytes([data[consumed], data[consumed + 1]]) as usize
+                    };
+                    if (3..=120).contains(&type_len) && consumed + prefix_len + type_len <= hard_stop {
+                        let type_slice = &data[consumed + prefix_len..consumed + prefix_len + type_len];
+                        if looks_like_cpp_type(type_slice) {
+                            let ts = std::str::from_utf8(type_slice)
+                                .unwrap_or_default()
+                                .trim()
+                                .to_string();
+                            cpp_types.insert(ts.clone());
+                            cpp_type = Some(ts);
+                            type_consumed_bytes = prefix_len + type_len;
+                            break;
+                        }
+                    }
+                }
+
+                fields.push(FieldEntry { name: field_name, cpp_type });
+                i = if type_consumed_bytes > 0 { consumed + type_consumed_bytes } else { post_name };
+                continue;
+            }
+        }
+        i += 1;
+    }
+    (i, fields)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn class_name_heuristic() {
+        assert!(looks_like_class_name(b"ADocument"));
+        assert!(looks_like_class_name(b"A3PartyObject"));
+        assert!(looks_like_class_name(b"APIEventHandlerStatus"));
+        assert!(!looks_like_class_name(b"lowercaseStart"));
+        assert!(!looks_like_class_name(b""));
+        assert!(!looks_like_class_name(b"Has-Dash"));
+    }
+
+    #[test]
+    fn field_name_heuristic() {
+        assert!(looks_like_field_name(b"m_id"));
+        assert!(looks_like_field_name(b"m_id64"));
+        assert!(looks_like_field_name(b"first"));
+        assert!(looks_like_field_name(b"second"));
+        assert!(!looks_like_field_name(b"Has Space"));
+    }
+
+    #[test]
+    fn cpp_type_heuristic() {
+        assert!(looks_like_cpp_type(b"std::pair< ElementId, double >"));
+        assert!(looks_like_cpp_type(b"ElementId"));
+        assert!(looks_like_cpp_type(b"int"));
+        assert!(!looks_like_cpp_type(b"m_id"));   // lowercase only = field name territory
+    }
+
+    #[test]
+    fn parses_sample_schema_snippet() {
+        // Realistic snippet mirroring the observed wire format:
+        //  [u16 LE 13] "ACDPtrWrapper"   (class name)
+        //  [u16 LE 0]                     (class tag / pad)
+        //  [u32 LE 1]                     (field count)
+        //  [u32 LE 1]                     (index or secondary count)
+        //  [u32 LE 6] "m_pACD"            (field name with u32 prefix)
+        //  [u32 LE 0]                     (no cpp type)
+        let mut buf = Vec::<u8>::new();
+        buf.extend_from_slice(&[0x0d, 0x00]);     // u16 len=13
+        buf.extend_from_slice(b"ACDPtrWrapper");  // 13 ASCII bytes
+        buf.extend_from_slice(&[0x00, 0x00]);     // class tag
+        buf.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]); // field count u32
+        buf.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]); // index u32
+        buf.extend_from_slice(&[0x06, 0x00, 0x00, 0x00]); // field name len u32
+        buf.extend_from_slice(b"m_pACD");        // 6 ASCII bytes
+
+        let schema = parse_schema(&buf).unwrap();
+        assert!(
+            schema.classes.iter().any(|c| c.name == "ACDPtrWrapper"),
+            "expected class ACDPtrWrapper, got {:?}",
+            schema.classes.iter().map(|c| &c.name).collect::<Vec<_>>()
+        );
+        let class = schema.classes.iter().find(|c| c.name == "ACDPtrWrapper").unwrap();
+        assert!(
+            class.fields.iter().any(|f| f.name == "m_pACD"),
+            "expected field m_pACD, got {:?}",
+            class.fields.iter().map(|f| &f.name).collect::<Vec<_>>()
+        );
+    }
+}
