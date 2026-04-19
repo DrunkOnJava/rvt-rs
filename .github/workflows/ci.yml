@@ -80,6 +80,7 @@ jobs:
       - name: Coverage gate — 100% field-type classification
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+          RVT_REQUIRE_CORPUS: "1"
         run: cargo test --release --test field_type_coverage -- --nocapture
       # Broader integration suite (round-trips, part-atom parsing, history
       # extraction, etc.) runs against the corpus on Linux + macOS. On

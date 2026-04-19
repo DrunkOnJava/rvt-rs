@@ -20,17 +20,58 @@ a few practices keep the repo healthy.
 - **Tests.** More coverage is always welcome, especially for
   edge-case file layouts.
 
+## Where help is most wanted (as of v0.1.1)
+
+The schema layer (Layer 4) is complete and regression-proofed: 100%
+field-type classification across every Revit release 2016–2026,
+enforced by CI. The instance layer (Layer 5) is wide open, with
+three stacked sub-questions any of which is a genuine contribution:
+
+1. **§Q6.4 — decode the `Global/Latest` directory-table format.**
+   Right after the document-upgrade-history block in
+   `Global/Latest`, there is a contiguous sequential-ID TLV table
+   of ~131 records (stable across all 11 releases). Record bodies
+   are 2, 6, 12, 14, or 16 bytes; u16 body values are not schema
+   class tags (0/131 hit — see `examples/directory_class_lookup.rs`).
+   Strong candidates: ElementId references, indices into
+   `Global/ElemTable`, or a reference-pool. Cross-reference against
+   `Global/ElemTable`'s records and/or test on a non-sample-family
+   `.rvt` (any real project) to see whether the count is
+   per-document or format-structural.
+2. **§Q6.5 — locate ADocument's actual instance bytes.** Blocked on
+   Q6.4 — once we know what the directory indexes, we can follow
+   its entries to ADocument's real location (not the post-history
+   offset, as originally hypothesised and refuted in §Q6.3).
+3. **Layer 5a — schema-directed walker.** Blocked on Q6.5. The
+   skeleton has been scoped; implementation is bounded once Q6.5
+   produces the entry-point offset.
+
+Each step has clear validation oracles: rvt-info already extracts
+the document title + GUID via a second path, rvt-history extracts
+the upgrade timeline via Phase D string scanning. Anything the
+walker pulls must cross-check.
+
+See `docs/rvt-moat-break-reconnaissance.md` §Q6 for the full state
+of play, including the documented refutation of the original Q6.2
+entry-point hypothesis (this is the first project section a
+contributor should read before starting on Layer 5).
+
 ## What needs discussion first
 
 Open an issue (or a draft PR) before starting work on any of:
 
-- Layer 4c.2 field-body byte decoding (the live moat edge — please
-  read the latest §Q5 and §Q5.1 addenda of the recon report first).
-- IFC exporter emission (`src/ifc/`). Mapping decisions have to
-  align with buildingSMART IFC schema conventions.
-- The modifying writer (`src/writer::write_with_patches`). Any
+- **Layer 5 itself** — the questions above are open research; a
+  one-paragraph sketch of your approach in an issue saves everyone
+  time before you spend days on a probe.
+- **IFC exporter emission** (`src/ifc/`). Mapping decisions have
+  to align with buildingSMART IFC schema conventions.
+- **The modifying writer** (`src/writer::write_with_patches`). Any
   change to Revit's truncated-gzip framing must be verified
   against a round-trip test.
+- **Layer 4c field-type decoder changes.** Coverage is at 100%
+  and CI-gated. If you think a pattern is misclassified, file an
+  issue with byte evidence from the corpus — do not silently
+  change the decoder.
 
 ## Coding conventions
 

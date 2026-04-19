@@ -1,0 +1,70 @@
+name: Bug report
+description: rvt-rs crashes, panics, misreads a file, or produces clearly-wrong output.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Security-sensitive reports
+        should go through [GitHub Security Advisories](https://github.com/DrunkOnJava/rvt-rs/security/advisories/new)
+        instead — not public issues.
+  - type: input
+    id: version
+    attributes:
+      label: rvt-rs version
+      description: Output of `cargo pkgid rvt` or the version from Cargo.toml
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: input
+    id: rust
+    attributes:
+      label: Rust toolchain
+      description: Output of `rustc --version`
+      placeholder: "rustc 1.85.0"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS + architecture
+      placeholder: "macOS 14.5 arm64 / Ubuntu 22.04 x86_64 / Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: revit_release
+    attributes:
+      label: Revit release the input file came from
+      description: 2016, 2017, … 2026, or "unknown"
+      placeholder: "2024"
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: A panic, a wrong value, a crash, a wrong byte count — concrete details.
+      placeholder: |
+        Running `rvt-analyze myfile.rfa` panics at src/formats.rs:200 with
+        "called Option::unwrap() on a None value".
+    validations:
+      required: true
+  - type: textarea
+    id: what_expected
+    attributes:
+      label: What you expected
+      placeholder: "Normal forensic report, like the one in docs/demo/."
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: |
+        The smallest `.rvt`/`.rfa`/`.rte`/`.rft` that triggers the bug. If the
+        file contains proprietary / personal data, redact it first or describe
+        the file's shape (size, Revit release, content type).
+      placeholder: "Attached: bug.rfa (450 KB, Revit 2024 family file)"
+  - type: textarea
+    id: stack
+    attributes:
+      label: Stack trace or error output
+      description: Paste the full output. `RUST_BACKTRACE=1` is appreciated for panics.
+      render: text
