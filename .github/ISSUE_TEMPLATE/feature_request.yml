@@ -1,0 +1,52 @@
+name: Feature request
+description: An enhancement, new CLI, new decoder, or a Layer-5 research direction.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening: is this already tracked? Active research questions
+        and open work live in
+        [`docs/rvt-moat-break-reconnaissance.md`](../blob/main/docs/rvt-moat-break-reconnaissance.md)
+        §Q6. If your suggestion maps onto an existing question there, a
+        comment on that area (or a draft PR) is often more productive than
+        a new issue.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Layer 5 — instance-data extraction (walker / IFC export)
+        - Layer 4 — schema decoder / type classification
+        - CLI tooling (rvt-analyze, rvt-info, rvt-schema, rvt-history, rvt-diff, rvt-corpus, rvt-dump)
+        - Writer / round-trip patching
+        - Documentation / recon report
+        - Python bindings (pyo3 + maturin)
+        - IfcOpenShell bridge
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Who benefits, concretely? (BIM tool authors, format researchers, contractors, etc.)
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Rough sketch of the implementation or investigation plan. Probes welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Are you willing to work on this?
+      options:
+        - label: "Yes — I'll open a PR."
+        - label: "Maybe — with guidance."
+        - label: "Just filing."
