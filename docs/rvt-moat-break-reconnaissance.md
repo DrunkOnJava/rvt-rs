@@ -1471,4 +1471,86 @@ Probes added (all under `examples/`):
 - `table_b_structure.rs` — walks Table B with large look-ahead;
   produces the record-length distribution for Finding Q6.4-B.
 
+### Finding Q6.5-A: post-Table-B region is schema-driven instance data
+
+Phase D's original 340× class-tag density measurement was taken
+over the **entire** `Global/Latest` stream. Running the same test
+restricted to the post-Table-B region (probe:
+`examples/post_table_b_density.rs`) gives:
+
+| Region | Bytes | Tag hits | Distinct tags | vs uniform |
+|---|---|---|---|---|
+| Pre-Table-B (header + history + directories) | 3,943 | 63 | 22 | **13.3×** |
+| Post-Table-B (candidate object payload) | 934,635 | 37,134 | 54 | **33.0×** |
+
+The 33× density over 935 KB is unambiguous evidence this region is
+schema-referenced instance data. (The 340× whole-stream Phase D
+number averaged over ALL tags; most tags appear rarely and a few
+appear very frequently — 33× is what happens when you include the
+long tail of rare tags in the denominator.)
+
+### Finding Q6.5-B: the post-Table-B region starts with structured record data
+
+Hex dump of the first 80 bytes at offset 0x0f67 (2024 sample),
+probe: `examples/post_table_b_head.rs`:
+
+```text
+0x000f67  00 00 00 00 00 00 00 00 0c 00 00 00 ff ff ff ff
+0x000f77  c8 0b ff ff ff ff c8 0b ff ff ff ff c8 0b ff ff
+0x000f87  ff ff c8 0b ff ff ff ff c8 0b ff ff ff ff c8 0b
+0x000f97  ff ff ff ff c8 0b ff ff ff ff c8 0b ff ff ff ff
+0x000fa7  c8 0b ff ff ff ff c8 0b ff ff ff ff c8 0b ff ff
+0x000fb7  ff ff c8 0b 0c 00 00 00 ff ff ff ff c7 0b ff ff
+```
+
+Visible structure:
+
+- **8-byte zero preamble** (`00 00 00 00 00 00 00 00`). Plausibly
+  a record-type marker or document-version counter.
+- **`[u32 12]`** field count or array length marker, followed by
+  **twelve** 6-byte records of the form `[u16 id][u32 0xffffffff]`
+  (the `0xffffffff` is a classic "unset/null" sentinel in C++
+  containers; the `u16 id` is 0x0bc8 = 3016 repeated).
+- Immediately after: **another `[u32 12]` marker**, another twelve
+  6-byte records with `[u16 0x0bc7 = 3015]`.
+- Shortly after that, embedded IEEE-754 `f64` values decoded from
+  `00 00 00 00 00 00 20 40` → **8.0** and `00 00 00 00 00 00 08 40`
+  → **3.0**. Plausible BIM dimensions for the test fixture (a
+  family element; 8.0 / 3.0 are credible member-length parameters).
+
+This is what ADocument's serialized instance should look like per
+the schema: `m_appInfoArr` is declared as a `Container` (array) in
+the schema, and the 12-element array of `[element-id][unset]` pairs
+matches exactly. The IEEE-754 floats after are plausible field
+values for scalar parameters on the root document.
+
+### Where Q6.5 now stands
+
+The combination of findings suggests — with moderate but not yet
+airtight confidence — that:
+
+```text
+0x000000                 …   compressed-stream header (not of interest)
+0x000053 .. 0x000362     UTF-16LE document-upgrade-history strings
+0x000363 .. 0x0008a0     Table A   (131 sequential-ID records, ~1342 B)
+0x0008a1 .. 0x000f67     Table B   (141 sequential-ID records, ~1754 B)
+0x000f67 .. end-of-stream ACTUAL INSTANCE DATA — schema-driven
+                         (first record is very likely ADocument)
+```
+
+With 100% type coverage (Q5.2) already in place, a walker can now
+start at 0x0f67 and attempt to read ADocument's 13 fields in
+schema-declared order. The validation oracle: extracted values
+must match what `rvt-info`, `rvt-history`, and Phase D string
+extraction already surface by independent paths. The remaining
+uncertainty is record-framing details — 8-byte preamble, exact
+array-count encoding, how the `m_pHostDocument` pointer (one of
+ADocument's fields) threads into the rest of Table B's records.
+
+Probes added:
+- `post_table_b_density.rs` — Phase-D-style class-tag density scan
+  over the post-Table-B region. Basis for Finding Q6.5-A.
+- `post_table_b_head.rs` — hex dump + class-tag annotation of the
+  first 384 bytes. Basis for Finding Q6.5-B.
+
 **End of report.**
