@@ -25,6 +25,7 @@ fn looks_like_field_name(bytes: &[u8]) -> bool {
         && bytes.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
+#[allow(dead_code)]
 struct FieldSite {
     class_name: String,
     class_tag: u16,

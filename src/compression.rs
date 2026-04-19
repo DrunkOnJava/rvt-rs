@@ -50,7 +50,21 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
 /// Inflate the DEFLATE stream that follows a gzip header starting at `offset`.
 ///
 /// Returns the decompressed bytes. Unused tail (any garbage / next chunk /
-/// missing CRC+ISIZE) is silently ignored.
+/// missing CRC+ISIZE) is silently ignored — which is exactly what we need
+/// for Revit's truncated-gzip streams.
+///
+/// ```
+/// # use rvt::compression;
+/// // Revit omits the trailing CRC+ISIZE, so standard gzip decoders refuse
+/// // these streams. Our `inflate_at` returns the decompressed bytes
+/// // regardless.
+/// let empty_truncated_gzip = [
+///     0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, // 10-byte header
+///     0x03, 0x00, // empty deflate block
+/// ];
+/// let decomp = compression::inflate_at(&empty_truncated_gzip, 0).unwrap();
+/// assert_eq!(decomp, b"");
+/// ```
 pub fn inflate_at(data: &[u8], offset: usize) -> Result<Vec<u8>> {
     let header_len =
         gzip_header_len(data, offset).ok_or_else(|| Error::Decompress("no gzip header".into()))?;
