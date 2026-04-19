@@ -10,6 +10,23 @@ For over a decade the openBIM community — anchored by [buildingSMART Internati
 
 `rvt-rs` reads the actual on-disk RVT bytes. That is a *strict superset* of what Revit's API exposes. An rvt-rs → IFC pipeline built on top of it (planned; not yet shipped) is the full-fidelity path to IFC that the openBIM movement has been waiting for — and a natural partner for [IfcOpenShell](https://ifcopenshell.org/), [BIMvision](https://bimvision.eu/), and anyone participating in buildingSMART's annual openBIM Hackathon.
 
+## Quick demo
+
+One command produces the full forensic picture — identity, upgrade history, format anchors, schema table, Phase D link histogram, content metadata, and a disclosure scan:
+
+```bash
+cargo build --release
+./target/release/rvt-analyze --redact path/to/your.rfa
+```
+
+**Sample output** (pre-scrubbed, committed for review):
+
+- Terminal report: [`docs/demo/rvt-analyze-2024-redacted.txt`](docs/demo/rvt-analyze-2024-redacted.txt) — 130 lines of structured output
+- JSON report:    [`docs/demo/rvt-analyze-2024-redacted.json`](docs/demo/rvt-analyze-2024-redacted.json) — machine-readable version
+- Tag-drift heatmap: [`docs/data/tag-drift-heatmap.svg`](docs/data/tag-drift-heatmap.svg) — visual proof of class-ID drift across 11 Revit releases
+
+The `--redact` flag (on by default in every committed artifact) scrubs Windows usernames, Autodesk-internal paths, and project-ID folder names to `<redacted>` markers while preserving path shape so claims remain verifiable. Omit the flag when running privately against your own files.
+
 ## Results at a glance
 
 Running the shipped CLIs against one 400 KB RFA fixture:
@@ -40,12 +57,12 @@ Four reproducible discoveries, all documented in `docs/rvt-moat-break-reconnaiss
 
 4. **Parameter-group namespace shipped separately in Revit 2024.** `autodesk.parameter.group.*` identifiers appear in 2024+ only — three releases after units/specs. Dating the Forge schema rollout from on-disk bytes: [`examples/tag_drift.rs`](examples/tag_drift.rs), [`src/object_graph.rs`](src/object_graph.rs).
 
-Two unintended disclosures also surfaced:
+Two unintended disclosure patterns also surfaced in Autodesk's shipped reference content — details are withheld from this README to avoid re-broadcasting them; they are documented in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md) for security-research reproducibility. They are:
 
-- The shipped 2024 Autodesk reference family leaks an Autodesk employee's OneDrive path verbatim (`C:\Users\<redacted>\OneDrive - Autodesk\FY-20XX Projects\...`) — RVT does not sanitize authoring paths.
-- The DLL ships with the build-server path `F:\Ship\2026_px64\Source\API\RevitAPI\...` embedded in assertion strings.
+- A customer-facing OneDrive path that leaks the directory structure of an Autodesk employee's personal sample-authoring workflow.
+- A build-server path baked into C++ assertion strings inside the public `RevitAPI.dll`.
 
-Downstream tools consuming rvt-rs output should redact `C:\Users\*\` paths from extracted strings.
+**Downstream safety:** the `rvt-analyze` CLI ships with a `--redact` flag (on by default for any of the committed demo output in this repo) that rewrites creator paths, Autodesk-internal paths, and build-server paths to `<redacted>` markers while preserving the surrounding structure. Any tool consuming rvt-rs output and displaying it publicly should do the same.
 
 ---
 
@@ -60,10 +77,14 @@ Downstream tools consuming rvt-rs output should redact `C:\Users\*\` paths from 
 - Extract class/schema inventory from `Formats/Latest` (8-10K class names per file)
 - Find the version-specific `Partitions/NN` stream (58, 60-69 for 2016-2026, skipping 59)
 
-Six CLIs ship in the box:
+Seven CLIs ship in the box:
 
 ```bash
 cargo build --release
+
+# One-shot forensic analysis — all subsystems in one report
+./target/release/rvt-analyze --redact my-project.rvt
+./target/release/rvt-analyze --redact --json my-project.rvt > report.json
 
 # Quick metadata + schema summary
 ./target/release/rvt-info --show-classes my-project.rvt
