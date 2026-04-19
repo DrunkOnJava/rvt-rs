@@ -43,6 +43,19 @@ pub struct Summary {
 
 impl RevitFile {
     /// Open a Revit file from disk.
+    ///
+    /// Returns an error if the file doesn't exist, can't be read, or
+    /// doesn't start with the OLE2 / MS-CFB magic bytes
+    /// (`D0 CF 11 E0 A1 B1 1A E1`).
+    ///
+    /// ```no_run
+    /// use rvt::RevitFile;
+    ///
+    /// let mut rf = RevitFile::open("your-project.rfa")?;
+    /// let summary = rf.summarize()?;
+    /// println!("Revit {}", summary.version);
+    /// # Ok::<(), rvt::Error>(())
+    /// ```
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let mut f = File::open(path.as_ref())?;
         let mut bytes = Vec::new();
@@ -51,6 +64,16 @@ impl RevitFile {
     }
 
     /// Open a Revit file from an in-memory byte buffer.
+    ///
+    /// Useful for callers that have the file bytes already (e.g. streamed
+    /// over the network). Equivalent to `open` after a `read_to_end`.
+    ///
+    /// ```
+    /// use rvt::RevitFile;
+    /// // Four bytes that are definitely not a valid CFB file.
+    /// let result = RevitFile::open_bytes(b"nope".to_vec());
+    /// assert!(matches!(result, Err(rvt::Error::NotACfbFile)));
+    /// ```
     pub fn open_bytes(bytes: Vec<u8>) -> Result<Self> {
         if bytes.len() < 8 || bytes[..8] != [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] {
             return Err(Error::NotACfbFile);

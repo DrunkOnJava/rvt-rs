@@ -1,4 +1,4 @@
-# RVT (Revit) Format Moat-Break — Reconnaissance Report
+# RVT (Revit) on-disk format — reconnaissance report
 
 **Date:** 2026-04-19
 **Analyst:** Opus 4.7 (via Claude Code) + Griffin Radcliffe
@@ -8,54 +8,63 @@
 
 ---
 
-## Strategic framing — this is an openBIM play, not just a format recon
+## Context — an openBIM interoperability gap
 
-The narrow framing of this report is "break Autodesk's RVT moat via a native parser." The broader framing is: **the openBIM movement has begged for a high-fidelity RVT parser for over a decade, and Autodesk has structurally prevented it by confining IFC export to a Revit plug-in that inherits every limitation of the Revit API.**
+This report documents the on-disk structure of Autodesk Revit files
+as observed from Autodesk's publicly-distributed sample content. The
+practical motivation is the long-standing interoperability gap
+between Revit and the IFC open standard maintained by buildingSMART
+International.
 
-Autodesk's own [`revit-ifc`](https://github.com/Autodesk/revit-ifc) exporter is Apache-2 open-source, actively maintained, and certified by buildingSMART. None of that matters — it runs **inside** Revit. It can only export what the Revit API surface exposes. The API surface deliberately withholds:
-
-- Private families (embedded sub-families not published as shared content)
-- Complex assemblies (`HostObj` sub-components, joined wall/floor edges)
-- Internal geometric relationships (parameter-driven constraints, solver links)
-- Proprietary parameter types (non-shared enums, internal schema types)
-- Workset + worksharing metadata (only partially exposed to the API)
-- View-specific display overrides that aren't persisted as named styles
-- Historical edit data that IFC has no concept for
-
-A native RVT parser reads the actual on-disk bytes — a strict superset. Every limitation in the Autodesk-supplied IFC path vanishes the moment the converter runs outside Revit. That is the thing the openBIM community has publicly requested for years:
+Autodesk's own [`revit-ifc`](https://github.com/Autodesk/revit-ifc)
+exporter is Apache-2.0 open-source and actively maintained. It runs
+as a Revit plug-in, which means its output is structurally bounded by
+what the Revit API chooses to expose. Practitioners discussing this
+limitation publicly note:
 
 - OSArch Wiki: *"Revit does not come with strong official support for Industry Foundation Classes (IFC)"*
 - thinkmoult.com (buildingSMART volunteer blog): *"Out of the box, Revit IFC support is very limited"*
-- Reddit r/bim consensus: *"Revit -> IFC export gives data loss"*
-- buildingSMART openBIM Hackathon hosts annual events targeting exactly this class of tooling
+- Reddit r/bim (community consensus): *"Revit -> IFC export gives data loss"*
+- buildingSMART International hosts annual openBIM Hackathon events focused on this class of tooling.
 
-The downstream `rvt-rs` → IFC converter (planned, not in v0.1) would be the first open-source, non-Autodesk-API path to full-fidelity RVT/RFA export. Natural partners:
+A parser that reads the actual on-disk bytes is a strict superset of
+the Revit-API-surface path. Once field-body decoding (Layer 4c.2 in
+the moat model below) is complete, an rvt-rs → IFC converter built
+on top of this library could cover categories the Revit API
+withholds from the existing exporter.
 
-| Partner | Role |
+Natural collaborators for the downstream IFC writer layer:
+
+| Project | Role |
 |---|---|
-| [IfcOpenShell](https://ifcopenshell.org/) | Mature C++/Python IFC toolkit — takes structured input, emits spec-compliant IFC. Would be the IFC writer layer on top of rvt-rs's parser. |
-| [buildingSMART International](https://www.buildingsmart.org/) | Standards body + certification authority. Their formal IFC Software Certification Program is the industry stamp of legitimacy. |
-| [BIMvision](https://bimvision.eu/) | Free IFC viewer. Downstream consumer of high-fidelity IFC output. |
-| [OSArch](https://wiki.osarch.org/) | Community hub for open-source architecture tooling. Already documents Revit's IFC limitations — a natural amplifier. |
-| [Solibri](https://www.solibri.com/), Tekla, Archicad | Competing BIM vendors. All currently pay ODA or rely on Revit's lossy IFC path — any of them would pay-to-play or contribute to break Autodesk's API-surface dominance. |
+| [IfcOpenShell](https://ifcopenshell.org/) | Mature C++ / Python IFC toolkit — likely writer for spec-compliant STEP emission. |
+| [buildingSMART International](https://www.buildingsmart.org/) | Standards body. Operates the formal IFC Software Certification Program. |
+| [BIMvision](https://bimvision.eu/) | Free IFC viewer — downstream consumer. |
+| [OSArch](https://wiki.osarch.org/) | Community documentation hub for open-source architecture tooling. |
 
 ---
 
-## TL;DR — bigger whale than DWG, same go-recommendation
+## TL;DR
 
-| Dimension | DWG (whale #1) | **RVT (whale #2)** |
-|---|---|---|
-| Container format | Custom binary + LZ77 + Reed-Solomon parity | **OLE Compound Document + DEFLATE** (both public-standard) |
-| Public spec | ODA 5.4.1 (279 pages, thru 2018) | **None** |
-| Open-source read coverage | LibreDWG 99% | ~10% (metadata only via olefile) |
-| Open-source write coverage | LibreDWG ~80% through 2000 | **0%** |
-| Format stability | 7 AC-code bumps since 1997 | **One format, 11 years unchanged** — only the `Partitions/NN` index advances |
-| Autodesk revenue anchor | ~$2B AEC/AutoCAD | ~$4B AEC Collection / Revit-centric enterprise bundle ($3,555/seat/yr) |
-| Regulatory lock-in | None | **UK / Nordic / Singapore / UAE public-project mandates require RVT deliverables** |
+| Dimension | RVT observation |
+|---|---|
+| Container format | OLE Compound Document + DEFLATE — both public, non-proprietary standards. |
+| Public spec | No Autodesk-published format spec exists. |
+| Open-source read coverage prior to this project | Metadata-only (Apache Tika, olefile) or partial (phi-ag/rvt, Reveche). |
+| Format stability | One container format, 11 years unchanged (2016–2026); only the version-specific `Partitions/NN` index advances. |
+| Data-layer exposure | `Formats/Latest` ships the full class + field schema as plaintext ASCII inside every file. This is the key observation that makes the rest of the work tractable. |
 
-**RVT's moat is more valuable than DWG's** (twice the revenue, broader lock-in, newer format), but the **container layer is easier** (OLE + DEFLATE, both public). The gap shifts up one level: it's no longer "how are bytes encoded?" but "what does the decompressed object graph mean?" And Autodesk helpfully ships the class schema IN the file itself (`Formats/Latest`), so the hard work is semantics-only — not pure reverse engineering.
+The container and compression layers use public standards. The
+interesting work sits one level up, in the binary object graph.
+Because Autodesk ships the class schema inside every file, that
+work is semantic rather than purely reverse-engineering the wire
+format from scratch.
 
-This reconnaissance confirmed every outer layer of the format in under two hours from a terminal. **That is the belief-gap** — everyone assumes RVT is uncrackable, and nobody realizes Autodesk has already done 60% of the work for you.
+The findings in this report rest on the byte evidence of
+Autodesk's publicly-distributed sample content, cross-checked
+against the public `RevitAPI.dll` NuGet package's exported symbol
+list. Every FACT below is reproducible from a probe under
+`examples/`.
 
 ---
 
@@ -342,76 +351,41 @@ AI changes all four:
 - **GPL-3 / Apache-2 clean-room implementation has no legal risk** — DMCA doesn't apply (no DRM circumvention), copyright doesn't apply (interoperability exception under 17 USC 1201(f)).
 - **Autodesk Forge ToS** does restrict "deriving the RVT format" — but those ToS only bind Forge users, not independent researchers.
 
-## 7. Quantified opportunity
+## 7. Status & next steps
 
-| Metric | Value | Source |
-|---|---|---|
-| Autodesk FY2025 total revenue | $6.13B | Autodesk 10-K |
-| AEC Collection revenue (Revit-anchored) | ~$4B (est.) | Industry analysis |
-| Revit-specific seats worldwide | ~2M | Autodesk public statements |
-| AEC Collection list price / seat / yr | $3,555 | Autodesk.com pricing page |
-| Enterprise BIM market (global, 2025) | $11.5B | Fortune Business Insights |
-| US AECO firms using Revit | ~40,000 | Dodge Data & Analytics |
-| UK gov projects requiring BIM Level 2 (RVT) | All central-gov above £5M | UK Cabinet Office mandate |
-| ODA BimRv members (est.) | 200-500 | ODA membership not disclosed |
-| ODA BimRv revenue (est.) | $1-5M/yr | Derived from membership tiers |
+### What's shipped in this repo
 
-**Revit is bigger, more profitable, and more moat-locked than AutoCAD** — which was already whale-class. Revit is one of Autodesk's top-3 revenue lines and the anchor of their enterprise AEC bundle.
+- Layer 1 (OLE2 container): **done**, via the `cfb` crate.
+- Layer 2 (truncated-gzip compression): **done**, with a matching
+  encoder so the modifying writer can round-trip.
+- Layer 3 (per-stream framing): **done** for every stream we've
+  touched; 165-byte `Global/PartitionTable` invariant + 44-byte
+  `Partitions/NN` header decoded.
+- Layer 4a (schema table): **done**. 395 class records with
+  `{tag, parent, ancestor_tag, declared_field_count}` per class.
+- Layer 4b (schema → data link): **done**. Tags from `Formats/Latest`
+  occur in `Global/Latest` at ~340× the uniform-random rate.
+- Layer 4c.1 (record framing): **done**.
+- Layer 4c.2 (field-body decoding): **84% coverage** via the
+  `FieldType` enum with 7 variants.
+- Layer 4d (ElemTable records): **header done, body partial**.
+- Layer 5 (IFC export): **scaffolded** (`src/ifc/`). Emission gated
+  on 4c.2 reaching ≥95%.
+- Layer 6 (write path): **stream-level done** — `write_with_patches`
+  round-trips through truncated-gzip re-encoding. Field-level
+  patching gated on 4c.2.
 
-## 8. Decision: STRONG GO, with positioning caveat
+### Next falsifiable targets
 
-RVT is genuinely more tractable than I assumed when Griffin floated the hypothesis, and more valuable than DWG. Verdict:
+1. Push Layer 4c.2 coverage from 84% → ≥95% by enumerating the
+   remaining `Unknown` discriminator bytes.
+2. Close Q6.3: walk the Global/Latest TLV stream sequentially from
+   the ADocument entry point at offset 0x363.
+3. Finish Layer 4d with a per-record walker that respects the
+   declared element_count from the header.
 
-### Technical feasibility: CONFIRMED HIGH.
-
-- Container: public standard.
-- Compression: public standard.
-- Framing: invariant across 11 years.
-- Class schemas: exposed as plaintext inside the file.
-- Object graph: hard but AI-tractable.
-
-### Strategic positioning: NEEDS A DECISION
-
-This is infrastructure, not a vertical product. The 3 reasonable shapes:
-
-1. **Publish + community** — fork/coordinate with phi-ag, ship Apache-2 Rust+TypeScript library, publish the R2018+ spec as a 60-page PDF that ODA has never released. Reputation/hiring/grant leverage, minimal revenue. Similar to the DWG/LibreDWG path but one level up in value.
-2. **Commercial SaaS on top** — "Upload RVT, get IFC/OBJ/glTF/JSON back" paid API at $0.10/conversion. Target construction SaaS vertical. Revenue real, but crowded market (RevitBatchProcessor, Forge).
-3. **Embed in CiteCodes** — not fit. RVT is BIM design; CiteCodes is code/storm/permit intel. Unrelated except both touch buildings.
-
-### Comparison recommendation
-
-If Griffin ranks whales by (technical-feasibility × market-value × AI-asymmetry):
-
-| Whale | Feasibility | Value | AI-asymmetry | Composite |
-|---|---|---|---|---|
-| **DWG** | 8/10 (80% done in LibreDWG) | 7/10 ($2B AEC) | 6/10 | **336** |
-| **RVT** | 7/10 (container solved, object graph hard) | 9/10 ($4B+) | **9/10** (plaintext classes, AI scales) | **567** |
-| Tyler Tech | 4/10 (govt procurement drag) | 7/10 ($2.3B) | 6/10 | 168 |
-| Enverus | 8/10 (parcel-crawler pattern transfers) | 7/10 ($500M-1B) | 9/10 | 504 |
-
-**RVT scores highest on composite.** It's harder than Enverus but materially more valuable, and the AI-asymmetry is the best on the list: plaintext class names + delta-across-11-years + binary-diff-friendly object graph is precisely where Opus 4.7 has the biggest edge over human researchers.
-
-### If GO: next session agenda
-
-```
-Session 1 (crawl):
-  ✓ Done: Container, compression, stream inventory, class enum sample
-
-Session 2 (walk):
-  • Rust scaffold: cfb crate + zlib + olefile-equivalent
-  • Parse BasicFileInfo + PartAtom + Formats/Latest properly
-  • Publish first output: `rvt-info my.rvt` CLI that dumps version/metadata/class-list
-
-Session 3 (run):
-  • Cross-version diff toolkit (all 11 sample versions)
-  • Decompressed stream fingerprinting
-  • First object-graph hypothesis: APropertyDouble3 = 3 × f64 little-endian
-
-Session 4 (ship):
-  • Open-source release: Apache-2
-  • Publish the "R2026 Revit File Format Reconnaissance" PDF
-  • Announcement post comparing to LibreDWG trajectory
-```
+Each is a bounded probe + cross-version verification. The
+11-version corpus is the oracle.
 
 ---
 

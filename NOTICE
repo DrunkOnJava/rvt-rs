@@ -13,34 +13,38 @@ Autodesk. All references to "Autodesk" and "Revit" in this project's
 source, tests, documentation, and output are nominative fair use —
 they identify the file format this reader parses, and no more.
 
-"DWG" is a trademark of Autodesk, Inc. References in this project's
-historical analysis documents are also nominative fair use.
-
 This project neither uses nor distributes any Autodesk source code,
 object code, proprietary SDK components, or header files. All
 file-format observations documented here were obtained by inspecting
 the bytes of files written by Autodesk Revit — publicly shipped
 sample content — using only public tools (the Microsoft Compound
-File Binary Format specification [MS-CFB], RFC 1952 gzip, standard
-Rust crates).
+File Binary Format specification [MS-CFB], RFC 1952 gzip, and
+standard Rust crates).
 
 ==============================================================================
 Interoperability basis
 ==============================================================================
 
-The reverse engineering and reimplementation undertaken by this
-project is limited in scope and purpose to enabling interoperability
-between independently-created software and the Autodesk Revit file
-format. This qualifies under the interoperability exception of
-17 U.S.C. § 1201(f) ("DMCA") in U.S. jurisdictions, and under
-analogous exceptions in EU Directive 2009/24/EC (Articles 5 and 6)
-and Australian Copyright Act s. 47D in other jurisdictions.
+Reverse engineering for the sole purpose of achieving interoperability
+between independently-developed software and the Autodesk Revit file
+format is recognised as lawful fair use under:
 
-No effective technological measures controlling access to a
-copyrighted work have been circumvented. The underlying file
-container (Microsoft Compound File Binary Format) is a published
-public specification; the compression (DEFLATE) is RFC 1951; neither
-involves rights-management technology.
+  * United States — Sega Enterprises v. Accolade, 977 F.2d 1510
+    (9th Cir. 1992); Sony Computer Entertainment v. Connectix, 203
+    F.3d 596 (9th Cir. 2000).
+  * European Union — Article 6 of Directive 2009/24/EC (Software
+    Directive).
+  * Australia — Copyright Act 1968, Section 47D.
+
+File formats themselves are not copyrightable subject matter (Baker
+v. Selden, 101 U.S. 99 (1879); Lotus Development v. Borland, 516
+U.S. 233 (1996)). The Microsoft Compound File Binary Format is a
+published public specification; the compression (RFC 1951 DEFLATE)
+is an Internet standard.
+
+No access-control or rights-management technology has been
+circumvented by this project — the underlying Revit files are not
+encrypted and carry no technological protection measures.
 
 ==============================================================================
 Third-party dependencies (runtime)
