@@ -41,7 +41,7 @@ fn find_table_b_end(d: &[u8]) -> usize {
                     break;
                 }
             }
-            if expect - 1 >= 5 {
+            if expect >= 6 {
                 last_end = end + 32;
                 i = end;
                 continue;
@@ -112,7 +112,7 @@ fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> (usize, String) {
         // Guess: ElementId wire = 8 bytes (full u64 or [u32 tag][u32 id])
         ElementId | ElementIdRef { .. } => {
             if bytes.len() < 8 {
-                return (0, format!("<short buffer for ElementId>"));
+                return (0, "<short buffer for ElementId>".into());
             }
             let tag = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
             let id = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
