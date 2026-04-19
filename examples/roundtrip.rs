@@ -1,3 +1,12 @@
+//! Round-trip integrity test for `writer::copy_file`.
+//!
+//! Opens the 2024 sample family, writes it to a new OLE container, then
+//! re-reads every stream from both source and destination and confirms
+//! byte-for-byte equality. Exits 0 if all 13 streams match.
+//!
+//! This probe backs the "byte-preserving read-modify-write round-trip
+//! (13/13 streams identical)" claim in the README's RE-state table.
+
 use rvt::writer;
 use rvt::RevitFile;
 use std::path::PathBuf;

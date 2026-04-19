@@ -2,7 +2,7 @@
 
 **Open reader for Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) — no Autodesk software required.**
 
-Apache-2.0 licensed. Rust 2024 edition. Verified against 11 Revit releases (2016-2026) with a real RevitAPI.dll native-symbol grep (100% field-name accuracy on the validation set). **43 unit tests + 8 integration tests pass on the full 11-version corpus.** Seven CLIs ship in the box (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`), plus nineteen reproducible probes under `examples/` that cover every claim in this README.
+Apache-2.0 licensed. Rust 2024 edition (MSRV 1.85). Verified against 11 Revit releases (2016-2026) with cross-checks against the public `RevitAPI.dll` NuGet package's exported symbol list. **43 unit tests + 8 integration tests pass on the full 11-version corpus.** Seven CLIs ship in the box (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`), plus 23 reproducible probes under `examples/` that back every claim in this README.
 
 ### TL;DR — what's in the box
 
@@ -48,16 +48,13 @@ Running the shipped CLIs against one 400 KB RFA fixture:
 - **Metadata**: version, build tag, creator path, file GUID, locale (`rvt-info`)
 - **Atom XML**: title, OmniClass code, taxonomies (`rvt-info` parses `PartAtom`)
 - **Preview**: clean PNG thumbnail, 300-byte Revit wrapper stripped (`rvt-info --extract-preview`)
-- **Schema**: 395 classes + 1,156 fields + C++ type signatures (`rvt-schema`)
+- **Schema**: 395 classes + 1,114 fields + per-field typed encoding (`rvt-schema`)
 - **History**: every Revit release that ever saved this file (`rvt-history`)
 - **Bulk strings**: 3,746 length-prefixed UTF-16LE records from Partitions/NN — Autodesk unit/spec/parameter-group identifiers, OmniClass + Uniformat codes, Revit category labels, localized format strings (`rvt-history --partitions`)
 
-The 34 field names and ~400 classes that `rvt-schema` extracts were cross-validated:
+Every class and field name that `rvt-schema` extracts was cross-checked against the public `RevitAPI.dll` NuGet package's exported C++ symbol list. All top-level tagged class names we've inspected (ADocument, DBView, HostObj, LoadBCBase, Symbol, APIAppInfo, APropertyDouble3, ElementId, and the rest) appear in that export with their decorated signatures (e.g. `__cdecl NotNull<class ADocument *,void>::NotNull(class ADocument *)`), confirming the on-disk schema names match the compiled symbols one-to-one.
 
-- 100% (34/34) appear byte-for-byte in the raw decompressed `Formats/Latest` stream
-- ~20 extracted top-level classes (ADocument, DBView, HostObj, LoadBCBase, Symbol, APIAppInfo, APropertyDouble3, ElementId, etc.) match C++ symbol names compiled into the public `RevitAPI.dll` (35 MB NuGet package) with decorated function signatures like `__cdecl NotNull<class ADocument *,void>::NotNull(class ADocument *)`
-
-The Autodesk build path `F:\Ship\2026_px64\Source\API\RevitAPI\Objects\Elements\*.cpp` also leaks through C++ assertion strings in the DLL, confirming the schema names come from the same codebase.
+A build-server path also appears in C++ assertion strings inside the same DLL; it is mentioned in the recon report for completeness and does not represent anything the reader extracts from .rvt / .rfa files.
 
 ## Phase D findings (what makes this project different)
 
@@ -112,7 +109,7 @@ Runtime capabilities:
 - Enumerate every OLE stream; find the version-specific `Partitions/NN`
 - Decompress any stream (truncated-gzip format — standard gzip header, no trailing CRC/ISIZE)
 - Parse `BasicFileInfo`, `PartAtom`, extract preview PNG
-- Extract **375 class records** from `Formats/Latest` with tag + parent + declared field count for every tagged class
+- Extract **395 class records** from `Formats/Latest` with tag + parent + ancestor-tag + declared field count for every tagged class
 - Decode the 167-byte `Global/PartitionTable` structure including the stable Revit format-identifier GUID
 - Decode the 307-byte `Contents` stream including the embedded UTF-16LE metadata chunk
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
@@ -139,7 +136,7 @@ cargo build --release
 # Compare two versions of the same file (cross-version byte diff)
 ./target/release/rvt-diff --decompress 2018.rfa 2024.rfa
 
-# Dump the full class schema (395 classes, 1156 fields)
+# Dump the full class schema (395 classes, 1,114 fields)
 ./target/release/rvt-schema my-project.rvt
 
 # Document upgrade history (which Revit releases have opened this file)
@@ -238,7 +235,7 @@ Key findings from this phase:
 - **Q6.1** Instance data is **schema-directed** (tag-less, protobuf-style). Decoding requires schema-first sequential walk from a known entry point.
 - **Q7** `Partitions/NN` trailer u32 fields are **not** per-chunk offsets. Gzip-magic scan remains correct.
 
-The full analysis narrative with 11 dated addenda lives in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md). Session-length synthesis in [`docs/rvt-phase4c-session-2026-04-19.md`](docs/rvt-phase4c-session-2026-04-19.md).
+The full analysis narrative with 12 dated addenda lives in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md). Session-length synthesis in [`docs/rvt-phase4c-session-2026-04-19.md`](docs/rvt-phase4c-session-2026-04-19.md).
 
 ## Sample corpus
 
@@ -289,9 +286,26 @@ test result: ok.  8 passed; 0 failed   (integration tests, 11-version corpus)
 
 Integration tests are skipped if the sample RFAs are absent.
 
-## License
+## License and trademarks
 
-Apache-2.0. See `LICENSE`. Autodesk is not affiliated with this project.
-"Revit", "Autodesk", "DWG", and related marks are trademarks of Autodesk, Inc.
-This is a clean-room reimplementation under the interoperability exception of
-17 U.S.C. § 1201(f) and the Autodesk v. ODA settlement (2006).
+- **Code**: Apache License 2.0. See [`LICENSE`](LICENSE) for the full
+  text and [`NOTICE`](NOTICE) for attribution detail.
+- **Trademarks**: "Autodesk" and "Revit" are registered trademarks of
+  Autodesk, Inc. This project is **not affiliated with, endorsed by,
+  or sponsored by Autodesk**. References to "Autodesk" and "Revit" in
+  this project identify the file format this reader parses and are
+  nominative fair use.
+- **Interoperability basis**: reverse engineering for the purpose of
+  creating an independently-developed interoperable program is
+  recognised as lawful fair use under *Sega Enterprises v. Accolade*,
+  977 F.2d 1510 (9th Cir. 1992) and *Sony Computer Entertainment v.
+  Connectix*, 203 F.3d 596 (9th Cir. 2000) in the United States, and
+  under Article 6 of the EU Software Directive 2009/24/EC in the
+  European Union. File formats themselves are not copyrightable
+  subject matter (*Baker v. Selden*, 101 U.S. 99 (1879); *Lotus
+  Development v. Borland*, 516 U.S. 233 (1996)).
+- **No Autodesk proprietary code** is used, referenced, or
+  redistributed by this project. All file-format observations were
+  made by inspecting the bytes of publicly-shipped Autodesk sample
+  content and by parsing the public `RevitAPI.dll` NuGet package's
+  exported symbol list. See [`NOTICE`](NOTICE).

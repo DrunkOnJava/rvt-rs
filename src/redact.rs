@@ -10,6 +10,20 @@
 /// Scrub `\Users\<name>\` and `/Users/<name>/` usernames while
 /// preserving the path shape. The username segment is replaced by
 /// `<redacted>`; nothing else is touched.
+///
+/// ```
+/// use rvt::redact::redact_path_str;
+///
+/// let input  = "C:\\Users\\alice\\Documents\\model.rfa";
+/// let output = redact_path_str(input);
+/// assert_eq!(output, "C:\\Users\\<redacted>\\Documents\\model.rfa");
+///
+/// // Paths without a \Users\ or /Users/ segment pass through unchanged.
+/// assert_eq!(
+///     redact_path_str("C:\\ProgramData\\Autodesk\\RVT 2024"),
+///     "C:\\ProgramData\\Autodesk\\RVT 2024"
+/// );
+/// ```
 pub fn redact_path_str(p: &str) -> String {
     let mut out = p.to_string();
     for n in ["\\Users\\", "/Users/"] {
