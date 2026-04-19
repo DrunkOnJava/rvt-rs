@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  fmt:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    name: cargo test / ${{ matrix.os }} / ${{ matrix.rust }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable]
+        include:
+          - os: ubuntu-latest
+            rust: "1.85"  # MSRV (Rust 2024 edition minimum)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --all-targets
+      - name: Unit tests
+        run: cargo test --release --lib --bins
+      - name: Doc tests
+        run: cargo test --release --doc
+      # Integration tests require the phi-ag/rvt sample corpus via LFS,
+      # which we don't auto-fetch in CI to keep runs fast. The unit
+      # tests + doctests cover the library surface; the integration
+      # suite is run locally before release via tests/samples.rs.
+
+  doc:
+    name: cargo doc
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --no-deps --lib
+
+  pii-guard:
+    name: PII guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for known PII leak patterns
+        run: |
+          set -e
+          echo "Scanning repo for patterns that must never be committed..."
+          # Personal names / project IDs / employee usernames that
+          # have appeared in shipped Autodesk content.
+          PATTERNS=(
+            "<redacted>"
+            "/home/user"
+            "/home/user"
+          )
+          for p in "${PATTERNS[@]}"; do
+            if git grep -I "$p" -- ':!.github/workflows/' 2>/dev/null; then
+              echo "::error::Forbidden pattern '$p' present in tracked files"
+              exit 1
+            fi
+          done
+          echo "PII guard: clean."
