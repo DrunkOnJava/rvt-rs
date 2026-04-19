@@ -67,6 +67,105 @@ pub struct ClassEntry {
 pub struct FieldEntry {
     pub name: String,
     pub cpp_type: Option<String>,
+    /// Best-effort decode of the field's type encoding. See
+    /// `FieldType::decode` for the byte-level pattern this maps onto.
+    pub field_type: Option<FieldType>,
+}
+
+/// Best-effort classification of a field's type encoding (the byte block
+/// that follows a field name in `Formats/Latest`). Derived from the
+/// 2026-04-19 Phase 4c.2 sweep — see the §Q5 addendum in
+/// `docs/rvt-moat-break-reconnaissance.md` for the evidence.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FieldType {
+    /// `0x04` prefix. Fixed-size primitive (integer-like). The tail
+    /// bytes encode size / default / flags — not fully decoded yet.
+    Primitive { size_hint: u32 },
+    /// `0x0e 0x00 0x00 0x00 0x14 0x00` — 6-byte pattern for ElementId.
+    ElementId,
+    /// `0x0e 0xNN 0x00 0x00` where NN ∈ {0x01, 0x02, 0x03} — a pointer
+    /// or singular reference to another class instance. The low byte
+    /// marks the reference-kind (e.g. pointer vs. non-owning ref).
+    Pointer { kind: u8 },
+    /// `0x0e 0x10 0x00 0x00 ...` — a vector/array. Body (not fully
+    /// decoded) contains an element-count hint and a reference to
+    /// the element class's tag.
+    Vector {
+        /// Raw body bytes after the 4-byte header.
+        body: Vec<u8>,
+    },
+    /// `0x0e 0x50 0x00 0x00 ...` — a map / set. Body typically embeds
+    /// a class-tag reference AND an ASCII C++ type signature
+    /// (`std::pair< K, V >`, `std::map< K, V >`).
+    Container {
+        /// Embedded ASCII C++ signature, if one was recovered.
+        cpp_signature: Option<String>,
+        /// Raw body bytes after the 4-byte header.
+        body: Vec<u8>,
+    },
+    /// Anything we haven't classified yet. Preserves the raw bytes so
+    /// downstream tools can reanalyse.
+    Unknown { bytes: Vec<u8> },
+}
+
+impl FieldType {
+    /// Decode a field's type-encoding block. Input is the raw bytes
+    /// starting immediately after the `[u32 name_len][name]` record.
+    pub fn decode(bytes: &[u8]) -> Self {
+        if bytes.is_empty() {
+            return FieldType::Unknown { bytes: Vec::new() };
+        }
+        match bytes[0] {
+            0x04 => {
+                // Numeric primitive. The next u32 is the size hint.
+                if bytes.len() >= 4 {
+                    let size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                    FieldType::Primitive { size_hint: size }
+                } else {
+                    FieldType::Unknown { bytes: bytes.to_vec() }
+                }
+            }
+            0x0e if bytes.len() >= 4 => {
+                let sub = u16::from_le_bytes([bytes[1], bytes[2]]);
+                match sub {
+                    0x0000 if bytes.len() >= 6 && bytes[4] == 0x14 && bytes[5] == 0x00 => {
+                        FieldType::ElementId
+                    }
+                    0x0001 | 0x0002 | 0x0003 => FieldType::Pointer { kind: bytes[1] },
+                    0x0010 => FieldType::Vector {
+                        body: bytes[4..].to_vec(),
+                    },
+                    0x0050 => {
+                        // Extract any embedded ASCII C++ signature
+                        let body = &bytes[4..];
+                        let mut cpp_signature = None;
+                        let mut k = 0;
+                        while k + 2 < body.len() {
+                            let slen = u16::from_le_bytes([body[k], body[k + 1]]) as usize;
+                            if (3..=120).contains(&slen) && k + 2 + slen <= body.len() {
+                                let sig = &body[k + 2..k + 2 + slen];
+                                if sig.iter().all(|b| b.is_ascii_graphic() || *b == b' ')
+                                    && sig.iter().any(|b| *b == b':' || *b == b'<')
+                                {
+                                    cpp_signature = Some(
+                                        std::str::from_utf8(sig).unwrap_or("").to_string(),
+                                    );
+                                    break;
+                                }
+                            }
+                            k += 1;
+                        }
+                        FieldType::Container {
+                            cpp_signature,
+                            body: bytes[4..].to_vec(),
+                        }
+                    }
+                    _ => FieldType::Unknown { bytes: bytes.to_vec() },
+                }
+            }
+            _ => FieldType::Unknown { bytes: bytes.to_vec() },
+        }
+    }
 }
 
 /// Parse the decompressed `Formats/Latest` bytes into a schema table.
@@ -338,7 +437,23 @@ fn scan_fields_until_next_class(
                     }
                 }
 
-                fields.push(FieldEntry { name: field_name, cpp_type });
+                // Decode the type_encoding byte pattern from the bytes
+                // immediately after the field name. We cap at 32 bytes
+                // because field_type's Unknown variant preserves the raw
+                // input, and we don't want to accidentally swallow the
+                // next field's header.
+                let enc_end = (post_name + 32).min(hard_stop);
+                let field_type = if enc_end > post_name {
+                    Some(FieldType::decode(&data[post_name..enc_end]))
+                } else {
+                    None
+                };
+
+                fields.push(FieldEntry {
+                    name: field_name,
+                    cpp_type,
+                    field_type,
+                });
                 i = if type_consumed_bytes > 0 { consumed + type_consumed_bytes } else { post_name };
                 continue;
             }
@@ -409,6 +524,47 @@ mod tests {
             "expected field m_pACD, got {:?}",
             class.fields.iter().map(|f| &f.name).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn decodes_field_type_element_id() {
+        // 6-byte pattern for ElementId: 0e 00 00 00 14 00
+        let bytes = [0x0e, 0x00, 0x00, 0x00, 0x14, 0x00];
+        assert_eq!(FieldType::decode(&bytes), FieldType::ElementId);
+    }
+
+    #[test]
+    fn decodes_field_type_pointer() {
+        // 4-byte pattern for pointer: 0e 02 00 00
+        let bytes = [0x0e, 0x02, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(ft, FieldType::Pointer { kind: 0x02 }));
+    }
+
+    #[test]
+    fn decodes_field_type_primitive() {
+        // 4-byte pattern for int-like primitive: 04 00 00 00
+        let bytes = [0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let ft = FieldType::decode(&bytes);
+        assert!(matches!(ft, FieldType::Primitive { size_hint: 4 }));
+    }
+
+    #[test]
+    fn decodes_field_type_container_with_cpp_signature() {
+        // 0e 50 00 00 + class-tag + u16 len + "std::pair< int, X >"
+        let sig = b"std::pair< int, X >";
+        let mut bytes = vec![0x0e, 0x50, 0x00, 0x00];
+        // class-tag stand-in
+        bytes.extend_from_slice(&0x0000814au32.to_le_bytes());
+        bytes.extend_from_slice(&(sig.len() as u16).to_le_bytes());
+        bytes.extend_from_slice(sig);
+        let ft = FieldType::decode(&bytes);
+        match ft {
+            FieldType::Container { cpp_signature, .. } => {
+                assert_eq!(cpp_signature.as_deref(), Some("std::pair< int, X >"));
+            }
+            other => panic!("expected Container, got {other:?}"),
+        }
     }
 
     #[test]

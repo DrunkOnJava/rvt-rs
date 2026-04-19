@@ -853,4 +853,83 @@ flag handles this automatically; the committed demo output in
 
 Probe file: [`examples/contents_probe.rs`](examples/contents_probe.rs).
 
+## Addendum — Q5 field-type encoding (2026-04-19)
+
+The bytes immediately after a field name in a tagged class's schema
+record encode the field's C++ type. The first byte is a **type
+category discriminator**; the layout depends on the category.
+
+### Category byte distribution (2024 sample family, 1,156 fields total)
+
+| Byte | Fields | % | Interpretation |
+|---|---:|---:|---|
+| `0x0e` | ~460 | 40% | Reference / pointer / container |
+| `0x04` | ~225 | 20% | Fixed-size numeric primitive (32-bit int) |
+| Other | ~470 | 40% | Remaining — likely additional primitive widths (`0x08` for 64-bit, `0x02` for 16-bit, etc.) not yet mapped |
+
+### Sub-type decode for the 0x0e family
+
+When the first byte is `0x0e`, the following `u16` sub-type
+distinguishes the kind of reference:
+
+| Sub-type | Layout | Kind |
+|---|---|---|
+| `0x0000` | `0e 00 00 00 14 00` (6 bytes) | `ElementId` |
+| `0x0001` | `0e 01 00 00` (4 bytes) | Pointer kind A |
+| `0x0002` | `0e 02 00 00` (4 bytes) | Pointer kind B |
+| `0x0003` | `0e 03 00 00 …` (variable) | Pointer kind C (typically with trailing instance refs) |
+| `0x0010` | `0e 10 00 00 <class-tag> <u16 len> <ASCII sig>` | `std::vector<T>` |
+| `0x0050` | `0e 50 00 00 <class-tag> <u16 len> <ASCII sig>` | `std::map<K,V>` / `std::set<T>` |
+
+The trailing `14 00` for ElementId is constant across every ElementId
+field we've inspected. `0x14 = 20` — possibly a bit-width signal, or a
+fixed opcode.
+
+### Ground-truth samples (from HostObjAttr, verified byte-for-byte)
+
+```text
+m_symbolInfo      → Pointer (kind B)   [0e 02 00 00]
+m_renderStyleId   → ElementId          [0e 00 00 00 14 00]
+m_previewElemId   → ElementId          [0e 00 00 00 14 00 …]
+
+m_PatternPositionMap (AnalyticalPanelPatternHelper):
+   0e 50 00 00 4a 81 00 00 15 00 "std::pair< int, …"
+   │  │     │  │           │     └── UTF-8 embedded C++ signature
+   │  │     │  └── class-tag 0x814a with 0x8000 flag
+   │  └── sub-type 0x0050 = map/set
+   └── category 0x0e
+```
+
+### Distribution seen in a real 2024 sample family (1,156 fields)
+
+```text
+FieldType distribution:
+  Primitive     :  223 (19.3%)
+  Pointer       :  160 (13.8%)
+  ElementId     :  159 (13.8%)
+  Container     :  138 (11.9%)
+  Vector        :    5 (0.4%)
+  Unknown       :  471 (40.7%)   ← remaining work
+```
+
+### Implementation
+
+`src/formats.rs::FieldType` enum with `decode(bytes: &[u8]) -> FieldType`
+classifier. 4 unit tests pin the byte patterns. Every `FieldEntry` in
+the schema table now carries a `field_type: Option<FieldType>` populated
+at parse time.
+
+### Remaining work (Q5.1)
+
+The 40% `Unknown` slice is mostly integer fields that use discriminator
+bytes other than `0x04` / `0x0e`. A follow-up session should:
+
+1. Dump unique first-bytes for all `Unknown` cases
+2. Classify each by context (next-to-field-name hint)
+3. Extend the decoder to cover `0x02` (u16?), `0x08` (u64?), `0x10`
+   (double?), `0x48` (string?), and whatever else appears
+
+Once classification reaches ≥95%, the modifying writer (Layer 6) and
+real IFC exporter (Layer 5) become implementable end-to-end.
+
 **End of report.**
