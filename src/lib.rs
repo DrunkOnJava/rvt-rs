@@ -98,5 +98,11 @@ pub mod streams;
 pub mod walker;
 pub mod writer;
 
+// Python bindings via pyo3. Only compiled when the `python` feature
+// is enabled (typically via `maturin build --features python`).
+// Default Rust builds are unaffected.
+#[cfg(feature = "python")]
+mod python;
+
 pub use error::{Error, Result};
 pub use reader::RevitFile;
