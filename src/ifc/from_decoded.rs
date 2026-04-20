@@ -25,8 +25,9 @@
 //! so each future layer (geometry, materials, properties) attaches
 //! orthogonally.
 
-use super::IfcModel;
 use super::entities::{Classification, IfcEntity, UnitAssignment};
+use super::{IfcModel, Storey};
+use crate::elements::level::Level;
 use crate::walker::DecodedElement;
 
 /// Input record for the bridge: one decoded element plus a display
@@ -59,6 +60,30 @@ pub struct BuilderOptions {
     pub project_name: Option<String>,
     /// Project description.
     pub description: Option<String>,
+    /// Building storeys derived from Revit `Level` decoders. See
+    /// [`storeys_from_levels`] to derive these from a slice of
+    /// decoded [`Level`] values.
+    pub storeys: Vec<Storey>,
+}
+
+/// Derive [`Storey`] entries from a slice of decoded Revit
+/// [`Level`] values, dropping entries that lack a name (name is
+/// required for IFC `LongName`).
+///
+/// `is_building_story = false` entries are skipped — those are
+/// reference planes used only by drafting views, not real floors
+/// (Revit's own IFC exporter makes the same filter).
+pub fn storeys_from_levels(levels: &[Level]) -> Vec<Storey> {
+    levels
+        .iter()
+        .filter(|l| l.is_building_story.unwrap_or(true))
+        .filter_map(|l| {
+            Some(Storey {
+                name: l.name.clone()?,
+                elevation_feet: l.elevation_feet.unwrap_or(0.0),
+            })
+        })
+        .collect()
 }
 
 /// Build an `IfcModel` from a slice of decoded elements.
@@ -92,6 +117,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
         entities,
         classifications: options.classifications,
         units: options.units,
+        building_storeys: options.storeys,
     }
 }
 
@@ -231,6 +257,93 @@ mod tests {
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
         assert_eq!(hist.get("IFCWALL"), Some(&3));
+    }
+
+    #[test]
+    fn storeys_from_levels_filters_non_building_stories() {
+        let l1 = Level {
+            name: Some("Level 1".into()),
+            elevation_feet: Some(0.0),
+            is_building_story: Some(true),
+            ..Default::default()
+        };
+        let roof = Level {
+            name: Some("Roof".into()),
+            elevation_feet: Some(30.0),
+            is_building_story: Some(true),
+            ..Default::default()
+        };
+        let drafting_ref = Level {
+            name: Some("Drafting Ref".into()),
+            elevation_feet: Some(8.0),
+            is_building_story: Some(false),
+            ..Default::default()
+        };
+        let unnamed = Level {
+            name: None,
+            elevation_feet: Some(20.0),
+            is_building_story: Some(true),
+            ..Default::default()
+        };
+        let storeys = storeys_from_levels(&[l1, roof, drafting_ref, unnamed]);
+        assert_eq!(storeys.len(), 2);
+        assert_eq!(storeys[0].name, "Level 1");
+        assert_eq!(storeys[1].name, "Roof");
+        assert_eq!(storeys[1].elevation_feet, 30.0);
+    }
+
+    #[test]
+    fn storeys_threaded_through_to_step_output() {
+        // Real Level names + elevations should appear in the emitted
+        // IfcBuildingStorey, not the placeholder "Level 1".
+        let wall = mk_decoded("Wall");
+        let opts = BuilderOptions {
+            storeys: vec![
+                super::super::Storey {
+                    name: "Ground Floor".into(),
+                    elevation_feet: 0.0,
+                },
+                super::super::Storey {
+                    name: "Second Floor".into(),
+                    elevation_feet: 10.0,
+                },
+                super::super::Storey {
+                    name: "Roof Deck".into(),
+                    elevation_feet: 20.0,
+                },
+            ],
+            ..Default::default()
+        };
+        let inputs = vec![ElementInput {
+            decoded: &wall,
+            display_name: "W-1".into(),
+            guid: None,
+        }];
+        let model = build_ifc_model(&inputs, opts);
+        let s = super::super::write_step(&model);
+        // Three IfcBuildingStorey entities — one per level.
+        assert_eq!(s.matches("IFCBUILDINGSTOREY(").count(), 3);
+        // Names survive STEP escape (ASCII → pass-through).
+        assert!(s.contains("Ground Floor"));
+        assert!(s.contains("Second Floor"));
+        assert!(s.contains("Roof Deck"));
+        // Second floor's elevation (10 ft = 3.048 m) lands somewhere.
+        assert!(s.contains("3.048"), "second-floor elevation missing");
+        // One IfcRelAggregates for the building→storeys rel — bundle
+        // of all 3 storeys, not 3 separate rels.
+        // (Site + building + storeys = 3 total IFCRELAGGREGATES)
+        assert_eq!(s.matches("IFCRELAGGREGATES(").count(), 3);
+    }
+
+    #[test]
+    fn empty_storeys_still_emits_one_placeholder() {
+        // When storeys is empty, the writer falls back to one
+        // "Level 1" placeholder — the IFC spatial hierarchy still
+        // has to be valid.
+        let model = build_ifc_model(&[], BuilderOptions::default());
+        let s = super::super::write_step(&model);
+        assert_eq!(s.matches("IFCBUILDINGSTOREY(").count(), 1);
+        assert!(s.contains("Level 1"));
     }
 
     #[test]

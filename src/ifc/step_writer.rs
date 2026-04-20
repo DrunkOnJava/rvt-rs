@@ -226,19 +226,51 @@ impl StepWriter {
             ),
         );
 
-        let storey_placement = self.id();
-        self.emit_entity(
-            storey_placement,
-            format!("IFCLOCALPLACEMENT(#{building_placement},#{axis_placement})"),
-        );
-        let storey_id = self.id();
-        self.emit_entity(
-            storey_id,
-            format!(
-                "IFCBUILDINGSTOREY('{}',#{owner_hist},'Level 1',$,$,#{storey_placement},$,'Level 1',.ELEMENT.,0.)",
-                make_guid(storey_id),
-            ),
-        );
+        // Emit one IfcBuildingStorey per Revit Level (or one
+        // placeholder when no Levels have been decoded yet). Every
+        // storey gets its own IfcLocalPlacement; their IDs are later
+        // bundled into a single IfcRelAggregates bound to the
+        // building. The first storey doubles as the default container
+        // for elements that don't carry a level_id hint — Phase 4b+
+        // per-level containment is a follow-up.
+        let mut storey_ids: Vec<usize> = Vec::new();
+        let mut storey_placements: Vec<usize> = Vec::new();
+        let storeys = if model.building_storeys.is_empty() {
+            // Fallback: one placeholder so the IFC spatial hierarchy
+            // remains valid even when the caller hasn't provided any
+            // Levels yet.
+            vec![super::Storey {
+                name: "Level 1".to_string(),
+                elevation_feet: 0.0,
+            }]
+        } else {
+            model.building_storeys.clone()
+        };
+        for storey in &storeys {
+            let placement_id = self.id();
+            self.emit_entity(
+                placement_id,
+                format!("IFCLOCALPLACEMENT(#{building_placement},#{axis_placement})"),
+            );
+            let id = self.id();
+            // Convert feet → metres at emit boundary; IFC4 elevation
+            // attribute is in the project's length unit (metres here).
+            let elevation_m = storey.elevation_feet * 0.3048;
+            let name_escaped = escape(&storey.name);
+            self.emit_entity(
+                id,
+                format!(
+                    "IFCBUILDINGSTOREY('{}',#{owner_hist},'{name_escaped}',$,$,#{placement_id},$,'{name_escaped}',.ELEMENT.,{elevation_m})",
+                    make_guid(id),
+                ),
+            );
+            storey_ids.push(id);
+            storey_placements.push(placement_id);
+        }
+        // First storey stands in as the default container for
+        // BuildingElements that don't yet carry a level reference.
+        let storey_id = storey_ids[0];
+        let storey_placement = storey_placements[0];
 
         // Aggregation relationships — IfcRelAggregates is how the
         // spatial hierarchy binds in IFC4. Each level of the chain
@@ -260,10 +292,15 @@ impl StepWriter {
             ),
         );
         let rel_building_storey = self.id();
+        let storey_refs = storey_ids
+            .iter()
+            .map(|id| format!("#{id}"))
+            .collect::<Vec<_>>()
+            .join(",");
         self.emit_entity(
             rel_building_storey,
             format!(
-                "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{building_id},(#{storey_id}))",
+                "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{building_id},({storey_refs}))",
                 make_guid(rel_building_storey),
             ),
         );
@@ -566,6 +603,7 @@ mod tests {
             entities: Vec::new(),
             classifications: Vec::new(),
             units: Vec::new(),
+            building_storeys: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -584,6 +622,7 @@ mod tests {
             entities: Vec::new(),
             classifications: Vec::new(),
             units: Vec::new(),
+            building_storeys: Vec::new(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -644,6 +683,7 @@ mod tests {
             entities: Vec::new(),
             classifications: Vec::new(),
             units: Vec::new(),
+            building_storeys: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -764,6 +804,7 @@ mod tests {
                 ],
             }],
             units: Vec::new(),
+            building_storeys: Vec::new(),
         };
         let s = write_step(&model);
         assert!(
@@ -854,6 +895,7 @@ mod tests {
             ],
             classifications: Vec::new(),
             units: Vec::new(),
+            building_storeys: Vec::new(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -901,6 +943,7 @@ mod tests {
             }],
             classifications: Vec::new(),
             units: Vec::new(),
+            building_storeys: Vec::new(),
         };
         let s = write_step(&model);
         // The door line should have 9 commas (10 fields). Grep the

@@ -54,7 +54,7 @@ impl ElementDecoder for LevelDecoder {
 /// Typed view of a decoded Level. Convenience wrapper on top of
 /// [`DecodedElement`]; call [`LevelDecoder::decode`] first, then
 /// [`Level::from_decoded`] to project into this struct.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Level {
     pub name: Option<String>,
     pub elevation_feet: Option<f64>,
