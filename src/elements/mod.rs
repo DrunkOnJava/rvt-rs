@@ -25,6 +25,7 @@
 //! Wall / Floor / Door values use these; callers who want a
 //! uniform untyped dump use `decode_instance` directly.
 
+pub mod category;
 pub mod level;
 
 use crate::walker::ElementDecoder;
@@ -36,7 +37,11 @@ use crate::walker::ElementDecoder;
 /// this with compile-time discovery; for now an explicit Vec keeps
 /// it obvious what ships with the crate.
 pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
-    vec![Box::new(level::LevelDecoder)]
+    vec![
+        Box::new(level::LevelDecoder),
+        Box::new(category::CategoryDecoder),
+        Box::new(category::SubcategoryDecoder),
+    ]
 }
 
 #[cfg(test)]
@@ -48,6 +53,14 @@ mod tests {
         let decoders = all_decoders();
         let names: Vec<&str> = decoders.iter().map(|d| d.class_name()).collect();
         assert!(names.contains(&"Level"));
+    }
+
+    #[test]
+    fn all_decoders_includes_category_and_subcategory() {
+        let decoders = all_decoders();
+        let names: Vec<&str> = decoders.iter().map(|d| d.class_name()).collect();
+        assert!(names.contains(&"Category"));
+        assert!(names.contains(&"Subcategory"));
     }
 
     #[test]
