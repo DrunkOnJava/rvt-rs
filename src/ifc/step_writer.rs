@@ -489,6 +489,205 @@ impl StepWriter {
         }
     }
 
+    /// Emit all unit entities (IFC-40) from `model.units`, or fall
+    /// back to the default SI millimetre / square-metre / cubic-metre
+    /// / radian set when the model has no declared units. Returns the
+    /// list of emitted unit-entity IDs in the order they should
+    /// appear in the IfcUnitAssignment.
+    fn emit_unit_assignment(&mut self, model: &IfcModel) -> Vec<usize> {
+        use super::entities::{ForgeUnit, IfcUnitEmission, IfcUnitType};
+        use std::collections::HashMap;
+
+        // Early-out: no declared units → preserve legacy defaults.
+        if model.units.is_empty() {
+            return self.emit_default_unit_set();
+        }
+
+        // Parse each forge identifier → ForgeUnit → IfcUnitEmission.
+        // Collate by unit_type so the final IfcUnitAssignment has
+        // exactly one entry per dimensional category (last wins).
+        let mut per_type: HashMap<IfcUnitType, IfcUnitEmission> = HashMap::new();
+        for ua in &model.units {
+            let fu = ForgeUnit::from_forge_identifier(&ua.forge_identifier);
+            if let Some(emission) = fu.ifc_emission() {
+                let unit_type = match &emission {
+                    IfcUnitEmission::Si { unit_type, .. }
+                    | IfcUnitEmission::ConversionBased { unit_type, .. } => *unit_type,
+                };
+                per_type.insert(unit_type, emission);
+            }
+            // ForgeUnit::Other falls through silently; the fallback
+            // below fills in any missing required category.
+        }
+
+        // Ensure all four primary IFC units (Length, Area, Volume,
+        // PlaneAngle) are present. Fill gaps with SI defaults —
+        // IFC4 validators flag an IfcUnitAssignment that's missing
+        // a required category.
+        for (unit_type, default) in [
+            (
+                IfcUnitType::Length,
+                IfcUnitEmission::Si {
+                    unit_type: IfcUnitType::Length,
+                    prefix: Some("MILLI"),
+                    name: "METRE",
+                },
+            ),
+            (
+                IfcUnitType::Area,
+                IfcUnitEmission::Si {
+                    unit_type: IfcUnitType::Area,
+                    prefix: None,
+                    name: "SQUARE_METRE",
+                },
+            ),
+            (
+                IfcUnitType::Volume,
+                IfcUnitEmission::Si {
+                    unit_type: IfcUnitType::Volume,
+                    prefix: None,
+                    name: "CUBIC_METRE",
+                },
+            ),
+            (
+                IfcUnitType::PlaneAngle,
+                IfcUnitEmission::Si {
+                    unit_type: IfcUnitType::PlaneAngle,
+                    prefix: None,
+                    name: "RADIAN",
+                },
+            ),
+        ] {
+            per_type.entry(unit_type).or_insert(default);
+        }
+
+        // Deterministic order — same as the legacy emission — so the
+        // STEP byte diff stays stable across invocations.
+        let order = [
+            IfcUnitType::Length,
+            IfcUnitType::Area,
+            IfcUnitType::Volume,
+            IfcUnitType::PlaneAngle,
+            IfcUnitType::Mass,
+            IfcUnitType::Time,
+        ];
+        let mut ids = Vec::with_capacity(order.len());
+        for ut in order {
+            if let Some(em) = per_type.get(&ut) {
+                ids.push(self.emit_single_unit(em));
+            }
+        }
+        ids
+    }
+
+    /// Emit a single IfcSIUnit or IfcConversionBasedUnit entity
+    /// and return its ID.
+    fn emit_single_unit(&mut self, em: &super::entities::IfcUnitEmission) -> usize {
+        use super::entities::IfcUnitEmission;
+        match em {
+            IfcUnitEmission::Si { unit_type, prefix, name } => {
+                let prefix_tok = prefix
+                    .map(|p| format!(".{p}."))
+                    .unwrap_or_else(|| "$".into());
+                let id = self.id();
+                self.emit_entity(
+                    id,
+                    format!(
+                        "IFCSIUNIT(*,.{ut}.,{prefix_tok},.{name}.)",
+                        ut = unit_type.as_step_token(),
+                    ),
+                );
+                id
+            }
+            IfcUnitEmission::ConversionBased {
+                unit_type,
+                derived_name,
+                factor_to_si,
+                si_base_name,
+            } => {
+                // Emit the SI base unit first:
+                //   IFCSIUNIT(*, <type>, $, <base_name>)
+                let si_base_id = self.id();
+                self.emit_entity(
+                    si_base_id,
+                    format!(
+                        "IFCSIUNIT(*,.{ut}.,$,.{name}.)",
+                        ut = unit_type.as_step_token(),
+                        name = si_base_name,
+                    ),
+                );
+                // Then the IFCMEASUREWITHUNIT wrapping the factor.
+                // The measure type depends on the unit category:
+                // LENGTHUNIT → IFCLENGTHMEASURE, AREAUNIT →
+                // IFCAREAMEASURE, VOLUMEUNIT → IFCVOLUMEMEASURE,
+                // PLANEANGLEUNIT → IFCPLANEANGLEMEASURE, MASSUNIT →
+                // IFCMASSMEASURE, TIMEUNIT → IFCTIMEMEASURE.
+                let measure_token = match unit_type {
+                    super::entities::IfcUnitType::Length => "IFCLENGTHMEASURE",
+                    super::entities::IfcUnitType::Area => "IFCAREAMEASURE",
+                    super::entities::IfcUnitType::Volume => "IFCVOLUMEMEASURE",
+                    super::entities::IfcUnitType::PlaneAngle => {
+                        "IFCPLANEANGLEMEASURE"
+                    }
+                    super::entities::IfcUnitType::Mass => "IFCMASSMEASURE",
+                    super::entities::IfcUnitType::Time => "IFCTIMEMEASURE",
+                };
+                let mwu_id = self.id();
+                self.emit_entity(
+                    mwu_id,
+                    format!(
+                        "IFCMEASUREWITHUNIT({measure_token}({factor_to_si:.9}),#{si_base_id})"
+                    ),
+                );
+                // IFC4 IfcDimensionalExponents vector. Simplified
+                // emission: look up per unit_type. Full IfcDimensional-
+                // Exponents definition per IFC4 spec (length, mass,
+                // time, electric current, thermodynamic temperature,
+                // amount of substance, luminous intensity).
+                let dim_id = self.id();
+                let dim_tuple = match unit_type {
+                    super::entities::IfcUnitType::Length => "1,0,0,0,0,0,0",
+                    super::entities::IfcUnitType::Area => "2,0,0,0,0,0,0",
+                    super::entities::IfcUnitType::Volume => "3,0,0,0,0,0,0",
+                    super::entities::IfcUnitType::PlaneAngle => "0,0,0,0,0,0,0",
+                    super::entities::IfcUnitType::Mass => "0,1,0,0,0,0,0",
+                    super::entities::IfcUnitType::Time => "0,0,1,0,0,0,0",
+                };
+                self.emit_entity(
+                    dim_id,
+                    format!("IFCDIMENSIONALEXPONENTS({dim_tuple})"),
+                );
+                // Finally the IfcConversionBasedUnit itself:
+                //   IFCCONVERSIONBASEDUNIT(#dim, .UNIT_TYPE., 'name', #mwu)
+                let id = self.id();
+                self.emit_entity(
+                    id,
+                    format!(
+                        "IFCCONVERSIONBASEDUNIT(#{dim_id},.{ut}.,'{name}',#{mwu_id})",
+                        ut = unit_type.as_step_token(),
+                        name = derived_name,
+                    ),
+                );
+                id
+            }
+        }
+    }
+
+    /// The legacy fallback unit-set — SI millimetre length, square
+    /// / cubic metre area & volume, radian angle. Matches pre-IFC-40
+    /// output byte-for-byte so existing snapshot tests and fixtures
+    /// keep passing for models that don't declare `units`.
+    fn emit_default_unit_set(&mut self) -> Vec<usize> {
+        let u_length = self.id();
+        self.emit_entity(u_length, "IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)");
+        let u_area = self.id();
+        self.emit_entity(u_area, "IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)");
+        let u_volume = self.id();
+        self.emit_entity(u_volume, "IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)");
+        let u_plane_angle = self.id();
+        self.emit_entity(u_plane_angle, "IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)");
+        vec![u_length, u_area, u_volume, u_plane_angle]
+    }
 
     fn emit_header(&mut self, model: &IfcModel) {
         let project = escape(model.project_name.as_deref().unwrap_or("Untitled"));
@@ -538,21 +737,31 @@ impl StepWriter {
             ),
         );
 
-        // Unit assignment — fixed to SI millimetres + square metres +
-        // cubic metres for v1. Future: wire from model.units (Forge
-        // unit identifiers → IfcSIUnit mapping).
-        let u_length = self.id();
-        self.emit_entity(u_length, "IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)");
-        let u_area = self.id();
-        self.emit_entity(u_area, "IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)");
-        let u_volume = self.id();
-        self.emit_entity(u_volume, "IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)");
-        let u_plane_angle = self.id();
-        self.emit_entity(u_plane_angle, "IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)");
+        // Unit assignment (IFC-40).
+        //
+        // When the model has no units declared, fall back to the
+        // original spec-safe defaults (SI millimetre for length,
+        // square metre for area, cubic metre for volume, radian for
+        // plane angle). When the model carries `UnitAssignment`
+        // entries whose `forge_identifier` parses into a known
+        // `ForgeUnit`, emit the matching IfcSIUnit or
+        // IfcConversionBasedUnit per the Forge → IFC4 map.
+        //
+        // Precedence within a dimensional category is "last one wins"
+        // — if a caller supplies both Millimeters and Meters for
+        // Length, the second entry is the one that ends up in the
+        // IfcUnitAssignment. This matches IFC4 semantics where a
+        // single LENGTHUNIT is canonical per project.
+        let unit_entity_ids = self.emit_unit_assignment(model);
         let unit_assignment = self.id();
+        let unit_refs = unit_entity_ids
+            .iter()
+            .map(|id| format!("#{id}"))
+            .collect::<Vec<_>>()
+            .join(",");
         self.emit_entity(
             unit_assignment,
-            format!("IFCUNITASSIGNMENT((#{u_length},#{u_area},#{u_volume},#{u_plane_angle}))"),
+            format!("IFCUNITASSIGNMENT(({unit_refs}))"),
         );
 
         // Representation context — needs IfcAxis2Placement3D +
@@ -2623,6 +2832,121 @@ mod tests {
         );
         assert!(s.contains("IFCBOOLEANRESULT(.UNION.,"));
         assert!(s.contains("IFCBOOLEANRESULT(.DIFFERENCE.,"));
+    }
+
+    // -----------------------------------------------------------
+    // IFC-40: writer consumes model.units when set.
+    // -----------------------------------------------------------
+
+    #[test]
+    fn unit_assignment_defaults_to_si_millimetre_when_units_empty() {
+        // Empty units → legacy default emission (byte-for-byte
+        // compatible with pre-IFC-40 output).
+        use super::super::MaterialInfo;
+        let model = IfcModel {
+            project_name: Some("default units".into()),
+            description: None,
+            entities: Vec::new(),
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: vec![MaterialInfo {
+                name: "x".into(),
+                color_packed: None,
+                transparency: None,
+            }],
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+        };
+        let s = write_step(&model);
+        assert!(s.contains("IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)"));
+        assert!(s.contains("IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)"));
+        assert!(s.contains("IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)"));
+        assert!(s.contains("IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)"));
+        // Conversion-based units must NOT appear.
+        assert!(!s.contains("IFCCONVERSIONBASEDUNIT("));
+    }
+
+    #[test]
+    fn unit_assignment_imperial_feet_emits_conversion_based() {
+        // Revit projects often carry `autodesk.unit.unit:feet-1.0.1`
+        // for length. The writer must route that through
+        // IfcConversionBasedUnit with an IfcMeasureWithUnit payload.
+        use super::super::MaterialInfo;
+        use super::super::entities::UnitAssignment;
+        let model = IfcModel {
+            project_name: Some("imperial feet".into()),
+            description: None,
+            entities: Vec::new(),
+            classifications: Vec::new(),
+            units: vec![UnitAssignment {
+                forge_identifier: "autodesk.unit.unit:feet-1.0.1".into(),
+                ifc_mapping: None,
+            }],
+            building_storeys: Vec::new(),
+            materials: vec![MaterialInfo {
+                name: "x".into(),
+                color_packed: None,
+                transparency: None,
+            }],
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+        };
+        let s = write_step(&model);
+        // Conversion chain: IFCSIUNIT base + IFCMEASUREWITHUNIT +
+        // IFCDIMENSIONALEXPONENTS + IFCCONVERSIONBASEDUNIT.
+        assert!(s.contains("IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)"));
+        assert!(s.contains("IFCMEASUREWITHUNIT(IFCLENGTHMEASURE(0.304800000),#"));
+        assert!(s.contains("IFCDIMENSIONALEXPONENTS(1,0,0,0,0,0,0)"));
+        assert!(s.contains("IFCCONVERSIONBASEDUNIT("));
+        assert!(s.contains(",'FOOT',#"));
+        // Length category must NOT also emit the default MILLI
+        // metre — the Forge-declared length wins:
+        assert!(!s.contains("IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)"));
+    }
+
+    #[test]
+    fn unit_assignment_mixed_imperial_metric_fills_gaps() {
+        // Caller declares Feet (length) + SquareMeters (area), but
+        // leaves volume + angle unspecified. The writer must fill
+        // the gaps with SI defaults so the IfcUnitAssignment is
+        // complete (IFC4 validators expect all four primary
+        // categories).
+        use super::super::MaterialInfo;
+        use super::super::entities::UnitAssignment;
+        let model = IfcModel {
+            project_name: Some("mixed".into()),
+            description: None,
+            entities: Vec::new(),
+            classifications: Vec::new(),
+            units: vec![
+                UnitAssignment {
+                    forge_identifier: "autodesk.unit.unit:feet-1.0.1".into(),
+                    ifc_mapping: None,
+                },
+                UnitAssignment {
+                    forge_identifier: "autodesk.unit.unit:squareMeters-1.0.1".into(),
+                    ifc_mapping: None,
+                },
+            ],
+            building_storeys: Vec::new(),
+            materials: vec![MaterialInfo {
+                name: "x".into(),
+                color_packed: None,
+                transparency: None,
+            }],
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+        };
+        let s = write_step(&model);
+        // Length from the caller (feet).
+        assert!(s.contains(",'FOOT',#"));
+        // Area from the caller (square metres — SI, unprefixed).
+        assert!(s.contains("IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)"));
+        // Volume gap → default (cubic metre).
+        assert!(s.contains("IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)"));
+        // Angle gap → default (radian).
+        assert!(s.contains("IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)"));
     }
 
     #[test]
