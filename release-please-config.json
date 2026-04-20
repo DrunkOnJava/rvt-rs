@@ -1,0 +1,17 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "rust",
+      "package-name": "rvt-rs",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false,
+      "bump-minor-pre-major": true,
+      "draft": false,
+      "prerelease": false
+    }
+  },
+  "bootstrap-sha": "HEAD",
+  "plugins": [
+    { "type": "cargo-workspace" }
+  ]
+}
