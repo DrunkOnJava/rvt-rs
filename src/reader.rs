@@ -326,12 +326,40 @@ impl RevitFile {
     }
 
     /// Produce a one-shot summary of everything we can parse.
+    ///
+    /// Historically this method was mixed — strict on BasicFileInfo
+    /// (propagated errors) but lossy on PartAtom / class-names
+    /// (swallowed failures via `.ok()` / `.unwrap_or_default()`).
+    /// Prefer [`RevitFile::summarize_strict`] or
+    /// [`RevitFile::summarize_lossy`] — this wrapper calls through
+    /// to the lossy path and discards the diagnostics for backwards
+    /// compatibility. It's kept on the stable surface but new
+    /// callers should pick the strictness level they actually want.
+    #[deprecated(
+        since = "0.1.2",
+        note = "Use `summarize_strict` for errors-on-any-failure or `summarize_lossy` for Decoded<Summary> with accumulated diagnostics."
+    )]
     pub fn summarize(&mut self) -> Result<Summary> {
+        self.summarize_lossy().map(|d| d.value)
+    }
+
+    /// Strict variant of [`RevitFile::summarize`] (API-04) — returns
+    /// `Err` on ANY parse failure, including PartAtom absence and
+    /// class-name enumeration failure. Use when downstream code
+    /// can't tolerate a partially-populated `Summary`.
+    pub fn summarize_strict(&mut self) -> Result<Summary> {
         let streams = self.stream_names();
         let bfi = self.basic_file_info()?;
-        let partatom = self.part_atom().ok();
+        // PartAtom: absence is a soft concept — not every file has
+        // one. Missing PartAtom is NOT an error here; a failed
+        // parse of an existing PartAtom IS.
+        let partatom = match self.part_atom() {
+            Ok(p) => Some(p),
+            Err(Error::StreamNotFound(_)) => None,
+            Err(e) => return Err(e),
+        };
         let partition_stream = self.partition_stream_name();
-        let class_names = self.class_names().unwrap_or_default();
+        let class_names = self.class_names()?;
         let class_name_count = class_names.len();
         let class_name_sample: Vec<String> = class_names.into_iter().take(30).collect();
 
@@ -349,6 +377,73 @@ impl RevitFile {
             partatom,
             class_name_count,
             class_name_sample,
+        })
+    }
+
+    /// Lossy variant (API-05) — returns a [`crate::parse_mode::Decoded<Summary>`]
+    /// that accumulates partial-parse issues into its
+    /// `diagnostics` field instead of aborting. Fails only when
+    /// BasicFileInfo itself is unreadable (without it there's
+    /// nothing to summarise). Every other failure becomes a
+    /// `Diagnostic::fail_stream` entry and the corresponding
+    /// `Summary` field uses its default.
+    ///
+    /// Use when you're summarising a batch of files and want a
+    /// best-effort report even for the ones with partial parses.
+    pub fn summarize_lossy(&mut self) -> Result<crate::parse_mode::Decoded<Summary>> {
+        use crate::parse_mode::{Decoded, Diagnostics};
+
+        let streams = self.stream_names();
+        // BasicFileInfo is load-bearing — without it we can't
+        // populate any versioned identity. Propagate its error.
+        let bfi = self.basic_file_info()?;
+
+        let mut diagnostics = Diagnostics::default();
+
+        let partatom = match self.part_atom() {
+            Ok(p) => Some(p),
+            Err(Error::StreamNotFound(_)) => None,
+            Err(_) => {
+                diagnostics.fail_stream("PartAtom");
+                None
+            }
+        };
+
+        let partition_stream = self.partition_stream_name();
+        if partition_stream.is_none() {
+            diagnostics.fail_stream("Partitions/*");
+        }
+
+        let class_names = match self.class_names() {
+            Ok(n) => n,
+            Err(_) => {
+                diagnostics.fail_stream(FORMATS_LATEST);
+                Default::default()
+            }
+        };
+        let class_name_count = class_names.len();
+        let class_name_sample: Vec<String> = class_names.into_iter().take(30).collect();
+
+        let file_size: u64 = streams.iter().filter_map(|n| self.stream_size(n)).sum();
+
+        let summary = Summary {
+            file_size,
+            streams,
+            version: bfi.version,
+            build: bfi.build,
+            original_path: bfi.original_path,
+            guid: bfi.guid,
+            locale: bfi.locale,
+            partition_stream,
+            partatom,
+            class_name_count,
+            class_name_sample,
+        };
+
+        Ok(if diagnostics.is_empty() {
+            Decoded::complete(summary)
+        } else {
+            Decoded::partial(summary, diagnostics)
         })
     }
 

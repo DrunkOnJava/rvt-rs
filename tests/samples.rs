@@ -24,7 +24,7 @@ fn opens_all_11_versions() {
         }
         let mut rf = RevitFile::open(&p).unwrap_or_else(|_| panic!("{year}: open failed"));
         let s = rf
-            .summarize()
+            .summarize_strict()
             .unwrap_or_else(|_| panic!("{year}: summarize failed"));
         assert_eq!(s.version, year, "version mismatch for {year}");
         assert_eq!(s.streams.len(), 13, "{year}: expected 13 streams");

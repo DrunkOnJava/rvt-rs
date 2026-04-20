@@ -57,7 +57,10 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> anyhow::Result<()> {
     let mut rf = RevitFile::open(&cli.file)?;
-    let mut summary = rf.summarize()?;
+    // Lossy summarise — the CLI tolerates partial parses (missing
+    // PartAtom, unreadable class inventory) and prints whatever
+    // identity we managed to extract.
+    let mut summary = rf.summarize_lossy()?.value;
     if cli.redact {
         redact_summary(&mut summary);
     }
