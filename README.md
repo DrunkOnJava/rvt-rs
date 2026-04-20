@@ -2,7 +2,7 @@
 
 **Apache-2.0 clean-room Rust/Python toolkit for inspecting Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) without a Revit installation.** Opens the OLE/CFB container, decodes Revit's truncated-gzip streams, extracts metadata and previews, parses the embedded `Formats/Latest` schema, and classifies all observed schema field encodings across an 11-release 2016–2026 reference corpus.
 
-**This is not yet a full Revit model reader.** Schema-directed instance walking has a verified `ADocument` beachhead on Revit 2024–2026. Full element extraction, geometry, and high-fidelity IFC export are active research. See [What works today](#what-works-today) for the precise boundary.
+**This is not yet a full Revit model reader.** Schema-directed instance walking has a verified `ADocument` beachhead on Revit 2024–2026, 29 per-class decoders (Wall, Floor, Door, Window, Column, Beam, etc.), and IFC4 STEP emission that produces a valid spatial tree with per-element entities — but still without geometry. Full geometry extraction, materials, and web viewer are active research. See [What works today](#what-works-today) for the precise boundary.
 
 Rust 2024 edition (MSRV 1.85). Nine CLIs ship (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`) plus 30+ reproducible probes under `examples/`. Python bindings via pyo3+maturin — `pip install rvt`.
 
@@ -21,10 +21,11 @@ Rust 2024 edition (MSRV 1.85). Nine CLIs ship (`rvt-analyze`, `rvt-info`, `rvt-s
 | Layer 5a ADocument walker | partial | Reliable on Revit 2024–2026; 2016–2023 entry-point detection pending |
 | Stream-level modifying writer | ✓ | 13/13 streams byte-preserving |
 | Field-level semantic writer | pending | Phase 7 |
-| IFC export | document-level only | `IfcProject` + `IfcSite` + `IfcBuilding` + `IfcBuildingStorey` + OmniClass. No geometry, no per-element entities yet. |
-| Per-element extraction (walls, floors, doors) | pending | Phase 4 (Layer 5b) |
-| Geometry extraction | pending | Phase 5 |
-| Web viewer | pending | Phase 11 |
+| Layer 5b per-class decoders | partial | 29 decoders: Level/Category/Subcategory/Material/FillPattern/LinePattern/LineStyle/BasePoint/SurveyPoint/ProjectPosition/Grid/GridType/ReferencePlane/Wall/WallType/Floor/FloorType/Roof/RoofType/Ceiling/CeilingType/Door/Window/Column/StructuralColumn/Beam/StructuralFraming. Each decoder takes instance bytes → typed view. Validated on synthesized schema+bytes fixtures; real-file corpus validation is Q-01. |
+| IFC4 STEP export — spatial tree | ✓ | `IfcProject` + `IfcSite` + `IfcBuilding` + `IfcBuildingStorey` + OmniClass classifications |
+| IFC4 STEP export — elements | ✓ (geometry-free) | `IfcWall`/`IfcSlab`/`IfcRoof`/`IfcCovering`/`IfcDoor`/`IfcWindow`/`IfcColumn`/`IfcBeam` constructors + `IfcLocalPlacement` + `IfcRelContainedInSpatialStructure`. Each element is valid IFC4 and appears in BlenderBIM / IfcOpenShell spatial browsers. Missing: `IfcShapeRepresentation` (geometry), `IfcMaterial`, `IfcPropertySet`. |
+| Geometry extraction | pending | Phase 5 (GEO-27..34) |
+| Web viewer | pending | Phase 11 (VW1-01..24) |
 
 ## Why the schema matters
 
