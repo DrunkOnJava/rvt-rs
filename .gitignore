@@ -25,6 +25,9 @@
 CLAUDE.md
 .claude/*.local.md
 .claude/*.local.json
+# Claude Code spawns isolated git worktrees here when agents run —
+# never commit them (they're embedded git repos on throwaway branches).
+.claude/worktrees/
 
 # ---- Local draft / personal content (NEVER commit) ----
 # Outreach emails, internal decision memos, personal notes,
