@@ -31,6 +31,7 @@ pub mod level;
 pub mod reference_planes;
 pub mod reference_points;
 pub mod styling;
+pub mod wall;
 
 use crate::walker::ElementDecoder;
 
@@ -55,6 +56,8 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(grid::GridDecoder),
         Box::new(grid::GridTypeDecoder),
         Box::new(reference_planes::ReferencePlaneDecoder),
+        Box::new(wall::WallDecoder),
+        Box::new(wall::WallTypeDecoder),
     ]
 }
 
