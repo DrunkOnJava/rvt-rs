@@ -70,6 +70,27 @@ macro_rules! simple_decoder {
 simple_decoder!(ParameterElementDecoder, "ParameterElement");
 simple_decoder!(SharedParameterDecoder, "SharedParameter");
 
+// L5B-54: AProperty* value-carrier classes. Each Revit element's
+// parameters are stored as a sequence of AProperty* instances, one
+// per parameter-definition × host-element tuple. The class name
+// encodes the value type at schema time; the concrete instance
+// carries the stored value.
+//
+// AProperty is the abstract base class (no standalone instances
+// in the wild — any AProperty-tagged instance in Formats/Latest is
+// one of the concrete subclasses below).
+//
+// See src/formats.rs note at line ~958 for the raw wire pattern
+// (`06 10 00 00 03 00 00 00` = vector<f32>, used by APropertyFloat3.m_value).
+simple_decoder!(APropertyDecoder, "AProperty");
+simple_decoder!(APropertyBooleanDecoder, "APropertyBoolean");
+simple_decoder!(APropertyIntegerDecoder, "APropertyInteger");
+simple_decoder!(APropertyEnumDecoder, "APropertyEnum");
+simple_decoder!(APropertyDouble1Decoder, "APropertyDouble1");
+simple_decoder!(APropertyDouble3Decoder, "APropertyDouble3");
+simple_decoder!(APropertyFloatDecoder, "APropertyFloat");
+simple_decoder!(APropertyFloat3Decoder, "APropertyFloat3");
+
 /// Underlying wire-level storage kind of a parameter's value.
 ///
 /// Maps to Revit's `StorageType` enum. Every ParameterElement has

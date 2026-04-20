@@ -52,12 +52,10 @@ const TAG_DRIFT_CSV: &str = include_str!("../docs/data/tag-drift-2016-2026.csv")
 pub fn tag_for_class(class_name: &str, version: u16) -> Option<u16> {
     let col = version_column(version)?;
     for line in TAG_DRIFT_CSV.lines().skip(1) {
-        let mut parts = line.splitn(2, ',');
-        let name = parts.next()?;
+        let (name, rest) = line.split_once(',')?;
         if name != class_name {
             continue;
         }
-        let rest = parts.next()?;
         let cell = rest.split(',').nth(col - 1)?;
         return parse_tag(cell);
     }
@@ -71,9 +69,9 @@ pub fn tag_for_class(class_name: &str, version: u16) -> Option<u16> {
 pub fn class_for_tag(tag: u16, version: u16) -> Option<&'static str> {
     let col = version_column(version)?;
     for line in TAG_DRIFT_CSV.lines().skip(1) {
-        let mut parts = line.splitn(2, ',');
-        let name = parts.next()?;
-        let rest = parts.next()?;
+        let Some((name, rest)) = line.split_once(',') else {
+            continue;
+        };
         if let Some(cell) = rest.split(',').nth(col - 1) {
             if let Some(t) = parse_tag(cell) {
                 if t == tag {

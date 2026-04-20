@@ -16,7 +16,12 @@ version = 2
 yanked = "deny"
 # Permit CI time for triage when new advisories are published.
 # Unmaintained crates are warned but don't fail the build.
-unmaintained = "workspace"
+# Use the legacy `warn` value (not `workspace`) for compatibility
+# with the cargo-deny-action@1.6.3 CI runner's older cargo-deny
+# binary, which rejects the newer `workspace` keyword. When CI
+# upgrades to cargo-deny-action 2.x, this can switch back to
+# `"workspace"` for the modern workspace-scoped semantics.
+unmaintained = "warn"
 ignore = [
     # Currently-unblocked advisories. Keep list short; each entry
     # should cite a ticket URL and an expiry date.

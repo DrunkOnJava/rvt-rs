@@ -6,6 +6,16 @@
 
 use serde::{Deserialize, Serialize};
 
+// `IfcEntity::BuildingElement` is intentionally large (~608 B): it
+// carries every per-element property slot (material indices, layer /
+// profile set indices, extrusion, solid shape, representation map,
+// property set, host element, location, rotation). Boxing it would
+// spill one heap allocation per element — usually tens to hundreds
+// of thousands in a real Revit project — for zero semantic win,
+// since IfcModel owns these for the STEP writer's lifetime.
+// Project / TypeObject are rare; BuildingElement dominates the cache
+// footprint regardless of whether the variants are same-sized.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum IfcEntity {
@@ -831,13 +841,13 @@ impl IfcUnitType {
 ///   <prefix>, <name>)`. Prefix is `None` for ambient (e.g. metres,
 ///   square metres) or `Some("MILLI")` / `"CENTI")` / `"DECI")` /
 ///   `"KILO")` for multiples.
-/// - `ConversionBased { base_name, conversion_factor_to_si_base }`:
+/// - `ConversionBased { base_name, conversion_factor_to_si_base }`
 ///   emits a pair `IFCMEASUREWITHUNIT(<measure>(<factor>), <si_base>)`
 ///   + `IFCCONVERSIONBASEDUNIT(<dim>, <type>, <name>, <measure_ref>)`.
-///   Used for non-SI units (feet → metres at 0.3048, inches →
-///   metres at 0.0254, degrees → radians at π/180, pounds →
-///   kilograms at 0.453592, gallons → cubic metres at 0.00378541,
-///   …).
+///
+/// Example conversion factors: one foot equals `0.3048 m`; one inch
+/// equals `0.0254 m`; one degree equals `π / 180 rad`; one pound
+/// equals `0.453592 kg`; one US gallon equals `0.00378541 m^3`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum IfcUnitEmission {
     /// Pure SI unit.
@@ -1025,7 +1035,7 @@ impl ForgeUnit {
             ForgeUnit::Acres => Some(IfcUnitEmission::ConversionBased {
                 unit_type: Area,
                 derived_name: "ACRE",
-                factor_to_si: 4046.856_422_4,
+                factor_to_si: 4_046.856_422_4,
                 si_base_name: "SQUARE_METRE",
             }),
             ForgeUnit::Hectares => Some(IfcUnitEmission::ConversionBased {
