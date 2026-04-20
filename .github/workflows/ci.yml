@@ -82,26 +82,15 @@ jobs:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_REQUIRE_CORPUS: "1"
         run: cargo test --release --test field_type_coverage -- --nocapture
-      # Broader integration suite runs against the corpus on all three
-      # OSes. Windows currently fails 2 of 8 samples tests on the 2016
-      # sample ONLY — `has_revit_signature` reports missing streams that
-      # are empirically present on Linux/macOS. Ruled out: autocrlf
-      # corruption (phi-ag/rvt marks all .rfa LFS + `-text`). Kept
-      # enabled with `continue-on-error` so the next Windows run
-      # surfaces the missing_required_streams diagnostic — without
-      # that data we can't debug remotely. When the diagnostic comes
-      # back, we can convert this to a pass.
-      - name: Integration tests (corpus-dependent) — Linux + macOS
-        if: runner.os != 'Windows'
+      # Broader integration suite (round-trips, part-atom parsing,
+      # history extraction, stream inventory, etc.) runs against the
+      # corpus on all three OSes. Previously failed on Windows due to
+      # a path-separator bug (CFB stream names came back with `\`
+      # instead of `/` on Windows; fixed in reader::stream_names).
+      - name: Integration tests (corpus-dependent)
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
         run: cargo test --release --test samples
-      - name: Integration tests (corpus-dependent) — Windows diagnostic
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        env:
-          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-        run: cargo test --release --test samples -- --nocapture
 
   doc:
     name: cargo doc

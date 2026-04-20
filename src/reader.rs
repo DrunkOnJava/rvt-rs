@@ -82,7 +82,10 @@ impl RevitFile {
         Ok(Self { cfb })
     }
 
-    /// List all OLE stream paths (sorted).
+    /// List all OLE stream paths (sorted). Paths are always returned
+    /// with forward-slash separators regardless of host OS — on
+    /// Windows, `Path::display()` emits backslashes, but CFB stream
+    /// paths are logically `/`-separated.
     pub fn stream_names(&self) -> Vec<String> {
         let mut streams: Vec<_> = self
             .cfb
@@ -92,6 +95,7 @@ impl RevitFile {
                 e.path()
                     .display()
                     .to_string()
+                    .replace('\\', "/")
                     .trim_start_matches('/')
                     .to_string()
             })

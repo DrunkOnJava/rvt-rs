@@ -140,10 +140,10 @@ fn find_adocument_start_with_schema(
                 }
             }
         }
-        if let Some((sc, off)) = best
-            && sc >= 80
-        {
-            return Some(off);
+        if let Some((sc, off)) = best {
+            if sc >= 80 {
+                return Some(off);
+            }
         }
     }
     None
