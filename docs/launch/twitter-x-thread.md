@@ -56,7 +56,7 @@ Revit files have been opaque outside Autodesk's C# API, forcing BIM analytics, m
 
 rvt-rs is a byte-level reader. No Autodesk runtime, no Wine, no commercial SDK. Drop it into any Rust stack.
 
-(265 chars)
+(266 chars)
 
 ---
 
