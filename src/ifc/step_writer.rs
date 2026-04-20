@@ -1614,4 +1614,217 @@ mod tests {
             "IFCDOOR args expected 10 fields (9 commas), got: {args}"
         );
     }
+
+    /// IFC-28: A BuildingElement that references a MaterialLayerSet
+    /// emits IFCMATERIALLAYER + IFCMATERIALLAYERSET +
+    /// IFCMATERIALLAYERSETUSAGE + IFCRELASSOCIATESMATERIAL. Regression
+    /// test for the writer's compound-material emission path.
+    #[test]
+    fn layer_set_emits_layer_chain_plus_usage() {
+        use super::super::MaterialInfo;
+        use super::super::entities::{IfcEntity, MaterialLayer, MaterialLayerSet};
+        let model = IfcModel {
+            project_name: Some("LayerSet demo".into()),
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCWALL".into(),
+                name: "Exterior Wall".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: Some(0),
+                material_profile_set_index: None,
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: vec![
+                MaterialInfo {
+                    name: "Gypsum".into(),
+                    color_packed: None,
+                    transparency: None,
+                },
+                MaterialInfo {
+                    name: "Insulation".into(),
+                    color_packed: None,
+                    transparency: None,
+                },
+            ],
+            material_layer_sets: vec![MaterialLayerSet {
+                name: "Ext-6in".into(),
+                description: None,
+                layers: vec![
+                    MaterialLayer {
+                        material_index: 0,
+                        thickness_feet: 5.0 / 8.0 / 12.0, // 5/8" gypsum
+                        name: Some("Finish".into()),
+                    },
+                    MaterialLayer {
+                        material_index: 1,
+                        thickness_feet: 6.0 / 12.0, // 6" insulation
+                        name: Some("Core".into()),
+                    },
+                ],
+            }],
+            material_profile_sets: Vec::new(),
+        };
+        let s = write_step(&model);
+        assert!(s.contains("IFCMATERIALLAYER("), "IFCMATERIALLAYER missing");
+        assert_eq!(
+            s.matches("IFCMATERIALLAYER(").count(),
+            2,
+            "expected two IFCMATERIALLAYER entities"
+        );
+        assert!(
+            s.contains("IFCMATERIALLAYERSET("),
+            "IFCMATERIALLAYERSET missing"
+        );
+        assert!(s.contains("'Ext-6in'"), "layer-set name missing");
+        assert!(
+            s.contains("IFCMATERIALLAYERSETUSAGE("),
+            "usage missing"
+        );
+        // Relationship must be present — tied to the wall element.
+        assert!(
+            s.contains("IFCRELASSOCIATESMATERIAL("),
+            "IFCRELASSOCIATESMATERIAL missing"
+        );
+    }
+
+    /// IFC-30: A BuildingElement that references a MaterialProfileSet
+    /// emits IFCRECTANGLEPROFILEDEF + IFCMATERIALPROFILE +
+    /// IFCMATERIALPROFILESET + IFCMATERIALPROFILESETUSAGE.
+    #[test]
+    fn profile_set_emits_profile_chain_plus_usage() {
+        use super::super::MaterialInfo;
+        use super::super::entities::{IfcEntity, MaterialProfile, MaterialProfileSet};
+        let model = IfcModel {
+            project_name: Some("ProfileSet demo".into()),
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCCOLUMN".into(),
+                name: "W12x26 Col".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: Some(0),
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: vec![MaterialInfo {
+                name: "A992 Steel".into(),
+                color_packed: None,
+                transparency: None,
+            }],
+            material_layer_sets: Vec::new(),
+            material_profile_sets: vec![MaterialProfileSet {
+                name: "W12x26".into(),
+                description: Some("AISC wide-flange".into()),
+                profiles: vec![MaterialProfile {
+                    material_index: 0,
+                    profile_name: "W12x26".into(),
+                    description: None,
+                }],
+            }],
+        };
+        let s = write_step(&model);
+        assert!(
+            s.contains("IFCRECTANGLEPROFILEDEF("),
+            "placeholder profile def missing"
+        );
+        assert!(s.contains("IFCMATERIALPROFILE("), "profile entity missing");
+        assert!(
+            s.contains("IFCMATERIALPROFILESET("),
+            "profile set missing"
+        );
+        assert!(
+            s.contains("IFCMATERIALPROFILESETUSAGE("),
+            "profile set usage missing"
+        );
+        assert!(
+            s.contains("IFCRELASSOCIATESMATERIAL("),
+            "IFCRELASSOCIATESMATERIAL missing"
+        );
+    }
+
+    /// Precedence: when both material_profile_set_index and
+    /// material_layer_set_index are set on the same element, the
+    /// profile-set path wins (matches Rust-side impl precedence).
+    #[test]
+    fn profile_set_takes_precedence_over_layer_set() {
+        use super::super::MaterialInfo;
+        use super::super::entities::{
+            IfcEntity, MaterialLayer, MaterialLayerSet, MaterialProfile, MaterialProfileSet,
+        };
+        let model = IfcModel {
+            project_name: Some("Precedence test".into()),
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCBEAM".into(),
+                name: "Beam".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: Some(0),
+                material_profile_set_index: Some(0),
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: vec![MaterialInfo {
+                name: "Steel".into(),
+                color_packed: None,
+                transparency: None,
+            }],
+            material_layer_sets: vec![MaterialLayerSet {
+                name: "Coincidental".into(),
+                description: None,
+                layers: vec![MaterialLayer {
+                    material_index: 0,
+                    thickness_feet: 0.5,
+                    name: None,
+                }],
+            }],
+            material_profile_sets: vec![MaterialProfileSet {
+                name: "W12x26".into(),
+                description: None,
+                profiles: vec![MaterialProfile {
+                    material_index: 0,
+                    profile_name: "W12x26".into(),
+                    description: None,
+                }],
+            }],
+        };
+        let s = write_step(&model);
+        // Both layer set AND profile set entities exist because
+        // every layer-set and profile-set in the model is emitted
+        // up-front. What the precedence check governs is which
+        // USAGE the element gets associated with.
+        assert!(s.contains("IFCMATERIALLAYERSET("));
+        assert!(s.contains("IFCMATERIALPROFILESET("));
+        // Profile-set usage is emitted (because profile_set wins).
+        assert!(s.contains("IFCMATERIALPROFILESETUSAGE("));
+        // Layer-set usage is NOT emitted (layer_set lost to profile_set).
+        assert!(
+            !s.contains("IFCMATERIALLAYERSETUSAGE("),
+            "layer-set usage should NOT be emitted when profile-set wins precedence"
+        );
+    }
 }
