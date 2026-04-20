@@ -1,0 +1,97 @@
+name: Fuzz
+
+# Runs every cargo-fuzz target nightly for a bounded wall-clock
+# budget. Failures + crash corpora are uploaded as artifacts so
+# maintainers can reproduce locally. See `fuzz/README.md` for how
+# to run the same targets on your laptop.
+#
+# Budget: 9 targets × 180 s = 27 minutes of libFuzzer time per run,
+# well under the public-repo unlimited-minutes ceiling. If a target
+# crashes during the budget window, the workflow fails and the
+# crash artifact set is uploaded.
+
+on:
+  schedule:
+    # Nightly at 07:17 UTC — staggered off the top of the hour so
+    # we don't fight for runners with the world's :00 cron jobs.
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Single target to run (empty = all)"
+        required: false
+        default: ""
+      duration_seconds:
+        description: "libFuzzer wall-clock budget per target"
+        required: false
+        default: "180"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_open_bytes
+          - fuzz_gzip_header_len
+          - fuzz_inflate_at_with_limits
+          - fuzz_parse_schema
+          - fuzz_find_chunks
+          - fuzz_basic_file_info
+          - fuzz_part_atom
+          - fuzz_walker_entry_detect
+          - fuzz_step_writer
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          workspaces: fuzz
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Skip if target was not selected
+        id: filter
+        run: |
+          sel='${{ inputs.target }}'
+          if [[ -n "$sel" && "$sel" != "${{ matrix.target }}" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run ${{ matrix.target }}
+        if: steps.filter.outputs.skip != 'true'
+        working-directory: fuzz
+        run: |
+          budget='${{ inputs.duration_seconds }}'
+          if [[ -z "$budget" ]]; then budget=180; fi
+          cargo fuzz run ${{ matrix.target }} -- \
+            -max_total_time="$budget" \
+            -rss_limit_mb=2048 \
+            -timeout=30
+
+      - name: Upload crash corpus on failure
+        if: failure() && steps.filter.outputs.skip != 'true'
+        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fdd378f8f2a4b9 # v4
+        with:
+          name: crash-${{ matrix.target }}-${{ github.run_id }}
+          path: |
+            fuzz/artifacts/${{ matrix.target }}
+            fuzz/corpus/${{ matrix.target }}
+          if-no-files-found: warn
+          retention-days: 30
