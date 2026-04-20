@@ -93,6 +93,10 @@ path = "src/bin/rvt_doc.rs"
 name = "rvt-ifc"
 path = "src/bin/rvt_ifc.rs"
 
+[[bin]]
+name = "gen-fixture"
+path = "src/bin/gen_fixture.rs"
+
 [lib]
 name = "rvt"
 path = "src/lib.rs"
