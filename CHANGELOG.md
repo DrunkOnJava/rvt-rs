@@ -69,6 +69,18 @@ All notable changes will be documented here. This project follows
   cheap counts-only variant. Two new pytest tests cross-check that
   summary counts match `schema_json()`'s full-parse counts and that
   the `ADocument` class (the walker's target) is always present.
+- **`RevitFile.basic_file_info_json()`** — `BasicFileInfo` as JSON
+  in one call. Single-call equivalent of the four individual
+  getters (`version` / `original_path` / `build` / `guid`) plus
+  any future fields. Returns `None` when the stream is unparseable.
+- **`RevitFile.part_atom_json()`** — `PartAtom` as JSON in one
+  call. Superset of `part_atom_title` — also carries `id`,
+  `updated`, `taxonomies`, `categories`, `omniclass`, and `raw_xml`
+  (the original XML for lossless downstream reuse). Returns `None`
+  when the stream is absent (common on project `.rvt` files).
+- Two new pytest tests pin `basic_file_info_json` ↔ individual
+  getters agreement, and `part_atom_json` ↔ `part_atom_title`
+  agreement plus presence of the structural keys.
 - **CI wheel build matrix** (`.github/workflows/ci.yml` `python-wheel`
   job) — `PyO3/maturin-action@v1` builds a release wheel on Ubuntu,
   macOS, and Windows runners, installs it into the runner's Python,
