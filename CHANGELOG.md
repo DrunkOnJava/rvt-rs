@@ -6,6 +6,30 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Changed — IFC exporter now emits the full spatial hierarchy
+
+- **`rvt-ifc` output now includes `IfcSite → IfcBuilding → IfcBuildingStorey`**
+  with `IfcLocalPlacement` per container and `IfcRelAggregates`
+  binding each level to its parent. Previous output was a valid-but-
+  empty `IfcProject`; BlenderBIM and IfcOpenShell-based viewers
+  accepted it but couldn't render anything because there was no
+  spatial structure for them to attach geometry to. The minimal
+  `Default Site / Default Building / Level 1` hierarchy now opens as
+  a navigable scene directly. Once the walker surfaces real
+  `BasePoint` / `Level` / `Building` records from the Revit file,
+  these placeholder names and the zero-elevation storey will be
+  replaced with the actual values.
+- **`make_guid(index)` deterministic GUID generator** — replaces the
+  constant `random_guid_stub()` placeholder. Emits 22-character
+  strings in the IFC-GUID alphabet (`0-9A-Za-z_$`), prefix `0rvtrs`
+  + base-64 big-endian-encoded entity index. Every entity in one
+  export now has a distinct GUID; identical models produce
+  byte-identical STEP output (STEP text diffs now work).
+- 5 new unit tests pinning spatial-hierarchy presence, entity
+  counts, GUID alphabet, GUID determinism, and per-file GUID
+  uniqueness. Existing `ifc_roundtrip` integration tests continue
+  to pass across the 11-release corpus.
+
 ### Added — Python bindings via pyo3 + maturin
 
 - **`rvt` Python package** — `pip install rvt` produces a single wheel

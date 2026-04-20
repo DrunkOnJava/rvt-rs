@@ -148,17 +148,102 @@ impl StepWriter {
             project_id,
             format!(
                 "IFCPROJECT('{}',#{owner_hist},'{}',{},$,$,$,(#{geom_ctx}),#{unit_assignment})",
-                random_guid_stub(),
+                make_guid(project_id),
                 project_name,
                 quoted_or_dollar(&project_desc),
             ),
         );
 
+        // Spatial containment hierarchy — required by IFC4 for any
+        // project with building content. We emit a minimal but valid
+        // IfcSite → IfcBuilding → IfcBuildingStorey chain with
+        // identity placements so downstream viewers (BlenderBIM,
+        // IfcOpenShell-based tools, buildingSMART validator) render
+        // the file directly without needing to synthesise a host
+        // structure. Names default to "Default {Site,Building,Level
+        // 1}"; once the walker surfaces site/level instances they'll
+        // flow in here.
+        //
+        // Every IfcSpatialStructureElement needs its own
+        // IfcLocalPlacement — we share the `axis_placement` across
+        // the three (they're all identity), then chain the
+        // placements via `PlacementRelTo` so the coordinate frames
+        // compose correctly.
+        let site_placement = self.id();
+        self.emit_entity(
+            site_placement,
+            format!("IFCLOCALPLACEMENT($,#{axis_placement})"),
+        );
+        let site_id = self.id();
+        self.emit_entity(
+            site_id,
+            format!(
+                "IFCSITE('{}',#{owner_hist},'Default Site',$,$,#{site_placement},$,'Default Site',.ELEMENT.,$,$,$,$,$)",
+                make_guid(site_id),
+            ),
+        );
+
+        let building_placement = self.id();
+        self.emit_entity(
+            building_placement,
+            format!("IFCLOCALPLACEMENT(#{site_placement},#{axis_placement})"),
+        );
+        let building_id = self.id();
+        self.emit_entity(
+            building_id,
+            format!(
+                "IFCBUILDING('{}',#{owner_hist},'Default Building',$,$,#{building_placement},$,'Default Building',.ELEMENT.,$,$,$)",
+                make_guid(building_id),
+            ),
+        );
+
+        let storey_placement = self.id();
+        self.emit_entity(
+            storey_placement,
+            format!("IFCLOCALPLACEMENT(#{building_placement},#{axis_placement})"),
+        );
+        let storey_id = self.id();
+        self.emit_entity(
+            storey_id,
+            format!(
+                "IFCBUILDINGSTOREY('{}',#{owner_hist},'Level 1',$,$,#{storey_placement},$,'Level 1',.ELEMENT.,0.)",
+                make_guid(storey_id),
+            ),
+        );
+
+        // Aggregation relationships — IfcRelAggregates is how the
+        // spatial hierarchy binds in IFC4. Each level of the chain
+        // gets one relationship pointing from parent to child.
+        let rel_proj_site = self.id();
+        self.emit_entity(
+            rel_proj_site,
+            format!(
+                "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{project_id},(#{site_id}))",
+                make_guid(rel_proj_site),
+            ),
+        );
+        let rel_site_building = self.id();
+        self.emit_entity(
+            rel_site_building,
+            format!(
+                "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{site_id},(#{building_id}))",
+                make_guid(rel_site_building),
+            ),
+        );
+        let rel_building_storey = self.id();
+        self.emit_entity(
+            rel_building_storey,
+            format!(
+                "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{building_id},(#{storey_id}))",
+                make_guid(rel_building_storey),
+            ),
+        );
+
         // Future: emit `model.entities` as IFCBUILDINGELEMENT et al.
-        // here, wired back to the project via IFCRELAGGREGATES. The
-        // shape is well-defined once the walker surfaces typed
+        // here, each wired to `storey_id` via `IfcRelContainedInSpatialStructure`.
+        // The shape is well-defined once the walker surfaces typed
         // `BuildingElement` values.
-        let _ = (project_id, model);
+        let _ = model;
 
         self.emit_line("ENDSEC;");
     }
@@ -235,11 +320,36 @@ fn epoch_to_ymdhms(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
     (y, m, d, hh, mm, ss)
 }
 
-/// Placeholder GUID — IFC requires 22-char compressed base64.
-/// For v1 we use a deterministic stub; future work: proper UUID4 →
-/// IfcGloballyUniqueId encoding.
-fn random_guid_stub() -> String {
-    "0rvtrsgeneratedguidnullx".chars().take(22).collect()
+/// IFC4 globally-unique-ID. Format: 22 chars from the IFC-GUID
+/// alphabet (`0-9A-Za-z_$`, 64 symbols). The spec requires these be
+/// unique per file but does not mandate a specific encoding —
+/// `IfcOpenShell` and `buildingSMART` validators accept any 22-char
+/// string in the alphabet.
+///
+/// v1 encoding is deterministic per `index`: a fixed 6-char `"0rvtrs"`
+/// prefix followed by the base-64 big-endian encoding of `index` into
+/// 16 chars. Gives a bijection between `index` and GUID for the first
+/// 64^16 ≈ 7.9 × 10^28 entities — trivially enough. Stable across
+/// runs (same input → same output), which makes STEP text diffs
+/// tractable.
+///
+/// Future: once the walker surfaces real per-element GUIDs from the
+/// Revit file, we'll prefer those (they're already in the correct
+/// format) and fall back to this for entities without a native GUID.
+fn make_guid(index: usize) -> String {
+    const ALPHABET: &[u8; 64] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
+    let mut guid = String::with_capacity(22);
+    guid.push_str("0rvtrs");
+    let mut suffix = [b'0'; 16];
+    let mut n = index;
+    for slot in suffix.iter_mut().rev() {
+        *slot = ALPHABET[n & 63];
+        n >>= 6;
+    }
+    for b in &suffix {
+        guid.push(*b as char);
+    }
+    guid
 }
 
 #[cfg(test)]
@@ -300,5 +410,95 @@ mod tests {
         assert_eq!(epoch_to_ymdhms(0), (1970, 1, 1, 0, 0, 0));
         // 2024-04-01 00:00:00 UTC = 1711929600
         assert_eq!(epoch_to_ymdhms(1_711_929_600), (2024, 4, 1, 0, 0, 0));
+    }
+
+    #[test]
+    fn step_emits_spatial_hierarchy() {
+        // IFC4 viewers expect a Project → Site → Building → Storey
+        // spine before any building elements. Every IfcSpatialStructureElement
+        // in the chain needs its own IfcLocalPlacement and must be
+        // bound to its parent via IfcRelAggregates.
+        let model = IfcModel::default();
+        let s = write_step(&model);
+        for required in [
+            "IFCSITE(",
+            "IFCBUILDING(",
+            "IFCBUILDINGSTOREY(",
+            "IFCLOCALPLACEMENT(",
+            "IFCRELAGGREGATES(",
+        ] {
+            assert!(
+                s.contains(required),
+                "spatial hierarchy missing required entity: {required}\n\nOutput:\n{s}"
+            );
+        }
+    }
+
+    #[test]
+    fn step_hierarchy_count_is_stable() {
+        // The hierarchy adds exactly:
+        //   3 IfcLocalPlacement (one per spatial container)
+        //   1 IfcSite
+        //   1 IfcBuilding
+        //   1 IfcBuildingStorey
+        //   3 IfcRelAggregates (project-site, site-building, building-storey)
+        // Pinning the counts prevents silent regressions if the writer
+        // grows extra placeholder entities.
+        let model = IfcModel::default();
+        let s = write_step(&model);
+        assert_eq!(s.matches("IFCSITE(").count(), 1);
+        assert_eq!(s.matches("IFCBUILDING(").count(), 1);
+        assert_eq!(s.matches("IFCBUILDINGSTOREY(").count(), 1);
+        assert_eq!(s.matches("IFCLOCALPLACEMENT(").count(), 3);
+        assert_eq!(s.matches("IFCRELAGGREGATES(").count(), 3);
+    }
+
+    #[test]
+    fn make_guid_is_22_chars_in_alphabet() {
+        let g = make_guid(0);
+        assert_eq!(g.len(), 22, "IFC GUIDs must be exactly 22 characters");
+        const ALPHABET: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
+        for c in g.chars() {
+            assert!(
+                ALPHABET.contains(c),
+                "character {c:?} not in IFC GUID alphabet"
+            );
+        }
+    }
+
+    #[test]
+    fn make_guid_is_deterministic_and_distinct() {
+        // Same input → same output (stable diffs across runs).
+        assert_eq!(make_guid(42), make_guid(42));
+        // Different inputs → different outputs (uniqueness).
+        let g1 = make_guid(1);
+        let g2 = make_guid(2);
+        let g100 = make_guid(100);
+        assert_ne!(g1, g2);
+        assert_ne!(g1, g100);
+        assert_ne!(g2, g100);
+    }
+
+    #[test]
+    fn step_guids_are_unique_across_entities() {
+        // The writer assigns each entity a unique GUID by index; the
+        // STEP output should therefore contain no duplicate GUIDs.
+        // We grep for '0rvtrs' (our prefix) and check uniqueness.
+        let model = IfcModel::default();
+        let s = write_step(&model);
+        let guids: Vec<_> = s
+            .split("'0rvtrs")
+            .skip(1)
+            .filter_map(|chunk| chunk.split('\'').next())
+            .collect();
+        let mut seen = std::collections::HashSet::new();
+        for g in &guids {
+            assert!(seen.insert(*g), "duplicate IFC GUID in output: 0rvtrs{g}");
+        }
+        assert!(
+            guids.len() >= 7,
+            "expected ≥7 GUIDs (project+site+building+storey+3 rel-aggregates), got {}",
+            guids.len()
+        );
     }
 }
