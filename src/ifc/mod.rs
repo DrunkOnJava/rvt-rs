@@ -55,6 +55,9 @@
 use crate::Result;
 
 pub mod entities;
+pub mod step_writer;
+
+pub use step_writer::write_step;
 
 /// In-memory IFC model — what a successful export produces. Wire format
 /// (STEP or IFC-JSON) is a separate concern handled by a serializer.
@@ -104,6 +107,86 @@ impl Exporter for NullExporter {
             ),
             entities: Vec::new(),
             classifications: Vec::new(),
+            units: Vec::new(),
+        })
+    }
+}
+
+/// Document-level exporter — populates an `IfcModel` with project
+/// metadata from PartAtom + BasicFileInfo + (when locatable) ADocument's
+/// walker-read instance fields. Produces a spec-valid but structurally
+/// minimal IFC4 file when paired with `step_writer::write_step`.
+///
+/// Current coverage: project name + document description + (soon)
+/// OmniClass classification reference. Pending walker expansion:
+/// units from `autodesk.unit.*` identifiers, categories from the
+/// family-graph references, building-element geometry.
+pub struct RvtDocExporter;
+
+impl Exporter for RvtDocExporter {
+    fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel> {
+        // Identity from PartAtom if present; fall back to
+        // BasicFileInfo's original path.
+        let part = rf.part_atom().ok();
+        let bfi = rf.basic_file_info().ok();
+        let project_name = part
+            .as_ref()
+            .and_then(|pa| pa.title.clone())
+            .or_else(|| bfi.as_ref().and_then(|b| b.original_path.clone()));
+
+        let description = {
+            let mut d = Vec::new();
+            if let Some(b) = &bfi {
+                d.push(format!("Revit {} export", b.version));
+            }
+            if let Some(p) = &part {
+                if let Some(id) = &p.id {
+                    d.push(format!("id={id}"));
+                }
+            }
+            if d.is_empty() {
+                None
+            } else {
+                Some(d.join("; "))
+            }
+        };
+
+        // OmniClass / Uniformat classification references, if present
+        // in PartAtom.
+        let mut classifications = Vec::new();
+        if let Some(p) = &part {
+            let omni_items: Vec<_> = p
+                .categories
+                .iter()
+                .filter(|c| c.term.starts_with(char::is_numeric) && c.term.contains('.'))
+                .map(|c| entities::ClassificationItem {
+                    code: c.term.clone(),
+                    name: None,
+                })
+                .collect();
+            if !omni_items.is_empty() {
+                classifications.push(entities::Classification {
+                    source: entities::ClassificationSource::OmniClass,
+                    edition: None,
+                    items: omni_items,
+                });
+            }
+        }
+
+        // A single IfcProject entity at the model level (step_writer
+        // emits its STEP form; other entity types are wired in the
+        // walker-expansion phase).
+        let entities = vec![entities::IfcEntity::Project {
+            name: project_name.clone(),
+            description: description.clone(),
+            long_name: part.as_ref().and_then(|p| p.title.clone()),
+        }];
+
+        Ok(IfcModel {
+            project_name,
+            description,
+            entities,
+            classifications,
             units: Vec::new(),
         })
     }
