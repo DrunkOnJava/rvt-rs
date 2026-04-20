@@ -181,6 +181,29 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - run: cargo doc --no-deps --lib
 
+  # Q-12: reproduce the docs.rs build locally in CI.
+  # docs.rs runs `cargo doc` on nightly with `--all-features` and the
+  # `--cfg docsrs` flag set; broken rustdoc (invalid links, missing
+  # items, syntax errors in code examples) breaks the docs.rs page —
+  # catching it in CI means every PR validates that rvt-rs will render
+  # properly on docs.rs before the release cut.
+  docs-rs-preview:
+    name: docs.rs build preview
+    runs-on: ubuntu-latest
+    env:
+      # Same flags docs.rs passes, plus -D warnings so this job fails
+      # instead of silently publishing broken docs.
+      RUSTDOCFLAGS: "--cfg docsrs -D warnings"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      # docs.rs builds with nightly — any `#[cfg_attr(docsrs, ...)]`
+      # attributes + `#![feature(...)]` gates must be available.
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      # Mirror the [package.metadata.docs.rs] settings from Cargo.toml
+      # (`all-features = true`) — if these drift, update both.
+      - run: cargo +nightly doc --no-deps --all-features
+
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
