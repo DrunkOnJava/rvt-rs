@@ -100,6 +100,37 @@ Open an issue (or a draft PR) before starting work on any of:
   comment explaining *what FACT it proves* and *how to verify*
   the result against the 11-version corpus.
 
+## Fuzzing
+
+`rvt-rs` parses untrusted on-disk byte streams, so coverage-guided
+fuzzing is part of the safety story. A `cargo-fuzz` workspace
+lives at `fuzz/` — see [`fuzz/README.md`](fuzz/README.md) for the
+full reference.
+
+`cargo-fuzz` drives libFuzzer against a single entry-point per
+target: you write a small `fuzz_target!` that takes a `&[u8]` and
+feeds it into one parser surface, and libFuzzer mutates a corpus
+looking for any input that makes the target panic, abort, time
+out, or OOM. The fuzz crate is a standalone workspace so that the
+main `cargo build` does not need nightly Rust.
+
+To add a new fuzz target:
+
+1. Pick the parser surface you want to harden and check whether
+   it already has a tracked task in the `SEC-14..SEC-23` series
+   (listed in `fuzz/README.md`). If it does, claim that task.
+2. Create `fuzz/fuzz_targets/<name>.rs` using the libfuzzer-sys
+   template and register it as a `[[bin]]` entry in
+   `fuzz/Cargo.toml`.
+3. Run the target locally (`cargo +nightly fuzz run <name>`) for
+   long enough to exercise mutation — a few minutes at minimum,
+   longer for anything that touches decompression or XML.
+4. Commit any reproducible crashes to `fuzz/corpus/<name>/` as
+   regression inputs (tracked separately under Q-04).
+
+The scaffold itself is tracked as SEC-14; the individual targets
+are SEC-15 through SEC-23, and a nightly CI runner is SEC-25.
+
 ## Commit messages
 
 We use Conventional Commits:

@@ -1,0 +1,17 @@
+[package]
+name = "rvt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rvt = { path = ".." }
+
+# Prevent this from being picked up as part of the main workspace
+[workspace]
+
+# Binaries go here as separate [[bin]] entries — empty for this scaffold
