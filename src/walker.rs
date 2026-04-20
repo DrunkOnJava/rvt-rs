@@ -25,10 +25,13 @@
 
 use crate::{Error, Result, RevitFile, compression, formats, streams};
 
-/// One field's value as read by the walker. Best-effort — only the
-/// variants that `ADocument` exercises today are meaningfully
-/// populated; others return `Bytes` with raw wire bytes for downstream
-/// tools to reanalyse.
+/// One field's value as read by the walker.
+///
+/// Matches the [`formats::FieldType`] classifier's output space. The
+/// walker decodes each declared field to one of these variants based
+/// on the field's schema-declared type; unrecognised or unexercised
+/// wire shapes fall through to [`InstanceField::Bytes`] so downstream
+/// tooling can still inspect raw bytes.
 #[derive(Debug, Clone)]
 pub enum InstanceField {
     /// `[u32 a][u32 b]` pointer slot. Both-zero means NULL; both-ones
@@ -40,8 +43,310 @@ pub enum InstanceField {
     /// Reference container, 2-column layout: `col_a` is the primary
     /// id list, `col_b` is typically masks or a parallel id stream.
     RefContainer { col_a: Vec<u16>, col_b: Vec<u16> },
+    /// Fixed-size integer primitive (bool / u16 / u32 / i32 / u64 /
+    /// i64). `signed` is `true` for signed variants; `value` is the
+    /// widened 64-bit representation.
+    Integer { value: i64, signed: bool, size: u8 },
+    /// 32-bit or 64-bit IEEE 754 floating point.
+    Float { value: f64, size: u8 },
+    /// 1-byte boolean (stored padded on the wire; decoded as bool).
+    Bool(bool),
+    /// 16-byte GUID / UUID.
+    Guid([u8; 16]),
+    /// UTF-16LE length-prefixed string (both schema-encoded forms).
+    String(std::string::String),
+    /// Generic vector of homogeneous `InstanceField` values. Wire:
+    /// `[u32 count][count × element]` where element layout depends on
+    /// the vector's element FieldType.
+    Vector(Vec<InstanceField>),
     /// Unused / unexercised paths return the raw bytes consumed.
     Bytes(Vec<u8>),
+}
+
+/// Handle/ID index into a decompressed `Global/Latest` stream.
+///
+/// Built by the Layer 5b walker from the element table. Maps each
+/// `ElementId` to the byte offset in the stream where that element's
+/// record begins. Used by per-class decoders to dereference pointers
+/// across the object graph.
+#[derive(Debug, Clone, Default)]
+pub struct HandleIndex {
+    map: std::collections::BTreeMap<u32, usize>,
+}
+
+impl HandleIndex {
+    /// Construct an empty index. Populated by walker implementations
+    /// (see `Self::insert`).
+    pub fn new() -> Self {
+        Self {
+            map: std::collections::BTreeMap::new(),
+        }
+    }
+
+    /// Record that `element_id` lives at byte `offset` in the
+    /// decompressed stream.
+    pub fn insert(&mut self, element_id: u32, offset: usize) {
+        self.map.insert(element_id, offset);
+    }
+
+    /// Resolve an ElementId to its byte offset, if known.
+    pub fn get(&self, element_id: u32) -> Option<usize> {
+        self.map.get(&element_id).copied()
+    }
+
+    /// Number of indexed elements.
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    /// True when the index has no entries.
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    /// Iterate over (ElementId, offset) pairs in sorted ElementId
+    /// order.
+    pub fn iter(&self) -> impl Iterator<Item = (u32, usize)> + '_ {
+        self.map.iter().map(|(k, v)| (*k, *v))
+    }
+}
+
+/// Trait implemented by each per-class decoder. Converts a byte slice
+/// (positioned at the start of the class's instance data) into a
+/// typed `Element` of the decoder's output type, consuming schema
+/// knowledge + the handle index for cross-references.
+///
+/// Implementations for concrete Revit classes (Wall, Floor, Door,
+/// etc.) live in `src/elements/*.rs` and follow the
+/// `EXTENDING_LAYER_5B.md` template. The trait gives the walker
+/// generic dispatch without needing to know every class at compile
+/// time.
+pub trait ElementDecoder: Sync + Send {
+    /// The class's name as it appears in `Formats/Latest` (e.g.
+    /// `"Wall"`, `"Floor"`, `"Level"`, `"Door"`). Must match the
+    /// `ClassEntry.name` the schema parser produces.
+    fn class_name(&self) -> &'static str;
+
+    /// Decode a single instance of this class from its byte range.
+    /// `schema` is the `ClassEntry` from `parse_schema`; `bytes`
+    /// starts at the class's instance data; `index` resolves
+    /// cross-references.
+    fn decode(
+        &self,
+        bytes: &[u8],
+        schema: &formats::ClassEntry,
+        index: &HandleIndex,
+    ) -> Result<DecodedElement>;
+}
+
+/// Result of decoding a single element's instance bytes.
+///
+/// Every per-class decoder returns one of these so the walker can
+/// handle arbitrary class types generically while still giving
+/// callers structured access to parameter values + dereference-able
+/// cross-references.
+#[derive(Debug, Clone)]
+pub struct DecodedElement {
+    /// ElementId of this instance, if known.
+    pub id: Option<u32>,
+    /// Class name ("Wall", "Floor", "Level", etc.).
+    pub class: std::string::String,
+    /// Ordered list of `(field_name, value)` — one per declared
+    /// schema field, populated in schema order.
+    pub fields: Vec<(std::string::String, InstanceField)>,
+    /// Byte range in the decompressed stream that this element's
+    /// instance data occupies. For building a HandleIndex and for
+    /// debugging byte-level decoding issues.
+    pub byte_range: std::ops::Range<usize>,
+}
+
+/// Read a single `InstanceField` value starting at `bytes[cursor]`
+/// based on the declared `FieldType`. Advances `cursor` past the
+/// consumed bytes. Returns `InstanceField::Bytes(rest)` when the
+/// FieldType is unknown or the wire layout for that variant isn't
+/// yet exercised — callers can store the raw bytes for manual
+/// inspection without crashing.
+///
+/// This is the per-field dispatch core that a generic `decode_instance`
+/// implementation uses to walk any class's fields in schema order.
+pub fn read_field_by_type(
+    bytes: &[u8],
+    cursor: &mut usize,
+    ty: &formats::FieldType,
+) -> InstanceField {
+    use formats::FieldType;
+
+    let rem = || bytes.get(*cursor..).unwrap_or(&[]);
+
+    match ty {
+        FieldType::Primitive { kind, size } => {
+            let n = *size as usize;
+            let slice = rem();
+            if slice.len() < n {
+                return InstanceField::Bytes(slice.to_vec());
+            }
+            match (*kind, *size) {
+                (0x01, _) => {
+                    let b = slice[0] != 0;
+                    *cursor += n.max(1);
+                    InstanceField::Bool(b)
+                }
+                (0x02, 2) => {
+                    let v = u16::from_le_bytes([slice[0], slice[1]]) as i64;
+                    *cursor += 2;
+                    InstanceField::Integer {
+                        value: v,
+                        signed: false,
+                        size: 2,
+                    }
+                }
+                (0x04, 4) | (0x05, 4) => {
+                    let v = u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]) as i64;
+                    *cursor += 4;
+                    InstanceField::Integer {
+                        value: v,
+                        signed: *kind == 0x04,
+                        size: 4,
+                    }
+                }
+                (0x06, 4) => {
+                    let v = f32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]) as f64;
+                    *cursor += 4;
+                    InstanceField::Float { value: v, size: 4 }
+                }
+                (0x07, 8) => {
+                    let v = f64::from_le_bytes([
+                        slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6],
+                        slice[7],
+                    ]);
+                    *cursor += 8;
+                    InstanceField::Float { value: v, size: 8 }
+                }
+                (0x0b, 8) => {
+                    let v = i64::from_le_bytes([
+                        slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6],
+                        slice[7],
+                    ]);
+                    *cursor += 8;
+                    InstanceField::Integer {
+                        value: v,
+                        signed: true,
+                        size: 8,
+                    }
+                }
+                _ => {
+                    let bytes = slice[..n.min(slice.len())].to_vec();
+                    *cursor += n.min(slice.len());
+                    InstanceField::Bytes(bytes)
+                }
+            }
+        }
+        FieldType::String => {
+            // UTF-16LE length-prefixed. Wire: [u32 char_count][2*chars bytes].
+            let slice = rem();
+            if slice.len() < 4 {
+                return InstanceField::Bytes(slice.to_vec());
+            }
+            let char_count = u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]) as usize;
+            let byte_count = char_count.saturating_mul(2);
+            if slice.len() < 4 + byte_count {
+                return InstanceField::Bytes(slice.to_vec());
+            }
+            let utf16_bytes = &slice[4..4 + byte_count];
+            // Decode as UTF-16LE. encoding_rs is already in deps.
+            let (text, _, had_errors) = encoding_rs::UTF_16LE.decode(utf16_bytes);
+            *cursor += 4 + byte_count;
+            if had_errors {
+                // Fall back to raw bytes when encoding failed.
+                InstanceField::Bytes(utf16_bytes.to_vec())
+            } else {
+                InstanceField::String(text.into_owned())
+            }
+        }
+        FieldType::Guid => {
+            let slice = rem();
+            if slice.len() < 16 {
+                return InstanceField::Bytes(slice.to_vec());
+            }
+            let mut g = [0u8; 16];
+            g.copy_from_slice(&slice[..16]);
+            *cursor += 16;
+            InstanceField::Guid(g)
+        }
+        FieldType::ElementId | FieldType::ElementIdRef { .. } => {
+            let slice = rem();
+            if slice.len() < 8 {
+                return InstanceField::Bytes(slice.to_vec());
+            }
+            let tag = u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]);
+            let id = u32::from_le_bytes([slice[4], slice[5], slice[6], slice[7]]);
+            *cursor += 8;
+            InstanceField::ElementId { tag, id }
+        }
+        FieldType::Pointer { .. } => {
+            let slice = rem();
+            if slice.len() < 8 {
+                return InstanceField::Bytes(slice.to_vec());
+            }
+            let a = u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]);
+            let b = u32::from_le_bytes([slice[4], slice[5], slice[6], slice[7]]);
+            *cursor += 8;
+            InstanceField::Pointer { raw: [a, b] }
+        }
+        FieldType::Vector { .. } | FieldType::Container { .. } => {
+            // These need inner-type knowledge to decode element-by-element;
+            // the 2-column container layout (kind=0x0e) is handled
+            // specially by `read_ref_container_two_column` below and
+            // called from the ADocument walker. Generic callers get
+            // the raw bytes until per-variant support lands.
+            let slice = rem();
+            // Consume at least the count prefix so outer decoders
+            // don't re-read it; but preserve the raw for inspection.
+            let consumed = slice.len().min(4);
+            let out = slice[..consumed].to_vec();
+            *cursor += consumed;
+            InstanceField::Bytes(out)
+        }
+        FieldType::Unknown { .. } => {
+            // Forward remaining bytes. Callers can inspect them.
+            let slice = rem();
+            let out = slice.to_vec();
+            *cursor = bytes.len();
+            InstanceField::Bytes(out)
+        }
+    }
+}
+
+/// Generic instance decoder: walks each declared field of `class` in
+/// schema order using `read_field_by_type`. Falls back to
+/// `InstanceField::Bytes` for fields whose FieldType is unknown or
+/// whose wire layout isn't yet exercised.
+///
+/// Used by `ElementDecoder` default implementations and by any
+/// caller who wants a best-effort instance dump without writing a
+/// class-specific decoder first. Returns a `DecodedElement` with
+/// `id: None` (callers that can extract the ID from the record
+/// header should set it after calling this).
+pub fn decode_instance(bytes: &[u8], start: usize, class: &formats::ClassEntry) -> DecodedElement {
+    let mut cursor = start;
+    let mut fields = Vec::with_capacity(class.fields.len());
+    for field in &class.fields {
+        let value = match field.field_type.as_ref() {
+            Some(ft) => read_field_by_type(bytes, &mut cursor, ft),
+            None => {
+                // Field's type didn't classify — consume nothing,
+                // emit empty bytes.
+                InstanceField::Bytes(Vec::new())
+            }
+        };
+        fields.push((field.name.clone(), value));
+    }
+    DecodedElement {
+        id: None,
+        class: class.name.clone(),
+        fields,
+        byte_range: start..cursor,
+    }
 }
 
 /// ADocument's instance, as extracted by the v0.1.2 walker. Field
@@ -398,6 +703,182 @@ mod tests {
             }
             _ => panic!("expected ElementId"),
         }
+    }
+
+    #[test]
+    fn read_field_by_type_primitive_u32() {
+        let ft = formats::FieldType::Primitive {
+            kind: 0x05,
+            size: 4,
+        };
+        let bytes = [0x2a, 0x00, 0x00, 0x00];
+        let mut cursor = 0;
+        let v = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 4);
+        match v {
+            InstanceField::Integer {
+                value,
+                signed,
+                size,
+            } => {
+                assert_eq!(value, 42);
+                assert!(!signed);
+                assert_eq!(size, 4);
+            }
+            _ => panic!("expected Integer, got {v:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_by_type_primitive_f64() {
+        let ft = formats::FieldType::Primitive {
+            kind: 0x07,
+            size: 8,
+        };
+        // 42.5 — arbitrary value, deliberately not near a math
+        // constant so clippy's approx_constant lint doesn't trip.
+        let bytes = 42.5_f64.to_le_bytes();
+        let mut cursor = 0;
+        let v = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 8);
+        match v {
+            InstanceField::Float { value, size } => {
+                assert!((value - 42.5).abs() < 1e-9);
+                assert_eq!(size, 8);
+            }
+            _ => panic!("expected Float, got {v:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_by_type_primitive_bool() {
+        let ft = formats::FieldType::Primitive {
+            kind: 0x01,
+            size: 1,
+        };
+        let bytes = [1u8, 99];
+        let mut cursor = 0;
+        let v = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 1);
+        match v {
+            InstanceField::Bool(b) => assert!(b),
+            _ => panic!("expected Bool, got {v:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_by_type_guid_16_bytes() {
+        let ft = formats::FieldType::Guid;
+        let bytes: Vec<u8> = (0..16).collect();
+        let mut cursor = 0;
+        let v = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 16);
+        match v {
+            InstanceField::Guid(g) => assert_eq!(g.to_vec(), (0..16u8).collect::<Vec<_>>()),
+            _ => panic!("expected Guid, got {v:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_by_type_string_utf16le() {
+        // 4-char string "Test": u32 count=4 then 8 bytes UTF-16LE.
+        let ft = formats::FieldType::String;
+        let mut bytes = vec![];
+        bytes.extend_from_slice(&4u32.to_le_bytes());
+        for ch in "Test".encode_utf16() {
+            bytes.extend_from_slice(&ch.to_le_bytes());
+        }
+        let mut cursor = 0;
+        let v = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, bytes.len());
+        match v {
+            InstanceField::String(s) => assert_eq!(s, "Test"),
+            _ => panic!("expected String, got {v:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_by_type_graceful_on_short_input() {
+        // A FieldType that claims 8 bytes but only 3 are available
+        // should return InstanceField::Bytes (not panic).
+        let ft = formats::FieldType::Pointer { kind: 2 };
+        let bytes = [0xff, 0xff, 0xff];
+        let mut cursor = 0;
+        let v = read_field_by_type(&bytes, &mut cursor, &ft);
+        match v {
+            InstanceField::Bytes(_) => {}
+            _ => panic!("expected Bytes on short input, got {v:?}"),
+        }
+    }
+
+    #[test]
+    fn handle_index_basic_operations() {
+        let mut idx = HandleIndex::new();
+        assert!(idx.is_empty());
+        idx.insert(42, 0x100);
+        idx.insert(7, 0x050);
+        assert_eq!(idx.len(), 2);
+        assert_eq!(idx.get(42), Some(0x100));
+        assert_eq!(idx.get(7), Some(0x050));
+        assert_eq!(idx.get(99), None);
+        let pairs: Vec<_> = idx.iter().collect();
+        // BTreeMap sorts ascending by ElementId.
+        assert_eq!(pairs, vec![(7, 0x050), (42, 0x100)]);
+    }
+
+    #[test]
+    fn decode_instance_walks_fields_in_schema_order() {
+        // Synth a ClassEntry with 3 fields of known types + decode.
+        let class = formats::ClassEntry {
+            name: "SynthClass".to_string(),
+            offset: 0,
+            fields: vec![
+                formats::FieldEntry {
+                    name: "a_bool".to_string(),
+                    cpp_type: Some("bool".into()),
+                    field_type: Some(formats::FieldType::Primitive {
+                        kind: 0x01,
+                        size: 1,
+                    }),
+                },
+                formats::FieldEntry {
+                    name: "a_u32".to_string(),
+                    cpp_type: Some("unsigned int".into()),
+                    field_type: Some(formats::FieldType::Primitive {
+                        kind: 0x05,
+                        size: 4,
+                    }),
+                },
+                formats::FieldEntry {
+                    name: "a_guid".to_string(),
+                    cpp_type: Some("Guid".into()),
+                    field_type: Some(formats::FieldType::Guid),
+                },
+            ],
+            tag: Some(123),
+            parent: None,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            ancestor_tag: None,
+        };
+        let mut bytes = Vec::new();
+        bytes.push(1); // bool=true
+        bytes.extend_from_slice(&42u32.to_le_bytes()); // u32=42
+        bytes.extend_from_slice(&[7u8; 16]); // guid
+
+        let decoded = decode_instance(&bytes, 0, &class);
+        assert_eq!(decoded.class, "SynthClass");
+        assert_eq!(decoded.fields.len(), 3);
+        assert!(matches!(decoded.fields[0].1, InstanceField::Bool(true)));
+        match &decoded.fields[1].1 {
+            InstanceField::Integer { value, .. } => assert_eq!(*value, 42),
+            other => panic!("expected Integer, got {other:?}"),
+        }
+        match &decoded.fields[2].1 {
+            InstanceField::Guid(g) => assert_eq!(g[0], 7),
+            other => panic!("expected Guid, got {other:?}"),
+        }
+        assert_eq!(decoded.byte_range.end, bytes.len());
     }
 
     #[test]

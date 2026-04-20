@@ -66,6 +66,44 @@ fn render(inst: &ADocumentInstance) -> Vec<OutField> {
                     "col_b": col_b,
                 }),
             },
+            InstanceField::Integer {
+                value,
+                signed,
+                size,
+            } => OutField {
+                name: name.clone(),
+                kind: "integer".into(),
+                value: serde_json::json!({
+                    "value": value,
+                    "signed": signed,
+                    "size": size,
+                }),
+            },
+            InstanceField::Float { value, size } => OutField {
+                name: name.clone(),
+                kind: "float".into(),
+                value: serde_json::json!({ "value": value, "size": size }),
+            },
+            InstanceField::Bool(b) => OutField {
+                name: name.clone(),
+                kind: "bool".into(),
+                value: serde_json::json!({ "value": b }),
+            },
+            InstanceField::Guid(g) => OutField {
+                name: name.clone(),
+                kind: "guid".into(),
+                value: serde_json::json!({ "bytes": g.to_vec() }),
+            },
+            InstanceField::String(s) => OutField {
+                name: name.clone(),
+                kind: "string".into(),
+                value: serde_json::json!({ "value": s }),
+            },
+            InstanceField::Vector(elems) => OutField {
+                name: name.clone(),
+                kind: "vector".into(),
+                value: serde_json::json!({ "count": elems.len() }),
+            },
             InstanceField::Bytes(b) => OutField {
                 name: name.clone(),
                 kind: "bytes".into(),
