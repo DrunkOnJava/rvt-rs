@@ -94,6 +94,7 @@ pub mod corpus;
 pub mod elem_table;
 pub mod error;
 pub mod formats;
+pub mod geometry;
 pub mod ifc;
 pub mod object_graph;
 pub mod part_atom;
