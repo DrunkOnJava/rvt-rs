@@ -76,6 +76,7 @@ macro_rules! simple_decoder {
 simple_decoder!(DimensionDecoder, "Dimension");
 simple_decoder!(TagDecoder, "Tag");
 simple_decoder!(TextNoteDecoder, "TextNote");
+simple_decoder!(AnnotationDecoder, "Annotation");
 
 /// Typed view of a decoded Dimension.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -481,5 +482,22 @@ mod tests {
         assert_eq!(DimensionDecoder.class_name(), "Dimension");
         assert_eq!(TagDecoder.class_name(), "Tag");
         assert_eq!(TextNoteDecoder.class_name(), "TextNote");
+        assert_eq!(AnnotationDecoder.class_name(), "Annotation");
+    }
+
+    /// Generic Annotation decoder accepts any element whose schema is
+    /// named "Annotation" — it's the base class. Tests the
+    /// wrong-schema rejection path only; typed-view pattern-matching
+    /// is deferred until we see real-world Annotation shapes. This
+    /// means callers who walk Annotation today get the raw
+    /// DecodedElement back (via decode_instance's schema-directed
+    /// walker) and can inspect `fields` themselves.
+    #[test]
+    fn annotation_rejects_wrong_schema() {
+        assert!(
+            AnnotationDecoder
+                .decode(&[], &wrong_schema(), &HandleIndex::new())
+                .is_err()
+        );
     }
 }
