@@ -165,15 +165,15 @@ impl Tag {
                 ("taggedelementid" | "elementid", InstanceField::ElementId { id, .. }) => {
                     out.tagged_element_id = Some(*id);
                 }
-                ("tagheadposition" | "headposition", InstanceField::Vector(components)) => {
-                    if components.len() >= 2 {
-                        if let (
-                            Some(InstanceField::Float { value: x, .. }),
-                            Some(InstanceField::Float { value: y, .. }),
-                        ) = (components.first(), components.get(1))
-                        {
-                            out.head_position = Some(TagHeadPosition { x: *x, y: *y });
-                        }
+                ("tagheadposition" | "headposition", InstanceField::Vector(components))
+                    if components.len() >= 2 =>
+                {
+                    if let (
+                        Some(InstanceField::Float { value: x, .. }),
+                        Some(InstanceField::Float { value: y, .. }),
+                    ) = (components.first(), components.get(1))
+                    {
+                        out.head_position = Some(TagHeadPosition { x: *x, y: *y });
                     }
                 }
                 ("tagorientation" | "orientation", InstanceField::Integer { value, .. }) => {
