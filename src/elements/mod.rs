@@ -30,6 +30,7 @@ pub mod ceiling;
 pub mod circulation;
 pub mod floor;
 pub mod foundation_and_furnishings;
+pub mod generic;
 pub mod grid;
 pub mod level;
 pub mod openings;
@@ -94,6 +95,8 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(project_organization::PhaseDecoder),
         Box::new(project_organization::DesignOptionDecoder),
         Box::new(project_organization::WorksetDecoder),
+        Box::new(generic::GenericModelDecoder),
+        Box::new(generic::MassDecoder),
     ]
 }
 
