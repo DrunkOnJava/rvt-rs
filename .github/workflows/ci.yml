@@ -107,6 +107,63 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps --lib
 
+  python-wheel:
+    name: Python wheel / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      # Windows CFB stream names need the same autocrlf=false guard
+      # we use for the Rust Windows integration job, or LFS-bound
+      # corpus bytes get CRLF-mangled. Keeping this idempotent.
+      - name: Disable autocrlf on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - name: Fetch phi-ag/rvt sample corpus
+        uses: actions/checkout@v4
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: python-wheel-${{ matrix.os }}
+      # Build the abi3 wheel. `--features python` flips the optional
+      # pyo3 dependency on; `--release` produces an optimised binary
+      # matching what users get via `pip install rvt`.
+      - name: Build wheel via maturin
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --features python --out dist
+      # Install into this runner's Python, then run the pytest suite
+      # we ship in tests/python/. This is the real regression gate —
+      # if the wheel doesn't actually import or the bindings return
+      # wrong values, CI fails here.
+      - name: Install the built wheel
+        shell: bash
+        run: |
+          python3 -m pip install --upgrade pip pytest
+          python3 -m pip install --force-reinstall dist/*.whl
+      - name: Run pytest integration tests
+        shell: bash
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+        run: python3 -m pytest tests/python -v
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rvt-wheel-${{ matrix.os }}
+          path: dist/*.whl
+          if-no-files-found: error
+
   pii-guard:
     name: PII guard
     runs-on: ubuntu-latest
