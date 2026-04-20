@@ -20,46 +20,65 @@ a few practices keep the repo healthy.
 - **Tests.** More coverage is always welcome, especially for
   edge-case file layouts.
 
-## Where help is most wanted (as of v0.1.2)
+## Where help is most wanted
 
-**Layer 5a (ADocument walker) exists and is reliable on Revit
-2024–2026.** Layer 5b (per-element walker: walls, floors, doors,
-windows, columns, etc.) is the current beachhead. The schema layer
-is 100%-classified and CI-gated. Per-element extraction + geometry
-+ a real IFC exporter + a web viewer are the phases documented in
-`TODO-BLINDSIDE.md` at the repo parent.
+**Current shipped surface** (as of April 2026 / post-Phase-5a):
 
-Most wanted right now:
+- 395 classes · 13,570 fields · 100% type classification
+- **80 typed element decoders** (every major element class:
+  walls, floors, roofs, ceilings, doors, windows, columns, beams,
+  stairs, railings, rooms, furniture, 11 MEP classes, annotations,
+  parameters — see `src/elements/mod.rs`'s `all_decoders()` for
+  the full list).
+- **Schema-directed ADocument walker** across all 11 releases
+  (fully on 2024-2026; graceful `Decoded::partial` on 2016-2023).
+- **Full IFC4 STEP export** (`rvt-ifc input.rfa input.ifc`): spatial
+  hierarchy + per-element entities + 8 IfcProfileDef subclasses
+  (IFC-24) + extruded / revolved / boolean / faceted-brep / swept-
+  path solids (IFC-16/17/18/19/20) + material layer sets + material
+  profile sets + property sets + opening/fill rels + IfcMember
+  secondary-member routing + IfcRepresentationMap shared geometry
+  (IFC-21) + ForgeUnit → IfcSIUnit/IfcConversionBasedUnit (IFC-39/40).
+- **Three-layer validation CI** on every commit: ifc-smoke
+  (substring counts) + IfcOpenShell (spec-level parse) + 382+
+  lib tests (per-feature coverage). See `docs/validation-evidence.md`.
+- **Python bindings**: `pip install rvt` (pyo3 + maturin wheel,
+  abi3-py38, one per OS/arch).
+- **Parameter system**: `ParameterElement` + `SharedParameter`
+  definitions, AProperty* value-carrier decoders (L5B-54), typed
+  `ParameterValue` enum, type-instance inheritance resolution
+  (L5B-55), calculated/reporting flag detection (L5B-56).
 
-1. **§L5B — per-element decoders.** The schema tells you exactly
-   what bytes each element class consumes. Pick any class from the
-   L5B-XX task list (Wall, Floor, Door, Level, Material, etc.) and
-   implement its `ElementDecoder`. Each one is a few hundred lines
-   + unit test + integration test against corpus.
-2. **§L5B-11 — extend walker to Revit 2016–2023.** Walker detects
-   entry points across all 11 releases but cleanly decodes all 13
-   ADocument fields only on 2024–2026. Older releases need per-band
-   entry-point heuristics (see recon report §Q6.5).
-3. **§GEO — geometry extraction.** Once decoders surface location
-   curves, profiles, sketches — turn them into `Solid` enum values
-   (Extrusion, Sweep, Revolve, Blend, Boolean). IFC exporter
-   consumes these.
-4. **§IFC-02+ — real IfcWall/IfcSlab/IfcDoor/... emission.** Today
-   we emit `IfcProject → IfcSite → IfcBuilding → IfcBuildingStorey`
-   scaffolding only. Wiring per-element entities with geometry +
-   material layer sets + property sets is the blind-side unlock.
-5. **§VW1 — web viewer (WASM + Three.js).** Once any geometry is
-   extractable, a basic viewer showing a 3D model becomes
-   immediately useful to BIM engineers. glTF export for Blender
-   compatibility is the first milestone.
+**Most wanted right now:**
+
+1. **§L5B-11 — extend walker to Revit 2016–2023.** Walker finds
+   entry points across all 11 releases but fully decodes ADocument
+   fields only on 2024–2026. Older releases need per-band heuristics
+   (see recon report §Q6.5). Needs corpus byte-inspection.
+2. **§L5B-09 — generalize Container 2-column decoder.** Current
+   implementation handles `kind: 0x0e` with 6-byte records; other
+   container kinds need reverse-engineering against live instance
+   data.
+3. **§GEO — geometry extraction from the object graph.** Writer
+   + bridge can already emit per-element geometry when the caller
+   supplies dimensions; the *extraction* side (reading location
+   curves / profile shapes / arbitrary brep from the Revit element
+   bytes) is the open research frontier. GEO-27..35 tasks are the
+   breakdown.
+4. **§WRT — write path.** Byte-preserving stream-level patching
+   round-trips (`write_with_patches`), but field-level semantic
+   writes (edit a Wall's height and round-trip to a Revit-openable
+   .rvt) are the big next subsystem. WRT-01..14.
+5. **§VW1 — web viewer (WASM + Three.js).** VW1-01..24.
 6. **Corpus expansion.** We only have the `rac_basic_sample_family`
    11-release corpus. Donations of real-world project RVTs (with
-   redistribution rights) would dramatically widen validation.
+   redistribution rights) would dramatically widen validation —
+   tracked as Q-01.
 
 Each layer has a clear validation oracle: rvt-info extracts
-document title + GUID via metadata (for cross-checking walker
-output); rvt-history gives the upgrade timeline via Phase D string
-scanning; IfcOpenShell validates IFC output for free.
+document title + GUID via metadata; rvt-history gives the upgrade
+timeline via Phase D string scanning; IfcOpenShell validates IFC
+output against the full IFC4 schema (enforced in CI per IFC-41).
 
 See `docs/rvt-moat-break-reconnaissance.md` §Q6 for Layer 5a's
 research trail, including the documented refutation of the Q6.2
