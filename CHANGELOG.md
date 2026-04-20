@@ -6,6 +6,31 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added — Layer 5: first end-to-end `rvt → ifc` pipeline
+
+- **`rvt::ifc::step_writer::write_step`** — pure-Rust IFC4 STEP
+  serializer. Takes an `IfcModel`, produces spec-valid ISO-10303-21
+  text with all required framework entities (IfcPerson,
+  IfcOrganization, IfcApplication, IfcOwnerHistory, IfcSIUnit×4,
+  IfcUnitAssignment, IfcGeometricRepresentationContext, IfcProject).
+  No IfcOpenShell dependency. No `unsafe`. 4 new unit tests pinning
+  envelope shape, escaping, and required entities.
+- **`rvt::ifc::RvtDocExporter`** — concrete `Exporter` that
+  populates `IfcModel` from a `RevitFile`. Extracts project name
+  from PartAtom (falls back to BasicFileInfo path), builds a
+  description string from version + id, pulls OmniClass codes into
+  `ClassificationSource::OmniClass`.
+- **`rvt-ifc` CLI** — ninth shipped binary. `rvt-ifc input.rfa`
+  writes `input.ifc` next to the input. `rvt-ifc -o path input.rfa`
+  overrides. `--null` uses the empty-project exporter for
+  STEP-writer testing.
+
+First end-user deliverable for Layer 5: `cargo run --release --bin
+rvt-ifc -- sample.rfa` produces a ~1 KB IFC4 file that
+IfcOpenShell, BlenderBIM, and buildingSMART validators can read.
+Geometry and per-element entities are pending walker expansion;
+this v1 covers document-level metadata.
+
 ### Fixed
 - **Windows CFB stream-name path separator.** `RevitFile::stream_names()`
   returned backslash-separated paths on Windows (`Formats\Latest`)

@@ -79,6 +79,10 @@ path = "src/bin/rvt_dump.rs"
 name = "rvt-doc"
 path = "src/bin/rvt_doc.rs"
 
+[[bin]]
+name = "rvt-ifc"
+path = "src/bin/rvt_ifc.rs"
+
 [lib]
 name = "rvt"
 path = "src/lib.rs"
