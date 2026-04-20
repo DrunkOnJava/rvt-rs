@@ -143,6 +143,39 @@ impl StorageType {
     }
 }
 
+/// How a parameter's value is produced (L5B-56).
+///
+/// Revit parameters come in three flavours by how their value is
+/// produced:
+///
+/// - **User-set**: a value the end user types or picks from a menu.
+///   Always writable, always carried on the element.
+/// - **Calculated / formula-driven**: the value is computed from a
+///   formula that references other parameters ("= 2 * Height +
+///   Width" for a label derived from geometry). Read-only to the
+///   user; Revit evaluates the formula at update time and writes
+///   the result back to the parameter slot.
+/// - **Reporting**: the value is pulled from geometry or the
+///   element's type at read time. Revit's "Dimension reports its
+///   length" is the canonical example. Read-only; never edited
+///   directly.
+///
+/// The `m_is_calculated` / `m_is_reporting` flags on
+/// `ParameterElement` are what distinguish these modes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ParameterValueSource {
+    /// User-set (default). Writable, no implicit dependency on
+    /// other parameters or geometry.
+    #[default]
+    UserSet,
+    /// Formula-driven. Revit recomputes the value from a formula
+    /// string each time an input parameter changes.
+    Calculated,
+    /// Reporting. Value sourced from geometry / element properties
+    /// at read time. Not user-editable.
+    Reporting,
+}
+
 /// Typed view of a decoded ParameterElement.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ParameterElement {
@@ -152,11 +185,18 @@ pub struct ParameterElement {
     pub unit_type: Option<u32>,
     pub is_shared: Option<bool>,
     pub visible: Option<bool>,
+    /// How this parameter's value is produced (L5B-56). `None` when
+    /// the relevant flags weren't present in the decoded payload;
+    /// treat as [`ParameterValueSource::UserSet`] for
+    /// user-facing writability purposes.
+    pub value_source: Option<ParameterValueSource>,
 }
 
 impl ParameterElement {
     pub fn from_decoded(decoded: &DecodedElement) -> Self {
         let mut out = Self::default();
+        let mut is_calculated = None;
+        let mut is_reporting = None;
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
@@ -173,10 +213,42 @@ impl ParameterElement {
                     out.is_shared = Some(*b);
                 }
                 ("visible", InstanceField::Bool(b)) => out.visible = Some(*b),
+                (
+                    "iscalculated" | "calculated" | "isformula" | "formula",
+                    InstanceField::Bool(b),
+                ) => {
+                    is_calculated = Some(*b);
+                }
+                ("isreporting" | "reporting", InstanceField::Bool(b)) => {
+                    is_reporting = Some(*b);
+                }
                 _ => {}
             }
         }
+        // Precedence: reporting > calculated > user-set. A single
+        // parameter can't be both calculated and reporting in Revit's
+        // model (reporting parameters don't accept formulas), but if
+        // both flags are somehow set we surface the stronger
+        // constraint (reporting — fully read-only).
+        out.value_source = match (is_calculated, is_reporting) {
+            (_, Some(true)) => Some(ParameterValueSource::Reporting),
+            (Some(true), _) => Some(ParameterValueSource::Calculated),
+            (Some(false), Some(false)) | (Some(false), None) | (None, Some(false)) => {
+                Some(ParameterValueSource::UserSet)
+            }
+            (None, None) => None,
+        };
         out
+    }
+
+    /// True when this parameter is user-writable — i.e., neither
+    /// calculated nor reporting. When the flags weren't present in
+    /// the decoded payload, assumes user-writable (the safe default).
+    pub fn is_user_writable(&self) -> bool {
+        !matches!(
+            self.value_source,
+            Some(ParameterValueSource::Calculated | ParameterValueSource::Reporting)
+        )
     }
 }
 
@@ -721,6 +793,91 @@ mod tests {
             .storage_type(),
             StorageType::Other
         );
+    }
+
+    // ----- L5B-56: calculated / reporting parameter flags -----
+
+    #[test]
+    fn parameter_element_value_source_user_set_when_flags_absent() {
+        let decoded = mk_decoded(
+            "ParameterElement",
+            vec![("m_name".into(), InstanceField::String("Height".into()))],
+        );
+        let p = ParameterElement::from_decoded(&decoded);
+        // No flag → None (caller treats as UserSet); is_user_writable=true.
+        assert_eq!(p.value_source, None);
+        assert!(p.is_user_writable());
+    }
+
+    #[test]
+    fn parameter_element_value_source_calculated() {
+        let decoded = mk_decoded(
+            "ParameterElement",
+            vec![
+                ("m_name".into(), InstanceField::String("TotalArea".into())),
+                ("m_is_calculated".into(), InstanceField::Bool(true)),
+                ("m_is_reporting".into(), InstanceField::Bool(false)),
+            ],
+        );
+        let p = ParameterElement::from_decoded(&decoded);
+        assert_eq!(p.value_source, Some(ParameterValueSource::Calculated));
+        assert!(!p.is_user_writable());
+    }
+
+    #[test]
+    fn parameter_element_value_source_reporting() {
+        let decoded = mk_decoded(
+            "ParameterElement",
+            vec![
+                ("m_name".into(), InstanceField::String("DimLength".into())),
+                ("m_is_reporting".into(), InstanceField::Bool(true)),
+            ],
+        );
+        let p = ParameterElement::from_decoded(&decoded);
+        assert_eq!(p.value_source, Some(ParameterValueSource::Reporting));
+        assert!(!p.is_user_writable());
+    }
+
+    #[test]
+    fn parameter_element_value_source_reporting_wins_over_calculated() {
+        // If both flags are set (unusual in practice, but defend
+        // against malformed data), reporting wins — it's the
+        // stronger read-only constraint.
+        let decoded = mk_decoded(
+            "ParameterElement",
+            vec![
+                ("m_is_calculated".into(), InstanceField::Bool(true)),
+                ("m_is_reporting".into(), InstanceField::Bool(true)),
+            ],
+        );
+        let p = ParameterElement::from_decoded(&decoded);
+        assert_eq!(p.value_source, Some(ParameterValueSource::Reporting));
+    }
+
+    #[test]
+    fn parameter_element_value_source_explicit_user_set() {
+        let decoded = mk_decoded(
+            "ParameterElement",
+            vec![
+                ("m_is_calculated".into(), InstanceField::Bool(false)),
+                ("m_is_reporting".into(), InstanceField::Bool(false)),
+            ],
+        );
+        let p = ParameterElement::from_decoded(&decoded);
+        assert_eq!(p.value_source, Some(ParameterValueSource::UserSet));
+        assert!(p.is_user_writable());
+    }
+
+    #[test]
+    fn parameter_element_value_source_accepts_formula_alias() {
+        // Some schemas name the field `m_is_formula` instead of
+        // `m_is_calculated`. Accept both.
+        let decoded = mk_decoded(
+            "ParameterElement",
+            vec![("m_is_formula".into(), InstanceField::Bool(true))],
+        );
+        let p = ParameterElement::from_decoded(&decoded);
+        assert_eq!(p.value_source, Some(ParameterValueSource::Calculated));
     }
 
     #[test]
