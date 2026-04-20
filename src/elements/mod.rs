@@ -26,10 +26,13 @@
 //! uniform untyped dump use `decode_instance` directly.
 
 pub mod category;
+pub mod ceiling;
+pub mod floor;
 pub mod grid;
 pub mod level;
 pub mod reference_planes;
 pub mod reference_points;
+pub mod roof;
 pub mod styling;
 pub mod wall;
 
@@ -58,6 +61,12 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(reference_planes::ReferencePlaneDecoder),
         Box::new(wall::WallDecoder),
         Box::new(wall::WallTypeDecoder),
+        Box::new(floor::FloorDecoder),
+        Box::new(floor::FloorTypeDecoder),
+        Box::new(roof::RoofDecoder),
+        Box::new(roof::RoofTypeDecoder),
+        Box::new(ceiling::CeilingDecoder),
+        Box::new(ceiling::CeilingTypeDecoder),
     ]
 }
 
