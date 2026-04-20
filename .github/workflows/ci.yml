@@ -127,6 +127,49 @@ jobs:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
         run: cargo test --release --test ifc_roundtrip
 
+  ifc-smoke:
+    # IFC-42: run the synthetic-project integration test and assert
+    # the emitted STEP file has the expected entity counts. Catches
+    # regressions where the writer drops elements, the bridge layer
+    # mis-counts openings, or STEP serialisation silently truncates.
+    # Uses the committed fixture at `tests/fixtures/synthetic-project.ifc`
+    # as the reference — any writer change that alters counts must
+    # update this job AND the fixture together.
+    name: IFC synthetic-project smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - name: Build + run synthetic-project integration test
+        run: cargo test --release --test ifc_synthetic_project
+      - name: Assert entity counts in committed fixture
+        run: |
+          set -euo pipefail
+          f=tests/fixtures/synthetic-project.ifc
+          expect() {
+            local pat="$1" want="$2"
+            local got
+            got=$(grep -c "$pat" "$f" || true)
+            if [ "$got" != "$want" ]; then
+              echo "::error::IFC count drift: $pat got $got, want $want"
+              exit 1
+            fi
+            echo "ok: $pat = $got"
+          }
+          expect IFCPROJECT 1
+          expect IFCBUILDINGSTOREY 3
+          expect IFCWALL 4
+          expect IFCSLAB 1
+          expect IFCDOOR 1
+          expect IFCWINDOW 2
+          expect IFCMATERIAL 2
+          expect IFCPROPERTYSET 2
+          expect IFCOPENINGELEMENT 1
+          expect IFCRELVOIDSELEMENT 1
+          expect IFCRELFILLSELEMENT 1
+          expect IFCEXTRUDEDAREASOLID 7
+
   doc:
     name: cargo doc
     runs-on: ubuntu-latest
