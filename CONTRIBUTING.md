@@ -39,7 +39,7 @@ Most wanted right now:
 2. **§L5B-11 — extend walker to Revit 2016–2023.** Walker detects
    entry points across all 11 releases but cleanly decodes all 13
    ADocument fields only on 2024–2026. Older releases need per-band
-   entry-point heuristics (see recon report §Q6.5-F addendum).
+   entry-point heuristics (see recon report §Q6.5).
 3. **§GEO — geometry extraction.** Once decoders surface location
    curves, profiles, sketches — turn them into `Solid` enum values
    (Extrusion, Sweep, Revolve, Blend, Boolean). IFC exporter

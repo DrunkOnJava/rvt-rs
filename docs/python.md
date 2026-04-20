@@ -132,7 +132,7 @@ candidate bands but not yet validated. Tracked as `L5B-11` in
 entry-point detector (heuristic first, scoring-based brute-force
 fallback) is the starting point; reaching older releases is
 expected to require per-version heuristics. See the recon report
-§Q6.5-F for the current state.
+§Q6.5 for the current state.
 
 ### Module-level helpers
 
