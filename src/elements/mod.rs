@@ -30,6 +30,7 @@ pub mod ceiling;
 pub mod floor;
 pub mod grid;
 pub mod level;
+pub mod openings;
 pub mod reference_planes;
 pub mod reference_points;
 pub mod roof;
@@ -67,6 +68,8 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(roof::RoofTypeDecoder),
         Box::new(ceiling::CeilingDecoder),
         Box::new(ceiling::CeilingTypeDecoder),
+        Box::new(openings::DoorDecoder),
+        Box::new(openings::WindowDecoder),
     ]
 }
 
