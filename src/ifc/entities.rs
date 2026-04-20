@@ -639,6 +639,417 @@ pub struct UnitAssignment {
     pub ifc_mapping: Option<String>,
 }
 
+/// A parsed Forge (Autodesk) unit identifier (IFC-39).
+///
+/// Revit carries its project / family unit preferences as
+/// "Forge-style" identifier strings in the `PartAtom` XML and in
+/// serialized `UnitType` fields, e.g.
+/// `autodesk.unit.unit:millimeters-1.0.1`,
+/// `autodesk.unit.unit:squareFeet-1.0.1`,
+/// `autodesk.unit.unit:degrees-1.0.1`.
+///
+/// This enum captures every common one that maps cleanly to an
+/// IFC4 `IfcSIUnit` (metric SI) or `IfcConversionBasedUnit` (non-
+/// SI Imperial / mixed). Identifiers that don't match a known
+/// unit fall through to [`ForgeUnit::Other`] carrying the raw
+/// identifier so downstream code can still introspect it.
+///
+/// Invariant: every non-`Other` variant has a defined
+/// [`ForgeUnit::ifc_emission`] mapping — callers can always emit
+/// a valid IFC unit for a matched identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ForgeUnit {
+    // ---- Length ----
+    Millimeters,
+    Centimeters,
+    Decimeters,
+    Meters,
+    Kilometers,
+    Inches,
+    Feet,
+    Yards,
+    Miles,
+
+    // ---- Area ----
+    SquareMillimeters,
+    SquareCentimeters,
+    SquareMeters,
+    SquareFeet,
+    SquareInches,
+    SquareYards,
+    Acres,
+    Hectares,
+
+    // ---- Volume ----
+    CubicMillimeters,
+    CubicCentimeters,
+    CubicMeters,
+    CubicFeet,
+    CubicInches,
+    CubicYards,
+    Liters,
+    UsGallons,
+
+    // ---- Angle ----
+    Radians,
+    Degrees,
+    Grads,
+
+    // ---- Mass ----
+    Kilograms,
+    Grams,
+    Pounds,
+
+    // ---- Time ----
+    Seconds,
+    Minutes,
+    Hours,
+
+    /// Unrecognised Forge identifier — carries the raw string
+    /// so callers can still round-trip it through serialization
+    /// without losing data.
+    Other(String),
+}
+
+/// IFC4 dimensional category (`LENGTHUNIT`, `AREAUNIT`, …).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IfcUnitType {
+    Length,
+    Area,
+    Volume,
+    PlaneAngle,
+    Mass,
+    Time,
+}
+
+impl IfcUnitType {
+    /// STEP keyword (no surrounding dots — caller wraps).
+    pub fn as_step_token(self) -> &'static str {
+        match self {
+            IfcUnitType::Length => "LENGTHUNIT",
+            IfcUnitType::Area => "AREAUNIT",
+            IfcUnitType::Volume => "VOLUMEUNIT",
+            IfcUnitType::PlaneAngle => "PLANEANGLEUNIT",
+            IfcUnitType::Mass => "MASSUNIT",
+            IfcUnitType::Time => "TIMEUNIT",
+        }
+    }
+}
+
+/// How an IFC unit should be emitted (IFC-40).
+///
+/// - `SI { prefix, name }`: emits a single `IFCSIUNIT(*, <type>,
+///   <prefix>, <name>)`. Prefix is `None` for ambient (e.g. metres,
+///   square metres) or `Some("MILLI")` / `"CENTI")` / `"DECI")` /
+///   `"KILO")` for multiples.
+/// - `ConversionBased { base_name, conversion_factor_to_si_base }`:
+///   emits a pair `IFCMEASUREWITHUNIT(<measure>(<factor>), <si_base>)`
+///   + `IFCCONVERSIONBASEDUNIT(<dim>, <type>, <name>, <measure_ref>)`.
+///   Used for non-SI units (feet → metres at 0.3048, inches →
+///   metres at 0.0254, degrees → radians at π/180, pounds →
+///   kilograms at 0.453592, gallons → cubic metres at 0.00378541,
+///   …).
+#[derive(Debug, Clone, PartialEq)]
+pub enum IfcUnitEmission {
+    /// Pure SI unit.
+    Si {
+        unit_type: IfcUnitType,
+        /// `None` for base unit, or `"MILLI"` / `"CENTI"` / `"DECI"`
+        /// / `"KILO"` / `"HECTO"` for the standard IFC SI prefix
+        /// vocabulary.
+        prefix: Option<&'static str>,
+        /// `"METRE"` / `"SQUARE_METRE"` / `"CUBIC_METRE"` /
+        /// `"RADIAN"` / `"GRAM"` / `"SECOND"` — the unprefixed
+        /// SI base name.
+        name: &'static str,
+    },
+    /// Conversion-based unit derived from an SI base.
+    ConversionBased {
+        unit_type: IfcUnitType,
+        /// Human / IFC name for the derived unit (`"FOOT"`,
+        /// `"INCH"`, `"DEGREE"`, `"POUND"`, `"GALLON"`).
+        derived_name: &'static str,
+        /// Multiplier: `<derived_unit> = <this> × <si_base_unit>`.
+        /// Example: foot = 0.3048 × metre; inch = 0.0254 × metre;
+        /// degree = π/180 × radian.
+        factor_to_si: f64,
+        /// The SI base emission to attach the factor to (always
+        /// `IfcUnitEmission::Si` conceptually, but inlined here
+        /// as the bare IFC unit name to keep the data flat).
+        si_base_name: &'static str,
+    },
+}
+
+impl ForgeUnit {
+    /// Parse an Autodesk Forge unit identifier. Returns
+    /// `ForgeUnit::Other(raw)` for any string that doesn't match
+    /// a known pattern.
+    ///
+    /// Accepted shapes:
+    /// - `autodesk.unit.unit:millimeters-1.0.1` (canonical)
+    /// - `autodesk.unit.unit:millimeters` (without version)
+    /// - `millimeters` (bare — lenient)
+    ///
+    /// Case-insensitive on the unit token; versions are
+    /// ignored (there's no meaningful difference between
+    /// `-1.0.0` and `-1.0.1` for the unit vocabulary as of
+    /// Revit 2026).
+    pub fn from_forge_identifier(id: &str) -> Self {
+        // Strip "autodesk.unit.unit:" prefix if present, then any
+        // "-X.Y.Z" version suffix.
+        let trimmed = id.trim().to_ascii_lowercase();
+        let stripped = trimmed
+            .strip_prefix("autodesk.unit.unit:")
+            .unwrap_or(&trimmed);
+        let bare = stripped.split('-').next().unwrap_or(stripped);
+        match bare {
+            "millimeters" | "mm" => ForgeUnit::Millimeters,
+            "centimeters" | "cm" => ForgeUnit::Centimeters,
+            "decimeters" | "dm" => ForgeUnit::Decimeters,
+            "meters" | "m" => ForgeUnit::Meters,
+            "kilometers" | "km" => ForgeUnit::Kilometers,
+            "inches" | "in" => ForgeUnit::Inches,
+            "feet" | "ft" | "fractionalinches"
+            | "feetandfractionalinches" => ForgeUnit::Feet,
+            "yards" | "yd" => ForgeUnit::Yards,
+            "miles" | "mi" => ForgeUnit::Miles,
+            "squaremillimeters" => ForgeUnit::SquareMillimeters,
+            "squarecentimeters" => ForgeUnit::SquareCentimeters,
+            "squaremeters" => ForgeUnit::SquareMeters,
+            "squarefeet" => ForgeUnit::SquareFeet,
+            "squareinches" => ForgeUnit::SquareInches,
+            "squareyards" => ForgeUnit::SquareYards,
+            "acres" => ForgeUnit::Acres,
+            "hectares" => ForgeUnit::Hectares,
+            "cubicmillimeters" => ForgeUnit::CubicMillimeters,
+            "cubiccentimeters" => ForgeUnit::CubicCentimeters,
+            "cubicmeters" => ForgeUnit::CubicMeters,
+            "cubicfeet" => ForgeUnit::CubicFeet,
+            "cubicinches" => ForgeUnit::CubicInches,
+            "cubicyards" => ForgeUnit::CubicYards,
+            "liters" | "litres" => ForgeUnit::Liters,
+            "usgallons" | "gallons" => ForgeUnit::UsGallons,
+            "radians" | "rad" => ForgeUnit::Radians,
+            "degrees" | "deg" => ForgeUnit::Degrees,
+            "grads" | "gradians" => ForgeUnit::Grads,
+            "kilograms" | "kg" => ForgeUnit::Kilograms,
+            "grams" | "g" => ForgeUnit::Grams,
+            "pounds" | "lb" | "lbs" | "poundsmass" => ForgeUnit::Pounds,
+            "seconds" | "s" => ForgeUnit::Seconds,
+            "minutes" | "min" => ForgeUnit::Minutes,
+            "hours" | "hr" | "h" => ForgeUnit::Hours,
+            _ => ForgeUnit::Other(id.to_string()),
+        }
+    }
+
+    /// Map a `ForgeUnit` to its IFC4 emission plan. Returns
+    /// `None` for `Other(_)` — the caller should either fall back
+    /// to a sensible default (usually metres) or surface a
+    /// diagnostic.
+    pub fn ifc_emission(&self) -> Option<IfcUnitEmission> {
+        use IfcUnitType::*;
+        match self {
+            // Length — SI prefixes
+            ForgeUnit::Millimeters => Some(IfcUnitEmission::Si {
+                unit_type: Length,
+                prefix: Some("MILLI"),
+                name: "METRE",
+            }),
+            ForgeUnit::Centimeters => Some(IfcUnitEmission::Si {
+                unit_type: Length,
+                prefix: Some("CENTI"),
+                name: "METRE",
+            }),
+            ForgeUnit::Decimeters => Some(IfcUnitEmission::Si {
+                unit_type: Length,
+                prefix: Some("DECI"),
+                name: "METRE",
+            }),
+            ForgeUnit::Meters => Some(IfcUnitEmission::Si {
+                unit_type: Length,
+                prefix: None,
+                name: "METRE",
+            }),
+            ForgeUnit::Kilometers => Some(IfcUnitEmission::Si {
+                unit_type: Length,
+                prefix: Some("KILO"),
+                name: "METRE",
+            }),
+            // Length — conversion-based (Imperial)
+            ForgeUnit::Inches => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Length,
+                derived_name: "INCH",
+                factor_to_si: 0.0254,
+                si_base_name: "METRE",
+            }),
+            ForgeUnit::Feet => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Length,
+                derived_name: "FOOT",
+                factor_to_si: 0.3048,
+                si_base_name: "METRE",
+            }),
+            ForgeUnit::Yards => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Length,
+                derived_name: "YARD",
+                factor_to_si: 0.9144,
+                si_base_name: "METRE",
+            }),
+            ForgeUnit::Miles => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Length,
+                derived_name: "MILE",
+                factor_to_si: 1609.344,
+                si_base_name: "METRE",
+            }),
+            // Area
+            ForgeUnit::SquareMillimeters => Some(IfcUnitEmission::Si {
+                unit_type: Area,
+                prefix: Some("MILLI"),
+                name: "SQUARE_METRE",
+            }),
+            ForgeUnit::SquareCentimeters => Some(IfcUnitEmission::Si {
+                unit_type: Area,
+                prefix: Some("CENTI"),
+                name: "SQUARE_METRE",
+            }),
+            ForgeUnit::SquareMeters => Some(IfcUnitEmission::Si {
+                unit_type: Area,
+                prefix: None,
+                name: "SQUARE_METRE",
+            }),
+            ForgeUnit::SquareFeet => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Area,
+                derived_name: "SQUARE_FOOT",
+                factor_to_si: 0.092_903_04,
+                si_base_name: "SQUARE_METRE",
+            }),
+            ForgeUnit::SquareInches => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Area,
+                derived_name: "SQUARE_INCH",
+                factor_to_si: 0.000_645_16,
+                si_base_name: "SQUARE_METRE",
+            }),
+            ForgeUnit::SquareYards => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Area,
+                derived_name: "SQUARE_YARD",
+                factor_to_si: 0.836_127_36,
+                si_base_name: "SQUARE_METRE",
+            }),
+            ForgeUnit::Acres => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Area,
+                derived_name: "ACRE",
+                factor_to_si: 4046.856_422_4,
+                si_base_name: "SQUARE_METRE",
+            }),
+            ForgeUnit::Hectares => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Area,
+                derived_name: "HECTARE",
+                factor_to_si: 10_000.0,
+                si_base_name: "SQUARE_METRE",
+            }),
+            // Volume
+            ForgeUnit::CubicMillimeters => Some(IfcUnitEmission::Si {
+                unit_type: Volume,
+                prefix: Some("MILLI"),
+                name: "CUBIC_METRE",
+            }),
+            ForgeUnit::CubicCentimeters => Some(IfcUnitEmission::Si {
+                unit_type: Volume,
+                prefix: Some("CENTI"),
+                name: "CUBIC_METRE",
+            }),
+            ForgeUnit::CubicMeters => Some(IfcUnitEmission::Si {
+                unit_type: Volume,
+                prefix: None,
+                name: "CUBIC_METRE",
+            }),
+            ForgeUnit::CubicFeet => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Volume,
+                derived_name: "CUBIC_FOOT",
+                factor_to_si: 0.028_316_846_592,
+                si_base_name: "CUBIC_METRE",
+            }),
+            ForgeUnit::CubicInches => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Volume,
+                derived_name: "CUBIC_INCH",
+                factor_to_si: 0.000_016_387_064,
+                si_base_name: "CUBIC_METRE",
+            }),
+            ForgeUnit::CubicYards => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Volume,
+                derived_name: "CUBIC_YARD",
+                factor_to_si: 0.764_554_857_984,
+                si_base_name: "CUBIC_METRE",
+            }),
+            ForgeUnit::Liters => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Volume,
+                derived_name: "LITRE",
+                factor_to_si: 0.001,
+                si_base_name: "CUBIC_METRE",
+            }),
+            ForgeUnit::UsGallons => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Volume,
+                derived_name: "US_GALLON",
+                factor_to_si: 0.003_785_411_784,
+                si_base_name: "CUBIC_METRE",
+            }),
+            // Plane angle
+            ForgeUnit::Radians => Some(IfcUnitEmission::Si {
+                unit_type: PlaneAngle,
+                prefix: None,
+                name: "RADIAN",
+            }),
+            ForgeUnit::Degrees => Some(IfcUnitEmission::ConversionBased {
+                unit_type: PlaneAngle,
+                derived_name: "DEGREE",
+                factor_to_si: std::f64::consts::PI / 180.0,
+                si_base_name: "RADIAN",
+            }),
+            ForgeUnit::Grads => Some(IfcUnitEmission::ConversionBased {
+                unit_type: PlaneAngle,
+                derived_name: "GRAD",
+                factor_to_si: std::f64::consts::PI / 200.0,
+                si_base_name: "RADIAN",
+            }),
+            // Mass
+            ForgeUnit::Kilograms => Some(IfcUnitEmission::Si {
+                unit_type: Mass,
+                prefix: None,
+                name: "GRAM",
+            }),
+            ForgeUnit::Grams => Some(IfcUnitEmission::Si {
+                unit_type: Mass,
+                prefix: Some("MILLI"),
+                name: "GRAM",
+            }),
+            ForgeUnit::Pounds => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Mass,
+                derived_name: "POUND",
+                factor_to_si: 0.453_592_37,
+                si_base_name: "GRAM",
+            }),
+            // Time
+            ForgeUnit::Seconds => Some(IfcUnitEmission::Si {
+                unit_type: Time,
+                prefix: None,
+                name: "SECOND",
+            }),
+            ForgeUnit::Minutes => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Time,
+                derived_name: "MINUTE",
+                factor_to_si: 60.0,
+                si_base_name: "SECOND",
+            }),
+            ForgeUnit::Hours => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Time,
+                derived_name: "HOUR",
+                factor_to_si: 3600.0,
+                si_base_name: "SECOND",
+            }),
+            ForgeUnit::Other(_) => None,
+        }
+    }
+}
+
 /// A named collection of typed property values attached to a
 /// BuildingElement. Emits as IfcPropertySet → IfcPropertySingleValue
 /// → IfcRelDefinesByProperties in the STEP writer.
@@ -859,5 +1270,133 @@ mod tests {
             PropertyValue::MassPounds(1.0).to_step(),
             "IFCMASSMEASURE(0.453592)"
         );
+    }
+
+    // ---------------- IFC-39 / IFC-40: ForgeUnit parsing + IFC map ----------------
+
+    #[test]
+    fn forge_unit_parses_canonical_ids() {
+        // Canonical: `autodesk.unit.unit:<name>-<version>`.
+        assert_eq!(
+            ForgeUnit::from_forge_identifier("autodesk.unit.unit:millimeters-1.0.1"),
+            ForgeUnit::Millimeters
+        );
+        assert_eq!(
+            ForgeUnit::from_forge_identifier("autodesk.unit.unit:feet-1.0.1"),
+            ForgeUnit::Feet
+        );
+        assert_eq!(
+            ForgeUnit::from_forge_identifier("autodesk.unit.unit:degrees-1.0.1"),
+            ForgeUnit::Degrees
+        );
+    }
+
+    #[test]
+    fn forge_unit_parses_without_version() {
+        assert_eq!(
+            ForgeUnit::from_forge_identifier("autodesk.unit.unit:meters"),
+            ForgeUnit::Meters
+        );
+    }
+
+    #[test]
+    fn forge_unit_parses_bare_names() {
+        // Bare-name lenient path — sometimes PartAtom carries just
+        // the tail (`millimeters`) rather than the full identifier.
+        assert_eq!(
+            ForgeUnit::from_forge_identifier("millimeters"),
+            ForgeUnit::Millimeters
+        );
+        assert_eq!(
+            ForgeUnit::from_forge_identifier("Feet"),
+            ForgeUnit::Feet
+        );
+    }
+
+    #[test]
+    fn forge_unit_unknown_falls_through_to_other() {
+        let fu = ForgeUnit::from_forge_identifier(
+            "autodesk.unit.unit:furlongsPerFortnight-1.0.1",
+        );
+        match fu {
+            ForgeUnit::Other(id) => assert!(id.contains("furlongsPerFortnight")),
+            _ => panic!("unknown units must map to ForgeUnit::Other(_)"),
+        }
+    }
+
+    #[test]
+    fn forge_unit_length_metric_emits_si() {
+        match ForgeUnit::Millimeters.ifc_emission().unwrap() {
+            IfcUnitEmission::Si {
+                unit_type,
+                prefix,
+                name,
+            } => {
+                assert_eq!(unit_type, IfcUnitType::Length);
+                assert_eq!(prefix, Some("MILLI"));
+                assert_eq!(name, "METRE");
+            }
+            _ => panic!("millimeters should emit as IfcSIUnit"),
+        }
+    }
+
+    #[test]
+    fn forge_unit_feet_emits_conversion_based() {
+        match ForgeUnit::Feet.ifc_emission().unwrap() {
+            IfcUnitEmission::ConversionBased {
+                unit_type,
+                derived_name,
+                factor_to_si,
+                si_base_name,
+            } => {
+                assert_eq!(unit_type, IfcUnitType::Length);
+                assert_eq!(derived_name, "FOOT");
+                // 1 foot = 0.3048 metre exactly.
+                assert!((factor_to_si - 0.3048).abs() < 1e-12);
+                assert_eq!(si_base_name, "METRE");
+            }
+            _ => panic!("feet should emit as IfcConversionBasedUnit"),
+        }
+    }
+
+    #[test]
+    fn forge_unit_all_known_variants_have_emission() {
+        // Every non-Other variant MUST have a defined ifc_emission.
+        // (Pinned as an invariant — if a new unit lands without its
+        // mapping, this test fails instead of the bug shipping.)
+        for fu in [
+            ForgeUnit::Millimeters, ForgeUnit::Centimeters,
+            ForgeUnit::Decimeters, ForgeUnit::Meters,
+            ForgeUnit::Kilometers, ForgeUnit::Inches, ForgeUnit::Feet,
+            ForgeUnit::Yards, ForgeUnit::Miles,
+            ForgeUnit::SquareMillimeters, ForgeUnit::SquareCentimeters,
+            ForgeUnit::SquareMeters, ForgeUnit::SquareFeet,
+            ForgeUnit::SquareInches, ForgeUnit::SquareYards,
+            ForgeUnit::Acres, ForgeUnit::Hectares,
+            ForgeUnit::CubicMillimeters, ForgeUnit::CubicCentimeters,
+            ForgeUnit::CubicMeters, ForgeUnit::CubicFeet,
+            ForgeUnit::CubicInches, ForgeUnit::CubicYards,
+            ForgeUnit::Liters, ForgeUnit::UsGallons,
+            ForgeUnit::Radians, ForgeUnit::Degrees, ForgeUnit::Grads,
+            ForgeUnit::Kilograms, ForgeUnit::Grams, ForgeUnit::Pounds,
+            ForgeUnit::Seconds, ForgeUnit::Minutes, ForgeUnit::Hours,
+        ] {
+            assert!(
+                fu.ifc_emission().is_some(),
+                "ForgeUnit {fu:?} has no ifc_emission mapping"
+            );
+        }
+        // ...while Other must return None.
+        assert!(ForgeUnit::Other("x".into()).ifc_emission().is_none());
+    }
+
+    #[test]
+    fn ifc_unit_type_step_tokens() {
+        assert_eq!(IfcUnitType::Length.as_step_token(), "LENGTHUNIT");
+        assert_eq!(IfcUnitType::Area.as_step_token(), "AREAUNIT");
+        assert_eq!(IfcUnitType::Volume.as_step_token(), "VOLUMEUNIT");
+        assert_eq!(IfcUnitType::PlaneAngle.as_step_token(), "PLANEANGLEUNIT");
+        assert_eq!(IfcUnitType::Mass.as_step_token(), "MASSUNIT");
+        assert_eq!(IfcUnitType::Time.as_step_token(), "TIMEUNIT");
     }
 }
