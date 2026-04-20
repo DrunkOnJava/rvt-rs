@@ -38,6 +38,7 @@ pub mod generic;
 pub mod grid;
 pub mod level;
 pub mod openings;
+pub mod parameters;
 pub mod project_organization;
 pub mod reference_planes;
 pub mod reference_points;
@@ -116,6 +117,8 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(annotations::TextNoteDecoder),
         Box::new(annotations::AnnotationDecoder),
         Box::new(project_organization::RevisionDecoder),
+        Box::new(parameters::ParameterElementDecoder),
+        Box::new(parameters::SharedParameterDecoder),
     ]
 }
 
