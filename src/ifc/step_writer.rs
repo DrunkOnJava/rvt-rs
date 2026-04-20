@@ -239,11 +239,93 @@ impl StepWriter {
             ),
         );
 
+        // Classifications — one IfcClassification per source
+        // (OmniClass, Uniformat, …), with one IfcClassificationReference
+        // per coded item. Each classification gets its own
+        // IfcRelAssociatesClassification tying its references back to
+        // the project, which is how IFC4 consumers (BlenderBIM,
+        // IfcOpenShell's classification viewer) discover code refs.
+        //
+        // RvtDocExporter populates `model.classifications` from
+        // PartAtom's `<category term="...">` blocks. Previously those
+        // codes were collected but never emitted; this wires them
+        // through the STEP writer so downstream consumers can see
+        // them directly.
+        for classification in &model.classifications {
+            let source_name = match &classification.source {
+                super::entities::ClassificationSource::OmniClass => "OmniClass",
+                super::entities::ClassificationSource::Uniformat => "Uniformat",
+                super::entities::ClassificationSource::Other(s) => s.as_str(),
+            };
+            let source_name_escaped = escape(source_name);
+            let edition = classification
+                .edition
+                .as_deref()
+                .map(escape)
+                .map(|e| format!("'{e}'"))
+                .unwrap_or_else(|| "$".into());
+
+            let classification_id = self.id();
+            self.emit_entity(
+                classification_id,
+                format!("IFCCLASSIFICATION($,{edition},$,'{source_name_escaped}',$,$,$)"),
+            );
+
+            // One IfcClassificationReference per item; collect their
+            // ids so we can bundle them into the IfcRelAssociatesClassification.
+            let mut ref_ids: Vec<usize> = Vec::with_capacity(classification.items.len());
+            for item in &classification.items {
+                let code_escaped = escape(&item.code);
+                let name_str = item
+                    .name
+                    .as_deref()
+                    .map(escape)
+                    .map(|n| format!("'{n}'"))
+                    .unwrap_or_else(|| "$".into());
+                let ref_id = self.id();
+                self.emit_entity(
+                    ref_id,
+                    format!(
+                        "IFCCLASSIFICATIONREFERENCE($,'{code_escaped}',{name_str},#{classification_id},$)"
+                    ),
+                );
+                ref_ids.push(ref_id);
+            }
+
+            if !ref_ids.is_empty() {
+                let refs_list = ref_ids
+                    .iter()
+                    .map(|id| format!("#{id}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                // IfcRelAssociatesClassification binds a set of objects
+                // to one classification reference. IFC4's schema
+                // requires the RelatingClassification to be a single
+                // IfcClassificationReferenceSelect; we pick the last
+                // reference as the relating one and treat the rest as
+                // project associations. If the project only has one
+                // reference this is exact; when there are multiple,
+                // each gets its own association relationship.
+                for ref_id in &ref_ids {
+                    let rel_id = self.id();
+                    self.emit_entity(
+                        rel_id,
+                        format!(
+                            "IFCRELASSOCIATESCLASSIFICATION('{}',#{owner_hist},$,$,(#{project_id}),#{ref_id})",
+                            make_guid(rel_id),
+                        ),
+                    );
+                }
+                // Silence the warning about an unused local when the
+                // outer `for` loop only iterates once.
+                let _ = refs_list;
+            }
+        }
+
         // Future: emit `model.entities` as IFCBUILDINGELEMENT et al.
         // here, each wired to `storey_id` via `IfcRelContainedInSpatialStructure`.
         // The shape is well-defined once the walker surfaces typed
         // `BuildingElement` values.
-        let _ = model;
 
         self.emit_line("ENDSEC;");
     }
@@ -477,6 +559,70 @@ mod tests {
         assert_ne!(g1, g2);
         assert_ne!(g1, g100);
         assert_ne!(g2, g100);
+    }
+
+    #[test]
+    fn step_emits_omniclass_classification_when_present() {
+        use super::super::entities::{Classification, ClassificationItem, ClassificationSource};
+        let model = IfcModel {
+            project_name: Some("ClassifiedDemo".into()),
+            description: None,
+            entities: Vec::new(),
+            classifications: vec![Classification {
+                source: ClassificationSource::OmniClass,
+                edition: Some("2012".into()),
+                items: vec![
+                    ClassificationItem {
+                        code: "23.45.12.34".into(),
+                        name: Some("Example Product".into()),
+                    },
+                    ClassificationItem {
+                        code: "23.45.12.35".into(),
+                        name: None,
+                    },
+                ],
+            }],
+            units: Vec::new(),
+        };
+        let s = write_step(&model);
+        assert!(
+            s.contains("IFCCLASSIFICATION("),
+            "classification entity missing"
+        );
+        assert!(s.contains("'OmniClass'"), "OmniClass source missing");
+        assert!(s.contains("'2012'"), "edition 2012 missing");
+        assert!(
+            s.matches("IFCCLASSIFICATIONREFERENCE(").count() == 2,
+            "expected two classification references (one per item)"
+        );
+        assert!(s.contains("'23.45.12.34'"), "first code missing");
+        assert!(s.contains("'23.45.12.35'"), "second code missing");
+        assert!(s.contains("'Example Product'"), "item name missing");
+        assert!(
+            s.matches("IFCRELASSOCIATESCLASSIFICATION(").count() == 2,
+            "expected one association rel per reference"
+        );
+    }
+
+    #[test]
+    fn step_omits_classification_entities_when_empty() {
+        // Model with no classifications must NOT emit classification
+        // entities. Guards against a regression where the writer
+        // emits empty IfcClassification / IfcRelAssociates entities.
+        let model = IfcModel::default();
+        let s = write_step(&model);
+        assert!(
+            !s.contains("IFCCLASSIFICATION("),
+            "should not emit IfcClassification when model.classifications is empty"
+        );
+        assert!(
+            !s.contains("IFCCLASSIFICATIONREFERENCE("),
+            "should not emit IfcClassificationReference when model has no classifications"
+        );
+        assert!(
+            !s.contains("IFCRELASSOCIATESCLASSIFICATION("),
+            "should not emit IfcRelAssociatesClassification when model has no classifications"
+        );
     }
 
     #[test]

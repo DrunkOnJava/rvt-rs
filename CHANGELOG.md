@@ -25,10 +25,24 @@ All notable changes will be documented here. This project follows
   + base-64 big-endian-encoded entity index. Every entity in one
   export now has a distinct GUID; identical models produce
   byte-identical STEP output (STEP text diffs now work).
-- 5 new unit tests pinning spatial-hierarchy presence, entity
-  counts, GUID alphabet, GUID determinism, and per-file GUID
-  uniqueness. Existing `ifc_roundtrip` integration tests continue
-  to pass across the 11-release corpus.
+- **`IfcClassification` + `IfcClassificationReference` +
+  `IfcRelAssociatesClassification` emission.** `RvtDocExporter`
+  already extracted OmniClass codes from PartAtom (e.g.
+  `23.45.12.34`) into `model.classifications`; the STEP writer now
+  actually emits them. Each classification source (OmniClass,
+  Uniformat, …) gets one `IfcClassification`; each coded item gets
+  an `IfcClassificationReference` linked back to its source; the
+  project gets one `IfcRelAssociatesClassification` per reference
+  binding the code to the root `IfcProject`. BIM consumers that
+  track code/category provenance (Solibri, IfcOpenShell
+  classification viewer) can now read those codes directly from
+  the exported IFC.
+- 7 new unit tests total pinning spatial-hierarchy presence,
+  entity counts, GUID alphabet, GUID determinism, per-file GUID
+  uniqueness, OmniClass classification emission with items + names
+  + edition, and a guard that empty classifications produce no
+  classification entities. Existing `ifc_roundtrip` integration
+  tests continue to pass across the 11-release corpus.
 
 ### Added — Python bindings via pyo3 + maturin
 
