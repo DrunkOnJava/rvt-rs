@@ -131,6 +131,18 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(mep::PipeFittingDecoder),
         Box::new(mep::PlumbingFixtureDecoder),
         Box::new(mep::SpecialtyEquipmentDecoder),
+        // L5B-54: AProperty* value-carrier classes. The schema
+        // represents every element's parameter values as instances
+        // of one of these subclasses, keyed by name to a matching
+        // ParameterElement definition.
+        Box::new(parameters::APropertyDecoder),
+        Box::new(parameters::APropertyBooleanDecoder),
+        Box::new(parameters::APropertyIntegerDecoder),
+        Box::new(parameters::APropertyEnumDecoder),
+        Box::new(parameters::APropertyDouble1Decoder),
+        Box::new(parameters::APropertyDouble3Decoder),
+        Box::new(parameters::APropertyFloatDecoder),
+        Box::new(parameters::APropertyFloat3Decoder),
     ]
 }
 

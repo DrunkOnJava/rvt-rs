@@ -214,6 +214,186 @@ impl SharedParameter {
     }
 }
 
+/// A single decoded parameter value (L5B-54).
+///
+/// Revit's parameter system stores each element's parameter values
+/// as a sequence of `AProperty*` class instances. The specific
+/// subclass encodes the value's storage type; the instance body
+/// carries the actual value in an `m_value` field.
+///
+/// This enum captures the full vocabulary (8 variants) so callers
+/// can pattern-match once on the property's class + decoded body
+/// without threading the storage type through every downstream
+/// branch. Unknown AProperty subclasses fall through to
+/// [`ParameterValue::Other`] carrying the raw class name + the
+/// best-effort typed fields (useful when Revit ships a new
+/// AProperty variant we haven't mapped yet — the field bytes
+/// still round-trip, just without a typed view).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParameterValue {
+    /// `APropertyBoolean.m_value` — single 8-bit bool (0 / 1).
+    Boolean(bool),
+    /// `APropertyInteger.m_value` — 32-bit signed integer. Used
+    /// for counts, enum-valued options, flags.
+    Integer(i64),
+    /// `APropertyEnum.m_value` — 32-bit enum code. Revit's
+    /// category-specific parameter enum (e.g. Wall.StructuralUsage
+    /// = Bearing / Shear / NonBearing / …).
+    Enum(u32),
+    /// `APropertyDouble1.m_value` — single 64-bit IEEE double.
+    /// Used for length (feet), angle (radians), area, volume,
+    /// and every other measurement. Unit conversion is a display-
+    /// layer concern; the stored value is always in Revit
+    /// internal units.
+    Double(f64),
+    /// `APropertyDouble3.m_value` — triple of 64-bit doubles.
+    /// Used for 3D coordinates, directions, colours as
+    /// normalized RGB.
+    Double3([f64; 3]),
+    /// `APropertyFloat.m_value` — single 32-bit IEEE float.
+    /// Legacy float storage still present in some element classes.
+    Float(f32),
+    /// `APropertyFloat3.m_value` — triple of 32-bit floats.
+    /// Same role as Double3 but narrower precision — reserved for
+    /// graphical-only data (material diffuse colour, UI accent).
+    Float3([f32; 3]),
+    /// `AProperty` or an unrecognised subclass. `class_name` is the
+    /// raw schema class name; `raw_bytes` is the instance body
+    /// before field-level decode. Round-trips through the walker
+    /// unchanged.
+    Other {
+        class_name: String,
+        raw_bytes: Vec<u8>,
+    },
+}
+
+impl ParameterValue {
+    /// Extract a typed [`ParameterValue`] from a [`DecodedElement`]
+    /// produced by one of the AProperty* decoders.
+    ///
+    /// Field-name matching is lenient — we accept any of
+    /// `m_value`, `value`, or `m_value_0` / `value_0` (Revit's
+    /// convention for `_0` / `_1` / `_2` for the components of a
+    /// vector-3 field). Returns [`ParameterValue::Other`] when
+    /// the class doesn't match a known subclass OR the expected
+    /// `m_value` field wasn't in the decoded payload.
+    pub fn from_decoded(decoded: &DecodedElement) -> Self {
+        let find_value = |names: &[&str]| -> Option<&InstanceField> {
+            for (name, field) in &decoded.fields {
+                let normalised = normalise_field_name(name);
+                if names.iter().any(|wanted| normalised == *wanted) {
+                    return Some(field);
+                }
+            }
+            None
+        };
+        match decoded.class.as_str() {
+            "APropertyBoolean" => {
+                if let Some(InstanceField::Bool(b)) = find_value(&["value"]) {
+                    return ParameterValue::Boolean(*b);
+                }
+            }
+            "APropertyInteger" => {
+                if let Some(InstanceField::Integer { value, .. }) =
+                    find_value(&["value"])
+                {
+                    return ParameterValue::Integer(*value);
+                }
+            }
+            "APropertyEnum" => {
+                if let Some(InstanceField::Integer { value, .. }) =
+                    find_value(&["value"])
+                {
+                    return ParameterValue::Enum(*value as u32);
+                }
+            }
+            "APropertyDouble1" => {
+                if let Some(InstanceField::Float { value, .. }) =
+                    find_value(&["value"])
+                {
+                    return ParameterValue::Double(*value);
+                }
+            }
+            "APropertyFloat" => {
+                if let Some(InstanceField::Float { value, .. }) =
+                    find_value(&["value"])
+                {
+                    return ParameterValue::Float(*value as f32);
+                }
+            }
+            "APropertyDouble3" => {
+                if let Some(InstanceField::Vector(components)) = find_value(&["value"])
+                {
+                    if let Some(tuple) = vector_to_f64_3(components) {
+                        return ParameterValue::Double3(tuple);
+                    }
+                }
+            }
+            "APropertyFloat3" => {
+                if let Some(InstanceField::Vector(components)) = find_value(&["value"])
+                {
+                    if let Some(tuple) = vector_to_f32_3(components) {
+                        return ParameterValue::Float3(tuple);
+                    }
+                }
+            }
+            _ => {}
+        }
+        // Fallback — AProperty (base class) or unknown subclass.
+        let raw_bytes = decoded
+            .fields
+            .iter()
+            .find_map(|(_, f)| {
+                if let InstanceField::Bytes(b) = f {
+                    Some(b.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+        ParameterValue::Other {
+            class_name: decoded.class.clone(),
+            raw_bytes,
+        }
+    }
+
+    /// The [`StorageType`] this value corresponds to. Useful for
+    /// joining a decoded value against its matching ParameterElement
+    /// definition.
+    pub fn storage_type(&self) -> StorageType {
+        match self {
+            ParameterValue::Boolean(_) | ParameterValue::Integer(_)
+            | ParameterValue::Enum(_) => StorageType::Integer,
+            ParameterValue::Double(_) | ParameterValue::Double3(_)
+            | ParameterValue::Float(_) | ParameterValue::Float3(_) => {
+                StorageType::Double
+            }
+            ParameterValue::Other { .. } => StorageType::Other,
+        }
+    }
+}
+
+fn vector_to_f64_3(components: &[InstanceField]) -> Option<[f64; 3]> {
+    if components.len() < 3 {
+        return None;
+    }
+    let to_f64 = |f: &InstanceField| match f {
+        InstanceField::Float { value, .. } => Some(*value),
+        InstanceField::Integer { value, .. } => Some(*value as f64),
+        _ => None,
+    };
+    Some([
+        to_f64(&components[0])?,
+        to_f64(&components[1])?,
+        to_f64(&components[2])?,
+    ])
+}
+
+fn vector_to_f32_3(components: &[InstanceField]) -> Option<[f32; 3]> {
+    let tuple_f64 = vector_to_f64_3(components)?;
+    Some([tuple_f64[0] as f32, tuple_f64[1] as f32, tuple_f64[2] as f32])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,5 +537,204 @@ mod tests {
     fn class_names() {
         assert_eq!(ParameterElementDecoder.class_name(), "ParameterElement");
         assert_eq!(SharedParameterDecoder.class_name(), "SharedParameter");
+    }
+
+    // ----- L5B-54: AProperty* + ParameterValue -----
+
+    fn mk_decoded(class: &str, fields: Vec<(String, InstanceField)>) -> DecodedElement {
+        DecodedElement {
+            id: None,
+            class: class.into(),
+            fields,
+            byte_range: 0..0,
+        }
+    }
+
+    #[test]
+    fn aproperty_boolean_decodes_to_parameter_value() {
+        let d = mk_decoded(
+            "APropertyBoolean",
+            vec![("m_value".into(), InstanceField::Bool(true))],
+        );
+        assert_eq!(ParameterValue::from_decoded(&d), ParameterValue::Boolean(true));
+    }
+
+    #[test]
+    fn aproperty_integer_decodes_to_parameter_value() {
+        let d = mk_decoded(
+            "APropertyInteger",
+            vec![(
+                "m_value".into(),
+                InstanceField::Integer {
+                    value: 42,
+                    signed: true,
+                    size: 4,
+                },
+            )],
+        );
+        assert_eq!(ParameterValue::from_decoded(&d), ParameterValue::Integer(42));
+    }
+
+    #[test]
+    fn aproperty_enum_decodes_to_parameter_value() {
+        let d = mk_decoded(
+            "APropertyEnum",
+            vec![(
+                "m_value".into(),
+                InstanceField::Integer {
+                    value: 7,
+                    signed: false,
+                    size: 4,
+                },
+            )],
+        );
+        assert_eq!(ParameterValue::from_decoded(&d), ParameterValue::Enum(7));
+    }
+
+    #[test]
+    fn aproperty_double1_decodes_to_parameter_value() {
+        let d = mk_decoded(
+            "APropertyDouble1",
+            vec![(
+                "m_value".into(),
+                InstanceField::Float {
+                    value: 3.5,
+                    size: 8,
+                },
+            )],
+        );
+        assert_eq!(ParameterValue::from_decoded(&d), ParameterValue::Double(3.5));
+    }
+
+    #[test]
+    fn aproperty_double3_decodes_to_parameter_value() {
+        let components = vec![
+            InstanceField::Float { value: 1.0, size: 8 },
+            InstanceField::Float { value: 2.0, size: 8 },
+            InstanceField::Float { value: 3.0, size: 8 },
+        ];
+        let d = mk_decoded(
+            "APropertyDouble3",
+            vec![("m_value".into(), InstanceField::Vector(components))],
+        );
+        assert_eq!(
+            ParameterValue::from_decoded(&d),
+            ParameterValue::Double3([1.0, 2.0, 3.0])
+        );
+    }
+
+    #[test]
+    fn aproperty_float_decodes_to_parameter_value() {
+        let d = mk_decoded(
+            "APropertyFloat",
+            vec![(
+                "m_value".into(),
+                InstanceField::Float {
+                    value: 0.5,
+                    size: 4,
+                },
+            )],
+        );
+        assert_eq!(ParameterValue::from_decoded(&d), ParameterValue::Float(0.5));
+    }
+
+    #[test]
+    fn aproperty_float3_decodes_to_parameter_value() {
+        let components = vec![
+            InstanceField::Float { value: 0.1, size: 4 },
+            InstanceField::Float { value: 0.2, size: 4 },
+            InstanceField::Float { value: 0.3, size: 4 },
+        ];
+        let d = mk_decoded(
+            "APropertyFloat3",
+            vec![("m_value".into(), InstanceField::Vector(components))],
+        );
+        match ParameterValue::from_decoded(&d) {
+            ParameterValue::Float3([x, y, z]) => {
+                assert!((x - 0.1).abs() < 1e-6);
+                assert!((y - 0.2).abs() < 1e-6);
+                assert!((z - 0.3).abs() < 1e-6);
+            }
+            other => panic!("expected Float3, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn aproperty_unknown_falls_through_to_other() {
+        let d = mk_decoded(
+            "APropertyNewVariantFromFutureRevit",
+            vec![("m_value".into(), InstanceField::Bytes(vec![0x01, 0x02]))],
+        );
+        match ParameterValue::from_decoded(&d) {
+            ParameterValue::Other { class_name, raw_bytes } => {
+                assert_eq!(class_name, "APropertyNewVariantFromFutureRevit");
+                assert_eq!(raw_bytes, vec![0x01, 0x02]);
+            }
+            other => panic!("expected Other, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn aproperty_missing_value_field_falls_through_to_other() {
+        // Class matches a known decoder, but the m_value field is
+        // absent. Should still return Other (not panic, not silently
+        // lose data).
+        let d = mk_decoded("APropertyBoolean", vec![]);
+        assert!(matches!(
+            ParameterValue::from_decoded(&d),
+            ParameterValue::Other { .. }
+        ));
+    }
+
+    #[test]
+    fn parameter_value_storage_type_mapping() {
+        assert_eq!(
+            ParameterValue::Boolean(false).storage_type(),
+            StorageType::Integer
+        );
+        assert_eq!(
+            ParameterValue::Integer(0).storage_type(),
+            StorageType::Integer
+        );
+        assert_eq!(ParameterValue::Enum(0).storage_type(), StorageType::Integer);
+        assert_eq!(
+            ParameterValue::Double(0.0).storage_type(),
+            StorageType::Double
+        );
+        assert_eq!(
+            ParameterValue::Double3([0.0; 3]).storage_type(),
+            StorageType::Double
+        );
+        assert_eq!(
+            ParameterValue::Float(0.0).storage_type(),
+            StorageType::Double
+        );
+        assert_eq!(
+            ParameterValue::Float3([0.0; 3]).storage_type(),
+            StorageType::Double
+        );
+        assert_eq!(
+            ParameterValue::Other {
+                class_name: String::new(),
+                raw_bytes: vec![],
+            }
+            .storage_type(),
+            StorageType::Other
+        );
+    }
+
+    #[test]
+    fn aproperty_decoders_reject_wrong_schema() {
+        // Spot-check two of the eight new decoders.
+        assert!(
+            APropertyBooleanDecoder
+                .decode(&[], &wrong_schema(), &HandleIndex::new())
+                .is_err()
+        );
+        assert!(
+            APropertyDouble3Decoder
+                .decode(&[], &wrong_schema(), &HandleIndex::new())
+                .is_err()
+        );
     }
 }
