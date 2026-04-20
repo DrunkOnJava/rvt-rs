@@ -84,6 +84,18 @@ class RevitFile:
         regardless of host OS.
         """
 
+    def read_stream(self, name: str) -> bytes:
+        """Raw bytes of the named OLE stream. Accepts either
+        ``/Formats/Latest`` or ``Formats/Latest`` (both resolve the
+        same way). Returns compressed bytes on streams that use
+        truncated-gzip framing; most Revit streams use this framing
+        so callers typically want to run the bytes through a
+        ``gzip`` decompressor before parsing.
+
+        Raises ``IOError`` when the stream doesn't exist. Use
+        ``stream_names()`` to enumerate available streams.
+        """
+
     def missing_required_streams(self) -> list[str]:
         """List of required Revit stream names the file doesn't
         contain. Empty list on a valid Revit file. Useful for
