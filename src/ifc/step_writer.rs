@@ -486,6 +486,84 @@ impl StepWriter {
                 self.emit_entity(brep_id, format!("IFCFACETEDBREP(#{brep_id_placeholder})", brep_id_placeholder = shell_id));
                 (brep_id, "Brep")
             }
+            SolidShape::SweptPath {
+                profile,
+                directrix_points_feet,
+                fixed_reference,
+            } => {
+                // IFC-17: IfcFixedReferenceSweptAreaSolid. Profile
+                // sweeps along the directrix polyline, orthogonal
+                // at every sample, with `fixed_reference` providing
+                // the "up" direction.
+
+                // Directrix — one IfcCartesianPoint per vertex, then
+                // an IfcPolyline referencing them.
+                let mut dir_pt_ids: Vec<usize> =
+                    Vec::with_capacity(directrix_points_feet.len());
+                for [x, y, z] in directrix_points_feet {
+                    let (xm, ym, zm) = (x * 0.3048, y * 0.3048, z * 0.3048);
+                    let pt = self.id();
+                    self.emit_entity(
+                        pt,
+                        format!("IFCCARTESIANPOINT(({xm:.6},{ym:.6},{zm:.6}))"),
+                    );
+                    dir_pt_ids.push(pt);
+                }
+                let directrix = self.id();
+                let pt_refs = dir_pt_ids
+                    .iter()
+                    .map(|id| format!("#{id}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                self.emit_entity(directrix, format!("IFCPOLYLINE(({pt_refs}))"));
+
+                // Profile — same 2D placement pattern as
+                // emit_profile_def. Wrap ProfileDef in a temporary
+                // Extrusion to reuse the existing helper (its
+                // dimensions aren't used since we override via
+                // profile_override).
+                let profile_origin = self.id();
+                self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                let profile_x_axis = self.id();
+                self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
+                let profile_placement = self.id();
+                self.emit_entity(
+                    profile_placement,
+                    format!(
+                        "IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"
+                    ),
+                );
+                let wrap_ex = Extrusion {
+                    width_feet: 0.0,
+                    depth_feet: 0.0,
+                    height_feet: 0.0,
+                    profile_override: Some(profile.clone()),
+                };
+                let profile_id = self.emit_profile_def(&wrap_ex, profile_placement);
+
+                // Fixed reference — normalise to unit length.
+                let [fx, fy, fz] = *fixed_reference;
+                let mag = (fx * fx + fy * fy + fz * fz).sqrt().max(1e-12);
+                let (fx, fy, fz) = (fx / mag, fy / mag, fz / mag);
+                let fixed_ref_id = self.id();
+                self.emit_entity(
+                    fixed_ref_id,
+                    format!("IFCDIRECTION(({fx:.6},{fy:.6},{fz:.6}))"),
+                );
+
+                // IFCFIXEDREFERENCESWEPTAREASOLID(SweptArea, Position,
+                //   Directrix, StartParam, EndParam, FixedReference).
+                // StartParam / EndParam = $ means use the full
+                // directrix from start to end — the IFC4 default.
+                let solid_id = self.id();
+                self.emit_entity(
+                    solid_id,
+                    format!(
+                        "IFCFIXEDREFERENCESWEPTAREASOLID(#{profile_id},#{element_axis},#{directrix},$,$,#{fixed_ref_id})"
+                    ),
+                );
+                (solid_id, "SweptSolid")
+            }
         }
     }
 
@@ -2928,6 +3006,50 @@ mod tests {
         assert!(
             !s.contains("IFCEXTRUDEDAREASOLID("),
             "extrusion path must not fire when solid_shape is set"
+        );
+    }
+
+    #[test]
+    fn swept_path_emits_fixed_reference_swept_area_solid() {
+        use super::super::entities::ProfileDef;
+        // Pipe run: a 2-inch-diameter circular profile swept along a
+        // 3-segment L-shape directrix with +Z as the fixed reference.
+        let shape = SolidShape::SweptPath {
+            profile: ProfileDef::Circle {
+                radius_feet: 1.0 / 12.0,
+            },
+            directrix_points_feet: vec![
+                [0.0, 0.0, 0.0],
+                [10.0, 0.0, 0.0],
+                [10.0, 0.0, 8.0],
+                [10.0, 5.0, 8.0],
+            ],
+            fixed_reference: [0.0, 0.0, 1.0],
+        };
+        let s = write_step(&model_with_solid_shape(shape));
+        assert!(
+            s.contains("IFCFIXEDREFERENCESWEPTAREASOLID("),
+            "swept-path shape missing IFCFIXEDREFERENCESWEPTAREASOLID"
+        );
+        assert!(
+            s.contains("IFCCIRCLEPROFILEDEF("),
+            "profile not emitted"
+        );
+        assert!(
+            s.contains("IFCPOLYLINE(("),
+            "directrix polyline not emitted"
+        );
+        // 4 directrix vertices + 1 profile-placement origin =
+        // minimum cartesian-point count. Profile origin + directrix
+        // pts = 5. Actual count may be higher (project-level origins
+        // also emit IFCCARTESIANPOINT) so we only lower-bound.
+        assert!(
+            s.matches("IFCCARTESIANPOINT((").count() >= 5,
+            "expected at least 5 IFCCARTESIANPOINT entries"
+        );
+        assert!(
+            s.contains("'Body','SweptSolid'"),
+            "swept-path rep type must be 'SweptSolid'"
         );
     }
 
