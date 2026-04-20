@@ -1,52 +1,53 @@
 name: Feature request
-description: An enhancement, new CLI, new decoder, or a Layer-5 research direction.
-labels: ["enhancement"]
+description: Propose a new capability, decoder, CLI flag, or API surface.
+title: "Feature: "
+labels: ["enhancement", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Before opening: is this already tracked? Active research questions
-        and open work live in
-        [`docs/rvt-moat-break-reconnaissance.md`](../blob/main/docs/rvt-moat-break-reconnaissance.md)
-        §Q6. If your suggestion maps onto an existing question there, a
-        comment on that area (or a draft PR) is often more productive than
-        a new issue.
-  - type: dropdown
-    id: area
-    attributes:
-      label: Area
-      options:
-        - Layer 5 — instance-data extraction (walker / IFC export)
-        - Layer 4 — schema decoder / type classification
-        - CLI tooling (rvt-analyze, rvt-info, rvt-schema, rvt-history, rvt-diff, rvt-corpus, rvt-dump)
-        - Writer / round-trip patching
-        - Documentation / recon report
-        - Python bindings (pyo3 + maturin)
-        - IfcOpenShell bridge
-        - Other
-    validations:
-      required: true
+        Before opening, check whether the request is already tracked in [`CHANGELOG.md`](../blob/main/CHANGELOG.md) or the open research questions in [`docs/rvt-moat-break-reconnaissance.md`](../blob/main/docs/rvt-moat-break-reconnaissance.md). For Layer 5 work in particular, a comment on an existing question is often more productive than a new issue.
   - type: textarea
     id: problem
     attributes:
-      label: What problem does this solve?
-      description: Who benefits, concretely? (BIM tool authors, format researchers, contractors, etc.)
+      label: Problem
+      description: What concrete problem does this solve, and for whom?
+      placeholder: "BIM tool authors need to read Revit family parameters without running Revit, and today rvt-rs does not expose X."
     validations:
       required: true
   - type: textarea
-    id: proposal
+    id: proposed_solution
     attributes:
-      label: Proposed approach
-      description: Rough sketch of the implementation or investigation plan. Probes welcome.
+      label: Proposed solution
+      description: Sketch of the API, CLI flag, decoder, or investigation plan.
+    validations:
+      required: true
   - type: textarea
-    id: alternatives
+    id: alternatives_considered
     attributes:
       label: Alternatives considered
-  - type: checkboxes
-    id: willing
+      description: Existing workarounds, other crates, or approaches you ruled out — and why.
+  - type: dropdown
+    id: affected_subsystem
     attributes:
-      label: Are you willing to work on this?
+      label: Affected subsystem
       options:
-        - label: "Yes — I'll open a PR."
-        - label: "Maybe — with guidance."
-        - label: "Just filing."
+        - "File reader"
+        - "Element decoders"
+        - "IFC exporter"
+        - "CLI"
+        - "Docs"
+        - "Other"
+    validations:
+      required: true
+  - type: dropdown
+    id: breaking_change
+    attributes:
+      label: Breaking change
+      description: Would this change break existing rvt-rs API or CLI behavior?
+      options:
+        - "No"
+        - "Yes"
+        - "Not sure"
+    validations:
+      required: true
