@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
 description = "Open reader for Autodesk Revit (.rvt, .rfa, .rte, .rft) files. No Revit installation required. Verified against 11 Revit releases (2016-2026)."
-authors = ["Griffin Radcliffe <151978260+DrunkOnJava@users.noreply.github.com>"]
+authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]
 repository = "https://github.com/DrunkOnJava/rvt-rs"
 homepage = "https://github.com/DrunkOnJava/rvt-rs"
 documentation = "https://docs.rs/rvt"
@@ -24,6 +24,12 @@ exclude = [
 
 # The SPDX identifier `Apache-2.0` is set above. The full license text
 # is in LICENSE at the crate root.
+
+[features]
+# Optional Python bindings via pyo3. Enabled when building the
+# `rvt` Python wheel with maturin (`maturin build --features python`).
+# Keeps the default Rust lib dependency footprint lean.
+python = ["dep:pyo3"]
 
 [dependencies]
 # Microsoft Compound File Binary (OLE) container — reads the outer
@@ -44,6 +50,10 @@ clap = { version = "4", features = ["derive"] }
 # Error ergonomics.
 anyhow = "1"
 thiserror = "1"
+# Optional: Python bindings. `abi3-py38` produces a single wheel
+# compatible with every Python >= 3.8, avoiding per-minor-version
+# rebuilds. Only pulled in when the `python` feature is enabled.
+pyo3 = { version = "0.22", optional = true, features = ["extension-module", "abi3-py38"] }
 
 # Seven shipped binaries. All depend on the `rvt` library crate.
 
@@ -86,6 +96,11 @@ path = "src/bin/rvt_ifc.rs"
 [lib]
 name = "rvt"
 path = "src/lib.rs"
+# `cdylib` builds the Python extension shared object via maturin;
+# `rlib` is needed so other Rust crates (tests, examples, the
+# binaries in src/bin/) can depend on the library. Both must be
+# present for `cargo test --features python` to link correctly.
+crate-type = ["cdylib", "rlib"]
 
 [profile.release]
 lto = true
