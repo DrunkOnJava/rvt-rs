@@ -1,7 +1,7 @@
 # RVT (Revit) on-disk format — reconnaissance report
 
 **Date:** 2026-04-19
-**Analyst:** Opus 4.7 (via Claude Code) + Griffin Radcliffe
+**Analyst:** Opus 4.7 (via Claude Code) + Griffin Long
 **Artifact corpus:** 11 RFA samples from phi-ag/rvt (Autodesk's `rac_basic_sample_family`) spanning **Revit 2016 → 2026** (every release)
 **Primary target:** `racbasicsamplefamily-2024.rfa` SHA-256 derivable from Git LFS OID (phi-ag/rvt)
 **Reference corpus:** Apache Tika (metadata only), phi-ag/rvt (TypeScript CFB parser, partial), chuongmep/revit-extractor (wraps Autodesk's .exe), teocomi/Reveche (OLE enumeration), Jeremy Tammik's blog (Autodesk DevRel — 2008-present)

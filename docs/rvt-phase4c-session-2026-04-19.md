@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-19
 **Skill:** `/rev-eng` (static-only)
-**Analyst:** Opus 4.7 (via Claude Code) + Griffin Radcliffe
+**Analyst:** Opus 4.7 (via Claude Code) + Griffin Long
 **Target:** `phi-ag/rvt` sample family corpus — 11 Autodesk
 `rac_basic_sample_family-YYYY.rfa` files spanning Revit 2016 → 2026.
 **Safety posture:** Static analysis only. No execution of sample files.

@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use rvt-rs in academic or archival work, please cite it using this metadata."
+title: "rvt-rs: Clean-room Rust reader for Autodesk Revit files"
+type: software
+version: 0.1.0
+date-released: "2026-04-19"
+license: Apache-2.0
+repository-code: "https://github.com/DrunkOnJava/rvt-rs"
+url: "https://github.com/DrunkOnJava/rvt-rs"
+abstract: >-
+  rvt-rs is an Apache-2-licensed Rust library and CLI for reading
+  Autodesk Revit files (.rvt, .rfa, .rte, .rft) without any dependency
+  on Autodesk's SDK or a Revit installation. It is the first
+  open-source tool to enumerate the Formats/Latest class schema
+  inventory and has been verified against 11 Revit releases spanning
+  2016 through 2026.
+keywords:
+  - revit
+  - rvt
+  - rfa
+  - bim
+  - autodesk
+  - ifc
+  - file-format
+  - parser
+  - rust
+  - interoperability
+  - reverse-engineering
+authors:
+  - family-names: Long
+    given-names: Griffin
+    alias: DrunkOnJava

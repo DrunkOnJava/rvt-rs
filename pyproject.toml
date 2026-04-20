@@ -1,0 +1,36 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rvt"
+description = "Clean-room Apache-2 Python reader for Autodesk Revit files (.rvt/.rfa/.rte/.rft). No Autodesk SDK required. Verified against 11 Revit releases (2016–2026)."
+authors = [{ name = "Griffin Long", email = "151978260+DrunkOnJava@users.noreply.github.com" }]
+license = { text = "Apache-2.0" }
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering",
+    "Topic :: File Formats",
+]
+keywords = ["revit", "bim", "autodesk", "ifc", "rfa"]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/DrunkOnJava/rvt-rs"
+Documentation = "https://github.com/DrunkOnJava/rvt-rs/blob/main/README.md"
+Issues = "https://github.com/DrunkOnJava/rvt-rs/issues"
+
+[tool.maturin]
+# Python extension module lives behind the `python` feature so the
+# default Rust lib build doesn't pull pyo3.
+features = ["python"]
+# Version comes from Cargo.toml's [package.version].
+module-name = "rvt"
+# Manylinux-compatible wheels are the default; abi3-py38 feature on
+# pyo3 produces a single wheel that works with every Python ≥ 3.8.
+python-source = "python"
