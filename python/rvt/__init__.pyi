@@ -95,6 +95,20 @@ class RevitFile:
         ``classes``, ``fields``, ``cpp_types``.
         """
 
+    def schema_json(self) -> str:
+        """Full schema as a JSON string (parseable via ``json.loads``).
+
+        Return shape: ``{"classes": [...], "cpp_types": [...],
+        "skipped_records": int}``. Each class has ``name``, ``offset``,
+        ``fields``, ``tag``, ``parent``, ``declared_field_count``,
+        ``was_parent_only``, ``ancestor_tag``. Each field has
+        ``name``, ``cpp_type``, ``field_type`` (a tagged enum).
+
+        The string is on the order of 1-2 MB for a typical Revit
+        family (~395 classes, ~13,570 fields). For just counts, use
+        ``schema_summary()``.
+        """
+
     def read_adocument(self) -> Optional[TypedADocument]:
         """Run the Layer-5a walker and return ADocument's instance
         as a dict, or ``None`` if the entry-point detector can't

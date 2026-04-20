@@ -131,6 +131,38 @@ def test_schema_summary_has_expected_counts(sample_2024):
     assert summary["cpp_types"] >= 0
 
 
+def test_schema_json_parses_and_matches_summary(sample_2024):
+    """The JSON output of schema_json() should parse into a dict whose
+    counts match schema_summary(), confirming the full-schema export
+    is consistent with the cheap counts-only query.
+    """
+    import json
+
+    summary = sample_2024.schema_summary()
+    js = sample_2024.schema_json()
+    assert isinstance(js, str)
+    assert len(js) > 10_000, "full schema JSON should be substantial"
+    parsed = json.loads(js)
+    assert isinstance(parsed, dict)
+    assert "classes" in parsed
+    assert "cpp_types" in parsed
+    assert len(parsed["classes"]) == summary["classes"]
+    assert len(parsed["cpp_types"]) == summary["cpp_types"]
+    total_fields = sum(len(c["fields"]) for c in parsed["classes"])
+    assert total_fields == summary["fields"]
+
+
+def test_schema_json_contains_adocument_class(sample_2024):
+    """The schema always contains a class named `ADocument` — it's
+    the root document class and what the Layer 5a walker targets.
+    """
+    import json
+
+    parsed = json.loads(sample_2024.schema_json())
+    names = [c["name"] for c in parsed["classes"]]
+    assert "ADocument" in names
+
+
 def test_read_adocument_returns_dict_with_13_fields(sample_2024):
     doc = sample_2024.read_adocument()
     assert doc is not None

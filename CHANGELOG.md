@@ -48,6 +48,13 @@ All notable changes will be documented here. This project follows
 - **`rvt.rvt_to_ifc(path)`** one-shot helper — equivalent to
   `RevitFile(path).write_ifc()` for callers that just want the IFC
   string and never touch the intermediate object.
+- **`RevitFile.schema_json()`** — returns the full schema as a JSON
+  string (parse with `json.loads` to get a dict equivalent to
+  Rust's `SchemaTable`). Zero-copy relative to the decoded schema;
+  ~1-2 MB per typical Revit family. `schema_summary()` remains the
+  cheap counts-only variant. Two new pytest tests cross-check that
+  summary counts match `schema_json()`'s full-parse counts and that
+  the `ADocument` class (the walker's target) is always present.
 - **CI wheel build matrix** (`.github/workflows/ci.yml` `python-wheel`
   job) — `PyO3/maturin-action@v1` builds a release wheel on Ubuntu,
   macOS, and Windows runners, installs it into the runner's Python,
