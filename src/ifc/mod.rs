@@ -65,8 +65,10 @@ use crate::Result;
 
 pub mod category_map;
 pub mod entities;
+pub mod from_decoded;
 pub mod step_writer;
 
+pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model, entity_type_histogram};
 pub use step_writer::write_step;
 
 /// In-memory IFC model — what a successful export produces. Wire format
