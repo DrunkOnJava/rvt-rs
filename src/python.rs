@@ -142,7 +142,7 @@ impl PyRevitFile {
     /// `stream_names()` first to enumerate what's readable.
     fn read_stream<'py>(&mut self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyBytes>> {
         let bytes = self.inner.read_stream(name).map_err(to_py_io)?;
-        Ok(PyBytes::new_bound(py, &bytes))
+        Ok(PyBytes::new(py, &bytes))
     }
 
     /// Required streams that are absent — empty list means the file
@@ -160,7 +160,7 @@ impl PyRevitFile {
     /// it should use `schema_json()`.
     fn schema_summary<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let schema = self.inner.schema().map_err(to_py_val)?;
-        let d = PyDict::new_bound(py);
+        let d = PyDict::new(py);
         let total_fields: usize = schema.classes.iter().map(|c| c.fields.len()).sum();
         d.set_item("classes", schema.classes.len())?;
         d.set_item("fields", total_fields)?;
@@ -258,13 +258,13 @@ impl PyRevitFile {
         let Some(inst) = walker::read_adocument(&mut self.inner).map_err(to_py_io)? else {
             return Ok(None);
         };
-        let d = PyDict::new_bound(py);
+        let d = PyDict::new(py);
         d.set_item("entry_offset", inst.entry_offset)?;
         d.set_item("version", inst.version)?;
 
-        let fields = PyList::empty_bound(py);
+        let fields = PyList::empty(py);
         for (name, value) in &inst.fields {
-            let fd = PyDict::new_bound(py);
+            let fd = PyDict::new(py);
             fd.set_item("name", name)?;
             match value {
                 walker::InstanceField::Pointer { raw } => {
@@ -282,6 +282,33 @@ impl PyRevitFile {
                     fd.set_item("count", col_a.len())?;
                     fd.set_item("col_a", col_a.clone())?;
                     fd.set_item("col_b", col_b.clone())?;
+                }
+                walker::InstanceField::Integer { value, signed, size } => {
+                    fd.set_item("kind", "integer")?;
+                    fd.set_item("value", *value)?;
+                    fd.set_item("signed", *signed)?;
+                    fd.set_item("size", *size)?;
+                }
+                walker::InstanceField::Float { value, size } => {
+                    fd.set_item("kind", "float")?;
+                    fd.set_item("value", *value)?;
+                    fd.set_item("size", *size)?;
+                }
+                walker::InstanceField::Bool(v) => {
+                    fd.set_item("kind", "bool")?;
+                    fd.set_item("value", *v)?;
+                }
+                walker::InstanceField::Guid(bytes) => {
+                    fd.set_item("kind", "guid")?;
+                    fd.set_item("bytes", bytes.to_vec())?;
+                }
+                walker::InstanceField::String(s) => {
+                    fd.set_item("kind", "string")?;
+                    fd.set_item("value", s.as_str())?;
+                }
+                walker::InstanceField::Vector(items) => {
+                    fd.set_item("kind", "vector")?;
+                    fd.set_item("len", items.len())?;
                 }
                 walker::InstanceField::Bytes(b) => {
                     fd.set_item("kind", "bytes")?;
