@@ -17,6 +17,7 @@
 //! dependency, fully `#![deny(unsafe_code)]`-clean.
 
 use super::IfcModel;
+use super::entities::Extrusion;
 
 /// Options controlling STEP serialization.
 #[derive(Debug, Clone, Default)]
@@ -83,6 +84,212 @@ impl StepWriter {
 
     fn emit_entity<S: AsRef<str>>(&mut self, id: usize, body: S) {
         self.out.push_str(&format!("#{id}={};\n", body.as_ref()));
+    }
+
+    /// Emit one `IfcProfileDef` subclass from an [`Extrusion`],
+    /// dispatching on [`Extrusion::profile_override`]. Returns the
+    /// entity ID of the emitted profile so the caller can wire it
+    /// into an `IFCEXTRUDEDAREASOLID`.
+    ///
+    /// - `ex.profile_override = None` emits the default
+    ///   `IFCRECTANGLEPROFILEDEF` from `width_feet` × `depth_feet`.
+    /// - `Circle { radius }` emits `IFCCIRCLEPROFILEDEF`.
+    /// - `IShape { … }` emits `IFCIShapeProfileDef` with a full
+    ///   OverallWidth / OverallDepth / WebThickness /
+    ///   FlangeThickness attribute set (fillet radius = $).
+    /// - `TShape { … }` emits `IFCTShapeProfileDef`.
+    /// - `LShape { … }` emits `IFCLShapeProfileDef` (EdgeRadius,
+    ///   LegSlope = $).
+    /// - `UShape { … }` emits `IFCUShapeProfileDef`.
+    /// - `RectangleHollow { … }` emits
+    ///   `IFCRectangleHollowProfileDef`.
+    /// - `CircleHollow { … }` emits `IFCCircleHollowProfileDef`.
+    /// - `ArbitraryClosed { points }` emits `IFCPOLYLINE` +
+    ///   `IFCArbitraryClosedProfileDef`; if the polyline isn't
+    ///   already closed (last == first), the writer appends the
+    ///   first point at the tail.
+    ///
+    /// All length values are converted from feet to metres at emit
+    /// time (factor 0.3048).
+    fn emit_profile_def(&mut self, ex: &Extrusion, profile_placement: usize) -> usize {
+        use super::entities::ProfileDef;
+
+        let profile_id = self.id();
+        match &ex.profile_override {
+            None | Some(ProfileDef::Rectangle { .. }) => {
+                let (w_ft, d_ft) = match ex.profile_override {
+                    Some(ProfileDef::Rectangle {
+                        width_feet,
+                        depth_feet,
+                    }) => (width_feet, depth_feet),
+                    _ => (ex.width_feet, ex.depth_feet),
+                };
+                let x_dim = w_ft * 0.3048;
+                let y_dim = d_ft * 0.3048;
+                self.emit_entity(
+                    profile_id,
+                    format!(
+                        "IFCRECTANGLEPROFILEDEF(.AREA.,$,#{profile_placement},{x_dim:.6},{y_dim:.6})"
+                    ),
+                );
+            }
+            Some(ProfileDef::Circle { radius_feet }) => {
+                let r = radius_feet * 0.3048;
+                self.emit_entity(
+                    profile_id,
+                    format!("IFCCIRCLEPROFILEDEF(.AREA.,$,#{profile_placement},{r:.6})"),
+                );
+            }
+            Some(ProfileDef::IShape {
+                overall_width_feet,
+                overall_depth_feet,
+                web_thickness_feet,
+                flange_thickness_feet,
+            }) => {
+                let w = overall_width_feet * 0.3048;
+                let d = overall_depth_feet * 0.3048;
+                let tw = web_thickness_feet * 0.3048;
+                let tf = flange_thickness_feet * 0.3048;
+                // IFCIShapeProfileDef(ProfileType, ProfileName,
+                // Position, OverallWidth, OverallDepth,
+                // WebThickness, FlangeThickness, FilletRadius?).
+                self.emit_entity(
+                    profile_id,
+                    format!(
+                        "IFCISHAPEPROFILEDEF(.AREA.,$,#{profile_placement},{w:.6},{d:.6},{tw:.6},{tf:.6},$)"
+                    ),
+                );
+            }
+            Some(ProfileDef::TShape {
+                overall_depth_feet,
+                flange_width_feet,
+                web_thickness_feet,
+                flange_thickness_feet,
+            }) => {
+                let d = overall_depth_feet * 0.3048;
+                let fw = flange_width_feet * 0.3048;
+                let tw = web_thickness_feet * 0.3048;
+                let tf = flange_thickness_feet * 0.3048;
+                // IFCTShapeProfileDef(ProfileType, ProfileName,
+                // Position, Depth, FlangeWidth, WebThickness,
+                // FlangeThickness, FilletRadius?, FlangeEdgeRadius?,
+                // WebEdgeRadius?, WebSlope?, FlangeSlope?).
+                self.emit_entity(
+                    profile_id,
+                    format!(
+                        "IFCTSHAPEPROFILEDEF(.AREA.,$,#{profile_placement},{d:.6},{fw:.6},{tw:.6},{tf:.6},$,$,$,$,$)"
+                    ),
+                );
+            }
+            Some(ProfileDef::LShape {
+                overall_depth_feet,
+                overall_width_feet,
+                thickness_feet,
+            }) => {
+                let d = overall_depth_feet * 0.3048;
+                let w = overall_width_feet * 0.3048;
+                let t = thickness_feet * 0.3048;
+                // IFCLShapeProfileDef(ProfileType, ProfileName,
+                // Position, Depth, Width, Thickness, FilletRadius?,
+                // EdgeRadius?, LegSlope?).
+                self.emit_entity(
+                    profile_id,
+                    format!(
+                        "IFCLSHAPEPROFILEDEF(.AREA.,$,#{profile_placement},{d:.6},{w:.6},{t:.6},$,$,$)"
+                    ),
+                );
+            }
+            Some(ProfileDef::UShape {
+                overall_depth_feet,
+                flange_width_feet,
+                web_thickness_feet,
+                flange_thickness_feet,
+            }) => {
+                let d = overall_depth_feet * 0.3048;
+                let fw = flange_width_feet * 0.3048;
+                let tw = web_thickness_feet * 0.3048;
+                let tf = flange_thickness_feet * 0.3048;
+                // IFCUShapeProfileDef(ProfileType, ProfileName,
+                // Position, Depth, FlangeWidth, WebThickness,
+                // FlangeThickness, FilletRadius?,
+                // EdgeRadius?, FlangeSlope?).
+                self.emit_entity(
+                    profile_id,
+                    format!(
+                        "IFCUSHAPEPROFILEDEF(.AREA.,$,#{profile_placement},{d:.6},{fw:.6},{tw:.6},{tf:.6},$,$,$)"
+                    ),
+                );
+            }
+            Some(ProfileDef::RectangleHollow {
+                overall_width_feet,
+                overall_depth_feet,
+                wall_thickness_feet,
+            }) => {
+                let w = overall_width_feet * 0.3048;
+                let d = overall_depth_feet * 0.3048;
+                let t = wall_thickness_feet * 0.3048;
+                // IFCRectangleHollowProfileDef(ProfileType, ProfileName,
+                // Position, XDim, YDim, WallThickness,
+                // InnerFilletRadius?, OuterFilletRadius?).
+                self.emit_entity(
+                    profile_id,
+                    format!(
+                        "IFCRECTANGLEHOLLOWPROFILEDEF(.AREA.,$,#{profile_placement},{w:.6},{d:.6},{t:.6},$,$)"
+                    ),
+                );
+            }
+            Some(ProfileDef::CircleHollow {
+                radius_feet,
+                wall_thickness_feet,
+            }) => {
+                let r = radius_feet * 0.3048;
+                let t = wall_thickness_feet * 0.3048;
+                // IFCCircleHollowProfileDef(ProfileType, ProfileName,
+                // Position, Radius, WallThickness).
+                self.emit_entity(
+                    profile_id,
+                    format!(
+                        "IFCCIRCLEHOLLOWPROFILEDEF(.AREA.,$,#{profile_placement},{r:.6},{t:.6})"
+                    ),
+                );
+            }
+            Some(ProfileDef::ArbitraryClosed { points }) => {
+                // Build the polyline by emitting one IFCCARTESIANPOINT
+                // per vertex, then an IFCPOLYLINE that references them
+                // as its Points list. Auto-close by appending the first
+                // point if the last doesn't already equal it.
+                let mut pts: Vec<(f64, f64)> =
+                    points.iter().map(|(x, y)| (*x * 0.3048, *y * 0.3048)).collect();
+                if let (Some(first), Some(last)) = (pts.first().copied(), pts.last().copied())
+                    && ((first.0 - last.0).abs().max((first.1 - last.1).abs()) > 1e-9_f64)
+                {
+                    pts.push(first);
+                }
+                let mut point_ids: Vec<usize> = Vec::with_capacity(pts.len());
+                for (x, y) in &pts {
+                    let pt_id = self.id();
+                    self.emit_entity(
+                        pt_id,
+                        format!("IFCCARTESIANPOINT(({x:.6},{y:.6}))"),
+                    );
+                    point_ids.push(pt_id);
+                }
+                let polyline_id = self.id();
+                let refs = point_ids
+                    .iter()
+                    .map(|id| format!("#{id}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                self.emit_entity(polyline_id, format!("IFCPOLYLINE(({refs}))"));
+                // IFCArbitraryClosedProfileDef(ProfileType, ProfileName,
+                // OuterCurve).
+                self.emit_entity(
+                    profile_id,
+                    format!("IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#{polyline_id})"),
+                );
+            }
+        }
+        profile_id
     }
 
     fn emit_header(&mut self, model: &IfcModel) {
@@ -686,20 +893,18 @@ impl StepWriter {
                 );
 
                 // Emit the extrusion chain when geometry is present.
-                // Chain: IfcRectangleProfileDef → IfcExtrudedAreaSolid
+                // Chain: IfcProfileDef subclass → IfcExtrudedAreaSolid
                 // → IfcShapeRepresentation → IfcProductDefinitionShape.
                 // Profile placement uses a single fresh 2D axis per
                 // element (profile-local XY frame centred on origin).
                 let shape_ref = if let Some(ex) = extrusion {
-                    let x_dim = ex.width_feet * 0.3048;
-                    let y_dim = ex.depth_feet * 0.3048;
                     let depth = ex.height_feet * 0.3048;
-                    // IfcRectangleProfileDef has a 2D placement; we
-                    // emit a fresh 2D origin + direction + 2D axis
-                    // per extrusion. Sharing a single 2D placement
-                    // across all extrusions would be possible but
-                    // muddies byte-by-byte diff tooling, so pay the
-                    // ~3-entity cost for clarity.
+                    // IfcProfileDef has a 2D placement; we emit a
+                    // fresh 2D origin + direction + 2D axis per
+                    // extrusion. Sharing a single 2D placement across
+                    // all extrusions would be possible but muddies
+                    // byte-by-byte diff tooling, so pay the ~3-entity
+                    // cost for clarity.
                     let profile_origin = self.id();
                     self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
                     let profile_x_axis = self.id();
@@ -709,13 +914,7 @@ impl StepWriter {
                         profile_placement,
                         format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
                     );
-                    let profile_id = self.id();
-                    self.emit_entity(
-                        profile_id,
-                        format!(
-                            "IFCRECTANGLEPROFILEDEF(.AREA.,$,#{profile_placement},{x_dim:.6},{y_dim:.6})"
-                        ),
-                    );
+                    let profile_id = self.emit_profile_def(ex, profile_placement);
                     // Solid-local placement: reuse the element's own
                     // axis so the extrusion sits at the element origin.
                     let solid_id = self.id();
@@ -1826,5 +2025,186 @@ mod tests {
             !s.contains("IFCMATERIALLAYERSETUSAGE("),
             "layer-set usage should NOT be emitted when profile-set wins precedence"
         );
+    }
+
+    // -----------------------------------------------------------
+    // IFC-24: IfcProfileDef subclasses.
+    // Each test below builds a single-element IfcModel whose
+    // extrusion carries a ProfileDef::X variant, then asserts the
+    // STEP output contains the IFCxShAPEPROFILEDEF token AND that
+    // the default IFCRECTANGLEPROFILEDEF is NOT emitted — the
+    // whole point of the override is that the rectangle path is
+    // bypassed.
+    // -----------------------------------------------------------
+
+    fn model_with_column_extrusion(ex: Extrusion) -> IfcModel {
+        use super::super::entities::IfcEntity;
+        IfcModel {
+            project_name: Some("ProfileTest".into()),
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCCOLUMN".into(),
+                name: "C1".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: Some([0.0, 0.0, 0.0]),
+                rotation_radians: Some(0.0),
+                extrusion: Some(ex),
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: Vec::new(),
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn circle_profile_emits_ifccircleprofiledef() {
+        let ex = Extrusion::circle(0.5, 10.0); // 1-ft-diameter, 10 ft tall
+        let s = write_step(&model_with_column_extrusion(ex));
+        assert!(s.contains("IFCCIRCLEPROFILEDEF(.AREA.,$,"));
+        // 0.5 ft * 0.3048 = 0.152400 m
+        assert!(s.contains(",0.152400)"));
+        // The rectangle path must NOT fire.
+        assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
+    }
+
+    #[test]
+    fn i_shape_profile_emits_wide_flange() {
+        // Approximate AISC W12x26: d=12.2 in, bf=6.49 in, tw=0.23 in, tf=0.38 in.
+        let ex = Extrusion::i_shape(
+            6.49 / 12.0,
+            12.2 / 12.0,
+            0.23 / 12.0,
+            0.38 / 12.0,
+            10.0,
+        );
+        let s = write_step(&model_with_column_extrusion(ex));
+        assert!(s.contains("IFCISHAPEPROFILEDEF(.AREA.,$,"));
+        assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
+    }
+
+    #[test]
+    fn t_shape_profile_emits_tee() {
+        // Example WT6x20: d=5.97 in, bf=8.08 in, tw=0.415 in, tf=0.515 in.
+        let ex = Extrusion::t_shape(
+            5.97 / 12.0,
+            8.08 / 12.0,
+            0.415 / 12.0,
+            0.515 / 12.0,
+            10.0,
+        );
+        let s = write_step(&model_with_column_extrusion(ex));
+        assert!(s.contains("IFCTSHAPEPROFILEDEF(.AREA.,$,"));
+        assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
+    }
+
+    #[test]
+    fn l_shape_profile_emits_angle() {
+        // L4x3x1/4: d=4 in, w=3 in, t=0.25 in.
+        let ex = Extrusion::l_shape(4.0 / 12.0, 3.0 / 12.0, 0.25 / 12.0, 8.0);
+        let s = write_step(&model_with_column_extrusion(ex));
+        assert!(s.contains("IFCLSHAPEPROFILEDEF(.AREA.,$,"));
+        assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
+    }
+
+    #[test]
+    fn u_shape_profile_emits_channel() {
+        // C8x11.5: d=8 in, bf=2.26 in, tw=0.22 in, tf=0.39 in.
+        let ex = Extrusion::u_shape(
+            8.0 / 12.0,
+            2.26 / 12.0,
+            0.22 / 12.0,
+            0.39 / 12.0,
+            12.0,
+        );
+        let s = write_step(&model_with_column_extrusion(ex));
+        assert!(s.contains("IFCUSHAPEPROFILEDEF(.AREA.,$,"));
+        assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
+    }
+
+    #[test]
+    fn rectangle_hollow_profile_emits_tube() {
+        // HSS6x4x1/4: 6x4x0.25 in wall.
+        let ex = Extrusion::rectangle_hollow(6.0 / 12.0, 4.0 / 12.0, 0.25 / 12.0, 10.0);
+        let s = write_step(&model_with_column_extrusion(ex));
+        assert!(s.contains("IFCRECTANGLEHOLLOWPROFILEDEF(.AREA.,$,"));
+        // Plain rectangle MUST NOT fire — but 'IFCRECTANGLEHOLLOWPROFILEDEF'
+        // contains the substring 'IFCRECTANGLE', so check for the
+        // PROPER closing paren of the plain variant (never emitted).
+        assert!(
+            !s.contains("IFCRECTANGLEPROFILEDEF("),
+            "plain IFCRECTANGLEPROFILEDEF must not be emitted when an HSS profile is present"
+        );
+    }
+
+    #[test]
+    fn circle_hollow_profile_emits_pipe() {
+        // 6-inch-OD HSS round pipe with 0.25-in wall.
+        let ex = Extrusion::circle_hollow(0.25, 0.25 / 12.0, 10.0);
+        let s = write_step(&model_with_column_extrusion(ex));
+        assert!(s.contains("IFCCIRCLEHOLLOWPROFILEDEF(.AREA.,$,"));
+        // Neither the plain circle nor the plain rectangle should
+        // fire.
+        assert!(!s.contains("IFCCIRCLEPROFILEDEF("));
+        assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
+    }
+
+    #[test]
+    fn arbitrary_closed_profile_emits_polyline_and_profile() {
+        // Simple triangle, NOT pre-closed — the writer must auto-close.
+        let pts = vec![(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)];
+        let ex = Extrusion::arbitrary_closed(pts, 5.0);
+        let s = write_step(&model_with_column_extrusion(ex));
+        assert!(s.contains("IFCPOLYLINE(("));
+        assert!(s.contains("IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,"));
+        // Point count: 3 supplied vertices + 1 auto-closing
+        // repeat = 4 IFCCARTESIANPOINT lines referenced by the
+        // IFCPOLYLINE. Count the literal occurrences of '#N,' in
+        // the polyline tuple by looking for 3+ commas.
+        let comma_count = s
+            .lines()
+            .find(|l| l.contains("IFCPOLYLINE(("))
+            .expect("polyline present")
+            .matches(',')
+            .count();
+        assert!(
+            comma_count >= 3,
+            "expected polyline with ≥4 points (3 commas), got comma_count={}",
+            comma_count
+        );
+    }
+
+    #[test]
+    fn explicit_rectangle_variant_matches_legacy_output() {
+        // ProfileDef::Rectangle { .. } and profile_override=None
+        // both produce IFCRECTANGLEPROFILEDEF — this pins the
+        // round-trip contract.
+        use super::super::entities::ProfileDef;
+        let ex_none = Extrusion::rectangle(2.0, 0.5, 10.0);
+        let mut ex_explicit = Extrusion::rectangle(2.0, 0.5, 10.0);
+        ex_explicit.profile_override = Some(ProfileDef::Rectangle {
+            width_feet: 2.0,
+            depth_feet: 0.5,
+        });
+        let s_none = write_step(&model_with_column_extrusion(ex_none));
+        let s_explicit = write_step(&model_with_column_extrusion(ex_explicit));
+        // Both must contain the rectangle profile entity with the
+        // same dimensions — the explicit-variant path must not
+        // diverge from the implicit-default path.
+        let rect_line = |s: &str| {
+            s.lines()
+                .find(|l| l.contains("IFCRECTANGLEPROFILEDEF"))
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(rect_line(&s_none), rect_line(&s_explicit));
     }
 }

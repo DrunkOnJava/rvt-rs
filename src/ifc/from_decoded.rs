@@ -150,6 +150,7 @@ pub fn wall_extrusion(
         width_feet: length_feet,
         depth_feet: wall_type.and_then(|wt| wt.width_feet).unwrap_or(8.0 / 12.0),
         height_feet: wall.unconnected_height_feet.unwrap_or(10.0),
+        profile_override: None,
     }
 }
 
@@ -167,6 +168,7 @@ pub fn slab_extrusion(
         width_feet: length_feet,
         depth_feet: width_feet,
         height_feet: floor_type.and_then(|ft| ft.thickness_feet).unwrap_or(1.0),
+        profile_override: None,
     }
 }
 
@@ -183,6 +185,7 @@ pub fn roof_extrusion(
         width_feet: length_feet,
         depth_feet: width_feet,
         height_feet: roof_type.and_then(|rt| rt.thickness_feet).unwrap_or(1.0),
+        profile_override: None,
     }
 }
 
@@ -200,6 +203,7 @@ pub fn ceiling_extrusion(
         height_feet: ceiling_type
             .and_then(|ct| ct.thickness_feet)
             .unwrap_or(1.0 / 12.0),
+        profile_override: None,
     }
 }
 
@@ -223,6 +227,7 @@ pub fn column_extrusion(
         width_feet: profile_width_feet,
         depth_feet: profile_depth_feet,
         height_feet: (level_elevation_diff_feet + offset_delta).max(0.1),
+        profile_override: None,
     }
 }
 
