@@ -151,6 +151,18 @@ pub struct Property {
 
 /// IFC4 IfcValue subtypes we surface from Revit decoded fields.
 /// Maps directly to the `NominalValue` slot of IfcPropertySingleValue.
+///
+/// Quantity variants (`AreaSquareFeet`, `VolumeCubicFeet`, `CountValue`,
+/// `TimeSeconds`, `MassPounds`) are the measurement-flavoured siblings
+/// of the primitive variants. They emit as the matching
+/// `IfcAreaMeasure` / `IfcVolumeMeasure` / `IfcCountMeasure` / etc.
+/// constructors — semantically they correspond to the IFC4 `IfcQuantity*`
+/// family, but we route them through the existing
+/// `IfcPropertySingleValue` carrier so the writer doesn't need a
+/// parallel `IfcElementQuantity` path yet (tracked separately).
+/// Feet / cubic-feet / pounds inputs are converted to metres /
+/// cubic-metres / kilograms at emit time so the STEP output is
+/// unit-consistent with the project-level `IfcUnitAssignment`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value")]
 pub enum PropertyValue {
@@ -167,6 +179,20 @@ pub enum PropertyValue {
     LengthFeet(f64),
     /// Angle in radians. Maps to `IfcPlaneAngleMeasure`.
     AngleRadians(f64),
+    /// Area in square feet (writer converts to square metres).
+    /// Maps to `IfcAreaMeasure`. (IFC-32)
+    AreaSquareFeet(f64),
+    /// Volume in cubic feet (writer converts to cubic metres).
+    /// Maps to `IfcVolumeMeasure`. (IFC-32)
+    VolumeCubicFeet(f64),
+    /// Unitless discrete count — occupancy, rebar count, fixture count.
+    /// Maps to `IfcCountMeasure`. (IFC-32)
+    CountValue(i64),
+    /// Time measurement in seconds. Maps to `IfcTimeMeasure`. (IFC-32)
+    TimeSeconds(f64),
+    /// Mass in pounds (writer converts to kilograms).
+    /// Maps to `IfcMassMeasure`. (IFC-32)
+    MassPounds(f64),
 }
 
 impl PropertyValue {
@@ -186,6 +212,23 @@ impl PropertyValue {
                 format!("IFCLENGTHMEASURE({metres:.6})")
             }
             PropertyValue::AngleRadians(r) => format!("IFCPLANEANGLEMEASURE({r:.6})"),
+            PropertyValue::AreaSquareFeet(sqft) => {
+                // 1 ft² = 0.09290304 m² (exact, from international foot).
+                let sqm = sqft * 0.09290304;
+                format!("IFCAREAMEASURE({sqm:.6})")
+            }
+            PropertyValue::VolumeCubicFeet(cuft) => {
+                // 1 ft³ = 0.028316846592 m³ (exact).
+                let cum = cuft * 0.028316846592;
+                format!("IFCVOLUMEMEASURE({cum:.6})")
+            }
+            PropertyValue::CountValue(n) => format!("IFCCOUNTMEASURE({n})"),
+            PropertyValue::TimeSeconds(s) => format!("IFCTIMEMEASURE({s:.6})"),
+            PropertyValue::MassPounds(lb) => {
+                // 1 lb = 0.45359237 kg (exact, international avoirdupois pound).
+                let kg = lb * 0.45359237;
+                format!("IFCMASSMEASURE({kg:.6})")
+            }
         }
     }
 }
@@ -205,4 +248,80 @@ fn escape_step_string(s: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn property_value_to_step_primitives() {
+        assert_eq!(PropertyValue::Integer(42).to_step(), "IFCINTEGER(42)");
+        assert_eq!(PropertyValue::Real(1.25).to_step(), "IFCREAL(1.250000)");
+        assert_eq!(PropertyValue::Boolean(true).to_step(), "IFCBOOLEAN(.T)");
+        assert_eq!(PropertyValue::Boolean(false).to_step(), "IFCBOOLEAN(.F)");
+        assert_eq!(
+            PropertyValue::Text("hello".into()).to_step(),
+            "IFCTEXT('hello')"
+        );
+        assert_eq!(
+            PropertyValue::Text("it's".into()).to_step(),
+            "IFCTEXT('it''s')"
+        );
+    }
+
+    #[test]
+    fn property_value_to_step_length_and_angle() {
+        // 10 ft = 3.048 m.
+        assert_eq!(
+            PropertyValue::LengthFeet(10.0).to_step(),
+            "IFCLENGTHMEASURE(3.048000)"
+        );
+        // π/2 rad comes out to ~1.570796.
+        let step = PropertyValue::AngleRadians(std::f64::consts::FRAC_PI_2).to_step();
+        assert!(step.starts_with("IFCPLANEANGLEMEASURE(1.570796"));
+    }
+
+    /// IFC-32: quantity variants emit IfcAreaMeasure / IfcVolumeMeasure
+    /// / IfcCountMeasure / IfcTimeMeasure / IfcMassMeasure, with the
+    /// Imperial → SI conversion applied at emit time so downstream
+    /// tools see unit-consistent output against the project's SI
+    /// `IfcUnitAssignment`.
+    #[test]
+    fn property_value_to_step_quantities() {
+        // 1 ft² = 0.09290304 m² exact.
+        assert_eq!(
+            PropertyValue::AreaSquareFeet(1.0).to_step(),
+            "IFCAREAMEASURE(0.092903)"
+        );
+        // 100 ft² = 9.290304 m².
+        assert_eq!(
+            PropertyValue::AreaSquareFeet(100.0).to_step(),
+            "IFCAREAMEASURE(9.290304)"
+        );
+
+        // 1 ft³ = 0.028316846592 m³ exact.
+        assert_eq!(
+            PropertyValue::VolumeCubicFeet(1.0).to_step(),
+            "IFCVOLUMEMEASURE(0.028317)"
+        );
+
+        // Counts are unitless integers.
+        assert_eq!(
+            PropertyValue::CountValue(12).to_step(),
+            "IFCCOUNTMEASURE(12)"
+        );
+
+        // Time in seconds is already SI.
+        assert_eq!(
+            PropertyValue::TimeSeconds(3.0).to_step(),
+            "IFCTIMEMEASURE(3.000000)"
+        );
+
+        // 1 lb = 0.45359237 kg exact.
+        assert_eq!(
+            PropertyValue::MassPounds(1.0).to_step(),
+            "IFCMASSMEASURE(0.453592)"
+        );
+    }
 }
