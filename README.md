@@ -1,29 +1,38 @@
 # rvt-rs
 
-**The first complete, open documentation and tooling for the Autodesk Revit on-disk format — 395 classes, 13,570 fields, 100% type classification across Revit 2016–2026.** No Autodesk software required.
+**Apache-2.0 clean-room Rust/Python toolkit for inspecting Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) without a Revit installation.** Opens the OLE/CFB container, decodes Revit's truncated-gzip streams, extracts metadata and previews, parses the embedded `Formats/Latest` schema, and classifies all observed schema field encodings across an 11-release 2016–2026 reference corpus.
 
-Apache-2.0 licensed. Rust 2024 edition (MSRV 1.85). Reads `.rvt`, `.rfa`, `.rte`, `.rft` directly from bytes — zero API calls, zero cloud, zero Revit install. Eight CLIs ship (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`) plus 30+ reproducible probes under `examples/` that back every claim in this README. **75 tests pass** (61 unit + 9 integration + 5 doctest), including a **CI-enforced regression gate** that fails if any field in any of the 11 corpus files decodes to `FieldType::Unknown`.
+**This is not yet a full Revit model reader.** Schema-directed instance walking has a verified `ADocument` beachhead on Revit 2024–2026. Full element extraction, geometry, and high-fidelity IFC export are active research. See [What works today](#what-works-today) for the precise boundary.
 
-**Schema-directed instance extraction is an active research frontier** — with a working beachhead. The Q6.2 entry-point hypothesis was refuted by Q6.3, then Q6.4–Q6.5 narrowed the stream layout, and as of v0.1.2 the walker in [`src/walker.rs`](src/walker.rs) reads ADocument's root record end-to-end on Revit 2024–2026. **Cross-version validated**: all three releases produce identical `[27, 31, 35]` ElementId values for the last three reference fields (owner-family, containing-group, dev-branch). Try it: `cargo run --release --bin rvt-doc -- your.rfa`. Older releases (2016–2023) need entry-point detection work; fields 2–5 need container element-payload decoding. The full dictionary (Layer 4c) is complete and regression-proofed; expanding the walker's class coverage is where collaborative contributions are most welcome. See [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md) §Q6 for the full research trail including the documented refutation and subsequent progress.
+Rust 2024 edition (MSRV 1.85). Nine CLIs ship (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`) plus 30+ reproducible probes under `examples/`. Python bindings via pyo3+maturin — `pip install rvt`.
 
-### TL;DR — what's in the box
+## What works today
 
-- **No Autodesk dependency.** Reads .rvt / .rfa / .rte / .rft directly from bytes.
-- **Every Revit release 2016–2026.** 11-year corpus fetched from [`phi-ag/rvt`](https://github.com/phi-ag/rvt) at build time; CI enforces 100% schema-field classification across every release.
-- **Phase D moat proved:** class tags from `Formats/Latest` occur in `Global/Latest` at **~340× uniform-random rate** (`AbsCurveGStep` = 19,415 hits in 938 KB). Schema IS the live type dictionary.
-- **First public RVT tag-drift table** — 122 classes × 11 releases, CSV + SVG heatmap.
-- **First publicly-documented Revit format-identifier GUID** — `3529342d-e51e-11d4-92d8-0000863f27ad`, stable in 98.8% of `Global/PartitionTable` bytes since 2000.
-- **Revit 2021 was a silent format rewrite** — Global/Latest grew 27× and Forge Design Data Schema namespaces debuted. No public changelog mentions this.
-- **Byte-preserving round-trip writer works today** — 13/13 streams identical after read-modify-write.
-- **Hands-clean by default.** Every CLI has `--redact` that scrubs usernames, Autodesk-internal paths, and project IDs while preserving path shape so claims remain verifiable. Committed demo output is pre-scrubbed.
-- **Fast.** `rvt-analyze` produces the full forensic report in **27 ms** on a 400 KB RFA (20 ms/file over the 11-version corpus). Full benchmark table: [`docs/benchmarks.md`](docs/benchmarks.md).
-- **Modifying writer works.** `writer::write_with_patches` reads a file, patches any stream's decompressed bytes, re-compresses with truncated-gzip, and writes a new file. Stream-level patching is end-to-end; field-level patching is unblocked by Q5.2's 100% type coverage and ready for implementation.
+| Layer | Status | Notes |
+|---|---|---|
+| OLE/CFB container open | ✓ | No Revit required |
+| Truncated-gzip stream decode | ✓ | |
+| `BasicFileInfo` metadata | ✓ | Version, build, GUID, original path |
+| `PartAtom` XML | ✓ | Title, OmniClass code, taxonomies |
+| Stream preview extraction | ✓ | Clean PNG, wrapper stripped |
+| `Formats/Latest` schema parse | ✓ | 395 classes, 13,570 fields |
+| Field-type classification | ✓ | **100% over `rac_basic_sample_family` 11-release corpus** — CI regression gate |
+| Cross-release tag-drift table | ✓ | First public 122×11 dataset |
+| Layer 5a ADocument walker | partial | Reliable on Revit 2024–2026; 2016–2023 entry-point detection pending |
+| Stream-level modifying writer | ✓ | 13/13 streams byte-preserving |
+| Field-level semantic writer | pending | Phase 7 |
+| IFC export | document-level only | `IfcProject` + `IfcSite` + `IfcBuilding` + `IfcBuildingStorey` + OmniClass. No geometry, no per-element entities yet. |
+| Per-element extraction (walls, floors, doors) | pending | Phase 4 (Layer 5b) |
+| Geometry extraction | pending | Phase 5 |
+| Web viewer | pending | Phase 11 |
 
-## Why this exists — the openBIM gap
+## Why the schema matters
 
-For over a decade the openBIM community — anchored by [buildingSMART International](https://www.buildingsmart.org/) and the IFC standard — has worked to break Autodesk's Revit lock-in. The official answer, Autodesk's [revit-ifc](https://github.com/Autodesk/revit-ifc) exporter, runs **inside** Revit using the Revit API, so it can only emit what the API chooses to expose. That's why real-world IFC exports from Revit are described, routinely and publicly, as *"very limited"* (thinkmoult.com), *"data loss"* (Reddit r/bim), and *"out of the box, just crap"* (the [OSArch Wiki's guide to Revit for openBIM](https://wiki.osarch.org/index.php?title=Revit_setup_for_OpenBIM)). BIM coordinators have spent years working around lossy IFC exports — private families, complex assemblies, proprietary parameter types, and internal geometric relationships are all dropped by the API-surface exporter.
+The openBIM community — anchored by [buildingSMART International](https://www.buildingsmart.org/) and the IFC standard — has spent years working on Revit interoperability. Autodesk's own [revit-ifc](https://github.com/Autodesk/revit-ifc) exporter runs **inside** Revit using the Revit API, so it can only emit what the API surfaces. Real-world IFC exports from Revit are described, routinely and publicly, as *"very limited"* (thinkmoult.com), *"data loss"* (Reddit r/bim), and *"out of the box, just crap"* (the [OSArch Wiki's guide to Revit for openBIM](https://wiki.osarch.org/index.php?title=Revit_setup_for_OpenBIM)).
 
-`rvt-rs` reads the actual on-disk RVT bytes. That is a *strict superset* of what Revit's API exposes. An rvt-rs → IFC pipeline built on top of it (exporter scaffolded in [`src/ifc/`](src/ifc/); full emission is the natural next milestone now that the schema is fully typed) is the full-fidelity path to IFC that the openBIM movement has been waiting for — and a natural partner for [IfcOpenShell](https://ifcopenshell.org/), [BIMvision](https://bimvision.eu/), and anyone participating in buildingSMART's annual openBIM Hackathon.
+The schema work here — decoding `Formats/Latest` and classifying 100% of field encodings across 11 Revit releases — is the dictionary a byte-level reader needs. Once per-element decoders (Phase 4 in [`TODO`](../../TODO-BLINDSIDE.md)) and geometry extraction (Phase 5) land on top, the resulting IFC export can carry more than what the Revit API chooses to expose. That is the thesis. It is not yet the delivered product.
+
+If you're building BIM/AEC tooling and want an Apache-2 Revit reader to compose into your stack, the current release covers metadata, schema introspection, and document-level IFC scaffolding. For per-element geometry, please follow Phase 4 / 5 progress in [CHANGELOG](CHANGELOG.md).
 
 ## Quick demo
 
@@ -45,7 +54,7 @@ print(f.read_adocument()["fields"][-1])  # {name: m_devBranchInfo, kind: element
 open("out.ifc", "w").write(f.write_ifc())
 ```
 
-Install: `pip install rvt` (once [#52e](docs/python.md#install) PyPI publish ships) or build from source with [`maturin build --release --features python`](docs/python.md#from-source). Full API + Jupyter notebook walkthrough: [`docs/python.md`](docs/python.md) and [`docs/rvt-python-quickstart.ipynb`](docs/rvt-python-quickstart.ipynb).
+Install: `pip install rvt` — or build from source with [`maturin build --release --features python`](docs/python.md#from-source). Full API + Jupyter notebook walkthrough: [`docs/python.md`](docs/python.md) and [`docs/rvt-python-quickstart.ipynb`](docs/rvt-python-quickstart.ipynb).
 
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 
@@ -130,7 +139,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-Seven CLIs ship in the box:
+Nine CLIs ship in the box (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`):
 
 ```bash
 cargo build --release

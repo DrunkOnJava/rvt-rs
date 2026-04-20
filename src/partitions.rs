@@ -18,7 +18,7 @@
 //! gzip-magic scanner is conservative enough to work across all 11
 //! releases we have samples for.
 
-use crate::{Result, RevitFile, streams};
+use crate::{Result, RevitFile};
 
 /// Size of the Partitions/NN header in bytes. Constant across all Revit
 /// releases observed (2016–2026).
@@ -89,7 +89,11 @@ pub fn chunks_from_stream(rf: &mut RevitFile) -> Result<Vec<PartitionChunk>> {
 /// magic `1F 8B 08`.
 pub fn find_chunks(raw: &[u8]) -> Vec<PartitionChunk> {
     let mut positions: Vec<usize> = Vec::new();
-    for i in 0..raw.len().saturating_sub(3) {
+    // `raw.len().saturating_sub(2)` gives the exclusive upper bound
+    // such that `i + 2 <= raw.len() - 1`, i.e. the magic triplet at
+    // the LAST valid starting position is still scanned. The prior
+    // `saturating_sub(3)` missed offset raw.len()-3 entirely.
+    for i in 0..raw.len().saturating_sub(2) {
         if raw[i] == 0x1f && raw[i + 1] == 0x8b && raw[i + 2] == 0x08 {
             positions.push(i);
         }
@@ -108,7 +112,8 @@ pub fn find_chunks(raw: &[u8]) -> Vec<PartitionChunk> {
 /// Header-bytes preview: everything before the first gzip magic.
 /// Reserved for when we decode the explicit chunk table.
 pub fn header_bytes(raw: &[u8]) -> &[u8] {
-    for i in 0..raw.len().saturating_sub(3) {
+    // Same off-by-one fix as find_chunks.
+    for i in 0..raw.len().saturating_sub(2) {
         if raw[i] == 0x1f && raw[i + 1] == 0x8b && raw[i + 2] == 0x08 {
             return &raw[..i];
         }
@@ -116,10 +121,10 @@ pub fn header_bytes(raw: &[u8]) -> &[u8] {
     raw
 }
 
-/// Convenience: expose the partition stream name used.
-pub fn stream_name() -> &'static str {
-    streams::GLOBAL_LATEST // dummy — actual name is per-file
-}
+// Note: `partitions::stream_name()` was removed in v0.1.3. It had
+// returned `streams::GLOBAL_LATEST` as a dummy, which was wrong — the
+// actual Partitions/NN stream name is per-file. Callers should use
+// `RevitFile::partition_stream_name()` instead.
 
 #[cfg(test)]
 mod tests {
@@ -150,6 +155,32 @@ mod tests {
         let buf = [0u8, 0, 0, 0, 1, 2, 3, 0x1f, 0x8b, 0x08, 4, 5, 6];
         let h = header_bytes(&buf);
         assert_eq!(h, &[0u8, 0, 0, 0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn find_chunks_detects_magic_at_last_valid_offset() {
+        // Regression for off-by-one: gzip magic at offset len-3 was
+        // previously missed because the scan used saturating_sub(3)
+        // as an exclusive upper bound instead of saturating_sub(2).
+        let buf = [0u8, 0, 0, 0, 0x1f, 0x8b, 0x08]; // len=7, magic at offset 4 = len-3
+        let chunks = find_chunks(&buf);
+        assert_eq!(
+            chunks.len(),
+            1,
+            "gzip magic at the last valid starting offset must be found"
+        );
+        assert_eq!(chunks[0].raw_offset, 4);
+    }
+
+    #[test]
+    fn find_chunks_handles_tiny_inputs() {
+        // <3 bytes cannot contain a gzip magic. Must return empty,
+        // not panic.
+        assert_eq!(find_chunks(&[]).len(), 0);
+        assert_eq!(find_chunks(&[0x1f]).len(), 0);
+        assert_eq!(find_chunks(&[0x1f, 0x8b]).len(), 0);
+        // Exactly 3 bytes with magic IS valid.
+        assert_eq!(find_chunks(&[0x1f, 0x8b, 0x08]).len(), 1);
     }
 
     #[test]

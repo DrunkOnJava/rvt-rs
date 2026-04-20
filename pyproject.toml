@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rvt"
-description = "Clean-room Apache-2 Python reader for Autodesk Revit files (.rvt/.rfa/.rte/.rft). No Autodesk SDK required. Verified against 11 Revit releases (2016–2026)."
+description = "Apache-2 clean-room Python toolkit for inspecting Autodesk Revit files (.rvt/.rfa/.rte/.rft) without a Revit install. Metadata, schema introspection, and document-level IFC4 scaffolding across 11 Revit releases (2016-2026). Per-element extraction + geometry are active research."
 authors = [{ name = "Griffin Long", email = "151978260+DrunkOnJava@users.noreply.github.com" }]
 license = { text = "Apache-2.0" }
 readme = "README.md"

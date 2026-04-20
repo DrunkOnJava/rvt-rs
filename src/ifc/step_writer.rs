@@ -18,11 +18,35 @@
 
 use super::IfcModel;
 
+/// Options controlling STEP serialization.
+#[derive(Debug, Clone, Default)]
+pub struct StepOptions {
+    /// If `Some`, use this Unix timestamp (in seconds) for both the
+    /// `FILE_NAME` header and the `IfcOwnerHistory` creation time
+    /// instead of `SystemTime::now()`. Setting this makes the
+    /// output deterministic — identical `(IfcModel, StepOptions)`
+    /// pairs produce byte-identical STEP strings, which makes
+    /// STEP-text diffs tractable and regression tests reliable.
+    pub timestamp: Option<i64>,
+}
+
 /// Serialize an `IfcModel` into an IFC4 STEP text stream. The output
 /// includes the ISO-10303-21 envelope and a minimal but spec-valid
-/// data section centred on `IfcProject`.
+/// data section centred on `IfcProject`. Uses current wall-clock
+/// timestamp. For deterministic output (e.g. tests), use
+/// [`write_step_with_options`] with `StepOptions::timestamp = Some(_)`.
 pub fn write_step(model: &IfcModel) -> String {
-    let mut w = StepWriter::new();
+    write_step_with_options(model, &StepOptions::default())
+}
+
+/// Deterministic-option variant of [`write_step`].
+///
+/// When `options.timestamp = Some(t)`, the emitted STEP is a pure
+/// function of `(model, t)` — no wall-clock access. Use this in
+/// tests and regression fixtures.
+pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> String {
+    let now = options.timestamp.unwrap_or_else(unix_seconds);
+    let mut w = StepWriter::new(now);
     w.emit_header(model);
     w.emit_data(model);
     w.finish()
@@ -31,13 +55,18 @@ pub fn write_step(model: &IfcModel) -> String {
 struct StepWriter {
     out: String,
     next_id: usize,
+    /// Unix timestamp (seconds) used for FILE_NAME + IfcOwnerHistory.
+    /// Injected at construction so the output is a pure function of
+    /// `(model, timestamp)` when a fixed timestamp is supplied.
+    timestamp: i64,
 }
 
 impl StepWriter {
-    fn new() -> Self {
+    fn new(timestamp: i64) -> Self {
         Self {
             out: String::new(),
             next_id: 1,
+            timestamp,
         }
     }
 
@@ -67,7 +96,7 @@ impl StepWriter {
         self.emit_line("FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');");
         self.emit_line(format!(
             "FILE_NAME('{project}.ifc','{}',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.1.x','rvt-rs STEP writer','');",
-            iso_timestamp()
+            iso_timestamp_from(self.timestamp)
         ));
         self.emit_line("FILE_SCHEMA(('IFC4'));");
         self.emit_line("ENDSEC;");
@@ -100,7 +129,7 @@ impl StepWriter {
             owner_hist,
             format!(
                 "IFCOWNERHISTORY(#{person_and_org},#{application},$,.ADDED.,$,#{person_and_org},#{application},{})",
-                unix_seconds()
+                self.timestamp
             ),
         );
 
@@ -337,20 +366,45 @@ impl StepWriter {
     }
 }
 
-/// STEP-style string escape. IFC uses single-quoted strings with `''`
-/// for literal apostrophes and `\S\\` / `\X\` escapes for non-ASCII.
-/// For our minimal emitter we handle the apostrophe case and
-/// pass-through ASCII; non-ASCII strings get their bytes stripped to
-/// safe replacements (conservative, avoids invalid STEP output).
+/// STEP-style string escape per ISO-10303-21:
+///
+/// - Literal apostrophe → `''` (doubled).
+/// - Literal backslash → `\\`.
+/// - ASCII printable (0x20–0x7E) → pass through.
+/// - ASCII control (0x00–0x1F, 0x7F) → `\X\<HH>` (2-hex-digit byte).
+/// - Non-ASCII code points:
+///   - BMP (≤ U+FFFF): `\X2\<HHHH>\X0\`
+///   - Supplementary plane (> U+FFFF): `\X4\<HHHHHHHH>\X0\`
+///
+/// Previous implementation replaced non-ASCII with underscore, which
+/// silently mangled accented project names, CJK text, and any Unicode
+/// symbols in Revit metadata. Real RVT files routinely have
+/// non-ASCII in title, path, and taxonomy strings; this escape
+/// preserves them round-trip per the STEP spec.
+///
+/// Two consecutive non-ASCII chars produce separate `\X2\<HHHH>\X0\`
+/// sequences rather than a concatenated run. The spec allows either
+/// form; separate sequences keep the encoder stateless and the
+/// output diff-friendly.
 fn escape(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for c in input.chars() {
-        if c == '\'' {
-            out.push_str("''");
-        } else if c.is_ascii() && !c.is_control() {
-            out.push(c);
-        } else {
-            out.push('_');
+        match c {
+            '\'' => out.push_str("''"),
+            '\\' => out.push_str("\\\\"),
+            c if c.is_ascii() && !c.is_control() => out.push(c),
+            c if c.is_ascii() => {
+                // ASCII control byte.
+                out.push_str(&format!("\\X\\{:02X}", c as u32));
+            }
+            c if (c as u32) <= 0xFFFF => {
+                // BMP non-ASCII.
+                out.push_str(&format!("\\X2\\{:04X}\\X0\\", c as u32));
+            }
+            c => {
+                // Supplementary plane (emoji, rare scripts).
+                out.push_str(&format!("\\X4\\{:08X}\\X0\\", c as u32));
+            }
         }
     }
     out
@@ -364,10 +418,9 @@ fn quoted_or_dollar(s: &str) -> String {
     }
 }
 
-fn iso_timestamp() -> String {
-    // Minimal implementation: format the current Unix epoch as ISO
-    // 8601. Avoids chrono to stay dep-lean.
-    let secs = unix_seconds();
+fn iso_timestamp_from(secs: i64) -> String {
+    // Format a Unix epoch as ISO 8601. Avoids chrono to stay
+    // dep-lean. Pure function — deterministic given its input.
     let (y, m, d, hh, mm, ss) = epoch_to_ymdhms(secs);
     format!("{y:04}-{m:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}")
 }
@@ -453,6 +506,67 @@ mod tests {
         assert!(s.contains("DATA;"));
         assert!(s.contains("IFCPROJECT"));
         assert!(s.ends_with("END-ISO-10303-21;\n"));
+    }
+
+    #[test]
+    fn step_output_deterministic_with_fixed_timestamp() {
+        // Byte-identical output across calls when timestamp is pinned.
+        let model = IfcModel {
+            project_name: Some("Stable".into()),
+            description: Some("Deterministic test".into()),
+            entities: Vec::new(),
+            classifications: Vec::new(),
+            units: Vec::new(),
+        };
+        let opts = StepOptions {
+            timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
+        };
+        let a = write_step_with_options(&model, &opts);
+        let b = write_step_with_options(&model, &opts);
+        assert_eq!(
+            a, b,
+            "identical (model, opts) must produce identical STEP output"
+        );
+        // And the timestamp actually shows up.
+        assert!(a.contains("2023-11-14T22:13:20"), "ISO timestamp missing");
+        assert!(
+            a.contains(",1700000000)"),
+            "IfcOwnerHistory seconds missing"
+        );
+    }
+
+    #[test]
+    fn escape_handles_unicode_bmp_codepoints() {
+        // BMP non-ASCII (é, ü, 中, 文, ç) should be \X2\HHHH\X0\.
+        let s = escape("Café 中文");
+        assert!(s.starts_with("Caf"), "ASCII prefix preserved: {s:?}");
+        assert!(s.contains("\\X2\\00E9\\X0\\"), "é as \\X2\\00E9: {s:?}");
+        assert!(s.contains("\\X2\\4E2D\\X0\\"), "中 as \\X2\\4E2D: {s:?}");
+        assert!(s.contains("\\X2\\6587\\X0\\"), "文 as \\X2\\6587: {s:?}");
+    }
+
+    #[test]
+    fn escape_handles_supplementary_plane() {
+        // 🏢 (U+1F3E2, office building emoji — apt for BIM data)
+        // must use \X4\0001F3E2\X0\ form.
+        let s = escape("🏢");
+        assert!(
+            s.contains("\\X4\\0001F3E2\\X0\\"),
+            "emoji as \\X4\\0001F3E2: {s:?}"
+        );
+    }
+
+    #[test]
+    fn escape_preserves_ascii_printable() {
+        let s = escape("Hello, World! 0123 @#$%^&*()");
+        assert_eq!(s, "Hello, World! 0123 @#$%^&*()");
+    }
+
+    #[test]
+    fn escape_backslash_doubled() {
+        // Windows paths in original_path fields have backslashes.
+        let s = escape("C:\\Users\\x");
+        assert_eq!(s, "C:\\\\Users\\\\x");
     }
 
     #[test]

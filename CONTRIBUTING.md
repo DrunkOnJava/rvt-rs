@@ -20,41 +20,51 @@ a few practices keep the repo healthy.
 - **Tests.** More coverage is always welcome, especially for
   edge-case file layouts.
 
-## Where help is most wanted (as of v0.1.1)
+## Where help is most wanted (as of v0.1.2)
 
-The schema layer (Layer 4) is complete and regression-proofed: 100%
-field-type classification across every Revit release 2016–2026,
-enforced by CI. The instance layer (Layer 5) is wide open, with
-three stacked sub-questions any of which is a genuine contribution:
+**Layer 5a (ADocument walker) exists and is reliable on Revit
+2024–2026.** Layer 5b (per-element walker: walls, floors, doors,
+windows, columns, etc.) is the current beachhead. The schema layer
+is 100%-classified and CI-gated. Per-element extraction + geometry
++ a real IFC exporter + a web viewer are the phases documented in
+`TODO-BLINDSIDE.md` at the repo parent.
 
-1. **§Q6.4 — decode the `Global/Latest` directory-table format.**
-   Right after the document-upgrade-history block in
-   `Global/Latest`, there is a contiguous sequential-ID TLV table
-   of ~131 records (stable across all 11 releases). Record bodies
-   are 2, 6, 12, 14, or 16 bytes; u16 body values are not schema
-   class tags (0/131 hit — see `examples/directory_class_lookup.rs`).
-   Strong candidates: ElementId references, indices into
-   `Global/ElemTable`, or a reference-pool. Cross-reference against
-   `Global/ElemTable`'s records and/or test on a non-sample-family
-   `.rvt` (any real project) to see whether the count is
-   per-document or format-structural.
-2. **§Q6.5 — locate ADocument's actual instance bytes.** Blocked on
-   Q6.4 — once we know what the directory indexes, we can follow
-   its entries to ADocument's real location (not the post-history
-   offset, as originally hypothesised and refuted in §Q6.3).
-3. **Layer 5a — schema-directed walker.** Blocked on Q6.5. The
-   skeleton has been scoped; implementation is bounded once Q6.5
-   produces the entry-point offset.
+Most wanted right now:
 
-Each step has clear validation oracles: rvt-info already extracts
-the document title + GUID via a second path, rvt-history extracts
-the upgrade timeline via Phase D string scanning. Anything the
-walker pulls must cross-check.
+1. **§L5B — per-element decoders.** The schema tells you exactly
+   what bytes each element class consumes. Pick any class from the
+   L5B-XX task list (Wall, Floor, Door, Level, Material, etc.) and
+   implement its `ElementDecoder`. Each one is a few hundred lines
+   + unit test + integration test against corpus.
+2. **§L5B-11 — extend walker to Revit 2016–2023.** Walker detects
+   entry points across all 11 releases but cleanly decodes all 13
+   ADocument fields only on 2024–2026. Older releases need per-band
+   entry-point heuristics (see recon report §Q6.5-F addendum).
+3. **§GEO — geometry extraction.** Once decoders surface location
+   curves, profiles, sketches — turn them into `Solid` enum values
+   (Extrusion, Sweep, Revolve, Blend, Boolean). IFC exporter
+   consumes these.
+4. **§IFC-02+ — real IfcWall/IfcSlab/IfcDoor/... emission.** Today
+   we emit `IfcProject → IfcSite → IfcBuilding → IfcBuildingStorey`
+   scaffolding only. Wiring per-element entities with geometry +
+   material layer sets + property sets is the blind-side unlock.
+5. **§VW1 — web viewer (WASM + Three.js).** Once any geometry is
+   extractable, a basic viewer showing a 3D model becomes
+   immediately useful to BIM engineers. glTF export for Blender
+   compatibility is the first milestone.
+6. **Corpus expansion.** We only have the `rac_basic_sample_family`
+   11-release corpus. Donations of real-world project RVTs (with
+   redistribution rights) would dramatically widen validation.
 
-See `docs/rvt-moat-break-reconnaissance.md` §Q6 for the full state
-of play, including the documented refutation of the original Q6.2
-entry-point hypothesis (this is the first project section a
-contributor should read before starting on Layer 5).
+Each layer has a clear validation oracle: rvt-info extracts
+document title + GUID via metadata (for cross-checking walker
+output); rvt-history gives the upgrade timeline via Phase D string
+scanning; IfcOpenShell validates IFC output for free.
+
+See `docs/rvt-moat-break-reconnaissance.md` §Q6 for Layer 5a's
+research trail, including the documented refutation of the Q6.2
+hypothesis. See `TODO-BLINDSIDE.md` (repo parent dir, local-only)
+for the full per-task decomposition.
 
 ## What needs discussion first
 

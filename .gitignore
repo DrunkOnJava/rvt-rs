@@ -17,6 +17,15 @@
 *.prof
 *.heapdump
 
+# ---- Claude Code context files (NEVER commit) ----
+# CLAUDE.md provides cross-session context to the Claude agent. It lives
+# at the PARENT of this repo (rvt-recon-2026-04-19/CLAUDE.md), not
+# inside the repo. This entry is a defensive guard in case anyone
+# copies or symlinks it here.
+CLAUDE.md
+.claude/*.local.md
+.claude/*.local.json
+
 # ---- Local draft / personal content (NEVER commit) ----
 # Outreach emails, internal decision memos, personal notes,
 # anything that shouldn't be readable by strangers on the

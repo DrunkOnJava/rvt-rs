@@ -10,7 +10,7 @@
 use clap::Parser;
 use rvt::{
     RevitFile,
-    ifc::{Exporter, NullExporter, RvtDocExporter, write_step},
+    ifc::{Exporter, PlaceholderExporter, RvtDocExporter, write_step},
 };
 use std::path::PathBuf;
 
@@ -25,18 +25,19 @@ struct Args {
     /// Output path. If omitted, writes `<input>.ifc` next to the input.
     #[arg(short, long)]
     output: Option<PathBuf>,
-    /// Use the null exporter (empty project body) instead of the
+    /// Use the placeholder exporter (empty project body) instead of the
     /// document exporter. Mostly useful for testing the STEP writer.
-    #[arg(long)]
-    null: bool,
+    /// Kept as `--null` for backward compatibility with earlier versions.
+    #[arg(long, alias = "null")]
+    placeholder: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut rf = RevitFile::open(&args.input)?;
 
-    let model = if args.null {
-        NullExporter.export(&mut rf)?
+    let model = if args.placeholder {
+        PlaceholderExporter.export(&mut rf)?
     } else {
         RvtDocExporter.export(&mut rf)?
     };

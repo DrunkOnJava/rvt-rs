@@ -1734,12 +1734,20 @@ start.
 3. ~~Promote the walker to `src/walker.rs`.~~ **Done.** The
    module is shipped, and `rvt-doc` is the user-facing CLI.
 
-## Addendum — Q6.5-F: walker validated on all 11 releases (2026-04-19)
+## Addendum — Q6.5-F: walker entry-point detection across the 11-release corpus (2026-04-19)
 
 The entry-point detection upgrade in 471baaa lets the walker
-produce sensible output on every release in the corpus. Running
-`rvt-doc --json` against each sample and extracting the last three
-ElementIdRef fields:
+produce sensible output on every release in the corpus. **Full
+validation (all 13 fields decoding cleanly) is today limited to
+Revit 2024–2026.** Entry-point detection + plausible numeric output
+lands on all 11 releases; cross-version byte-identity within each
+version band confirms the detector is correct, but fields 2–5
+(container element payloads) still need layout hardening before
+the 2016–2023 walker output can be called validated. Tracked as
+`L5B-11` in [TODO-BLINDSIDE.md](../../../TODO-BLINDSIDE.md).
+
+Running `rvt-doc --json` against each sample and extracting the
+last three ElementIdRef fields:
 
 | Release | Entry offset | m_ownerFamilyId | m_ownerFamilyContainingGroupId | m_devBranchInfo | Band |
 |---|---|---|---|---|---|
