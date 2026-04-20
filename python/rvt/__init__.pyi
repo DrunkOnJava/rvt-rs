@@ -47,7 +47,28 @@ class RevitFile:
     non-CFB input, or read failures.
     """
 
-    def __init__(self, path: str) -> None: ...
+    def __init__(
+        self,
+        path: str,
+        max_file_bytes: Optional[int] = None,
+        max_stream_bytes: Optional[int] = None,
+        max_inflate_bytes: Optional[int] = None,
+    ) -> None:
+        """Open a Revit file from a filesystem path, with optional
+        resource limits.
+
+        :param path: path to ``.rvt`` / ``.rfa`` / ``.rte`` / ``.rft`` file.
+        :param max_file_bytes: maximum file size to accept (default 2 GiB).
+            Files exceeding this size are rejected before reading.
+        :param max_stream_bytes: maximum per-stream size for
+            ``read_stream`` calls (default 256 MiB).
+        :param max_inflate_bytes: maximum decompressed output per
+            inflate call (default 256 MiB). Protects against
+            compressed-bomb DoS.
+
+        Raises ``IOError`` on missing files, non-CFB input, file-size
+        over ``max_file_bytes``, or other read errors.
+        """
     def __repr__(self) -> str: ...
 
     @property

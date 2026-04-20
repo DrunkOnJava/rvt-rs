@@ -75,9 +75,15 @@
 //! ## License
 //!
 //! Apache-2.0. See LICENSE. Not affiliated with Autodesk. "Revit" and
-//! related marks are trademarks of Autodesk, Inc. This is a clean-room
-//! reimplementation under the interoperability exception of
-//! 17 U.S.C. § 1201(f).
+//! related marks are trademarks of Autodesk, Inc.
+//!
+//! rvt-rs is intended as a clean-room interoperability implementation.
+//! It does not use Autodesk/ODA SDK sources, leaked documentation, or
+//! decompiled proprietary implementation code — see CLEANROOM.md for
+//! the formal policy on accepted / forbidden sources. Users with
+//! specific legal constraints should evaluate the project with their
+//! own counsel. Nothing in this crate's documentation is legal
+//! advice.
 
 #![warn(rust_2024_compatibility)]
 

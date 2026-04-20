@@ -21,9 +21,64 @@ use std::{
     path::Path,
 };
 
+/// Default maximum file size accepted by [`RevitFile::open`].
+///
+/// 2 GiB is above any real-world Revit project we've observed
+/// (typical: few MB–a few hundred MB; worksharing extreme: ~1 GiB)
+/// and well below "pathological or hostile" territory. Callers with
+/// specific larger-file needs should use [`RevitFile::open_with_limits`].
+pub const DEFAULT_MAX_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Default maximum stream size accepted by [`RevitFile::read_stream`].
+///
+/// 256 MiB per stream is comfortably above any observed stream. The
+/// largest legitimate stream we've seen in the corpus is ~40 MiB
+/// (Global/Latest on a large worksharing project). Hostile input
+/// with a claimed huge stream size will be rejected before a
+/// multi-GB allocation.
+pub const DEFAULT_MAX_STREAM_BYTES: u64 = 256 * 1024 * 1024;
+
+/// Limits applied when opening a Revit file. Protects against
+/// pathological or hostile input that would otherwise force
+/// unbounded memory allocation.
+///
+/// See audit P0 items 4 and 5 (AUDIT-2026-04-19.md) for the
+/// rationale — RVT is a file-upload target, and bounded resource
+/// consumption is a DoS-safety requirement, not a nice-to-have.
+#[derive(Debug, Clone, Copy)]
+pub struct OpenLimits {
+    /// Maximum file size accepted. File bytes are read into memory
+    /// entirely on open (CFB requires random access), so this
+    /// doubles as an upper bound on the initial allocation.
+    pub max_file_bytes: u64,
+    /// Maximum per-stream size accepted by [`RevitFile::read_stream`].
+    /// Streams larger than this cause an error rather than a
+    /// multi-GB alloc.
+    pub max_stream_bytes: u64,
+    /// Inflate limits applied to every `compression::inflate_at`
+    /// call sourced from this `RevitFile`. Keeps bounded-decompression
+    /// and open-limits consistent so a file opened under restrictive
+    /// limits doesn't accidentally re-inflate under permissive ones.
+    pub inflate_limits: compression::InflateLimits,
+}
+
+impl Default for OpenLimits {
+    fn default() -> Self {
+        Self {
+            max_file_bytes: DEFAULT_MAX_FILE_BYTES,
+            max_stream_bytes: DEFAULT_MAX_STREAM_BYTES,
+            inflate_limits: compression::InflateLimits::default(),
+        }
+    }
+}
+
 /// Opened Revit file. Holds the CFB handle + cached stream bytes.
 pub struct RevitFile {
     cfb: CompoundFile<Cursor<Vec<u8>>>,
+    /// Limits to apply on subsequent reads. Copied from the
+    /// `OpenLimits` passed at construction; defaults to
+    /// `OpenLimits::default()` for back-compat `open`/`open_bytes`.
+    limits: OpenLimits,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,10 +112,42 @@ impl RevitFile {
     /// # Ok::<(), rvt::Error>(())
     /// ```
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let mut f = File::open(path.as_ref())?;
-        let mut bytes = Vec::new();
+        Self::open_with_limits(path, OpenLimits::default())
+    }
+
+    /// Open a Revit file from disk with explicit resource limits.
+    ///
+    /// Stats the file before reading; refuses if file size exceeds
+    /// `limits.max_file_bytes` to prevent multi-GB allocations from
+    /// a hostile input. Back-compat [`Self::open`] calls this with
+    /// `OpenLimits::default()` (2 GiB file, 256 MiB per stream, 256
+    /// MiB per inflate).
+    ///
+    /// ```no_run
+    /// use rvt::reader::{RevitFile, OpenLimits};
+    ///
+    /// // Only accept files up to 100 MB.
+    /// let limits = OpenLimits {
+    ///     max_file_bytes: 100 * 1024 * 1024,
+    ///     ..OpenLimits::default()
+    /// };
+    /// let mut rf = RevitFile::open_with_limits("your-project.rfa", limits)?;
+    /// # Ok::<(), rvt::Error>(())
+    /// ```
+    pub fn open_with_limits(path: impl AsRef<Path>, limits: OpenLimits) -> Result<Self> {
+        let path = path.as_ref();
+        let metadata = std::fs::metadata(path)?;
+        if metadata.len() > limits.max_file_bytes {
+            return Err(Error::Cfb(format!(
+                "file size {} exceeds limit {}",
+                metadata.len(),
+                limits.max_file_bytes
+            )));
+        }
+        let mut f = File::open(path)?;
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
         f.read_to_end(&mut bytes)?;
-        Self::open_bytes(bytes)
+        Self::open_bytes_with_limits(bytes, limits)
     }
 
     /// Open a Revit file from an in-memory byte buffer.
@@ -75,11 +162,33 @@ impl RevitFile {
     /// assert!(matches!(result, Err(rvt::Error::NotACfbFile)));
     /// ```
     pub fn open_bytes(bytes: Vec<u8>) -> Result<Self> {
+        Self::open_bytes_with_limits(bytes, OpenLimits::default())
+    }
+
+    /// Open-bytes variant with explicit limits. The byte count check
+    /// has already been done by the caller if they came through
+    /// [`Self::open_with_limits`]; here it's repeated for in-memory
+    /// paths that skip disk stat.
+    pub fn open_bytes_with_limits(bytes: Vec<u8>, limits: OpenLimits) -> Result<Self> {
+        if (bytes.len() as u64) > limits.max_file_bytes {
+            return Err(Error::Cfb(format!(
+                "in-memory buffer size {} exceeds limit {}",
+                bytes.len(),
+                limits.max_file_bytes
+            )));
+        }
         if bytes.len() < 8 || bytes[..8] != [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] {
             return Err(Error::NotACfbFile);
         }
         let cfb = CompoundFile::open(Cursor::new(bytes)).map_err(|e| Error::Cfb(e.to_string()))?;
-        Ok(Self { cfb })
+        Ok(Self { cfb, limits })
+    }
+
+    /// Resource limits this file was opened under. Use to match
+    /// the limits when calling bounded-inflate on extracted stream
+    /// bytes.
+    pub fn limits(&self) -> OpenLimits {
+        self.limits
     }
 
     /// List all OLE stream paths (sorted). Paths are always returned
@@ -104,8 +213,23 @@ impl RevitFile {
         streams
     }
 
-    /// Read a named stream's raw bytes.
+    /// Read a named stream's raw bytes, capped at the file's
+    /// configured `max_stream_bytes`.
+    ///
+    /// For streams larger than the limit, returns an error rather
+    /// than allocating a potentially multi-GB `Vec`. Use
+    /// [`Self::read_stream_with_limit`] to override per-call.
     pub fn read_stream(&mut self, name: &str) -> Result<Vec<u8>> {
+        self.read_stream_with_limit(name, self.limits.max_stream_bytes)
+    }
+
+    /// Read a named stream's raw bytes, capped at an explicit
+    /// byte limit.
+    ///
+    /// `max_bytes` is the ceiling on output size. A stream whose
+    /// declared size (or read position) exceeds this returns
+    /// `Error::Cfb("stream exceeds limit…")`.
+    pub fn read_stream_with_limit(&mut self, name: &str, max_bytes: u64) -> Result<Vec<u8>> {
         let path = if name.starts_with('/') {
             name.to_string()
         } else {
@@ -115,8 +239,31 @@ impl RevitFile {
             .cfb
             .open_stream(&path)
             .map_err(|_| Error::StreamNotFound(name.to_string()))?;
-        let mut out = Vec::new();
-        stream.read_to_end(&mut out)?;
+        // Stream size is known up-front from the CFB directory entry.
+        // Reject before reading.
+        let stream_size = stream.len();
+        if stream_size > max_bytes {
+            return Err(Error::Cfb(format!(
+                "stream '{name}' size {stream_size} exceeds limit {max_bytes}"
+            )));
+        }
+        let cap = (stream_size as usize).min(max_bytes as usize);
+        let mut out = Vec::with_capacity(cap);
+        // Read in bounded chunks so we can catch the case where a
+        // stream's directory-entry size is a lie (malformed CFB).
+        let mut buf = [0u8; 8192];
+        loop {
+            let n = stream.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            if (out.len() as u64) + (n as u64) > max_bytes {
+                return Err(Error::Cfb(format!(
+                    "stream '{name}' exceeded limit {max_bytes} mid-read"
+                )));
+            }
+            out.extend_from_slice(&buf[..n]);
+        }
         Ok(out)
     }
 
