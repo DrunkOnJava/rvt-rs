@@ -9,9 +9,43 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
 rvt = { path = ".." }
 
 # Prevent this from being picked up as part of the main workspace
 [workspace]
 
-# Binaries go here as separate [[bin]] entries — empty for this scaffold
+[[bin]]
+name = "fuzz_open_bytes"
+path = "fuzz_targets/fuzz_open_bytes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_gzip_header_len"
+path = "fuzz_targets/fuzz_gzip_header_len.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_inflate_at_with_limits"
+path = "fuzz_targets/fuzz_inflate_at_with_limits.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_parse_schema"
+path = "fuzz_targets/fuzz_parse_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_find_chunks"
+path = "fuzz_targets/fuzz_find_chunks.rs"
+test = false
+doc = false
+bench = false
