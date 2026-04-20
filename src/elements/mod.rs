@@ -29,6 +29,7 @@ pub mod category;
 pub mod ceiling;
 pub mod circulation;
 pub mod floor;
+pub mod foundation_and_furnishings;
 pub mod grid;
 pub mod level;
 pub mod openings;
@@ -38,6 +39,7 @@ pub mod roof;
 pub mod structural;
 pub mod styling;
 pub mod wall;
+pub mod zones;
 
 use crate::walker::ElementDecoder;
 
@@ -80,6 +82,14 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(circulation::StairTypeDecoder),
         Box::new(circulation::RailingDecoder),
         Box::new(circulation::RailingTypeDecoder),
+        Box::new(zones::RoomDecoder),
+        Box::new(zones::AreaDecoder),
+        Box::new(zones::SpaceDecoder),
+        Box::new(foundation_and_furnishings::StructuralFoundationDecoder),
+        Box::new(foundation_and_furnishings::FurnitureDecoder),
+        Box::new(foundation_and_furnishings::FurnitureSystemDecoder),
+        Box::new(foundation_and_furnishings::CaseworkDecoder),
+        Box::new(foundation_and_furnishings::RebarDecoder),
     ]
 }
 
