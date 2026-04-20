@@ -194,7 +194,7 @@ jobs:
           # to a stable 0.8.x series — the 0.7 API has semantic
           # differences in entity-by-type iteration.
           python -m pip install 'ifcopenshell>=0.8.0,<0.9.0'
-      - name: Validate committed fixture
+      - name: Validate synthetic-project fixture
         run: |
           python - <<'PY'
           import ifcopenshell
@@ -231,6 +231,47 @@ jobs:
           print(f"  entities: {len(list(f))}")
           print(f"  walls/slabs/doors/windows: 4/1/1/2")
           print(f"  storeys: 3")
+          PY
+
+      # IFC-44: second fixture — structural framing + shared
+      # RepresentationMap + faceted-brep furniture. Validates IFC-17 /
+      # IFC-20 / IFC-21 / IFC-24 / IFC-30 paths that the project
+      # fixture above doesn't exercise.
+      - name: Validate synthetic-structural fixture
+        run: |
+          python - <<'PY'
+          import ifcopenshell
+          path = "tests/fixtures/synthetic-structural.ifc"
+          f = ifcopenshell.open(path)
+          assert f.schema == "IFC4"
+          assert len(f.by_type("IfcColumn")) == 2, "expected 2 columns"
+          assert len(f.by_type("IfcBeam")) == 2, "expected 2 beams"
+          assert len(f.by_type("IfcDoor")) == 3, "expected 3 doors"
+          assert len(f.by_type("IfcFurniture")) == 1, "expected 1 furniture"
+          # IFC-21: shared representation map, one entity, three
+          # mapped items referencing it.
+          reps = f.by_type("IfcRepresentationMap")
+          assert len(reps) == 1, f"expected 1 IfcRepresentationMap, got {len(reps)}"
+          mapped_items = f.by_type("IfcMappedItem")
+          assert len(mapped_items) == 3, (
+              f"expected 3 IfcMappedItem instances, got {len(mapped_items)}"
+          )
+          # All three mapped items must reference the same map.
+          for mi in mapped_items:
+              assert mi.MappingSource.id() == reps[0].id(), (
+                  "mapped item points at a different representation map"
+              )
+          # IFC-20: one faceted brep for the furniture.
+          assert len(f.by_type("IfcFacetedBrep")) == 1
+          # IFC-30: MaterialProfileSet usage on the 2 beams.
+          assert len(f.by_type("IfcMaterialProfileSetUsage")) >= 1
+          # IFC-24: I-shape profiles (3 total) + 1 circle profile.
+          assert len(f.by_type("IfcIShapeProfileDef")) == 3
+          assert len(f.by_type("IfcCircleProfileDef")) == 1
+          print("IFC-44 structural fixture validation passed:")
+          print(f"  columns/beams/doors/furniture: 2/2/3/1")
+          print(f"  IfcRepresentationMap/IfcMappedItem: 1/3 (3:1 sharing ratio)")
+          print(f"  IfcFacetedBrep: 1 (tetrahedron)")
           PY
 
   doc:
