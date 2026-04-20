@@ -34,6 +34,7 @@ pub mod openings;
 pub mod reference_planes;
 pub mod reference_points;
 pub mod roof;
+pub mod structural;
 pub mod styling;
 pub mod wall;
 
@@ -70,6 +71,10 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(ceiling::CeilingTypeDecoder),
         Box::new(openings::DoorDecoder),
         Box::new(openings::WindowDecoder),
+        Box::new(structural::ColumnDecoder),
+        Box::new(structural::StructuralColumnDecoder),
+        Box::new(structural::BeamDecoder),
+        Box::new(structural::StructuralFramingDecoder),
     ]
 }
 
