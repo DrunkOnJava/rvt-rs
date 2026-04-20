@@ -351,10 +351,77 @@ impl StepWriter {
             }
         }
 
-        // Future: emit `model.entities` as IFCBUILDINGELEMENT et al.
-        // here, each wired to `storey_id` via `IfcRelContainedInSpatialStructure`.
-        // The shape is well-defined once the walker surfaces typed
-        // `BuildingElement` values.
+        // BuildingElement emission — one `IFC<TYPE>` instance per decoded
+        // Revit element (Wall, Floor, Roof, Ceiling, Door, Window, Column,
+        // Beam). Each element gets its own `IFCLOCALPLACEMENT` relative
+        // to the storey, and at the end they're all bundled into a single
+        // `IFCRELCONTAINEDINSPATIALSTRUCTURE` wiring them to `storey_id`
+        // — which is how IFC4 tools (BlenderBIM, IfcOpenShell) discover
+        // what's in a building.
+        //
+        // Geometry (`IfcShapeRepresentation`) is intentionally omitted
+        // here — tasks IFC-15 through IFC-22 produce proper
+        // representations once Phase-5 geometry lands. For now every
+        // element carries its placement + name + GUID, which validates
+        // against the IFC4 schema as a "geometry-free" element.
+        let mut element_ids: Vec<usize> = Vec::new();
+        for entity in &model.entities {
+            if let super::entities::IfcEntity::BuildingElement {
+                ifc_type,
+                name,
+                type_guid,
+            } = entity
+            {
+                let placement_id = self.id();
+                self.emit_entity(
+                    placement_id,
+                    format!("IFCLOCALPLACEMENT(#{storey_placement},#{axis_placement})"),
+                );
+                let el_id = self.id();
+                let name_quoted = quoted_or_dollar(&escape(name));
+                let tag_quoted = type_guid
+                    .as_deref()
+                    .map(escape)
+                    .map(|t| format!("'{t}'"))
+                    .unwrap_or_else(|| "$".into());
+                // IFC<TYPE>(GlobalId, OwnerHist, Name, Desc, ObjectType,
+                //   ObjectPlacement, Representation, Tag)
+                // Some subclasses (IfcDoor/IfcWindow) want extra predefined
+                // fields — the minimal 8-field form is valid for IfcWall,
+                // IfcSlab, IfcRoof, IfcCovering, IfcColumn, IfcBeam. Door
+                // and Window are emitted with their 10-field variants.
+                let ifc_upper = ifc_type.to_ascii_uppercase();
+                let line = if ifc_upper == "IFCDOOR" || ifc_upper == "IFCWINDOW" {
+                    format!(
+                        "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},$,{tag_quoted},$,$)",
+                        make_guid(el_id),
+                    )
+                } else {
+                    format!(
+                        "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},$,{tag_quoted})",
+                        make_guid(el_id),
+                    )
+                };
+                self.emit_entity(el_id, line);
+                element_ids.push(el_id);
+            }
+        }
+
+        if !element_ids.is_empty() {
+            let rel_id = self.id();
+            let refs_list = element_ids
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELCONTAINEDINSPATIALSTRUCTURE('{}',#{owner_hist},$,$,({refs_list}),#{storey_id})",
+                    make_guid(rel_id),
+                ),
+            );
+        }
 
         self.emit_line("ENDSEC;");
     }
@@ -759,6 +826,97 @@ mod tests {
             guids.len() >= 7,
             "expected ≥7 GUIDs (project+site+building+storey+3 rel-aggregates), got {}",
             guids.len()
+        );
+    }
+
+    #[test]
+    fn step_emits_building_elements() {
+        use super::super::entities::IfcEntity;
+        let model = IfcModel {
+            project_name: Some("ElementsDemo".into()),
+            description: None,
+            entities: vec![
+                IfcEntity::BuildingElement {
+                    ifc_type: "IfcWall".into(),
+                    name: "North Wall".into(),
+                    type_guid: None,
+                },
+                IfcEntity::BuildingElement {
+                    ifc_type: "IfcSlab".into(),
+                    name: "Level 1 Floor".into(),
+                    type_guid: Some("101".into()),
+                },
+                IfcEntity::BuildingElement {
+                    ifc_type: "IfcDoor".into(),
+                    name: "Front Door".into(),
+                    type_guid: None,
+                },
+            ],
+            classifications: Vec::new(),
+            units: Vec::new(),
+        };
+        let s = write_step(&model);
+        // Each element's IFC4 entity constructor appears in the output.
+        assert!(s.contains("IFCWALL("), "missing IFCWALL constructor:\n{s}");
+        assert!(s.contains("IFCSLAB("), "missing IFCSLAB constructor:\n{s}");
+        assert!(s.contains("IFCDOOR("), "missing IFCDOOR constructor:\n{s}");
+        assert!(
+            s.contains("North Wall"),
+            "escaped element name not emitted:\n{s}"
+        );
+        // IfcRelContainedInSpatialStructure ties them to the storey.
+        assert_eq!(
+            s.matches("IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(),
+            1,
+            "expected exactly one spatial-containment rel:\n{s}"
+        );
+        // Each element gets its own placement on top of the 3 spatial
+        // placements (site, building, storey) → 6 total.
+        assert_eq!(s.matches("IFCLOCALPLACEMENT(").count(), 6);
+    }
+
+    #[test]
+    fn step_empty_entities_emits_no_containment_rel() {
+        // When no BuildingElements are provided, the writer must NOT
+        // emit an IFCRELCONTAINEDINSPATIALSTRUCTURE — an empty
+        // references list would fail IFC4 schema validation.
+        let model = IfcModel::default();
+        let s = write_step(&model);
+        assert_eq!(s.matches("IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(), 0);
+    }
+
+    #[test]
+    fn step_door_and_window_get_10_field_form() {
+        // IfcDoor and IfcWindow have OverallHeight/OverallWidth slots
+        // after the standard 8 fields; we emit them as `$,$` (unknown)
+        // until geometry lands. Verify they land as 10-field forms.
+        use super::super::entities::IfcEntity;
+        let model = IfcModel {
+            project_name: None,
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IfcDoor".into(),
+                name: "Door".into(),
+                type_guid: None,
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+        };
+        let s = write_step(&model);
+        // The door line should have 9 commas (10 fields). Grep the
+        // full constructor by finding the line that starts with a
+        // GUID and contains "IFCDOOR(".
+        let line = s
+            .lines()
+            .find(|l| l.contains("IFCDOOR("))
+            .expect("IFCDOOR emitted");
+        let open = line.find("IFCDOOR(").unwrap() + "IFCDOOR(".len();
+        let close = line.rfind(");").unwrap();
+        let args = &line[open..close];
+        assert_eq!(
+            args.matches(',').count(),
+            9,
+            "IFCDOOR args expected 10 fields (9 commas), got: {args}"
         );
     }
 }

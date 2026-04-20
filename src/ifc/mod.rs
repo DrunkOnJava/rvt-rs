@@ -14,12 +14,16 @@
 //!   `IfcApplication`, `IfcOwnerHistory`, `IfcSIUnit`×4,
 //!   `IfcUnitAssignment`, `IfcGeometricRepresentationContext`)
 //!
-//! **This is not yet a meaningful RVT → IFC converter.** No geometry,
-//! no per-element entities, no materials, no parameter property sets,
-//! no type-instancing, no real units from the file's Forge unit
-//! identifiers. Those layers land in Phase 4 (Layer 5b per-element
-//! walker), Phase 5 (geometry extraction), and Phase 6 (real IFC
-//! mapping) per `TODO-BLINDSIDE.md`.
+//! **Per-element entities now land as geometry-free IFC4 elements.**
+//! When `IfcModel.entities` contains `BuildingElement { ifc_type, name,
+//! type_guid }` values (populated by Layer 5b decoders: Wall, Floor,
+//! Roof, Ceiling, Door, Window, Column, Beam), the writer emits each
+//! as an `IFC<TYPE>` constructor with its own `IFCLOCALPLACEMENT`, and
+//! bundles them via `IFCRELCONTAINEDINSPATIALSTRUCTURE` linked to the
+//! storey. This means BlenderBIM / IfcOpenShell now see a real element
+//! list — they can count walls, list rooms, and enumerate the spatial
+//! tree. Geometry (`IfcShapeRepresentation`), materials, and property
+//! sets still land in Phase 5 + 6 per `TODO-BLINDSIDE.md`.
 //!
 //! # Eventual implementation plan
 //!
