@@ -1,0 +1,40 @@
+[template]
+cargo_generate_version = ">=0.18.0"
+
+# Entry point for the generated file. When invoked from the rvt-rs
+# repo root via `cargo generate --path templates/element-decoder
+# --destination .`, the template body lands at
+# `src/elements/<snake>.rs` — which is exactly where a new decoder
+# belongs.
+include = ["src/elements/{{class_name_snake}}.rs"]
+
+# ----------------------------------------------------------------------
+# Prompts
+# ----------------------------------------------------------------------
+
+[placeholders.class_name]
+type = "string"
+prompt = "Revit class name (PascalCase, e.g. Dimension, TextNote, Revision)"
+regex = "^[A-Z][A-Za-z0-9]*$"
+
+[placeholders.struct_description]
+type = "string"
+prompt = "One-line description of the Revit class (used in the module docstring)"
+
+# Auto-derived snake_case name. cargo-generate's `default` field
+# accepts liquid expressions, so this prompt pre-fills with the
+# correct value and the user just presses enter — no redundant
+# typing, but still visible for review.
+#
+#   class_name = "Dimension"  ->  class_name_snake = "dimension"
+#   class_name = "TextNote"   ->  class_name_snake = "text_note"
+#   class_name = "WallType"   ->  class_name_snake = "wall_type"
+#
+# Exposed as its own placeholder so both the file path and the
+# generated body can reference it without reapplying the filter
+# on every use.
+[placeholders.class_name_snake]
+type = "string"
+prompt = "Snake_case name (auto-derived — press enter to accept)"
+default = "{{ class_name | snake_case }}"
+regex = "^[a-z][a-z0-9_]*$"
