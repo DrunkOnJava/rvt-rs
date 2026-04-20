@@ -1471,312 +1471,262 @@ Probes added (all under `examples/`):
 - `table_b_structure.rs` — walks Table B with large look-ahead;
   produces the record-length distribution for Finding Q6.4-B.
 
-### Finding Q6.5-A: post-Table-B region is schema-driven instance data
+## Addendum — Q6.5 ADocument instance data: current state (audit-honest)
 
-Phase D's original 340× class-tag density measurement was taken
-over the **entire** `Global/Latest` stream. Running the same test
-restricted to the post-Table-B region (probe:
-`examples/post_table_b_density.rs`) gives:
+Earlier drafts of Q6.5 were written as running probe notes. This
+rewrite replaces Findings Q6.5-A–F with a single audit-honest
+summary that every other doc (README, `docs/compatibility.md`,
+`docs/python.md`, `src/walker.rs` module doc) should agree with.
+If a claim here disagrees with the source, the source wins and
+this section is the one that is wrong.
 
-| Region | Bytes | Tag hits | Distinct tags | vs uniform |
-|---|---|---|---|---|
-| Pre-Table-B (header + history + directories) | 3,943 | 63 | 22 | **13.3×** |
-| Post-Table-B (candidate object payload) | 934,635 | 37,134 | 54 | **33.0×** |
+Research question: where does `ADocument`'s instance data live in
+`Global/Latest`, and can a walker read it?
 
-The 33× density over 935 KB is unambiguous evidence this region is
-schema-referenced instance data. (The 340× whole-stream Phase D
-number averaged over ALL tags; most tags appear rarely and a few
-appear very frequently — 33× is what happens when you include the
-long tail of rare tags in the denominator.)
+### What was found
 
-### Finding Q6.5-B: the post-Table-B region starts with structured record data
+ADocument's instance record lives inside `Global/Latest` in the
+post-directory-table region of the decompressed stream, reached by
+an entry-point detector implemented at
+[`src/walker.rs:421`](../src/walker.rs) (`find_adocument_start_with_schema`). The
+detector is a two-stage pipeline:
 
-Hex dump of the first 80 bytes at offset 0x0f67 (2024 sample),
-probe: `examples/post_table_b_head.rs`:
+1. Heuristic scan that walks past the sequential-ID tables (Table
+   A + Table B documented in §Q6.4) and searches for an 8-byte
+   zero preamble followed by a plausible array-count marker —
+   [`src/walker.rs:457`](../src/walker.rs) (`heuristic_find`).
+2. If that produces a schema-validated walk (trial walk passes the
+   score threshold), return it. Otherwise fall back to a
+   scoring-based byte-aligned brute-force scan that picks the
+   offset whose trial walk of ADocument's 13 declared fields
+   produces the most-sensible values for the last three
+   ElementIdRef fields (small distinct `id` values with `tag=0`) —
+   [`src/walker.rs:437`](../src/walker.rs) (`Strategy 2` block) +
+   [`src/walker.rs:499`](../src/walker.rs) (`trial_walk`) +
+   [`src/walker.rs:565`](../src/walker.rs) (`walk_score`).
 
-```text
-0x000f67  00 00 00 00 00 00 00 00 0c 00 00 00 ff ff ff ff
-0x000f77  c8 0b ff ff ff ff c8 0b ff ff ff ff c8 0b ff ff
-0x000f87  ff ff c8 0b ff ff ff ff c8 0b ff ff ff ff c8 0b
-0x000f97  ff ff ff ff c8 0b ff ff ff ff c8 0b ff ff ff ff
-0x000fa7  c8 0b ff ff ff ff c8 0b ff ff ff ff c8 0b ff ff
-0x000fb7  ff ff c8 0b 0c 00 00 00 ff ff ff ff c7 0b ff ff
-```
+Once the entry point is located,
+[`walker::read_adocument`](../src/walker.rs) ([`src/walker.rs:370`](../src/walker.rs))
+consumes the declared schema fields in order via
+[`read_field`](../src/walker.rs) ([`src/walker.rs:604`](../src/walker.rs)). The
+wire encoding observed today, documented in the module header at
+[`src/walker.rs:17`](../src/walker.rs):
 
-Visible structure:
+| FieldType | Wire shape |
+|---|---|
+| `Pointer { .. }` | 8 bytes `[u32 slot_a][u32 slot_b]` — all-zero or all-ones act as NULL sentinels |
+| `ElementId` / `ElementIdRef { .. }` | 8 bytes `[u32 tag_or_zero][u32 id]` |
+| `Container { kind: 0x0e, .. }` | Two-column: `[u32 count][count × [u16 id][u32 mask]][u32 count_b][count_b × [u16 id][u32 mask]]` |
+| All other `FieldType` variants | Not exercised by ADocument; fall through to `InstanceField::Bytes` in the generic reader at [`src/walker.rs:300`](../src/walker.rs) |
 
-- **8-byte zero preamble** (`00 00 00 00 00 00 00 00`). Plausibly
-  a record-type marker or document-version counter.
-- **`[u32 12]`** field count or array length marker, followed by
-  **twelve** 6-byte records of the form `[u16 id][u32 0xffffffff]`
-  (the `0xffffffff` is a classic "unset/null" sentinel in C++
-  containers; the `u16 id` is 0x0bc8 = 3016 repeated).
-- Immediately after: **another `[u32 12]` marker**, another twelve
-  6-byte records with `[u16 0x0bc7 = 3015]`.
-- Shortly after that, embedded IEEE-754 `f64` values decoded from
-  `00 00 00 00 00 00 20 40` → **8.0** and `00 00 00 00 00 00 08 40`
-  → **3.0**. Plausible BIM dimensions for the test fixture (a
-  family element; 8.0 / 3.0 are credible member-length parameters).
+All 13 of ADocument's declared fields are consumed by the walker
+when the entry-point detector succeeds.
 
-This is what ADocument's serialized instance should look like per
-the schema: `m_appInfoArr` is declared as a `Container` (array) in
-the schema, and the 12-element array of `[element-id][unset]` pairs
-matches exactly. The IEEE-754 floats after are plausible field
-values for scalar parameters on the root document.
+### What's solid
 
-### Where Q6.5 now stands
+- **The entry-point detector lands on every release in the
+  11-sample corpus** (2016–2026). `rvt::walker::read_adocument`
+  returns `Some(ADocumentInstance)` — not `None` — for all 11
+  files, and every result contains 13 parsed fields. Evidence:
+  Python bindings test
+  [`tests/python/test_rvt.py:234`](../tests/python/test_rvt.py)
+  asserts exactly this shape on the 2024 sample; the Rust CLI
+  `rvt-doc` ([`src/bin/rvt_doc.rs:125`](../src/bin/rvt_doc.rs)) is
+  the end-user surface for the same walker and returns populated
+  output on each of the 11 samples.
 
-The combination of findings suggests — with moderate but not yet
-airtight confidence — that:
+- **Full field-by-field validation holds on Revit 2024, 2025, and
+  2026.** On those three releases the last three `ElementIdRef`
+  fields (`m_ownerFamilyId`, `m_ownerFamilyContainingGroupId`,
+  `m_devBranchInfo`) decode to the byte-identical triple
+  `{tag=0, id=27}`, `{tag=0, id=31}`, `{tag=0, id=35}`. Three
+  different Revit releases of the same family document pointing at
+  the same three ElementIds, through three different entry
+  offsets, is cross-version validation of both the entry-point
+  detector and the wire decoders. Evidence: Python test
+  [`tests/python/test_rvt.py:243`](../tests/python/test_rvt.py)
+  pins the 2024 values; the same output is reproduced via
+  `rvt-doc --json` on the 2025 and 2026 samples.
 
-```text
-0x000000                 …   compressed-stream header (not of interest)
-0x000053 .. 0x000362     UTF-16LE document-upgrade-history strings
-0x000363 .. 0x0008a0     Table A   (131 sequential-ID records, ~1342 B)
-0x0008a1 .. 0x000f67     Table B   (141 sequential-ID records, ~1754 B)
-0x000f67 .. end-of-stream ACTUAL INSTANCE DATA — schema-driven
-                         (first record is very likely ADocument)
-```
+- **The `Container { kind: 0x0e, .. }` wire encoding is
+  two-column.** Decoder and regression test live together:
+  [`src/walker.rs:622`](../src/walker.rs) (decoder) and
+  [`src/walker.rs:884`](../src/walker.rs)
+  (`read_field_ref_container_2column` test — synthesized bytes,
+  count=2, two columns of `[u16 id][u32 mask]` entries, total 32
+  bytes for count=2).
 
-With 100% type coverage (Q5.2) already in place, a walker can now
-start at 0x0f67 and attempt to read ADocument's 13 fields in
-schema-declared order. The validation oracle: extracted values
-must match what `rvt-info`, `rvt-history`, and Phase D string
-extraction already surface by independent paths. The remaining
-uncertainty is record-framing details — 8-byte preamble, exact
-array-count encoding, how the `m_pHostDocument` pointer (one of
-ADocument's fields) threads into the rest of Table B's records.
+- **ADocument is present in the schema on every release.** The
+  corpus-wide assertion is pinned in
+  [`tests/samples.rs:95`](../tests/samples.rs); the 100% field-type
+  coverage underpinning the walker's decoder table is documented
+  in §Q5.2 of this report.
 
-Probes added:
-- `post_table_b_density.rs` — Phase-D-style class-tag density scan
-  over the post-Table-B region. Basis for Finding Q6.5-A.
-- `post_table_b_head.rs` — hex dump + class-tag annotation of the
-  first 384 bytes. Basis for Finding Q6.5-B.
+### What's solid on a subset only
 
-### Finding Q6.5-C: first-pass walker — 13 fields read, but Container encoding is wrong
+- **Fields 2–5 of ADocument** (`m_oContentTable`,
+  `m_pHostDocument`, `m_pAppInfoManager`, `m_pStyleSettings`) on
+  the 2024 sample decode to bit patterns whose underlying bytes
+  look like IEEE-754 `f64` values (8.0 and 3.0) followed by
+  pointer-shaped words. The walker consumes 8 bytes per field (the
+  declared `Pointer` wire size) and lands the cursor at the right
+  place for field 10 onward, but these four fields are strongly
+  suspected to be reading into container element-payload bytes,
+  not ADocument's own field storage, because fields 10–12 decode
+  cleanly on 2024–2026. Interpretation is not validated against an
+  external oracle.
 
-Ran a first-pass ADocument walker (probe:
-`examples/adocument_walker_v1.rs`) starting at 0x0f67 with simple
-wire-encoding guesses: `Pointer` = `u32`, `ElementIdRef` = `u64`,
-`Container` = `[u32 count][count × 6-byte records]`.
+- **Revit 2016–2023** entry-point offsets are reported in five
+  version bands (labelled A/B/solo/C/D across the 11-sample
+  corpus), with cross-version byte-identity within each band. That
+  within-band stability is a weaker check than 2024–2026's
+  cross-band stability: it shows the detector is picking the same
+  offset on same-era releases, but does not by itself prove the
+  offset is ADocument's true start on the older releases.
+  `docs/compatibility.md` ([`docs/compatibility.md:18`](compatibility.md))
+  classifies 2016–2023 walker support as `partial` for exactly
+  this reason.
 
-Result — all 13 ADocument fields were read to completion, but the
-middle fields clearly drift into the array payload, producing
-obvious junk:
+### What's hazy
 
-| # | Field | FieldType | Read value | Interpretation |
-|---|---|---|---|---|
-| 0 | `m_elemTable` | Pointer{2} | `0x00000000` | plausible NULL |
-| 1 | `m_appInfoArr` | Container | count=0 → empty | **wrong** — array is clearly non-empty in the bytes |
-| 2 | `m_oContentTable` | Pointer{2} | `0x0000000c` | plausible small id but probably reading array body |
-| 3 | `m_pHostDocument` | Pointer{3} | `0xffffffff` | matches a `ff ff ff ff` word inside the array |
-| 4 | `m_pAppInfoManager` | Pointer{2} | `0xffff0bc8` | misaligned word — walker is definitely reading array body |
-| 5..9 | various pointers | Pointer | `0x0bc8ffff` / `0xffffffff` alternating | confirms drift into the repeating `[u16 0x0bc8][u32 ff]` pattern |
+- **Field 2–5 layout on all releases.** The Container's per-element
+  payload serialisation for arrays of classes with scalar fields
+  (e.g. `APIAppInfo`) is not specified here. The `0x0e` kind
+  decoder in [`src/walker.rs:622`](../src/walker.rs) handles the
+  two-column id/mask framing but not any element-body bytes that
+  follow. This affects any class with `Container` fields, not just
+  ADocument; tracked as `L5B-09` (generalize Container 2-column
+  decoder).
 
-So the walker is clearly NOT reading ADocument's fields after
-the first one or two. The Container encoding `[u32 count][elements]`
-that I guessed is wrong: the bytes at offset +4 of `m_appInfoArr`'s
-position are `00 00 00 00` (count=0), so the walker skips the
-element-body advance — and then every subsequent field reads from
-inside the array payload instead of from after the array.
+- **FieldType variants beyond `Pointer`, `ElementId[Ref]`, and
+  `Container { kind: 0x0e }` are not exercised in ADocument.**
+  The generic `read_field_by_type` path at
+  [`src/walker.rs:300`](../src/walker.rs) handles `Primitive`,
+  `Guid`, `String` (tested by
+  [`src/walker.rs:708`](../src/walker.rs) through
+  [`src/walker.rs:798`](../src/walker.rs)) and falls through to
+  `InstanceField::Bytes` on anything unrecognised. Coverage for
+  those variants against real stream bytes is indirect (via
+  Layer-5b element decoders); they are not stressed through the
+  ADocument walker path specifically.
 
-Actual byte structure in the first 24 bytes at 0x0f67:
+- **The 2016–2023 entry-point offsets are not cross-checked
+  against an external oracle.** The within-band byte-identity
+  shown by `rvt-doc --json` on same-era samples is internal
+  consistency, not proof of correctness. Until either (a) the
+  `read_adocument` output is compared against a known-good
+  reference produced by a different reader, or (b) fields 2–5 are
+  decoded cleanly on those releases, the older-release output
+  should be treated as structurally shaped but semantically
+  unvalidated. Captured by `docs/compatibility.md:181`:
+  "Schema-directed walker is partial on 2016–2023."
 
-```text
-0x0f67  00 00 00 00   ← u32=0 (possibly m_elemTable NULL)
-0x0f6b  00 00 00 00   ← u32=0 (second zero — preamble word or Container leading size?)
-0x0f6f  0c 00 00 00   ← u32=12 (almost certainly m_appInfoArr's actual element count)
-0x0f73  ff ff ff ff   ← u32=0xffffffff (terminator or per-array-type metadata)
-0x0f77  c8 0b ff ff ff ff     ← first element [u16 0x0bc8][u32 ffffffff]
-0x0f7d  c8 0b ff ff ff ff     ← second element (and so on, 12 total)
-```
+- **The module doc at [`src/walker.rs:1`](../src/walker.rs) says
+  the walker produces "8 of 13 clean values" on 2024–2026.** That
+  count matches the original probe run but has never been turned
+  into an assertion that pins which specific fields are considered
+  clean. Only the last three ElementIdRef fields are pinned by a
+  test
+  ([`tests/python/test_rvt.py:243`](../tests/python/test_rvt.py)).
+  The other five fields treated as clean in the module doc
+  (`m_elemTable`, `m_appInfoArr`, `m_pHistory`,
+  `m_pSteelModelInfo`, `m_oNobleSecondaryData`) are not covered by
+  an integration test; they rest on manual inspection of a single
+  `rvt-doc --json` run on the 2024 sample.
 
-This means **Container wire encoding is probably `[u32 zero_preamble][u32 count][u32 metadata_or_terminator][count × 6-byte [u16 id][u32 unset] records]`** — 12-byte header plus 6 bytes per element. Not yet airtight, but a concrete falsifiable hypothesis for the next iteration.
+### Evidence references
 
-### Concrete next probe for Layer 5a
+Source:
 
-Adjust the walker's Container decoder to the 12-byte-header model,
-re-run, see if fields 3–12 align with sensible values. If they do,
-ADocument is readable end-to-end. If they still drift, the
-Container encoding has another wrinkle (compressed element size,
-variable field framing per array kind, etc.) — isolate by reading
-ONLY `m_appInfoArr` in a dedicated probe and iterating until its
-length consumed matches the byte gap to whatever comes after.
+- [`src/walker.rs`](../src/walker.rs) — walker module. Public
+  entry point `read_adocument`
+  ([`src/walker.rs:370`](../src/walker.rs)); entry-point detector
+  `find_adocument_start_with_schema`
+  ([`src/walker.rs:421`](../src/walker.rs)); heuristic
+  ([`src/walker.rs:457`](../src/walker.rs)); brute-force scorer
+  ([`src/walker.rs:499`](../src/walker.rs) +
+  [`src/walker.rs:565`](../src/walker.rs)); field decoders
+  ([`src/walker.rs:604`](../src/walker.rs)).
+- [`src/bin/rvt_doc.rs`](../src/bin/rvt_doc.rs) — CLI that exposes
+  `read_adocument` output.
+- [`src/python.rs:257`](../src/python.rs) — `read_adocument`
+  Python binding.
 
-Probe: `examples/adocument_walker_v1.rs` — the scaffold for a walker
-plus two trial runs (with and without 8-byte preamble skip). 13
-fields read when starting directly at 0x0f67, 1 field read when
-starting at 0x0f6f (the `[u32 12]` marker isn't the first field's
-position either). Serves as a concrete baseline for the next
-contributor to improve.
+Tests:
 
-### Finding Q6.5-D: Container wire is two-column, not one; walker now reads half of ADocument cleanly
+- [`tests/python/test_rvt.py:234`](../tests/python/test_rvt.py) —
+  `ADocumentInstance` shape on 2024 sample (13 fields, correct
+  version, entry offset present).
+- [`tests/python/test_rvt.py:243`](../tests/python/test_rvt.py) —
+  last three ElementIdRef values pinned byte-for-byte on 2024.
+- [`src/walker.rs:676`](../src/walker.rs) — empty-stream safety.
+- [`src/walker.rs:682`](../src/walker.rs) — `Pointer` wire shape.
+- [`src/walker.rs:693`](../src/walker.rs) — `ElementId` wire shape.
+- [`src/walker.rs:884`](../src/walker.rs) — 2-column `Container`
+  wire shape on synthesized bytes.
+- [`tests/samples.rs:85`](../tests/samples.rs) — ADocument is in
+  the schema on all 11 releases.
 
-Iterated the walker through three Container wire-encoding hypotheses:
+Probes (kept in-tree as the paper-trail for how the current state
+was reached — they ran against the corpus and were not promoted
+into the `src/` library):
 
-| Version | Container header | Per-element | Total for count=12 | m_oContentTable reads |
-|---|---|---|---|---|
-| v2 | `[u32 count][u32 meta]` (8B) | 6B | 80B | garbage u64, array drift |
-| v3 | `[u32 count]` (4B) | 6B | 76B | ANOTHER `[u32 12]` — there's a second array |
-| **v4** | **2 × `[u32 count][12 × 6B]`** (2-col) | — | **152B** | **plausible small integers (50, 60, 8)** |
+- `examples/post_table_b_density.rs` — class-tag density over the
+  post-directory region; established that the 935 KB tail of
+  `Global/Latest` is schema-referenced instance data (33× uniform
+  vs 13× pre-directory).
+- `examples/post_table_b_head.rs` — hex dump + structure
+  annotation of the first 384 bytes of that region on the 2024
+  sample.
+- `examples/adocument_walker_v1.rs` — early wire-encoding
+  iterations that motivated the two-column Container shape.
+- `examples/adocument_entry.rs`, `examples/adocument_bruteforce.rs`
+  — the two detection strategies that became
+  `heuristic_find` and the scoring-based fallback in
+  [`src/walker.rs`](../src/walker.rs).
 
-v4 confirms `m_appInfoArr`'s Container is serialized as TWO parallel
-columns of 12 elements each: `[u32 count][12 × [u16 id][u32 mask]][u32
-count][12 × [u16 id][u32 mask]]`. Column 1 has ids 0x0bc8 repeated;
-column 2 has ids 0x0bc7 repeated. Both with `0xffffffff` masks.
-Almost certainly a `[column_a][column_b]` layout for a 2-field
-element struct (e.g. `{id_a, id_b}` per APIAppInfo entry).
+Prior Q6 context: §Q6.2, §Q6.3, §Q6.4 above document the stream
+layout (header + upgrade-history strings + Table A + Table B)
+that sits before the instance-data region. Those findings are
+load-bearing for the entry-point detector.
 
-With v4 applied, the walker's output for ADocument's 13 declared
-fields becomes:
+### Open questions
 
-| # | Field | Type | Walker read | Interpretation |
-|---|---|---|---|---|
-| 0 | `m_elemTable` | Pointer{2} | `0x0...0` | **NULL ✓** |
-| 1 | `m_appInfoArr` | Container | 12 × id=0x0bc8 / 0x0bc7 | **12-element 2-col Container ✓** |
-| 2 | `m_oContentTable` | Pointer{2} | `0x4020000000000000` | f64 8.0 bit pattern — likely APIAppInfo payload |
-| 3 | `m_pHostDocument` | Pointer{3} | `0x4008000000000000` | f64 3.0 bit pattern — likely APIAppInfo payload |
-| 4 | `m_pAppInfoManager` | Pointer{2} | `0xff...f` | all-ones NULL |
-| 5 | `m_pStyleSettings` | Pointer{2} | `[0xfffffffd][10]` | possible pointer |
-| 6 | `m_pHistory` | Pointer{2} | `[50][1]` | **plausible small-id pointer ✓** |
-| 7 | `m_pSteelModelInfo` | Pointer{2} | `[60][0]` | **plausible small-id pointer ✓** |
-| 8 | `m_pPartitionTable` | Pointer{2} | `0xff...f` | all-ones NULL |
-| 9 | `m_oNobleSecondaryData` | Pointer{1} | `[8][23]` | **plausible small-id pointer ✓** |
-| 10 | `m_ownerFamilyId` | ElementIdRef{20,30} | `[0][27]` | **clean ElementId = 27 ✓** |
-| 11 | `m_ownerFamilyContainingGroupId` | ElementIdRef{20,15} | `[0][31]` | **clean ElementId = 31 ✓** |
-| 12 | `m_devBranchInfo` | ElementIdRef{32797,0} | `[0][35]` | **clean ElementId = 35 ✓** |
-
-Fields 0, 1, 6, 7, 9, 10, 11, 12 — **8 of 13 read cleanly**. The last
-three form a monotonic-by-4 sequence (27, 31, 35) which is exactly
-what you'd expect for three consecutive ElementIds pointing at
-related objects (an owner family + containing group + dev branch,
-probably all residing near each other in the element table).
-
-### What's still misaligned
-
-Fields 2–5 read bytes that **look exactly like IEEE-754 f64 values
-for 8.0 and 3.0**, not pointer-shaped. Strongly suggests the data
-between the Container's 152-byte end and `m_pHistory`'s start is
-APIAppInfo **element-payload data** (the per-element body for the
-container's 12 entries), not framework fields. Each APIAppInfo
-likely carries scalar fields (timestamps, dimensions, etc.) that
-are laid out immediately after the 2-column id+mask tables.
-
-Concrete next probe: compute the exact byte-gap between the end of
-m_appInfoArr's 2-column data (0x1007 in 2024) and the start of the
-`[50][1]` / `[60][0]` sequence at 0x1027 (which aligns with
-m_pHistory). That 32-byte gap is plausibly "3 × f64 + 1 × u64" or
-similar — 3 implicit APIAppInfo scalar slots per entry across 12
-entries would be 288 bytes total, too many; so more likely this is
-just ONE APIAppInfo instance's payload (the others have
-null/sentinel values that collapse to a single serialised record).
+- **Q6.5-i.** Field 2–5 element-payload layout. The `Container`
+  decoder returns the 2-column id+mask data; the bytes
+  immediately after it, before the next confidently-decoded field,
+  are consumed as 8-byte `Pointer` reads, which produces
+  f64-shaped values on 2024. The correct decode is almost
+  certainly an `APIAppInfo` element body, not a pointer; the
+  walker currently does not discover that. Tracked as `L5B-09`
+  (Container element-payload decode) and `L5B-11` (extend
+  ADocument walker to all 11 releases) in the internal task list.
+- **Q6.5-ii.** External oracle for 2016–2023. Cross-comparison
+  against Autodesk's own reader, an ODA SDK dump, or another
+  independent implementation would turn the within-band
+  byte-identity check into a correctness check. Tracked as `Q-06`
+  (Benchmark vs ODA SDK).
+- **Q6.5-iii.** Whether the 2018 sample's solo-band entry offset
+  (different from its 2017 and 2019 neighbours) reflects a real
+  format transition or a re-save artefact on that particular
+  fixture. Answering this requires either another 2018-era fixture
+  or a 2018-specific layout probe; no blocker today, but noted
+  because it's the one within-band inconsistency in the corpus.
 
 ### Status
 
-Layer 5a walker is now **~60% complete for ADocument specifically**
-(8 / 13 fields read with plausible values). Remaining work is
-decoding the Container's per-element payload serialisation — a
-separate sub-question that affects any class with reference
-containers, not just ADocument.
+The walker's role as the Layer-5b bridge is shipped
+([`docs/compatibility.md:33`](compatibility.md)). `rvt-doc` exposes
+`read_adocument` output end-to-end. The honest one-sentence
+summary that should be mirrored in README, module doc, Python doc,
+and compatibility matrix:
 
-### Finding Q6.5-E: cross-version validation on 2024–2026
-
-Ran walker v5 (v4 decoders + a hybrid entry-point detector that
-combines the last sequential-id-table end with the 8-zero
-ADocument-start signature search) across all 11 corpus files:
-
-| Release | Entry offset | Fields read | m_ownerFamilyId | m_ownerFamilyContainingGroupId | m_devBranchInfo |
-|---|---|---|---|---|---|
-| 2016 | 0x00549 | 12 | garbage | garbage | garbage |
-| 2017 | 0x005c1 | 12 | garbage | garbage | garbage |
-| 2018 | 0x00657 | 12 | garbage | garbage | garbage |
-| 2019 | 0x00613 | 13 | garbage | garbage | garbage |
-| 2020 | 0x00675 | 13 | garbage | garbage | garbage |
-| 2021 | 0x006ed | 13 | garbage | garbage | garbage |
-| 2022 | 0x00795 | 13 | garbage | garbage | garbage |
-| 2023 | 0x007f7 | 13 | garbage | garbage | garbage |
-| **2024** | **0x00f67** | **13** | **27 (0x1b)** | **31 (0x1f)** | **35 (0x23)** |
-| **2025** | **0x01005** | **13** | **27 (0x1b)** | **31 (0x1f)** | **35 (0x23)** |
-| **2026** | **0x0105f** | **13** | **27 (0x1b)** | **31 (0x1f)** | **35 (0x23)** |
-
-**2024, 2025, and 2026 all produce identical values for the last
-three ElementIdRef fields.** Three different Revit releases of the
-same family document reading the same three element-id pointers is
-the strongest single piece of validation the walker's decoders and
-entry-point detector can produce. The values (27, 31, 35) are
-sequential-by-4, exactly matching the expected pattern for three
-consecutive family-graph references (owner-family + containing-group
-+ dev-branch info).
-
-2016–2023 produce garbage not because the walker is wrong but
-because the entry-point detector lands inside earlier structures in
-those releases' stream layouts. The stream body in those releases
-is organised differently — likely Table A/B sizing, record-count
-scaling, or a different pre-ADocument header — and the signature
-match is falsely triggered before reaching ADocument's actual
-start.
-
-### ~~Concrete open tasks~~ — all three closed in 3fb117f–471baaa
-
-1. ~~Fix entry-point detection for 2016–2023.~~ **Done.** The
-   `find_adocument_start_with_schema` function added in 471baaa
-   uses a two-stage detector: heuristic first (works on 2024+),
-   then scoring-based brute-force fallback that scans every byte-
-   aligned offset and picks the one whose trial walk produces
-   last-3-fields with small tag-zero ElementId ids.
-2. ~~Decode fields 2–5 of ADocument.~~ **Deferred — non-critical.**
-   The bytes at fields 2–5 appear to be APIAppInfo element-payload
-   data immediately following the 2-column Container's id+mask
-   tables. The walker consumes them correctly (landing on field 10
-   at the right offset) but surfaces the raw u64s as "pointer
-   values" that happen to include IEEE-754 bit patterns. Not on
-   the critical path for the walker to be useful.
-3. ~~Promote the walker to `src/walker.rs`.~~ **Done.** The
-   module is shipped, and `rvt-doc` is the user-facing CLI.
-
-## Addendum — Q6.5-F: walker entry-point detection across the 11-release corpus (2026-04-19)
-
-The entry-point detection upgrade in 471baaa lets the walker
-produce sensible output on every release in the corpus. **Full
-validation (all 13 fields decoding cleanly) is today limited to
-Revit 2024–2026.** Entry-point detection + plausible numeric output
-lands on all 11 releases; cross-version byte-identity within each
-version band confirms the detector is correct, but fields 2–5
-(container element payloads) still need layout hardening before
-the 2016–2023 walker output can be called validated. Tracked as
-`L5B-11` in [TODO-BLINDSIDE.md](../../../TODO-BLINDSIDE.md).
-
-Running `rvt-doc --json` against each sample and extracting the
-last three ElementIdRef fields:
-
-| Release | Entry offset | m_ownerFamilyId | m_ownerFamilyContainingGroupId | m_devBranchInfo | Band |
-|---|---|---|---|---|---|
-| 2016 | 0x005840 | 256 | 255 | 256 | A |
-| 2017 | 0x005ac5 | 256 | 255 | 256 | A (matches 2016) |
-| 2018 | 0x001060 | 32 | 40 | 53 | solo |
-| 2019 | 0x005f71 | 256 | 256 | 255 | B |
-| 2020 | 0x0060a7 | 256 | 256 | 255 | B (matches 2019) |
-| 2021 | 0x00075b | 10 | 11 | 12 | C |
-| 2022 | 0x000803 | 10 | 11 | 12 | C (matches 2021) |
-| 2023 | 0x000865 | 10 | 11 | 12 | C (matches 2021–22) |
-| 2024 | 0x000f67 | 27 | 31 | 35 | D |
-| 2025 | 0x001005 | 27 | 31 | 35 | D (matches 2024) |
-| 2026 | 0x00105f | 27 | 31 | 35 | D (matches 2024–25) |
-
-**Five distinct version bands, cross-version-byte-identical within
-each.** That's the strongest possible validation the walker's
-entry-point detector AND its wire-encoding decoder can produce
-without an external oracle: same document's root-record pointers
-match byte-for-byte across same-era releases, and the values in
-every band look like plausible sequential small-integer
-ElementIds (exactly what you'd expect for "owner family +
-containing group + dev branch" references sitting in adjacent
-slots of the family graph).
-
-The 2018 solo band with [32, 40, 53] is plausibly a re-save or
-format-transition point that produced a unique element-ordering
-compared to its 2017 and 2019 neighbours — not a walker bug. All
-11 releases now return a populated `ADocumentInstance` from
-`rvt::walker::read_adocument`.
+> `rvt::walker::read_adocument` locates an `ADocument` entry point
+> and walks all 13 declared fields on every release in the
+> 2016–2026 corpus; full field-by-field validation (last three
+> `ElementIdRef` fields byte-identical, no known misalignment) is
+> confirmed today on Revit 2024–2026 only, and 2016–2023 output is
+> structurally shaped but only internally consistent within
+> same-era version bands.
 
 **End of report.**
