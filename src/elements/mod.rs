@@ -26,7 +26,9 @@
 //! uniform untyped dump use `decode_instance` directly.
 
 pub mod category;
+pub mod grid;
 pub mod level;
+pub mod reference_planes;
 pub mod reference_points;
 pub mod styling;
 
@@ -50,6 +52,9 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(reference_points::BasePointDecoder),
         Box::new(reference_points::SurveyPointDecoder),
         Box::new(reference_points::ProjectPositionDecoder),
+        Box::new(grid::GridDecoder),
+        Box::new(grid::GridTypeDecoder),
+        Box::new(reference_planes::ReferencePlaneDecoder),
     ]
 }
 
