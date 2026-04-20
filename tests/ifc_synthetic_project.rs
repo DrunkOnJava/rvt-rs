@@ -102,7 +102,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &south_wall,
@@ -118,7 +118,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &east_wall,
@@ -138,7 +138,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &west_wall,
@@ -154,7 +154,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &floor,
@@ -172,7 +172,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &front_door,
@@ -199,7 +199,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &north_window,
@@ -215,7 +215,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &south_window,
@@ -231,7 +231,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &stair,
@@ -247,7 +247,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
         ElementInput {
             decoded: &unknown,
@@ -263,7 +263,7 @@ fn synthetic_project_emits_valid_ifc4() {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         },
     ];
 
@@ -532,10 +532,10 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         rotation_radians: None,
         extrusion: None,
         host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
-                representation_map_index: None,
+        material_layer_set_index: None,
+        material_profile_set_index: None,
+        solid_shape: None,
+        representation_map_index: None,
     }];
     let opts = BuilderOptions {
         project_name: Some("Stable".into()),

@@ -74,11 +74,12 @@ pub fn class_for_tag(tag: u16, version: u16) -> Option<&'static str> {
         let mut parts = line.splitn(2, ',');
         let name = parts.next()?;
         let rest = parts.next()?;
-        if let Some(cell) = rest.split(',').nth(col - 1)
-            && let Some(t) = parse_tag(cell)
-            && t == tag
-        {
-            return Some(name);
+        if let Some(cell) = rest.split(',').nth(col - 1) {
+            if let Some(t) = parse_tag(cell) {
+                if t == tag {
+                    return Some(name);
+                }
+            }
         }
     }
     None
@@ -91,7 +92,10 @@ pub fn dataset_size() -> usize {
 }
 
 fn version_column(version: u16) -> Option<usize> {
-    REVIT_VERSIONS.iter().position(|&v| v == version).map(|i| i + 1)
+    REVIT_VERSIONS
+        .iter()
+        .position(|&v| v == version)
+        .map(|i| i + 1)
 }
 
 /// Parse a hex tag cell like `"0x0123"`. Empty cells (class didn't

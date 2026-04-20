@@ -258,20 +258,19 @@ impl StepWriter {
                 // per vertex, then an IFCPOLYLINE that references them
                 // as its Points list. Auto-close by appending the first
                 // point if the last doesn't already equal it.
-                let mut pts: Vec<(f64, f64)> =
-                    points.iter().map(|(x, y)| (*x * 0.3048, *y * 0.3048)).collect();
-                if let (Some(first), Some(last)) = (pts.first().copied(), pts.last().copied())
-                    && ((first.0 - last.0).abs().max((first.1 - last.1).abs()) > 1e-9_f64)
-                {
-                    pts.push(first);
+                let mut pts: Vec<(f64, f64)> = points
+                    .iter()
+                    .map(|(x, y)| (*x * 0.3048, *y * 0.3048))
+                    .collect();
+                if let (Some(first), Some(last)) = (pts.first().copied(), pts.last().copied()) {
+                    if (first.0 - last.0).abs().max((first.1 - last.1).abs()) > 1e-9_f64 {
+                        pts.push(first);
+                    }
                 }
                 let mut point_ids: Vec<usize> = Vec::with_capacity(pts.len());
                 for (x, y) in &pts {
                     let pt_id = self.id();
-                    self.emit_entity(
-                        pt_id,
-                        format!("IFCCARTESIANPOINT(({x:.6},{y:.6}))"),
-                    );
+                    self.emit_entity(pt_id, format!("IFCCARTESIANPOINT(({x:.6},{y:.6}))"));
                     point_ids.push(pt_id);
                 }
                 let polyline_id = self.id();
@@ -324,9 +323,7 @@ impl StepWriter {
                 let profile_placement = self.id();
                 self.emit_entity(
                     profile_placement,
-                    format!(
-                        "IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"
-                    ),
+                    format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
                 );
                 let profile_id = self.emit_profile_def(ex, profile_placement);
                 let depth = ex.height_feet * 0.3048;
@@ -381,9 +378,7 @@ impl StepWriter {
                 let profile_placement = self.id();
                 self.emit_entity(
                     profile_placement,
-                    format!(
-                        "IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"
-                    ),
+                    format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
                 );
                 let wrap_ex = Extrusion {
                     width_feet: 0.0,
@@ -404,34 +399,33 @@ impl StepWriter {
                 );
                 (solid_id, "SweptSolid")
             }
-            SolidShape::BooleanResult { op, operand_a, operand_b } => {
+            SolidShape::BooleanResult {
+                op,
+                operand_a,
+                operand_b,
+            } => {
                 // Recursively emit operands, then wrap in
                 // IFCBOOLEANRESULT(op, first, second). Nested
                 // booleans compose naturally.
-                let (a_id, _rep_a) =
-                    self.emit_solid_shape(operand_a, element_axis, z_axis);
-                let (b_id, _rep_b) =
-                    self.emit_solid_shape(operand_b, element_axis, z_axis);
+                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, element_axis, z_axis);
+                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, element_axis, z_axis);
                 let solid_id = self.id();
                 self.emit_entity(
                     solid_id,
-                    format!(
-                        "IFCBOOLEANRESULT({},#{a_id},#{b_id})",
-                        op.as_step_keyword()
-                    ),
+                    format!("IFCBOOLEANRESULT({},#{a_id},#{b_id})", op.as_step_keyword()),
                 );
                 (solid_id, "CSG")
             }
-            SolidShape::FacetedBrep { vertices_feet, triangles } => {
+            SolidShape::FacetedBrep {
+                vertices_feet,
+                triangles,
+            } => {
                 // One IfcCartesianPoint per vertex.
                 let mut vert_ids: Vec<usize> = Vec::with_capacity(vertices_feet.len());
                 for [x, y, z] in vertices_feet {
                     let (xm, ym, zm) = (x * 0.3048, y * 0.3048, z * 0.3048);
                     let pid = self.id();
-                    self.emit_entity(
-                        pid,
-                        format!("IFCCARTESIANPOINT(({xm:.6},{ym:.6},{zm:.6}))"),
-                    );
+                    self.emit_entity(pid, format!("IFCCARTESIANPOINT(({xm:.6},{ym:.6},{zm:.6}))"));
                     vert_ids.push(pid);
                 }
                 // One IfcPolyLoop + IfcFaceBound + IfcFace per triangle.
@@ -444,9 +438,7 @@ impl StepWriter {
                     let idx_a = tri.0 as usize;
                     let idx_b = tri.1 as usize;
                     let idx_c = tri.2 as usize;
-                    if idx_a >= vert_ids.len()
-                        || idx_b >= vert_ids.len()
-                        || idx_c >= vert_ids.len()
+                    if idx_a >= vert_ids.len() || idx_b >= vert_ids.len() || idx_c >= vert_ids.len()
                     {
                         debug_assert!(
                             false,
@@ -458,18 +450,11 @@ impl StepWriter {
                         );
                         continue;
                     }
-                    let (va, vb, vc) =
-                        (vert_ids[idx_a], vert_ids[idx_b], vert_ids[idx_c]);
+                    let (va, vb, vc) = (vert_ids[idx_a], vert_ids[idx_b], vert_ids[idx_c]);
                     let loop_id = self.id();
-                    self.emit_entity(
-                        loop_id,
-                        format!("IFCPOLYLOOP((#{va},#{vb},#{vc}))"),
-                    );
+                    self.emit_entity(loop_id, format!("IFCPOLYLOOP((#{va},#{vb},#{vc}))"));
                     let bound_id = self.id();
-                    self.emit_entity(
-                        bound_id,
-                        format!("IFCFACEBOUND(#{loop_id},.T.)"),
-                    );
+                    self.emit_entity(bound_id, format!("IFCFACEBOUND(#{loop_id},.T.)"));
                     let face_id = self.id();
                     self.emit_entity(face_id, format!("IFCFACE((#{bound_id}))"));
                     face_ids.push(face_id);
@@ -483,7 +468,13 @@ impl StepWriter {
                     .join(",");
                 self.emit_entity(shell_id, format!("IFCCLOSEDSHELL(({face_refs}))"));
                 let brep_id = self.id();
-                self.emit_entity(brep_id, format!("IFCFACETEDBREP(#{brep_id_placeholder})", brep_id_placeholder = shell_id));
+                self.emit_entity(
+                    brep_id,
+                    format!(
+                        "IFCFACETEDBREP(#{brep_id_placeholder})",
+                        brep_id_placeholder = shell_id
+                    ),
+                );
                 (brep_id, "Brep")
             }
             SolidShape::SweptPath {
@@ -498,15 +489,11 @@ impl StepWriter {
 
                 // Directrix — one IfcCartesianPoint per vertex, then
                 // an IfcPolyline referencing them.
-                let mut dir_pt_ids: Vec<usize> =
-                    Vec::with_capacity(directrix_points_feet.len());
+                let mut dir_pt_ids: Vec<usize> = Vec::with_capacity(directrix_points_feet.len());
                 for [x, y, z] in directrix_points_feet {
                     let (xm, ym, zm) = (x * 0.3048, y * 0.3048, z * 0.3048);
                     let pt = self.id();
-                    self.emit_entity(
-                        pt,
-                        format!("IFCCARTESIANPOINT(({xm:.6},{ym:.6},{zm:.6}))"),
-                    );
+                    self.emit_entity(pt, format!("IFCCARTESIANPOINT(({xm:.6},{ym:.6},{zm:.6}))"));
                     dir_pt_ids.push(pt);
                 }
                 let directrix = self.id();
@@ -529,9 +516,7 @@ impl StepWriter {
                 let profile_placement = self.id();
                 self.emit_entity(
                     profile_placement,
-                    format!(
-                        "IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"
-                    ),
+                    format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
                 );
                 let wrap_ex = Extrusion {
                     width_feet: 0.0,
@@ -663,7 +648,11 @@ impl StepWriter {
     fn emit_single_unit(&mut self, em: &super::entities::IfcUnitEmission) -> usize {
         use super::entities::IfcUnitEmission;
         match em {
-            IfcUnitEmission::Si { unit_type, prefix, name } => {
+            IfcUnitEmission::Si {
+                unit_type,
+                prefix,
+                name,
+            } => {
                 let prefix_tok = prefix
                     .map(|p| format!(".{p}."))
                     .unwrap_or_else(|| "$".into());
@@ -704,18 +693,14 @@ impl StepWriter {
                     super::entities::IfcUnitType::Length => "IFCLENGTHMEASURE",
                     super::entities::IfcUnitType::Area => "IFCAREAMEASURE",
                     super::entities::IfcUnitType::Volume => "IFCVOLUMEMEASURE",
-                    super::entities::IfcUnitType::PlaneAngle => {
-                        "IFCPLANEANGLEMEASURE"
-                    }
+                    super::entities::IfcUnitType::PlaneAngle => "IFCPLANEANGLEMEASURE",
                     super::entities::IfcUnitType::Mass => "IFCMASSMEASURE",
                     super::entities::IfcUnitType::Time => "IFCTIMEMEASURE",
                 };
                 let mwu_id = self.id();
                 self.emit_entity(
                     mwu_id,
-                    format!(
-                        "IFCMEASUREWITHUNIT({measure_token}({factor_to_si:.9}),#{si_base_id})"
-                    ),
+                    format!("IFCMEASUREWITHUNIT({measure_token}({factor_to_si:.9}),#{si_base_id})"),
                 );
                 // IFC4 IfcDimensionalExponents vector. Simplified
                 // emission: look up per unit_type. Full IfcDimensional-
@@ -731,10 +716,7 @@ impl StepWriter {
                     super::entities::IfcUnitType::Mass => "0,1,0,0,0,0,0",
                     super::entities::IfcUnitType::Time => "0,0,1,0,0,0,0",
                 };
-                self.emit_entity(
-                    dim_id,
-                    format!("IFCDIMENSIONALEXPONENTS({dim_tuple})"),
-                );
+                self.emit_entity(dim_id, format!("IFCDIMENSIONALEXPONENTS({dim_tuple})"));
                 // Finally the IfcConversionBasedUnit itself:
                 //   IFCCONVERSIONBASEDUNIT(#dim, .UNIT_TYPE., 'name', #mwu)
                 let id = self.id();
@@ -837,10 +819,7 @@ impl StepWriter {
             .map(|id| format!("#{id}"))
             .collect::<Vec<_>>()
             .join(",");
-        self.emit_entity(
-            unit_assignment,
-            format!("IFCUNITASSIGNMENT(({unit_refs}))"),
-        );
+        self.emit_entity(unit_assignment, format!("IFCUNITASSIGNMENT(({unit_refs}))"));
 
         // Representation context — needs IfcAxis2Placement3D +
         // IfcDirection + IfcCartesianPoint (origin, X, Z axes).
@@ -1178,9 +1157,7 @@ impl StepWriter {
                 };
                 self.emit_entity(
                     layer_id,
-                    format!(
-                        "IFCMATERIALLAYER(#{mat_id},{thickness_m:.6},$,$,$,{name_slot},$)"
-                    ),
+                    format!("IFCMATERIALLAYER(#{mat_id},{thickness_m:.6},$,$,$,{name_slot},$)"),
                 );
                 layer_ids.push(layer_id);
             }
@@ -1238,9 +1215,7 @@ impl StepWriter {
                 let profile_def_name = escape(&profile.profile_name);
                 self.emit_entity(
                     profile_def_id,
-                    format!(
-                        "IFCRECTANGLEPROFILEDEF(.AREA.,'{profile_def_name}',$,1.,1.)"
-                    ),
+                    format!("IFCRECTANGLEPROFILEDEF(.AREA.,'{profile_def_name}',$,1.,1.)"),
                 );
                 let profile_id = self.id();
                 let profile_name = escape(&profile.profile_name);
@@ -1279,9 +1254,7 @@ impl StepWriter {
             // IfcMaterialProfileSet(Name, Description, MaterialProfiles, CompositeProfile)
             self.emit_entity(
                 set_id,
-                format!(
-                    "IFCMATERIALPROFILESET('{set_name}',{desc_slot},{profile_refs},$)"
-                ),
+                format!("IFCMATERIALPROFILESET('{set_name}',{desc_slot},{profile_refs},$)"),
             );
             profile_set_ids.push(set_id);
         }
@@ -1293,9 +1266,8 @@ impl StepWriter {
         // IfcShapeRepresentation body. The emitted-map ID is stored
         // by index so the per-element loop can look it up from
         // `representation_map_index`.
-        let mut representation_map_ids: Vec<usize> = Vec::with_capacity(
-            model.representation_maps.len(),
-        );
+        let mut representation_map_ids: Vec<usize> =
+            Vec::with_capacity(model.representation_maps.len());
         for rmap in &model.representation_maps {
             // Mapping origin: per IFC4, usually identity (0,0,0)
             // with +X east / +Z up. Non-identity origins are rare —
@@ -1313,22 +1285,17 @@ impl StepWriter {
             let map_placement = self.id();
             self.emit_entity(
                 map_placement,
-                format!(
-                    "IFCAXIS2PLACEMENT3D(#{map_origin_pt},#{z_axis},#{x_axis})"
-                ),
+                format!("IFCAXIS2PLACEMENT3D(#{map_origin_pt},#{z_axis},#{x_axis})"),
             );
             // Emit the shared shape body. The emission helper returns
             // (solid_entity_id, rep_type_token). For the map's own
             // IfcShapeRepresentation we use the returned rep_type
             // (SweptSolid / CSG / Brep).
-            let (solid_id, rep_type) =
-                self.emit_solid_shape(&rmap.shape, map_placement, z_axis);
+            let (solid_id, rep_type) = self.emit_solid_shape(&rmap.shape, map_placement, z_axis);
             let body_rep_id = self.id();
             self.emit_entity(
                 body_rep_id,
-                format!(
-                    "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','{rep_type}',(#{solid_id}))"
-                ),
+                format!("IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','{rep_type}',(#{solid_id}))"),
             );
             // IFCREPRESENTATIONMAP(MappingOrigin, MappedRepresentation).
             let rep_map_id = self.id();
@@ -1489,8 +1456,7 @@ impl StepWriter {
                         prod_shape_id
                     })
                 } else if let Some(shape) = solid_shape {
-                    let (solid_id, rep_type) =
-                        self.emit_solid_shape(shape, element_axis, z_axis);
+                    let (solid_id, rep_type) = self.emit_solid_shape(shape, element_axis, z_axis);
                     let rep_id = self.id();
                     self.emit_entity(
                         rep_id,
@@ -1621,48 +1587,47 @@ impl StepWriter {
                 // IFC-28: material_layer_set_index falls through when
                 // profile-set didn't apply. Emits IfcMaterialLayerSetUsage
                 // + IfcRelAssociatesMaterial.
-                let layer_set_applied = !profile_set_applied && if let Some(ls_idx) = material_layer_set_index {
-                    if let Some(&ls_id) = layer_set_ids.get(*ls_idx) {
-                        let usage_id = self.id();
-                        // IfcMaterialLayerSetUsage(ForLayerSet, LayerSetDirection=.AXIS2.,
-                        //   DirectionSense=.POSITIVE., OffsetFromReferenceLine=0.0)
-                        // .AXIS2. = Y axis of the extrusion (wall
-                        // thickness direction). .POSITIVE. = stack
-                        // outward from the reference line. These are
-                        // the IFC4 defaults most exporters emit; Revit
-                        // wall-type-specific offsets would override.
-                        self.emit_entity(
-                            usage_id,
-                            format!(
-                                "IFCMATERIALLAYERSETUSAGE(#{ls_id},.AXIS2.,.POSITIVE.,0.)"
-                            ),
-                        );
-                        let rel_id = self.id();
-                        self.emit_entity(
+                let layer_set_applied = !profile_set_applied
+                    && if let Some(ls_idx) = material_layer_set_index {
+                        if let Some(&ls_id) = layer_set_ids.get(*ls_idx) {
+                            let usage_id = self.id();
+                            // IfcMaterialLayerSetUsage(ForLayerSet, LayerSetDirection=.AXIS2.,
+                            //   DirectionSense=.POSITIVE., OffsetFromReferenceLine=0.0)
+                            // .AXIS2. = Y axis of the extrusion (wall
+                            // thickness direction). .POSITIVE. = stack
+                            // outward from the reference line. These are
+                            // the IFC4 defaults most exporters emit; Revit
+                            // wall-type-specific offsets would override.
+                            self.emit_entity(
+                                usage_id,
+                                format!("IFCMATERIALLAYERSETUSAGE(#{ls_id},.AXIS2.,.POSITIVE.,0.)"),
+                            );
+                            let rel_id = self.id();
+                            self.emit_entity(
                             rel_id,
                             format!(
                                 "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,(#{el_id}),#{usage_id})",
                                 make_guid(rel_id),
                             ),
                         );
-                        true
+                            true
+                        } else {
+                            false
+                        }
                     } else {
                         false
+                    };
+                if !profile_set_applied && !layer_set_applied {
+                    if let Some(m_idx) = material_index {
+                        if *m_idx < material_ids.len() {
+                            element_material_pairs.push((el_id, *m_idx));
+                        }
                     }
-                } else {
-                    false
-                };
-                if !profile_set_applied
-                    && !layer_set_applied
-                    && let Some(m_idx) = material_index
-                    && *m_idx < material_ids.len()
-                {
-                    element_material_pairs.push((el_id, *m_idx));
                 }
-                if let Some(pset) = property_set
-                    && !pset.properties.is_empty()
-                {
-                    element_property_sets.push((el_id, pset));
+                if let Some(pset) = property_set {
+                    if !pset.properties.is_empty() {
+                        element_property_sets.push((el_id, pset));
+                    }
                 }
                 // Void / fill chain: when the element has both an
                 // extrusion (describes its volume) and a host_element_
@@ -2009,7 +1974,7 @@ mod tests {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
-        material_layer_sets: Vec::new(),
+            material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
         };
@@ -2032,7 +1997,7 @@ mod tests {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
-        material_layer_sets: Vec::new(),
+            material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
         };
@@ -2097,7 +2062,7 @@ mod tests {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
-        material_layer_sets: Vec::new(),
+            material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
         };
@@ -2222,7 +2187,7 @@ mod tests {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
-        material_layer_sets: Vec::new(),
+            material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
         };
@@ -2308,10 +2273,10 @@ mod tests {
                     rotation_radians: None,
                     extrusion: None,
                     host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
-                representation_map_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
@@ -2324,10 +2289,10 @@ mod tests {
                     rotation_radians: None,
                     extrusion: None,
                     host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
-                representation_map_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
@@ -2340,17 +2305,17 @@ mod tests {
                     rotation_radians: None,
                     extrusion: None,
                     host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
-                representation_map_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: None,
                 },
             ],
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
-        material_layer_sets: Vec::new(),
+            material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
         };
@@ -2404,16 +2369,16 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
-        material_layer_sets: Vec::new(),
+            material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
         };
@@ -2459,7 +2424,7 @@ mod tests {
                 host_element_index: None,
                 material_layer_set_index: Some(0),
                 material_profile_set_index: None,
-            solid_shape: None,
+                solid_shape: None,
                 representation_map_index: None,
             }],
             classifications: Vec::new(),
@@ -2508,10 +2473,7 @@ mod tests {
             "IFCMATERIALLAYERSET missing"
         );
         assert!(s.contains("'Ext-6in'"), "layer-set name missing");
-        assert!(
-            s.contains("IFCMATERIALLAYERSETUSAGE("),
-            "usage missing"
-        );
+        assert!(s.contains("IFCMATERIALLAYERSETUSAGE("), "usage missing");
         // Relationship must be present — tied to the wall element.
         assert!(
             s.contains("IFCRELASSOCIATESMATERIAL("),
@@ -2571,10 +2533,7 @@ mod tests {
             "placeholder profile def missing"
         );
         assert!(s.contains("IFCMATERIALPROFILE("), "profile entity missing");
-        assert!(
-            s.contains("IFCMATERIALPROFILESET("),
-            "profile set missing"
-        );
+        assert!(s.contains("IFCMATERIALPROFILESET("), "profile set missing");
         assert!(
             s.contains("IFCMATERIALPROFILESETUSAGE("),
             "profile set usage missing"
@@ -2685,7 +2644,7 @@ mod tests {
                 host_element_index: None,
                 material_layer_set_index: None,
                 material_profile_set_index: None,
-            solid_shape: None,
+                solid_shape: None,
                 representation_map_index: None,
             }],
             classifications: Vec::new(),
@@ -2712,13 +2671,7 @@ mod tests {
     #[test]
     fn i_shape_profile_emits_wide_flange() {
         // Approximate AISC W12x26: d=12.2 in, bf=6.49 in, tw=0.23 in, tf=0.38 in.
-        let ex = Extrusion::i_shape(
-            6.49 / 12.0,
-            12.2 / 12.0,
-            0.23 / 12.0,
-            0.38 / 12.0,
-            10.0,
-        );
+        let ex = Extrusion::i_shape(6.49 / 12.0, 12.2 / 12.0, 0.23 / 12.0, 0.38 / 12.0, 10.0);
         let s = write_step(&model_with_column_extrusion(ex));
         assert!(s.contains("IFCISHAPEPROFILEDEF(.AREA.,$,"));
         assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
@@ -2727,13 +2680,7 @@ mod tests {
     #[test]
     fn t_shape_profile_emits_tee() {
         // Example WT6x20: d=5.97 in, bf=8.08 in, tw=0.415 in, tf=0.515 in.
-        let ex = Extrusion::t_shape(
-            5.97 / 12.0,
-            8.08 / 12.0,
-            0.415 / 12.0,
-            0.515 / 12.0,
-            10.0,
-        );
+        let ex = Extrusion::t_shape(5.97 / 12.0, 8.08 / 12.0, 0.415 / 12.0, 0.515 / 12.0, 10.0);
         let s = write_step(&model_with_column_extrusion(ex));
         assert!(s.contains("IFCTSHAPEPROFILEDEF(.AREA.,$,"));
         assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
@@ -2751,13 +2698,7 @@ mod tests {
     #[test]
     fn u_shape_profile_emits_channel() {
         // C8x11.5: d=8 in, bf=2.26 in, tw=0.22 in, tf=0.39 in.
-        let ex = Extrusion::u_shape(
-            8.0 / 12.0,
-            2.26 / 12.0,
-            0.22 / 12.0,
-            0.39 / 12.0,
-            12.0,
-        );
+        let ex = Extrusion::u_shape(8.0 / 12.0, 2.26 / 12.0, 0.22 / 12.0, 0.39 / 12.0, 12.0);
         let s = write_step(&model_with_column_extrusion(ex));
         assert!(s.contains("IFCUSHAPEPROFILEDEF(.AREA.,$,"));
         assert!(!s.contains("IFCRECTANGLEPROFILEDEF("));
@@ -3031,10 +2972,7 @@ mod tests {
             s.contains("IFCFIXEDREFERENCESWEPTAREASOLID("),
             "swept-path shape missing IFCFIXEDREFERENCESWEPTAREASOLID"
         );
-        assert!(
-            s.contains("IFCCIRCLEPROFILEDEF("),
-            "profile not emitted"
-        );
+        assert!(s.contains("IFCCIRCLEPROFILEDEF("), "profile not emitted");
         assert!(
             s.contains("IFCPOLYLINE(("),
             "directrix polyline not emitted"
@@ -3219,9 +3157,9 @@ mod tests {
                 host_element_index: None,
                 material_layer_set_index: None,
                 material_profile_set_index: None,
-                solid_shape: Some(SolidShape::ExtrudedArea(
-                    Extrusion::rectangle(888.0, 888.0, 888.0),
-                )),
+                solid_shape: Some(SolidShape::ExtrudedArea(Extrusion::rectangle(
+                    888.0, 888.0, 888.0,
+                ))),
                 representation_map_index: Some(0),
             }],
             classifications: Vec::new(),

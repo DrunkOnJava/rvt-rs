@@ -98,10 +98,7 @@ impl Dimension {
                 ("ownerviewid" | "viewid", InstanceField::ElementId { id, .. }) => {
                     out.owner_view_id = Some(*id);
                 }
-                (
-                    "dimensiontypeid" | "typeid",
-                    InstanceField::ElementId { id, .. },
-                ) => {
+                ("dimensiontypeid" | "typeid", InstanceField::ElementId { id, .. }) => {
                     out.dimension_type_id = Some(*id);
                 }
                 ("value", InstanceField::Float { value, .. }) => {
@@ -165,32 +162,21 @@ impl Tag {
                 ("ownerviewid" | "viewid", InstanceField::ElementId { id, .. }) => {
                     out.owner_view_id = Some(*id);
                 }
-                (
-                    "taggedelementid" | "elementid",
-                    InstanceField::ElementId { id, .. },
-                ) => {
+                ("taggedelementid" | "elementid", InstanceField::ElementId { id, .. }) => {
                     out.tagged_element_id = Some(*id);
                 }
-                (
-                    "tagheadposition" | "headposition",
-                    InstanceField::Vector(components),
-                ) => {
-                    if components.len() >= 2
-                        && let (
+                ("tagheadposition" | "headposition", InstanceField::Vector(components)) => {
+                    if components.len() >= 2 {
+                        if let (
                             Some(InstanceField::Float { value: x, .. }),
                             Some(InstanceField::Float { value: y, .. }),
                         ) = (components.first(), components.get(1))
-                    {
-                        out.head_position = Some(TagHeadPosition {
-                            x: *x,
-                            y: *y,
-                        });
+                        {
+                            out.head_position = Some(TagHeadPosition { x: *x, y: *y });
+                        }
                     }
                 }
-                (
-                    "tagorientation" | "orientation",
-                    InstanceField::Integer { value, .. },
-                ) => {
+                ("tagorientation" | "orientation", InstanceField::Integer { value, .. }) => {
                     out.orientation = Some(TagOrientation::from_code(*value as u32));
                 }
                 ("leader" | "hasleader", InstanceField::Bool(b)) => {
@@ -244,22 +230,15 @@ impl TextNote {
                 ("ownerviewid" | "viewid", InstanceField::ElementId { id, .. }) => {
                     out.owner_view_id = Some(*id);
                 }
-                (
-                    "textnotetypeid" | "typeid",
-                    InstanceField::ElementId { id, .. },
-                ) => {
+                ("textnotetypeid" | "typeid", InstanceField::ElementId { id, .. }) => {
                     out.text_note_type_id = Some(*id);
                 }
                 ("text", InstanceField::String(s)) => out.text = Some(s.clone()),
                 ("width", InstanceField::Float { value, .. }) => {
                     out.width_feet = Some(*value);
                 }
-                (
-                    "horizontalalignment" | "alignment",
-                    InstanceField::Integer { value, .. },
-                ) => {
-                    out.horizontal_alignment =
-                        Some(HorizontalAlignment::from_code(*value as u32));
+                ("horizontalalignment" | "alignment", InstanceField::Integer { value, .. }) => {
+                    out.horizontal_alignment = Some(HorizontalAlignment::from_code(*value as u32));
                 }
                 _ => {}
             }
@@ -327,10 +306,7 @@ mod tests {
                 "m_override_text".into(),
                 InstanceField::String("12'-6\"".into()),
             ),
-            (
-                "m_is_locked".into(),
-                InstanceField::Bool(true),
-            ),
+            ("m_is_locked".into(), InstanceField::Bool(true)),
             (
                 "m_owner_view_id".into(),
                 InstanceField::ElementId { tag: 0, id: 7 },
@@ -368,10 +344,7 @@ mod tests {
                     size: 4,
                 },
             ),
-            (
-                "m_leader".into(),
-                InstanceField::Bool(true),
-            ),
+            ("m_leader".into(), InstanceField::Bool(true)),
             (
                 "m_tag_head_position".into(),
                 InstanceField::Vector(vec![
@@ -397,10 +370,7 @@ mod tests {
         assert_eq!(t.tagged_element_id, Some(99));
         assert_eq!(t.orientation, Some(TagOrientation::Vertical));
         assert_eq!(t.has_leader, Some(true));
-        assert_eq!(
-            t.head_position,
-            Some(TagHeadPosition { x: 3.5, y: -1.25 })
-        );
+        assert_eq!(t.head_position, Some(TagHeadPosition { x: 3.5, y: -1.25 }));
     }
 
     #[test]
@@ -439,10 +409,7 @@ mod tests {
         let n = TextNote::from_decoded(&decoded);
         assert_eq!(n.text.as_deref(), Some("SEE STRUCT DETAIL"));
         assert_eq!(n.width_feet, Some(2.0));
-        assert_eq!(
-            n.horizontal_alignment,
-            Some(HorizontalAlignment::Center)
-        );
+        assert_eq!(n.horizontal_alignment, Some(HorizontalAlignment::Center));
         assert_eq!(n.owner_view_id, Some(17));
     }
 
@@ -460,8 +427,14 @@ mod tests {
             HorizontalAlignment::from_code(1),
             HorizontalAlignment::Center
         );
-        assert_eq!(HorizontalAlignment::from_code(2), HorizontalAlignment::Right);
-        assert_eq!(HorizontalAlignment::from_code(99), HorizontalAlignment::Other);
+        assert_eq!(
+            HorizontalAlignment::from_code(2),
+            HorizontalAlignment::Right
+        );
+        assert_eq!(
+            HorizontalAlignment::from_code(99),
+            HorizontalAlignment::Other
+        );
     }
 
     #[test]

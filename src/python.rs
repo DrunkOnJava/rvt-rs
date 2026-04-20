@@ -82,7 +82,11 @@ fn instance_to_dict<'py>(
                 fd.set_item("col_a", col_a.clone())?;
                 fd.set_item("col_b", col_b.clone())?;
             }
-            walker::InstanceField::Integer { value, signed, size } => {
+            walker::InstanceField::Integer {
+                value,
+                signed,
+                size,
+            } => {
                 fd.set_item("kind", "integer")?;
                 fd.set_item("value", *value)?;
                 fd.set_item("signed", *signed)?;
@@ -354,10 +358,7 @@ impl PyRevitFile {
     /// locate the record, OR if any field fell back to raw bytes.
     /// Contract: success means every field decoded cleanly — mirrors
     /// the Rust `walker::read_adocument_strict` bar.
-    fn read_adocument_strict<'py>(
-        &mut self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    fn read_adocument_strict<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let inst = walker::read_adocument_strict(&mut self.inner).map_err(to_py_val)?;
         instance_to_dict(py, &inst)
     }
@@ -382,10 +383,7 @@ impl PyRevitFile {
     ///     print(f"partial: {d['confidence']:.0%} typed")
     ///     print(d["partial_fields"])
     /// ```
-    fn read_adocument_lossy<'py>(
-        &mut self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    fn read_adocument_lossy<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let decoded = walker::read_adocument_lossy(&mut self.inner).map_err(to_py_io)?;
         let out = PyDict::new(py);
         let value = instance_to_dict(py, &decoded.value)?;
@@ -408,10 +406,7 @@ impl PyRevitFile {
     /// cpp_type_count — one dict, all integers.
     ///
     /// Raises `ValueError` if the schema can't be parsed (strict).
-    fn schema_diagnostics<'py>(
-        &mut self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    fn schema_diagnostics<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let schema = self.inner.schema().map_err(to_py_val)?;
         let d = schema.diagnostics();
         let out = PyDict::new(py);

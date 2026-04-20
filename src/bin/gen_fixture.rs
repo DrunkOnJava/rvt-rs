@@ -205,8 +205,8 @@ fn write_fixture(path: &std::path::Path, spec: &FixtureSpec) -> anyhow::Result<(
         .create(true)
         .truncate(true)
         .open(path)?;
-    let mut out = cfb::CompoundFile::create(out_file)
-        .map_err(|e| anyhow::anyhow!("cfb create: {e}"))?;
+    let mut out =
+        cfb::CompoundFile::create(out_file).map_err(|e| anyhow::anyhow!("cfb create: {e}"))?;
 
     // Pre-create parent storages (`/Formats`, `/Global`, `/Partitions`).
     let mut created: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
@@ -230,8 +230,7 @@ fn write_fixture(path: &std::path::Path, spec: &FixtureSpec) -> anyhow::Result<(
         s.write_all(&data)
             .map_err(|e| anyhow::anyhow!("write_all {path}: {e}"))?;
     }
-    out.flush()
-        .map_err(|e| anyhow::anyhow!("cfb flush: {e}"))?;
+    out.flush().map_err(|e| anyhow::anyhow!("cfb flush: {e}"))?;
     Ok(())
 }
 
@@ -311,7 +310,13 @@ fn build_formats_latest(spec: &FixtureSpec) -> anyhow::Result<Vec<u8>> {
     // canonical `ElementId` tag (0x0014).
     for (idx, class_name) in spec.classes.iter().enumerate() {
         let tag = 0x0100u16 + (idx as u16);
-        emit_class_record(&mut body, class_name, tag, "Element", &synthesize_fields(class_name))?;
+        emit_class_record(
+            &mut body,
+            class_name,
+            tag,
+            "Element",
+            &synthesize_fields(class_name),
+        )?;
     }
 
     // Pad the body out so the schema parser's "at least 64 bytes

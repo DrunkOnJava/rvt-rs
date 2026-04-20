@@ -183,7 +183,7 @@ impl Exporter for PlaceholderExporter {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
-        material_layer_sets: Vec::new(),
+            material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
         })
@@ -268,7 +268,7 @@ impl Exporter for RvtDocExporter {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
-        material_layer_sets: Vec::new(),
+            material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
         })
