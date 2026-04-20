@@ -179,6 +179,7 @@ fn synthetic_project_emits_valid_ifc4() {
                 width_feet: 3.0,
                 depth_feet: 8.0 / 12.0,
                 height_feet: 7.0,
+                profile_override: None,
             }),
             // South wall is at inputs[1]. Writer emits
             // IfcOpeningElement + IfcRelVoidsElement(wall → opening)

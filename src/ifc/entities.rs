@@ -122,26 +122,310 @@ pub struct ClassificationItem {
     pub name: Option<String>,
 }
 
-/// Minimal rectangular-extrusion geometry descriptor for a
-/// BuildingElement. The writer turns this into an
-/// `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` +
-/// `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain
-/// and points the element's Representation slot at the chain.
+/// Swept-area-solid geometry descriptor for a BuildingElement. The
+/// writer turns this into an `IfcProfileDef` subclass +
+/// `IfcExtrudedAreaSolid` + `IfcShapeRepresentation` +
+/// `IfcProductDefinitionShape` chain and points the element's
+/// Representation slot at the chain.
 ///
 /// All values in feet; the writer converts to metres at emit
 /// boundary (ft × 0.3048). The profile is centred on the element
 /// origin and the extrusion runs +Z.
+///
+/// Backward-compat: the primary shape is still a rectangle defined
+/// by [`width_feet`] × [`depth_feet`]. Callers that need a richer
+/// cross-section (circle, I-beam, T, L, U, hollow rectangle, hollow
+/// circle, arbitrary closed polyline) set [`profile_override`] to a
+/// [`ProfileDef`] — when `Some`, the writer emits the matching
+/// `IfcProfileDef` subclass (IFC-24) and ignores `width_feet` /
+/// `depth_feet`. `height_feet` is always honoured as the extrusion
+/// depth.
+///
+/// [`width_feet`]: Extrusion::width_feet
+/// [`depth_feet`]: Extrusion::depth_feet
+/// [`profile_override`]: Extrusion::profile_override
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Extrusion {
-    /// Profile width (local X, in feet). For a wall = length along
-    /// its location line. For a slab = plan dimension in X.
+    /// Profile width (local X, in feet) when `profile_override` is
+    /// `None`. For a wall = length along its location line. For a
+    /// slab = plan dimension in X. Ignored when `profile_override`
+    /// is `Some`.
     pub width_feet: f64,
-    /// Profile depth (local Y, in feet). For a wall = thickness.
-    /// For a slab = plan dimension in Y.
+    /// Profile depth (local Y, in feet) when `profile_override` is
+    /// `None`. For a wall = thickness. For a slab = plan dimension
+    /// in Y. Ignored when `profile_override` is `Some`.
     pub depth_feet: f64,
-    /// Extrusion height (local Z, in feet). For a wall = height;
-    /// for a slab = slab thickness.
+    /// Extrusion depth (local Z, in feet). For a wall = height;
+    /// for a slab = slab thickness; for a column = height; for a
+    /// beam = length along its structural axis.
     pub height_feet: f64,
+    /// Optional non-rectangular profile (IFC-24). When `Some`, the
+    /// writer emits the corresponding `IfcProfileDef` subclass
+    /// (`IFCCIRCLEPROFILEDEF`, `IFCIShapeProfileDef`,
+    /// `IFCTShapeProfileDef`, `IFCLShapeProfileDef`,
+    /// `IFCUShapeProfileDef`, `IFCRectangleHollowProfileDef`,
+    /// `IFCCircleHollowProfileDef`, or `IFCArbitraryClosedProfileDef`)
+    /// instead of the default `IFCRectangleProfileDef`. Use
+    /// `Extrusion::circle`, `Extrusion::i_shape`, etc. constructors
+    /// for ergonomics.
+    #[serde(default)]
+    pub profile_override: Option<ProfileDef>,
+}
+
+impl Extrusion {
+    /// Rectangular profile — the default / backward-compatible
+    /// shape. Equivalent to leaving `profile_override` at `None`.
+    pub fn rectangle(width_feet: f64, depth_feet: f64, height_feet: f64) -> Self {
+        Self { width_feet, depth_feet, height_feet, profile_override: None }
+    }
+
+    /// Solid circular profile (e.g. round column, round pier).
+    /// Emits `IFCCIRCLEPROFILEDEF`.
+    pub fn circle(radius_feet: f64, height_feet: f64) -> Self {
+        let diameter = radius_feet * 2.0;
+        Self {
+            width_feet: diameter,
+            depth_feet: diameter,
+            height_feet,
+            profile_override: Some(ProfileDef::Circle { radius_feet }),
+        }
+    }
+
+    /// I-shape profile (wide-flange, W/S/HP shapes in AISC). Emits
+    /// `IFCIShapeProfileDef`. `overall_width_feet` is the flange
+    /// width; `overall_depth_feet` is the beam depth between outer
+    /// flange faces.
+    pub fn i_shape(
+        overall_width_feet: f64,
+        overall_depth_feet: f64,
+        web_thickness_feet: f64,
+        flange_thickness_feet: f64,
+        height_feet: f64,
+    ) -> Self {
+        Self {
+            width_feet: overall_width_feet,
+            depth_feet: overall_depth_feet,
+            height_feet,
+            profile_override: Some(ProfileDef::IShape {
+                overall_width_feet,
+                overall_depth_feet,
+                web_thickness_feet,
+                flange_thickness_feet,
+            }),
+        }
+    }
+
+    /// T-shape profile (structural tee, WT/ST/MT cut from I-beams).
+    /// Emits `IFCTShapeProfileDef`.
+    pub fn t_shape(
+        overall_depth_feet: f64,
+        flange_width_feet: f64,
+        web_thickness_feet: f64,
+        flange_thickness_feet: f64,
+        height_feet: f64,
+    ) -> Self {
+        Self {
+            width_feet: flange_width_feet,
+            depth_feet: overall_depth_feet,
+            height_feet,
+            profile_override: Some(ProfileDef::TShape {
+                overall_depth_feet,
+                flange_width_feet,
+                web_thickness_feet,
+                flange_thickness_feet,
+            }),
+        }
+    }
+
+    /// L-shape (angle) profile — equal-leg when `width == depth`.
+    /// Emits `IFCLShapeProfileDef`.
+    pub fn l_shape(
+        overall_depth_feet: f64,
+        overall_width_feet: f64,
+        thickness_feet: f64,
+        height_feet: f64,
+    ) -> Self {
+        Self {
+            width_feet: overall_width_feet,
+            depth_feet: overall_depth_feet,
+            height_feet,
+            profile_override: Some(ProfileDef::LShape {
+                overall_depth_feet,
+                overall_width_feet,
+                thickness_feet,
+            }),
+        }
+    }
+
+    /// U-shape (channel) profile. Emits `IFCUShapeProfileDef`.
+    pub fn u_shape(
+        overall_depth_feet: f64,
+        flange_width_feet: f64,
+        web_thickness_feet: f64,
+        flange_thickness_feet: f64,
+        height_feet: f64,
+    ) -> Self {
+        Self {
+            width_feet: flange_width_feet,
+            depth_feet: overall_depth_feet,
+            height_feet,
+            profile_override: Some(ProfileDef::UShape {
+                overall_depth_feet,
+                flange_width_feet,
+                web_thickness_feet,
+                flange_thickness_feet,
+            }),
+        }
+    }
+
+    /// Rectangular hollow section (HSS tube). Emits
+    /// `IFCRectangleHollowProfileDef`.
+    pub fn rectangle_hollow(
+        overall_width_feet: f64,
+        overall_depth_feet: f64,
+        wall_thickness_feet: f64,
+        height_feet: f64,
+    ) -> Self {
+        Self {
+            width_feet: overall_width_feet,
+            depth_feet: overall_depth_feet,
+            height_feet,
+            profile_override: Some(ProfileDef::RectangleHollow {
+                overall_width_feet,
+                overall_depth_feet,
+                wall_thickness_feet,
+            }),
+        }
+    }
+
+    /// Circular hollow section (round HSS pipe). Emits
+    /// `IFCCIRCLEHOLLOWPROFILEDEF`.
+    pub fn circle_hollow(
+        radius_feet: f64,
+        wall_thickness_feet: f64,
+        height_feet: f64,
+    ) -> Self {
+        let diameter = radius_feet * 2.0;
+        Self {
+            width_feet: diameter,
+            depth_feet: diameter,
+            height_feet,
+            profile_override: Some(ProfileDef::CircleHollow {
+                radius_feet,
+                wall_thickness_feet,
+            }),
+        }
+    }
+
+    /// Arbitrary closed polyline profile (e.g. curtain-mullion
+    /// cross-section, custom sketched shape). Emits
+    /// `IFCArbitraryClosedProfileDef` + an `IFCPOLYLINE` as the
+    /// outer curve. The writer auto-closes the polyline if the
+    /// last point doesn't equal the first.
+    pub fn arbitrary_closed(points: Vec<(f64, f64)>, height_feet: f64) -> Self {
+        let (min_x, max_x, min_y, max_y) = points.iter().fold(
+            (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY),
+            |(mn_x, mx_x, mn_y, mx_y), (x, y)| {
+                (mn_x.min(*x), mx_x.max(*x), mn_y.min(*y), mx_y.max(*y))
+            },
+        );
+        let width = (max_x - min_x).max(0.0);
+        let depth = (max_y - min_y).max(0.0);
+        Self {
+            width_feet: width,
+            depth_feet: depth,
+            height_feet,
+            profile_override: Some(ProfileDef::ArbitraryClosed { points }),
+        }
+    }
+}
+
+/// Named cross-sections for an extrusion (IFC-24). Feeds one of
+/// eight IFC4 `IfcProfileDef` subclasses. All values in feet
+/// (writer converts to metres at emit time). Profiles are centred
+/// on the element origin in the local XY frame; positive X is the
+/// profile width direction, positive Y is the profile depth
+/// direction.
+///
+/// Profile selection cheat-sheet:
+///
+/// | Revit class | Typical profile |
+/// |---|---|
+/// | Structural column (round) | `Circle` |
+/// | Structural column (wide-flange) | `IShape` |
+/// | Structural column (HSS square) | `RectangleHollow` |
+/// | Structural column (round HSS) | `CircleHollow` |
+/// | Beam (wide-flange W-shape) | `IShape` |
+/// | Beam (channel) | `UShape` |
+/// | Beam (angle) | `LShape` |
+/// | Beam (tee) | `TShape` |
+/// | Curtain mullion | `ArbitraryClosed` |
+/// | Wall / slab / roof / ceiling | `Rectangle` (default, no override) |
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ProfileDef {
+    /// `IFCRectangleProfileDef` — the default if `profile_override`
+    /// is `None`. Kept as an explicit variant so callers can round-
+    /// trip through `profile_override` without losing shape info.
+    Rectangle { width_feet: f64, depth_feet: f64 },
+    /// `IFCCIRCLEPROFILEDEF` — solid circular cross-section.
+    Circle { radius_feet: f64 },
+    /// `IFCIShapeProfileDef` — wide-flange steel shape.
+    ///
+    /// - `overall_width_feet` is the flange width (local X span).
+    /// - `overall_depth_feet` is the distance between outer flange
+    ///   faces (local Y span).
+    /// - `web_thickness_feet` is the web's thickness.
+    /// - `flange_thickness_feet` is the (constant) flange thickness.
+    ///
+    /// All four values map directly onto the IFC4 attribute names
+    /// `OverallWidth`, `OverallDepth`, `WebThickness`,
+    /// `FlangeThickness`.
+    IShape {
+        overall_width_feet: f64,
+        overall_depth_feet: f64,
+        web_thickness_feet: f64,
+        flange_thickness_feet: f64,
+    },
+    /// `IFCTShapeProfileDef` — structural tee.
+    TShape {
+        overall_depth_feet: f64,
+        flange_width_feet: f64,
+        web_thickness_feet: f64,
+        flange_thickness_feet: f64,
+    },
+    /// `IFCLShapeProfileDef` — structural angle. `overall_depth` is
+    /// the longer leg; `overall_width` the shorter leg (they can be
+    /// equal for equal-leg angles).
+    LShape {
+        overall_depth_feet: f64,
+        overall_width_feet: f64,
+        thickness_feet: f64,
+    },
+    /// `IFCUShapeProfileDef` — structural channel (C-shape).
+    UShape {
+        overall_depth_feet: f64,
+        flange_width_feet: f64,
+        web_thickness_feet: f64,
+        flange_thickness_feet: f64,
+    },
+    /// `IFCRectangleHollowProfileDef` — rectangular HSS tube.
+    /// `wall_thickness` is the uniform wall thickness.
+    RectangleHollow {
+        overall_width_feet: f64,
+        overall_depth_feet: f64,
+        wall_thickness_feet: f64,
+    },
+    /// `IFCCircleHollowProfileDef` — round HSS pipe.
+    CircleHollow {
+        radius_feet: f64,
+        wall_thickness_feet: f64,
+    },
+    /// `IFCArbitraryClosedProfileDef` with an `IFCPOLYLINE` outer
+    /// curve. Points are in local 2D coordinates (feet); writer
+    /// auto-closes the polyline if the last point isn't equal to
+    /// the first. No self-intersection check is performed — callers
+    /// supplying degenerate polygons will emit degenerate IFC.
+    ArbitraryClosed { points: Vec<(f64, f64)> },
 }
 
 /// One layer of a compound building-element material assembly
