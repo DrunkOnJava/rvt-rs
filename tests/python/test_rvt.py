@@ -120,6 +120,33 @@ def test_stream_names_returns_expected_set(sample_2024):
         assert required in names, f"missing required stream {required}"
 
 
+def test_read_stream_returns_bytes_for_known_stream(sample_2024):
+    """`read_stream` should return ``bytes`` for a stream that exists
+    in the file. Content is intentionally not validated here — we
+    just want proof the binding round-trips raw bytes from CFB.
+    """
+    data = sample_2024.read_stream("BasicFileInfo")
+    assert isinstance(data, bytes)
+    assert len(data) > 0, "BasicFileInfo stream should be non-empty"
+
+
+def test_read_stream_accepts_leading_slash(sample_2024):
+    """Both ``/Formats/Latest`` and ``Formats/Latest`` must resolve
+    the same way — the reader normalises the path internally.
+    """
+    without_slash = sample_2024.read_stream("Formats/Latest")
+    with_slash = sample_2024.read_stream("/Formats/Latest")
+    assert without_slash == with_slash
+
+
+def test_read_stream_raises_on_missing_name(sample_2024):
+    """Unknown stream names should raise, not silently return empty
+    bytes. `OSError` in Python catches pyo3's PyIOError.
+    """
+    with pytest.raises((OSError, IOError)):
+        sample_2024.read_stream("does/not/exist")
+
+
 def test_missing_required_streams_empty_on_valid_file(sample_2024):
     assert sample_2024.missing_required_streams() == []
 

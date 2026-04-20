@@ -81,6 +81,15 @@ All notable changes will be documented here. This project follows
 - Two new pytest tests pin `basic_file_info_json` ↔ individual
   getters agreement, and `part_atom_json` ↔ `part_atom_title`
   agreement plus presence of the structural keys.
+- **`RevitFile.read_stream(name)`** — return the raw bytes of an
+  OLE stream by name as a Python `bytes` object. Accepts either
+  path form (`"/Formats/Latest"` or `"Formats/Latest"`). Raises
+  `IOError` for unknown streams. Use `stream_names()` to enumerate
+  what's available. Opens up forensic-inspection use cases the
+  announcement draft calls out (reading raw bytes without the
+  Rust-API dependency). Three new pytest tests pin bytes
+  round-trip, path-normalisation equivalence, and
+  missing-stream-raises semantics.
 - **CI wheel build matrix** (`.github/workflows/ci.yml` `python-wheel`
   job) — `PyO3/maturin-action@v1` builds a release wheel on Ubuntu,
   macOS, and Windows runners, installs it into the runner's Python,

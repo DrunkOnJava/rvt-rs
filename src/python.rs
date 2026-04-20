@@ -39,7 +39,7 @@
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyBytes, PyDict, PyList};
 
 use crate::{RevitFile as RustRevitFile, ifc, walker};
 
@@ -106,6 +106,21 @@ impl PyRevitFile {
     /// All OLE stream paths (sorted, `/`-separated on every OS).
     fn stream_names(&self) -> Vec<String> {
         self.inner.stream_names()
+    }
+
+    /// Raw bytes of the named OLE stream. Accepts either a
+    /// leading-slash path (`"/Formats/Latest"`) or the bare name
+    /// (`"Formats/Latest"`) — both resolve the same way. Returns the
+    /// raw, *compressed* bytes on streams that use truncated-gzip
+    /// framing (most of them); callers wanting decompressed content
+    /// should pipe through the Rust `compression::inflate_at`
+    /// equivalent (pending its own Python binding).
+    ///
+    /// Raises `IOError` when the stream name doesn't exist. Use
+    /// `stream_names()` first to enumerate what's readable.
+    fn read_stream<'py>(&mut self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyBytes>> {
+        let bytes = self.inner.read_stream(name).map_err(to_py_io)?;
+        Ok(PyBytes::new_bound(py, &bytes))
     }
 
     /// Required streams that are absent — empty list means the file
