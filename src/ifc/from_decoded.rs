@@ -52,8 +52,8 @@ pub struct ElementInput<'a> {
     pub guid: Option<String>,
     /// Which storey contains this element. Index into
     /// `BuilderOptions.storeys`. `None` → element lands in
-    /// storey[0] (fine when only one storey is defined or when the
-    /// element's level hasn't been resolved yet).
+    /// storey index 0 (fine when only one storey is defined or
+    /// when the element's level hasn't been resolved yet).
     pub storey_index: Option<usize>,
     /// Which material the element associates with. Index into
     /// `BuilderOptions.materials`. `None` = no material emitted.
@@ -174,7 +174,8 @@ pub fn wall_extrusion(
 }
 
 /// Build a rectangular `Extrusion` for a slab from its plan
-/// dimensions and a thickness from the [`FloorType`].
+/// dimensions and a thickness from the
+/// [`crate::elements::floor::FloorType`].
 ///
 /// Defaults: thickness 12 inches (1 ft) when `floor_type` is
 /// `None` or lacks a thickness.
@@ -448,9 +449,9 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
         units: options.units,
         building_storeys: options.storeys,
         materials: options.materials,
-    material_layer_sets: Vec::new(),
-            material_profile_sets: Vec::new(),
-            representation_maps: Vec::new(),
+        material_layer_sets: Vec::new(),
+        material_profile_sets: Vec::new(),
+        representation_maps: Vec::new(),
     }
 }
 
@@ -498,9 +499,9 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             },
             ElementInput {
@@ -514,9 +515,9 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             },
             ElementInput {
@@ -530,9 +531,9 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             },
         ];
@@ -561,7 +562,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -585,7 +586,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -614,7 +615,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -648,9 +649,9 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             },
             ElementInput {
@@ -664,9 +665,9 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             },
             ElementInput {
@@ -680,9 +681,9 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             },
         ];
@@ -760,7 +761,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
-                representation_map_index: None,
+            representation_map_index: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -809,9 +810,9 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             },
             ElementInput {
@@ -825,9 +826,9 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
-            material_layer_set_index: None,
-            material_profile_set_index: None,
-            solid_shape: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
                 representation_map_index: None,
             },
         ];

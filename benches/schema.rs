@@ -38,9 +38,7 @@ fn synth_schema_bytes() -> Vec<u8> {
 
 fn bench_parse_schema(c: &mut Criterion) {
     let data = synth_schema_bytes();
-    c.bench_function("parse_schema/empty", |b| {
-        b.iter(|| parse_schema(&data))
-    });
+    c.bench_function("parse_schema/empty", |b| b.iter(|| parse_schema(&data)));
 }
 
 criterion_group!(benches, bench_parse_schema);

@@ -206,7 +206,12 @@ impl Extrusion {
     /// Rectangular profile — the default / backward-compatible
     /// shape. Equivalent to leaving `profile_override` at `None`.
     pub fn rectangle(width_feet: f64, depth_feet: f64, height_feet: f64) -> Self {
-        Self { width_feet, depth_feet, height_feet, profile_override: None }
+        Self {
+            width_feet,
+            depth_feet,
+            height_feet,
+            profile_override: None,
+        }
     }
 
     /// Solid circular profile (e.g. round column, round pier).
@@ -330,11 +335,7 @@ impl Extrusion {
 
     /// Circular hollow section (round HSS pipe). Emits
     /// `IFCCIRCLEHOLLOWPROFILEDEF`.
-    pub fn circle_hollow(
-        radius_feet: f64,
-        wall_thickness_feet: f64,
-        height_feet: f64,
-    ) -> Self {
+    pub fn circle_hollow(radius_feet: f64, wall_thickness_feet: f64, height_feet: f64) -> Self {
         let diameter = radius_feet * 2.0;
         Self {
             width_feet: diameter,
@@ -354,7 +355,12 @@ impl Extrusion {
     /// last point doesn't equal the first.
     pub fn arbitrary_closed(points: Vec<(f64, f64)>, height_feet: f64) -> Self {
         let (min_x, max_x, min_y, max_y) = points.iter().fold(
-            (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY),
+            (
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ),
             |(mn_x, mx_x, mn_y, mx_y), (x, y)| {
                 (mn_x.min(*x), mx_x.max(*x), mn_y.min(*y), mx_y.max(*y))
             },
@@ -395,7 +401,7 @@ impl IfcBooleanOp {
     }
 }
 
-/// One triangular face of an [`IfcFacetedBrep`]. The three
+/// One triangular face of an `IfcFacetedBrep`. The three
 /// `u32` values are indices into the `vertices` array on the
 /// enclosing shell (range-checked at emit time; out-of-range
 /// indices cause a panic in debug, are silently clamped to 0 in
@@ -403,7 +409,7 @@ impl IfcBooleanOp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BrepTriangle(pub u32, pub u32, pub u32);
 
-/// A rich solid geometry for a [`BuildingElement`] (IFC-18 /
+/// A rich solid geometry for a `BuildingElement` (IFC-18 /
 /// IFC-19 / IFC-20). Covers three IFC4 solid-body paths that the
 /// rectangular [`Extrusion`] can't express:
 ///
@@ -617,13 +623,14 @@ pub struct MaterialLayer {
 
 /// An ordered set of [`MaterialLayer`]s representing the compound
 /// composition of a wall / floor / roof / ceiling (IFC-28). Maps
-/// to IFC4 `IfcMaterialLayerSet` + (via [`BuildingElement::material_layer_set_index`])
+/// to IFC4 `IfcMaterialLayerSet` + (via
+/// `IfcEntity::BuildingElement::material_layer_set_index`)
 /// `IfcMaterialLayerSetUsage`.
 ///
 /// `name` is the set-level label ("Generic - 6\" Wall", "Ext - CMU").
 /// Revit's exterior wall types often carry 3-5 layers; interior
 /// partitions are usually 2-3. The ordering matters: IFC4
-/// interprets `[0]` as the outermost layer (exterior or top side)
+/// interprets index `0` as the outermost layer (exterior or top side)
 /// with subsequent layers stacked inward.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialLayerSet {
@@ -668,7 +675,8 @@ pub struct MaterialProfile {
 /// sections (steel + concrete encasement) use multiple.
 ///
 /// Maps to IFC4 `IfcMaterialProfileSet` + (via
-/// [`BuildingElement::material_profile_set_index`]) `IfcMaterialProfileSetUsage`.
+/// `IfcEntity::BuildingElement::material_profile_set_index`)
+/// `IfcMaterialProfileSetUsage`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialProfileSet {
     pub name: String,
@@ -890,8 +898,7 @@ impl ForgeUnit {
             "meters" | "m" => ForgeUnit::Meters,
             "kilometers" | "km" => ForgeUnit::Kilometers,
             "inches" | "in" => ForgeUnit::Inches,
-            "feet" | "ft" | "fractionalinches"
-            | "feetandfractionalinches" => ForgeUnit::Feet,
+            "feet" | "ft" | "fractionalinches" | "feetandfractionalinches" => ForgeUnit::Feet,
             "yards" | "yd" => ForgeUnit::Yards,
             "miles" | "mi" => ForgeUnit::Miles,
             "squaremillimeters" => ForgeUnit::SquareMillimeters,
@@ -1388,17 +1395,12 @@ mod tests {
             ForgeUnit::from_forge_identifier("millimeters"),
             ForgeUnit::Millimeters
         );
-        assert_eq!(
-            ForgeUnit::from_forge_identifier("Feet"),
-            ForgeUnit::Feet
-        );
+        assert_eq!(ForgeUnit::from_forge_identifier("Feet"), ForgeUnit::Feet);
     }
 
     #[test]
     fn forge_unit_unknown_falls_through_to_other() {
-        let fu = ForgeUnit::from_forge_identifier(
-            "autodesk.unit.unit:furlongsPerFortnight-1.0.1",
-        );
+        let fu = ForgeUnit::from_forge_identifier("autodesk.unit.unit:furlongsPerFortnight-1.0.1");
         match fu {
             ForgeUnit::Other(id) => assert!(id.contains("furlongsPerFortnight")),
             _ => panic!("unknown units must map to ForgeUnit::Other(_)"),
@@ -1446,21 +1448,40 @@ mod tests {
         // (Pinned as an invariant — if a new unit lands without its
         // mapping, this test fails instead of the bug shipping.)
         for fu in [
-            ForgeUnit::Millimeters, ForgeUnit::Centimeters,
-            ForgeUnit::Decimeters, ForgeUnit::Meters,
-            ForgeUnit::Kilometers, ForgeUnit::Inches, ForgeUnit::Feet,
-            ForgeUnit::Yards, ForgeUnit::Miles,
-            ForgeUnit::SquareMillimeters, ForgeUnit::SquareCentimeters,
-            ForgeUnit::SquareMeters, ForgeUnit::SquareFeet,
-            ForgeUnit::SquareInches, ForgeUnit::SquareYards,
-            ForgeUnit::Acres, ForgeUnit::Hectares,
-            ForgeUnit::CubicMillimeters, ForgeUnit::CubicCentimeters,
-            ForgeUnit::CubicMeters, ForgeUnit::CubicFeet,
-            ForgeUnit::CubicInches, ForgeUnit::CubicYards,
-            ForgeUnit::Liters, ForgeUnit::UsGallons,
-            ForgeUnit::Radians, ForgeUnit::Degrees, ForgeUnit::Grads,
-            ForgeUnit::Kilograms, ForgeUnit::Grams, ForgeUnit::Pounds,
-            ForgeUnit::Seconds, ForgeUnit::Minutes, ForgeUnit::Hours,
+            ForgeUnit::Millimeters,
+            ForgeUnit::Centimeters,
+            ForgeUnit::Decimeters,
+            ForgeUnit::Meters,
+            ForgeUnit::Kilometers,
+            ForgeUnit::Inches,
+            ForgeUnit::Feet,
+            ForgeUnit::Yards,
+            ForgeUnit::Miles,
+            ForgeUnit::SquareMillimeters,
+            ForgeUnit::SquareCentimeters,
+            ForgeUnit::SquareMeters,
+            ForgeUnit::SquareFeet,
+            ForgeUnit::SquareInches,
+            ForgeUnit::SquareYards,
+            ForgeUnit::Acres,
+            ForgeUnit::Hectares,
+            ForgeUnit::CubicMillimeters,
+            ForgeUnit::CubicCentimeters,
+            ForgeUnit::CubicMeters,
+            ForgeUnit::CubicFeet,
+            ForgeUnit::CubicInches,
+            ForgeUnit::CubicYards,
+            ForgeUnit::Liters,
+            ForgeUnit::UsGallons,
+            ForgeUnit::Radians,
+            ForgeUnit::Degrees,
+            ForgeUnit::Grads,
+            ForgeUnit::Kilograms,
+            ForgeUnit::Grams,
+            ForgeUnit::Pounds,
+            ForgeUnit::Seconds,
+            ForgeUnit::Minutes,
+            ForgeUnit::Hours,
         ] {
             assert!(
                 fu.ifc_emission().is_some(),

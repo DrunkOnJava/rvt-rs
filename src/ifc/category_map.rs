@@ -1,6 +1,6 @@
 //! Revit class / category → IFC4 entity type mapping table.
 //!
-//! Every concrete [`crate::elements::ElementDecoder`] implementation
+//! Every concrete [`crate::walker::ElementDecoder`] implementation
 //! ultimately needs to know "when I emit this as IFC, what entity
 //! type should it be?" This module is the single source of truth for
 //! that mapping. Keeping it data-driven (a static table) instead of
@@ -373,8 +373,7 @@ mod tests {
             ("Rafter", "RAFTER"),
         ];
         for (revit, expected_pt) in cases {
-            let m = lookup(revit)
-                .unwrap_or_else(|| panic!("{revit} missing from MAPPINGS"));
+            let m = lookup(revit).unwrap_or_else(|| panic!("{revit} missing from MAPPINGS"));
             assert_eq!(m.ifc_type, "IFCMEMBER", "{revit} should be IFCMEMBER");
             assert_eq!(
                 m.predefined_type,
@@ -413,14 +412,25 @@ mod tests {
         // stay within this set. Updating IFC schema bumps (IFC4.3,
         // IFC5) would edit this list.
         let legal = [
-            "BRACE", "CHORD", "COLLAR", "MEMBER", "MULLION", "PLATE",
-            "POST", "PURLIN", "RAFTER", "STRINGER", "STRUT", "STUD",
-            "USERDEFINED", "NOTDEFINED",
+            "BRACE",
+            "CHORD",
+            "COLLAR",
+            "MEMBER",
+            "MULLION",
+            "PLATE",
+            "POST",
+            "PURLIN",
+            "RAFTER",
+            "STRINGER",
+            "STRUT",
+            "STUD",
+            "USERDEFINED",
+            "NOTDEFINED",
         ];
         for m in MAPPINGS.iter().filter(|m| m.ifc_type == "IFCMEMBER") {
-            let pt = m.predefined_type.expect(
-                "IfcMember entries must have an explicit PredefinedType",
-            );
+            let pt = m
+                .predefined_type
+                .expect("IfcMember entries must have an explicit PredefinedType");
             assert!(
                 legal.contains(&pt),
                 "{} has illegal IfcMember PredefinedType: {}",

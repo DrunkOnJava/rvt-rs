@@ -230,8 +230,7 @@ fn read_adocument_lossy_succeeds_or_gracefully_degrades() {
             eprintln!("skipping {year}: sample not present (LFS not pulled?)");
             continue;
         }
-        let mut rf = RevitFile::open(&p)
-            .unwrap_or_else(|_| panic!("{year}: RevitFile::open"));
+        let mut rf = RevitFile::open(&p).unwrap_or_else(|_| panic!("{year}: RevitFile::open"));
         let decoded = rvt::walker::read_adocument_lossy(&mut rf)
             .unwrap_or_else(|e| panic!("{year}: read_adocument_lossy errored hard: {e}"));
 
@@ -253,8 +252,7 @@ fn read_adocument_lossy_succeeds_or_gracefully_degrades() {
             // Sanity: the walker's reported version matches the
             // file's declared release.
             assert_eq!(
-                inst.version,
-                year,
+                inst.version, year,
                 "{year}: walker returned version {} for {year} fixture",
                 inst.version,
             );

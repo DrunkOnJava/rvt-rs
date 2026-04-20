@@ -799,8 +799,8 @@ pub struct DetectionResult {
 }
 
 /// Schema-aware entry-point detection with per-call diagnostics
-/// (API-12). Same decision logic as
-/// [`find_adocument_start_with_schema`] but returns the strategy +
+/// (API-12). Same decision logic as the internal
+/// `find_adocument_start_with_schema`, but returns the strategy +
 /// score + candidate count that produced the result, instead of
 /// just an `Option<usize>`.
 ///
@@ -1526,11 +1526,14 @@ mod tests {
             entry_offset: 0,
             version: 2024,
             fields: vec![
-                ("a".into(), InstanceField::Integer {
-                    value: 1,
-                    signed: false,
-                    size: 4,
-                }),
+                (
+                    "a".into(),
+                    InstanceField::Integer {
+                        value: 1,
+                        signed: false,
+                        size: 4,
+                    },
+                ),
                 ("b".into(), InstanceField::Bytes(vec![0xff])),
                 ("c".into(), InstanceField::String("hello".into())),
                 ("d".into(), InstanceField::Vector(vec![])),

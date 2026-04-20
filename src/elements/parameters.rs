@@ -139,16 +139,10 @@ impl ParameterElement {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
-                (
-                    "parametergroup" | "group",
-                    InstanceField::Integer { value, .. },
-                ) => {
+                ("parametergroup" | "group", InstanceField::Integer { value, .. }) => {
                     out.parameter_group = Some(*value as u32);
                 }
-                (
-                    "storagetype" | "storage",
-                    InstanceField::Integer { value, .. },
-                ) => {
+                ("storagetype" | "storage", InstanceField::Integer { value, .. }) => {
                     out.storage_type = Some(StorageType::from_code(*value as u32));
                 }
                 ("unittype" | "unit", InstanceField::Integer { value, .. }) => {
@@ -252,10 +246,7 @@ mod tests {
     #[test]
     fn parameter_element_from_decoded() {
         let fields = vec![
-            (
-                "m_name".into(),
-                InstanceField::String("Head Height".into()),
-            ),
+            ("m_name".into(), InstanceField::String("Head Height".into())),
             (
                 "m_parameter_group".into(),
                 InstanceField::Integer {
@@ -272,14 +263,8 @@ mod tests {
                     size: 4,
                 },
             ),
-            (
-                "m_is_shared".into(),
-                InstanceField::Bool(false),
-            ),
-            (
-                "m_visible".into(),
-                InstanceField::Bool(true),
-            ),
+            ("m_is_shared".into(), InstanceField::Bool(false)),
+            ("m_visible".into(), InstanceField::Bool(true)),
         ];
         let decoded = DecodedElement {
             id: None,
@@ -298,14 +283,11 @@ mod tests {
     #[test]
     fn shared_parameter_from_decoded_carries_base_fields() {
         let guid_bytes = [
-            0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x0f, 0xed,
-            0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
+            0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65,
+            0x43, 0x21,
         ];
         let fields = vec![
-            (
-                "m_name".into(),
-                InstanceField::String("Fire Rating".into()),
-            ),
+            ("m_name".into(), InstanceField::String("Fire Rating".into())),
             (
                 "m_storage_type".into(),
                 InstanceField::Integer {
@@ -314,10 +296,7 @@ mod tests {
                     size: 4,
                 },
             ),
-            (
-                "m_is_shared".into(),
-                InstanceField::Bool(true),
-            ),
+            ("m_is_shared".into(), InstanceField::Bool(true)),
             ("m_guid".into(), InstanceField::Guid(guid_bytes)),
             (
                 "m_description".into(),

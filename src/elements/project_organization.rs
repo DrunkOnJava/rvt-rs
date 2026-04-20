@@ -432,10 +432,7 @@ mod tests {
                 "m_description".into(),
                 InstanceField::String("Permit set".into()),
             ),
-            (
-                "m_issued_to".into(),
-                InstanceField::String("Client".into()),
-            ),
+            ("m_issued_to".into(), InstanceField::String("Client".into())),
             (
                 "m_issued_by".into(),
                 InstanceField::String("Architect of Record".into()),

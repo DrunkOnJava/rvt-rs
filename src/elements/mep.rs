@@ -163,10 +163,7 @@ impl MepInstance {
                     out.system_classification = Some(MepSystemClassification::from_code(code));
                     out.system_classification_code = Some(code);
                 }
-                (
-                    "systemtypeid" | "mepsystemtypeid",
-                    InstanceField::ElementId { id, .. },
-                ) => {
+                ("systemtypeid" | "mepsystemtypeid", InstanceField::ElementId { id, .. }) => {
                     out.system_type_id = Some(*id);
                 }
                 ("connectorcount", InstanceField::Integer { value, .. }) => {
@@ -249,13 +246,19 @@ mod tests {
 
     #[test]
     fn class_names_match_registry() {
-        assert_eq!(ElectricalEquipmentDecoder.class_name(), "ElectricalEquipment");
+        assert_eq!(
+            ElectricalEquipmentDecoder.class_name(),
+            "ElectricalEquipment"
+        );
         assert_eq!(ElectricalFixtureDecoder.class_name(), "ElectricalFixture");
         assert_eq!(LightingFixtureDecoder.class_name(), "LightingFixture");
         assert_eq!(LightingDeviceDecoder.class_name(), "LightingDevice");
         assert_eq!(DuctDecoder.class_name(), "Duct");
         assert_eq!(DuctFittingDecoder.class_name(), "DuctFitting");
-        assert_eq!(MechanicalEquipmentDecoder.class_name(), "MechanicalEquipment");
+        assert_eq!(
+            MechanicalEquipmentDecoder.class_name(),
+            "MechanicalEquipment"
+        );
         assert_eq!(PipeDecoder.class_name(), "Pipe");
         assert_eq!(PipeFittingDecoder.class_name(), "PipeFitting");
         assert_eq!(PlumbingFixtureDecoder.class_name(), "PlumbingFixture");
@@ -264,7 +267,10 @@ mod tests {
 
     #[test]
     fn system_classification_mapping() {
-        assert_eq!(MepSystemClassification::from_code(0), MepSystemClassification::Unknown);
+        assert_eq!(
+            MepSystemClassification::from_code(0),
+            MepSystemClassification::Unknown
+        );
         assert_eq!(
             MepSystemClassification::from_code(3),
             MepSystemClassification::Electrical
@@ -337,10 +343,7 @@ mod tests {
     #[test]
     fn mep_instance_from_decoded_mechanical_duct() {
         let fields = vec![
-            (
-                "m_name".into(),
-                InstanceField::String("SA Trunk".into()),
-            ),
+            ("m_name".into(), InstanceField::String("SA Trunk".into())),
             (
                 "m_system_classification".into(),
                 InstanceField::Integer {
