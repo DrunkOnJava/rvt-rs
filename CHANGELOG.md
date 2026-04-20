@@ -6,6 +6,177 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed — audit P0 credibility + correctness repair
+
+External audit (local `AUDIT-2026-04-19.md`) flagged a cluster of
+overclaiming and correctness bugs. All 16 P0 items are closed:
+
+- **README + PyPI + Cargo.toml descriptions rewritten** — removed
+  "complete, open documentation", "strict superset", "full-fidelity
+  path to IFC that the openBIM movement has been waiting for".
+  Replaced with narrower, audit-honest wording. New "What works
+  today" table distinguishes done vs pending per layer.
+- **CITATION.cff** bumped to 0.1.2 (was stale at 0.1.0).
+- **CLI count fixed** everywhere — Cargo defines 9; README said 7–8.
+- **Walker-version contradiction resolved** — walker reliably reads
+  all 13 ADocument fields on Revit 2024–2026; 2016–2023 entry-point
+  detection still needs work. Fixed in `src/walker.rs`,
+  `docs/python.md`, CHANGELOG [0.1.2] section, recon report §Q6.5-F.
+- **IFC module docs rephrased** to "document-level scaffold…
+  geometry and per-element entities pending walker expansion."
+- **CONTRIBUTING.md updated** from v0.1.1 state to v0.1.2 reality;
+  §Where help is most wanted now points at Layer 5b per-element
+  decoder tasks + cross-references TODO-BLINDSIDE.md.
+- **`NullExporter` → `PlaceholderExporter`** rename — old name
+  implied `NotYetImplemented` return but impl returned empty model.
+  `--null` CLI flag aliased to `--placeholder` for back-compat.
+- **`BasicFileInfo::extract_build`** no longer only matches literal
+  `_1515(x64)`; scans `YYYYMMDD_HHMM(x64)` shape so `_1635(x64)`
+  and other HHMM values survive the path.
+- **`partitions::stream_name()`** deleted — was a public-API
+  footgun returning `GLOBAL_LATEST` as a dummy; nothing used it.
+- **`find_chunks` off-by-one** fixed — `saturating_sub(3)` as
+  exclusive upper bound missed magic at offset `len-3`. Added
+  regression test + tiny-input safety test.
+- **`writer::write_with_patches`** now validates every patch's
+  `stream_name` against the actual stream set *before* writing —
+  typos return `Error::StreamNotFound` instead of silent no-op.
+- **`writer::write_with_patches`** now atomic via sibling temp
+  file + rename, with RAII `TempGuard` cleanup on panic/error.
+- **STEP output deterministic** via `StepOptions { timestamp }`.
+  `write_step_with_options(model, opts)` with fixed timestamp
+  produces byte-identical output — fixes the CHANGELOG claim that
+  was silently broken by `SystemTime::now()`.
+- **STEP Unicode escaping** now ISO-10303-21-correct: non-ASCII
+  BMP → `\X2\HHHH\X0\`, supplementary plane → `\X4\HHHHHHHH\X0\`,
+  backslash doubled, control chars as `\X\HH`. Previously replaced
+  all non-ASCII with `_`, silently mangling accented project names
+  and CJK text.
+
+### Added — Phase 1 security hardening
+
+Closes the audit's DoS + supply-chain findings:
+
+- **`compression::InflateLimits { max_output_bytes }`** with 256 MiB
+  default. `inflate_at_with_limits(data, offset, limits)` uses a
+  chunked-read loop that rejects output over budget with new
+  `Error::DecompressLimitExceeded`. Legacy `inflate_at` wraps the
+  limited variant. Regression test: 1 KB→1 MB zero-bomb rejected
+  by 64 KiB cap.
+- **`compression::inflate_all_chunks_with_limits`** with per-chunk
+  + aggregate budget (default 1 GiB). Legacy
+  `inflate_all_chunks` delegates to it.
+- **`reader::OpenLimits { max_file_bytes, max_stream_bytes,
+  inflate_limits }`** with 2 GiB / 256 MiB / 256 MiB defaults.
+  `RevitFile::open_with_limits` stats file before reading;
+  rejects oversize before allocation.
+- **`reader::RevitFile::read_stream_with_limit`** — per-call byte
+  cap enforced against CFB directory size + checked chunked read.
+- **Python bindings** expose all three caps:
+  `rvt.RevitFile(path, max_file_bytes=..., max_stream_bytes=...,
+  max_inflate_bytes=...)`.
+- **`deny.toml`** — license allowlist (Apache-2 / MIT / BSD and
+  compatible permissive only; no GPL), advisory deny, crates.io-only
+  source, wildcard deny.
+- **CI: `cargo deny check` + `cargo audit`** jobs added, both
+  SHA-pinned to their actions.
+- **`THREAT_MODEL.md`** — documents T1 RCE / T2 memory DoS / T3
+  algorithmic DoS / T4 PII / T5 supply-chain threats + specific
+  mitigations + residual-risk notes + out-of-scope list.
+- **`CLEANROOM.md`** — formal accepted/forbidden source policy,
+  contributor declaration, suspicious-contribution handling.
+- **`src/lib.rs` DMCA claim softened** — removed absolute
+  "17 U.S.C. § 1201(f)" legal-advice framing; points to
+  `CLEANROOM.md` for enforcement detail.
+
+### Added — Phase 2 API discipline foundation (strict vs lossy)
+
+- **`parse_mode::ParseMode { Strict, BestEffort }`** — default
+  `BestEffort` preserves legacy behaviour.
+- **`parse_mode::Warning`** — structured `{ code, message, offset }`.
+- **`parse_mode::Diagnostics`** — `warnings` + `skipped_records` +
+  `failed_streams` + `partial_fields` + `confidence`. `Display`
+  impl gives informative dump.
+- **`parse_mode::Decoded<T>`** — wraps best-effort results with
+  diagnostics + `complete` flag. `map()` for composition,
+  `is_clean()` for "would strict accept this?" check.
+- Strict/lossy concrete method pairs on RevitFile + walker land in
+  subsequent commits using these types.
+
+### Added — Phase 4 Layer 5b walker scaffold
+
+Unblocks every per-class decoder task:
+
+- **`walker::InstanceField`** extended with real value-type
+  variants: `Bool(bool)`, `Integer { value, signed, size }`,
+  `Float { value, size }`, `Guid([u8; 16])`, `String(String)`,
+  `Vector(Vec<InstanceField>)`. Previously collapsed to raw
+  `Bytes` because ADocument's schema didn't exercise them.
+- **`walker::HandleIndex`** — ElementId → byte-offset BTreeMap
+  for resolving cross-references in per-class decoders.
+- **`walker::ElementDecoder` trait** — `class_name()` + `decode()`
+  contract. Adding a new Revit class decoder is drop-in.
+- **`walker::DecodedElement`** — uniform output struct
+  `{ id, class, fields, byte_range }`.
+- **`walker::read_field_by_type`** — per-FieldType dispatch core
+  that consumes bytes and emits the right InstanceField variant.
+  Panic-safe on short input.
+- **`walker::decode_instance`** — generic per-class fallback;
+  walks any class's declared fields in schema order.
+- `rvt-doc` CLI emits the new variants as typed JSON ("integer",
+  "float", "bool", "guid", "string", "vector", "bytes").
+
+### Added — Phase 5 geometry type primitives
+
+Format-agnostic geometry types serving as walker output + IFC
+exporter input:
+
+- **Base**: `Point3`, `Vector3`, `Transform3` (with `IDENTITY`).
+- **Curves** (7 variants): `Line`, `Arc`, `Circle`, `Ellipse`,
+  `HermiteSpline`, `NurbsCurve`, `CylindricalHelix` +
+  `CurveLoop { curves, closed }`.
+- **Faces** (6 variants): `Planar`, `Cylindrical`, `Conical`,
+  `Revolved`, `Ruled`, `HermitePatch`, `NurbsSurface`.
+- **Solids** (8 variants): `Extrusion`, `Blend`, `Revolve`,
+  `Sweep`, `SweptBlend`, `Boolean` (Union/Difference/Intersection),
+  `Void` (explicit door/window-in-wall variant), `Mesh(Mesh)`.
+- **Supporting types**: `Mesh { vertices, triangles, normals }`,
+  `PointCloud { points }`, `BoundingBox` with `empty()` +
+  `expand_point()`.
+
+All serde-serializable. Module docstring documents coordinate
+conventions (right-handed, project-unit distances, radians,
+never implicit conversion).
+
+### Changed — CI efficiency
+
+- `concurrency: cancel-in-progress: true` (already in place
+  pre-audit; documented explicitly).
+- Top-level `permissions: contents: read` — least-privilege
+  workflow scope (audit SEC-30).
+- `paths-ignore` keeps docs-only commits off the Windows wheel
+  matrix.
+
+### Known pending (tracked in TODO-BLINDSIDE.md)
+
+Phase 1 remaining: SEC-11..13 (workspace split) + SEC-14..25
+(fuzz infrastructure). Both are structural changes deferred to a
+dedicated session.
+
+Phase 4 remaining: L5B-10..L5B-59 — per-class decoders (Wall,
+Floor, Door, Window, Level, Material, etc.). Scaffold is complete;
+each decoder is a ~200-line `ElementDecoder` impl + unit test
++ corpus integration test. Corpus access required for validation.
+
+Phase 6 (real IFC emission): IFC-02..44 — depends on Phase 4 + 5.
+
+Phase 7 (write support): WRT-01..14.
+
+Phase 11 (web viewer): VW1-01..24 — separate WASM + Three.js
+workstream.
+
+Public ROADMAP.md + RELEASE.md land in the next commit cluster.
+
 ## [0.1.2] — 2026-04-19
 
 First tagged release since 0.1.0. Bundles the Python bindings,
