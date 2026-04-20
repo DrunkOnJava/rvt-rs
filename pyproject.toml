@@ -31,6 +31,8 @@ Issues = "https://github.com/DrunkOnJava/rvt-rs/issues"
 features = ["python"]
 # Version comes from Cargo.toml's [package.version].
 module-name = "rvt"
-# Manylinux-compatible wheels are the default; abi3-py38 feature on
-# pyo3 produces a single wheel that works with every Python ≥ 3.8.
-python-source = "python"
+# Pyo3's `abi3-py38` feature produces a single wheel compatible
+# with every Python >= 3.8 (one wheel per OS/arch, not per Python
+# minor version).
+# No `python-source`: this is a pure-extension wheel with no
+# accompanying pure-Python code.
