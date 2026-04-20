@@ -451,6 +451,73 @@ impl StepWriter {
             material_ids.push(mat_id);
         }
 
+        // IFC-28: Emit IfcMaterialLayer + IfcMaterialLayerSet for
+        // every compound assembly declared on the model. Layers
+        // reference the `material_ids` vector above by index, so
+        // layer_set emission MUST follow single-material emission.
+        // Track layer-set ids for later IfcRelAssociatesMaterial
+        // pairing.
+        let mut layer_set_ids: Vec<usize> = Vec::with_capacity(model.material_layer_sets.len());
+        for lset in &model.material_layer_sets {
+            let mut layer_ids: Vec<usize> = Vec::with_capacity(lset.layers.len());
+            for layer in &lset.layers {
+                // Clamp material_index to stay within bounds. Out-of-range
+                // indices get the first material as a defensive fallback;
+                // losing the layer would be worse.
+                let mat_id = material_ids
+                    .get(layer.material_index)
+                    .copied()
+                    .or_else(|| material_ids.first().copied())
+                    .unwrap_or(0);
+                if mat_id == 0 {
+                    // No materials at all — skip this layer. IFC4 allows
+                    // IfcMaterialLayerSet with zero layers, so the set
+                    // will still emit below, just empty.
+                    continue;
+                }
+                let layer_id = self.id();
+                // IfcMaterialLayer(Material, LayerThickness, IsVentilated=$,
+                //                  Category=$, Priority=$, Name=$, Description=$)
+                // Thickness in metres (feet × 0.3048).
+                let thickness_m = layer.thickness_feet * 0.3048;
+                let name_slot = match &layer.name {
+                    Some(n) => format!("'{}'", escape(n)),
+                    None => "$".into(),
+                };
+                self.emit_entity(
+                    layer_id,
+                    format!(
+                        "IFCMATERIALLAYER(#{mat_id},{thickness_m:.6},$,$,$,{name_slot},$)"
+                    ),
+                );
+                layer_ids.push(layer_id);
+            }
+            let set_id = self.id();
+            let set_name = escape(&lset.name);
+            let desc_slot = match &lset.description {
+                Some(d) => format!("'{}'", escape(d)),
+                None => "$".into(),
+            };
+            let layer_refs = if layer_ids.is_empty() {
+                "()".to_string()
+            } else {
+                format!(
+                    "({})",
+                    layer_ids
+                        .iter()
+                        .map(|id| format!("#{id}"))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            };
+            // IfcMaterialLayerSet(MaterialLayers, LayerSetName, Description)
+            self.emit_entity(
+                set_id,
+                format!("IFCMATERIALLAYERSET({layer_refs},'{set_name}',{desc_slot})"),
+            );
+            layer_set_ids.push(set_id);
+        }
+
         let mut per_storey_elements: Vec<Vec<usize>> = vec![Vec::new(); storeys.len()];
         // Track (element_id, material_index) pairs so we can emit
         // IfcRelAssociatesMaterial per material after the element
@@ -483,6 +550,7 @@ impl StepWriter {
                 rotation_radians,
                 extrusion,
                 host_element_index,
+                material_layer_set_index,
             } = entity
             {
                 // Clamp out-of-range indices to storey[0] rather than
@@ -633,10 +701,48 @@ impl StepWriter {
                 self.emit_entity(el_id, line);
                 per_storey_elements[idx].push(el_id);
                 entity_index_to_el_id[entity_idx] = Some(el_id);
-                if let Some(m_idx) = material_index {
-                    if *m_idx < material_ids.len() {
-                        element_material_pairs.push((el_id, *m_idx));
+                // IFC-28: material_layer_set_index takes precedence over
+                // single material_index. When set, emit an
+                // IfcMaterialLayerSetUsage referencing the layer set
+                // and an IfcRelAssociatesMaterial linking the
+                // element to it. Fall back to single-material if the
+                // layer-set index is out of range.
+                let layer_set_applied = if let Some(ls_idx) = material_layer_set_index {
+                    if let Some(&ls_id) = layer_set_ids.get(*ls_idx) {
+                        let usage_id = self.id();
+                        // IfcMaterialLayerSetUsage(ForLayerSet, LayerSetDirection=.AXIS2.,
+                        //   DirectionSense=.POSITIVE., OffsetFromReferenceLine=0.0)
+                        // .AXIS2. = Y axis of the extrusion (wall
+                        // thickness direction). .POSITIVE. = stack
+                        // outward from the reference line. These are
+                        // the IFC4 defaults most exporters emit; Revit
+                        // wall-type-specific offsets would override.
+                        self.emit_entity(
+                            usage_id,
+                            format!(
+                                "IFCMATERIALLAYERSETUSAGE(#{ls_id},.AXIS2.,.POSITIVE.,0.)"
+                            ),
+                        );
+                        let rel_id = self.id();
+                        self.emit_entity(
+                            rel_id,
+                            format!(
+                                "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,(#{el_id}),#{usage_id})",
+                                make_guid(rel_id),
+                            ),
+                        );
+                        true
+                    } else {
+                        false
                     }
+                } else {
+                    false
+                };
+                if !layer_set_applied
+                    && let Some(m_idx) = material_index
+                    && *m_idx < material_ids.len()
+                {
+                    element_material_pairs.push((el_id, *m_idx));
                 }
                 if let Some(pset) = property_set
                     && !pset.properties.is_empty()
@@ -988,6 +1094,7 @@ mod tests {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
+        material_layer_sets: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -1008,6 +1115,7 @@ mod tests {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
+        material_layer_sets: Vec::new(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -1070,6 +1178,7 @@ mod tests {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
+        material_layer_sets: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -1192,6 +1301,7 @@ mod tests {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
+        material_layer_sets: Vec::new(),
         };
         let s = write_step(&model);
         assert!(
@@ -1275,6 +1385,7 @@ mod tests {
                     rotation_radians: None,
                     extrusion: None,
                     host_element_index: None,
+            material_layer_set_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
@@ -1287,6 +1398,7 @@ mod tests {
                     rotation_radians: None,
                     extrusion: None,
                     host_element_index: None,
+            material_layer_set_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
@@ -1299,12 +1411,14 @@ mod tests {
                     rotation_radians: None,
                     extrusion: None,
                     host_element_index: None,
+            material_layer_set_index: None,
                 },
             ],
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
+        material_layer_sets: Vec::new(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -1356,11 +1470,13 @@ mod tests {
                 rotation_radians: None,
                 extrusion: None,
                 host_element_index: None,
+            material_layer_set_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
+        material_layer_sets: Vec::new(),
         };
         let s = write_step(&model);
         // The door line should have 9 commas (10 fields). Grep the

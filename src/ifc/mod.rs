@@ -90,6 +90,12 @@ pub struct IfcModel {
     /// Materials available for association with BuildingElements.
     /// BuildingElement.material_index points into this list.
     pub materials: Vec<MaterialInfo>,
+    /// Compound material assemblies (IFC-28). Referenced by
+    /// `BuildingElement.material_layer_set_index`. Each layer
+    /// inside a set references a material in `materials` above by
+    /// index, so the two lists share a namespace — a layer can't
+    /// reference a material that hasn't been registered there first.
+    pub material_layer_sets: Vec<entities::MaterialLayerSet>,
 }
 
 /// A single building storey derived from a Revit `Level` element.
@@ -163,6 +169,7 @@ impl Exporter for PlaceholderExporter {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
+        material_layer_sets: Vec::new(),
         })
     }
 }
@@ -245,6 +252,7 @@ impl Exporter for RvtDocExporter {
             units: Vec::new(),
             building_storeys: Vec::new(),
             materials: Vec::new(),
+        material_layer_sets: Vec::new(),
         })
     }
 }

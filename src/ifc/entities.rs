@@ -74,6 +74,18 @@ pub enum IfcEntity {
         /// (otherwise the void subtracts from nothing).
         #[serde(default)]
         host_element_index: Option<usize>,
+        /// Index into `IfcModel.material_layer_sets` — the layered
+        /// assembly (gypsum / insulation / sheathing / …) that
+        /// makes up this element (IFC-28). Used for walls, slabs,
+        /// roofs, and ceilings that have a real multi-layer
+        /// composition. When set, the writer emits
+        /// `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` + an
+        /// `IfcRelAssociatesMaterial` pointing at the layer-set
+        /// usage — *instead of* the single-material path driven by
+        /// `material_index`. When both are set, the layer set
+        /// wins (single-material falls back to the first layer).
+        #[serde(default)]
+        material_layer_set_index: Option<usize>,
     },
     TypeObject {
         name: String,
@@ -121,6 +133,51 @@ pub struct Extrusion {
     /// Extrusion height (local Z, in feet). For a wall = height;
     /// for a slab = slab thickness.
     pub height_feet: f64,
+}
+
+/// One layer of a compound building-element material assembly
+/// (IFC-28). `thickness_feet` is the physical thickness (writer
+/// converts to metres at emit time). `material_index` points into
+/// `IfcModel.materials` — the material filling this layer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaterialLayer {
+    pub material_index: usize,
+    pub thickness_feet: f64,
+    /// Optional per-layer name. When `Some`, emitted as the
+    /// `IfcMaterialLayer.Name` attribute. Revit's convention is
+    /// layer names like "Finish - Face Layer", "Structure", "Air
+    /// Gap", "Insulation" — useful for downstream BIM tools that
+    /// surface them in schedules.
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// An ordered set of [`MaterialLayer`]s representing the compound
+/// composition of a wall / floor / roof / ceiling (IFC-28). Maps
+/// to IFC4 `IfcMaterialLayerSet` + (via [`BuildingElement::material_layer_set_index`])
+/// `IfcMaterialLayerSetUsage`.
+///
+/// `name` is the set-level label ("Generic - 6\" Wall", "Ext - CMU").
+/// Revit's exterior wall types often carry 3-5 layers; interior
+/// partitions are usually 2-3. The ordering matters: IFC4
+/// interprets `[0]` as the outermost layer (exterior or top side)
+/// with subsequent layers stacked inward.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaterialLayerSet {
+    pub name: String,
+    pub layers: Vec<MaterialLayer>,
+    /// Optional description; emitted as `IfcMaterialLayerSet.Description`.
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+impl MaterialLayerSet {
+    /// Total thickness in feet (sum of layer thicknesses). Useful
+    /// for sanity-checking that the declared wall thickness matches
+    /// the layer-set composition.
+    pub fn total_thickness_feet(&self) -> f64 {
+        self.layers.iter().map(|l| l.thickness_feet).sum()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -287,6 +344,34 @@ mod tests {
     /// Imperial → SI conversion applied at emit time so downstream
     /// tools see unit-consistent output against the project's SI
     /// `IfcUnitAssignment`.
+    /// IFC-28: MaterialLayerSet totals its layer thicknesses.
+    #[test]
+    fn material_layer_set_total_thickness() {
+        let lset = MaterialLayerSet {
+            name: "Ext - Generic 8\" Wall".into(),
+            description: None,
+            layers: vec![
+                MaterialLayer {
+                    material_index: 0,
+                    thickness_feet: 5.0 / 12.0, // 5"
+                    name: Some("Finish".into()),
+                },
+                MaterialLayer {
+                    material_index: 1,
+                    thickness_feet: 2.0 / 12.0, // 2"
+                    name: Some("Structure".into()),
+                },
+                MaterialLayer {
+                    material_index: 2,
+                    thickness_feet: 1.0 / 12.0, // 1"
+                    name: Some("Air Gap".into()),
+                },
+            ],
+        };
+        let total = lset.total_thickness_feet();
+        assert!((total - (8.0 / 12.0)).abs() < 1e-9);
+    }
+
     #[test]
     fn property_value_to_step_quantities() {
         // 1 ft² = 0.09290304 m² exact.
