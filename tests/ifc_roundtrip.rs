@@ -116,7 +116,7 @@ fn ifc_export_has_no_unescaped_apostrophes() -> Result<()> {
             let doubled_pairs = line.matches("''").count();
             let remaining_singles = apostrophes - 2 * doubled_pairs;
             assert!(
-                remaining_singles.is_multiple_of(2),
+                remaining_singles % 2 == 0,
                 "{year}: entity has an odd number of unescaped apostrophes — {line}"
             );
         }
