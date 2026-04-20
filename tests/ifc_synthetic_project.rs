@@ -28,6 +28,7 @@
 //! IfcRelContainedInSpatialStructure (per-level containment is a
 //! follow-up per IFC-35).
 
+use rvt::ifc::MaterialInfo;
 use rvt::ifc::{BuilderOptions, ElementInput, Storey, build_ifc_model, write_step};
 use rvt::walker::{DecodedElement, InstanceField};
 
@@ -59,54 +60,63 @@ fn synthetic_project_emits_valid_ifc4() {
             decoded: &north_wall,
             display_name: "North Wall".into(),
             guid: Some("W-N-001".into()),
+            material_index: Some(0),
             storey_index: Some(0),
         },
         ElementInput {
             decoded: &south_wall,
             display_name: "South Wall".into(),
             guid: Some("W-S-001".into()),
+            material_index: Some(0),
             storey_index: Some(0),
         },
         ElementInput {
             decoded: &east_wall,
             display_name: "East Wall".into(),
             guid: Some("W-E-001".into()),
+            material_index: Some(0),
             storey_index: Some(1),
         },
         ElementInput {
             decoded: &west_wall,
             display_name: "West Wall".into(),
             guid: Some("W-W-001".into()),
+            material_index: Some(0),
             storey_index: Some(0),
         },
         ElementInput {
             decoded: &floor,
             display_name: "Ground Floor Slab".into(),
             guid: Some("SLAB-001".into()),
+            material_index: Some(0),
             storey_index: Some(0),
         },
         ElementInput {
             decoded: &front_door,
             display_name: "Front Entry Door".into(),
             guid: Some("DOOR-001".into()),
+            material_index: Some(0),
             storey_index: Some(0),
         },
         ElementInput {
             decoded: &north_window,
             display_name: "North Window".into(),
             guid: Some("WIN-N-001".into()),
+            material_index: Some(1),
             storey_index: Some(0),
         },
         ElementInput {
             decoded: &south_window,
             display_name: "South Window".into(),
             guid: Some("WIN-S-001".into()),
+            material_index: Some(1),
             storey_index: Some(0),
         },
         ElementInput {
             decoded: &stair,
             display_name: "Main Stair".into(),
             guid: Some("STAIR-001".into()),
+            material_index: Some(0),
             storey_index: Some(0),
         },
         ElementInput {
@@ -114,6 +124,7 @@ fn synthetic_project_emits_valid_ifc4() {
             display_name: "Mystery Element".into(),
             guid: None,
             storey_index: None,
+            material_index: None,
         },
     ];
 
@@ -132,6 +143,20 @@ fn synthetic_project_emits_valid_ifc4() {
             Storey {
                 name: "Roof Deck".into(),
                 elevation_feet: 20.0,
+            },
+        ],
+        materials: vec![
+            // material_index 0: walls + slab
+            MaterialInfo {
+                name: "Concrete".into(),
+                color_packed: Some(0x00AAAAAA), // light grey
+                transparency: Some(0.0),
+            },
+            // material_index 1: windows
+            MaterialInfo {
+                name: "Glass - Tinted".into(),
+                color_packed: Some(0x00DDAA88), // blue-ish (B=0x88, G=0xAA, R=0xDD)
+                transparency: Some(0.6),
             },
         ],
         ..Default::default()
@@ -202,6 +227,30 @@ fn synthetic_project_emits_valid_ifc4() {
     assert!(step.contains("3.048"), "2nd floor elevation missing");
     assert!(step.contains("6.096"), "roof elevation missing");
 
+    // --- Materials emit IfcMaterial + IfcSurfaceStyle + RelAssociates ---
+    // 2 materials (Concrete + Glass - Tinted) → 2 IFCMATERIAL + 2
+    // IFCSURFACESTYLE (both have color). 2 IFCRELASSOCIATESMATERIAL
+    // bundling concrete to 7 elements (4 walls + slab + door + stair)
+    // and glass to 2 elements (N/S windows). Mystery Element has no
+    // material — not counted.
+    assert_eq!(
+        step.matches("IFCMATERIAL(").count(),
+        2,
+        "expect 2 materials"
+    );
+    assert_eq!(
+        step.matches("IFCSURFACESTYLE(").count(),
+        2,
+        "each material with color gets a surface style"
+    );
+    assert_eq!(
+        step.matches("IFCRELASSOCIATESMATERIAL(").count(),
+        2,
+        "one rel per material (concrete + glass)"
+    );
+    assert!(step.contains("Concrete"), "concrete material name");
+    assert!(step.contains("Glass - Tinted"), "glass material name");
+
     // --- Optional: dump to a fixture file when asked ---
     if std::env::var("DUMP_IFC").is_ok() {
         let out_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -223,6 +272,7 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         display_name: "Stable Wall".into(),
         guid: Some("W-1".into()),
         storey_index: None,
+        material_index: None,
     }];
     let opts = BuilderOptions {
         project_name: Some("Stable".into()),
