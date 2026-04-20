@@ -666,6 +666,83 @@ pub fn read_adocument_with_limits(
     }))
 }
 
+/// Strict variant of [`read_adocument`] (API-07). Returns `Err` if
+/// the walker's `Completeness` summary flags any raw-bytes
+/// fallback, OR if the ADocument entry-point detector couldn't
+/// confidently land on the record.
+///
+/// Use when downstream code can't tolerate a partial decode —
+/// e.g. CI gates, round-trip verification, cross-version
+/// correctness checks. The contract is: if this returns `Ok`, the
+/// `ADocumentInstance` has every declared field decoded into a
+/// typed `InstanceField` (no `Bytes` fallbacks).
+pub fn read_adocument_strict(rf: &mut RevitFile) -> Result<ADocumentInstance> {
+    let Some(inst) = read_adocument(rf)? else {
+        return Err(Error::BasicFileInfo(
+            "ADocument entry-point detector returned None".into(),
+        ));
+    };
+    let c = inst.completeness();
+    if !c.is_fully_typed() {
+        return Err(Error::BasicFileInfo(format!(
+            "ADocument decode incomplete: {} of {} fields fell back to raw bytes",
+            c.raw_bytes_fallback, c.total
+        )));
+    }
+    Ok(inst)
+}
+
+/// Lossy variant of [`read_adocument`] (API-08). Returns a
+/// [`crate::parse_mode::Decoded<ADocumentInstance>`] that surfaces
+/// the per-instance completeness summary as diagnostics rather
+/// than short-circuiting.
+///
+/// Contract:
+/// - `Ok(Decoded { complete: true, diagnostics: empty, .. })` —
+///   every field decoded cleanly (same bar as the strict variant).
+/// - `Ok(Decoded { complete: false, diagnostics, .. })` — record
+///   was reached but at least one field fell back to raw bytes.
+///   Each partial field appears in `diagnostics.partial_fields`;
+///   `diagnostics.confidence` is set to `Completeness::typed_ratio`
+///   so callers can threshold on it.
+/// - `Err(_)` — stream-level failure (BasicFileInfo unreadable,
+///   Global/Latest inflate failure, schema parse failure). A
+///   stream-level error is still fatal even for the lossy path.
+/// - `Ok(Decoded { value, diagnostics })` where
+///   `diagnostics.failed_streams` contains "ADocument" — entry
+///   detector returned None. Value is a default `ADocumentInstance`
+///   placeholder (`entry_offset=0, version=0, fields=vec![]`).
+pub fn read_adocument_lossy(
+    rf: &mut RevitFile,
+) -> Result<crate::parse_mode::Decoded<ADocumentInstance>> {
+    use crate::parse_mode::{Decoded, Diagnostics};
+
+    let Some(inst) = read_adocument(rf)? else {
+        let mut d = Diagnostics::default();
+        d.fail_stream("ADocument");
+        let placeholder = ADocumentInstance {
+            entry_offset: 0,
+            version: 0,
+            fields: Vec::new(),
+        };
+        return Ok(Decoded::partial(placeholder, d));
+    };
+
+    let c = inst.completeness();
+    if c.is_fully_typed() {
+        return Ok(Decoded::complete(inst));
+    }
+
+    let mut diagnostics = Diagnostics::default();
+    for (name, value) in &inst.fields {
+        if matches!(value, InstanceField::Bytes(_)) {
+            diagnostics.partial_field(name.clone());
+        }
+    }
+    diagnostics.confidence = c.typed_ratio().map(|r| r as f32);
+    Ok(Decoded::partial(inst, diagnostics))
+}
+
 #[cfg(test)]
 fn find_adocument_start(d: &[u8]) -> Option<usize> {
     find_adocument_start_with_schema(d, None)
