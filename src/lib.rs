@@ -97,6 +97,7 @@ pub mod formats;
 pub mod geometry;
 pub mod ifc;
 pub mod object_graph;
+pub mod parse_mode;
 pub mod part_atom;
 pub mod partitions;
 pub mod reader;
