@@ -203,3 +203,76 @@ fn rejects_non_cfb_input() {
         Err(rvt::Error::NotACfbFile)
     ));
 }
+
+// L5B-58: walker element counts from corpus.
+//
+// Runs `read_adocument_lossy` against each available corpus fixture
+// and asserts:
+//
+//   * 2024-2026: the walker returns a decoded ADocument with at
+//     least one typed field (anything > 0 is evidence the walker
+//     reached instance data rather than just locating the entry).
+//   * 2016-2023: the walker returns `Decoded::partial` with a
+//     diagnostic indicating it couldn't find / fully decode the
+//     record — NOT a hard panic or error. This is the documented
+//     "graceful degradation" behaviour from API-05..09.
+//
+// Taken together this pins that (a) the walker works on the fully
+// supported releases and (b) the lossy path never crashes on
+// partially supported releases, which is the contract the public
+// API advertises. If a future commit breaks either half, this test
+// catches it with a specific year-tagged failure message.
+#[test]
+fn read_adocument_lossy_succeeds_or_gracefully_degrades() {
+    for year in all_years() {
+        let p = sample_for_year(year);
+        if !p.exists() {
+            eprintln!("skipping {year}: sample not present (LFS not pulled?)");
+            continue;
+        }
+        let mut rf = RevitFile::open(&p)
+            .unwrap_or_else(|_| panic!("{year}: RevitFile::open"));
+        let decoded = rvt::walker::read_adocument_lossy(&mut rf)
+            .unwrap_or_else(|e| panic!("{year}: read_adocument_lossy errored hard: {e}"));
+
+        if (2024..=2026).contains(&year) {
+            // Fully-supported releases: walker should find and
+            // decode the ADocument with non-trivial progress.
+            let inst = &decoded.value;
+            assert!(
+                !inst.fields.is_empty(),
+                "{year}: expected walker to decode ≥ 1 field on fully-supported release, got 0",
+            );
+            let completeness = inst.completeness();
+            assert!(
+                completeness.typed > 0,
+                "{year}: expected ≥ 1 typed field, got {typed}/{total}",
+                typed = completeness.typed,
+                total = completeness.total,
+            );
+            // Sanity: the walker's reported version matches the
+            // file's declared release.
+            assert_eq!(
+                inst.version,
+                year,
+                "{year}: walker returned version {} for {year} fixture",
+                inst.version,
+            );
+        } else {
+            // 2016-2023: accept either "fully decoded" (if the
+            // walker has been extended) OR "gracefully degraded
+            // with diagnostics". What's forbidden is (a) a hard
+            // panic/error (already caught above by unwrap_or_else)
+            // and (b) silently returning a zero-field instance
+            // without a diagnostic — that would be a regression of
+            // API-09's completeness-marker work.
+            let has_fields = !decoded.value.fields.is_empty();
+            let has_diagnostics = !decoded.diagnostics.is_empty();
+            assert!(
+                has_fields || has_diagnostics,
+                "{year}: walker returned empty instance AND no diagnostics — \
+                 graceful-degradation contract broken",
+            );
+        }
+    }
+}
