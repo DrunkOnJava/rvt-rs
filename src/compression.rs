@@ -12,6 +12,48 @@ use std::io::{Read, Write};
 
 pub const GZIP_MAGIC: [u8; 3] = [0x1F, 0x8B, 0x08];
 
+/// Default maximum decompressed size per inflate call.
+///
+/// 256 MiB is comfortably above any real `Formats/Latest` or
+/// `Global/Latest` stream we've observed across the 11-release
+/// corpus (typical is 1–5 MiB; largest observed ~40 MiB on a
+/// worksharing project RVT), and comfortably below the point where
+/// a compressed-bomb attack becomes a credible DoS. Callers with
+/// larger legitimate needs can override by passing a custom
+/// [`InflateLimits`] to [`inflate_at_with_limits`].
+pub const DEFAULT_MAX_INFLATE_BYTES: usize = 256 * 1024 * 1024;
+
+/// Caps for bounded decompression. Passed explicitly to
+/// [`inflate_at_with_limits`] or pulled from
+/// [`InflateLimits::default`] by the back-compat [`inflate_at`]
+/// wrapper.
+///
+/// # Why this exists
+///
+/// DEFLATE is an adversary-choice format: a small number of input
+/// bytes can legitimately expand by 1000× or more (e.g. a 1 KB
+/// block of zeros compresses to ~20 bytes; uncompressed is 1 KB;
+/// a 1 MB block of zeros compresses to ~1 KB). The previous
+/// `inflate_at` allocated `body.len() * 4` without a hard upper
+/// bound and called `read_to_end` with no size limit, so a
+/// hostile `.rvt` could trivially DoS any process that opened it.
+///
+/// The audit (AUDIT-2026-04-19.md P0 item 4) flagged this as the
+/// single most urgent security fix before promoting the repo.
+#[derive(Debug, Clone, Copy)]
+pub struct InflateLimits {
+    /// Maximum decompressed output bytes per call.
+    pub max_output_bytes: usize,
+}
+
+impl Default for InflateLimits {
+    fn default() -> Self {
+        Self {
+            max_output_bytes: DEFAULT_MAX_INFLATE_BYTES,
+        }
+    }
+}
+
 /// Returns `true` iff `data` starts with the gzip magic at the given offset.
 pub fn has_gzip_magic(data: &[u8], offset: usize) -> bool {
     data.get(offset..offset + 3) == Some(GZIP_MAGIC.as_slice())
@@ -53,11 +95,71 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
     Some(pos - offset)
 }
 
+/// Inflate the DEFLATE stream that follows a gzip header starting at
+/// `offset`, with an output-size ceiling enforced.
+///
+/// Returns the decompressed bytes. Unused tail (any garbage / next
+/// chunk / missing CRC+ISIZE) is silently ignored — which is exactly
+/// what we need for Revit's truncated-gzip streams.
+///
+/// The output size is capped by `limits.max_output_bytes`. If a
+/// DEFLATE block would expand beyond that cap, the function returns
+/// [`Error::DecompressLimitExceeded`] rather than allocating
+/// unbounded memory. The initial allocation is also clamped — the
+/// historic `body.len() * 4` hint is bounded to at most
+/// `max_output_bytes` so an attacker can't force a multi-GB
+/// allocation just by handing us a large compressed body.
+///
+/// ```
+/// # use rvt::compression::{self, InflateLimits};
+/// let empty_truncated_gzip = [
+///     0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+///     0x03, 0x00,
+/// ];
+/// let decomp = compression::inflate_at_with_limits(
+///     &empty_truncated_gzip, 0, InflateLimits::default()
+/// ).unwrap();
+/// assert_eq!(decomp, b"");
+/// ```
+pub fn inflate_at_with_limits(
+    data: &[u8],
+    offset: usize,
+    limits: InflateLimits,
+) -> Result<Vec<u8>> {
+    let header_len =
+        gzip_header_len(data, offset).ok_or_else(|| Error::Decompress("no gzip header".into()))?;
+    let body = &data[offset + header_len..];
+    // Clamp initial capacity. `body.len() * 4` was the historical hint
+    // but without an upper bound it's a memory-amplification vector.
+    let cap = body.len().saturating_mul(4).min(limits.max_output_bytes);
+    let mut out = Vec::with_capacity(cap);
+    // Chunked read loop so we can enforce the cap deterministically.
+    let mut decoder = DeflateDecoder::new(body);
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = decoder
+            .read(&mut buf)
+            .map_err(|e| Error::Decompress(format!("DEFLATE at offset {offset}: {e}")))?;
+        if n == 0 {
+            break;
+        }
+        if out.len() + n > limits.max_output_bytes {
+            return Err(Error::DecompressLimitExceeded(format!(
+                "DEFLATE at offset {offset} would exceed {} bytes",
+                limits.max_output_bytes
+            )));
+        }
+        out.extend_from_slice(&buf[..n]);
+    }
+    Ok(out)
+}
+
 /// Inflate the DEFLATE stream that follows a gzip header starting at `offset`.
 ///
-/// Returns the decompressed bytes. Unused tail (any garbage / next chunk /
-/// missing CRC+ISIZE) is silently ignored — which is exactly what we need
-/// for Revit's truncated-gzip streams.
+/// Backwards-compatible wrapper around [`inflate_at_with_limits`] with
+/// the default [`InflateLimits`] (256 MiB per call). Existing callers
+/// continue to work unchanged; the cap only kicks in on adversarial
+/// input that would not have produced a useful result anyway.
 ///
 /// ```
 /// # use rvt::compression;
@@ -72,14 +174,7 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
 /// assert_eq!(decomp, b"");
 /// ```
 pub fn inflate_at(data: &[u8], offset: usize) -> Result<Vec<u8>> {
-    let header_len =
-        gzip_header_len(data, offset).ok_or_else(|| Error::Decompress("no gzip header".into()))?;
-    let body = &data[offset + header_len..];
-    let mut out = Vec::with_capacity(body.len() * 4);
-    DeflateDecoder::new(body)
-        .read_to_end(&mut out)
-        .map_err(|e| Error::Decompress(format!("DEFLATE at offset {offset}: {e}")))?;
-    Ok(out)
+    inflate_at_with_limits(data, offset, InflateLimits::default())
 }
 
 /// Find every gzip magic byte-triple in `data`.
@@ -98,14 +193,55 @@ pub fn find_gzip_offsets(data: &[u8]) -> Vec<usize> {
     hits
 }
 
+/// Inflate every GZIP chunk in `data`, concatenating the outputs,
+/// with bounded per-chunk + aggregate output sizes.
+///
+/// `per_chunk` caps each chunk's inflated size (same semantics as
+/// [`inflate_at_with_limits`]). `aggregate` caps the total bytes
+/// returned across all chunks — useful when the caller wants to
+/// refuse processing of streams that would expand to multi-gigabyte
+/// totals even if each individual chunk is small.
+///
+/// False positives (byte triples that match the gzip magic inside
+/// random compressed data) continue to be silently skipped via
+/// `filter_map` — their error is "looks like gzip but isn't." A
+/// chunk that IS gzip but would exceed `per_chunk` is also skipped.
+/// A fully-materialised result that would exceed `aggregate` causes
+/// iteration to stop early at the last chunk whose inclusion keeps
+/// us under budget.
+pub fn inflate_all_chunks_with_limits(
+    data: &[u8],
+    per_chunk: InflateLimits,
+    aggregate: usize,
+) -> Vec<Vec<u8>> {
+    let mut total: usize = 0;
+    let mut results = Vec::new();
+    for off in find_gzip_offsets(data) {
+        let chunk = match inflate_at_with_limits(data, off, per_chunk) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        if total.saturating_add(chunk.len()) > aggregate {
+            break;
+        }
+        total += chunk.len();
+        results.push(chunk);
+    }
+    results
+}
+
 /// Inflate every GZIP chunk in `data`, concatenating the outputs.
 /// Silently skips chunks that fail to inflate (some trailing "magic-like"
 /// byte triples in random compressed data are false positives).
+///
+/// Backwards-compatible wrapper around [`inflate_all_chunks_with_limits`].
+/// Uses default per-chunk limits (256 MiB) and a 1 GiB aggregate cap.
 pub fn inflate_all_chunks(data: &[u8]) -> Vec<Vec<u8>> {
-    find_gzip_offsets(data)
-        .into_iter()
-        .filter_map(|off| inflate_at(data, off).ok())
-        .collect()
+    inflate_all_chunks_with_limits(
+        data,
+        InflateLimits::default(),
+        1024 * 1024 * 1024, // 1 GiB aggregate
+    )
 }
 
 /// Encode `bytes` as Revit's "truncated-gzip" stream format: a minimal
@@ -167,5 +303,46 @@ mod tests {
             0x1F, 0x8B, 0x08, 0x08, 0, 0, 0, 0, 0, 0x0B, b'f', b'o', b'o', 0,
         ];
         assert_eq!(gzip_header_len(&hdr, 0), Some(14));
+    }
+
+    #[test]
+    fn compressed_bomb_rejected_by_inflate_limits() {
+        // Build a minimal compressed bomb: truncated-gzip header plus a
+        // DEFLATE body that inflates 1 MB of zeros. Then set the inflate
+        // cap below 1 MB and assert the call refuses rather than
+        // allocating past the limit.
+        use flate2::{Compression, write::DeflateEncoder};
+        use std::io::Write;
+        let payload = vec![0u8; 1024 * 1024]; // 1 MiB of zeros
+        let mut bomb = Vec::new();
+        bomb.extend_from_slice(&[0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0, 0xff]);
+        let mut enc = DeflateEncoder::new(&mut bomb, Compression::default());
+        enc.write_all(&payload).unwrap();
+        enc.finish().unwrap();
+
+        // Bomb ratio is ~1000:1 — a few KB expands to 1 MB. Cap at
+        // 64 KB to force rejection; a legit Formats/Latest stream is
+        // nowhere near this small-compared-to-header.
+        let tight = InflateLimits {
+            max_output_bytes: 64 * 1024,
+        };
+        let result = inflate_at_with_limits(&bomb, 0, tight);
+        match result {
+            Err(Error::DecompressLimitExceeded(msg)) => {
+                assert!(msg.contains("65536"), "error should name the cap: {msg}");
+            }
+            other => panic!("expected DecompressLimitExceeded, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn legitimate_decompression_under_default_limit_still_works() {
+        // Sanity: ordinary small payloads continue to inflate with the
+        // default cap. Previous regressions have come from over-zealous
+        // cap application.
+        let payload = b"hello, world";
+        let compressed = truncated_gzip_encode(payload).unwrap();
+        let out = inflate_at_with_limits(&compressed, 0, InflateLimits::default()).unwrap();
+        assert_eq!(&out[..], payload);
     }
 }

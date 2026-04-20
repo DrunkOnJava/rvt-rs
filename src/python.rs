@@ -61,9 +61,31 @@ struct PyRevitFile {
 
 #[pymethods]
 impl PyRevitFile {
+    /// Open a Revit file with optional size limits.
+    ///
+    /// `max_file_bytes`, `max_stream_bytes`, and `max_inflate_bytes`
+    /// cap the resources the reader will use. Each defaults to the
+    /// Rust-side `OpenLimits::default()` values (2 GiB file, 256 MiB
+    /// stream, 256 MiB inflate). Hostile input that would otherwise
+    /// force multi-GB allocations is rejected up-front.
     #[new]
-    fn new(path: &str) -> PyResult<Self> {
-        let inner = RustRevitFile::open(path).map_err(to_py_io)?;
+    #[pyo3(signature = (path, max_file_bytes=None, max_stream_bytes=None, max_inflate_bytes=None))]
+    fn new(
+        path: &str,
+        max_file_bytes: Option<u64>,
+        max_stream_bytes: Option<u64>,
+        max_inflate_bytes: Option<usize>,
+    ) -> PyResult<Self> {
+        let default = crate::reader::OpenLimits::default();
+        let limits = crate::reader::OpenLimits {
+            max_file_bytes: max_file_bytes.unwrap_or(default.max_file_bytes),
+            max_stream_bytes: max_stream_bytes.unwrap_or(default.max_stream_bytes),
+            inflate_limits: crate::compression::InflateLimits {
+                max_output_bytes: max_inflate_bytes
+                    .unwrap_or(default.inflate_limits.max_output_bytes),
+            },
+        };
+        let inner = RustRevitFile::open_with_limits(path, limits).map_err(to_py_io)?;
         Ok(Self { inner })
     }
 

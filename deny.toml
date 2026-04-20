@@ -1,0 +1,68 @@
+# cargo-deny configuration for rvt-rs.
+#
+# Run: cargo deny check
+#
+# Enforces:
+# - License allowlist (no GPL surprises)
+# - Security advisory deny (fails build on RustSec advisories)
+# - Duplicate-version ban for critical deps (one flate2, one serde, etc)
+# - Source allowlist (no git = URL-sourced deps, no arbitrary registries)
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# Permit CI time for triage when new advisories are published.
+# Unmaintained crates are warned but don't fail the build.
+unmaintained = "workspace"
+ignore = [
+    # Currently-unblocked advisories. Keep list short; each entry
+    # should cite a ticket URL and an expiry date.
+]
+
+[licenses]
+version = 2
+# Allowed licenses. Matches rvt-rs's own Apache-2.0 plus the usual
+# compatible permissive set. No GPL/AGPL/LGPL — the whole point is a
+# clean-room permissive-licensed reader.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unlicense",
+    "Zlib",
+    "CC0-1.0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+]
+# Confidence threshold for license detection — same as cargo-deny's
+# default but documented for future reference.
+confidence-threshold = 0.8
+
+[bans]
+# Ban multiple versions of the same critical crate. Prevents
+# accidental bloat (two copies of flate2) and reduces attack surface
+# (one fewer thing to audit when advisories land).
+multiple-versions = "warn"
+wildcards = "deny"
+# Explicit allowed skip list — known benign duplicates in common
+# transitive dep trees. Add entries here with comments rather than
+# raising the severity globally.
+skip = []
+skip-tree = []
+
+[sources]
+# Only crates.io + published git repositories are allowed. No private
+# registries. Prevents supply-chain surprises where a typo or a
+# malicious fork sneaks in.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

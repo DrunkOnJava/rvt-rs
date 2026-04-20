@@ -195,6 +195,32 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
 
+  # Supply-chain hardening. `cargo-deny check` enforces our deny.toml:
+  # permissive-license allowlist, RustSec advisory deny, crates.io-only
+  # source, no wildcards. Keeps the dependency tree auditable as the
+  # project grows.
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: EmbarkStudios/cargo-deny-action@3f4a782664881cf5725d0ffd23969fcce89fd868 # v2
+        with:
+          command: check
+
+  # Fails CI on any RustSec advisory published against the current
+  # dependency set. Complements cargo-deny's coverage — deny has the
+  # per-advisory `ignore` list for triage flexibility, audit catches
+  # fresh advisories the moment they land.
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   pii-guard:
     name: PII guard
     runs-on: ubuntu-latest
