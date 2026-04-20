@@ -6,6 +6,18 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+- **Windows CFB stream-name path separator.** `RevitFile::stream_names()`
+  returned backslash-separated paths on Windows (`Formats\Latest`)
+  because `Path::display()` uses host-native separators. Now
+  normalises to forward-slashes across all OSes so
+  `has_revit_signature()` and equivalent cross-stream comparisons
+  work uniformly. This was the root cause of the Windows-only
+  integration-test failures on the 2016 sample.
+- **MSRV compliance.** Removed a `if let ... && ...` let-chain that
+  crept in; let-chains require Rust 1.88+ and the crate's MSRV is
+  1.85. Rewrote as nested `if let { if cond { ... } }`.
+
 ### Added — Layer 5a walker + rvt-doc CLI
 
 - **`src/walker.rs` module** — first end-to-end schema-directed
