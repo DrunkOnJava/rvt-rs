@@ -96,6 +96,12 @@ pub struct IfcModel {
     /// index, so the two lists share a namespace — a layer can't
     /// reference a material that hasn't been registered there first.
     pub material_layer_sets: Vec<entities::MaterialLayerSet>,
+    /// Compound structural profile assignments (IFC-30). Referenced
+    /// by `BuildingElement.material_profile_set_index`. Used for
+    /// columns and beams with named cross-sections (W12x26, HSS,
+    /// circular columns). Profiles reference materials in
+    /// `materials` above by index.
+    pub material_profile_sets: Vec<entities::MaterialProfileSet>,
 }
 
 /// A single building storey derived from a Revit `Level` element.
@@ -170,6 +176,7 @@ impl Exporter for PlaceholderExporter {
             building_storeys: Vec::new(),
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
         })
     }
 }
@@ -253,6 +260,7 @@ impl Exporter for RvtDocExporter {
             building_storeys: Vec::new(),
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
         })
     }
 }

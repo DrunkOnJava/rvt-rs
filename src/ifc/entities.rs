@@ -86,6 +86,15 @@ pub enum IfcEntity {
         /// wins (single-material falls back to the first layer).
         #[serde(default)]
         material_layer_set_index: Option<usize>,
+        /// Index into `IfcModel.material_profile_sets` — the
+        /// profile-based material assignment for structural framing
+        /// (columns / beams) with named cross-sections (IFC-30).
+        /// When set, the writer emits `IfcMaterialProfileSet` +
+        /// `IfcMaterialProfileSetUsage` instead of the single-material
+        /// or layer-set paths. Precedence order for material
+        /// association: profile_set > layer_set > single material.
+        #[serde(default)]
+        material_profile_set_index: Option<usize>,
     },
     TypeObject {
         name: String,
@@ -178,6 +187,40 @@ impl MaterialLayerSet {
     pub fn total_thickness_feet(&self) -> f64 {
         self.layers.iter().map(|l| l.thickness_feet).sum()
     }
+}
+
+/// One material assigned to a structural profile in a
+/// [`MaterialProfileSet`] (IFC-30). `material_index` references
+/// `IfcModel.materials`; `profile_name` identifies the profile
+/// (I-beam, HSS tube, circular column) defined elsewhere in the
+/// model via `IfcProfileDef`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaterialProfile {
+    pub material_index: usize,
+    /// Profile identifier — emitted as `IfcMaterialProfile.Name`
+    /// and matched against the corresponding `IfcProfileDef`.
+    /// Revit convention: profile family name like
+    /// "W12x26" / "HSS4x4x1/4" / "ROUND-6in".
+    pub profile_name: String,
+    /// Optional per-profile descriptive text.
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// An ordered set of [`MaterialProfile`]s for a structural
+/// framing element (IFC-30). Analog of [`MaterialLayerSet`] but
+/// for columns and beams rather than compound walls. Most
+/// structural elements have exactly one profile; composite
+/// sections (steel + concrete encasement) use multiple.
+///
+/// Maps to IFC4 `IfcMaterialProfileSet` + (via
+/// [`BuildingElement::material_profile_set_index`]) `IfcMaterialProfileSetUsage`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaterialProfileSet {
+    pub name: String,
+    pub profiles: Vec<MaterialProfile>,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

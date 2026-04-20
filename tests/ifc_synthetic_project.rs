@@ -100,6 +100,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 20.0)),
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &south_wall,
@@ -113,6 +114,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 20.0)),
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &east_wall,
@@ -130,6 +132,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 10.0)),
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &west_wall,
@@ -143,6 +146,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 10.0)),
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &floor,
@@ -158,6 +162,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: Some(slab_extrusion(20.0, 10.0, None)),
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &front_door,
@@ -181,6 +186,7 @@ fn synthetic_project_emits_valid_ifc4() {
             // an actual hole where the door goes.
             host_element_index: Some(1),
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &north_window,
@@ -194,6 +200,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: None,
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &south_window,
@@ -207,6 +214,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: None,
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &stair,
@@ -220,6 +228,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: None,
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
         ElementInput {
             decoded: &unknown,
@@ -233,6 +242,7 @@ fn synthetic_project_emits_valid_ifc4() {
             extrusion: None,
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         },
     ];
 
@@ -502,6 +512,7 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         extrusion: None,
         host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
     }];
     let opts = BuilderOptions {
         project_name: Some("Stable".into()),
