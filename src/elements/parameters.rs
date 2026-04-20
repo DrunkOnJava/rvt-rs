@@ -466,6 +466,130 @@ fn vector_to_f32_3(components: &[InstanceField]) -> Option<[f32; 3]> {
     Some([tuple_f64[0] as f32, tuple_f64[1] as f32, tuple_f64[2] as f32])
 }
 
+/// A per-element (or per-type) collection of decoded parameter
+/// values keyed by parameter name (L5B-55).
+///
+/// Revit's parameter-inheritance model has two tiers:
+///
+/// 1. **Type-level** parameters live on the `Symbol` (family type).
+///    Any instance of that type that hasn't overridden the value
+///    sees the type-level value.
+/// 2. **Instance-level** parameters live on the FamilyInstance
+///    (or any host element — Wall, Floor, etc.) directly. When an
+///    instance-level value is present for a given parameter name,
+///    it overrides the type-level value for that specific
+///    instance.
+///
+/// This struct holds one tier's view of the name → value map.
+/// Pair two of them — one for the type, one for the instance —
+/// and resolve with [`effective_value`].
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ParameterBundle {
+    /// `BTreeMap` rather than `HashMap` so iteration order is
+    /// deterministic — useful for snapshot tests and STEP output
+    /// stability.
+    values: std::collections::BTreeMap<String, ParameterValue>,
+}
+
+impl ParameterBundle {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Insert a (name, value) pair. Later inserts overwrite
+    /// earlier ones for the same name.
+    pub fn insert(&mut self, name: impl Into<String>, value: ParameterValue) {
+        self.values.insert(name.into(), value);
+    }
+
+    /// Look up a parameter by name. Returns `None` when the name
+    /// isn't in this tier's map.
+    pub fn get(&self, name: &str) -> Option<&ParameterValue> {
+        self.values.get(name)
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    /// Iterate over (name, value) pairs in sorted-by-name order.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &ParameterValue)> {
+        self.values.iter().map(|(k, v)| (k.as_str(), v))
+    }
+
+    /// Every parameter name present in this tier. Sorted.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.values.keys().map(String::as_str)
+    }
+}
+
+/// Resolve the effective value of a named parameter given both
+/// tiers (L5B-55).
+///
+/// Precedence follows Revit's own model: **instance wins over
+/// type**. The instance bundle is consulted first; if the
+/// parameter name isn't present there, the type bundle is the
+/// fallback; if the name is in neither, returns `None`.
+///
+/// Usage pattern:
+///
+/// ```rust
+/// use rvt::elements::parameters::{ParameterBundle, ParameterValue, effective_value};
+///
+/// let mut type_params = ParameterBundle::new();
+/// type_params.insert("Width", ParameterValue::Double(2.0));
+/// type_params.insert("Height", ParameterValue::Double(6.8));
+///
+/// let mut instance_params = ParameterBundle::new();
+/// instance_params.insert("Height", ParameterValue::Double(7.0));
+///
+/// // Instance overrides the type's 6.8-ft default.
+/// assert_eq!(
+///     effective_value(&instance_params, &type_params, "Height"),
+///     Some(&ParameterValue::Double(7.0))
+/// );
+/// // Instance didn't override Width — type-level value falls through.
+/// assert_eq!(
+///     effective_value(&instance_params, &type_params, "Width"),
+///     Some(&ParameterValue::Double(2.0))
+/// );
+/// // Unknown name → None.
+/// assert!(effective_value(&instance_params, &type_params, "Unknown").is_none());
+/// ```
+pub fn effective_value<'a>(
+    instance: &'a ParameterBundle,
+    type_: &'a ParameterBundle,
+    name: &str,
+) -> Option<&'a ParameterValue> {
+    instance.get(name).or_else(|| type_.get(name))
+}
+
+/// Merge a type bundle and an instance bundle into a single
+/// effective-view bundle (L5B-55).
+///
+/// Every parameter name present in EITHER bundle appears in the
+/// result. Instance values override type values for overlapping
+/// names — the same precedence rule as [`effective_value`] applied
+/// across the whole name set in one pass.
+///
+/// Useful when a downstream consumer (IFC property-set builder,
+/// schedule extractor) needs the full effective parameter map for
+/// an element without doing per-name lookups.
+pub fn merge_effective(
+    instance: &ParameterBundle,
+    type_: &ParameterBundle,
+) -> ParameterBundle {
+    let mut out = type_.clone();
+    for (name, value) in instance.iter() {
+        out.insert(name.to_string(), value.clone());
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -878,6 +1002,95 @@ mod tests {
         );
         let p = ParameterElement::from_decoded(&decoded);
         assert_eq!(p.value_source, Some(ParameterValueSource::Calculated));
+    }
+
+    // ----- L5B-55: type-instance parameter resolution -----
+
+    #[test]
+    fn parameter_bundle_insert_get_roundtrip() {
+        let mut b = ParameterBundle::new();
+        assert!(b.is_empty());
+        b.insert("Width", ParameterValue::Double(2.0));
+        assert_eq!(b.len(), 1);
+        assert_eq!(b.get("Width"), Some(&ParameterValue::Double(2.0)));
+        assert!(b.get("Nonexistent").is_none());
+    }
+
+    #[test]
+    fn parameter_bundle_iteration_is_sorted() {
+        let mut b = ParameterBundle::new();
+        b.insert("Zebra", ParameterValue::Boolean(true));
+        b.insert("Alpha", ParameterValue::Integer(1));
+        b.insert("Mango", ParameterValue::Double(5.5));
+        let names: Vec<&str> = b.names().collect();
+        assert_eq!(names, vec!["Alpha", "Mango", "Zebra"]);
+    }
+
+    #[test]
+    fn effective_value_prefers_instance_over_type() {
+        let mut type_ = ParameterBundle::new();
+        type_.insert("Height", ParameterValue::Double(6.8));
+        let mut instance = ParameterBundle::new();
+        instance.insert("Height", ParameterValue::Double(7.0));
+        assert_eq!(
+            effective_value(&instance, &type_, "Height"),
+            Some(&ParameterValue::Double(7.0))
+        );
+    }
+
+    #[test]
+    fn effective_value_falls_back_to_type_when_instance_missing() {
+        let mut type_ = ParameterBundle::new();
+        type_.insert("Width", ParameterValue::Double(2.0));
+        let instance = ParameterBundle::new();
+        assert_eq!(
+            effective_value(&instance, &type_, "Width"),
+            Some(&ParameterValue::Double(2.0))
+        );
+    }
+
+    #[test]
+    fn effective_value_returns_none_for_unknown_name() {
+        let type_ = ParameterBundle::new();
+        let instance = ParameterBundle::new();
+        assert!(effective_value(&instance, &type_, "DoesNotExist").is_none());
+    }
+
+    #[test]
+    fn merge_effective_union_with_instance_precedence() {
+        let mut type_ = ParameterBundle::new();
+        type_.insert("Width", ParameterValue::Double(2.0));
+        type_.insert("Height", ParameterValue::Double(6.8));
+        type_.insert("Material", ParameterValue::Enum(3));
+        let mut instance = ParameterBundle::new();
+        instance.insert("Height", ParameterValue::Double(7.0));
+        instance.insert("Mark", ParameterValue::Integer(42));
+        let effective = merge_effective(&instance, &type_);
+        // Union covers every name from either bundle.
+        assert_eq!(effective.len(), 4);
+        // Type-only name carries through.
+        assert_eq!(effective.get("Width"), Some(&ParameterValue::Double(2.0)));
+        // Instance-only name carries through.
+        assert_eq!(effective.get("Mark"), Some(&ParameterValue::Integer(42)));
+        // Overlapping name — instance wins.
+        assert_eq!(
+            effective.get("Height"),
+            Some(&ParameterValue::Double(7.0))
+        );
+        // Type-only Material value still present.
+        assert_eq!(effective.get("Material"), Some(&ParameterValue::Enum(3)));
+    }
+
+    #[test]
+    fn merge_effective_preserves_input_bundles() {
+        // Merging shouldn't mutate inputs.
+        let mut type_ = ParameterBundle::new();
+        type_.insert("A", ParameterValue::Integer(1));
+        let mut instance = ParameterBundle::new();
+        instance.insert("A", ParameterValue::Integer(2));
+        let _ = merge_effective(&instance, &type_);
+        assert_eq!(type_.get("A"), Some(&ParameterValue::Integer(1)));
+        assert_eq!(instance.get("A"), Some(&ParameterValue::Integer(2)));
     }
 
     #[test]
