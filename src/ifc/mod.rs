@@ -102,6 +102,14 @@ pub struct IfcModel {
     /// circular columns). Profiles reference materials in
     /// `materials` above by index.
     pub material_profile_sets: Vec<entities::MaterialProfileSet>,
+    /// Shared geometry maps for family / type instancing (IFC-21).
+    /// Any `BuildingElement` whose `representation_map_index` is
+    /// `Some(i)` routes through `representation_maps[i]` via an
+    /// `IfcMappedItem` instead of emitting its own body chain. Each
+    /// map's shape is serialised once; instances add a ~4-entity
+    /// mapped-item wrap. Empty `Vec` leaves writer behaviour
+    /// unchanged.
+    pub representation_maps: Vec<entities::RepresentationMap>,
 }
 
 /// A single building storey derived from a Revit `Level` element.
@@ -177,6 +185,7 @@ impl Exporter for PlaceholderExporter {
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         })
     }
 }
@@ -261,6 +270,7 @@ impl Exporter for RvtDocExporter {
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         })
     }
 }

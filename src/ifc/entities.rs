@@ -106,6 +106,25 @@ pub enum IfcEntity {
         /// (Representation = $).
         #[serde(default)]
         solid_shape: Option<SolidShape>,
+        /// Index into `IfcModel.representation_maps` — when set,
+        /// the element shares a common shape representation with
+        /// other instances pointing at the same map (IFC-21). The
+        /// writer emits an `IfcMappedItem` + `IfcShapeRepresentation`
+        /// with representation-type `'MappedRepresentation'` in
+        /// place of the per-instance extrusion / solid chain.
+        ///
+        /// Precedence (highest wins):
+        /// 1. `representation_map_index`   (IFC-21 mapped item)
+        /// 2. `solid_shape`                (IFC-18/19/20 solid)
+        /// 3. `extrusion`                  (IFC-16 extruded area)
+        /// 4. none                         (Representation = $)
+        ///
+        /// Typical Revit → IFC use: every Door or Window sharing
+        /// the same Symbol (type family) references a single
+        /// representation map. The writer emits the shape chain
+        /// once, instances emit a ~4-entity IfcMappedItem wrap.
+        #[serde(default)]
+        representation_map_index: Option<usize>,
     },
     TypeObject {
         name: String,
@@ -629,6 +648,41 @@ pub struct MaterialProfileSet {
     pub profiles: Vec<MaterialProfile>,
     #[serde(default)]
     pub description: Option<String>,
+}
+
+/// Shared geometry for a family / type / symbol (IFC-21).
+/// Any number of `BuildingElement` instances can reference the
+/// same `RepresentationMap` via `representation_map_index` —
+/// the writer emits the underlying shape chain once and each
+/// instance gets a ~4-entity `IfcMappedItem` wrap instead of a
+/// full re-emission. Mirrors Revit's Symbol → FamilyInstance
+/// relationship (a single door `Symbol` used by 20 `Door`
+/// instances = 1 shape emission + 20 mapped items, not 20
+/// shape chains).
+///
+/// Maps to IFC4 `IfcRepresentationMap` + (through the writer's
+/// dispatch) `IfcMappedItem` per referencing instance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepresentationMap {
+    /// Human-readable name for the family / type. Emitted as
+    /// a comment-only field today (the IFC4
+    /// `IfcRepresentationMap` entity itself doesn't carry a
+    /// name slot — names live on the referencing type object
+    /// when one exists). Kept here so downstream tooling (e.g.
+    /// glTF export, schedule generation) can surface it.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// The shared geometry. Any `SolidShape` variant is valid:
+    /// an extruded rectangle for simple doors, a revolved
+    /// profile for lathe-turned piers, an arbitrary faceted-brep
+    /// for imported free-form content. See [`SolidShape`] docs
+    /// for the variant vocabulary.
+    pub shape: SolidShape,
+    /// Mapping origin in local coordinates (feet). Usually
+    /// `[0.0, 0.0, 0.0]` — the identity origin. Non-zero origins
+    /// are emitted as the mapping-origin's `IfcAxis2Placement3D`.
+    #[serde(default)]
+    pub origin_feet: [f64; 3],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

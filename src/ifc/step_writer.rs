@@ -1208,6 +1208,59 @@ impl StepWriter {
             profile_set_ids.push(set_id);
         }
 
+        // IFC-21: emit IfcRepresentationMap entities up-front. Each
+        // map carries its shape representation (emitted once) and an
+        // IFCAXIS2PLACEMENT3D mapping origin; instances reference
+        // the map via IFCMAPPEDITEM in their own
+        // IfcShapeRepresentation body. The emitted-map ID is stored
+        // by index so the per-element loop can look it up from
+        // `representation_map_index`.
+        let mut representation_map_ids: Vec<usize> = Vec::with_capacity(
+            model.representation_maps.len(),
+        );
+        for rmap in &model.representation_maps {
+            // Mapping origin: per IFC4, usually identity (0,0,0)
+            // with +X east / +Z up. Non-identity origins are rare —
+            // they shift the shared shape relative to the mapped-item
+            // transform.
+            let [mx, my, mz] = rmap.origin_feet;
+            let (mx, my, mz) = (mx * 0.3048, my * 0.3048, mz * 0.3048);
+            let map_origin_pt = self.id();
+            self.emit_entity(
+                map_origin_pt,
+                format!("IFCCARTESIANPOINT(({mx:.6},{my:.6},{mz:.6}))"),
+            );
+            // Reuse the project-level #z_axis / project-level #x_axis
+            // directions — identity orientation is the common case.
+            let map_placement = self.id();
+            self.emit_entity(
+                map_placement,
+                format!(
+                    "IFCAXIS2PLACEMENT3D(#{map_origin_pt},#{z_axis},#{x_axis})"
+                ),
+            );
+            // Emit the shared shape body. The emission helper returns
+            // (solid_entity_id, rep_type_token). For the map's own
+            // IfcShapeRepresentation we use the returned rep_type
+            // (SweptSolid / CSG / Brep).
+            let (solid_id, rep_type) =
+                self.emit_solid_shape(&rmap.shape, map_placement, z_axis);
+            let body_rep_id = self.id();
+            self.emit_entity(
+                body_rep_id,
+                format!(
+                    "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','{rep_type}',(#{solid_id}))"
+                ),
+            );
+            // IFCREPRESENTATIONMAP(MappingOrigin, MappedRepresentation).
+            let rep_map_id = self.id();
+            self.emit_entity(
+                rep_map_id,
+                format!("IFCREPRESENTATIONMAP(#{map_placement},#{body_rep_id})"),
+            );
+            representation_map_ids.push(rep_map_id);
+        }
+
         let mut per_storey_elements: Vec<Vec<usize>> = vec![Vec::new(); storeys.len()];
         // Track (element_id, material_index) pairs so we can emit
         // IfcRelAssociatesMaterial per material after the element
@@ -1243,6 +1296,7 @@ impl StepWriter {
                 material_layer_set_index,
                 material_profile_set_index,
                 solid_shape,
+                representation_map_index,
             } = entity
             {
                 // Clamp out-of-range indices to storey[0] rather than
@@ -1305,10 +1359,58 @@ impl StepWriter {
                 // → IfcShapeRepresentation → IfcProductDefinitionShape.
                 // Profile placement uses a single fresh 2D axis per
                 // element (profile-local XY frame centred on origin).
-                // Precedence: solid_shape wins over extrusion when
-                // both are set. See `SolidShape` docs for the
-                // IFC-18 / IFC-19 / IFC-20 entity chains.
-                let shape_ref = if let Some(shape) = solid_shape {
+                // Precedence (highest wins):
+                //   1. representation_map_index (IFC-21 mapped item)
+                //   2. solid_shape              (IFC-18/19/20 solid)
+                //   3. extrusion                (IFC-16 extruded area)
+                //   4. none                     (Representation = $)
+                let shape_ref = if let Some(rm_idx) = representation_map_index {
+                    representation_map_ids.get(*rm_idx).map(|rep_map_id| {
+                        // Mapped item: the instance's own
+                        // transformation operator (identity for now —
+                        // the element's own IfcLocalPlacement carries
+                        // the instance position, and the mapped item
+                        // rides on top of that).
+                        let tx_op_origin = self.id();
+                        self.emit_entity(
+                            tx_op_origin,
+                            "IFCCARTESIANPOINT((0.,0.,0.))",
+                        );
+                        // IFC4 uses IfcCartesianTransformationOperator3D
+                        // for the mapped-target transform. Identity =
+                        // ($,$,ORIGIN,$,$) per spec (Axis1/Axis2 left
+                        // null, scale defaults to 1.0, Axis3 null).
+                        let tx_op = self.id();
+                        self.emit_entity(
+                            tx_op,
+                            format!(
+                                "IFCCARTESIANTRANSFORMATIONOPERATOR3D($,$,#{tx_op_origin},$,$)"
+                            ),
+                        );
+                        let mapped_item = self.id();
+                        self.emit_entity(
+                            mapped_item,
+                            format!("IFCMAPPEDITEM(#{rep_map_id},#{tx_op})"),
+                        );
+                        // The instance's IfcShapeRepresentation wraps
+                        // the mapped item with representation-type
+                        // 'MappedRepresentation' (IFC4 convention for
+                        // type-instance shared geometry).
+                        let rep_id = self.id();
+                        self.emit_entity(
+                            rep_id,
+                            format!(
+                                "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','MappedRepresentation',(#{mapped_item}))"
+                            ),
+                        );
+                        let prod_shape_id = self.id();
+                        self.emit_entity(
+                            prod_shape_id,
+                            format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{rep_id}))"),
+                        );
+                        prod_shape_id
+                    })
+                } else if let Some(shape) = solid_shape {
                     let (solid_id, rep_type) =
                         self.emit_solid_shape(shape, element_axis, z_axis);
                     let rep_id = self.id();
@@ -1831,6 +1933,7 @@ mod tests {
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -1853,6 +1956,7 @@ mod tests {
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -1917,6 +2021,7 @@ mod tests {
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -2041,6 +2146,7 @@ mod tests {
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         assert!(
@@ -2127,6 +2233,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
@@ -2142,6 +2249,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
@@ -2157,6 +2265,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
                 },
             ],
             classifications: Vec::new(),
@@ -2165,6 +2274,7 @@ mod tests {
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -2219,6 +2329,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2226,6 +2337,7 @@ mod tests {
             materials: Vec::new(),
         material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         // The door line should have 9 commas (10 fields). Grep the
@@ -2270,6 +2382,7 @@ mod tests {
                 material_layer_set_index: Some(0),
                 material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2303,6 +2416,7 @@ mod tests {
                 ],
             }],
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCMATERIALLAYER("), "IFCMATERIALLAYER missing");
@@ -2351,6 +2465,7 @@ mod tests {
                 material_layer_set_index: None,
                 material_profile_set_index: Some(0),
                 solid_shape: None,
+                representation_map_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2370,6 +2485,7 @@ mod tests {
                     description: None,
                 }],
             }],
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         assert!(
@@ -2417,6 +2533,7 @@ mod tests {
                 material_layer_set_index: Some(0),
                 material_profile_set_index: Some(0),
                 solid_shape: None,
+                representation_map_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2444,6 +2561,7 @@ mod tests {
                     description: None,
                 }],
             }],
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         // Both layer set AND profile set entities exist because
@@ -2490,6 +2608,7 @@ mod tests {
                 material_layer_set_index: None,
                 material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2497,6 +2616,7 @@ mod tests {
             materials: Vec::new(),
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         }
     }
 
@@ -2640,6 +2760,7 @@ mod tests {
                 material_layer_set_index: None,
                 material_profile_set_index: None,
                 solid_shape: Some(shape),
+                representation_map_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2647,6 +2768,7 @@ mod tests {
             materials: Vec::new(),
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         }
     }
 
@@ -2788,6 +2910,7 @@ mod tests {
                     axis_direction: [0.0, 0.0, 1.0],
                     angle_radians: std::f64::consts::TAU,
                 }),
+                representation_map_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2795,6 +2918,7 @@ mod tests {
             materials: Vec::new(),
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         // solid_shape path fires:
@@ -2835,6 +2959,231 @@ mod tests {
     }
 
     // -----------------------------------------------------------
+    // IFC-21: IfcRepresentationMap + IfcMappedItem for shared
+    // type-instance geometry.
+    // -----------------------------------------------------------
+
+    #[test]
+    fn representation_map_emits_entity_once() {
+        use super::super::entities::{IfcEntity, RepresentationMap};
+        let shared_shape = SolidShape::ExtrudedArea(Extrusion::rectangle(3.0, 0.2, 7.0));
+        let model = IfcModel {
+            project_name: Some("shared door type".into()),
+            description: None,
+            entities: vec![
+                // Three door instances, all referencing map 0.
+                IfcEntity::BuildingElement {
+                    ifc_type: "IFCDOOR".into(),
+                    name: "D1".into(),
+                    type_guid: Some("D-TYPE".into()),
+                    storey_index: None,
+                    material_index: None,
+                    property_set: None,
+                    location_feet: Some([0.0, 0.0, 0.0]),
+                    rotation_radians: Some(0.0),
+                    extrusion: None,
+                    host_element_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: Some(0),
+                },
+                IfcEntity::BuildingElement {
+                    ifc_type: "IFCDOOR".into(),
+                    name: "D2".into(),
+                    type_guid: Some("D-TYPE".into()),
+                    storey_index: None,
+                    material_index: None,
+                    property_set: None,
+                    location_feet: Some([5.0, 0.0, 0.0]),
+                    rotation_radians: Some(0.0),
+                    extrusion: None,
+                    host_element_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: Some(0),
+                },
+                IfcEntity::BuildingElement {
+                    ifc_type: "IFCDOOR".into(),
+                    name: "D3".into(),
+                    type_guid: Some("D-TYPE".into()),
+                    storey_index: None,
+                    material_index: None,
+                    property_set: None,
+                    location_feet: Some([10.0, 0.0, 0.0]),
+                    rotation_radians: Some(0.0),
+                    extrusion: None,
+                    host_element_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: Some(0),
+                },
+            ],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: Vec::new(),
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+            representation_maps: vec![RepresentationMap {
+                name: Some("Simple Door".into()),
+                shape: shared_shape,
+                origin_feet: [0.0, 0.0, 0.0],
+            }],
+        };
+        let s = write_step(&model);
+        // Exactly ONE IfcRepresentationMap — that's the whole point
+        // of the instancing.
+        assert_eq!(
+            s.matches("IFCREPRESENTATIONMAP(").count(),
+            1,
+            "expected exactly 1 IFCREPRESENTATIONMAP entity, shared by 3 instances"
+        );
+        // Exactly ONE underlying IFCEXTRUDEDAREASOLID (the shared
+        // body) — NOT three.
+        assert_eq!(
+            s.matches("IFCEXTRUDEDAREASOLID(").count(),
+            1,
+            "expected exactly 1 shared IFCEXTRUDEDAREASOLID body"
+        );
+        // Three IfcMappedItem entities, one per instance.
+        assert_eq!(
+            s.matches("IFCMAPPEDITEM(").count(),
+            3,
+            "expected 3 IFCMAPPEDITEM entities (one per instance)"
+        );
+        // Each instance's IfcShapeRepresentation is of type
+        // 'MappedRepresentation'.
+        assert_eq!(
+            s.matches("'Body','MappedRepresentation'").count(),
+            3,
+            "expected 3 IFCSHAPEREPRESENTATION('MappedRepresentation', …) entities"
+        );
+        // The shared body's own IfcShapeRepresentation uses the
+        // representation type from the solid (SweptSolid for an
+        // extrusion).
+        assert!(
+            s.contains("'Body','SweptSolid'"),
+            "shared body's own IfcShapeRepresentation must use SweptSolid"
+        );
+        // And one IfcCartesianTransformationOperator3D per instance.
+        assert_eq!(
+            s.matches("IFCCARTESIANTRANSFORMATIONOPERATOR3D(").count(),
+            3,
+            "expected 3 CartesianTransformationOperator3D per instance"
+        );
+    }
+
+    #[test]
+    fn representation_map_takes_precedence_over_solid_shape_and_extrusion() {
+        // When all three (representation_map_index, solid_shape,
+        // extrusion) are set, the map wins.
+        use super::super::entities::{IfcEntity, RepresentationMap};
+        let model = IfcModel {
+            project_name: Some("precedence".into()),
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCDOOR".into(),
+                name: "D".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: Some(Extrusion::rectangle(999.0, 999.0, 999.0)),
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: Some(SolidShape::ExtrudedArea(
+                    Extrusion::rectangle(888.0, 888.0, 888.0),
+                )),
+                representation_map_index: Some(0),
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: Vec::new(),
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+            representation_maps: vec![RepresentationMap {
+                name: Some("winner".into()),
+                shape: SolidShape::ExtrudedArea(Extrusion::rectangle(1.0, 1.0, 1.0)),
+                origin_feet: [0.0, 0.0, 0.0],
+            }],
+        };
+        let s = write_step(&model);
+        // IFCMAPPEDITEM must be emitted; no inline body extrusion
+        // for this element. The map's own shared extrusion fires
+        // once (3 ft × 0.5 ft etc from the map's body, converted
+        // to metres), so we verify the NUMBER of extrusions equals
+        // the NUMBER of map shapes (which is 1), not 2 + 1.
+        assert_eq!(
+            s.matches("IFCEXTRUDEDAREASOLID(").count(),
+            1,
+            "only the representation-map body should emit an IfcExtrudedAreaSolid"
+        );
+        assert_eq!(
+            s.matches("IFCMAPPEDITEM(").count(),
+            1,
+            "instance should emit exactly one IfcMappedItem"
+        );
+        // 888 comes from solid_shape, 999 from extrusion — neither
+        // should appear in the output if the map wins.
+        let to_m = |ft: f64| format!("{:.6}", ft * 0.3048);
+        assert!(
+            !s.contains(&to_m(999.0)),
+            "extrusion path fired unexpectedly — 999 ft converted to metres appears"
+        );
+        assert!(
+            !s.contains(&to_m(888.0)),
+            "solid_shape path fired unexpectedly — 888 ft converted to metres appears"
+        );
+    }
+
+    #[test]
+    fn representation_map_index_out_of_range_leaves_element_geometry_free() {
+        // Out-of-range index → shape_ref = None → Representation =
+        // `$` slot. Matches the safe-fallback philosophy elsewhere
+        // (storey_index out-of-range clamps to storey[0]).
+        use super::super::entities::IfcEntity;
+        let model = IfcModel {
+            project_name: Some("OOB".into()),
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCWALL".into(),
+                name: "W".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
+                representation_map_index: Some(42),
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: Vec::new(),
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
+        };
+        let s = write_step(&model);
+        // No mapped item, no extrusion, no brep — just an element
+        // with $ in its representation slot.
+        assert!(!s.contains("IFCMAPPEDITEM("));
+        assert!(!s.contains("IFCREPRESENTATIONMAP("));
+    }
+
+    // -----------------------------------------------------------
     // IFC-40: writer consumes model.units when set.
     // -----------------------------------------------------------
 
@@ -2857,6 +3206,7 @@ mod tests {
             }],
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)"));
@@ -2891,6 +3241,7 @@ mod tests {
             }],
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         // Conversion chain: IFCSIUNIT base + IFCMEASUREWITHUNIT +
@@ -2937,6 +3288,7 @@ mod tests {
             }],
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
         };
         let s = write_step(&model);
         // Length from the caller (feet).
