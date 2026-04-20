@@ -157,16 +157,121 @@ never implicit conversion).
 - `paths-ignore` keeps docs-only commits off the Windows wheel
   matrix.
 
+### Added — Phase 4 Layer 5b per-class decoders (35 new decoders)
+
+Following the scaffold + Level reference example, added typed
+decoders + `{Class}::from_decoded(&DecodedElement)` projections for:
+
+- **Reference points**: `BasePoint`, `SurveyPoint`, `ProjectPosition`
+  (with `to_transform()` composing the world↔project transform).
+- **Datums**: `Grid` + `GridType` (line / arc curve kind, bubble
+  locations), `ReferencePlane` (bubble/free endpoints + normal).
+- **Walls**: `Wall` + `WallType` with `StructuralUsage`,
+  `LocationLine`, `WallKind`, `WallFunction::to_ifc_predefined()`
+  mapping to `IfcWallTypeEnum`.
+- **Horizontal envelope**: `Floor` + `FloorType`, `Roof` + `RoofType`
+  (footprint vs extrusion, rafter-cut enum), `Ceiling` + `CeilingType`
+  with `drop_inches()` helper.
+- **Openings**: `Door` + `Window` with shared `OpeningCommon`
+  collector; flip-hand/facing XOR logic for `is_flipped`; sill-height
+  convenience.
+- **Structural**: `Column` + `StructuralColumn`, `Beam` +
+  `StructuralFraming`; `length_feet()` + `is_horizontal(eps)` on
+  beams.
+- **Circulation**: `Stair` + `StairType` with `was_adjusted()`
+  (desired vs actual riser count), `Railing` + `RailingType`
+  (free-standing detection).
+- **Spatial zoning**: `Room`, `Area`, `Space` share `Zone` view;
+  `label()` → "number: name" formatting.
+- **Foundations + furnishings**: `StructuralFoundation`,
+  `Furniture`, `FurnitureSystem`, `Casework`, `Rebar` with
+  `total_length_feet()` for quantity takeoff.
+- **Project-org**: `Phase`, `DesignOption`, `Workset` with
+  `is_modifiable()` (open && editable).
+
+All 35 decoders registered in `all_decoders()` (45 total). Each
+decoder normalises field names through `normalise_field_name()` so
+camelCase / snake_case / m_-prefixed variants across Revit
+2016–2026 all collapse to a single match pattern. `from_decoded()`
+never returns `Err` — missing fields land as `None` so versions
+that drop a field still decode cleanly.
+
+### Added — IFC4 STEP per-element entities (IFC-02..IFC-15)
+
+The STEP writer grew real `IFCWALL` / `IFCSLAB` / `IFCROOF` /
+`IFCCOVERING` / `IFCDOOR` / `IFCWINDOW` / `IFCCOLUMN` / `IFCBEAM` /
+`IFCSTAIR` / `IFCRAILING` / `IFCFURNITURE` / `IFCFOOTING` /
+`IFCREINFORCINGBAR` / `IFCSPACE` / `IFCBUILDINGELEMENTPROXY`
+emission, each with its own `IFCLOCALPLACEMENT` and a single
+`IFCRELCONTAINEDINSPATIALSTRUCTURE` bundling them under the
+storey. Door + Window use the 10-field constructor form (extra
+OverallHeight / OverallWidth slots); everything else uses the
+minimal 8-field form. Empty-entities path is schema-safe (skips
+the containment rel when there are zero elements).
+
+### Added — IFC bridge: `build_ifc_model` one-call pipeline
+
+`src/ifc/from_decoded.rs` — feed in `&[ElementInput]` plus
+`BuilderOptions { storeys, classifications, units, project_name,
+description }` and get back an `IfcModel` that `write_step()`
+renders as valid IFC4. `storeys_from_levels(&[Level])` helper
+derives `Storey { name, elevation_feet }` from decoded Levels
+(filters out `is_building_story == false`). Unknown classes fall
+back to `IFCBUILDINGELEMENTPROXY` rather than being silently
+dropped. `entity_type_histogram(&model)` for end-to-end smoke
+tests.
+
+### Added — IFC4 real Level → IfcBuildingStorey (IFC-36)
+
+`IfcModel.building_storeys: Vec<Storey>` — when populated, the
+STEP writer emits one `IFCBUILDINGSTOREY` per Level (with the
+Revit level's name + elevation converted ft → m at the
+0.3048 boundary) instead of the hardcoded "Level 1". All storeys
+bundle into a single `IFCRELAGGREGATES` bound to the building.
+Empty-storeys fallback preserves the IFC4 invariant that a
+building must have ≥1 storey.
+
+### Added — End-to-end integration test + sample .ifc fixture
+
+`tests/ifc_synthetic_project.rs` exercises the full pipeline
+(decoded elements → `build_ifc_model` → `write_step`) against a
+10-element fake building (4 walls + slab + door + 2 windows +
+stair + unknown-class proxy + 3 storeys). Validates structural
+IFC4 conformance, element counts, name/GUID round-trip, and ft→m
+elevation conversion. `tests/fixtures/synthetic-project.ifc` is
+the committed output — 60 lines of valid IFC4 STEP that opens
+cleanly in BlenderBIM / IfcOpenShell. Regenerate via
+`DUMP_IFC=1 cargo test synthetic_project`.
+
+Second test pins byte-stable STEP output under fixed timestamps
+(no wall-clock leakage) so CI diffs stay tractable.
+
 ### Known pending (tracked in TODO-BLINDSIDE.md)
 
 Phase 1 remaining: SEC-11..13 (workspace split) + SEC-14..25
 (fuzz infrastructure). Both are structural changes deferred to a
 dedicated session.
 
-Phase 4 remaining: L5B-10..L5B-59 — per-class decoders (Wall,
-Floor, Door, Window, Level, Material, etc.). Scaffold is complete;
-each decoder is a ~200-line `ElementDecoder` impl + unit test
-+ corpus integration test. Corpus access required for validation.
+Phase 4 remaining — per-class decoders not yet shipped:
+- L5B-20 Symbol, L5B-21 FamilyInstance (generic containers)
+- L5B-34 CurtainWall + grids/mullions/panels
+- L5B-36 Electrical* / L5B-37 Mech/Plumb/Specialty FamilyInstance subtypes
+- L5B-38 GenericModel, L5B-39 Mass
+- L5B-41 View + subtypes, L5B-42 Schedule, L5B-43 Sheet
+- L5B-44..48 Dimension / Tag / TextNote / Annotation / Revision
+- L5B-53..56 Parameter decoding + value extraction
+
+Phase 5 (geometry) — 14 pending: wall/floor/roof/door/window/
+stair/column/beam geometry assembly from location curves, layer
+stacks, profiles. Needed to emit `IfcShapeRepresentation` per
+element (currently every element is geometry-free).
+
+Phase 6 (IFC richness) — IFC-16..20 (shape representations),
+IFC-21..22 (type instancing), IFC-23..25 (placement hierarchies),
+IFC-27..30 (materials), IFC-31..34 (property sets), IFC-35
+(per-level containment), IFC-37..38 (opening voids).
+
+Phase 7 (write) + Phase 11 (viewer) — see TODO-BLINDSIDE.md.
 
 Phase 6 (real IFC emission): IFC-02..44 — depends on Phase 4 + 5.
 
