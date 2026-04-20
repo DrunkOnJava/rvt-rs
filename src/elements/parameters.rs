@@ -366,44 +366,34 @@ impl ParameterValue {
                 }
             }
             "APropertyInteger" => {
-                if let Some(InstanceField::Integer { value, .. }) =
-                    find_value(&["value"])
-                {
+                if let Some(InstanceField::Integer { value, .. }) = find_value(&["value"]) {
                     return ParameterValue::Integer(*value);
                 }
             }
             "APropertyEnum" => {
-                if let Some(InstanceField::Integer { value, .. }) =
-                    find_value(&["value"])
-                {
+                if let Some(InstanceField::Integer { value, .. }) = find_value(&["value"]) {
                     return ParameterValue::Enum(*value as u32);
                 }
             }
             "APropertyDouble1" => {
-                if let Some(InstanceField::Float { value, .. }) =
-                    find_value(&["value"])
-                {
+                if let Some(InstanceField::Float { value, .. }) = find_value(&["value"]) {
                     return ParameterValue::Double(*value);
                 }
             }
             "APropertyFloat" => {
-                if let Some(InstanceField::Float { value, .. }) =
-                    find_value(&["value"])
-                {
+                if let Some(InstanceField::Float { value, .. }) = find_value(&["value"]) {
                     return ParameterValue::Float(*value as f32);
                 }
             }
             "APropertyDouble3" => {
-                if let Some(InstanceField::Vector(components)) = find_value(&["value"])
-                {
+                if let Some(InstanceField::Vector(components)) = find_value(&["value"]) {
                     if let Some(tuple) = vector_to_f64_3(components) {
                         return ParameterValue::Double3(tuple);
                     }
                 }
             }
             "APropertyFloat3" => {
-                if let Some(InstanceField::Vector(components)) = find_value(&["value"])
-                {
+                if let Some(InstanceField::Vector(components)) = find_value(&["value"]) {
                     if let Some(tuple) = vector_to_f32_3(components) {
                         return ParameterValue::Float3(tuple);
                     }
@@ -434,12 +424,13 @@ impl ParameterValue {
     /// definition.
     pub fn storage_type(&self) -> StorageType {
         match self {
-            ParameterValue::Boolean(_) | ParameterValue::Integer(_)
-            | ParameterValue::Enum(_) => StorageType::Integer,
-            ParameterValue::Double(_) | ParameterValue::Double3(_)
-            | ParameterValue::Float(_) | ParameterValue::Float3(_) => {
-                StorageType::Double
+            ParameterValue::Boolean(_) | ParameterValue::Integer(_) | ParameterValue::Enum(_) => {
+                StorageType::Integer
             }
+            ParameterValue::Double(_)
+            | ParameterValue::Double3(_)
+            | ParameterValue::Float(_)
+            | ParameterValue::Float3(_) => StorageType::Double,
             ParameterValue::Other { .. } => StorageType::Other,
         }
     }
@@ -463,7 +454,11 @@ fn vector_to_f64_3(components: &[InstanceField]) -> Option<[f64; 3]> {
 
 fn vector_to_f32_3(components: &[InstanceField]) -> Option<[f32; 3]> {
     let tuple_f64 = vector_to_f64_3(components)?;
-    Some([tuple_f64[0] as f32, tuple_f64[1] as f32, tuple_f64[2] as f32])
+    Some([
+        tuple_f64[0] as f32,
+        tuple_f64[1] as f32,
+        tuple_f64[2] as f32,
+    ])
 }
 
 /// A per-element (or per-type) collection of decoded parameter
@@ -579,10 +574,7 @@ pub fn effective_value<'a>(
 /// Useful when a downstream consumer (IFC property-set builder,
 /// schedule extractor) needs the full effective parameter map for
 /// an element without doing per-name lookups.
-pub fn merge_effective(
-    instance: &ParameterBundle,
-    type_: &ParameterBundle,
-) -> ParameterBundle {
+pub fn merge_effective(instance: &ParameterBundle, type_: &ParameterBundle) -> ParameterBundle {
     let mut out = type_.clone();
     for (name, value) in instance.iter() {
         out.insert(name.to_string(), value.clone());
@@ -752,7 +744,10 @@ mod tests {
             "APropertyBoolean",
             vec![("m_value".into(), InstanceField::Bool(true))],
         );
-        assert_eq!(ParameterValue::from_decoded(&d), ParameterValue::Boolean(true));
+        assert_eq!(
+            ParameterValue::from_decoded(&d),
+            ParameterValue::Boolean(true)
+        );
     }
 
     #[test]
@@ -768,7 +763,10 @@ mod tests {
                 },
             )],
         );
-        assert_eq!(ParameterValue::from_decoded(&d), ParameterValue::Integer(42));
+        assert_eq!(
+            ParameterValue::from_decoded(&d),
+            ParameterValue::Integer(42)
+        );
     }
 
     #[test]
@@ -799,15 +797,27 @@ mod tests {
                 },
             )],
         );
-        assert_eq!(ParameterValue::from_decoded(&d), ParameterValue::Double(3.5));
+        assert_eq!(
+            ParameterValue::from_decoded(&d),
+            ParameterValue::Double(3.5)
+        );
     }
 
     #[test]
     fn aproperty_double3_decodes_to_parameter_value() {
         let components = vec![
-            InstanceField::Float { value: 1.0, size: 8 },
-            InstanceField::Float { value: 2.0, size: 8 },
-            InstanceField::Float { value: 3.0, size: 8 },
+            InstanceField::Float {
+                value: 1.0,
+                size: 8,
+            },
+            InstanceField::Float {
+                value: 2.0,
+                size: 8,
+            },
+            InstanceField::Float {
+                value: 3.0,
+                size: 8,
+            },
         ];
         let d = mk_decoded(
             "APropertyDouble3",
@@ -837,9 +847,18 @@ mod tests {
     #[test]
     fn aproperty_float3_decodes_to_parameter_value() {
         let components = vec![
-            InstanceField::Float { value: 0.1, size: 4 },
-            InstanceField::Float { value: 0.2, size: 4 },
-            InstanceField::Float { value: 0.3, size: 4 },
+            InstanceField::Float {
+                value: 0.1,
+                size: 4,
+            },
+            InstanceField::Float {
+                value: 0.2,
+                size: 4,
+            },
+            InstanceField::Float {
+                value: 0.3,
+                size: 4,
+            },
         ];
         let d = mk_decoded(
             "APropertyFloat3",
@@ -862,7 +881,10 @@ mod tests {
             vec![("m_value".into(), InstanceField::Bytes(vec![0x01, 0x02]))],
         );
         match ParameterValue::from_decoded(&d) {
-            ParameterValue::Other { class_name, raw_bytes } => {
+            ParameterValue::Other {
+                class_name,
+                raw_bytes,
+            } => {
                 assert_eq!(class_name, "APropertyNewVariantFromFutureRevit");
                 assert_eq!(raw_bytes, vec![0x01, 0x02]);
             }
@@ -1073,10 +1095,7 @@ mod tests {
         // Instance-only name carries through.
         assert_eq!(effective.get("Mark"), Some(&ParameterValue::Integer(42)));
         // Overlapping name — instance wins.
-        assert_eq!(
-            effective.get("Height"),
-            Some(&ParameterValue::Double(7.0))
-        );
+        assert_eq!(effective.get("Height"), Some(&ParameterValue::Double(7.0)));
         // Type-only Material value still present.
         assert_eq!(effective.get("Material"), Some(&ParameterValue::Enum(3)));
     }
