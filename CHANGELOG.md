@@ -183,8 +183,9 @@ this v1 covers document-level metadata.
   with `--json`. Respects `--redact` for user-path scrubbing.
 - **Cross-version detection** — hybrid entry-point finder that
   combines a sequential-id-table heuristic with a scoring-based
-  brute-force fallback. Works on all 11 releases (Revit 2016–2026)
-  with five cross-version-consistent bands:
+  brute-force fallback. **Reliable on Revit 2024–2026**; older
+  releases (2016–2023) need further entry-point detection work.
+  Observed version bands if/when older releases land:
   2016–17 / 2018 (solo) / 2019–20 / 2021–23 / 2024–26.
 - **`RevitFile::missing_required_streams()`** — diagnostic form of
   `has_revit_signature`. Returns the list of required stream names
@@ -207,8 +208,10 @@ this v1 covers document-level metadata.
 - **Q6.5-D**: Container wire is two-column `[u32 count][12 × 6B
   ids][u32 count][12 × 6B masks]` = 152 bytes for count=12.
 - **Q6.5-E**: walker reads 8/13 fields cleanly on Revit 2024.
-- **Q6.5-F**: walker reads ADocument on all 11 releases with
+- **Q6.5-F**: walker reads ADocument on Revit 2024–2026 with
   cross-version-byte-identical output within each version band.
+  Older releases (2016–2023) identified the entry-point band but
+  still need hardening — tracked as L5B-11.
 
 ## [0.1.1] — 2026-04-19
 

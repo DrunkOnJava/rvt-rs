@@ -125,11 +125,14 @@ Kinds:
 - `ref_container` — `{count: int, col_a: [u16, ...], col_b: [u16, ...]}`
 - `bytes` — `{len: int}` — raw bytes, for field types not yet decoded
 
-The walker is reliable on every Revit release 2016–2026. It uses
-a hybrid entry-point detector (heuristic first, scoring-based
-brute-force fallback) that reliably lands on ADocument across five
-cross-version-consistent bands. See the recon report §Q6.5-F for the
-full validation story.
+**The walker is reliable on Revit 2024–2026 today.** Older releases
+(2016–2023) need further entry-point detection work — identified
+candidate bands but not yet validated. Tracked as `L5B-11` in
+[TODO-BLINDSIDE.md](../../../TODO-BLINDSIDE.md). The hybrid
+entry-point detector (heuristic first, scoring-based brute-force
+fallback) is the starting point; reaching older releases is
+expected to require per-version heuristics. See the recon report
+§Q6.5-F for the current state.
 
 ### Module-level helpers
 

@@ -1,56 +1,61 @@
-//! Layer 5 — IFC export.
+//! Layer 5 — IFC export (document-level scaffold).
 //!
-//! # Why this module exists
+//! # What this module currently produces
 //!
-//! The whole moat-break case for rvt-rs rests on being able to produce a
-//! strictly-better IFC export than Autodesk's own `revit-ifc` plug-in. The
-//! plug-in runs *inside* Revit and can only export what the Revit API
-//! chooses to surface (private families, complex assemblies, and several
-//! parameter types are dropped). A byte-level parser reading the RVT
-//! on-disk format is a *strict superset* of the API surface; an IFC
-//! writer on top of it is therefore the full-fidelity export path that
-//! the openBIM community has waited a decade for.
+//! A spec-valid but structurally minimal IFC4 STEP file containing:
 //!
-//! # Current status
+//! - `IfcProject` with name + description from PartAtom / BasicFileInfo
+//! - `IfcSite` → `IfcBuilding` → `IfcBuildingStorey` spatial hierarchy
+//!   (placeholder names today; real names from `Level` elements
+//!   pending Layer 5b)
+//! - `IfcClassification` + `IfcClassificationReference` for any
+//!   OmniClass codes found in PartAtom
+//! - Required framework entities (`IfcPerson`, `IfcOrganization`,
+//!   `IfcApplication`, `IfcOwnerHistory`, `IfcSIUnit`×4,
+//!   `IfcUnitAssignment`, `IfcGeometricRepresentationContext`)
 //!
-//! This is a Phase-5 scaffold:
+//! **This is not yet a meaningful RVT → IFC converter.** No geometry,
+//! no per-element entities, no materials, no parameter property sets,
+//! no type-instancing, no real units from the file's Forge unit
+//! identifiers. Those layers land in Phase 4 (Layer 5b per-element
+//! walker), Phase 5 (geometry extraction), and Phase 6 (real IFC
+//! mapping) per `TODO-BLINDSIDE.md`.
 //!
-//! - Defines `IfcModel` (the target type) with the minimum shape required
-//!   to serialize STEP-encoded IFC 4 (ISO 10303-21).
-//! - Defines `Exporter`, the trait that takes a `RevitFile` and emits an
-//!   `IfcModel`.
-//! - Provides a `NullExporter` that returns `Err(NotYetImplemented)` for
-//!   every entity type. Exists so downstream tools can import the trait
-//!   object and compile today, even though nothing is wired yet.
+//! # Eventual implementation plan
 //!
-//! # Implementation plan
-//!
-//! 1. Layer 4c (object-graph field decoding) must produce typed
-//!    `Category`, `ElementId`, `Symbol`, `HostObj*`, and
-//!    `FamilyInstance` values. This module consumes those.
-//! 2. An entity mapper translates Revit classes to IFC types:
+//! 1. Layer 5b (per-element walker) produces typed `Category`, `Level`,
+//!    `Wall`, `Floor`, `Door`, `Window`, `Column`, `Beam`, etc.
+//! 2. Phase 5 (geometry) extracts curves, faces, solids for each
+//!    element.
+//! 3. Entity mapper translates:
 //!
 //!    | Revit concept | IFC mapping |
 //!    |---|---|
-//!    | Project metadata (PartAtom) | `IfcProject` |
-//!    | Unit set (autodesk.unit.*) | `IfcUnitAssignment` / `IfcSIUnit` |
-//!    | Category (C: Walls, C: Doors, …) | `IfcBuildingElementType` |
-//!    | Family (RFA) | `IfcTypeObject` + `IfcRepresentationMap` |
-//!    | Family Instance | `IfcBuildingElement` / `IfcFurnishingElement` |
-//!    | Uniformat code | `IfcClassification` / `IfcClassificationReference` |
-//!    | OmniClass code | `IfcClassification` |
-//!    | Host element's geometry | `IfcShapeRepresentation` |
+//!    | Project metadata (PartAtom) | `IfcProject` (done) |
+//!    | Unit set (autodesk.unit.*) | `IfcUnitAssignment` / `IfcSIUnit` (pending real read) |
+//!    | Level | `IfcBuildingStorey` (pending Layer 5b) |
+//!    | Wall | `IfcWall` + geometry (pending Phase 5) |
+//!    | Floor/Roof/Ceiling | `IfcSlab` / `IfcRoof` / `IfcCovering` (pending) |
+//!    | Door/Window | `IfcDoor` / `IfcWindow` + `IfcRelVoidsElement` (pending) |
+//!    | Column/Beam | `IfcColumn` / `IfcBeam` (pending) |
+//!    | Family (RFA) | `IfcTypeObject` + `IfcRepresentationMap` (pending) |
+//!    | Uniformat / OmniClass codes | `IfcClassificationReference` (done) |
+//!    | Material | `IfcMaterial` / `IfcMaterialLayerSet` (pending) |
+//!    | Parameters | `IfcPropertySet` + `IfcPropertySingleValue` (pending) |
+//!    | Host geometry | `IfcShapeRepresentation` (pending Phase 5) |
 //!
-//! 3. STEP serializer writes the `IfcModel` as `.ifc` text.
-//! 4. buildingSMART IFC certification suite validates round-trip.
+//! 4. STEP serializer writes the `IfcModel` as `.ifc` text (done at
+//!    document level; extends to elements as Phase 6 lands).
+//! 5. IfcOpenShell + buildingSMART validators verify output against
+//!    the 11-release corpus (pending — IFC-41/43).
 //!
 //! # Library collaboration
 //!
-//! `IfcOpenShell` is the natural collaborator on the writer side: the
-//! plan is to generate an `IfcOpenShell`-compatible STEP output and let
-//! their suite perform the final validation. That partnership is a
-//! post-Phase-5 conversation; this module does the parsing-to-model
-//! conversion that precedes it.
+//! `IfcOpenShell` is the validation partner. Output is written in
+//! IFC4 STEP (ISO 10303-21) so it interoperates directly with
+//! IfcOpenShell, BlenderBIM, and the buildingSMART validator family.
+//! No IfcOpenShell runtime dependency is needed — the STEP writer is
+//! pure Rust.
 
 use crate::Result;
 
@@ -85,12 +90,20 @@ pub struct NotYetImplemented {
     pub reason: String,
 }
 
-/// The "everything is TODO" exporter. Returns an empty `IfcModel` whose
-/// only filled field is `project_name` (extracted from PartAtom if it
-/// parses). Safe to use as a placeholder for downstream tooling.
-pub struct NullExporter;
+/// Placeholder exporter — returns an `IfcModel` whose only filled
+/// field is `project_name` (extracted from PartAtom if it parses).
+/// Geometry, categories, and per-element entities are absent. Safe
+/// to use as a stand-in for downstream tooling that wants to test
+/// the `Exporter` plumbing without requiring real model data.
+///
+/// For the real document-level exporter with spatial hierarchy +
+/// classifications, use [`RvtDocExporter`] instead.
+///
+/// (Renamed from `NullExporter` in v0.1.3 — the old name implied
+/// it returns `NotYetImplemented`, which it does not.)
+pub struct PlaceholderExporter;
 
-impl Exporter for NullExporter {
+impl Exporter for PlaceholderExporter {
     fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel> {
         let project_name = rf
             .part_atom()
@@ -100,9 +113,9 @@ impl Exporter for NullExporter {
         Ok(IfcModel {
             project_name,
             description: Some(
-                "Partial IFC export via rvt-rs NullExporter. \
-                 Geometry, categories, and elements are pending Layer 4c \
-                 completion."
+                "Partial IFC export via rvt-rs PlaceholderExporter. \
+                 Geometry, categories, and elements are pending Layer 5b \
+                 walker + Phase 5 geometry work."
                     .into(),
             ),
             entities: Vec::new(),
@@ -196,7 +209,7 @@ impl Exporter for RvtDocExporter {
 mod tests {
     use super::*;
     #[test]
-    fn null_exporter_has_description() {
+    fn placeholder_exporter_default_model_has_no_name() {
         let m = IfcModel::default();
         assert!(m.project_name.is_none());
     }

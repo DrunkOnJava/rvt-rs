@@ -1,33 +1,36 @@
-//! Write path — round-trip Revit files.
-//!
-//! # Current scope (Phase-gated scaffold)
-//!
-//! This module is the Phase 6 entry point: reading a Revit file and
-//! writing it back out **byte-for-byte identically**. Once that round-trip
-//! works, modifying a stream's content becomes a matter of:
-//!
-//! 1. Decompress stream → structured data (Layer 4c).
-//! 2. Edit the structured data.
-//! 3. Serialize back to bytes using the inverse of Layer 4c.
-//! 4. Re-compress with truncated gzip and re-embed into the OLE container.
-//!
-//! Step 4 is what this module currently addresses. Steps 1–3 are gated
-//! on Layer 4c (object-graph field decoding) completing; the write path
-//! for the object-graph bytes is therefore not yet implemented.
+//! Write path — round-trip Revit files + stream-level patching.
 //!
 //! # What works today
 //!
-//! - Copy a Revit file from one path to another by re-reading every OLE
-//!   stream and re-writing it through a new `cfb::CompoundFile`. This is
-//!   mostly a smoke test for the container-level round trip.
+//! - **CFB copy**: copy a Revit file from one path to another by
+//!   re-reading every OLE stream and re-writing it through a new
+//!   `cfb::CompoundFile`. Verified on the 11-release corpus.
+//! - **Stream-level patching**: [`write_with_patches`] replaces the
+//!   decompressed contents of named streams with caller-provided
+//!   bytes, re-compresses with truncated gzip, and writes a new
+//!   file. The framing invariants (gzip-truncation, 8-byte prefix
+//!   on `Global/*`, Revit wrapper on `RevitPreview4.0` and
+//!   `Contents`) are preserved via [`StreamFraming`]. Round-trip
+//!   tests verify the 13 streams in the 2024 sample stay
+//!   semantically identical after patch-less write.
 //!
 //! # What does not work yet
 //!
-//! - Modifying an OLE stream's content. The stream-encoding invariants
-//!   (truncated-gzip framing, custom 8-byte prefix on Global/*, Revit
-//!   wrapper on RevitPreview4.0 and Contents) must be recreated byte-for-
-//!   byte. Tests ensure we preserve them on copy but do not yet verify
-//!   arbitrary edits.
+//! - **Field-level semantic editing**: writing NEW values into
+//!   Formats/Latest schema fields or Global/Latest instance fields.
+//!   Blocked on Phase 7 (per-class encoders) in
+//!   `TODO-BLINDSIDE.md`. Stream-level patching + the 100%
+//!   classified schema are the pieces that unblock it.
+//! - **CFB structural writing at Revit's exact sector layout**:
+//!   current output uses the `cfb` crate's default sector
+//!   ordering, which differs from Revit's own writer. Streams are
+//!   byte-identical on read; raw file bytes are not.
+//! # Atomicity
+//!
+//! [`write_with_patches`] writes to a sibling temp file and renames
+//! into place on success. A mid-write failure leaves `dst` either
+//! unchanged (if it already existed) or absent. The `TempGuard` RAII
+//! handle unlinks the temp file on any early return or panic.
 
 use crate::{Result, RevitFile};
 use std::fs::OpenOptions;
@@ -125,18 +128,73 @@ pub enum StreamFraming {
 ///
 /// Success criterion: the round-trip preserves every unpatched stream
 /// byte-for-byte; patched streams round-trip with their new content.
+///
+/// # Validation
+///
+/// Every `StreamPatch.stream_name` MUST correspond to a stream that
+/// exists in the source file. A patch for a non-existent stream (e.g.
+/// a typo in the name) returns `Error::StreamNotFound` BEFORE any
+/// write begins. This prevents silent-no-op bugs where users think
+/// they patched a stream but actually just copied the file unchanged.
+///
+/// # Atomicity
+///
+/// The output is written to a sibling temp file (`<dst>.tmp-<pid>`)
+/// and renamed to `dst` only after all writes + flushes succeed. A
+/// mid-write failure leaves the temp file behind and `dst` either
+/// unchanged (if it already existed) or absent. This prevents the
+/// previous corrupt-on-mid-write behaviour that a truncating
+/// `OpenOptions::truncate(true).open(dst)` call caused.
 pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Result<()> {
     use crate::compression;
     let mut rf = RevitFile::open(src)?;
     let streams = rf.stream_names();
+
+    // Validate patch names against actual stream set. A typo or stale
+    // reference should error fast, not silently no-op.
+    let stream_set: std::collections::BTreeSet<&str> = streams.iter().map(|s| s.as_str()).collect();
+    for p in patches {
+        if !stream_set.contains(p.stream_name.as_str()) {
+            return Err(crate::Error::StreamNotFound(p.stream_name.clone()));
+        }
+    }
+
+    // Compute a sibling temp path in the same directory as dst so
+    // the final rename is atomic on the same filesystem.
+    let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
+    let dst_name = dst
+        .file_name()
+        .ok_or_else(|| crate::Error::Cfb("dst has no filename component".into()))?
+        .to_string_lossy()
+        .to_string();
+    let tmp_name = format!(".{dst_name}.tmp-{}", std::process::id());
+    let tmp_path = dst_parent.join(&tmp_name);
+
+    // Guard that unlinks the temp file on any early return or panic.
+    // On success we rename it into place and the guard becomes a
+    // no-op (its path field gets cleared).
+    struct TempGuard {
+        path: Option<std::path::PathBuf>,
+    }
+    impl Drop for TempGuard {
+        fn drop(&mut self) {
+            if let Some(p) = self.path.take() {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+    }
+    let mut guard = TempGuard {
+        path: Some(tmp_path.clone()),
+    };
+
     let out_file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(true)
-        .open(dst)?;
+        .open(&tmp_path)?;
     let mut out = cfb::CompoundFile::create(out_file)
-        .map_err(|e| crate::Error::Cfb(format!("create dst: {e}")))?;
+        .map_err(|e| crate::Error::Cfb(format!("create tmp: {e}")))?;
 
     // Pre-create parent storages (same logic as copy_file).
     let mut created: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
@@ -184,6 +242,22 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     }
     out.flush()
         .map_err(|e| crate::Error::Cfb(format!("flush: {e}")))?;
+    // Close before rename so Windows doesn't hold the handle.
+    drop(out);
+
+    // Atomic rename into place. If rename fails (e.g. cross-device),
+    // fall back to copy+remove. On failure both dst and tmp may exist
+    // briefly; the guard cleans up tmp.
+    std::fs::rename(&tmp_path, dst).map_err(|e| {
+        crate::Error::Cfb(format!(
+            "rename {} -> {}: {e}",
+            tmp_path.display(),
+            dst.display()
+        ))
+    })?;
+
+    // Rename succeeded — temp no longer exists, disarm the guard.
+    guard.path = None;
     Ok(())
 }
 

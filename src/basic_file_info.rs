@@ -86,22 +86,45 @@ fn extract_version(text: &str) -> Option<u32> {
 }
 
 fn extract_build(text: &str) -> Option<String> {
-    // Pattern 1: "(Build: 20170130_1515(x64))"
+    // Pattern 1: "(Build: 20170130_1515(x64))" — most common wrapper
+    // on files saved by Revit 2016–2018.
     if let Some(p) = text.find("Build: ") {
         let tail = &text[p + 7..];
         if let Some(end) = tail.find(')') {
             return Some(tail[..end + 1].to_string());
         }
     }
-    // Pattern 2: plain "20170130_1515(x64)" after year
-    if let Some((i, _)) = text.match_indices("_1515(x64)").next() {
-        let start = text[..i]
-            .rfind(|c: char| !c.is_ascii_digit())
-            .map(|j| j + 1)
-            .unwrap_or(0);
-        return Some(text[start..i + "_1515(x64)".len()].to_string());
+    // Pattern 2: plain "YYYYMMDD_HHMM(x64)" format — Revit 2019+ and
+    // later releases embed the build tag without the "Build:" wrapper.
+    // The HHMM component varies (1515, 1635, 1200, …); we scan for
+    // the full YYYYMMDD_HHMM(x64) shape directly rather than literal
+    // substring matches so all build tags survive this path.
+    //
+    // Wire format: 8 digits, '_', 4 digits, literal "(x64)".
+    // Total length: 18 chars.
+    let suffix = "(x64)";
+    let bytes = text.as_bytes();
+    let n = bytes.len();
+    let tag_len = 8 + 1 + 4 + suffix.len();
+    if n >= tag_len {
+        for i in 0..=n - tag_len {
+            let window = &bytes[i..i + tag_len];
+            let ymd = &window[0..8];
+            let us = window[8];
+            let hm = &window[9..13];
+            let sfx = &window[13..];
+            let ok = ymd.iter().all(u8::is_ascii_digit)
+                && us == b'_'
+                && hm.iter().all(u8::is_ascii_digit)
+                && sfx == suffix.as_bytes();
+            if ok {
+                // Safe because window is all ASCII.
+                return Some(std::str::from_utf8(window).unwrap().to_string());
+            }
+        }
     }
-    // Pattern 3: "Development Build"
+    // Pattern 3: "Development Build" — Revit dev releases ship
+    // without a build tag; callers want SOME string.
     if text.contains("Development Build") {
         return Some("Development Build".to_string());
     }
@@ -192,6 +215,41 @@ mod tests {
     fn extracts_version_2018_pattern() {
         let text = "Autodesk Revit 2018 (Build: 20170130_1515(x64))";
         assert_eq!(extract_version(text), Some(2018));
+    }
+
+    #[test]
+    fn extract_build_matches_wrapped_form() {
+        // Revit 2016-2018 uses "(Build: ...)" wrapper.
+        let text = "Autodesk Revit 2018 (Build: 20170130_1515(x64))";
+        assert_eq!(extract_build(text).as_deref(), Some("20170130_1515(x64)"));
+    }
+
+    #[test]
+    fn extract_build_matches_plain_1515_form() {
+        // Revit 2019+ uses plain "YYYYMMDD_HHMM(x64)" after year.
+        let text = "2019  20180123_1515(x64)Z C:\\Users\\testuser\\Desktop\\x.rfa";
+        assert_eq!(extract_build(text).as_deref(), Some("20180123_1515(x64)"));
+    }
+
+    #[test]
+    fn extract_build_matches_non_1515_time_component() {
+        // Regression for the 2024 sample which has "_1635(x64)", not
+        // "_1515(x64)". Previous implementation only matched literal
+        // "_1515(x64)" and silently dropped every non-1515 build tag.
+        let text = "2024  20230308_1635(x64)Z C:\\Users\\testuser\\Desktop\\x.rfa";
+        assert_eq!(extract_build(text).as_deref(), Some("20230308_1635(x64)"));
+    }
+
+    #[test]
+    fn extract_build_returns_none_on_missing_tag() {
+        let text = "2024 some other content with no build tag at all";
+        assert!(extract_build(text).is_none());
+    }
+
+    #[test]
+    fn extract_build_development_build() {
+        let text = "Autodesk Revit 2024 (Development Build)";
+        assert_eq!(extract_build(text).as_deref(), Some("Development Build"));
     }
 
     #[test]
