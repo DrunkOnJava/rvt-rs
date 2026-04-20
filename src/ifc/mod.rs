@@ -80,6 +80,22 @@ pub struct IfcModel {
     pub entities: Vec<entities::IfcEntity>,
     pub classifications: Vec<entities::Classification>,
     pub units: Vec<entities::UnitAssignment>,
+    /// Real building storeys derived from Revit `Level` decoders. When
+    /// empty, the STEP writer falls back to a single placeholder
+    /// "Level 1" storey so the spatial hierarchy is still valid
+    /// IFC4. When populated, each entry emits one `IfcBuildingStorey`
+    /// with the Revit level's name + elevation in metres (converted
+    /// from feet at emit time).
+    pub building_storeys: Vec<Storey>,
+}
+
+/// A single building storey derived from a Revit `Level` element.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Storey {
+    pub name: String,
+    /// Elevation in feet (Revit's native unit). The STEP writer
+    /// converts to metres at emit time per IFC4 convention.
+    pub elevation_feet: f64,
 }
 
 /// Trait every IFC exporter implements. Multiple implementations exist
@@ -128,6 +144,7 @@ impl Exporter for PlaceholderExporter {
             entities: Vec::new(),
             classifications: Vec::new(),
             units: Vec::new(),
+            building_storeys: Vec::new(),
         })
     }
 }
@@ -208,6 +225,7 @@ impl Exporter for RvtDocExporter {
             entities,
             classifications,
             units: Vec::new(),
+            building_storeys: Vec::new(),
         })
     }
 }
