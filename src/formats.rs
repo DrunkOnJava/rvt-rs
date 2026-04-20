@@ -45,6 +45,84 @@ pub struct SchemaTable {
     pub skipped_records: usize,
 }
 
+/// Derived diagnostic counters for a parsed [`SchemaTable`] (API-10).
+///
+/// These counters are computed on demand from the parsed table — the
+/// `SchemaTable` itself stores only the raw record lists to keep the
+/// serialized JSON format stable. Callers who want structured
+/// quality metadata (for CLI output, CI drift detection, or
+/// cross-release regression checks) use [`SchemaTable::diagnostics`]
+/// and inspect the returned `SchemaDiagnostics`.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct SchemaDiagnostics {
+    /// Total number of classes in the schema.
+    pub class_count: usize,
+    /// Total number of declared fields across all classes (summed
+    /// `fields.len()`). Not the same as `declared_field_count_sum` —
+    /// the parser may have missed a field or two; this is the
+    /// actually-parsed total.
+    pub parsed_field_count: usize,
+    /// Sum of `declared_field_count` across classes that set it.
+    /// Compare against `parsed_field_count` to spot parser coverage
+    /// gaps (expected equal when parsing is 100%-complete).
+    pub declared_field_count_sum: u64,
+    /// Classes that declared a field count that the parser couldn't
+    /// walk all the way through. Non-zero means the parser missed
+    /// fields; inspect those class names for what encoding slipped.
+    pub field_count_mismatches: usize,
+    /// Classes that carry a serialization `tag` (i.e. are top-level
+    /// serializable). The complement is mixins / embedded types that
+    /// only appear as members of other classes.
+    pub tagged_class_count: usize,
+    /// Classes that appear only because another class referenced
+    /// them as a parent (`was_parent_only = true`). A non-zero count
+    /// usually means the full schema for that class lives in another
+    /// stream or is implicit.
+    pub parent_only_class_count: usize,
+    /// Classes that carry a non-zero `ancestor_tag` (Q4 addendum
+    /// finding — a mixin / protocol / category reference distinct
+    /// from direct `parent`).
+    pub ancestor_tag_count: usize,
+    /// Parse candidates skipped for validation reasons. Copied from
+    /// the underlying `skipped_records` field for convenience.
+    pub skipped_records: usize,
+    /// Count of unique C++ type signatures. Rough proxy for schema
+    /// complexity — stable across releases for a given Revit major.
+    pub cpp_type_count: usize,
+}
+
+impl SchemaTable {
+    /// Compute derived diagnostic counters. O(n) in the number of
+    /// classes + fields; cheap enough to call ad-hoc from CLIs.
+    pub fn diagnostics(&self) -> SchemaDiagnostics {
+        let mut d = SchemaDiagnostics {
+            class_count: self.classes.len(),
+            skipped_records: self.skipped_records,
+            cpp_type_count: self.cpp_types.len(),
+            ..SchemaDiagnostics::default()
+        };
+        for c in &self.classes {
+            d.parsed_field_count += c.fields.len();
+            if let Some(declared) = c.declared_field_count {
+                d.declared_field_count_sum += declared as u64;
+                if (declared as usize) != c.fields.len() {
+                    d.field_count_mismatches += 1;
+                }
+            }
+            if c.tag.is_some() {
+                d.tagged_class_count += 1;
+            }
+            if c.was_parent_only {
+                d.parent_only_class_count += 1;
+            }
+            if c.ancestor_tag.is_some() {
+                d.ancestor_tag_count += 1;
+            }
+        }
+        d
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassEntry {
     pub name: String,
@@ -1029,5 +1107,89 @@ mod tests {
         assert_eq!(class.tag, Some(0x006b));
         assert_eq!(class.parent.as_deref(), Some("Symbol"));
         assert_eq!(class.declared_field_count, Some(3));
+    }
+
+    /// API-10: diagnostic counters reflect the parsed schema state
+    /// accurately — parsed field count, declared-vs-parsed mismatch
+    /// detection, tagged / parent-only / ancestor-tag breakdowns.
+    #[test]
+    fn schema_diagnostics_on_synthetic_table() {
+        let table = SchemaTable {
+            classes: vec![
+                ClassEntry {
+                    name: "Wall".into(),
+                    offset: 0,
+                    fields: vec![
+                        FieldEntry {
+                            name: "m_id".into(),
+                            cpp_type: None,
+                            field_type: None,
+                        },
+                        FieldEntry {
+                            name: "m_name".into(),
+                            cpp_type: None,
+                            field_type: None,
+                        },
+                    ],
+                    tag: Some(0x01),
+                    parent: None,
+                    declared_field_count: Some(2),
+                    was_parent_only: false,
+                    ancestor_tag: Some(0x42),
+                },
+                ClassEntry {
+                    name: "Door".into(),
+                    offset: 128,
+                    fields: vec![FieldEntry {
+                        name: "m_id".into(),
+                        cpp_type: None,
+                        field_type: None,
+                    }],
+                    tag: Some(0x02),
+                    parent: Some("FamilyInstance".into()),
+                    // Declares 3 but we only parsed 1 → mismatch.
+                    declared_field_count: Some(3),
+                    was_parent_only: false,
+                    ancestor_tag: None,
+                },
+                ClassEntry {
+                    name: "FamilyInstance".into(),
+                    offset: 256,
+                    fields: vec![],
+                    tag: None,
+                    parent: None,
+                    declared_field_count: None,
+                    was_parent_only: true,
+                    ancestor_tag: None,
+                },
+            ],
+            cpp_types: vec!["ElementId".into(), "double".into()],
+            skipped_records: 7,
+        };
+        let d = table.diagnostics();
+        assert_eq!(d.class_count, 3);
+        assert_eq!(d.parsed_field_count, 3);
+        assert_eq!(d.declared_field_count_sum, 5);
+        assert_eq!(d.field_count_mismatches, 1); // Door declared 3 but parsed 1
+        assert_eq!(d.tagged_class_count, 2);
+        assert_eq!(d.parent_only_class_count, 1);
+        assert_eq!(d.ancestor_tag_count, 1);
+        assert_eq!(d.skipped_records, 7);
+        assert_eq!(d.cpp_type_count, 2);
+    }
+
+    #[test]
+    fn schema_diagnostics_empty_table_is_zero() {
+        let table = SchemaTable {
+            classes: vec![],
+            cpp_types: vec![],
+            skipped_records: 0,
+        };
+        let d = table.diagnostics();
+        assert_eq!(d.class_count, 0);
+        assert_eq!(d.parsed_field_count, 0);
+        assert_eq!(d.declared_field_count_sum, 0);
+        assert_eq!(d.field_count_mismatches, 0);
+        assert_eq!(d.tagged_class_count, 0);
     }
 }
