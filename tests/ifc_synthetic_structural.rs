@@ -22,8 +22,8 @@
 //! pattern in `ifc_synthetic_project.rs`).
 
 use rvt::ifc::entities::{
-    BrepTriangle, Extrusion, IfcEntity, MaterialProfile, MaterialProfileSet,
-    RepresentationMap, SolidShape,
+    BrepTriangle, Extrusion, IfcEntity, MaterialProfile, MaterialProfileSet, RepresentationMap,
+    SolidShape,
 };
 use rvt::ifc::{IfcModel, MaterialInfo, Storey, write_step};
 
@@ -67,9 +67,9 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
     let door_map = RepresentationMap {
         name: Some("Standard Interior Door".into()),
         shape: SolidShape::ExtrudedArea(Extrusion::rectangle(
-            3.0,         // 3 ft wide
-            8.0 / 12.0,  // 8" thick
-            7.0,         // 7 ft tall
+            3.0,        // 3 ft wide
+            8.0 / 12.0, // 8" thick
+            7.0,        // 7 ft tall
         )),
         origin_feet: [0.0, 0.0, 0.0],
     };
@@ -267,7 +267,11 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
 
     // --- Structural / profile counts ---
     // Two columns, both with distinct profile emission.
-    assert_eq!(count(&step, "IFCCOLUMN("), 2, "expected 2 IFCCOLUMN entities");
+    assert_eq!(
+        count(&step, "IFCCOLUMN("),
+        2,
+        "expected 2 IFCCOLUMN entities"
+    );
     // Two beams.
     assert_eq!(count(&step, "IFCBEAM("), 2, "expected 2 IFCBEAM entities");
     // IFC-24: I-shape profile emitted (W12x26 columns + beams =
