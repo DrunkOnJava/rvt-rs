@@ -6,6 +6,15 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-04-19
+
+First tagged release since 0.1.0. Bundles the Python bindings,
+document-level IFC4 export, Layer 5a ADocument walker, and the
+spatial-hierarchy / classification extensions that land between
+`v0.1.0` (initial public release) and the PyPI debut. Changelog
+entries previously accumulated under `[Unreleased]` move here
+verbatim.
+
 ### Changed — IFC exporter now emits the full spatial hierarchy
 
 - **`rvt-ifc` output now includes `IfcSite → IfcBuilding → IfcBuildingStorey`**
