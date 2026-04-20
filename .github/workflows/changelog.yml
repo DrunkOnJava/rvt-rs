@@ -1,0 +1,98 @@
+name: Changelog
+
+# Q-11 / #348 — git-cliff changelog automation.
+#
+# rvt-rs' CHANGELOG.md is hand-curated with rich narrative per release
+# (see the [0.1.0], [0.1.1], [0.1.2] entries — each carries context the
+# bare commit subject doesn't). We intentionally do NOT overwrite it
+# from `git log` on every push. Instead:
+#
+#   - main push : write `CHANGELOG-UNRELEASED.md` (unreleased commits
+#                 only) and commit it if the content changed. Release
+#                 managers copy-paste those bullets into CHANGELOG.md
+#                 when curating a version, annotating with prose.
+#   - tag push  : render the full history via git-cliff and upload as
+#                 `RELEASE_NOTES.md` workflow artifact. The release
+#                 workflow (Q-10 / #347, pending) consumes that file
+#                 for the GitHub Release body + PyPI description.
+#
+# See RELEASE.md for the end-to-end release workflow.
+#
+# Third-party actions are SHA-pinned per SEC-29 / #134. Official
+# actions/* follow the same convention as ci.yml (major-pinned where
+# pre-existing, SHA-pinned for recent additions).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+# Single-flight per ref so back-to-back pushes don't race on the
+# CHANGELOG-UNRELEASED.md commit back to main.
+concurrency:
+  group: changelog-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    name: Generate changelog
+    runs-on: ubuntu-latest
+    permissions:
+      # `write` needed to push the auto-generated CHANGELOG-UNRELEASED.md
+      # back to main. Tag-push runs don't need this path but the job
+      # flag-gates the commit step on `github.ref == refs/heads/main`.
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          # Full history so git-cliff can walk every tag back to the
+          # initial commit. `fetch-depth: 0` is the documented way.
+          fetch-depth: 0
+
+      # Unreleased-only render for main pushes. The output file is
+      # `CHANGELOG-UNRELEASED.md`, intentionally separate from the
+      # hand-curated CHANGELOG.md (see RELEASE.md §Workflow).
+      - name: Render unreleased section
+        if: github.ref == 'refs/heads/main'
+        uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72 # v4.7.1
+        with:
+          config: cliff.toml
+          args: --unreleased --verbose
+        env:
+          OUTPUT: CHANGELOG-UNRELEASED.md
+
+      # Commit only if the file actually changed — avoids churning the
+      # history with no-op commits when nothing new landed.
+      - name: Commit CHANGELOG-UNRELEASED on main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [[ -n "$(git status --porcelain CHANGELOG-UNRELEASED.md)" ]]; then
+            git add CHANGELOG-UNRELEASED.md
+            git commit -m "chore(changelog): regenerate unreleased section via git-cliff"
+            git push
+          fi
+
+      # On tag push, render the full versioned changelog as release
+      # notes. Uploaded as a workflow artifact so the release workflow
+      # (Q-10, pending) can pull it down for the GitHub Release body.
+      - name: Render release notes on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72 # v4.7.1
+        with:
+          config: cliff.toml
+          args: --verbose --current
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      - name: Upload release notes artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          if-no-files-found: error
