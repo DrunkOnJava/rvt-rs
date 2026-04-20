@@ -101,6 +101,7 @@
 
 pub mod basic_file_info;
 pub mod class_index;
+pub mod class_tag_map;
 pub mod compression;
 pub mod corpus;
 pub mod elem_table;
