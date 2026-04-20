@@ -25,6 +25,7 @@
 //! Wall / Floor / Door values use these; callers who want a
 //! uniform untyped dump use `decode_instance` directly.
 
+pub mod annotations;
 pub mod category;
 pub mod ceiling;
 pub mod circulation;
@@ -110,6 +111,9 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(drafting::SheetDecoder),
         Box::new(drafting::ScheduleDecoder),
         Box::new(drafting::ScheduleViewDecoder),
+        Box::new(annotations::DimensionDecoder),
+        Box::new(annotations::TagDecoder),
+        Box::new(annotations::TextNoteDecoder),
     ]
 }
 
