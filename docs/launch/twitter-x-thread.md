@@ -22,7 +22,7 @@ Apache-2.0.
 
 54 per-class element decoders today: walls, floors, roofs, doors, windows, columns, beams, stairs, rooms, grids, levels, materials.
 
-(276 chars)
+(274 chars)
 
 ---
 
@@ -44,7 +44,7 @@ Parse the OLE/CFB container. Decompress Revit's truncated-gzip streams. Walk the
 
 Then a schema-directed walker reads ADocument field by field.
 
-(265 chars)
+(263 chars)
 
 ---
 
@@ -56,7 +56,7 @@ Revit files have been opaque outside Autodesk's C# API, forcing BIM analytics, m
 
 rvt-rs is a byte-level reader. No Autodesk runtime, no Wine, no commercial SDK. Drop it into any Rust stack.
 
-(266 chars)
+(264 chars)
 
 ---
 
@@ -95,7 +95,7 @@ The IfcOpenShell + BlenderBIM ecosystem is what makes verification possible — 
 
 phi-ag/rvt provided the 11-release 2016–2026 sample corpus that gated cross-version schema classification.
 
-(262 chars)
+(260 chars)
 
 ---
 
@@ -121,7 +121,7 @@ Crate: rvt (Rust) / rvt (PyPI)
 
 If you work with Revit files outside Autodesk's toolchain — what would unblock you first?
 
-(183 chars)
+(181 chars)
 
 ---
 
