@@ -1,9 +1,19 @@
-name: Publish to PyPI
+name: Publish (crates.io + PyPI)
 
 # Triggered on tag pushes matching `v*` (e.g. v0.1.2, v0.2.0) and on
 # manual `workflow_dispatch`. NOT on every push to main — this is the
 # release path, intentionally separate from CI so day-to-day commits
 # don't spin up Windows wheel builds for nothing.
+#
+# Two publish targets (Q-10):
+#
+#   1. crates.io — the Rust registry. `cargo publish` uses
+#      `CARGO_REGISTRY_TOKEN` (repo secret).
+#   2. PyPI — the Python package index. Trusted-publisher OIDC
+#      (no secret needed after one-time account setup).
+#
+# Both run AFTER validate-wheel-install passes on every OS, so a
+# broken wheel can't reach either registry.
 #
 # Uses PyPI's Trusted Publisher feature (OIDC): no PYPI_API_TOKEN
 # secret is stored in the repo. PyPI trusts this specific workflow
@@ -150,14 +160,68 @@ jobs:
               print(f"got expected error: {type(e).__name__}")
           EOF
 
+  # Q-10: crates.io publish. Runs BEFORE the PyPI publish so if the
+  # crate is rejected (yanked name conflict, verify-failure, etc.)
+  # the Python side doesn't ship with a mismatched version. Requires
+  # the repo secret `CARGO_REGISTRY_TOKEN` (set once via
+  # https://github.com/DrunkOnJava/rvt-rs/settings/secrets/actions).
+  # On manual workflow_dispatch, the crates.io step is skipped
+  # (there's no TestPyPI equivalent for crates.io — the registry
+  # doesn't offer a test/staging environment).
+  publish-crate:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: [build-wheels, build-sdist, validate-wheel-install]
+    # Don't re-publish when the user explicitly asked for TestPyPI-only.
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          key: publish-crate
+      # Verify the Cargo.toml version matches the git tag — prevents
+      # mismatched publishes where the tag says v0.1.3 but the crate
+      # goes out as 0.1.2 (or vice versa). Compare `pkgid` output to
+      # the tag, strip the leading "v".
+      - name: Verify tag matches Cargo.toml version
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF#refs/tags/v}"
+          crate_version=$(cargo metadata --no-deps --format-version=1 \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['packages'][0]['version'])")
+          if [[ "$tag_version" != "$crate_version" ]]; then
+            echo "::error::tag v$tag_version does not match Cargo.toml version $crate_version"
+            exit 1
+          fi
+          echo "version match: $tag_version"
+      - name: Cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        # Don't use --all-features — the `python` feature pulls in
+        # pyo3 which requires Python headers and is separately
+        # distributed via maturin. `cargo publish` picks up the
+        # default features, which is what a `cargo add rvt` user
+        # will get.
+        run: cargo publish
+
   # Single publish step — gathers every wheel + sdist artifact from
   # the build jobs above and uploads them as one PyPI release. Running
   # inside the `pypi` environment activates the trusted publisher.
-  # Now also gated on `validate-wheel-install` passing on every OS.
+  # Now also gated on `validate-wheel-install` passing on every OS
+  # AND `publish-crate` succeeding on tag pushes.
   publish:
     name: Publish to ${{ inputs.test-pypi && 'TestPyPI' || 'PyPI' }}
     runs-on: ubuntu-latest
-    needs: [build-wheels, build-sdist, validate-wheel-install]
+    # On tag push: require `publish-crate` to succeed first. On
+    # manual workflow_dispatch: skip the crates.io dependency since
+    # that job won't run.
+    needs:
+      - build-wheels
+      - build-sdist
+      - validate-wheel-install
     environment:
       name: ${{ inputs.test-pypi && 'testpypi' || 'pypi' }}
       url: ${{ inputs.test-pypi && 'https://test.pypi.org/p/rvt' || 'https://pypi.org/p/rvt' }}
