@@ -52,7 +52,7 @@ Notes:
 
 ## 3. Element class decode coverage
 
-**54 classes decoded today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` — the walker dispatch table built at runtime. Grouped by domain below.
+**72 classes decoded today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` — the walker dispatch table built at runtime. Grouped by domain below.
 
 Each decoder takes schema-directed instance bytes (from `walker::decode_instance`) and projects them into a typed Rust struct. Decoders are validated on synthesized schema+bytes fixtures; real-file corpus validation is tracked as Q-01 in the recon report.
 
@@ -100,10 +100,10 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - `LinePattern` ([`styling.rs`](../src/elements/styling.rs))
 - `LineStyle` ([`styling.rs`](../src/elements/styling.rs))
 
-### Project organization (6)
+### Project organization (7)
 
 - `Category`, `Subcategory` ([`category.rs`](../src/elements/category.rs))
-- `Phase`, `DesignOption`, `Workset` ([`project_organization.rs`](../src/elements/project_organization.rs))
+- `Phase`, `DesignOption`, `Workset`, `Revision` ([`project_organization.rs`](../src/elements/project_organization.rs))
 - `Symbol` ([`family.rs`](../src/elements/family.rs))
 
 ### Drafting + views (5)
@@ -111,9 +111,25 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - `View`, `Sheet`, `Schedule`, `ScheduleView` ([`drafting.rs`](../src/elements/drafting.rs))
 - (ReferencePlane is counted under Structural above because its primary consumer is layout, not drafting views.)
 
-MEP (mechanical / electrical / plumbing): not yet. The IFC category map in [`src/ifc/category_map.rs`](../src/ifc/category_map.rs) anticipates `LightingFixture`, `ElectricalEquipment`, `ElectricalFixture`, `MechanicalEquipment`, `PlumbingFixture`, and `SpecialtyEquipment` and will route them to the appropriate IFC entity type when corresponding decoders are added, but there are no decoders for these classes yet, so the walker hands any instance of them to the generic untyped fallback in `walker::decode_instance`.
+### Annotations (4)
 
-Annotations / dimensions / tags / legends: not yet. No decoder registered; they fall through to the untyped generic walker.
+- `Dimension`, `Tag`, `TextNote`, `Annotation` ([`annotations.rs`](../src/elements/annotations.rs))
+- Dimensions include linear / angular / radial / arc-length subtypes via the `DimensionKind` discriminator projected from the schema; tag orientation and horizontal alignment enums are exposed on `TagOrientation` and `HorizontalAlignment`.
+
+### Parameters (2)
+
+- `ParameterElement`, `SharedParameter` ([`parameters.rs`](../src/elements/parameters.rs))
+- Both expose the `StorageType` enum (`None`, `Integer`, `Double`, `String`, `ElementId`, `Other`) so callers can route parameter values into property-set emission (see §4 IFC-31).
+
+### MEP — mechanical / electrical / plumbing (11)
+
+- Electrical: `ElectricalEquipment`, `ElectricalFixture`, `LightingFixture`, `LightingDevice` ([`mep.rs`](../src/elements/mep.rs))
+- Mechanical: `Duct`, `DuctFitting`, `MechanicalEquipment` ([`mep.rs`](../src/elements/mep.rs))
+- Plumbing: `Pipe`, `PipeFitting`, `PlumbingFixture` ([`mep.rs`](../src/elements/mep.rs))
+- Generic MEP: `SpecialtyEquipment` ([`mep.rs`](../src/elements/mep.rs))
+- All MEP instances project onto a shared `MepInstance` typed view with an optional `MepSystemClassification` (Supply / Return / Exhaust / …) so IFC distribution-system emission (IFC-10, future) can key off it without re-reading the schema.
+
+Group sum: 7 + 13 + 7 + 6 + 6 + 4 + 7 + 5 + 4 + 2 + 11 = **72**, matching `all_decoders().len()`.
 
 ## 4. IFC4 export coverage
 
@@ -123,9 +139,9 @@ Column definitions:
 
 - **IFC entity + placement**: a valid `IfcWall` / `IfcSlab` / … is constructed and wired to the storey via `IfcRelContainedInSpatialStructure`. Always yes for every Revit class that has a mapping in [`category_map.rs`](../src/ifc/category_map.rs); unknown classes fall back to `IfcBuildingElementProxy` rather than being dropped.
 - **Extruded geometry**: an `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` + `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain is emitted and attached to the element's `Representation` slot, iff the caller supplies an `Extrusion` via one of the helpers in [`from_decoded.rs`](../src/ifc/from_decoded.rs) (`wall_extrusion`, `slab_extrusion`, `roof_extrusion`, `ceiling_extrusion`, `column_extrusion`). The helpers exist for the classes marked "yes"; they do not exist yet for the classes marked "helper not yet".
-- **Material association**: an `IfcMaterial` + `IfcRelAssociatesMaterial` is emitted iff the caller populates `BuilderOptions.materials` (see [`materials_from_revit`](../src/ifc/from_decoded.rs)) and sets `ElementInput.material_index`.
-- **Property set**: an `IfcPropertySet` + `IfcPropertySingleValue` + `IfcRelDefinesByProperties` is emitted iff the caller supplies a `PropertySet` via a dedicated helper (`wall_property_set`, `door_property_set`, `window_property_set`, `stair_property_set` exist today).
-- **Opening / fill**: for doors / windows, iff the caller sets `host_element_index` and `extrusion` on the opening, the writer emits `IfcOpeningElement` + `IfcRelVoidsElement` (host → opening) + `IfcRelFillsElement` (opening → door/window).
+- **Material association**: an `IfcMaterial` + `IfcRelAssociatesMaterial` is emitted iff the caller populates `BuilderOptions.materials` (see [`materials_from_revit`](../src/ifc/from_decoded.rs)) and sets `ElementInput.material_index`. For compound hosts, `ElementInput.material_layer_set_index` routes through an `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` chain (IFC-28 / IFC-29); for profile-driven members, `material_profile_set_index` routes through `IfcMaterialProfileSet` + `IfcMaterialProfileSetUsage` (IFC-30). Precedence order is `profile_set > layer_set > single material` — whichever is set wins.
+- **Property set**: an `IfcPropertySet` + `IfcPropertySingleValue` + `IfcRelDefinesByProperties` (IFC-31 / IFC-33) is emitted iff the caller supplies a `PropertySet` via a dedicated helper (`wall_property_set`, `door_property_set`, `window_property_set`, `stair_property_set` exist today). Quantity-typed properties route through `IfcQuantityArea` / `IfcQuantityVolume` / `IfcQuantityCount` / `IfcQuantityTime` / `IfcQuantityWeight` (IFC-32), with Imperial-to-SI conversion done at emission time (square-feet → m², cubic-feet → m³, pounds → kg).
+- **Opening / fill**: for doors / windows, iff the caller sets `host_element_index` and `extrusion` on the opening, the writer emits `IfcOpeningElement` + `IfcRelVoidsElement` (host → opening, IFC-37) + `IfcRelFillsElement` (opening → door/window, IFC-38).
 
 | Revit class | IFC entity | Placement + storey | Extrusion helper | Material assoc | Property set | Opening / fill |
 |---|---|---|---|---|---|---|
@@ -152,12 +168,17 @@ Column definitions:
 | Furniture | IfcFurniture | yes | helper not yet | yes | helper not yet | n/a |
 | FurnitureSystem | IfcFurniture (USERDEFINED) | yes | helper not yet | yes | helper not yet | n/a |
 | Casework | IfcFurniture | yes | helper not yet | yes | helper not yet | n/a |
-| LightingFixture | IfcLightFixture | yes (mapped; decoder pending) | n/a | n/a | n/a | n/a |
-| ElectricalEquipment | IfcElectricAppliance | yes (mapped; decoder pending) | n/a | n/a | n/a | n/a |
-| ElectricalFixture | IfcLightFixture | yes (mapped; decoder pending) | n/a | n/a | n/a | n/a |
-| MechanicalEquipment | IfcFlowController | yes (mapped; decoder pending) | n/a | n/a | n/a | n/a |
-| PlumbingFixture | IfcSanitaryTerminal | yes (mapped; decoder pending) | n/a | n/a | n/a | n/a |
-| SpecialtyEquipment | IfcBuildingElementProxy (USERDEFINED) | yes (mapped; decoder pending) | n/a | n/a | n/a | n/a |
+| LightingFixture | IfcLightFixture | yes | helper not yet | yes | helper not yet | n/a |
+| LightingDevice | IfcLightFixture (USERDEFINED) | yes | helper not yet | yes | helper not yet | n/a |
+| ElectricalEquipment | IfcElectricAppliance | yes | helper not yet | yes | helper not yet | n/a |
+| ElectricalFixture | IfcLightFixture | yes | helper not yet | yes | helper not yet | n/a |
+| MechanicalEquipment | IfcFlowController | yes | helper not yet | yes | helper not yet | n/a |
+| Duct | IfcDuctSegment | yes | helper not yet | yes | helper not yet | n/a |
+| DuctFitting | IfcDuctFitting | yes | helper not yet | yes | helper not yet | n/a |
+| Pipe | IfcPipeSegment | yes | helper not yet | yes | helper not yet | n/a |
+| PipeFitting | IfcPipeFitting | yes | helper not yet | yes | helper not yet | n/a |
+| PlumbingFixture | IfcSanitaryTerminal | yes | helper not yet | yes | helper not yet | n/a |
+| SpecialtyEquipment | IfcBuildingElementProxy (USERDEFINED) | yes | helper not yet | yes | helper not yet | n/a |
 | Mass | IfcBuildingElementProxy (USERDEFINED) | yes | helper not yet | n/a | helper not yet | n/a |
 | GenericModel | IfcBuildingElementProxy | yes | helper not yet | n/a | helper not yet | n/a |
 | (unknown class) | IfcBuildingElementProxy | yes | n/a | n/a | n/a | n/a |
@@ -176,8 +197,8 @@ Notes:
 - **No IFC2X3 or IFC4.3 export**. The STEP writer targets IFC4 only. The category map is structured to make a future IFC2X3 / IFC4.3 swap a table replacement, but it has not been swapped.
 - **No encrypted or password-protected files**. Revit's "Protected" models use a wrapper format this library does not attempt to strip. CFB open will succeed on the outer container but inner streams will be gibberish.
 - **No linked-model resolution**. `.rvt` projects can carry references to external `.rvt` / `.rfa` / `.rcp` / `.dwg` / `.ifc` files; this library reads the host file's CFB streams but does not follow or resolve links. Any linked-model metadata is exposed only as raw bytes on whichever stream carries it (`TransmissionData` on project files).
-- **No MEP decoders**. §3 — mechanical, electrical, plumbing, and specialty-equipment classes are mapped in [`category_map.rs`](../src/ifc/category_map.rs) but no `ElementDecoder` implementations exist yet.
-- **No annotation / dimension / tag / view-specific element decoders**. Sheets, schedules, views, and schedule-views have class-level decoders (they are containers of data, not drawings), but the drawn annotations themselves do not.
+- **MEP geometry extraction**. The 11 MEP classes listed in §3 decode their schema metadata (class, name, family-instance linkage, system classification), but the geometric centerline / 3D path of ducts, pipes, conduits, and cable-trays is not yet extracted — the IFC rows above ship an `IfcDuctSegment` / `IfcPipeSegment` with placement and spatial-containment but no `IfcShapeRepresentation`. Routing-path recovery is tracked as a Phase-5 extension once the curve-graph decoder lands.
+- **Annotation geometry**. The 4 annotation classes (`Dimension`, `Tag`, `TextNote`, `Annotation`) decode the annotation-element data (anchor points, text contents, orientation, witness-line references) but do not yet render 2D annotation graphics into IFC presentation layers. Drawn sheets therefore export as `IfcAnnotation` shells without the witness-line / leader / dimension-string geometry that a plotted sheet would need.
 - **Schema-directed walker is partial on 2016–2023**. See §1. The stream layout and entry-point heuristics differ pre-2024; `read_adocument` returns `Ok(None)` when it can't find a high-confidence offset instead of returning possibly-wrong fields.
 - **Geometry extraction is Phase 5**. The IFC export produces valid placement and extruded rectangular solids when the caller supplies dimensions, but the reader does not yet recover per-element location curves, profile shapes, or arbitrary brep geometry from the object graph. The Extrusion helpers in [`from_decoded.rs`](../src/ifc/from_decoded.rs) take caller-supplied dimensions for exactly this reason.
 - **Parcel of unparsed streams**. `Global/DocumentIncrementTable`, `Global/History`, `Global/ContentDocuments`, and `Partitions/NN` chunks beyond the first are enumerated and decompressed but their internal framing is only partially reverse-engineered (see recon report §Q6 and §Q7).
