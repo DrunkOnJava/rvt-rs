@@ -131,6 +131,35 @@ impl PyRevitFile {
         Ok(d)
     }
 
+    /// Full `BasicFileInfo` as a JSON string. Single-call equivalent
+    /// of the four individual getters (`version`, `original_path`,
+    /// `build`, `guid`) plus any future fields added to the Rust
+    /// `BasicFileInfo` struct. Parse with `json.loads()` in Python.
+    ///
+    /// Returns `None` if the `BasicFileInfo` stream can't be parsed.
+    fn basic_file_info_json(&mut self) -> PyResult<Option<String>> {
+        let Some(bfi) = self.inner.basic_file_info().ok() else {
+            return Ok(None);
+        };
+        Ok(Some(serde_json::to_string(&bfi).map_err(to_py_val)?))
+    }
+
+    /// Full `PartAtom` as a JSON string. Superset of the
+    /// `part_atom_title` getter — also includes `id`, `updated`,
+    /// `taxonomies`, `categories`, `omniclass`, and `raw_xml` (the
+    /// original XML bytes for lossless downstream reuse). Parse with
+    /// `json.loads()` in Python.
+    ///
+    /// Returns `None` if the file has no PartAtom stream (common on
+    /// project `.rvt` files; family `.rfa` files almost always carry
+    /// one).
+    fn part_atom_json(&mut self) -> PyResult<Option<String>> {
+        let Some(pa) = self.inner.part_atom().ok() else {
+            return Ok(None);
+        };
+        Ok(Some(serde_json::to_string(&pa).map_err(to_py_val)?))
+    }
+
     /// Full schema as a JSON string. The Rust-side `SchemaTable` type
     /// already derives `Serialize`, so this is zero-copy relative to
     /// the in-memory schema. Parse with `json.loads()` in Python to

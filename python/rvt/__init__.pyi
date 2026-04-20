@@ -90,6 +90,24 @@ class RevitFile:
         pre-validating an input before running heavy extractors.
         """
 
+    def basic_file_info_json(self) -> Optional[str]:
+        """Full ``BasicFileInfo`` as a JSON string (parseable via
+        ``json.loads``). Single-call equivalent of the four individual
+        getters (``version``, ``original_path``, ``build``, ``guid``)
+        plus any future fields added to the Rust ``BasicFileInfo``
+        struct. Returns ``None`` if the ``BasicFileInfo`` stream
+        can't be parsed.
+        """
+
+    def part_atom_json(self) -> Optional[str]:
+        """Full ``PartAtom`` as a JSON string (parseable via
+        ``json.loads``). Superset of the ``part_atom_title`` getter —
+        also includes ``id``, ``updated``, ``taxonomies``,
+        ``categories``, ``omniclass``, and ``raw_xml``. Returns
+        ``None`` if the file has no PartAtom stream (common on
+        project ``.rvt`` files).
+        """
+
     def schema_summary(self) -> TypedSchemaSummary:
         """Decoded schema counts. Cheap. Returns a dict with keys
         ``classes``, ``fields``, ``cpp_types``.

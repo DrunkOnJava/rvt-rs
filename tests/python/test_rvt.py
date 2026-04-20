@@ -152,6 +152,47 @@ def test_schema_json_parses_and_matches_summary(sample_2024):
     assert total_fields == summary["fields"]
 
 
+def test_basic_file_info_json_matches_getters(sample_2024):
+    """`basic_file_info_json` should round-trip to a dict whose values
+    match the individual getters, confirming the JSON surface doesn't
+    silently drift from the per-field accessors.
+    """
+    import json
+
+    js = sample_2024.basic_file_info_json()
+    assert js is not None, "2024 sample should parse BasicFileInfo"
+    parsed = json.loads(js)
+    assert isinstance(parsed, dict)
+    assert parsed["version"] == sample_2024.version
+    # original_path / build / guid are optional; if the getter returns
+    # a value, the JSON should carry the same value under the same key.
+    if sample_2024.original_path is not None:
+        assert parsed["original_path"] == sample_2024.original_path
+    if sample_2024.build is not None:
+        assert parsed["build"] == sample_2024.build
+    if sample_2024.guid is not None:
+        assert parsed["guid"] == sample_2024.guid
+
+
+def test_part_atom_json_matches_title_getter(sample_2024):
+    """`part_atom_json` should round-trip to a dict whose ``title``
+    field matches the ``part_atom_title`` getter.
+    """
+    import json
+
+    js = sample_2024.part_atom_json()
+    if js is None:
+        # Some samples may not carry a PartAtom — skip rather than fail.
+        pytest.skip("PartAtom stream absent in this sample")
+    parsed = json.loads(js)
+    assert isinstance(parsed, dict)
+    assert parsed.get("title") == sample_2024.part_atom_title
+    # Structural sanity: PartAtom always carries these keys even when
+    # empty. (raw_xml is the lossless pass-through.)
+    for key in ("taxonomies", "categories", "raw_xml"):
+        assert key in parsed, f"PartAtom JSON missing key {key!r}"
+
+
 def test_schema_json_contains_adocument_class(sample_2024):
     """The schema always contains a class named `ADocument` — it's
     the root document class and what the Layer 5a walker targets.
