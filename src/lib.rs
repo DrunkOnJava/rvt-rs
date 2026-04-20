@@ -86,6 +86,18 @@
 //! advice.
 
 #![warn(rust_2024_compatibility)]
+// SEC-11: forbid `unsafe` in the library crate. Revit files come
+// from untrusted sources, so any raw-pointer or uninit-memory
+// manoeuvre is a potential parser vulnerability. `forbid` is one
+// step stronger than `deny` — it cannot be locally overridden with
+// `#[allow(unsafe_code)]`, so nobody can sneak an `unsafe` block
+// through review. The optional pyo3 bindings in `src/python.rs` are
+// the one legitimate place where `unsafe fn` can appear (pyo3's
+// `#[pyclass]` macros expand to `unsafe impl`), so that module is
+// compiled under the `python` feature and opts out locally via its
+// own `#![allow(unsafe_op_in_unsafe_fn)]` header. Nothing in the
+// core library itself is permitted to invoke `unsafe`.
+#![cfg_attr(not(feature = "python"), forbid(unsafe_code))]
 
 pub mod basic_file_info;
 pub mod class_index;
