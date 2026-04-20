@@ -6,6 +6,50 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added — Python bindings via pyo3 + maturin
+
+- **`rvt` Python package** — `pip install rvt` (once the PyPI publish
+  workflow lands) produces a single wheel per OS/arch that works on
+  every Python ≥ 3.8 (via pyo3 `abi3-py38`). Pure-Python `rvt` package
+  wraps the compiled `rvt._rvt` extension and ships a PEP 561
+  `py.typed` marker + hand-maintained `__init__.pyi` stubs so mypy,
+  pyright, and IDE autocomplete work out of the box.
+- **`rvt.RevitFile` class** — Python surface onto `RustRevitFile`.
+  Properties: `version`, `original_path`, `build`, `guid`,
+  `part_atom_title`. Methods: `stream_names()`,
+  `missing_required_streams()`, `schema_summary()`,
+  `read_adocument()` (returns a dict with the walker's
+  `ADocumentInstance` serialised to native Python types), and
+  `write_ifc()` (returns the IFC4 STEP text).
+- **`rvt.rvt_to_ifc(path)`** one-shot helper — equivalent to
+  `RevitFile(path).write_ifc()` for callers that just want the IFC
+  string and never touch the intermediate object.
+- **CI wheel build matrix** (`.github/workflows/ci.yml` `python-wheel`
+  job) — `PyO3/maturin-action@v1` builds a release wheel on Ubuntu,
+  macOS, and Windows runners, installs it into the runner's Python,
+  runs the pytest integration suite (`tests/python/test_rvt.py`), and
+  uploads the wheel as a workflow artifact. Any regression in the
+  Python surface fails CI across all three OSes.
+- **38 pytest integration tests** covering module surface, error
+  handling on missing / non-CFB files, happy-path reads against every
+  one of the 11 corpus releases (2016–2026), cross-version
+  `read_adocument` consistency-band checks, and `write_ifc` output
+  shape. Gracefully skips with a clear message when
+  `_corpus/rac_basic_sample_family` is absent so local runs work
+  without LFS fetches.
+- **`docs/python.md`** — full Python API reference (install, quick
+  start, tables per method, return shapes, error handling,
+  limitations, troubleshooting, contribution notes).
+- **`docs/rvt-python-quickstart.ipynb`** — 15-cell Jupyter notebook
+  mirror of `docs/python.md` for anyone who prefers an interactive
+  walkthrough.
+
+Design principle: expose only the stable high-level surface
+(metadata, walker-read ADocument, IFC export). The low-level
+byte-pattern / `FieldType` machinery stays in Rust; Python callers
+get dicts and strings, no wrapper types to learn. To rebuild the
+wheel locally: `maturin build --release --features python`.
+
 ### Added — Layer 5: first end-to-end `rvt → ifc` pipeline
 
 - **`rvt::ifc::step_writer::write_step`** — pure-Rust IFC4 STEP
