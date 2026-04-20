@@ -95,6 +95,17 @@ pub enum IfcEntity {
         /// association: profile_set > layer_set > single material.
         #[serde(default)]
         material_profile_set_index: Option<usize>,
+        /// Optional richer solid geometry (IFC-18 / IFC-19 / IFC-20).
+        /// When `Some`, the writer emits the corresponding
+        /// `IfcRevolvedAreaSolid`, `IfcBooleanResult`, or
+        /// `IfcFacetedBrep` chain into the element's Representation
+        /// slot **instead of** the `IfcExtrudedAreaSolid` chain
+        /// driven by `extrusion`. When both `solid_shape` and
+        /// `extrusion` are set, `solid_shape` wins; when both are
+        /// `None`, the element stays geometry-free
+        /// (Representation = $).
+        #[serde(default)]
+        solid_shape: Option<SolidShape>,
     },
     TypeObject {
         name: String,
@@ -338,6 +349,119 @@ impl Extrusion {
             profile_override: Some(ProfileDef::ArbitraryClosed { points }),
         }
     }
+}
+
+/// Boolean operation between two solids (IFC-19).
+/// Maps to the IFC4 `IfcBooleanOperator` enum values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IfcBooleanOp {
+    /// `.UNION.` — operand_a ∪ operand_b.
+    Union,
+    /// `.DIFFERENCE.` — operand_a − operand_b (the more common
+    /// Revit case: wall minus opening void).
+    Difference,
+    /// `.INTERSECTION.` — operand_a ∩ operand_b.
+    Intersection,
+}
+
+impl IfcBooleanOp {
+    /// STEP-encoded keyword for the enum value (includes the
+    /// surrounding dots, e.g. `".DIFFERENCE."`).
+    pub fn as_step_keyword(self) -> &'static str {
+        match self {
+            IfcBooleanOp::Union => ".UNION.",
+            IfcBooleanOp::Difference => ".DIFFERENCE.",
+            IfcBooleanOp::Intersection => ".INTERSECTION.",
+        }
+    }
+}
+
+/// One triangular face of an [`IfcFacetedBrep`]. The three
+/// `u32` values are indices into the `vertices` array on the
+/// enclosing shell (range-checked at emit time; out-of-range
+/// indices cause a panic in debug, are silently clamped to 0 in
+/// release — invalid mesh topology is a caller bug).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BrepTriangle(pub u32, pub u32, pub u32);
+
+/// A rich solid geometry for a [`BuildingElement`] (IFC-18 /
+/// IFC-19 / IFC-20). Covers three IFC4 solid-body paths that the
+/// rectangular [`Extrusion`] can't express:
+///
+/// | Variant | IFC4 entity chain emitted |
+/// |---|---|
+/// | `RevolvedArea` | `IfcProfileDef subclass` + `IfcRevolvedAreaSolid` (IFC-18) |
+/// | `BooleanResult` | `IfcBooleanResult(op, a, b)` with recursive operand emission (IFC-19) |
+/// | `FacetedBrep` | `IfcCartesianPoint` × N + `IfcPolyLoop` × F + `IfcFaceBound` × F + `IfcFace` × F + `IfcClosedShell` + `IfcFacetedBrep` (IFC-20) |
+///
+/// The `RevolvedArea` variant is the right fit for axi-symmetric
+/// elements — lathe-turned columns, bell curves, domes. The
+/// `BooleanResult` variant is for elements whose body is a
+/// *constructive-solid-geometry* result of simpler shapes
+/// (typical Revit: wall minus opening void, when modelled as a
+/// body solid rather than via `IfcRelVoidsElement`). The
+/// `FacetedBrep` variant is the catch-all fallback for any
+/// arbitrary mesh Revit produces (free-form roofs, imported
+/// terrain, scanned point clouds meshed into polygons).
+///
+/// See the writer in `step_writer.rs::emit_solid_shape` for the
+/// exact entity layout and the `emit_solid_shape_*` helper
+/// methods.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SolidShape {
+    /// Profile rotated about an axis through a specified angle.
+    /// Emits `IfcRevolvedAreaSolid` (IFC-18). The profile is the
+    /// same `ProfileDef` vocabulary used by
+    /// [`Extrusion::profile_override`], so a pear-shaped turned
+    /// pier column is `RevolvedArea { profile: ArbitraryClosed
+    /// { points: <half-silhouette> }, axis_..., angle_radians:
+    /// 2π }`.
+    RevolvedArea {
+        /// 2D cross-section to rotate.
+        profile: ProfileDef,
+        /// Axis origin in element-local coordinates (feet).
+        axis_origin_feet: [f64; 3],
+        /// Axis direction unit vector. Writer normalises at emit.
+        axis_direction: [f64; 3],
+        /// Sweep angle in radians. 2π = full rotation (dome /
+        /// turned column / sphere-of-revolution).
+        angle_radians: f64,
+    },
+    /// CSG combination of two nested solids (IFC-19). Emits
+    /// `IfcBooleanResult(op, a, b)` with operand_a / operand_b
+    /// recursively emitted by the same dispatcher. Use `Difference`
+    /// for Revit "subtract void from body" patterns when the void
+    /// can't be expressed as an `IfcOpeningElement` link (e.g. a
+    /// coffered ceiling, a pier with a carved niche).
+    BooleanResult {
+        op: IfcBooleanOp,
+        operand_a: Box<SolidShape>,
+        operand_b: Box<SolidShape>,
+    },
+    /// Closed polyhedral surface as a faceted brep (IFC-20).
+    /// Emits `IFCFACETEDBREP` with one `IfcClosedShell` wrapping
+    /// `IfcFace` / `IfcFaceBound` / `IfcPolyLoop` entities and
+    /// one `IfcCartesianPoint` per unique vertex. Used for any
+    /// Revit element whose body is a mesh rather than a swept
+    /// profile — imported terrain, free-form roofs, conceptual
+    /// massing brep output, DirectShape IfcOpenShell triangulation.
+    FacetedBrep {
+        /// Vertex coordinates in element-local space (feet). The
+        /// writer converts to metres at emit time.
+        vertices_feet: Vec<[f64; 3]>,
+        /// Triangular faces. Each triple indexes into
+        /// `vertices_feet`. Non-triangular faces should be
+        /// pre-tessellated by the caller — the writer emits a
+        /// 3-vertex `IfcPolyLoop` per triangle.
+        triangles: Vec<BrepTriangle>,
+    },
+    /// Simple extruded-area solid via the [`Extrusion`] struct.
+    /// Emitted when a caller wants to keep `extrusion` set to
+    /// `None` but route through `SolidShape` for uniform geometry
+    /// handling. Most callers should leave this variant unused
+    /// and just set `extrusion` directly — it exists for symmetry
+    /// with the other CSG operands.
+    ExtrudedArea(Extrusion),
 }
 
 /// Named cross-sections for an extrusion (IFC-24). Feeds one of
