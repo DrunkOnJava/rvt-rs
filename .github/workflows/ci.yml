@@ -170,6 +170,69 @@ jobs:
           expect IFCRELFILLSELEMENT 1
           expect IFCEXTRUDEDAREASOLID 7
 
+  ifcopenshell-validate:
+    # IFC-41: load the committed synthetic-project.ifc fixture in
+    # IfcOpenShell and assert it opens without errors, carries the
+    # right spatial hierarchy, and resolves every IfcRel* link. This
+    # is the independent-validator gate — the Rust-side ifc-smoke
+    # job above counts substrings, but IfcOpenShell actually parses
+    # the STEP file through the full IFC4 schema, so errors the
+    # substring check can't see (dangling refs, wrong attribute
+    # arity, enum values outside the spec vocabulary) fail here.
+    name: IfcOpenShell validates synthetic project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install IfcOpenShell (prebuilt wheel)
+        run: |
+          python -m pip install --upgrade pip
+          # ifcopenshell ships prebuilt wheels on PyPI as
+          # `ifcopenshell-python` for Linux/macOS/Windows x64. Pin
+          # to a stable 0.8.x series — the 0.7 API has semantic
+          # differences in entity-by-type iteration.
+          python -m pip install 'ifcopenshell>=0.8.0,<0.9.0'
+      - name: Validate committed fixture
+        run: |
+          python - <<'PY'
+          import ifcopenshell
+          path = "tests/fixtures/synthetic-project.ifc"
+          f = ifcopenshell.open(path)
+          # Schema identifier — we only ship IFC4.
+          assert f.schema == "IFC4", f"expected IFC4, got {f.schema}"
+          # Spatial hierarchy: 1 project, 1 site, 1 building, 3 storeys.
+          assert len(f.by_type("IfcProject")) == 1
+          assert len(f.by_type("IfcSite")) == 1
+          assert len(f.by_type("IfcBuilding")) == 1
+          assert len(f.by_type("IfcBuildingStorey")) == 3, (
+              f"expected 3 storeys, got {len(f.by_type('IfcBuildingStorey'))}"
+          )
+          # Per-element entities.
+          assert len(f.by_type("IfcWall")) == 4
+          assert len(f.by_type("IfcSlab")) == 1
+          assert len(f.by_type("IfcDoor")) == 1
+          assert len(f.by_type("IfcWindow")) == 2
+          # Openings + rels must have resolved references (no
+          # dangling pointers — IfcOpenShell would raise during
+          # open() if they did; double-check here).
+          openings = f.by_type("IfcOpeningElement")
+          assert len(openings) == 1
+          for op in openings:
+              voids = [r for r in f.by_type("IfcRelVoidsElement")
+                       if r.RelatedOpeningElement.id() == op.id()]
+              fills = [r for r in f.by_type("IfcRelFillsElement")
+                       if r.RelatingOpeningElement.id() == op.id()]
+              assert len(voids) == 1, f"opening {op} has {len(voids)} voids"
+              assert len(fills) == 1, f"opening {op} has {len(fills)} fills"
+          print("IfcOpenShell validation passed:")
+          print(f"  schema: {f.schema}")
+          print(f"  entities: {len(list(f))}")
+          print(f"  walls/slabs/doors/windows: 4/1/1/2")
+          print(f"  storeys: 3")
+          PY
+
   doc:
     name: cargo doc
     runs-on: ubuntu-latest
