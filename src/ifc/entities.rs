@@ -481,6 +481,33 @@ pub enum SolidShape {
     /// and just set `extrusion` directly — it exists for symmetry
     /// with the other CSG operands.
     ExtrudedArea(Extrusion),
+    /// Profile swept along an arbitrary polyline directrix with a
+    /// fixed up-reference direction (IFC-17). Emits IFC4
+    /// `IfcFixedReferenceSweptAreaSolid`. Use for cable trays,
+    /// pipes, duct runs, curtain-wall mullions along a curve,
+    /// sloped handrails — anything where the profile stays
+    /// orthogonal to the directrix at every sample.
+    ///
+    /// The directrix is a polyline through the supplied
+    /// `directrix_points` (in feet, element-local coordinates).
+    /// `fixed_reference` is a unit vector that together with the
+    /// directrix tangent defines the profile orientation — it's
+    /// the "up" direction the swept profile preserves as the
+    /// directrix changes heading.
+    ///
+    /// IFC4 reserves start / end parameters for trimming the
+    /// directrix; we always sweep the full polyline (0 → 1
+    /// normalised) which is the correct default for Revit data.
+    SweptPath {
+        /// 2D cross-section (see [`ProfileDef`]).
+        profile: ProfileDef,
+        /// Polyline vertices of the directrix path, in feet,
+        /// element-local coordinates.
+        directrix_points_feet: Vec<[f64; 3]>,
+        /// Fixed-reference direction (usually world +Z). Writer
+        /// normalises to a unit vector at emit.
+        fixed_reference: [f64; 3],
+    },
 }
 
 /// Named cross-sections for an extrusion (IFC-24). Feeds one of
