@@ -244,6 +244,36 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - run: cargo doc --no-deps --lib
 
+  # Q-09: benchmark-build regression gate.
+  #
+  # Runs `cargo bench --no-run` to compile every benchmark target
+  # against the current library API. Without this job, a PR that
+  # renames a public item or changes a function's signature can
+  # break the benchmarks silently — `cargo test` doesn't build the
+  # `[[bench]]` targets, and nobody runs benches on every push.
+  #
+  # A full runtime regression gate (compare wallclock numbers to a
+  # baseline, fail on >X% slowdown) would need a dedicated runner
+  # class with stable performance characteristics — GitHub's shared
+  # runners have variable load, so wallclock comparisons need wide
+  # tolerances to avoid false positives. Compile-gate is the
+  # high-value, low-noise version we can enforce on every push.
+  bench-build:
+    name: cargo bench --no-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          key: bench-build
+      # `--no-run` compiles the benches but doesn't execute them.
+      # This catches API drift (renamed public items, changed
+      # function signatures, missing traits on types used in
+      # benches) that `cargo test` doesn't, since benches live in
+      # their own `[[bench]]` targets.
+      - run: cargo bench --no-run
+
   # Q-12: reproduce the docs.rs build locally in CI.
   # docs.rs runs `cargo doc` on nightly with `--all-features` and the
   # `--cfg docsrs` flag set; broken rustdoc (invalid links, missing
