@@ -1,36 +1,23 @@
-# Keep dependencies current. See:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates
-
 version: 2
 updates:
-  # Rust dependencies
-  - package-ecosystem: "cargo"
-    directory: "/"
+  - package-ecosystem: cargo
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Etc/UTC"
-    open-pull-requests-limit: 10
-    commit-message:
-      prefix: "chore(deps)"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "rust"
-
-  # GitHub Actions (workflow files)
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Etc/UTC"
+      interval: weekly
     open-pull-requests-limit: 5
-    commit-message:
-      prefix: "chore(ci)"
-      include: "scope"
     labels:
-      - "dependencies"
-      - "github-actions"
+      - dependencies
+      - rust
+    commit-message:
+      prefix: deps
+      include: scope
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: deps
+      include: scope

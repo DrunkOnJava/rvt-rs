@@ -1,0 +1,19 @@
+# rvt-rs code ownership
+# Pattern: path -> owner(s)
+# Default: @DrunkOnJava
+* @DrunkOnJava
+
+# IFC emission — any changes need careful review against BlenderBIM round-trip
+/src/ifc/ @DrunkOnJava
+/tests/ifc_*.rs @DrunkOnJava
+/tests/fixtures/*.ifc @DrunkOnJava
+
+# File format readers — low-level; changes must preserve decoder contracts
+/src/formats.rs @DrunkOnJava
+/src/walker.rs @DrunkOnJava
+
+# Release plumbing
+/.github/ @DrunkOnJava
+/Cargo.toml @DrunkOnJava
+/release-please-config.json @DrunkOnJava
+/.release-please-manifest.json @DrunkOnJava
