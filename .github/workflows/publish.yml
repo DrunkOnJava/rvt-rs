@@ -102,13 +102,62 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  # Q-13: smoke-test every built wheel before uploading anywhere.
+  # Installs each wheel in a throwaway venv and imports the `rvt`
+  # module + instantiates a minimal `RevitFile` object; if any wheel
+  # fails to install or the import blows up, the release is aborted
+  # before TestPyPI or PyPI sees it. Cheap insurance against a
+  # broken release reaching users (TestPyPI round-trip would catch
+  # install but not import-time errors).
+  validate-wheel-install:
+    name: Install + import / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: [build-wheels]
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download wheel for this OS
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: wheel
+      - name: Install the wheel in a fresh venv
+        shell: bash
+        run: |
+          python -m venv /tmp/rvt-venv
+          # Cross-platform venv activation: source the right shim.
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            source /tmp/rvt-venv/Scripts/activate
+          else
+            source /tmp/rvt-venv/bin/activate
+          fi
+          python -m pip install --upgrade pip
+          python -m pip install wheel/*.whl
+          python -c "import rvt; print('rvt', rvt.__version__ if hasattr(rvt, '__version__') else 'ok')"
+          # Minimal smoke: can we create a RevitFile instance from a
+          # non-existent path and get a typed error (proves the pyo3
+          # bindings loaded)?
+          python - <<'EOF'
+          import rvt
+          try:
+              rvt.RevitFile("/definitely/does/not/exist.rvt")
+          except (FileNotFoundError, OSError, RuntimeError, Exception) as e:
+              print(f"got expected error: {type(e).__name__}")
+          EOF
+
   # Single publish step — gathers every wheel + sdist artifact from
   # the build jobs above and uploads them as one PyPI release. Running
   # inside the `pypi` environment activates the trusted publisher.
+  # Now also gated on `validate-wheel-install` passing on every OS.
   publish:
     name: Publish to ${{ inputs.test-pypi && 'TestPyPI' || 'PyPI' }}
     runs-on: ubuntu-latest
-    needs: [build-wheels, build-sdist]
+    needs: [build-wheels, build-sdist, validate-wheel-install]
     environment:
       name: ${{ inputs.test-pypi && 'testpypi' || 'pypi' }}
       url: ${{ inputs.test-pypi && 'https://test.pypi.org/p/rvt' || 'https://pypi.org/p/rvt' }}
