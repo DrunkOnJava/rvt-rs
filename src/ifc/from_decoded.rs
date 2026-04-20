@@ -76,6 +76,13 @@ pub struct ElementInput<'a> {
     /// `wall_extrusion` / `slab_extrusion` helpers for the
     /// typical recipe.
     pub extrusion: Option<Extrusion>,
+    /// Host-element index for doors / windows / openings. When set
+    /// alongside `extrusion`, the writer emits an
+    /// IfcOpeningElement + IfcRelVoidsElement + IfcRelFillsElement
+    /// so the host wall actually shows a hole. Index refers to
+    /// position in the `ElementInput` vec passed to `build_ifc_model`
+    /// (same as `model.entities` ordering).
+    pub host_element_index: Option<usize>,
 }
 
 /// Options controlling the bridge's output.
@@ -328,6 +335,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             location_feet: input.location_feet,
             rotation_radians: input.rotation_radians,
             extrusion: input.extrusion.clone(),
+            host_element_index: input.host_element_index,
         });
     }
     let project_name = options.project_name.or_else(|| {
@@ -389,6 +397,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             },
             ElementInput {
                 decoded: &floor,
@@ -400,6 +409,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             },
             ElementInput {
                 decoded: &roof,
@@ -411,6 +421,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -434,6 +445,7 @@ mod tests {
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
+            host_element_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -453,6 +465,7 @@ mod tests {
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
+            host_element_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -477,6 +490,7 @@ mod tests {
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
+            host_element_index: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -509,6 +523,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             },
             ElementInput {
                 decoded: &w2,
@@ -520,6 +535,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             },
             ElementInput {
                 decoded: &w3,
@@ -531,6 +547,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -603,6 +620,7 @@ mod tests {
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
+            host_element_index: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -650,6 +668,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             },
             ElementInput {
                 decoded: &door,
@@ -661,6 +680,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());

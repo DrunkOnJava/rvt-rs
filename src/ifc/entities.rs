@@ -64,6 +64,16 @@ pub enum IfcEntity {
         /// element stays geometry-free (Representation = $).
         #[serde(default)]
         extrusion: Option<Extrusion>,
+        /// Index into `IfcModel.entities` naming a host BuildingElement
+        /// (typically the wall that contains this door/window). When
+        /// set, the writer emits an IfcOpeningElement (same shape as
+        /// this element's extrusion) + IfcRelVoidsElement (host →
+        /// opening) + IfcRelFillsElement (opening → this element).
+        /// The host must already be in `entities` before this element
+        /// and must itself be a BuildingElement with an extrusion
+        /// (otherwise the void subtracts from nothing).
+        #[serde(default)]
+        host_element_index: Option<usize>,
     },
     TypeObject {
         name: String,
