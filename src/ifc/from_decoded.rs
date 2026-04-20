@@ -90,6 +90,12 @@ pub struct ElementInput<'a> {
     /// instead of a single `IfcMaterial`. `None` preserves the
     /// single-material behaviour.
     pub material_layer_set_index: Option<usize>,
+    /// Optional reference to a [`crate::ifc::entities::MaterialProfileSet`]
+    /// in the outgoing `IfcModel.material_profile_sets` (IFC-30).
+    /// For structural framing (columns / beams) with named
+    /// cross-sections. Takes precedence over `material_layer_set_index`
+    /// and `material_index` when set.
+    pub material_profile_set_index: Option<usize>,
 }
 
 /// Options controlling the bridge's output.
@@ -400,6 +406,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             extrusion: input.extrusion.clone(),
             host_element_index: input.host_element_index,
             material_layer_set_index: input.material_layer_set_index,
+            material_profile_set_index: None,
         });
     }
     let project_name = options.project_name.or_else(|| {
@@ -416,6 +423,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
         building_storeys: options.storeys,
         materials: options.materials,
     material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
     }
 }
 
@@ -464,6 +472,7 @@ mod tests {
                 extrusion: None,
                 host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
             },
             ElementInput {
                 decoded: &floor,
@@ -477,6 +486,7 @@ mod tests {
                 extrusion: None,
                 host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
             },
             ElementInput {
                 decoded: &roof,
@@ -490,6 +500,7 @@ mod tests {
                 extrusion: None,
                 host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -515,6 +526,7 @@ mod tests {
             extrusion: None,
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -536,6 +548,7 @@ mod tests {
             extrusion: None,
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -562,6 +575,7 @@ mod tests {
             extrusion: None,
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -596,6 +610,7 @@ mod tests {
                 extrusion: None,
                 host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
             },
             ElementInput {
                 decoded: &w2,
@@ -609,6 +624,7 @@ mod tests {
                 extrusion: None,
                 host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
             },
             ElementInput {
                 decoded: &w3,
@@ -622,6 +638,7 @@ mod tests {
                 extrusion: None,
                 host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -696,6 +713,7 @@ mod tests {
             extrusion: None,
             host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -745,6 +763,7 @@ mod tests {
                 extrusion: None,
                 host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
             },
             ElementInput {
                 decoded: &door,
@@ -758,6 +777,7 @@ mod tests {
                 extrusion: None,
                 host_element_index: None,
             material_layer_set_index: None,
+            material_profile_set_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
