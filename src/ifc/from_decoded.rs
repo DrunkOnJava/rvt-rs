@@ -106,6 +106,15 @@ pub struct ElementInput<'a> {
     /// vocabulary. Precedence: `solid_shape` wins when both it
     /// and `extrusion` are set.
     pub solid_shape: Option<crate::ifc::entities::SolidShape>,
+    /// Index into the outgoing `IfcModel.representation_maps` —
+    /// when set, the writer emits an `IfcMappedItem` +
+    /// `IfcShapeRepresentation` with representation-type
+    /// `'MappedRepresentation'` instead of a per-instance
+    /// extrusion / solid chain (IFC-21). Use this to share one
+    /// compiled shape across many instances of a Revit Symbol
+    /// (family type). Highest-precedence slot — beats
+    /// `solid_shape` and `extrusion`.
+    pub representation_map_index: Option<usize>,
 }
 
 /// Options controlling the bridge's output.
@@ -423,6 +432,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             material_layer_set_index: input.material_layer_set_index,
             material_profile_set_index: input.material_profile_set_index,
             solid_shape: input.solid_shape.clone(),
+            representation_map_index: input.representation_map_index,
         });
     }
     let project_name = options.project_name.or_else(|| {
@@ -440,6 +450,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
         materials: options.materials,
     material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
     }
 }
 
@@ -490,6 +501,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             },
             ElementInput {
                 decoded: &floor,
@@ -505,6 +517,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             },
             ElementInput {
                 decoded: &roof,
@@ -520,6 +533,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -547,6 +561,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -570,6 +585,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -598,6 +614,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -634,6 +651,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             },
             ElementInput {
                 decoded: &w2,
@@ -649,6 +667,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             },
             ElementInput {
                 decoded: &w3,
@@ -664,6 +683,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -740,6 +760,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -791,6 +812,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             },
             ElementInput {
                 decoded: &door,
@@ -806,6 +828,7 @@ mod tests {
             material_layer_set_index: None,
             material_profile_set_index: None,
             solid_shape: None,
+                representation_map_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
