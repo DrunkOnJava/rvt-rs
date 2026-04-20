@@ -459,7 +459,19 @@ impl StepWriter {
         // Track (element_id, &PropertySet) so property-set emission
         // runs after all element IDs are assigned.
         let mut element_property_sets: Vec<(usize, &super::entities::PropertySet)> = Vec::new();
-        for entity in &model.entities {
+        // Map vec index in model.entities → emitted IFC element id.
+        // None when that entity wasn't a BuildingElement. Consulted
+        // when resolving `host_element_index` for openings + for
+        // IfcRelVoidsElement / IfcRelFillsElement emission.
+        let mut entity_index_to_el_id: Vec<Option<usize>> = vec![None; model.entities.len()];
+        // Void/fill tracking: for each element with a host, note
+        // (host_el_id, opening_el_id, element_el_id) so the rels can
+        // be emitted after the element loop. Openings themselves are
+        // also BuildingElements (IfcOpeningElement) but they're never
+        // contained in a storey — IFC4 treats them as "virtual"
+        // elements that only live through IfcRelVoidsElement.
+        let mut void_fill_triples: Vec<(usize, usize, usize)> = Vec::new();
+        for (entity_idx, entity) in model.entities.iter().enumerate() {
             if let super::entities::IfcEntity::BuildingElement {
                 ifc_type,
                 name,
@@ -470,6 +482,7 @@ impl StepWriter {
                 location_feet,
                 rotation_radians,
                 extrusion,
+                host_element_index,
             } = entity
             {
                 // Clamp out-of-range indices to storey[0] rather than
@@ -619,6 +632,7 @@ impl StepWriter {
                 };
                 self.emit_entity(el_id, line);
                 per_storey_elements[idx].push(el_id);
+                entity_index_to_el_id[entity_idx] = Some(el_id);
                 if let Some(m_idx) = material_index {
                     if *m_idx < material_ids.len() {
                         element_material_pairs.push((el_id, *m_idx));
@@ -629,7 +643,107 @@ impl StepWriter {
                 {
                     element_property_sets.push((el_id, pset));
                 }
+                // Void / fill chain: when the element has both an
+                // extrusion (describes its volume) and a host_element_
+                // index (points at its parent wall/floor), emit an
+                // IfcOpeningElement matching the shape + the two
+                // binding relationships.
+                if let (Some(h_idx), Some(ex)) = (host_element_index, extrusion) {
+                    if let Some(host_el_id) = entity_index_to_el_id.get(*h_idx).and_then(|o| *o) {
+                        // Emit a second extrusion chain — same shape
+                        // as the element, placed on the element's
+                        // placement so the void sits where the door
+                        // sits. We reuse the element's placement for
+                        // simplicity; IFC4 validators accept this.
+                        let x_dim = ex.width_feet * 0.3048;
+                        let y_dim = ex.depth_feet * 0.3048;
+                        let depth_m = ex.height_feet * 0.3048;
+                        let o_profile_origin = self.id();
+                        self.emit_entity(o_profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                        let o_profile_x = self.id();
+                        self.emit_entity(o_profile_x, "IFCDIRECTION((1.,0.))");
+                        let o_profile_place = self.id();
+                        self.emit_entity(
+                            o_profile_place,
+                            format!("IFCAXIS2PLACEMENT2D(#{o_profile_origin},#{o_profile_x})"),
+                        );
+                        let o_profile = self.id();
+                        self.emit_entity(
+                            o_profile,
+                            format!(
+                                "IFCRECTANGLEPROFILEDEF(.AREA.,$,#{o_profile_place},{x_dim:.6},{y_dim:.6})"
+                            ),
+                        );
+                        let o_solid = self.id();
+                        self.emit_entity(
+                            o_solid,
+                            format!(
+                                "IFCEXTRUDEDAREASOLID(#{o_profile},#{element_axis},#{z_axis},{depth_m:.6})"
+                            ),
+                        );
+                        let o_rep = self.id();
+                        self.emit_entity(
+                            o_rep,
+                            format!(
+                                "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','SweptSolid',(#{o_solid}))"
+                            ),
+                        );
+                        let o_prod_shape = self.id();
+                        self.emit_entity(
+                            o_prod_shape,
+                            format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{o_rep}))"),
+                        );
+                        // IfcOpeningElement uses its own placement
+                        // (relative to the host wall's) — we reuse the
+                        // door/window placement.
+                        let o_placement = self.id();
+                        self.emit_entity(
+                            o_placement,
+                            format!("IFCLOCALPLACEMENT(#{placement_parent},#{element_axis})"),
+                        );
+                        let opening_id = self.id();
+                        // IfcOpeningElement: (GlobalId, OwnerHist, Name,
+                        //   Desc, ObjectType, Placement, Rep, Tag,
+                        //   PredefinedType). IFC4 adds PredefinedType.
+                        self.emit_entity(
+                            opening_id,
+                            format!(
+                                "IFCOPENINGELEMENT('{}',#{owner_hist},'Opening for {name_esc}',$,$,#{o_placement},#{o_prod_shape},$,.OPENING.)",
+                                make_guid(opening_id),
+                                name_esc = escape(name),
+                            ),
+                        );
+                        void_fill_triples.push((host_el_id, opening_id, el_id));
+                    }
+                }
             }
+        }
+
+        // IfcRelVoidsElement + IfcRelFillsElement — for each
+        // (host, opening, element) triple we collected during
+        // element emission, emit:
+        //   - IFCRELVOIDSELEMENT(host_wall, opening)
+        //   - IFCRELFILLSELEMENT(opening, door/window)
+        // Together these tell IFC4 viewers "subtract this opening's
+        // volume from the host wall, and fill the hole with this
+        // door/window."
+        for (host_el_id, opening_id, el_id) in &void_fill_triples {
+            let voids_rel = self.id();
+            self.emit_entity(
+                voids_rel,
+                format!(
+                    "IFCRELVOIDSELEMENT('{}',#{owner_hist},$,$,#{host_el_id},#{opening_id})",
+                    make_guid(voids_rel),
+                ),
+            );
+            let fills_rel = self.id();
+            self.emit_entity(
+                fills_rel,
+                format!(
+                    "IFCRELFILLSELEMENT('{}',#{owner_hist},$,$,#{opening_id},#{el_id})",
+                    make_guid(fills_rel),
+                ),
+            );
         }
 
         // IfcPropertySet emission — one set per element that ships
@@ -1160,6 +1274,7 @@ mod tests {
                     location_feet: None,
                     rotation_radians: None,
                     extrusion: None,
+                    host_element_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
@@ -1171,6 +1286,7 @@ mod tests {
                     location_feet: None,
                     rotation_radians: None,
                     extrusion: None,
+                    host_element_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
@@ -1182,6 +1298,7 @@ mod tests {
                     location_feet: None,
                     rotation_radians: None,
                     extrusion: None,
+                    host_element_index: None,
                 },
             ],
             classifications: Vec::new(),
@@ -1238,6 +1355,7 @@ mod tests {
                 location_feet: None,
                 rotation_radians: None,
                 extrusion: None,
+                host_element_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),

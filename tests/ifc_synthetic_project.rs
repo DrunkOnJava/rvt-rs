@@ -98,6 +98,7 @@ fn synthetic_project_emits_valid_ifc4() {
             rotation_radians: Some(0.0),
             // North/South walls run 20 ft east-west, 8" thick, 10 ft high.
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 20.0)),
+            host_element_index: None,
         },
         ElementInput {
             decoded: &south_wall,
@@ -109,6 +110,7 @@ fn synthetic_project_emits_valid_ifc4() {
             location_feet: Some([0.0, 0.0, 0.0]),
             rotation_radians: Some(0.0),
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 20.0)),
+            host_element_index: None,
         },
         ElementInput {
             decoded: &east_wall,
@@ -124,6 +126,7 @@ fn synthetic_project_emits_valid_ifc4() {
             // East/West walls run 10 ft in profile-local X (which is
             // world-Y after the 90° rotation).
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 10.0)),
+            host_element_index: None,
         },
         ElementInput {
             decoded: &west_wall,
@@ -135,6 +138,7 @@ fn synthetic_project_emits_valid_ifc4() {
             location_feet: Some([0.0, 0.0, 0.0]),
             rotation_radians: Some(std::f64::consts::FRAC_PI_2),
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 10.0)),
+            host_element_index: None,
         },
         ElementInput {
             decoded: &floor,
@@ -148,6 +152,7 @@ fn synthetic_project_emits_valid_ifc4() {
             location_feet: Some([0.0, 0.0, -1.0]),
             rotation_radians: Some(0.0),
             extrusion: Some(slab_extrusion(20.0, 10.0, None)),
+            host_element_index: None,
         },
         ElementInput {
             decoded: &front_door,
@@ -156,9 +161,20 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(0),
             property_set: None,
-            location_feet: None,
-            rotation_radians: None,
-            extrusion: None,
+            // Door sits mid-way along the south wall (10 ft east).
+            // 3 ft wide × 8" thick × 7 ft tall.
+            location_feet: Some([10.0, 0.0, 0.0]),
+            rotation_radians: Some(0.0),
+            extrusion: Some(rvt::ifc::entities::Extrusion {
+                width_feet: 3.0,
+                depth_feet: 8.0 / 12.0,
+                height_feet: 7.0,
+            }),
+            // South wall is at inputs[1]. Writer emits
+            // IfcOpeningElement + IfcRelVoidsElement(wall → opening)
+            // + IfcRelFillsElement(opening → door) so the wall shows
+            // an actual hole where the door goes.
+            host_element_index: Some(1),
         },
         ElementInput {
             decoded: &north_window,
@@ -170,6 +186,7 @@ fn synthetic_project_emits_valid_ifc4() {
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
+            host_element_index: None,
         },
         ElementInput {
             decoded: &south_window,
@@ -181,6 +198,7 @@ fn synthetic_project_emits_valid_ifc4() {
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
+            host_element_index: None,
         },
         ElementInput {
             decoded: &stair,
@@ -192,6 +210,7 @@ fn synthetic_project_emits_valid_ifc4() {
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
+            host_element_index: None,
         },
         ElementInput {
             decoded: &unknown,
@@ -203,6 +222,7 @@ fn synthetic_project_emits_valid_ifc4() {
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
+            host_element_index: None,
         },
     ];
 
@@ -380,32 +400,57 @@ fn synthetic_project_emits_valid_ifc4() {
     );
 
     // --- Extrusion geometry (IFC-16) ---
-    // 4 walls + 1 slab = 5 elements with Extrusion → 5 each of the
-    // chain entities.
+    // 4 walls + 1 slab + 1 door = 6 elements with Extrusion.
+    // The door ALSO triggers an opening-element chain (same shape
+    // used as the subtraction volume), so the chain-entity counts
+    // are 7 each (6 elements + 1 opening clone of the door shape).
     assert_eq!(
         step.matches("IFCRECTANGLEPROFILEDEF(").count(),
-        5,
-        "expect 5 rectangle profiles"
+        7,
+        "expect 7 rectangle profiles (6 elements + 1 opening)"
     );
     assert_eq!(
         step.matches("IFCEXTRUDEDAREASOLID(").count(),
-        5,
-        "expect 5 extruded solids"
+        7,
+        "expect 7 extruded solids"
     );
     assert_eq!(
         step.matches("IFCSHAPEREPRESENTATION(").count(),
-        5,
-        "expect 5 shape representations"
+        7,
+        "expect 7 shape representations"
     );
     assert_eq!(
         step.matches("IFCPRODUCTDEFINITIONSHAPE(").count(),
-        5,
-        "expect 5 product-definition shapes"
+        7,
+        "expect 7 product-definition shapes"
     );
     // Slab profile: 20 ft × 10 ft = 6.096 m × 3.048 m; 1 ft thick.
     assert!(
         step.contains(",6.096000,3.048000)"),
         "slab profile dims missing (20' × 10')"
+    );
+
+    // --- Opening voids (IFC-37 / IFC-38) ---
+    // Front door has host_element_index = 1 (South Wall). Writer
+    // emits IfcOpeningElement + IfcRelVoidsElement + IfcRelFillsElement.
+    assert_eq!(
+        step.matches("IFCOPENINGELEMENT(").count(),
+        1,
+        "expect 1 opening element for the front door"
+    );
+    assert_eq!(
+        step.matches("IFCRELVOIDSELEMENT(").count(),
+        1,
+        "expect 1 IfcRelVoidsElement(wall, opening)"
+    );
+    assert_eq!(
+        step.matches("IFCRELFILLSELEMENT(").count(),
+        1,
+        "expect 1 IfcRelFillsElement(opening, door)"
+    );
+    assert!(
+        step.contains("Opening for Front Entry Door"),
+        "opening should carry the host element's derived name"
     );
     // N/S walls = 20 ft long = 6.096 m profile width; 8" = 0.2032 m
     // thick; 10 ft = 3.048 m high. Floats round to 6 decimals.
@@ -445,6 +490,7 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         location_feet: None,
         rotation_radians: None,
         extrusion: None,
+        host_element_index: None,
     }];
     let opts = BuilderOptions {
         project_name: Some("Stable".into()),
