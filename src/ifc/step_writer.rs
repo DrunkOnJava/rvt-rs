@@ -17,7 +17,7 @@
 //! dependency, fully `#![deny(unsafe_code)]`-clean.
 
 use super::IfcModel;
-use super::entities::Extrusion;
+use super::entities::{Extrusion, SolidShape};
 
 /// Options controlling STEP serialization.
 #[derive(Debug, Clone, Default)]
@@ -291,6 +291,204 @@ impl StepWriter {
         }
         profile_id
     }
+
+    /// Emit a richer solid body (IFC-18 / IFC-19 / IFC-20) and
+    /// return `(solid_entity_id, representation_type_token)`. The
+    /// second value is the `IfcShapeRepresentation.RepresentationType`
+    /// token that the caller should use: `"SweptSolid"` for
+    /// extruded / revolved, `"CSG"` for boolean results, `"Brep"`
+    /// for faceted breps.
+    ///
+    /// The caller is responsible for wrapping the returned entity
+    /// ID in an `IfcShapeRepresentation` + `IfcProductDefinitionShape`
+    /// chain.
+    ///
+    /// `element_axis` / `z_axis` are the enclosing element's
+    /// IFCAXIS2PLACEMENT3D / IFCDIRECTION IDs — reused as the
+    /// placement for extruded variants (matches the existing
+    /// `IfcExtrudedAreaSolid` path).
+    fn emit_solid_shape(
+        &mut self,
+        shape: &SolidShape,
+        element_axis: usize,
+        z_axis: usize,
+    ) -> (usize, &'static str) {
+        match shape {
+            SolidShape::ExtrudedArea(ex) => {
+                // Same chain as the inline extrusion path — call
+                // emit_profile_def then wrap in IFCEXTRUDEDAREASOLID.
+                let profile_origin = self.id();
+                self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                let profile_x_axis = self.id();
+                self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
+                let profile_placement = self.id();
+                self.emit_entity(
+                    profile_placement,
+                    format!(
+                        "IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"
+                    ),
+                );
+                let profile_id = self.emit_profile_def(ex, profile_placement);
+                let depth = ex.height_feet * 0.3048;
+                let solid_id = self.id();
+                self.emit_entity(
+                    solid_id,
+                    format!(
+                        "IFCEXTRUDEDAREASOLID(#{profile_id},#{element_axis},#{z_axis},{depth:.6})"
+                    ),
+                );
+                (solid_id, "SweptSolid")
+            }
+            SolidShape::RevolvedArea {
+                profile,
+                axis_origin_feet,
+                axis_direction,
+                angle_radians,
+            } => {
+                // Axis-of-revolution: IfcAxis1Placement (Location,
+                // Direction). Both location and direction are
+                // element-local.
+                let axis_origin_id = self.id();
+                let [ox, oy, oz] = *axis_origin_feet;
+                let (ox, oy, oz) = (ox * 0.3048, oy * 0.3048, oz * 0.3048);
+                self.emit_entity(
+                    axis_origin_id,
+                    format!("IFCCARTESIANPOINT(({ox:.6},{oy:.6},{oz:.6}))"),
+                );
+                let axis_dir_id = self.id();
+                let [dx, dy, dz] = *axis_direction;
+                // Normalise to unit vector per IFC4.
+                let mag = (dx * dx + dy * dy + dz * dz).sqrt().max(1e-12);
+                let (dx, dy, dz) = (dx / mag, dy / mag, dz / mag);
+                self.emit_entity(
+                    axis_dir_id,
+                    format!("IFCDIRECTION(({dx:.6},{dy:.6},{dz:.6}))"),
+                );
+                let axis1_id = self.id();
+                self.emit_entity(
+                    axis1_id,
+                    format!("IFCAXIS1PLACEMENT(#{axis_origin_id},#{axis_dir_id})"),
+                );
+                // Profile (same 2D placement boilerplate as
+                // extruded-area). Reuse emit_profile_def by wrapping
+                // our ProfileDef in a temporary Extrusion — the
+                // emit_profile_def signature takes an Extrusion but
+                // only reads profile_override / width_feet / depth_feet.
+                let profile_origin = self.id();
+                self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                let profile_x_axis = self.id();
+                self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
+                let profile_placement = self.id();
+                self.emit_entity(
+                    profile_placement,
+                    format!(
+                        "IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"
+                    ),
+                );
+                let wrap_ex = Extrusion {
+                    width_feet: 0.0,
+                    depth_feet: 0.0,
+                    height_feet: 0.0,
+                    profile_override: Some(profile.clone()),
+                };
+                let profile_id = self.emit_profile_def(&wrap_ex, profile_placement);
+                let solid_id = self.id();
+                // IFCREVOLVEDAREASOLID(SweptArea, Position, Axis, Angle).
+                // SI units = radians, writer converts caller's angle
+                // (already in radians) at identity.
+                self.emit_entity(
+                    solid_id,
+                    format!(
+                        "IFCREVOLVEDAREASOLID(#{profile_id},#{element_axis},#{axis1_id},{angle_radians:.6})"
+                    ),
+                );
+                (solid_id, "SweptSolid")
+            }
+            SolidShape::BooleanResult { op, operand_a, operand_b } => {
+                // Recursively emit operands, then wrap in
+                // IFCBOOLEANRESULT(op, first, second). Nested
+                // booleans compose naturally.
+                let (a_id, _rep_a) =
+                    self.emit_solid_shape(operand_a, element_axis, z_axis);
+                let (b_id, _rep_b) =
+                    self.emit_solid_shape(operand_b, element_axis, z_axis);
+                let solid_id = self.id();
+                self.emit_entity(
+                    solid_id,
+                    format!(
+                        "IFCBOOLEANRESULT({},#{a_id},#{b_id})",
+                        op.as_step_keyword()
+                    ),
+                );
+                (solid_id, "CSG")
+            }
+            SolidShape::FacetedBrep { vertices_feet, triangles } => {
+                // One IfcCartesianPoint per vertex.
+                let mut vert_ids: Vec<usize> = Vec::with_capacity(vertices_feet.len());
+                for [x, y, z] in vertices_feet {
+                    let (xm, ym, zm) = (x * 0.3048, y * 0.3048, z * 0.3048);
+                    let pid = self.id();
+                    self.emit_entity(
+                        pid,
+                        format!("IFCCARTESIANPOINT(({xm:.6},{ym:.6},{zm:.6}))"),
+                    );
+                    vert_ids.push(pid);
+                }
+                // One IfcPolyLoop + IfcFaceBound + IfcFace per triangle.
+                // Triangles with out-of-range indices are skipped so
+                // downstream parsers don't choke on a dangling ref;
+                // debug builds panic instead so the caller learns
+                // about bad mesh input during testing.
+                let mut face_ids: Vec<usize> = Vec::new();
+                for tri in triangles {
+                    let idx_a = tri.0 as usize;
+                    let idx_b = tri.1 as usize;
+                    let idx_c = tri.2 as usize;
+                    if idx_a >= vert_ids.len()
+                        || idx_b >= vert_ids.len()
+                        || idx_c >= vert_ids.len()
+                    {
+                        debug_assert!(
+                            false,
+                            "FacetedBrep triangle ({},{},{}) refers to vertex out of range (len={})",
+                            tri.0,
+                            tri.1,
+                            tri.2,
+                            vert_ids.len(),
+                        );
+                        continue;
+                    }
+                    let (va, vb, vc) =
+                        (vert_ids[idx_a], vert_ids[idx_b], vert_ids[idx_c]);
+                    let loop_id = self.id();
+                    self.emit_entity(
+                        loop_id,
+                        format!("IFCPOLYLOOP((#{va},#{vb},#{vc}))"),
+                    );
+                    let bound_id = self.id();
+                    self.emit_entity(
+                        bound_id,
+                        format!("IFCFACEBOUND(#{loop_id},.T.)"),
+                    );
+                    let face_id = self.id();
+                    self.emit_entity(face_id, format!("IFCFACE((#{bound_id}))"));
+                    face_ids.push(face_id);
+                }
+                // IfcClosedShell wrapping all faces, then IfcFacetedBrep.
+                let shell_id = self.id();
+                let face_refs = face_ids
+                    .iter()
+                    .map(|id| format!("#{id}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                self.emit_entity(shell_id, format!("IFCCLOSEDSHELL(({face_refs}))"));
+                let brep_id = self.id();
+                self.emit_entity(brep_id, format!("IFCFACETEDBREP(#{brep_id_placeholder})", brep_id_placeholder = shell_id));
+                (brep_id, "Brep")
+            }
+        }
+    }
+
 
     fn emit_header(&mut self, model: &IfcModel) {
         let project = escape(model.project_name.as_deref().unwrap_or("Untitled"));
@@ -835,6 +1033,7 @@ impl StepWriter {
                 host_element_index,
                 material_layer_set_index,
                 material_profile_set_index,
+                solid_shape,
             } = entity
             {
                 // Clamp out-of-range indices to storey[0] rather than
@@ -897,7 +1096,26 @@ impl StepWriter {
                 // → IfcShapeRepresentation → IfcProductDefinitionShape.
                 // Profile placement uses a single fresh 2D axis per
                 // element (profile-local XY frame centred on origin).
-                let shape_ref = if let Some(ex) = extrusion {
+                // Precedence: solid_shape wins over extrusion when
+                // both are set. See `SolidShape` docs for the
+                // IFC-18 / IFC-19 / IFC-20 entity chains.
+                let shape_ref = if let Some(shape) = solid_shape {
+                    let (solid_id, rep_type) =
+                        self.emit_solid_shape(shape, element_axis, z_axis);
+                    let rep_id = self.id();
+                    self.emit_entity(
+                        rep_id,
+                        format!(
+                            "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','{rep_type}',(#{solid_id}))"
+                        ),
+                    );
+                    let prod_shape_id = self.id();
+                    self.emit_entity(
+                        prod_shape_id,
+                        format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{rep_id}))"),
+                    );
+                    Some(prod_shape_id)
+                } else if let Some(ex) = extrusion {
                     let depth = ex.height_feet * 0.3048;
                     // IfcProfileDef has a 2D placement; we emit a
                     // fresh 2D origin + direction + 2D axis per
@@ -1699,6 +1917,7 @@ mod tests {
                     host_element_index: None,
             material_layer_set_index: None,
             material_profile_set_index: None,
+            solid_shape: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
@@ -1713,6 +1932,7 @@ mod tests {
                     host_element_index: None,
             material_layer_set_index: None,
             material_profile_set_index: None,
+            solid_shape: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
@@ -1727,6 +1947,7 @@ mod tests {
                     host_element_index: None,
             material_layer_set_index: None,
             material_profile_set_index: None,
+            solid_shape: None,
                 },
             ],
             classifications: Vec::new(),
@@ -1788,6 +2009,7 @@ mod tests {
                 host_element_index: None,
             material_layer_set_index: None,
             material_profile_set_index: None,
+            solid_shape: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -1838,6 +2060,7 @@ mod tests {
                 host_element_index: None,
                 material_layer_set_index: Some(0),
                 material_profile_set_index: None,
+            solid_shape: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -1918,6 +2141,7 @@ mod tests {
                 host_element_index: None,
                 material_layer_set_index: None,
                 material_profile_set_index: Some(0),
+                solid_shape: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -1983,6 +2207,7 @@ mod tests {
                 host_element_index: None,
                 material_layer_set_index: Some(0),
                 material_profile_set_index: Some(0),
+                solid_shape: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2055,6 +2280,7 @@ mod tests {
                 host_element_index: None,
                 material_layer_set_index: None,
                 material_profile_set_index: None,
+            solid_shape: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
@@ -2179,6 +2405,234 @@ mod tests {
             comma_count >= 3,
             "expected polyline with ≥4 points (3 commas), got comma_count={}",
             comma_count
+        );
+    }
+
+    // -----------------------------------------------------------
+    // IFC-18 / IFC-19 / IFC-20: SolidShape emission paths.
+    // -----------------------------------------------------------
+
+    fn model_with_solid_shape(shape: SolidShape) -> IfcModel {
+        use super::super::entities::IfcEntity;
+        IfcModel {
+            project_name: Some("SolidShapeTest".into()),
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCBUILDINGELEMENTPROXY".into(),
+                name: "E1".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: Some([0.0, 0.0, 0.0]),
+                rotation_radians: Some(0.0),
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: Some(shape),
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: Vec::new(),
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn revolved_area_solid_emits_ifcrevolvedareasolid() {
+        use super::super::entities::ProfileDef;
+        let shape = SolidShape::RevolvedArea {
+            profile: ProfileDef::Rectangle {
+                width_feet: 1.0,
+                depth_feet: 0.5,
+            },
+            axis_origin_feet: [0.0, 0.0, 0.0],
+            axis_direction: [0.0, 0.0, 1.0],
+            angle_radians: std::f64::consts::TAU,
+        };
+        let s = write_step(&model_with_solid_shape(shape));
+        assert!(
+            s.contains("IFCREVOLVEDAREASOLID("),
+            "STEP output missing IFCREVOLVEDAREASOLID"
+        );
+        assert!(
+            s.contains("IFCAXIS1PLACEMENT("),
+            "revolved-area solid must include an IFCAXIS1PLACEMENT for axis"
+        );
+        assert!(
+            s.contains("'Body','SweptSolid'"),
+            "IfcRevolvedAreaSolid representation type must be SweptSolid"
+        );
+    }
+
+    #[test]
+    fn boolean_result_emits_ifcbooleanresult() {
+        use super::super::entities::ProfileDef;
+        let operand_a = SolidShape::ExtrudedArea(Extrusion::rectangle(2.0, 2.0, 10.0));
+        let operand_b = SolidShape::ExtrudedArea(Extrusion::circle(0.5, 10.0));
+        let shape = SolidShape::BooleanResult {
+            op: super::super::entities::IfcBooleanOp::Difference,
+            operand_a: Box::new(operand_a),
+            operand_b: Box::new(operand_b),
+        };
+        let s = write_step(&model_with_solid_shape(shape));
+        assert!(
+            s.contains("IFCBOOLEANRESULT(.DIFFERENCE.,"),
+            "STEP output missing IFCBOOLEANRESULT(.DIFFERENCE.,…)"
+        );
+        // Both operand shapes must be emitted:
+        assert!(s.contains("IFCEXTRUDEDAREASOLID("));
+        // operand_b is a circle-profile extrusion — IFCCIRCLEPROFILEDEF.
+        assert!(s.contains("IFCCIRCLEPROFILEDEF("));
+        // Representation-type token changes to CSG for boolean results.
+        assert!(
+            s.contains("'Body','CSG'"),
+            "boolean-result representation must be 'CSG'"
+        );
+        let _ = ProfileDef::Rectangle {
+            width_feet: 0.0,
+            depth_feet: 0.0,
+        };
+    }
+
+    #[test]
+    fn faceted_brep_emits_full_chain() {
+        // Simple tetrahedron: 4 vertices, 4 triangles.
+        use super::super::entities::BrepTriangle;
+        let vertices = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
+        let triangles = vec![
+            BrepTriangle(0, 1, 2), // bottom
+            BrepTriangle(0, 1, 3), // front face
+            BrepTriangle(1, 2, 3), // right face
+            BrepTriangle(0, 2, 3), // left face
+        ];
+        let shape = SolidShape::FacetedBrep {
+            vertices_feet: vertices,
+            triangles,
+        };
+        let s = write_step(&model_with_solid_shape(shape));
+        // 4 polyloops + 4 face bounds + 4 faces + 1 shell + 1 brep.
+        assert_eq!(
+            s.matches("IFCPOLYLOOP(").count(),
+            4,
+            "expected 4 IFCPOLYLOOP entities"
+        );
+        assert_eq!(
+            s.matches("IFCFACEBOUND(").count(),
+            4,
+            "expected 4 IFCFACEBOUND entities"
+        );
+        assert_eq!(
+            s.matches("IFCFACE((").count(),
+            4,
+            "expected 4 IFCFACE entities"
+        );
+        assert!(
+            s.contains("IFCCLOSEDSHELL("),
+            "faceted brep must include an IFCCLOSEDSHELL"
+        );
+        assert!(
+            s.contains("IFCFACETEDBREP("),
+            "faceted brep must include an IFCFACETEDBREP"
+        );
+        assert!(
+            s.contains("'Body','Brep'"),
+            "faceted-brep representation type must be 'Brep'"
+        );
+    }
+
+    #[test]
+    fn solid_shape_takes_precedence_over_extrusion() {
+        // When both extrusion and solid_shape are set, solid_shape
+        // wins (documented precedence). Pin the contract.
+        use super::super::entities::{IfcEntity, ProfileDef};
+        let model = IfcModel {
+            project_name: Some("Precedence".into()),
+            description: None,
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCCOLUMN".into(),
+                name: "C1".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: Some([0.0, 0.0, 0.0]),
+                rotation_radians: Some(0.0),
+                extrusion: Some(Extrusion::rectangle(2.0, 2.0, 10.0)),
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: Some(SolidShape::RevolvedArea {
+                    profile: ProfileDef::Rectangle {
+                        width_feet: 0.5,
+                        depth_feet: 2.0,
+                    },
+                    axis_origin_feet: [0.0, 0.0, 0.0],
+                    axis_direction: [0.0, 0.0, 1.0],
+                    angle_radians: std::f64::consts::TAU,
+                }),
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: Vec::new(),
+            materials: Vec::new(),
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+        };
+        let s = write_step(&model);
+        // solid_shape path fires:
+        assert!(s.contains("IFCREVOLVEDAREASOLID("));
+        // extrusion path does NOT fire — no IfcExtrudedAreaSolid in
+        // output.
+        assert!(
+            !s.contains("IFCEXTRUDEDAREASOLID("),
+            "extrusion path must not fire when solid_shape is set"
+        );
+    }
+
+    #[test]
+    fn nested_boolean_composes_recursively() {
+        // ((A ∪ B) − C) — two levels of boolean nesting.
+        use super::super::entities::IfcBooleanOp;
+        let a = SolidShape::ExtrudedArea(Extrusion::rectangle(1.0, 1.0, 10.0));
+        let b = SolidShape::ExtrudedArea(Extrusion::rectangle(0.5, 0.5, 10.0));
+        let c = SolidShape::ExtrudedArea(Extrusion::rectangle(0.25, 0.25, 10.0));
+        let union_ab = SolidShape::BooleanResult {
+            op: IfcBooleanOp::Union,
+            operand_a: Box::new(a),
+            operand_b: Box::new(b),
+        };
+        let diff = SolidShape::BooleanResult {
+            op: IfcBooleanOp::Difference,
+            operand_a: Box::new(union_ab),
+            operand_b: Box::new(c),
+        };
+        let s = write_step(&model_with_solid_shape(diff));
+        assert_eq!(
+            s.matches("IFCBOOLEANRESULT(").count(),
+            2,
+            "expected 2 nested IFCBOOLEANRESULT entities"
+        );
+        assert!(s.contains("IFCBOOLEANRESULT(.UNION.,"));
+        assert!(s.contains("IFCBOOLEANRESULT(.DIFFERENCE.,"));
+    }
+
+    #[test]
+    fn ifc_boolean_op_step_keywords_are_spec_legal() {
+        use super::super::entities::IfcBooleanOp;
+        assert_eq!(IfcBooleanOp::Union.as_step_keyword(), ".UNION.");
+        assert_eq!(IfcBooleanOp::Difference.as_step_keyword(), ".DIFFERENCE.");
+        assert_eq!(
+            IfcBooleanOp::Intersection.as_step_keyword(),
+            ".INTERSECTION."
         );
     }
 
