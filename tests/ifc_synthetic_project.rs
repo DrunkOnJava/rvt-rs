@@ -28,7 +28,9 @@
 //! IfcRelContainedInSpatialStructure (per-level containment is a
 //! follow-up per IFC-35).
 
+use rvt::elements::wall::{LocationLine, StructuralUsage, Wall};
 use rvt::ifc::MaterialInfo;
+use rvt::ifc::from_decoded::{wall_property_set, window_property_set};
 use rvt::ifc::{BuilderOptions, ElementInput, Storey, build_ifc_model, write_step};
 use rvt::walker::{DecodedElement, InstanceField};
 
@@ -55,6 +57,24 @@ fn synthetic_project_emits_valid_ifc4() {
     let stair = mk_decoded("Stair");
     let unknown = mk_decoded("AutodeskCustomThing");
 
+    // Build typed Wall views for the two walls we'll attach property
+    // sets to. In a real pipeline this comes from `Wall::from_decoded`;
+    // here we construct directly so the test isn't coupled to
+    // schema-fixture bytes.
+    let wall_north = Wall {
+        base_offset_feet: Some(0.0),
+        top_offset_feet: Some(0.0),
+        unconnected_height_feet: Some(10.0),
+        structural_usage: Some(StructuralUsage::Bearing),
+        location_line: Some(LocationLine::WallCenterline),
+        ..Default::default()
+    };
+    let win_sample = rvt::elements::openings::Window {
+        sill_height_feet: Some(2.5),
+        rotation_radians: Some(0.0),
+        ..Default::default()
+    };
+
     let inputs = vec![
         ElementInput {
             decoded: &north_wall,
@@ -62,6 +82,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("W-N-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
+            property_set: Some(wall_property_set(&wall_north)),
         },
         ElementInput {
             decoded: &south_wall,
@@ -69,6 +90,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("W-S-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
+            property_set: None,
         },
         ElementInput {
             decoded: &east_wall,
@@ -76,6 +98,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("W-E-001".into()),
             material_index: Some(0),
             storey_index: Some(1),
+            property_set: None,
         },
         ElementInput {
             decoded: &west_wall,
@@ -83,6 +106,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("W-W-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
+            property_set: None,
         },
         ElementInput {
             decoded: &floor,
@@ -90,6 +114,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("SLAB-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
+            property_set: None,
         },
         ElementInput {
             decoded: &front_door,
@@ -97,6 +122,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("DOOR-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
+            property_set: None,
         },
         ElementInput {
             decoded: &north_window,
@@ -104,6 +130,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("WIN-N-001".into()),
             material_index: Some(1),
             storey_index: Some(0),
+            property_set: Some(window_property_set(&win_sample)),
         },
         ElementInput {
             decoded: &south_window,
@@ -111,6 +138,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("WIN-S-001".into()),
             material_index: Some(1),
             storey_index: Some(0),
+            property_set: None,
         },
         ElementInput {
             decoded: &stair,
@@ -118,6 +146,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("STAIR-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
+            property_set: None,
         },
         ElementInput {
             decoded: &unknown,
@@ -125,6 +154,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: None,
             storey_index: None,
             material_index: None,
+            property_set: None,
         },
     ];
 
@@ -251,6 +281,38 @@ fn synthetic_project_emits_valid_ifc4() {
     assert!(step.contains("Concrete"), "concrete material name");
     assert!(step.contains("Glass - Tinted"), "glass material name");
 
+    // --- Property sets attached to wall + window ---
+    // North Wall carries Pset_WallCommon (BaseOffset, TopOffset,
+    // UnconnectedHeight, StructuralUsage, LocationLine = 5 properties).
+    // North Window carries Pset_WindowCommon (SillHeight, Rotation
+    // = 2 properties). Each produces one IFCPROPERTYSET +
+    // IFCRELDEFINESBYPROPERTIES.
+    assert!(
+        step.contains("'Pset_WallCommon'"),
+        "missing Pset_WallCommon"
+    );
+    assert!(
+        step.contains("'Pset_WindowCommon'"),
+        "missing Pset_WindowCommon"
+    );
+    assert!(step.contains("'BaseOffset'"), "BaseOffset property");
+    assert!(step.contains("'SillHeight'"), "SillHeight property");
+    assert_eq!(
+        step.matches("IFCPROPERTYSET(").count(),
+        2,
+        "expect 2 property sets"
+    );
+    assert_eq!(
+        step.matches("IFCRELDEFINESBYPROPERTIES(").count(),
+        2,
+        "one rel per property set"
+    );
+    // SillHeight = 2.5 ft → 0.762 m, IfcLengthMeasure.
+    assert!(
+        step.contains("IFCLENGTHMEASURE(0.762000)"),
+        "2.5ft → 0.762m"
+    );
+
     // --- Optional: dump to a fixture file when asked ---
     if std::env::var("DUMP_IFC").is_ok() {
         let out_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -273,6 +335,7 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         guid: Some("W-1".into()),
         storey_index: None,
         material_index: None,
+        property_set: None,
     }];
     let opts = BuilderOptions {
         project_name: Some("Stable".into()),

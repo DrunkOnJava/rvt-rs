@@ -36,6 +36,14 @@ pub enum IfcEntity {
         /// type).
         #[serde(default)]
         material_index: Option<usize>,
+        /// Property-set name + list of (name, value) pairs to emit
+        /// as IfcPropertySet → IfcPropertySingleValue → element via
+        /// IfcRelDefinesByProperties. Empty = no property set. The
+        /// property-set name should follow Revit / IFC convention:
+        /// usually "Pset_RevitType_{ClassName}" to match what the
+        /// Autodesk exporter produces.
+        #[serde(default)]
+        property_set: Option<PropertySet>,
     },
     TypeObject {
         name: String,
@@ -69,4 +77,80 @@ pub struct UnitAssignment {
     pub forge_identifier: String,
     /// IFC base unit name, e.g. "MILLI" + "METRE"
     pub ifc_mapping: Option<String>,
+}
+
+/// A named collection of typed property values attached to a
+/// BuildingElement. Emits as IfcPropertySet → IfcPropertySingleValue
+/// → IfcRelDefinesByProperties in the STEP writer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PropertySet {
+    /// Property-set name. Convention: "Pset_WallCommon",
+    /// "Pset_DoorCommon", or "Pset_RevitType_{ClassName}".
+    pub name: String,
+    pub properties: Vec<Property>,
+}
+
+/// A single property inside a [`PropertySet`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Property {
+    pub name: String,
+    pub value: PropertyValue,
+}
+
+/// IFC4 IfcValue subtypes we surface from Revit decoded fields.
+/// Maps directly to the `NominalValue` slot of IfcPropertySingleValue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value")]
+pub enum PropertyValue {
+    /// Free-form text — `IfcText`.
+    Text(String),
+    /// Integer count — `IfcInteger`.
+    Integer(i64),
+    /// Floating-point real — `IfcReal`.
+    Real(f64),
+    /// Boolean — `IfcBoolean`.
+    Boolean(bool),
+    /// Length measurement in feet (writer converts to metres).
+    /// Maps to `IfcLengthMeasure` with project length unit.
+    LengthFeet(f64),
+    /// Angle in radians. Maps to `IfcPlaneAngleMeasure`.
+    AngleRadians(f64),
+}
+
+impl PropertyValue {
+    /// Emit the STEP-level IfcValue constructor for this value.
+    /// Used by the writer; exposed for testing.
+    pub fn to_step(&self) -> String {
+        match self {
+            PropertyValue::Text(s) => format!("IFCTEXT('{}')", escape_step_string(s)),
+            PropertyValue::Integer(n) => format!("IFCINTEGER({n})"),
+            PropertyValue::Real(v) => format!("IFCREAL({v:.6})"),
+            PropertyValue::Boolean(b) => {
+                format!("IFCBOOLEAN(.{})", if *b { "T" } else { "F" })
+            }
+            PropertyValue::LengthFeet(ft) => {
+                // Convert to metres at emit time (project length unit).
+                let metres = ft * 0.3048;
+                format!("IFCLENGTHMEASURE({metres:.6})")
+            }
+            PropertyValue::AngleRadians(r) => format!("IFCPLANEANGLEMEASURE({r:.6})"),
+        }
+    }
+}
+
+/// Minimal STEP string escape — apostrophes doubled, backslashes
+/// doubled. Non-ASCII escape isn't needed here because the writer's
+/// full `escape()` is used for BuildingElement names; property
+/// values are typically numeric or short ASCII. Keeping the escape
+/// local to entities.rs avoids a cross-module dependency.
+fn escape_step_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\'' => out.push_str("''"),
+            '\\' => out.push_str("\\\\"),
+            c => out.push(c),
+        }
+    }
+    out
 }
