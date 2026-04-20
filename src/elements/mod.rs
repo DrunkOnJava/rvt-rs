@@ -27,6 +27,7 @@
 
 pub mod category;
 pub mod ceiling;
+pub mod circulation;
 pub mod floor;
 pub mod grid;
 pub mod level;
@@ -75,6 +76,10 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(structural::StructuralColumnDecoder),
         Box::new(structural::BeamDecoder),
         Box::new(structural::StructuralFramingDecoder),
+        Box::new(circulation::StairDecoder),
+        Box::new(circulation::StairTypeDecoder),
+        Box::new(circulation::RailingDecoder),
+        Box::new(circulation::RailingTypeDecoder),
     ]
 }
 
