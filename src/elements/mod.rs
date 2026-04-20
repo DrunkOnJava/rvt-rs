@@ -33,6 +33,7 @@ pub mod foundation_and_furnishings;
 pub mod grid;
 pub mod level;
 pub mod openings;
+pub mod project_organization;
 pub mod reference_planes;
 pub mod reference_points;
 pub mod roof;
@@ -90,6 +91,9 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(foundation_and_furnishings::FurnitureSystemDecoder),
         Box::new(foundation_and_furnishings::CaseworkDecoder),
         Box::new(foundation_and_furnishings::RebarDecoder),
+        Box::new(project_organization::PhaseDecoder),
+        Box::new(project_organization::DesignOptionDecoder),
+        Box::new(project_organization::WorksetDecoder),
     ]
 }
 
