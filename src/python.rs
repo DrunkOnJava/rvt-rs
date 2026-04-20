@@ -120,7 +120,7 @@ impl PyRevitFile {
 
     /// Decode the schema from `Formats/Latest` and return a count of
     /// classes + fields. The full schema is large; callers that want
-    /// it should use the Rust library directly.
+    /// it should use `schema_json()`.
     fn schema_summary<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let schema = self.inner.schema().map_err(to_py_val)?;
         let d = PyDict::new_bound(py);
@@ -129,6 +129,45 @@ impl PyRevitFile {
         d.set_item("fields", total_fields)?;
         d.set_item("cpp_types", schema.cpp_types.len())?;
         Ok(d)
+    }
+
+    /// Full schema as a JSON string. The Rust-side `SchemaTable` type
+    /// already derives `Serialize`, so this is zero-copy relative to
+    /// the in-memory schema. Parse with `json.loads()` in Python to
+    /// get a structured dict equivalent to `rvt::formats::SchemaTable`.
+    ///
+    /// Return shape (after `json.loads`):
+    ///
+    /// ```python
+    /// {
+    ///     "classes": [
+    ///         {
+    ///             "name": "ADocument",
+    ///             "offset": 123,
+    ///             "fields": [
+    ///                 {"name": "m_elemTable", "cpp_type": "...",
+    ///                  "field_type": {"ElementId": null}},
+    ///                 ...
+    ///             ],
+    ///             "tag": 4,
+    ///             "parent": null,
+    ///             "declared_field_count": 13,
+    ///             "was_parent_only": false,
+    ///             "ancestor_tag": null,
+    ///         },
+    ///         ...
+    ///     ],
+    ///     "cpp_types": ["ElementId", "std::pair< ElementId, double >", ...],
+    ///     "skipped_records": 0,
+    /// }
+    /// ```
+    ///
+    /// Typical 11-release corpus schema is ~395 classes / 13,570
+    /// fields — the JSON string is on the order of 1-2 MB. For just
+    /// counts, prefer `schema_summary()`.
+    fn schema_json(&mut self) -> PyResult<String> {
+        let schema = self.inner.schema().map_err(to_py_val)?;
+        serde_json::to_string(&schema).map_err(to_py_val)
     }
 
     /// Run the Layer-5a walker and return ADocument's instance fields
