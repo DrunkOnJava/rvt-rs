@@ -26,8 +26,9 @@
 //! orthogonally.
 
 use super::entities::{Classification, IfcEntity, UnitAssignment};
-use super::{IfcModel, Storey};
+use super::{IfcModel, MaterialInfo, Storey};
 use crate::elements::level::Level;
+use crate::elements::styling::Material;
 use crate::walker::DecodedElement;
 
 /// Input record for the bridge: one decoded element plus a display
@@ -49,6 +50,9 @@ pub struct ElementInput<'a> {
     /// storey[0] (fine when only one storey is defined or when the
     /// element's level hasn't been resolved yet).
     pub storey_index: Option<usize>,
+    /// Which material the element associates with. Index into
+    /// `BuilderOptions.materials`. `None` = no material emitted.
+    pub material_index: Option<usize>,
 }
 
 /// Options controlling the bridge's output.
@@ -69,6 +73,10 @@ pub struct BuilderOptions {
     /// [`storeys_from_levels`] to derive these from a slice of
     /// decoded [`Level`] values.
     pub storeys: Vec<Storey>,
+    /// Materials derived from Revit `Material` decoders. See
+    /// [`materials_from_revit`]. BuildingElement.material_index
+    /// points into this list.
+    pub materials: Vec<MaterialInfo>,
 }
 
 /// Derive [`Storey`] entries from a slice of decoded Revit
@@ -78,6 +86,22 @@ pub struct BuilderOptions {
 /// `is_building_story = false` entries are skipped — those are
 /// reference planes used only by drafting views, not real floors
 /// (Revit's own IFC exporter makes the same filter).
+/// Derive [`MaterialInfo`] entries from a slice of decoded Revit
+/// [`Material`] values. Drops entries with no name (IFC4 IfcMaterial
+/// requires a non-empty Name attribute).
+pub fn materials_from_revit(materials: &[Material]) -> Vec<MaterialInfo> {
+    materials
+        .iter()
+        .filter_map(|m| {
+            Some(MaterialInfo {
+                name: m.name.clone()?,
+                color_packed: m.color,
+                transparency: m.transparency,
+            })
+        })
+        .collect()
+}
+
 pub fn storeys_from_levels(levels: &[Level]) -> Vec<Storey> {
     levels
         .iter()
@@ -110,6 +134,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             name: input.display_name.clone(),
             type_guid: input.guid.clone(),
             storey_index: input.storey_index,
+            material_index: input.material_index,
         });
     }
     let project_name = options.project_name.or_else(|| {
@@ -124,6 +149,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
         classifications: options.classifications,
         units: options.units,
         building_storeys: options.storeys,
+        materials: options.materials,
     }
 }
 
@@ -165,18 +191,21 @@ mod tests {
                 display_name: "Wall-1".into(),
                 guid: None,
                 storey_index: None,
+                material_index: None,
             },
             ElementInput {
                 decoded: &floor,
                 display_name: "Slab-1".into(),
                 guid: None,
                 storey_index: None,
+                material_index: None,
             },
             ElementInput {
                 decoded: &roof,
                 display_name: "Roof-1".into(),
                 guid: None,
                 storey_index: None,
+                material_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -195,6 +224,7 @@ mod tests {
             display_name: "Mystery-1".into(),
             guid: None,
             storey_index: None,
+            material_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -209,6 +239,7 @@ mod tests {
             display_name: "Wall-1".into(),
             guid: None,
             storey_index: None,
+            material_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -228,6 +259,7 @@ mod tests {
             display_name: "Wall-1".into(),
             guid: None,
             storey_index: None,
+            material_index: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -255,18 +287,21 @@ mod tests {
                 display_name: "Wall-N".into(),
                 guid: None,
                 storey_index: None,
+                material_index: None,
             },
             ElementInput {
                 decoded: &w2,
                 display_name: "Wall-E".into(),
                 guid: None,
                 storey_index: None,
+                material_index: None,
             },
             ElementInput {
                 decoded: &w3,
                 display_name: "Wall-S".into(),
                 guid: None,
                 storey_index: None,
+                material_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -334,6 +369,7 @@ mod tests {
             display_name: "W-1".into(),
             guid: None,
             storey_index: None,
+            material_index: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -376,12 +412,14 @@ mod tests {
                 display_name: "North Wall".into(),
                 guid: None,
                 storey_index: None,
+                material_index: None,
             },
             ElementInput {
                 decoded: &door,
                 display_name: "Front Door".into(),
                 guid: Some("DOOR-GUID-42".into()),
                 storey_index: None,
+                material_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());

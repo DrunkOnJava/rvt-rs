@@ -29,6 +29,13 @@ pub enum IfcEntity {
         /// `level_id` wasn't resolved yet).
         #[serde(default)]
         storey_index: Option<usize>,
+        /// Index into `IfcModel.materials` — which material this
+        /// element associates with. `None` means the element has no
+        /// material, so no IfcRelAssociatesMaterial gets emitted for
+        /// it (IFC4 treats material as optional for every concrete
+        /// type).
+        #[serde(default)]
+        material_index: Option<usize>,
     },
     TypeObject {
         name: String,

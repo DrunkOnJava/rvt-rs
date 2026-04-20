@@ -87,6 +87,9 @@ pub struct IfcModel {
     /// with the Revit level's name + elevation in metres (converted
     /// from feet at emit time).
     pub building_storeys: Vec<Storey>,
+    /// Materials available for association with BuildingElements.
+    /// BuildingElement.material_index points into this list.
+    pub materials: Vec<MaterialInfo>,
 }
 
 /// A single building storey derived from a Revit `Level` element.
@@ -96,6 +99,20 @@ pub struct Storey {
     /// Elevation in feet (Revit's native unit). The STEP writer
     /// converts to metres at emit time per IFC4 convention.
     pub elevation_feet: f64,
+}
+
+/// A single material entry ready for IFC emission. Derived from
+/// a decoded Revit `Material` element via
+/// [`from_decoded::materials_from_revit`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct MaterialInfo {
+    /// Display name ("Concrete", "Glass - Tinted", "Wood - Oak").
+    pub name: String,
+    /// Packed RGB `0x00BBGGRR` from the Revit material's color.
+    /// `None` when the material didn't carry a color.
+    pub color_packed: Option<u32>,
+    /// Surface transparency in the 0..1 range. 0 = fully opaque.
+    pub transparency: Option<f64>,
 }
 
 /// Trait every IFC exporter implements. Multiple implementations exist
@@ -145,6 +162,7 @@ impl Exporter for PlaceholderExporter {
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
+            materials: Vec::new(),
         })
     }
 }
@@ -226,6 +244,7 @@ impl Exporter for RvtDocExporter {
             classifications,
             units: Vec::new(),
             building_storeys: Vec::new(),
+            materials: Vec::new(),
         })
     }
 }

@@ -404,13 +404,65 @@ impl StepWriter {
         // representations once Phase-5 geometry lands. For now every
         // element carries its placement + name + GUID, which validates
         // against the IFC4 schema as a "geometry-free" element.
+        // Emit IfcMaterials upfront so BuildingElements can reference
+        // them. Each material gets:
+        //   - IFCMATERIAL with just a name (IFC4 minimum)
+        //   - If the material has a color: IFCCOLOURRGB +
+        //     IFCSURFACESTYLERENDERING + IFCSURFACESTYLE +
+        //     IFCSTYLEDITEM to surface the color to IFC4 viewers
+        // The color emission is gated because a color-less material
+        // is valid IFC4 — we don't want to emit empty rendering
+        // records when there's nothing to render.
+        let mut material_ids: Vec<usize> = Vec::with_capacity(model.materials.len());
+        for mat in &model.materials {
+            let mat_id = self.id();
+            let name_escaped = escape(&mat.name);
+            self.emit_entity(mat_id, format!("IFCMATERIAL('{name_escaped}',$,$)"));
+            if let Some(packed) = mat.color_packed {
+                let r = (packed & 0xFF) as f64 / 255.0;
+                let g = ((packed >> 8) & 0xFF) as f64 / 255.0;
+                let b = ((packed >> 16) & 0xFF) as f64 / 255.0;
+                let colour_id = self.id();
+                self.emit_entity(colour_id, format!("IFCCOLOURRGB($,{r:.6},{g:.6},{b:.6})"));
+                let rendering_id = self.id();
+                let transparency = mat.transparency.unwrap_or(0.0);
+                self.emit_entity(
+                    rendering_id,
+                    format!(
+                        "IFCSURFACESTYLERENDERING(#{colour_id},{transparency:.6},$,$,$,$,$,$,.FLAT.)"
+                    ),
+                );
+                let style_id = self.id();
+                self.emit_entity(
+                    style_id,
+                    format!("IFCSURFACESTYLE('{name_escaped}',.BOTH.,(#{rendering_id}))"),
+                );
+                let presentation_id = self.id();
+                self.emit_entity(
+                    presentation_id,
+                    format!("IFCPRESENTATIONSTYLEASSIGNMENT((#{style_id}))"),
+                );
+                let styled_item_id = self.id();
+                self.emit_entity(
+                    styled_item_id,
+                    format!("IFCSTYLEDITEM($,(#{presentation_id}),'{name_escaped}')"),
+                );
+            }
+            material_ids.push(mat_id);
+        }
+
         let mut per_storey_elements: Vec<Vec<usize>> = vec![Vec::new(); storeys.len()];
+        // Track (element_id, material_index) pairs so we can emit
+        // IfcRelAssociatesMaterial per material after the element
+        // loop completes.
+        let mut element_material_pairs: Vec<(usize, usize)> = Vec::new();
         for entity in &model.entities {
             if let super::entities::IfcEntity::BuildingElement {
                 ifc_type,
                 name,
                 type_guid,
                 storey_index,
+                material_index,
             } = entity
             {
                 // Clamp out-of-range indices to storey[0] rather than
@@ -452,7 +504,39 @@ impl StepWriter {
                 };
                 self.emit_entity(el_id, line);
                 per_storey_elements[idx].push(el_id);
+                if let Some(m_idx) = material_index {
+                    if *m_idx < material_ids.len() {
+                        element_material_pairs.push((el_id, *m_idx));
+                    }
+                }
             }
+        }
+
+        // Bucket element_id lists by material_index so each material
+        // gets one IfcRelAssociatesMaterial (rather than N, where N
+        // is the number of elements using it).
+        let mut by_material: Vec<Vec<usize>> = vec![Vec::new(); material_ids.len()];
+        for (el_id, m_idx) in &element_material_pairs {
+            by_material[*m_idx].push(*el_id);
+        }
+        for (m_idx, elements) in by_material.iter().enumerate() {
+            if elements.is_empty() {
+                continue;
+            }
+            let rel_id = self.id();
+            let refs_list = elements
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,({refs_list}),#{})",
+                    make_guid(rel_id),
+                    material_ids[m_idx],
+                ),
+            );
         }
 
         // Suppress unused-variable warning from the legacy single-
@@ -629,6 +713,7 @@ mod tests {
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
+            materials: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -648,6 +733,7 @@ mod tests {
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
+            materials: Vec::new(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -709,6 +795,7 @@ mod tests {
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
+            materials: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -830,6 +917,7 @@ mod tests {
             }],
             units: Vec::new(),
             building_storeys: Vec::new(),
+            materials: Vec::new(),
         };
         let s = write_step(&model);
         assert!(
@@ -907,23 +995,27 @@ mod tests {
                     name: "North Wall".into(),
                     type_guid: None,
                     storey_index: None,
+                    material_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
                     name: "Level 1 Floor".into(),
                     type_guid: Some("101".into()),
                     storey_index: None,
+                    material_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
                     name: "Front Door".into(),
                     type_guid: None,
                     storey_index: None,
+                    material_index: None,
                 },
             ],
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
+            materials: Vec::new(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -969,10 +1061,12 @@ mod tests {
                 name: "Door".into(),
                 type_guid: None,
                 storey_index: None,
+                material_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
             building_storeys: Vec::new(),
+            materials: Vec::new(),
         };
         let s = write_step(&model);
         // The door line should have 9 commas (10 fields). Grep the
