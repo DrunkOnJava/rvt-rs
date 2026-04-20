@@ -124,6 +124,54 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCREINFORCINGBAR",
         predefined_type: None,
     },
+    // Structural — secondary members (IFC-10).
+    // IfcMember is IFC4's entity for structural elements that aren't
+    // the primary load path: bracing, trusses, studs, girts, purlins,
+    // mullions, posts. Revit distinguishes these via the Family
+    // Symbol / PredefinedType on the StructuralFraming class. When
+    // the walker can identify the subtype, route through one of these
+    // entries; otherwise StructuralFraming stays on the IfcBeam row
+    // above.
+    Mapping {
+        revit_class: "Brace",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("BRACE"),
+    },
+    Mapping {
+        revit_class: "StructuralTruss",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("CHORD"),
+    },
+    Mapping {
+        revit_class: "Purlin",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("PURLIN"),
+    },
+    Mapping {
+        revit_class: "Post",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("POST"),
+    },
+    Mapping {
+        revit_class: "Stud",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("STUD"),
+    },
+    Mapping {
+        revit_class: "Strut",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("STRUT"),
+    },
+    Mapping {
+        revit_class: "Girt",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("MEMBER"),
+    },
+    Mapping {
+        revit_class: "Rafter",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("RAFTER"),
+    },
     // Spatial zoning.
     Mapping {
         revit_class: "Room",
@@ -207,6 +255,24 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.revit_class == revit_class)
 }
 
+/// True when the mapping routes a Revit class through `IfcMember`
+/// (as opposed to `IfcBeam` / `IfcColumn` / `IfcFooting`). Useful
+/// for downstream code that wants to emit IfcMember-specific
+/// property-sets (`Pset_MemberCommon`) or group members into an
+/// `IfcRelAggregates` under a truss / frame assembly.
+///
+/// IFC-10: IfcMember is IFC4's dedicated entity for secondary
+/// structural elements. Routing through it (rather than the
+/// fallback `IfcBeam`) lets validators and downstream tools
+/// distinguish primary beams from bracing / purlins / studs /
+/// trusses, which matters for load-path visualization and
+/// structural schedules.
+pub fn is_ifc_member(revit_class: &str) -> bool {
+    lookup(revit_class)
+        .map(|m| m.ifc_type == "IFCMEMBER")
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,5 +339,94 @@ mod tests {
         assert_eq!(lookup("Room").unwrap().ifc_type, "IFCSPACE");
         assert_eq!(lookup("Area").unwrap().ifc_type, "IFCSPACE");
         assert_eq!(lookup("Space").unwrap().ifc_type, "IFCSPACE");
+    }
+
+    // IFC-10: IfcMember secondary-structural routing.
+    #[test]
+    fn brace_maps_to_ifcmember_brace() {
+        let m = lookup("Brace").unwrap();
+        assert_eq!(m.ifc_type, "IFCMEMBER");
+        assert_eq!(m.predefined_type, Some("BRACE"));
+    }
+
+    #[test]
+    fn structural_truss_maps_to_ifcmember_chord() {
+        let m = lookup("StructuralTruss").unwrap();
+        assert_eq!(m.ifc_type, "IFCMEMBER");
+        assert_eq!(m.predefined_type, Some("CHORD"));
+    }
+
+    #[test]
+    fn secondary_members_route_to_ifcmember() {
+        // All 8 IfcMember subtypes should route through IFCMEMBER
+        // with the correct IFC4 PredefinedType. If any of these
+        // flip back to IfcBeam, validators will complain about
+        // bracing-in-load-path misclassification.
+        let cases = [
+            ("Brace", "BRACE"),
+            ("StructuralTruss", "CHORD"),
+            ("Purlin", "PURLIN"),
+            ("Post", "POST"),
+            ("Stud", "STUD"),
+            ("Strut", "STRUT"),
+            ("Girt", "MEMBER"),
+            ("Rafter", "RAFTER"),
+        ];
+        for (revit, expected_pt) in cases {
+            let m = lookup(revit)
+                .unwrap_or_else(|| panic!("{revit} missing from MAPPINGS"));
+            assert_eq!(m.ifc_type, "IFCMEMBER", "{revit} should be IFCMEMBER");
+            assert_eq!(
+                m.predefined_type,
+                Some(expected_pt),
+                "{revit} predefined_type mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn is_ifc_member_true_for_member_classes() {
+        assert!(is_ifc_member("Brace"));
+        assert!(is_ifc_member("StructuralTruss"));
+        assert!(is_ifc_member("Stud"));
+    }
+
+    #[test]
+    fn is_ifc_member_false_for_primary_beams() {
+        // StructuralFraming stays on IfcBeam — callers that want to
+        // route framing-as-bracing need a separate decision point
+        // (e.g. Symbol family-name pattern match) and should NOT
+        // rely on is_ifc_member() returning true for the base class.
+        assert!(!is_ifc_member("StructuralFraming"));
+        assert!(!is_ifc_member("Column"));
+        assert!(!is_ifc_member("Beam"));
+    }
+
+    #[test]
+    fn is_ifc_member_false_for_unknown_classes() {
+        assert!(!is_ifc_member("DefinitelyNotARevitClass"));
+    }
+
+    #[test]
+    fn ifc_member_predefined_types_are_spec_legal() {
+        // IFC4 IfcMemberTypeEnum values — any future additions must
+        // stay within this set. Updating IFC schema bumps (IFC4.3,
+        // IFC5) would edit this list.
+        let legal = [
+            "BRACE", "CHORD", "COLLAR", "MEMBER", "MULLION", "PLATE",
+            "POST", "PURLIN", "RAFTER", "STRINGER", "STRUT", "STUD",
+            "USERDEFINED", "NOTDEFINED",
+        ];
+        for m in MAPPINGS.iter().filter(|m| m.ifc_type == "IFCMEMBER") {
+            let pt = m.predefined_type.expect(
+                "IfcMember entries must have an explicit PredefinedType",
+            );
+            assert!(
+                legal.contains(&pt),
+                "{} has illegal IfcMember PredefinedType: {}",
+                m.revit_class,
+                pt
+            );
+        }
     }
 }
