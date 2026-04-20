@@ -412,6 +412,27 @@ fn find_adocument_start(d: &[u8]) -> Option<usize> {
     find_adocument_start_with_schema(d, None)
 }
 
+/// Doc-hidden fuzz entry point for the ADocument entry-point detector.
+///
+/// Exposes the private [`find_adocument_start_with_schema`] so that
+/// fuzz targets in `fuzz/fuzz_targets/` can exercise both the
+/// heuristic path (`schema = None`) and the scoring-based
+/// brute-force path (`schema = Some(&...)`) directly on caller-
+/// supplied bytes. Not part of the stable public surface — the
+/// name, signature, and behaviour may change without a version bump.
+///
+/// Kept `pub` rather than exposed via `#[cfg(fuzzing)]` because
+/// cargo-fuzz compiles the library crate without custom cfgs, and
+/// putting it behind a feature flag forces every downstream caller
+/// to know about the flag.
+#[doc(hidden)]
+pub fn __fuzz_find_adocument_start(
+    d: &[u8],
+    schema: Option<&formats::ClassEntry>,
+) -> Option<usize> {
+    find_adocument_start_with_schema(d, schema)
+}
+
 /// Locate ADocument's entry point. When an ADocument class schema is
 /// supplied, also runs a scoring-based brute-force scan that picks
 /// the offset whose trial walk produces the most-sensible values for
