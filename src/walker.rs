@@ -520,6 +520,93 @@ pub struct ADocumentInstance {
     pub fields: Vec<(String, InstanceField)>,
 }
 
+/// Per-instance decode completeness summary (API-09).
+///
+/// Callers that want to distinguish "every field decoded cleanly"
+/// from "we parsed the record but several fields fell back to raw
+/// bytes" use [`ADocumentInstance::completeness`] to get this
+/// breakdown. It's the programmatic equivalent of the
+/// human-readable §Q6.5 addendum in the recon report — "what does
+/// the walker fully understand right now?"
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Completeness {
+    /// Total declared + parsed field count (always `fields.len()`).
+    pub total: usize,
+    /// Fields that decoded to a typed variant (anything except
+    /// `InstanceField::Bytes`). High value = clean parse.
+    pub typed: usize,
+    /// Fields that fell back to `InstanceField::Bytes` — the wire
+    /// layout wasn't exercised or the field classifier hit an
+    /// unknown type. Non-zero = known gap.
+    pub raw_bytes_fallback: usize,
+    /// Fields that are typed AND non-empty. Filters out the
+    /// zero-length `Bytes(Vec::new())` case emitted when a field's
+    /// `FieldType` didn't classify at all.
+    pub typed_and_non_empty: usize,
+}
+
+impl Completeness {
+    /// Decode completeness as a 0.0–1.0 ratio. `typed / total`.
+    /// Returns `None` for the zero-field case so callers don't
+    /// divide by zero silently.
+    pub fn typed_ratio(&self) -> Option<f64> {
+        if self.total == 0 {
+            None
+        } else {
+            Some(self.typed as f64 / self.total as f64)
+        }
+    }
+
+    /// Convenience: true iff every declared field decoded to a
+    /// typed variant (no raw-bytes fallbacks). Useful for CI drift
+    /// detection — a release that suddenly returns false on a
+    /// known-good fixture indicates wire-layout drift.
+    pub fn is_fully_typed(&self) -> bool {
+        self.total > 0 && self.raw_bytes_fallback == 0
+    }
+}
+
+impl ADocumentInstance {
+    /// Compute completeness markers for this instance. O(n) in the
+    /// field count; cheap enough to call ad-hoc.
+    pub fn completeness(&self) -> Completeness {
+        let mut out = Completeness {
+            total: self.fields.len(),
+            ..Completeness::default()
+        };
+        for (_, value) in &self.fields {
+            match value {
+                InstanceField::Bytes(b) => {
+                    out.raw_bytes_fallback += 1;
+                    // Zero-length Bytes means the field's FieldType
+                    // didn't classify at all — not a parse failure,
+                    // just "we don't know the type." Don't count
+                    // those as typed_and_non_empty anyway.
+                    if !b.is_empty() {
+                        // Bytes-with-content still counts as a raw
+                        // fallback, not typed.
+                    }
+                }
+                _ => {
+                    out.typed += 1;
+                    // Recursive non-empty check for Vector — a
+                    // typed Vector with zero items is empty.
+                    let non_empty = match value {
+                        InstanceField::Vector(items) => !items.is_empty(),
+                        InstanceField::String(s) => !s.is_empty(),
+                        InstanceField::RefContainer { col_a, .. } => !col_a.is_empty(),
+                        _ => true,
+                    };
+                    if non_empty {
+                        out.typed_and_non_empty += 1;
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
 /// Read ADocument from a `RevitFile`. Returns `None` if the
 /// entry-point detector can't confidently land on the record —
 /// currently reliable on Revit 2024+ releases; older releases return
@@ -1352,6 +1439,63 @@ mod tests {
             }
             other => panic!("expected outer Vector, got {other:?}"),
         }
+    }
+
+    /// API-09: completeness summary reports typed vs raw-bytes
+    /// fallback counts and handles the 0-total edge case.
+    #[test]
+    fn adocument_instance_completeness_basic() {
+        let inst = ADocumentInstance {
+            entry_offset: 0,
+            version: 2024,
+            fields: vec![
+                ("a".into(), InstanceField::Integer {
+                    value: 1,
+                    signed: false,
+                    size: 4,
+                }),
+                ("b".into(), InstanceField::Bytes(vec![0xff])),
+                ("c".into(), InstanceField::String("hello".into())),
+                ("d".into(), InstanceField::Vector(vec![])),
+                ("e".into(), InstanceField::Bytes(Vec::new())),
+            ],
+        };
+        let c = inst.completeness();
+        assert_eq!(c.total, 5);
+        assert_eq!(c.typed, 3); // a, c, d
+        assert_eq!(c.raw_bytes_fallback, 2); // b, e
+        assert_eq!(c.typed_and_non_empty, 2); // a, c (d is empty Vector)
+        assert!(!c.is_fully_typed());
+        let ratio = c.typed_ratio().unwrap();
+        assert!((ratio - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn completeness_empty_instance_has_no_ratio() {
+        let inst = ADocumentInstance {
+            entry_offset: 0,
+            version: 0,
+            fields: vec![],
+        };
+        let c = inst.completeness();
+        assert_eq!(c.total, 0);
+        assert!(c.typed_ratio().is_none());
+        assert!(!c.is_fully_typed());
+    }
+
+    #[test]
+    fn completeness_fully_typed_instance() {
+        let inst = ADocumentInstance {
+            entry_offset: 0,
+            version: 2026,
+            fields: vec![
+                ("a".into(), InstanceField::Bool(true)),
+                ("b".into(), InstanceField::ElementId { tag: 0, id: 42 }),
+            ],
+        };
+        let c = inst.completeness();
+        assert!(c.is_fully_typed());
+        assert_eq!(c.typed_ratio(), Some(1.0));
     }
 
     #[test]
