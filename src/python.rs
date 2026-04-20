@@ -213,10 +213,13 @@ fn rvt_to_ifc(path: &str) -> PyResult<String> {
     Ok(ifc::write_step(&model))
 }
 
-/// Top-level Python module named `rvt`. Exposes `RevitFile` and
-/// `rvt_to_ifc`; the wheel's `__version__` matches the Rust crate.
+/// Compiled Python submodule named `_rvt`. Sits under the
+/// pure-Python `rvt` package in `python/`, whose `__init__.py`
+/// re-exports everything here. That layout ships type stubs
+/// (`__init__.pyi`) and a PEP-561 `py.typed` marker alongside the
+/// extension so mypy and pyright pick them up.
 #[pymodule]
-fn rvt(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _rvt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRevitFile>()?;
     m.add_function(wrap_pyfunction!(rvt_to_ifc, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
