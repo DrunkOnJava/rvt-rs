@@ -463,6 +463,133 @@ fn find_adocument_start(d: &[u8]) -> Option<usize> {
     find_adocument_start_with_schema(d, None)
 }
 
+/// Which strategy resolved the ADocument entry offset (API-12).
+///
+/// The walker's entry-point detector runs two strategies in order:
+/// a fast heuristic that looks for the sequential-id-table + 8-zero
+/// signature, and a slower schema-directed scoring scan over every
+/// byte-aligned offset. The strategy that landed on the returned
+/// offset is useful for debugging and for cross-version regression
+/// tests (a release that suddenly falls through to `Scored` when
+/// prior ones hit `Heuristic` is a signal of wire-layout drift).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DetectionStrategy {
+    /// Fast heuristic hit — `heuristic_find` resolved directly.
+    /// Typical of Revit 2024-2026 where ADocument sits in a
+    /// predictable location after the sequential-id table.
+    Heuristic,
+    /// Scored brute-force scan found the best offset with score ≥
+    /// 80. Typical of older releases where the heuristic table end
+    /// doesn't align with the record start.
+    Scored,
+    /// No offset met the confidence threshold. The walker returns
+    /// `None` from `read_adocument` in this case.
+    NotFound,
+}
+
+/// Diagnostic output of [`detect_adocument_start`] (API-12).
+///
+/// Callers that want to understand WHY the walker landed where it
+/// did — for CI drift detection, cross-version regression reports,
+/// or user-facing "here's how confident I am" output — use this
+/// struct instead of plain `Option<usize>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetectionResult {
+    /// Resolved byte offset into the decompressed `Global/Latest`
+    /// stream where ADocument's record begins. `None` when
+    /// `strategy = NotFound`.
+    pub offset: Option<usize>,
+    /// Confidence score of the chosen offset. 90+ is a confident
+    /// hit, 80-89 is a scored-scan match, below 80 is `NotFound`.
+    /// `None` when no candidates were evaluated (no schema supplied
+    /// + heuristic failed).
+    pub score: Option<i64>,
+    /// Number of byte-aligned offsets that `trial_walk` produced a
+    /// walk for during the scored scan (only populated when a
+    /// schema was supplied and the heuristic didn't resolve it on
+    /// its own). A low count on a large stream can indicate a wire
+    /// layout the walker doesn't recognise.
+    pub candidates_evaluated: usize,
+    pub strategy: DetectionStrategy,
+}
+
+/// Schema-aware entry-point detection with per-call diagnostics
+/// (API-12). Same decision logic as
+/// [`find_adocument_start_with_schema`] but returns the strategy +
+/// score + candidate count that produced the result, instead of
+/// just an `Option<usize>`.
+///
+/// Public surface for tools that want to surface detection
+/// confidence — the plain `read_adocument` path calls through the
+/// non-diagnostic variant for backwards compatibility.
+pub fn detect_adocument_start(
+    d: &[u8],
+    adoc_schema: Option<&formats::ClassEntry>,
+) -> DetectionResult {
+    // Strategy 1: sequential-id-table end + 8-zero signature scan.
+    if let Some(h) = heuristic_find(d) {
+        if let Some(cls) = adoc_schema {
+            if let Some(w) = trial_walk(cls, &d[h..]) {
+                let sc = walk_score(&w);
+                if sc >= 90 {
+                    return DetectionResult {
+                        offset: Some(h),
+                        score: Some(sc),
+                        candidates_evaluated: 1,
+                        strategy: DetectionStrategy::Heuristic,
+                    };
+                }
+            }
+        } else {
+            return DetectionResult {
+                offset: Some(h),
+                score: None,
+                candidates_evaluated: 0,
+                strategy: DetectionStrategy::Heuristic,
+            };
+        }
+    }
+    // Strategy 2: score-based brute-force scan.
+    if let Some(cls) = adoc_schema {
+        let mut best: Option<(i64, usize)> = None;
+        let mut evaluated = 0usize;
+        let end = d.len().saturating_sub(256);
+        for offset in 0x100..end {
+            if let Some(walk) = trial_walk(cls, &d[offset..]) {
+                evaluated += 1;
+                let sc = walk_score(&walk);
+                if best.as_ref().is_none_or(|(bs, _)| sc > *bs) {
+                    best = Some((sc, offset));
+                }
+            }
+        }
+        if let Some((sc, off)) = best {
+            if sc >= 80 {
+                return DetectionResult {
+                    offset: Some(off),
+                    score: Some(sc),
+                    candidates_evaluated: evaluated,
+                    strategy: DetectionStrategy::Scored,
+                };
+            }
+            // Sub-threshold best — still return the score so
+            // callers can see how close it got.
+            return DetectionResult {
+                offset: None,
+                score: Some(sc),
+                candidates_evaluated: evaluated,
+                strategy: DetectionStrategy::NotFound,
+            };
+        }
+    }
+    DetectionResult {
+        offset: None,
+        score: None,
+        candidates_evaluated: 0,
+        strategy: DetectionStrategy::NotFound,
+    }
+}
+
 /// Doc-hidden fuzz entry point for the ADocument entry-point detector.
 ///
 /// Exposes the private [`find_adocument_start_with_schema`] so that
@@ -1021,5 +1148,27 @@ mod tests {
     #[test]
     fn walker_limits_default_matches_legacy_hardcoded() {
         assert_eq!(WalkerLimits::default().max_container_records, 1000);
+    }
+
+    /// API-12: `detect_adocument_start` surfaces NotFound on empty
+    /// input regardless of whether a schema is supplied. Score and
+    /// offset are both None; candidates_evaluated is 0.
+    #[test]
+    fn detect_adocument_start_on_empty_returns_not_found() {
+        let r = detect_adocument_start(&[], None);
+        assert_eq!(r.strategy, DetectionStrategy::NotFound);
+        assert_eq!(r.offset, None);
+        assert_eq!(r.score, None);
+        assert_eq!(r.candidates_evaluated, 0);
+    }
+
+    #[test]
+    fn detect_adocument_start_on_small_buffer_no_schema() {
+        let d = vec![0u8; 64];
+        let r = detect_adocument_start(&d, None);
+        // Heuristic won't find anything in 64 zero bytes; no schema
+        // means the scored path never runs.
+        assert_eq!(r.strategy, DetectionStrategy::NotFound);
+        assert_eq!(r.offset, None);
     }
 }
