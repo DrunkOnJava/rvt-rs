@@ -467,6 +467,8 @@ impl StepWriter {
                 storey_index,
                 material_index,
                 property_set,
+                location_feet,
+                rotation_radians,
             } = entity
             {
                 // Clamp out-of-range indices to storey[0] rather than
@@ -476,10 +478,52 @@ impl StepWriter {
                     .unwrap_or(0)
                     .min(storeys.len().saturating_sub(1));
                 let placement_parent = storey_placements[idx];
+                // Decide whether to emit a per-element axis placement
+                // (with real origin + rotation) or share the project-
+                // level identity placement. Sharing keeps byte counts
+                // down for elements where no location has been decoded;
+                // unique placements matter once geometry attaches to
+                // the element and tools read element.position.
+                let element_axis = if let Some([x_ft, y_ft, z_ft]) = location_feet {
+                    let x_m = x_ft * 0.3048;
+                    let y_m = y_ft * 0.3048;
+                    let z_m = z_ft * 0.3048;
+                    let point_id = self.id();
+                    self.emit_entity(
+                        point_id,
+                        format!("IFCCARTESIANPOINT(({x_m:.6},{y_m:.6},{z_m:.6}))"),
+                    );
+                    // Rotation is applied about Z only — all Revit
+                    // element placements we've seen so far are upright
+                    // with yaw-only rotation. Full 3D rotation needs
+                    // the BasePoint / ProjectPosition transform chain
+                    // (already decoded, not yet threaded here).
+                    let x_axis_id = if let Some(angle) = rotation_radians {
+                        let cx = angle.cos();
+                        let cy = angle.sin();
+                        let dir = self.id();
+                        self.emit_entity(dir, format!("IFCDIRECTION(({cx:.6},{cy:.6},0.))"));
+                        Some(dir)
+                    } else {
+                        None
+                    };
+                    let axis_id = self.id();
+                    // If we have a yaw rotation, reference our own X-
+                    // axis IfcDirection; otherwise reuse the shared
+                    // +X axis_placement points at (via `x_axis`).
+                    let axis_body = match x_axis_id {
+                        Some(d) => format!("IFCAXIS2PLACEMENT3D(#{point_id},#{z_axis},#{d})"),
+                        None => format!("IFCAXIS2PLACEMENT3D(#{point_id},#{z_axis},#{x_axis})"),
+                    };
+                    self.emit_entity(axis_id, axis_body);
+                    axis_id
+                } else {
+                    axis_placement
+                };
                 let placement_id = self.id();
                 self.emit_entity(
                     placement_id,
-                    format!("IFCLOCALPLACEMENT(#{placement_parent},#{axis_placement})"),
+                    format!("IFCLOCALPLACEMENT(#{placement_parent},#{element_axis})"),
                 );
                 let el_id = self.id();
                 let name_quoted = quoted_or_dollar(&escape(name));
@@ -1046,6 +1090,8 @@ mod tests {
                     storey_index: None,
                     material_index: None,
                     property_set: None,
+                    location_feet: None,
+                    rotation_radians: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
@@ -1054,6 +1100,8 @@ mod tests {
                     storey_index: None,
                     material_index: None,
                     property_set: None,
+                    location_feet: None,
+                    rotation_radians: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
@@ -1062,6 +1110,8 @@ mod tests {
                     storey_index: None,
                     material_index: None,
                     property_set: None,
+                    location_feet: None,
+                    rotation_radians: None,
                 },
             ],
             classifications: Vec::new(),
@@ -1115,6 +1165,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),

@@ -44,6 +44,20 @@ pub enum IfcEntity {
         /// Autodesk exporter produces.
         #[serde(default)]
         property_set: Option<PropertySet>,
+        /// Element origin in feet, expressed in the project's
+        /// coordinate system. When `Some`, the writer emits a
+        /// unique IFCCARTESIANPOINT + IFCAXIS2PLACEMENT3D for this
+        /// element (ft → m conversion at emit time). When `None`,
+        /// the element uses the shared identity placement — fine
+        /// until geometry lands and positions start mattering.
+        #[serde(default)]
+        location_feet: Option<[f64; 3]>,
+        /// Element rotation about the Z (up) axis, in radians. Only
+        /// consulted when `location_feet` is `Some` — the placement
+        /// with a non-default X-axis direction needs a unique
+        /// IFCDIRECTION.
+        #[serde(default)]
+        rotation_radians: Option<f64>,
     },
     TypeObject {
         name: String,
