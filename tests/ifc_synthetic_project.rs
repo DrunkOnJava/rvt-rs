@@ -30,7 +30,9 @@
 
 use rvt::elements::wall::{LocationLine, StructuralUsage, Wall, WallType};
 use rvt::ifc::MaterialInfo;
-use rvt::ifc::from_decoded::{wall_extrusion, wall_property_set, window_property_set};
+use rvt::ifc::from_decoded::{
+    slab_extrusion, wall_extrusion, wall_property_set, window_property_set,
+};
 use rvt::ifc::{BuilderOptions, ElementInput, Storey, build_ifc_model, write_step};
 use rvt::walker::{DecodedElement, InstanceField};
 
@@ -141,9 +143,11 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(0),
             property_set: None,
-            location_feet: None,
-            rotation_radians: None,
-            extrusion: None,
+            // Slab footprint: 20 ft × 10 ft × 1 ft thick, lying flat
+            // at z = -1 ft (top of slab coincides with storey origin).
+            location_feet: Some([0.0, 0.0, -1.0]),
+            rotation_radians: Some(0.0),
+            extrusion: Some(slab_extrusion(20.0, 10.0, None)),
         },
         ElementInput {
             decoded: &front_door,
@@ -376,26 +380,32 @@ fn synthetic_project_emits_valid_ifc4() {
     );
 
     // --- Extrusion geometry (IFC-16) ---
-    // 4 walls carry Extrusion → 4 each of the chain entities.
+    // 4 walls + 1 slab = 5 elements with Extrusion → 5 each of the
+    // chain entities.
     assert_eq!(
         step.matches("IFCRECTANGLEPROFILEDEF(").count(),
-        4,
-        "expect 4 rectangle profiles"
+        5,
+        "expect 5 rectangle profiles"
     );
     assert_eq!(
         step.matches("IFCEXTRUDEDAREASOLID(").count(),
-        4,
-        "expect 4 extruded solids"
+        5,
+        "expect 5 extruded solids"
     );
     assert_eq!(
         step.matches("IFCSHAPEREPRESENTATION(").count(),
-        4,
-        "expect 4 shape representations"
+        5,
+        "expect 5 shape representations"
     );
     assert_eq!(
         step.matches("IFCPRODUCTDEFINITIONSHAPE(").count(),
-        4,
-        "expect 4 product-definition shapes"
+        5,
+        "expect 5 product-definition shapes"
+    );
+    // Slab profile: 20 ft × 10 ft = 6.096 m × 3.048 m; 1 ft thick.
+    assert!(
+        step.contains(",6.096000,3.048000)"),
+        "slab profile dims missing (20' × 10')"
     );
     // N/S walls = 20 ft long = 6.096 m profile width; 8" = 0.2032 m
     // thick; 10 ft = 3.048 m high. Floats round to 6 decimals.
