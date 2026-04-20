@@ -8,12 +8,12 @@ All notable changes will be documented here. This project follows
 
 ### Added — Python bindings via pyo3 + maturin
 
-- **`rvt` Python package** — `pip install rvt` (once the PyPI publish
-  workflow lands) produces a single wheel per OS/arch that works on
-  every Python ≥ 3.8 (via pyo3 `abi3-py38`). Pure-Python `rvt` package
-  wraps the compiled `rvt._rvt` extension and ships a PEP 561
-  `py.typed` marker + hand-maintained `__init__.pyi` stubs so mypy,
-  pyright, and IDE autocomplete work out of the box.
+- **`rvt` Python package** — `pip install rvt` produces a single wheel
+  per OS/arch that works on every Python ≥ 3.8 (via pyo3 `abi3-py38`).
+  Pure-Python `rvt` package wraps the compiled `rvt._rvt` extension
+  and ships a PEP 561 `py.typed` marker + hand-maintained
+  `__init__.pyi` stubs so mypy, pyright, and IDE autocomplete work
+  out of the box.
 - **`rvt.RevitFile` class** — Python surface onto `RustRevitFile`.
   Properties: `version`, `original_path`, `build`, `guid`,
   `part_atom_title`. Methods: `stream_names()`,
@@ -43,6 +43,15 @@ All notable changes will be documented here. This project follows
 - **`docs/rvt-python-quickstart.ipynb`** — 15-cell Jupyter notebook
   mirror of `docs/python.md` for anyone who prefers an interactive
   walkthrough.
+- **`.github/workflows/publish.yml`** — PyPI release workflow. Fires
+  on tag push (`v*`) or `workflow_dispatch`. Builds wheels on
+  Ubuntu / macOS / Windows via `PyO3/maturin-action@v1`, builds the
+  sdist on Ubuntu, downloads every artifact into one `dist/`, and
+  publishes via `pypa/gh-action-pypi-publish` using PyPI's Trusted
+  Publisher flow (OIDC) — no `PYPI_API_TOKEN` secret stored in the
+  repo. Supports `workflow_dispatch` with `test-pypi: true` for
+  TestPyPI dry runs. Per-tag releases will cover every Python ≥ 3.8
+  on mainstream OSes with one wheel each.
 
 Design principle: expose only the stable high-level surface
 (metadata, walker-read ADocument, IFC export). The low-level
