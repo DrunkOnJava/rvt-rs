@@ -5,10 +5,14 @@ name: Fuzz
 # maintainers can reproduce locally. See `fuzz/README.md` for how
 # to run the same targets on your laptop.
 #
-# Budget: 9 targets × 180 s = 27 minutes of libFuzzer time per run,
-# well under the public-repo unlimited-minutes ceiling. If a target
-# crashes during the budget window, the workflow fails and the
-# crash artifact set is uploaded.
+# Budget: 9 targets × 300 s = 45 minutes of libFuzzer time per run
+# (SEC-24 minimum), well under the public-repo unlimited-minutes
+# ceiling. If a target crashes during the budget window, the
+# workflow fails and the crash artifact set is uploaded.
+#
+# SEC-24: minimum 5-minute (300s) per-target run per the security
+# task board. Increase via `workflow_dispatch` → `duration_seconds`
+# when doing a focused investigation of a specific target.
 
 on:
   schedule:
@@ -22,9 +26,9 @@ on:
         required: false
         default: ""
       duration_seconds:
-        description: "libFuzzer wall-clock budget per target"
+        description: "libFuzzer wall-clock budget per target (seconds)"
         required: false
-        default: "180"
+        default: "300"
 
 permissions:
   contents: read
@@ -79,7 +83,7 @@ jobs:
         working-directory: fuzz
         run: |
           budget='${{ inputs.duration_seconds }}'
-          if [[ -z "$budget" ]]; then budget=180; fi
+          if [[ -z "$budget" ]]; then budget=300; fi
           cargo fuzz run ${{ matrix.target }} -- \
             -max_total_time="$budget" \
             -rss_limit_mb=2048 \
