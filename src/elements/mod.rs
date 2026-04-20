@@ -27,6 +27,7 @@
 
 pub mod category;
 pub mod level;
+pub mod reference_points;
 pub mod styling;
 
 use crate::walker::ElementDecoder;
@@ -46,6 +47,9 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(styling::FillPatternDecoder),
         Box::new(styling::LinePatternDecoder),
         Box::new(styling::LineStyleDecoder),
+        Box::new(reference_points::BasePointDecoder),
+        Box::new(reference_points::SurveyPointDecoder),
+        Box::new(reference_points::ProjectPositionDecoder),
     ]
 }
 
