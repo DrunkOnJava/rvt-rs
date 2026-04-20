@@ -91,6 +91,10 @@ jobs:
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
         run: cargo test --release --test samples
+      - name: IFC export integration tests
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+        run: cargo test --release --test ifc_roundtrip
 
   doc:
     name: cargo doc
