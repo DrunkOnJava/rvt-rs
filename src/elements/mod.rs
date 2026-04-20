@@ -37,6 +37,7 @@ pub mod foundation_and_furnishings;
 pub mod generic;
 pub mod grid;
 pub mod level;
+pub mod mep;
 pub mod openings;
 pub mod parameters;
 pub mod project_organization;
@@ -119,6 +120,17 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(project_organization::RevisionDecoder),
         Box::new(parameters::ParameterElementDecoder),
         Box::new(parameters::SharedParameterDecoder),
+        Box::new(mep::ElectricalEquipmentDecoder),
+        Box::new(mep::ElectricalFixtureDecoder),
+        Box::new(mep::LightingFixtureDecoder),
+        Box::new(mep::LightingDeviceDecoder),
+        Box::new(mep::DuctDecoder),
+        Box::new(mep::DuctFittingDecoder),
+        Box::new(mep::MechanicalEquipmentDecoder),
+        Box::new(mep::PipeDecoder),
+        Box::new(mep::PipeFittingDecoder),
+        Box::new(mep::PlumbingFixtureDecoder),
+        Box::new(mep::SpecialtyEquipmentDecoder),
     ]
 }
 
