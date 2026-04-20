@@ -29,6 +29,7 @@ pub mod category;
 pub mod ceiling;
 pub mod circulation;
 pub mod curtain_wall;
+pub mod drafting;
 pub mod family;
 pub mod floor;
 pub mod foundation_and_furnishings;
@@ -105,6 +106,10 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(curtain_wall::CurtainPanelDecoder),
         Box::new(family::SymbolDecoder),
         Box::new(family::FamilyInstanceDecoder),
+        Box::new(drafting::ViewDecoder),
+        Box::new(drafting::SheetDecoder),
+        Box::new(drafting::ScheduleDecoder),
+        Box::new(drafting::ScheduleViewDecoder),
     ]
 }
 
