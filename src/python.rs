@@ -50,6 +50,76 @@ fn to_py_val<E: std::fmt::Display>(e: E) -> PyErr {
     PyValueError::new_err(e.to_string())
 }
 
+/// Shared serialiser: ADocumentInstance → Python dict. Used by the
+/// three ADocument accessors (plain / strict / lossy) so they all
+/// return the same shape.
+fn instance_to_dict<'py>(
+    py: Python<'py>,
+    inst: &walker::ADocumentInstance,
+) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("entry_offset", inst.entry_offset)?;
+    d.set_item("version", inst.version)?;
+
+    let fields = PyList::empty(py);
+    for (name, value) in &inst.fields {
+        let fd = PyDict::new(py);
+        fd.set_item("name", name)?;
+        match value {
+            walker::InstanceField::Pointer { raw } => {
+                fd.set_item("kind", "pointer")?;
+                fd.set_item("slot_a", raw[0])?;
+                fd.set_item("slot_b", raw[1])?;
+            }
+            walker::InstanceField::ElementId { tag, id } => {
+                fd.set_item("kind", "element_id")?;
+                fd.set_item("tag", *tag)?;
+                fd.set_item("id", *id)?;
+            }
+            walker::InstanceField::RefContainer { col_a, col_b } => {
+                fd.set_item("kind", "ref_container")?;
+                fd.set_item("count", col_a.len())?;
+                fd.set_item("col_a", col_a.clone())?;
+                fd.set_item("col_b", col_b.clone())?;
+            }
+            walker::InstanceField::Integer { value, signed, size } => {
+                fd.set_item("kind", "integer")?;
+                fd.set_item("value", *value)?;
+                fd.set_item("signed", *signed)?;
+                fd.set_item("size", *size)?;
+            }
+            walker::InstanceField::Float { value, size } => {
+                fd.set_item("kind", "float")?;
+                fd.set_item("value", *value)?;
+                fd.set_item("size", *size)?;
+            }
+            walker::InstanceField::Bool(v) => {
+                fd.set_item("kind", "bool")?;
+                fd.set_item("value", *v)?;
+            }
+            walker::InstanceField::Guid(bytes) => {
+                fd.set_item("kind", "guid")?;
+                fd.set_item("bytes", bytes.to_vec())?;
+            }
+            walker::InstanceField::String(s) => {
+                fd.set_item("kind", "string")?;
+                fd.set_item("value", s.as_str())?;
+            }
+            walker::InstanceField::Vector(items) => {
+                fd.set_item("kind", "vector")?;
+                fd.set_item("len", items.len())?;
+            }
+            walker::InstanceField::Bytes(b) => {
+                fd.set_item("kind", "bytes")?;
+                fd.set_item("len", b.len())?;
+            }
+        }
+        fields.append(fd)?;
+    }
+    d.set_item("fields", fields)?;
+    Ok(d)
+}
+
 /// Opened Revit file — the primary Python entry point.
 ///
 /// Constructed with a filesystem path. Raises `IOError` on missing
@@ -181,6 +251,24 @@ impl PyRevitFile {
         Ok(Some(serde_json::to_string(&bfi).map_err(to_py_val)?))
     }
 
+    /// Strict variant of [`basic_file_info_json`] (API-14). Raises
+    /// `ValueError` if the stream is missing or parse fails, instead
+    /// of returning `None`. Use when downstream Python code needs
+    /// to fail loud on malformed input.
+    ///
+    /// Python:
+    /// ```python
+    /// try:
+    ///     bfi = json.loads(rf.basic_file_info_json_strict())
+    /// except ValueError as e:
+    ///     # stream missing or parse failure
+    ///     ...
+    /// ```
+    fn basic_file_info_json_strict(&mut self) -> PyResult<String> {
+        let bfi = self.inner.basic_file_info().map_err(to_py_val)?;
+        serde_json::to_string(&bfi).map_err(to_py_val)
+    }
+
     /// Full `PartAtom` as a JSON string. Superset of the
     /// `part_atom_title` getter — also includes `id`, `updated`,
     /// `taxonomies`, `categories`, `omniclass`, and `raw_xml` (the
@@ -258,67 +346,85 @@ impl PyRevitFile {
         let Some(inst) = walker::read_adocument(&mut self.inner).map_err(to_py_io)? else {
             return Ok(None);
         };
-        let d = PyDict::new(py);
-        d.set_item("entry_offset", inst.entry_offset)?;
-        d.set_item("version", inst.version)?;
+        instance_to_dict(py, &inst).map(Some)
+    }
 
-        let fields = PyList::empty(py);
-        for (name, value) in &inst.fields {
-            let fd = PyDict::new(py);
-            fd.set_item("name", name)?;
-            match value {
-                walker::InstanceField::Pointer { raw } => {
-                    fd.set_item("kind", "pointer")?;
-                    fd.set_item("slot_a", raw[0])?;
-                    fd.set_item("slot_b", raw[1])?;
-                }
-                walker::InstanceField::ElementId { tag, id } => {
-                    fd.set_item("kind", "element_id")?;
-                    fd.set_item("tag", *tag)?;
-                    fd.set_item("id", *id)?;
-                }
-                walker::InstanceField::RefContainer { col_a, col_b } => {
-                    fd.set_item("kind", "ref_container")?;
-                    fd.set_item("count", col_a.len())?;
-                    fd.set_item("col_a", col_a.clone())?;
-                    fd.set_item("col_b", col_b.clone())?;
-                }
-                walker::InstanceField::Integer { value, signed, size } => {
-                    fd.set_item("kind", "integer")?;
-                    fd.set_item("value", *value)?;
-                    fd.set_item("signed", *signed)?;
-                    fd.set_item("size", *size)?;
-                }
-                walker::InstanceField::Float { value, size } => {
-                    fd.set_item("kind", "float")?;
-                    fd.set_item("value", *value)?;
-                    fd.set_item("size", *size)?;
-                }
-                walker::InstanceField::Bool(v) => {
-                    fd.set_item("kind", "bool")?;
-                    fd.set_item("value", *v)?;
-                }
-                walker::InstanceField::Guid(bytes) => {
-                    fd.set_item("kind", "guid")?;
-                    fd.set_item("bytes", bytes.to_vec())?;
-                }
-                walker::InstanceField::String(s) => {
-                    fd.set_item("kind", "string")?;
-                    fd.set_item("value", s.as_str())?;
-                }
-                walker::InstanceField::Vector(items) => {
-                    fd.set_item("kind", "vector")?;
-                    fd.set_item("len", items.len())?;
-                }
-                walker::InstanceField::Bytes(b) => {
-                    fd.set_item("kind", "bytes")?;
-                    fd.set_item("len", b.len())?;
-                }
-            }
-            fields.append(fd)?;
+    /// Strict variant of [`read_adocument`] (API-15). Raises
+    /// `ValueError` if the entry-point detector couldn't confidently
+    /// locate the record, OR if any field fell back to raw bytes.
+    /// Contract: success means every field decoded cleanly — mirrors
+    /// the Rust `walker::read_adocument_strict` bar.
+    fn read_adocument_strict<'py>(
+        &mut self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let inst = walker::read_adocument_strict(&mut self.inner).map_err(to_py_val)?;
+        instance_to_dict(py, &inst)
+    }
+
+    /// Lossy variant of [`read_adocument`] with a diagnostics
+    /// accumulator exposed to Python (API-16). Returns a dict with
+    /// `value` (the ADocument dict), `complete` (bool),
+    /// `partial_fields` (list of field names that fell back to raw
+    /// bytes), `failed_streams` (list), and `confidence` (float or
+    /// None — ratio of typed fields).
+    ///
+    /// Raises `OSError` for stream-level failures (BFI unreadable,
+    /// Global/Latest inflate failure, schema parse failure) — same
+    /// hard-error cases as the Rust equivalent.
+    ///
+    /// Python:
+    /// ```python
+    /// d = rf.read_adocument_lossy()
+    /// if d["complete"]:
+    ///     print("clean decode", d["value"])
+    /// else:
+    ///     print(f"partial: {d['confidence']:.0%} typed")
+    ///     print(d["partial_fields"])
+    /// ```
+    fn read_adocument_lossy<'py>(
+        &mut self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let decoded = walker::read_adocument_lossy(&mut self.inner).map_err(to_py_io)?;
+        let out = PyDict::new(py);
+        let value = instance_to_dict(py, &decoded.value)?;
+        out.set_item("value", value)?;
+        out.set_item("complete", decoded.complete)?;
+        out.set_item("partial_fields", decoded.diagnostics.partial_fields.clone())?;
+        out.set_item("failed_streams", decoded.diagnostics.failed_streams.clone())?;
+        match decoded.diagnostics.confidence {
+            Some(c) => out.set_item("confidence", c as f64)?,
+            None => out.set_item("confidence", py.None())?,
         }
-        d.set_item("fields", fields)?;
-        Ok(Some(d))
+        Ok(out)
+    }
+
+    /// Schema diagnostics as a dict (API-13 Python surface for
+    /// `SchemaTable::diagnostics`). Returns class_count,
+    /// parsed_field_count, declared_field_count_sum,
+    /// field_count_mismatches, tagged_class_count,
+    /// parent_only_class_count, ancestor_tag_count, skipped_records,
+    /// cpp_type_count — one dict, all integers.
+    ///
+    /// Raises `ValueError` if the schema can't be parsed (strict).
+    fn schema_diagnostics<'py>(
+        &mut self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let schema = self.inner.schema().map_err(to_py_val)?;
+        let d = schema.diagnostics();
+        let out = PyDict::new(py);
+        out.set_item("class_count", d.class_count)?;
+        out.set_item("parsed_field_count", d.parsed_field_count)?;
+        out.set_item("declared_field_count_sum", d.declared_field_count_sum)?;
+        out.set_item("field_count_mismatches", d.field_count_mismatches)?;
+        out.set_item("tagged_class_count", d.tagged_class_count)?;
+        out.set_item("parent_only_class_count", d.parent_only_class_count)?;
+        out.set_item("ancestor_tag_count", d.ancestor_tag_count)?;
+        out.set_item("skipped_records", d.skipped_records)?;
+        out.set_item("cpp_type_count", d.cpp_type_count)?;
+        Ok(out)
     }
 
     /// Produce an IFC4 STEP string for this Revit file via
