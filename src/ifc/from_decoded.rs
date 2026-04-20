@@ -157,6 +157,62 @@ pub fn slab_extrusion(
     }
 }
 
+/// Build a rectangular `Extrusion` for a roof. Identical shape to
+/// a slab — the IfcRoof emission already handles the semantic
+/// distinction. Thickness from [`crate::elements::roof::RoofType`]
+/// falls back to 12 inches.
+pub fn roof_extrusion(
+    length_feet: f64,
+    width_feet: f64,
+    roof_type: Option<&crate::elements::roof::RoofType>,
+) -> Extrusion {
+    Extrusion {
+        width_feet: length_feet,
+        depth_feet: width_feet,
+        height_feet: roof_type.and_then(|rt| rt.thickness_feet).unwrap_or(1.0),
+    }
+}
+
+/// Build a rectangular `Extrusion` for a ceiling. Thickness from
+/// [`crate::elements::ceiling::CeilingType`] falls back to 1 inch
+/// (ACT ceilings are typically 0.08 ft thick).
+pub fn ceiling_extrusion(
+    length_feet: f64,
+    width_feet: f64,
+    ceiling_type: Option<&crate::elements::ceiling::CeilingType>,
+) -> Extrusion {
+    Extrusion {
+        width_feet: length_feet,
+        depth_feet: width_feet,
+        height_feet: ceiling_type
+            .and_then(|ct| ct.thickness_feet)
+            .unwrap_or(1.0 / 12.0),
+    }
+}
+
+/// Build a rectangular `Extrusion` for a column, using the column's
+/// own height from level offsets. Profile dimensions are caller-
+/// supplied (column profile shape lives on the Symbol, not yet
+/// wired through).
+pub fn column_extrusion(
+    column: &crate::elements::structural::Column,
+    profile_width_feet: f64,
+    profile_depth_feet: f64,
+    level_elevation_diff_feet: f64,
+) -> Extrusion {
+    // Column height = (top_level.elevation + top_offset) -
+    //                 (base_level.elevation + base_offset).
+    // Callers provide the level-elevation delta; we add the
+    // decoded offsets (None → 0).
+    let offset_delta =
+        column.top_offset_feet.unwrap_or(0.0) - column.base_offset_feet.unwrap_or(0.0);
+    Extrusion {
+        width_feet: profile_width_feet,
+        depth_feet: profile_depth_feet,
+        height_feet: (level_elevation_diff_feet + offset_delta).max(0.1),
+    }
+}
+
 /// Build a `Pset_WallCommon`-style property set from a decoded
 /// [`Wall`]. Fields that are `None` are skipped — property sets
 /// only carry what we actually decoded.
