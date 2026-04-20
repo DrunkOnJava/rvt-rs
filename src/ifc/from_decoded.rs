@@ -62,6 +62,14 @@ pub struct ElementInput<'a> {
     /// typically from the decoded typed view (Wall/Floor/Door/…) —
     /// see the `*_property_set` helpers below.
     pub property_set: Option<PropertySet>,
+    /// Element origin in feet `[x, y, z]`. Typically sourced from
+    /// the decoded typed view's `location` field. When `Some`, the
+    /// writer emits a unique placement for this element; when
+    /// `None`, elements share the identity placement at (0,0,0).
+    pub location_feet: Option<[f64; 3]>,
+    /// Element yaw rotation in radians (rotation about the +Z
+    /// axis). Only consulted when `location_feet` is `Some`.
+    pub rotation_radians: Option<f64>,
 }
 
 /// Options controlling the bridge's output.
@@ -270,6 +278,8 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             storey_index: input.storey_index,
             material_index: input.material_index,
             property_set: input.property_set.clone(),
+            location_feet: input.location_feet,
+            rotation_radians: input.rotation_radians,
         });
     }
     let project_name = options.project_name.or_else(|| {
@@ -328,6 +338,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             },
             ElementInput {
                 decoded: &floor,
@@ -336,6 +348,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             },
             ElementInput {
                 decoded: &roof,
@@ -344,6 +358,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -364,6 +380,8 @@ mod tests {
             storey_index: None,
             material_index: None,
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -380,6 +398,8 @@ mod tests {
             storey_index: None,
             material_index: None,
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -401,6 +421,8 @@ mod tests {
             storey_index: None,
             material_index: None,
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -430,6 +452,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             },
             ElementInput {
                 decoded: &w2,
@@ -438,6 +462,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             },
             ElementInput {
                 decoded: &w3,
@@ -446,6 +472,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -515,6 +543,8 @@ mod tests {
             storey_index: None,
             material_index: None,
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -559,6 +589,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             },
             ElementInput {
                 decoded: &door,
@@ -567,6 +599,8 @@ mod tests {
                 storey_index: None,
                 material_index: None,
                 property_set: None,
+                location_feet: None,
+                rotation_radians: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());

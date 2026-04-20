@@ -83,6 +83,11 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(0),
             property_set: Some(wall_property_set(&wall_north)),
+            // Building footprint is 20 ft × 10 ft. Walls sit on the
+            // edges; their placement origins are the near-corner of
+            // each wall segment.
+            location_feet: Some([0.0, 10.0, 0.0]),
+            rotation_radians: Some(0.0),
         },
         ElementInput {
             decoded: &south_wall,
@@ -91,6 +96,8 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(0),
             property_set: None,
+            location_feet: Some([0.0, 0.0, 0.0]),
+            rotation_radians: Some(0.0),
         },
         ElementInput {
             decoded: &east_wall,
@@ -99,6 +106,10 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(1),
             property_set: None,
+            // East wall on the second floor — 10 ft up, 20 ft east.
+            // Rotated 90° so it runs +Y.
+            location_feet: Some([20.0, 0.0, 10.0]),
+            rotation_radians: Some(std::f64::consts::FRAC_PI_2),
         },
         ElementInput {
             decoded: &west_wall,
@@ -107,6 +118,8 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(0),
             property_set: None,
+            location_feet: Some([0.0, 0.0, 0.0]),
+            rotation_radians: Some(std::f64::consts::FRAC_PI_2),
         },
         ElementInput {
             decoded: &floor,
@@ -115,6 +128,8 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(0),
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         },
         ElementInput {
             decoded: &front_door,
@@ -123,6 +138,8 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(0),
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         },
         ElementInput {
             decoded: &north_window,
@@ -131,6 +148,8 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(1),
             storey_index: Some(0),
             property_set: Some(window_property_set(&win_sample)),
+            location_feet: None,
+            rotation_radians: None,
         },
         ElementInput {
             decoded: &south_window,
@@ -139,6 +158,8 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(1),
             storey_index: Some(0),
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         },
         ElementInput {
             decoded: &stair,
@@ -147,6 +168,8 @@ fn synthetic_project_emits_valid_ifc4() {
             material_index: Some(0),
             storey_index: Some(0),
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         },
         ElementInput {
             decoded: &unknown,
@@ -155,6 +178,8 @@ fn synthetic_project_emits_valid_ifc4() {
             storey_index: None,
             material_index: None,
             property_set: None,
+            location_feet: None,
+            rotation_radians: None,
         },
     ];
 
@@ -313,6 +338,24 @@ fn synthetic_project_emits_valid_ifc4() {
         "2.5ft → 0.762m"
     );
 
+    // --- Per-element placements (IFC-25) ---
+    // Four walls carry location_feet. North wall at (0, 10 ft, 0)
+    // → (0, 3.048, 0) metres. East wall at (20 ft, 0, 10 ft) →
+    // (6.096, 0, 3.048) metres.
+    assert!(
+        step.contains("IFCCARTESIANPOINT((0.000000,3.048000,0.000000))"),
+        "North Wall placement point missing"
+    );
+    assert!(
+        step.contains("IFCCARTESIANPOINT((6.096000,0.000000,3.048000))"),
+        "East Wall placement point missing"
+    );
+    // East + West walls rotated π/2 → X-axis IfcDirection (0,1,0).
+    assert!(
+        step.contains("IFCDIRECTION((0.000000,1.000000,0.))"),
+        "rotated X axis direction missing"
+    );
+
     // --- Optional: dump to a fixture file when asked ---
     if std::env::var("DUMP_IFC").is_ok() {
         let out_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -336,6 +379,8 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         storey_index: None,
         material_index: None,
         property_set: None,
+        location_feet: None,
+        rotation_radians: None,
     }];
     let opts = BuilderOptions {
         project_name: Some("Stable".into()),
