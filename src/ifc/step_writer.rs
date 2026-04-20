@@ -390,29 +390,40 @@ impl StepWriter {
 
         // BuildingElement emission — one `IFC<TYPE>` instance per decoded
         // Revit element (Wall, Floor, Roof, Ceiling, Door, Window, Column,
-        // Beam). Each element gets its own `IFCLOCALPLACEMENT` relative
-        // to the storey, and at the end they're all bundled into a single
-        // `IFCRELCONTAINEDINSPATIALSTRUCTURE` wiring them to `storey_id`
-        // — which is how IFC4 tools (BlenderBIM, IfcOpenShell) discover
-        // what's in a building.
+        // Beam…). Each element gets its own `IFCLOCALPLACEMENT` relative
+        // to whichever storey contains it (index from
+        // `BuildingElement.storey_index`; falls back to storey[0] when
+        // unset). At the end, elements are grouped by storey and one
+        // `IFCRELCONTAINEDINSPATIALSTRUCTURE` is emitted per non-empty
+        // storey — which is how IFC4 tools (BlenderBIM, IfcOpenShell)
+        // show "Floor 2 contains Wall-7, Wall-8" in the project
+        // browser.
         //
         // Geometry (`IfcShapeRepresentation`) is intentionally omitted
         // here — tasks IFC-15 through IFC-22 produce proper
         // representations once Phase-5 geometry lands. For now every
         // element carries its placement + name + GUID, which validates
         // against the IFC4 schema as a "geometry-free" element.
-        let mut element_ids: Vec<usize> = Vec::new();
+        let mut per_storey_elements: Vec<Vec<usize>> = vec![Vec::new(); storeys.len()];
         for entity in &model.entities {
             if let super::entities::IfcEntity::BuildingElement {
                 ifc_type,
                 name,
                 type_guid,
+                storey_index,
             } = entity
             {
+                // Clamp out-of-range indices to storey[0] rather than
+                // silently dropping the element. Out-of-range is a
+                // caller bug; losing the element would be worse.
+                let idx = storey_index
+                    .unwrap_or(0)
+                    .min(storeys.len().saturating_sub(1));
+                let placement_parent = storey_placements[idx];
                 let placement_id = self.id();
                 self.emit_entity(
                     placement_id,
-                    format!("IFCLOCALPLACEMENT(#{storey_placement},#{axis_placement})"),
+                    format!("IFCLOCALPLACEMENT(#{placement_parent},#{axis_placement})"),
                 );
                 let el_id = self.id();
                 let name_quoted = quoted_or_dollar(&escape(name));
@@ -440,11 +451,20 @@ impl StepWriter {
                     )
                 };
                 self.emit_entity(el_id, line);
-                element_ids.push(el_id);
+                per_storey_elements[idx].push(el_id);
             }
         }
 
-        if !element_ids.is_empty() {
+        // Suppress unused-variable warning from the legacy single-
+        // storey fallback — the loop above now consults
+        // storey_placements[idx] instead of this scalar binding.
+        let _ = storey_placement;
+
+        for (idx, element_ids) in per_storey_elements.iter().enumerate() {
+            if element_ids.is_empty() {
+                continue;
+            }
+            let target_storey = storey_ids[idx];
             let rel_id = self.id();
             let refs_list = element_ids
                 .iter()
@@ -454,11 +474,16 @@ impl StepWriter {
             self.emit_entity(
                 rel_id,
                 format!(
-                    "IFCRELCONTAINEDINSPATIALSTRUCTURE('{}',#{owner_hist},$,$,({refs_list}),#{storey_id})",
+                    "IFCRELCONTAINEDINSPATIALSTRUCTURE('{}',#{owner_hist},$,$,({refs_list}),#{target_storey})",
                     make_guid(rel_id),
                 ),
             );
         }
+        // storey_id from the pre-refactor era is still valid as the
+        // default storey; kept live above so existing tests that
+        // count placements / storeys on the empty-model path keep
+        // passing.
+        let _ = storey_id;
 
         self.emit_line("ENDSEC;");
     }
@@ -881,16 +906,19 @@ mod tests {
                     ifc_type: "IfcWall".into(),
                     name: "North Wall".into(),
                     type_guid: None,
+                    storey_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
                     name: "Level 1 Floor".into(),
                     type_guid: Some("101".into()),
+                    storey_index: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
                     name: "Front Door".into(),
                     type_guid: None,
+                    storey_index: None,
                 },
             ],
             classifications: Vec::new(),
@@ -940,6 +968,7 @@ mod tests {
                 ifc_type: "IfcDoor".into(),
                 name: "Door".into(),
                 type_guid: None,
+                storey_index: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),

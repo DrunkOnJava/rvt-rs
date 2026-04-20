@@ -59,51 +59,61 @@ fn synthetic_project_emits_valid_ifc4() {
             decoded: &north_wall,
             display_name: "North Wall".into(),
             guid: Some("W-N-001".into()),
+            storey_index: Some(0),
         },
         ElementInput {
             decoded: &south_wall,
             display_name: "South Wall".into(),
             guid: Some("W-S-001".into()),
+            storey_index: Some(0),
         },
         ElementInput {
             decoded: &east_wall,
             display_name: "East Wall".into(),
             guid: Some("W-E-001".into()),
+            storey_index: Some(1),
         },
         ElementInput {
             decoded: &west_wall,
             display_name: "West Wall".into(),
             guid: Some("W-W-001".into()),
+            storey_index: Some(0),
         },
         ElementInput {
             decoded: &floor,
             display_name: "Ground Floor Slab".into(),
             guid: Some("SLAB-001".into()),
+            storey_index: Some(0),
         },
         ElementInput {
             decoded: &front_door,
             display_name: "Front Entry Door".into(),
             guid: Some("DOOR-001".into()),
+            storey_index: Some(0),
         },
         ElementInput {
             decoded: &north_window,
             display_name: "North Window".into(),
             guid: Some("WIN-N-001".into()),
+            storey_index: Some(0),
         },
         ElementInput {
             decoded: &south_window,
             display_name: "South Window".into(),
             guid: Some("WIN-S-001".into()),
+            storey_index: Some(0),
         },
         ElementInput {
             decoded: &stair,
             display_name: "Main Stair".into(),
             guid: Some("STAIR-001".into()),
+            storey_index: Some(0),
         },
         ElementInput {
             decoded: &unknown,
             display_name: "Mystery Element".into(),
             guid: None,
+            storey_index: None,
         },
     ];
 
@@ -157,11 +167,16 @@ fn synthetic_project_emits_valid_ifc4() {
         "unknown-class should fall back to proxy"
     );
 
-    // --- Containment rel ties elements to storey ---
+    // --- Containment rels group elements by storey ---
+    // 9 elements on Ground (storey 0, incl. the None → default),
+    // 1 element on Second Floor (storey 1, the East Wall),
+    // 0 on Roof Deck → 2 IfcRelContainedInSpatialStructure
+    // entities. If you move an element between storeys, update
+    // this count.
     assert_eq!(
         step.matches("IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(),
-        1,
-        "expect one bundled containment rel"
+        2,
+        "expect 2 containment rels (Ground + Second)"
     );
 
     // --- Named entities round-trip ---
@@ -207,6 +222,7 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         decoded: &wall,
         display_name: "Stable Wall".into(),
         guid: Some("W-1".into()),
+        storey_index: None,
     }];
     let opts = BuilderOptions {
         project_name: Some("Stable".into()),

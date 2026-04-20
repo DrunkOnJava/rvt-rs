@@ -44,6 +44,11 @@ pub struct ElementInput<'a> {
     pub decoded: &'a DecodedElement,
     pub display_name: String,
     pub guid: Option<String>,
+    /// Which storey contains this element. Index into
+    /// `BuilderOptions.storeys`. `None` → element lands in
+    /// storey[0] (fine when only one storey is defined or when the
+    /// element's level hasn't been resolved yet).
+    pub storey_index: Option<usize>,
 }
 
 /// Options controlling the bridge's output.
@@ -104,6 +109,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             ifc_type: ifc_type.to_string(),
             name: input.display_name.clone(),
             type_guid: input.guid.clone(),
+            storey_index: input.storey_index,
         });
     }
     let project_name = options.project_name.or_else(|| {
@@ -158,16 +164,19 @@ mod tests {
                 decoded: &wall,
                 display_name: "Wall-1".into(),
                 guid: None,
+                storey_index: None,
             },
             ElementInput {
                 decoded: &floor,
                 display_name: "Slab-1".into(),
                 guid: None,
+                storey_index: None,
             },
             ElementInput {
                 decoded: &roof,
                 display_name: "Roof-1".into(),
                 guid: None,
+                storey_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -185,6 +194,7 @@ mod tests {
             decoded: &custom,
             display_name: "Mystery-1".into(),
             guid: None,
+            storey_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -198,6 +208,7 @@ mod tests {
             decoded: &wall,
             display_name: "Wall-1".into(),
             guid: None,
+            storey_index: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -216,6 +227,7 @@ mod tests {
             decoded: &wall,
             display_name: "Wall-1".into(),
             guid: None,
+            storey_index: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -242,16 +254,19 @@ mod tests {
                 decoded: &w1,
                 display_name: "Wall-N".into(),
                 guid: None,
+                storey_index: None,
             },
             ElementInput {
                 decoded: &w2,
                 display_name: "Wall-E".into(),
                 guid: None,
+                storey_index: None,
             },
             ElementInput {
                 decoded: &w3,
                 display_name: "Wall-S".into(),
                 guid: None,
+                storey_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -318,6 +333,7 @@ mod tests {
             decoded: &wall,
             display_name: "W-1".into(),
             guid: None,
+            storey_index: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -359,11 +375,13 @@ mod tests {
                 decoded: &wall,
                 display_name: "North Wall".into(),
                 guid: None,
+                storey_index: None,
             },
             ElementInput {
                 decoded: &door,
                 display_name: "Front Door".into(),
                 guid: Some("DOOR-GUID-42".into()),
+                storey_index: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
