@@ -92,6 +92,7 @@ pub mod class_index;
 pub mod compression;
 pub mod corpus;
 pub mod elem_table;
+pub mod elements;
 pub mod error;
 pub mod formats;
 pub mod geometry;

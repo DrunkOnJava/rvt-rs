@@ -59,6 +59,7 @@
 
 use crate::Result;
 
+pub mod category_map;
 pub mod entities;
 pub mod step_writer;
 
