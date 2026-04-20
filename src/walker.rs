@@ -293,15 +293,136 @@ pub fn read_field_by_type(
             *cursor += 8;
             InstanceField::Pointer { raw: [a, b] }
         }
-        FieldType::Vector { .. } | FieldType::Container { .. } => {
-            // These need inner-type knowledge to decode element-by-element;
-            // the 2-column container layout (kind=0x0e) is handled
-            // specially by `read_ref_container_two_column` below and
-            // called from the ADocument walker. Generic callers get
-            // the raw bytes until per-variant support lands.
+        FieldType::Vector { kind, .. } => {
+            // L5B-08: decode vectors of known-size primitive elements
+            // into `InstanceField::Vector(Vec<InstanceField>)`. Wire
+            // format for these kinds: `[u32 count][count × element]`
+            // where element size is driven by the outer-type byte.
+            //
+            // Element-kind table (matches the Primitive table above):
+            //
+            //   0x01 = bool (1 byte), 0x07 = f64 (8 bytes),
+            //   0x05 = u32 (4 bytes), 0x0b = i64 (8 bytes),
+            //   0x0d = point = 3 × f64 (24 bytes).
+            //
+            // Unknown element kinds fall back to `InstanceField::Bytes`
+            // with the raw count-prefix + remaining payload so callers
+            // can inspect — same graceful-fallback philosophy as the
+            // other read paths.
             let slice = rem();
-            // Consume at least the count prefix so outer decoders
-            // don't re-read it; but preserve the raw for inspection.
+            if slice.len() < 4 {
+                return InstanceField::Bytes(slice.to_vec());
+            }
+            let count = u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]) as usize;
+            // Per-element byte size for kinds we decode directly.
+            let elem_size: Option<usize> = match *kind {
+                0x01 => Some(1),
+                0x05 | 0x04 => Some(4),
+                0x07 | 0x0b => Some(8),
+                0x0d => Some(24),
+                _ => None,
+            };
+            let Some(esz) = elem_size else {
+                // Unknown element kind — consume just the count
+                // prefix and emit the following-bytes as raw.
+                let consumed = slice.len().min(4);
+                let out = slice[..consumed].to_vec();
+                *cursor += consumed;
+                return InstanceField::Bytes(out);
+            };
+            let needed = count
+                .checked_mul(esz)
+                .and_then(|n| n.checked_add(4))
+                .unwrap_or(usize::MAX);
+            if slice.len() < needed {
+                return InstanceField::Bytes(slice.to_vec());
+            }
+            let mut items = Vec::with_capacity(count);
+            let mut local = 4;
+            for _ in 0..count {
+                let elem_bytes = &slice[local..local + esz];
+                let item = match (*kind, esz) {
+                    (0x01, 1) => InstanceField::Bool(elem_bytes[0] != 0),
+                    (0x04, 4) | (0x05, 4) => {
+                        let v = u32::from_le_bytes([
+                            elem_bytes[0],
+                            elem_bytes[1],
+                            elem_bytes[2],
+                            elem_bytes[3],
+                        ]) as i64;
+                        InstanceField::Integer {
+                            value: v,
+                            signed: *kind == 0x04,
+                            size: 4,
+                        }
+                    }
+                    (0x07, 8) => {
+                        let v = f64::from_le_bytes([
+                            elem_bytes[0],
+                            elem_bytes[1],
+                            elem_bytes[2],
+                            elem_bytes[3],
+                            elem_bytes[4],
+                            elem_bytes[5],
+                            elem_bytes[6],
+                            elem_bytes[7],
+                        ]);
+                        InstanceField::Float { value: v, size: 8 }
+                    }
+                    (0x0b, 8) => {
+                        let v = i64::from_le_bytes([
+                            elem_bytes[0],
+                            elem_bytes[1],
+                            elem_bytes[2],
+                            elem_bytes[3],
+                            elem_bytes[4],
+                            elem_bytes[5],
+                            elem_bytes[6],
+                            elem_bytes[7],
+                        ]);
+                        InstanceField::Integer {
+                            value: v,
+                            signed: true,
+                            size: 8,
+                        }
+                    }
+                    (0x0d, 24) => {
+                        // point = 3 × f64. Surface as a nested Vector
+                        // of three Float items — the inner structure
+                        // preserves the X,Y,Z semantics without
+                        // needing a dedicated Point variant.
+                        let mut point = Vec::with_capacity(3);
+                        for k in 0..3 {
+                            let off = k * 8;
+                            let v = f64::from_le_bytes([
+                                elem_bytes[off],
+                                elem_bytes[off + 1],
+                                elem_bytes[off + 2],
+                                elem_bytes[off + 3],
+                                elem_bytes[off + 4],
+                                elem_bytes[off + 5],
+                                elem_bytes[off + 6],
+                                elem_bytes[off + 7],
+                            ]);
+                            point.push(InstanceField::Float { value: v, size: 8 });
+                        }
+                        InstanceField::Vector(point)
+                    }
+                    _ => InstanceField::Bytes(elem_bytes.to_vec()),
+                };
+                items.push(item);
+                local += esz;
+            }
+            *cursor += 4 + count * esz;
+            InstanceField::Vector(items)
+        }
+        FieldType::Container { .. } => {
+            // 2-column container layout (kind=0x0e) is handled
+            // specially by the caller via `read_field` (the
+            // ADocument-walker-facing path). Generic callers that
+            // hit this branch get the raw bytes until per-variant
+            // support lands.
+            let slice = rem();
             let consumed = slice.len().min(4);
             let out = slice[..consumed].to_vec();
             *cursor += consumed;
@@ -1170,5 +1291,80 @@ mod tests {
         // means the scored path never runs.
         assert_eq!(r.strategy, DetectionStrategy::NotFound);
         assert_eq!(r.offset, None);
+    }
+
+    /// L5B-08: read_field_by_type decodes `Vector<f64>` into a
+    /// typed sequence of `Float` items, not a raw Bytes fallback.
+    #[test]
+    fn read_field_by_type_vector_of_f64() {
+        let ft = formats::FieldType::Vector {
+            kind: 0x07,
+            body: Vec::new(),
+        };
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&[2, 0, 0, 0]); // count = 2
+        bytes.extend_from_slice(&1.25f64.to_le_bytes());
+        bytes.extend_from_slice(&(-3.5f64).to_le_bytes());
+        let mut cursor = 0;
+        let field = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 4 + 2 * 8);
+        match field {
+            InstanceField::Vector(items) => {
+                assert_eq!(items.len(), 2);
+                assert!(matches!(&items[0], InstanceField::Float { value, .. } if *value == 1.25));
+                assert!(matches!(&items[1], InstanceField::Float { value, .. } if *value == -3.5));
+            }
+            other => panic!("expected Vector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_by_type_vector_of_points() {
+        // Vector<point> = count × (3 × f64).
+        let ft = formats::FieldType::Vector {
+            kind: 0x0d,
+            body: Vec::new(),
+        };
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&[1, 0, 0, 0]); // count = 1
+        for v in [10.0f64, 20.0, 30.0] {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        let mut cursor = 0;
+        let field = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 4 + 24);
+        match field {
+            InstanceField::Vector(points) => {
+                assert_eq!(points.len(), 1);
+                match &points[0] {
+                    InstanceField::Vector(xyz) => {
+                        assert_eq!(xyz.len(), 3);
+                        let extract = |f: &InstanceField| match f {
+                            InstanceField::Float { value, .. } => *value,
+                            _ => f64::NAN,
+                        };
+                        assert_eq!(extract(&xyz[0]), 10.0);
+                        assert_eq!(extract(&xyz[1]), 20.0);
+                        assert_eq!(extract(&xyz[2]), 30.0);
+                    }
+                    other => panic!("expected inner Vector(point), got {other:?}"),
+                }
+            }
+            other => panic!("expected outer Vector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_by_type_vector_unknown_kind_falls_back() {
+        // 0xff isn't in our element-kind table — should fall back to
+        // Bytes without decoding.
+        let ft = formats::FieldType::Vector {
+            kind: 0xff,
+            body: Vec::new(),
+        };
+        let bytes = [0, 0, 0, 0, 0xaa, 0xbb];
+        let mut cursor = 0;
+        let field = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert!(matches!(field, InstanceField::Bytes(_)));
     }
 }
