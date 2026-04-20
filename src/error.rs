@@ -20,6 +20,16 @@ pub enum Error {
     #[error("Decompression failed: {0}")]
     Decompress(String),
 
+    /// A bounded-decompression call refused to continue because its
+    /// output budget would be exceeded. Raised by
+    /// [`crate::compression::inflate_at_with_limits`] and its
+    /// aggregate-budget cousin. Distinct from the generic
+    /// `Decompress` variant so callers can distinguish "corrupt
+    /// input" from "well-formed input that would inflate beyond the
+    /// configured DoS ceiling."
+    #[error("Decompression output limit exceeded: {0}")]
+    DecompressLimitExceeded(String),
+
     #[error("Malformed BasicFileInfo: {0}")]
     BasicFileInfo(String),
 

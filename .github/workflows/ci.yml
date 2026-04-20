@@ -29,6 +29,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege at the workflow level. No CI job here modifies the
+# repo, opens issues, comments on PRs, or otherwise needs write
+# access; `contents: read` is enough. Individual jobs can request
+# additional scopes with a per-job `permissions:` block if that
+# ever changes.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
@@ -38,7 +46,7 @@ jobs:
     name: cargo fmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -48,11 +56,11 @@ jobs:
     name: cargo clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
@@ -76,7 +84,7 @@ jobs:
       - name: Disable autocrlf on Windows
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       # Fetch the Autodesk-owned `rac_basic_sample_family` corpus from
       # phi-ag/rvt. rvt-rs intentionally does not redistribute these
       # files (see SECURITY.md §Scope); they're pulled at build time.
@@ -89,7 +97,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - name: Build
         run: cargo build --release --all-targets
       - name: Unit tests
@@ -125,9 +133,9 @@ jobs:
     env:
       RUSTDOCFLAGS: "-D warnings"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - run: cargo doc --no-deps --lib
 
   python-wheel:
@@ -144,7 +152,7 @@ jobs:
       - name: Disable autocrlf on Windows
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Fetch phi-ag/rvt sample corpus
         uses: actions/checkout@v4
         with:
@@ -155,7 +163,7 @@ jobs:
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           key: python-wheel-${{ matrix.os }}
       # Build the abi3 wheel. `--features python` flips the optional
@@ -191,7 +199,7 @@ jobs:
     name: PII guard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Scan for PII-shaped leak patterns
         run: |
           set -e
