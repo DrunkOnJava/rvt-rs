@@ -75,6 +75,7 @@ macro_rules! simple_decoder {
 simple_decoder!(PhaseDecoder, "Phase");
 simple_decoder!(DesignOptionDecoder, "DesignOption");
 simple_decoder!(WorksetDecoder, "Workset");
+simple_decoder!(RevisionDecoder, "Revision");
 
 /// Typed view for Phase.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -162,6 +163,96 @@ impl Workset {
     /// "I can modify this" combination in workshared Revit models.
     pub fn is_modifiable(&self) -> Option<bool> {
         Some(self.is_open? && self.is_editable?)
+    }
+}
+
+/// Issued-status enum for a Revit drawing revision.
+///
+/// Revit's `RevisionVisibility` + `RevisionIssued` split into a single
+/// simplified enum. `Draft` means the revision is still being edited;
+/// `Issued` means it has been signed off and the revision table on the
+/// sheet should lock it in place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RevisionStatus {
+    #[default]
+    Draft,
+    Issued,
+    Other,
+}
+
+impl RevisionStatus {
+    pub fn from_code(code: u32) -> Self {
+        match code {
+            0 => Self::Draft,
+            1 => Self::Issued,
+            _ => Self::Other,
+        }
+    }
+}
+
+/// Typed view of a decoded Revision.
+///
+/// Revisions are Revit's mechanism for tracking drawing-set updates
+/// over a project's lifecycle. Each Revision gets a sequence number,
+/// a date, a description, and an issued-to / issued-by pair. Sheets
+/// display the active revisions in a revision schedule, and the
+/// revision cloud tool annotates which regions of a drawing changed.
+///
+/// Typical fields (observed 2016–2026):
+///
+/// | Field | Type | Semantics |
+/// |---|---|---|
+/// | `m_sequence_number` | Primitive u32 | 1-indexed order; drives the default label. |
+/// | `m_revision_date` | String | Free-form date, typically "YYYY-MM-DD" or "MM/DD/YY". |
+/// | `m_description` | String | Human-readable summary, shown on the revision schedule. |
+/// | `m_issued_to` | String | "Client", "Architect of Record", etc. |
+/// | `m_issued_by` | String | Author / firm. |
+/// | `m_status` | Primitive u32 | 0 = Draft, 1 = Issued. |
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Revision {
+    pub sequence_number: Option<u32>,
+    pub revision_date: Option<String>,
+    pub description: Option<String>,
+    pub issued_to: Option<String>,
+    pub issued_by: Option<String>,
+    pub status: Option<RevisionStatus>,
+}
+
+impl Revision {
+    pub fn from_decoded(decoded: &DecodedElement) -> Self {
+        let mut out = Self::default();
+        for (field_name, value) in &decoded.fields {
+            match (normalise_field_name(field_name).as_str(), value) {
+                (
+                    "sequencenumber" | "sequence" | "number",
+                    InstanceField::Integer { value, .. },
+                ) => {
+                    out.sequence_number = Some(*value as u32);
+                }
+                ("revisiondate" | "date", InstanceField::String(s)) => {
+                    out.revision_date = Some(s.clone());
+                }
+                ("description", InstanceField::String(s)) => {
+                    out.description = Some(s.clone());
+                }
+                ("issuedto", InstanceField::String(s)) => {
+                    out.issued_to = Some(s.clone());
+                }
+                ("issuedby", InstanceField::String(s)) => {
+                    out.issued_by = Some(s.clone());
+                }
+                ("status" | "revisionstatus", InstanceField::Integer { value, .. }) => {
+                    out.status = Some(RevisionStatus::from_code(*value as u32));
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// Is this revision finalised (`Issued` status)?
+    pub fn is_issued(&self) -> bool {
+        matches!(self.status, Some(RevisionStatus::Issued))
     }
 }
 
@@ -292,5 +383,91 @@ mod tests {
         assert_eq!(PhaseDecoder.class_name(), "Phase");
         assert_eq!(DesignOptionDecoder.class_name(), "DesignOption");
         assert_eq!(WorksetDecoder.class_name(), "Workset");
+        assert_eq!(RevisionDecoder.class_name(), "Revision");
+    }
+
+    #[test]
+    fn revision_rejects_wrong_schema() {
+        use crate::formats::ClassEntry;
+        let wrong = ClassEntry {
+            name: "Wall".into(),
+            offset: 0,
+            fields: vec![],
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        };
+        assert!(
+            RevisionDecoder
+                .decode(&[], &wrong, &HandleIndex::new())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn revision_status_mapping() {
+        assert_eq!(RevisionStatus::from_code(0), RevisionStatus::Draft);
+        assert_eq!(RevisionStatus::from_code(1), RevisionStatus::Issued);
+        assert_eq!(RevisionStatus::from_code(42), RevisionStatus::Other);
+    }
+
+    #[test]
+    fn revision_from_decoded() {
+        let fields = vec![
+            (
+                "m_sequence_number".into(),
+                InstanceField::Integer {
+                    value: 3,
+                    signed: false,
+                    size: 4,
+                },
+            ),
+            (
+                "m_revision_date".into(),
+                InstanceField::String("2026-04-20".into()),
+            ),
+            (
+                "m_description".into(),
+                InstanceField::String("Permit set".into()),
+            ),
+            (
+                "m_issued_to".into(),
+                InstanceField::String("Client".into()),
+            ),
+            (
+                "m_issued_by".into(),
+                InstanceField::String("Architect of Record".into()),
+            ),
+            (
+                "m_status".into(),
+                InstanceField::Integer {
+                    value: 1,
+                    signed: false,
+                    size: 4,
+                },
+            ),
+        ];
+        let decoded = DecodedElement {
+            id: None,
+            class: "Revision".into(),
+            fields,
+            byte_range: 0..0,
+        };
+        let r = Revision::from_decoded(&decoded);
+        assert_eq!(r.sequence_number, Some(3));
+        assert_eq!(r.revision_date.as_deref(), Some("2026-04-20"));
+        assert_eq!(r.description.as_deref(), Some("Permit set"));
+        assert_eq!(r.issued_to.as_deref(), Some("Client"));
+        assert_eq!(r.issued_by.as_deref(), Some("Architect of Record"));
+        assert_eq!(r.status, Some(RevisionStatus::Issued));
+        assert!(r.is_issued());
+    }
+
+    #[test]
+    fn revision_is_issued_when_unset_is_false() {
+        let r = Revision::default();
+        assert!(!r.is_issued());
     }
 }

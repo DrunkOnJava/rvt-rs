@@ -114,6 +114,8 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(annotations::DimensionDecoder),
         Box::new(annotations::TagDecoder),
         Box::new(annotations::TextNoteDecoder),
+        Box::new(annotations::AnnotationDecoder),
+        Box::new(project_organization::RevisionDecoder),
     ]
 }
 
