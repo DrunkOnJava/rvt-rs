@@ -34,6 +34,19 @@ cargo build --release
 ./target/release/rvt-analyze --redact path/to/your.rfa
 ```
 
+### From Python
+
+```python
+import rvt
+
+f = rvt.RevitFile("my-project.rfa")
+print(f.version, f.part_atom_title)      # 2024 "0610 x 0915mm"
+print(f.read_adocument()["fields"][-1])  # {name: m_devBranchInfo, kind: element_id, tag: 0, id: 35}
+open("out.ifc", "w").write(f.write_ifc())
+```
+
+Install: `pip install rvt` (once [#52e](docs/python.md#install) PyPI publish ships) or build from source with [`maturin build --release --features python`](docs/python.md#from-source). Full API + Jupyter notebook walkthrough: [`docs/python.md`](docs/python.md) and [`docs/rvt-python-quickstart.ipynb`](docs/rvt-python-quickstart.ipynb).
+
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 
 - **One-screen teaser**: [`docs/demo/rvt-analyze-2024-teaser.txt`](docs/demo/rvt-analyze-2024-teaser.txt) — the four highlight sections fit in one terminal screen (identity, format anchors, Phase D linkage, disclosure scan)
