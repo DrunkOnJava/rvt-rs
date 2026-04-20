@@ -49,3 +49,31 @@ path = "fuzz_targets/fuzz_find_chunks.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_basic_file_info"
+path = "fuzz_targets/fuzz_basic_file_info.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_part_atom"
+path = "fuzz_targets/fuzz_part_atom.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_walker_entry_detect"
+path = "fuzz_targets/fuzz_walker_entry_detect.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_step_writer"
+path = "fuzz_targets/fuzz_step_writer.rs"
+test = false
+doc = false
+bench = false
