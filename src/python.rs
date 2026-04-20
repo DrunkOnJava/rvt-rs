@@ -26,6 +26,16 @@
 //! get dicts and strings, no wrapper types to learn.
 
 #![allow(non_local_definitions)]
+// pyo3's #[pyclass]/#[pymethods]/#[pyfunction] macros expand into code
+// that calls the pyo3 runtime's unsafe helpers inside otherwise-safe
+// user function signatures. The Rust 2024 `unsafe_op_in_unsafe_fn` lint
+// flags every one of those calls; pyo3 0.22 does not yet wrap them in
+// explicit `unsafe {}` blocks. Similarly the macros generate `.into()`
+// calls on already-PyErr values (clippy::useless_conversion). Both are
+// tracked upstream (pyo3#4382, pyo3#4448) — silence them at the module
+// level so the main Rust build stays clean with `-D warnings`.
+#![allow(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::useless_conversion)]
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
@@ -111,10 +121,7 @@ impl PyRevitFile {
     /// Decode the schema from `Formats/Latest` and return a count of
     /// classes + fields. The full schema is large; callers that want
     /// it should use the Rust library directly.
-    fn schema_summary<'py>(
-        &mut self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    fn schema_summary<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let schema = self.inner.schema().map_err(to_py_val)?;
         let d = PyDict::new_bound(py);
         let total_fields: usize = schema.classes.iter().map(|c| c.fields.len()).sum();
@@ -142,10 +149,7 @@ impl PyRevitFile {
     ///     ],
     /// }
     /// ```
-    fn read_adocument<'py>(
-        &mut self,
-        py: Python<'py>,
-    ) -> PyResult<Option<Bound<'py, PyDict>>> {
+    fn read_adocument<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
         let Some(inst) = walker::read_adocument(&mut self.inner).map_err(to_py_io)? else {
             return Ok(None);
         };
@@ -190,7 +194,8 @@ impl PyRevitFile {
     /// description, units, classifications. Raises `ValueError` if
     /// the file can't be parsed far enough to produce a model.
     fn write_ifc(&mut self) -> PyResult<String> {
-        let model = ifc::Exporter::export(&ifc::RvtDocExporter, &mut self.inner).map_err(to_py_val)?;
+        let model =
+            ifc::Exporter::export(&ifc::RvtDocExporter, &mut self.inner).map_err(to_py_val)?;
         Ok(ifc::write_step(&model))
     }
 
