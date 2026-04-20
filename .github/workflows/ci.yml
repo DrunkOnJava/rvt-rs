@@ -3,8 +3,31 @@ name: CI
 on:
   push:
     branches: [main]
+    # Docs-only changes don't need to spin up the Windows wheel
+    # matrix. Keep the fast Ubuntu jobs (fmt / clippy / doc / pii)
+    # for any commit that actually touches code, including tests
+    # or workflow files. `paths-ignore` is a whole-run filter so
+    # this skips ALL jobs when only ignored paths changed.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "CHANGELOG.md"
+      - "LICENSE*"
+      - ".gitignore"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "CITATION.cff"
   pull_request:
     branches: [main]
+
+# Supersede any in-flight run for the same ref when a new push
+# arrives. Prevents #52a → #52b → #52c back-to-back pushes from
+# burning 3× runner-minutes on stale Windows matrices nobody will
+# look at. `cancel-in-progress: true` is the budget saver; the
+# group key is per-ref so concurrent PR + push on different refs
+# don't cancel each other.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
