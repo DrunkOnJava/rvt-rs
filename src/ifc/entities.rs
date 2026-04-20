@@ -23,6 +23,12 @@ pub enum IfcEntity {
         ifc_type: String,
         name: String,
         type_guid: Option<String>,
+        /// Index into `IfcModel.building_storeys` — which storey
+        /// contains this element. `None` means the writer should
+        /// default it to the first storey (common when the element's
+        /// `level_id` wasn't resolved yet).
+        #[serde(default)]
+        storey_index: Option<usize>,
     },
     TypeObject {
         name: String,
