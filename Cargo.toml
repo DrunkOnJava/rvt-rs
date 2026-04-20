@@ -55,6 +55,14 @@ thiserror = "1"
 # rebuilds. Only pulled in when the `python` feature is enabled.
 pyo3 = { version = "0.24", optional = true, features = ["extension-module", "abi3-py38"] }
 
+[dev-dependencies]
+# Statistical benchmarking harness — drives `benches/*` and
+# powers the criterion-based cells in `docs/benchmarks.md` (Q-05).
+# `html_reports` renders per-run HTML + SVG so CI artefacts are
+# browsable. Version pinned to the 0.5 line (MSRV-compatible with
+# our 1.85 floor).
+criterion = { version = "0.5", features = ["html_reports"] }
+
 # Seven shipped binaries. All depend on the `rvt` library crate.
 
 [[bin]]
@@ -96,6 +104,20 @@ path = "src/bin/rvt_ifc.rs"
 [[bin]]
 name = "gen-fixture"
 path = "src/bin/gen_fixture.rs"
+
+# Criterion benchmark suite (Q-05). Run with `cargo bench` or
+# `cargo bench --bench compression`. See `docs/benchmarks.md`.
+[[bench]]
+name = "compression"
+harness = false
+
+[[bench]]
+name = "basic_file_info"
+harness = false
+
+[[bench]]
+name = "schema"
+harness = false
 
 [lib]
 name = "rvt"
