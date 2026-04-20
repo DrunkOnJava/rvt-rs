@@ -6,6 +6,20 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Security
+
+- **pyo3 bumped 0.22 → 0.24** — resolves Dependabot advisory
+  [GHSA-pph8-gcv7-4qj5](https://github.com/advisories/GHSA-pph8-gcv7-4qj5)
+  (`PyString::from_object` buffer-overread on non-nul-terminated `&str`).
+  Fix patched upstream in pyo3 0.24.1; we now track the 0.24 line.
+  Migration: replaced deprecated `PyBytes::new_bound`/`PyDict::new_bound`/
+  `PyList::empty_bound` with the renamed `PyBytes::new`/`PyDict::new`/
+  `PyList::empty` APIs in `src/python.rs`, and extended the
+  `InstanceField` match in `read_adocument` to cover the six variants
+  (`Integer`, `Float`, `Bool`, `Guid`, `String`, `Vector`) that had been
+  missed on the original bindings — those paths now round-trip through
+  Python. All 265 lib tests still pass under `--features python`.
+
 ### Fixed — audit P0 credibility + correctness repair
 
 External audit (local `AUDIT-2026-04-19.md`) flagged a cluster of
