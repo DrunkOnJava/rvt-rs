@@ -567,6 +567,72 @@ impl Completeness {
 }
 
 impl ADocumentInstance {
+    /// Pointer bytes from the `m_elem_table` field, when the schema
+    /// and decoded payload surfaced it (L5B-01).
+    ///
+    /// ADocument carries a pointer to the document-wide element
+    /// index table — the map from `ElementId` to per-element record
+    /// location in `Global/Latest`. The pointer appears in the
+    /// schema as a field named `m_elem_table` (sometimes
+    /// `m_elemTable` or a normalised variant), typed as
+    /// [`crate::formats::FieldType::Pointer`]. The walker decodes
+    /// the field to [`InstanceField::Pointer`] carrying the raw
+    /// 8-byte `[u32 slot_a][u32 slot_b]` payload.
+    ///
+    /// This helper looks up that field by name (accepting the
+    /// common spelling variants) and returns the raw pointer
+    /// tuple. Returns `None` when:
+    ///
+    /// - No field named `m_elem_table` (or its variants) is
+    ///   present. This happens on older Revit releases where the
+    ///   ADocument wire layout hasn't been fully decoded.
+    /// - The field IS present but wasn't decoded to
+    ///   `InstanceField::Pointer` — e.g. the typed walker fell
+    ///   back to raw `Bytes` when the `FieldType` classification
+    ///   didn't produce a pointer. This is a sign of schema drift
+    ///   or cross-version wire changes.
+    /// - The pointer payload is the sentinel NULL `[0, 0]` or
+    ///   `[0xFFFF_FFFF, 0xFFFF_FFFF]` value (Revit uses both to
+    ///   mean "no element table"; treating them uniformly as
+    ///   `None` matches the walker's semantic).
+    ///
+    /// Non-None return means the pointer exists and is non-null.
+    /// Consuming it (following into the referenced bytes and
+    /// parsing an actual element index) is separate — see the
+    /// `walk_elem_table_*` entry points on `RevitFile`.
+    pub fn elem_table_pointer(&self) -> Option<[u32; 2]> {
+        const NAMES: &[&str] = &[
+            "m_elem_table",
+            "m_elemtable",
+            "elem_table",
+            "elemtable",
+            "elementtable",
+            "m_element_table",
+        ];
+        for (field_name, value) in &self.fields {
+            let norm = field_name
+                .trim_start_matches('m')
+                .trim_start_matches('_')
+                .to_lowercase();
+            let compacted = norm.replace('_', "");
+            let matched = NAMES
+                .iter()
+                .any(|n| n.eq_ignore_ascii_case(field_name) || *n == compacted);
+            if !matched {
+                continue;
+            }
+            if let InstanceField::Pointer { raw } = value {
+                // Revit sentinels: [0, 0] = NULL, [!0, !0] = "not
+                // yet set." Both mean "no element table to walk."
+                if *raw == [0, 0] || *raw == [u32::MAX, u32::MAX] {
+                    return None;
+                }
+                return Some(*raw);
+            }
+        }
+        None
+    }
+
     /// Compute completeness markers for this instance. O(n) in the
     /// field count; cheap enough to call ad-hoc.
     pub fn completeness(&self) -> Completeness {
@@ -1590,5 +1656,74 @@ mod tests {
         let mut cursor = 0;
         let field = read_field_by_type(&bytes, &mut cursor, &ft);
         assert!(matches!(field, InstanceField::Bytes(_)));
+    }
+
+    // ----- L5B-01: ADocumentInstance::elem_table_pointer -----
+
+    fn mk_adoc(fields: Vec<(String, InstanceField)>) -> ADocumentInstance {
+        ADocumentInstance {
+            entry_offset: 0,
+            version: 2026,
+            fields,
+        }
+    }
+
+    #[test]
+    fn elem_table_pointer_extracts_canonical_field() {
+        let adoc = mk_adoc(vec![(
+            "m_elem_table".into(),
+            InstanceField::Pointer { raw: [42, 1337] },
+        )]);
+        assert_eq!(adoc.elem_table_pointer(), Some([42, 1337]));
+    }
+
+    #[test]
+    fn elem_table_pointer_accepts_snake_case_variant() {
+        let adoc = mk_adoc(vec![(
+            "m_elemTable".into(),
+            InstanceField::Pointer { raw: [7, 8] },
+        )]);
+        assert_eq!(adoc.elem_table_pointer(), Some([7, 8]));
+    }
+
+    #[test]
+    fn elem_table_pointer_returns_none_on_null_sentinel() {
+        let adoc = mk_adoc(vec![(
+            "m_elem_table".into(),
+            InstanceField::Pointer { raw: [0, 0] },
+        )]);
+        assert_eq!(adoc.elem_table_pointer(), None);
+    }
+
+    #[test]
+    fn elem_table_pointer_returns_none_on_max_sentinel() {
+        let adoc = mk_adoc(vec![(
+            "m_elem_table".into(),
+            InstanceField::Pointer {
+                raw: [u32::MAX, u32::MAX],
+            },
+        )]);
+        assert_eq!(adoc.elem_table_pointer(), None);
+    }
+
+    #[test]
+    fn elem_table_pointer_returns_none_when_field_absent() {
+        let adoc = mk_adoc(vec![(
+            "m_something_else".into(),
+            InstanceField::Pointer { raw: [1, 2] },
+        )]);
+        assert_eq!(adoc.elem_table_pointer(), None);
+    }
+
+    #[test]
+    fn elem_table_pointer_returns_none_when_field_is_bytes_fallback() {
+        // When the walker couldn't classify the field as a Pointer
+        // (schema drift etc.), it lands as Bytes. Don't try to
+        // interpret Bytes as a pointer.
+        let adoc = mk_adoc(vec![(
+            "m_elem_table".into(),
+            InstanceField::Bytes(vec![0x2a, 0, 0, 0, 0x39, 0x05, 0, 0]),
+        )]);
+        assert_eq!(adoc.elem_table_pointer(), None);
     }
 }
