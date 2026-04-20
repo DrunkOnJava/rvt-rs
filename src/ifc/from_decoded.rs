@@ -25,10 +25,15 @@
 //! so each future layer (geometry, materials, properties) attaches
 //! orthogonally.
 
-use super::entities::{Classification, IfcEntity, UnitAssignment};
+use super::entities::{
+    Classification, IfcEntity, Property, PropertySet, PropertyValue, UnitAssignment,
+};
 use super::{IfcModel, MaterialInfo, Storey};
+use crate::elements::circulation::Stair;
 use crate::elements::level::Level;
+use crate::elements::openings::{Door, Window};
 use crate::elements::styling::Material;
+use crate::elements::wall::Wall;
 use crate::walker::DecodedElement;
 
 /// Input record for the bridge: one decoded element plus a display
@@ -53,6 +58,10 @@ pub struct ElementInput<'a> {
     /// Which material the element associates with. Index into
     /// `BuilderOptions.materials`. `None` = no material emitted.
     pub material_index: Option<usize>,
+    /// Optional property set to emit for this element. Populated
+    /// typically from the decoded typed view (Wall/Floor/Door/…) —
+    /// see the `*_property_set` helpers below.
+    pub property_set: Option<PropertySet>,
 }
 
 /// Options controlling the bridge's output.
@@ -86,6 +95,131 @@ pub struct BuilderOptions {
 /// `is_building_story = false` entries are skipped — those are
 /// reference planes used only by drafting views, not real floors
 /// (Revit's own IFC exporter makes the same filter).
+/// Build a `Pset_WallCommon`-style property set from a decoded
+/// [`Wall`]. Fields that are `None` are skipped — property sets
+/// only carry what we actually decoded.
+pub fn wall_property_set(wall: &Wall) -> PropertySet {
+    let mut props = Vec::new();
+    if let Some(v) = wall.base_offset_feet {
+        props.push(Property {
+            name: "BaseOffset".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(v) = wall.top_offset_feet {
+        props.push(Property {
+            name: "TopOffset".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(v) = wall.unconnected_height_feet {
+        props.push(Property {
+            name: "UnconnectedHeight".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(usage) = wall.structural_usage {
+        props.push(Property {
+            name: "StructuralUsage".into(),
+            value: PropertyValue::Text(format!("{usage:?}")),
+        });
+    }
+    if let Some(line) = wall.location_line {
+        props.push(Property {
+            name: "LocationLine".into(),
+            value: PropertyValue::Text(format!("{line:?}")),
+        });
+    }
+    PropertySet {
+        name: "Pset_WallCommon".into(),
+        properties: props,
+    }
+}
+
+/// Build a `Pset_DoorCommon`-style property set from a decoded
+/// [`Door`].
+pub fn door_property_set(door: &Door) -> PropertySet {
+    let mut props = Vec::new();
+    if let Some(v) = door.rotation_radians {
+        props.push(Property {
+            name: "Rotation".into(),
+            value: PropertyValue::AngleRadians(v),
+        });
+    }
+    if let Some(v) = door.flip_hand {
+        props.push(Property {
+            name: "FlipHand".into(),
+            value: PropertyValue::Boolean(v),
+        });
+    }
+    if let Some(v) = door.flip_facing {
+        props.push(Property {
+            name: "FlipFacing".into(),
+            value: PropertyValue::Boolean(v),
+        });
+    }
+    PropertySet {
+        name: "Pset_DoorCommon".into(),
+        properties: props,
+    }
+}
+
+/// Build a `Pset_WindowCommon`-style property set from a decoded
+/// [`Window`].
+pub fn window_property_set(window: &Window) -> PropertySet {
+    let mut props = Vec::new();
+    if let Some(v) = window.sill_height_feet {
+        props.push(Property {
+            name: "SillHeight".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(v) = window.rotation_radians {
+        props.push(Property {
+            name: "Rotation".into(),
+            value: PropertyValue::AngleRadians(v),
+        });
+    }
+    PropertySet {
+        name: "Pset_WindowCommon".into(),
+        properties: props,
+    }
+}
+
+/// Build a `Pset_StairCommon`-style property set from a decoded
+/// [`Stair`]. Includes riser/tread counts + calibrated dimensions.
+pub fn stair_property_set(stair: &Stair) -> PropertySet {
+    let mut props = Vec::new();
+    if let Some(v) = stair.actual_riser_count {
+        props.push(Property {
+            name: "NumberOfRisers".into(),
+            value: PropertyValue::Integer(v as i64),
+        });
+    }
+    if let Some(v) = stair.actual_tread_depth_feet {
+        props.push(Property {
+            name: "TreadDepth".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(v) = stair.actual_riser_height_feet {
+        props.push(Property {
+            name: "RiserHeight".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(total) = stair.total_rise_feet() {
+        props.push(Property {
+            name: "TotalRise".into(),
+            value: PropertyValue::LengthFeet(total),
+        });
+    }
+    PropertySet {
+        name: "Pset_StairCommon".into(),
+        properties: props,
+    }
+}
+
 /// Derive [`MaterialInfo`] entries from a slice of decoded Revit
 /// [`Material`] values. Drops entries with no name (IFC4 IfcMaterial
 /// requires a non-empty Name attribute).
@@ -135,6 +269,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             type_guid: input.guid.clone(),
             storey_index: input.storey_index,
             material_index: input.material_index,
+            property_set: input.property_set.clone(),
         });
     }
     let project_name = options.project_name.or_else(|| {
@@ -192,6 +327,7 @@ mod tests {
                 guid: None,
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             },
             ElementInput {
                 decoded: &floor,
@@ -199,6 +335,7 @@ mod tests {
                 guid: None,
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             },
             ElementInput {
                 decoded: &roof,
@@ -206,6 +343,7 @@ mod tests {
                 guid: None,
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -225,6 +363,7 @@ mod tests {
             guid: None,
             storey_index: None,
             material_index: None,
+            property_set: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -240,6 +379,7 @@ mod tests {
             guid: None,
             storey_index: None,
             material_index: None,
+            property_set: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -260,6 +400,7 @@ mod tests {
             guid: None,
             storey_index: None,
             material_index: None,
+            property_set: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -288,6 +429,7 @@ mod tests {
                 guid: None,
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             },
             ElementInput {
                 decoded: &w2,
@@ -295,6 +437,7 @@ mod tests {
                 guid: None,
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             },
             ElementInput {
                 decoded: &w3,
@@ -302,6 +445,7 @@ mod tests {
                 guid: None,
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -370,6 +514,7 @@ mod tests {
             guid: None,
             storey_index: None,
             material_index: None,
+            property_set: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -413,6 +558,7 @@ mod tests {
                 guid: None,
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             },
             ElementInput {
                 decoded: &door,
@@ -420,6 +566,7 @@ mod tests {
                 guid: Some("DOOR-GUID-42".into()),
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());

@@ -456,6 +456,9 @@ impl StepWriter {
         // IfcRelAssociatesMaterial per material after the element
         // loop completes.
         let mut element_material_pairs: Vec<(usize, usize)> = Vec::new();
+        // Track (element_id, &PropertySet) so property-set emission
+        // runs after all element IDs are assigned.
+        let mut element_property_sets: Vec<(usize, &super::entities::PropertySet)> = Vec::new();
         for entity in &model.entities {
             if let super::entities::IfcEntity::BuildingElement {
                 ifc_type,
@@ -463,6 +466,7 @@ impl StepWriter {
                 type_guid,
                 storey_index,
                 material_index,
+                property_set,
             } = entity
             {
                 // Clamp out-of-range indices to storey[0] rather than
@@ -509,7 +513,52 @@ impl StepWriter {
                         element_material_pairs.push((el_id, *m_idx));
                     }
                 }
+                if let Some(pset) = property_set
+                    && !pset.properties.is_empty()
+                {
+                    element_property_sets.push((el_id, pset));
+                }
             }
+        }
+
+        // IfcPropertySet emission — one set per element that ships
+        // properties. Each property becomes an
+        // IfcPropertySingleValue, the set wraps them, then an
+        // IfcRelDefinesByProperties links the set to its element.
+        for (el_id, pset) in &element_property_sets {
+            let mut prop_ids: Vec<usize> = Vec::with_capacity(pset.properties.len());
+            for prop in &pset.properties {
+                let p_id = self.id();
+                let name_esc = escape(&prop.name);
+                let value_step = prop.value.to_step();
+                self.emit_entity(
+                    p_id,
+                    format!("IFCPROPERTYSINGLEVALUE('{name_esc}',$,{value_step},$)"),
+                );
+                prop_ids.push(p_id);
+            }
+            let refs = prop_ids
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let set_id = self.id();
+            let set_name = escape(&pset.name);
+            self.emit_entity(
+                set_id,
+                format!(
+                    "IFCPROPERTYSET('{}',#{owner_hist},'{set_name}',$,({refs}))",
+                    make_guid(set_id)
+                ),
+            );
+            let rel_id = self.id();
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELDEFINESBYPROPERTIES('{}',#{owner_hist},$,$,(#{el_id}),#{set_id})",
+                    make_guid(rel_id)
+                ),
+            );
         }
 
         // Bucket element_id lists by material_index so each material
@@ -996,6 +1045,7 @@ mod tests {
                     type_guid: None,
                     storey_index: None,
                     material_index: None,
+                    property_set: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
@@ -1003,6 +1053,7 @@ mod tests {
                     type_guid: Some("101".into()),
                     storey_index: None,
                     material_index: None,
+                    property_set: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
@@ -1010,6 +1061,7 @@ mod tests {
                     type_guid: None,
                     storey_index: None,
                     material_index: None,
+                    property_set: None,
                 },
             ],
             classifications: Vec::new(),
@@ -1062,6 +1114,7 @@ mod tests {
                 type_guid: None,
                 storey_index: None,
                 material_index: None,
+                property_set: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),
