@@ -1,70 +1,106 @@
 name: Bug report
 description: rvt-rs crashes, panics, misreads a file, or produces clearly-wrong output.
-labels: ["bug"]
+title: "Bug: "
+labels: ["bug", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to file a bug. Security-sensitive reports
-        should go through [GitHub Security Advisories](https://github.com/DrunkOnJava/rvt-rs/security/advisories/new)
-        instead — not public issues.
-  - type: input
-    id: version
+        Thanks for filing a bug. Please include a minimal reproducer — a concrete command or API call plus the smallest file that triggers the issue.
+
+        Security-sensitive reports (malformed input that crashes, silent data corruption, information disclosure) should go through [GitHub Security Advisories](https://github.com/DrunkOnJava/rvt-rs/security/advisories/new) instead of a public issue.
+  - type: textarea
+    id: description
     attributes:
-      label: rvt-rs version
-      description: Output of `cargo pkgid rvt` or the version from Cargo.toml
-      placeholder: "0.1.1"
+      label: Description
+      description: One-paragraph summary of what went wrong.
+      placeholder: "rvt-analyze panics when opening a family file saved in Revit 2019."
     validations:
       required: true
   - type: input
-    id: rust
+    id: rvt_rs_version
+    attributes:
+      label: rvt-rs version
+      description: Output of `cargo pkgid rvt` or the version from Cargo.toml.
+      placeholder: "0.1.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: revit_file_version
+    attributes:
+      label: Revit release the input file came from
+      options:
+        - "2026"
+        - "2025"
+        - "2024"
+        - "2023"
+        - "2022"
+        - "2021"
+        - "2020"
+        - "2019"
+        - "2018"
+        - "2017"
+        - "2016"
+        - "Unknown"
+        - "Not applicable"
+    validations:
+      required: true
+  - type: input
+    id: file_size_bytes
+    attributes:
+      label: Input file size (bytes)
+      description: Optional. Useful for triage of large-file or size-limit bugs.
+      placeholder: "450000"
+  - type: textarea
+    id: command_or_api_call
+    attributes:
+      label: Command or API call
+      description: Minimal reproducer — the exact command or Rust/Python snippet.
+      render: text
+      placeholder: |
+        $ ./target/release/rvt-analyze path/to/bug.rfa
+        # or
+        let f = rvt::RevitFile::open("bug.rfa")?;
+        f.read_adocument()?;
+    validations:
+      required: true
+  - type: textarea
+    id: actual_output
+    attributes:
+      label: Actual output
+      description: Full stderr/stdout, including stack trace. `RUST_BACKTRACE=1` appreciated for panics.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected_output
+    attributes:
+      label: Expected output
+      description: What the correct behavior would be.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - "Linux"
+        - "macOS"
+        - "Windows"
+        - "Other"
+    validations:
+      required: true
+  - type: input
+    id: rust_version
     attributes:
       label: Rust toolchain
-      description: Output of `rustc --version`
+      description: Output of `rustc --version`.
       placeholder: "rustc 1.85.0"
     validations:
       required: true
-  - type: input
-    id: platform
+  - type: checkboxes
+    id: attached_fixture
     attributes:
-      label: Platform
-      description: OS + architecture
-      placeholder: "macOS 14.5 arm64 / Ubuntu 22.04 x86_64 / Windows 11"
-    validations:
-      required: true
-  - type: input
-    id: revit_release
-    attributes:
-      label: Revit release the input file came from
-      description: 2016, 2017, … 2026, or "unknown"
-      placeholder: "2024"
-  - type: textarea
-    id: what_happened
-    attributes:
-      label: What happened
-      description: A panic, a wrong value, a crash, a wrong byte count — concrete details.
-      placeholder: |
-        Running `rvt-analyze myfile.rfa` panics at src/formats.rs:200 with
-        "called Option::unwrap() on a None value".
-    validations:
-      required: true
-  - type: textarea
-    id: what_expected
-    attributes:
-      label: What you expected
-      placeholder: "Normal forensic report, like the one in docs/demo/."
-  - type: textarea
-    id: reproducer
-    attributes:
-      label: Minimal reproducer
-      description: |
-        The smallest `.rvt`/`.rfa`/`.rte`/`.rft` that triggers the bug. If the
-        file contains proprietary / personal data, redact it first or describe
-        the file's shape (size, Revit release, content type).
-      placeholder: "Attached: bug.rfa (450 KB, Revit 2024 family file)"
-  - type: textarea
-    id: stack
-    attributes:
-      label: Stack trace or error output
-      description: Paste the full output. `RUST_BACKTRACE=1` is appreciated for panics.
-      render: text
+      label: Fixture
+      options:
+        - label: "I have attached (or am willing to share privately) a fixture file that reproduces the bug."

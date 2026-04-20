@@ -1,0 +1,80 @@
+name: Corpus submission
+description: Offer a Revit file for inclusion in the public rvt-rs test corpus.
+title: "Corpus: "
+labels: ["corpus", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        rvt-rs improves by testing against a wide range of real Revit files. This form collects files that users are willing to share for inclusion in the public test corpus.
+
+        **Submission is strictly opt-in.** You are responsible for confirming that you have the legal right to share the file publicly, and that the file contains no confidential, client-owned, or personally identifying content. rvt-rs maintainers cannot verify rights on your behalf.
+
+        If you are unsure whether you can share a given file, please do not submit it. Private bug-reproducer fixtures that cannot be shared publicly belong in a bug report, not a corpus submission.
+  - type: dropdown
+    id: revit_version
+    attributes:
+      label: Revit release that saved the file
+      options:
+        - "2026"
+        - "2025"
+        - "2024"
+        - "2023"
+        - "2022"
+        - "2021"
+        - "2020"
+        - "2019"
+        - "2018"
+        - "2017"
+        - "2016"
+    validations:
+      required: true
+  - type: dropdown
+    id: file_type
+    attributes:
+      label: File type
+      options:
+        - ".rvt"
+        - ".rfa"
+        - ".rte"
+        - ".rft"
+    validations:
+      required: true
+  - type: input
+    id: file_size_mb
+    attributes:
+      label: File size (MB)
+      placeholder: "2.5"
+    validations:
+      required: true
+  - type: checkboxes
+    id: sharing_rights_confirmed
+    attributes:
+      label: Sharing rights
+      options:
+        - label: "I confirm I have the right to share this file publicly and it contains no confidential content."
+          required: true
+  - type: dropdown
+    id: license
+    attributes:
+      label: License you are offering the file under
+      options:
+        - "Apache-2.0"
+        - "MIT"
+        - "CC0"
+        - "Other"
+    validations:
+      required: true
+  - type: textarea
+    id: notable_features
+    attributes:
+      label: Notable features
+      description: Anything that makes this file useful for coverage — unusual elements, large extents, specific subsystems, known edge cases.
+      placeholder: "Structural project with 400+ beams, mixed families, MEP systems, Revit worksharing enabled."
+  - type: textarea
+    id: attachment_method
+    attributes:
+      label: How to obtain the file
+      description: Attach directly to this issue, link a public download, or request a private hand-off channel.
+    validations:
+      required: true
