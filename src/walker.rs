@@ -349,6 +349,42 @@ pub fn decode_instance(bytes: &[u8], start: usize, class: &formats::ClassEntry) 
     }
 }
 
+/// Resource caps applied while the walker decodes an instance
+/// (API-11). Every size- or count-prefixed wire value that could
+/// drive an allocation is compared against the matching cap; values
+/// above the cap trigger a graceful fallback (the field is emitted
+/// as `InstanceField::Bytes` with the original bytes captured), not
+/// a panic.
+///
+/// Defaults match the hard-coded limits that shipped in v0.1.2 so
+/// existing callers get identical behaviour without opting in.
+/// Tighten the limits when parsing adversarial / untrusted input:
+///
+/// ```
+/// use rvt::walker::WalkerLimits;
+/// let tight = WalkerLimits {
+///     max_container_records: 64,
+///     ..WalkerLimits::default()
+/// };
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct WalkerLimits {
+    /// Maximum record count accepted in a 2-column `Container`
+    /// (`kind = 0x0e`). Above this, the field falls back to raw
+    /// bytes. Default 1000, which is already a generous cap for
+    /// ADocument's `m_elemTable` pointer column (typical projects
+    /// see 50-400 entries).
+    pub max_container_records: usize,
+}
+
+impl Default for WalkerLimits {
+    fn default() -> Self {
+        Self {
+            max_container_records: 1000,
+        }
+    }
+}
+
 /// ADocument's instance, as extracted by the v0.1.2 walker. Field
 /// names mirror the schema exactly.
 #[derive(Debug, Clone)]
@@ -367,7 +403,22 @@ pub struct ADocumentInstance {
 /// entry-point detector can't confidently land on the record —
 /// currently reliable on Revit 2024+ releases; older releases return
 /// `None`.
+///
+/// Uses [`WalkerLimits::default()`] — callers that need to tighten
+/// caps for untrusted input should use
+/// [`read_adocument_with_limits`] instead.
 pub fn read_adocument(rf: &mut RevitFile) -> Result<Option<ADocumentInstance>> {
+    read_adocument_with_limits(rf, WalkerLimits::default())
+}
+
+/// Same as [`read_adocument`], with caller-supplied resource caps.
+/// Applies [`WalkerLimits`] to every size- / count-prefixed wire
+/// value read during decode. Fields that exceed a cap fall back to
+/// raw bytes rather than panicking.
+pub fn read_adocument_with_limits(
+    rf: &mut RevitFile,
+    limits: WalkerLimits,
+) -> Result<Option<ADocumentInstance>> {
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
     let formats_d = compression::inflate_at(&formats_raw, 0)?;
     let schema = formats::parse_schema(&formats_d)?;
@@ -389,7 +440,7 @@ pub fn read_adocument(rf: &mut RevitFile) -> Result<Option<ADocumentInstance>> {
         let Some(ft) = &field.field_type else {
             break;
         };
-        let Some((consumed, value)) = read_field(ft, &d[cursor..]) else {
+        let Some((consumed, value)) = read_field(ft, &d[cursor..], limits) else {
             break;
         };
         fields.push((field.name.clone(), value));
@@ -622,7 +673,11 @@ fn walk_score(walk: &[(u32, u32)]) -> i64 {
     s
 }
 
-fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> Option<(usize, InstanceField)> {
+fn read_field(
+    ft: &formats::FieldType,
+    bytes: &[u8],
+    limits: WalkerLimits,
+) -> Option<(usize, InstanceField)> {
     match ft {
         formats::FieldType::Pointer { .. } => {
             if bytes.len() < 8 {
@@ -645,7 +700,7 @@ fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> Option<(usize, InstanceF
                 return None;
             }
             let count = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
-            if count > 1000 {
+            if count > limits.max_container_records {
                 return None;
             }
             let elem_size = 6;
@@ -703,7 +758,7 @@ mod tests {
     fn read_field_pointer_reads_8_bytes() {
         let ft = formats::FieldType::Pointer { kind: 2 };
         let bytes = [0x01u8, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00];
-        let (n, v) = read_field(&ft, &bytes).unwrap();
+        let (n, v) = read_field(&ft, &bytes, WalkerLimits::default()).unwrap();
         assert_eq!(n, 8);
         match v {
             InstanceField::Pointer { raw } => assert_eq!(raw, [1, 2]),
@@ -715,7 +770,7 @@ mod tests {
     fn read_field_element_id_reads_8_bytes() {
         let ft = formats::FieldType::ElementId;
         let bytes = [0x00u8, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00, 0x00];
-        let (n, v) = read_field(&ft, &bytes).unwrap();
+        let (n, v) = read_field(&ft, &bytes, WalkerLimits::default()).unwrap();
         assert_eq!(n, 8);
         match v {
             InstanceField::ElementId { tag, id } => {
@@ -917,7 +972,7 @@ mod tests {
         bytes.extend_from_slice(&[2, 0, 0, 0]); // count2
         bytes.extend_from_slice(&[0xcc, 0xcc, 0xff, 0xff, 0xff, 0xff]); // row1b
         bytes.extend_from_slice(&[0xdd, 0xdd, 0xff, 0xff, 0xff, 0xff]); // row2b
-        let (n, v) = read_field(&ft, &bytes).unwrap();
+        let (n, v) = read_field(&ft, &bytes, WalkerLimits::default()).unwrap();
         assert_eq!(n, 32); // 2 * (4 + 2*6)
         match v {
             InstanceField::RefContainer { col_a, col_b } => {
@@ -926,5 +981,45 @@ mod tests {
             }
             _ => panic!("expected RefContainer"),
         }
+    }
+
+    /// API-11: a tightened WalkerLimits rejects container records
+    /// above the cap. Same input that passes with default limits
+    /// returns None with `max_container_records: 1` because the
+    /// count=2 exceeds it.
+    #[test]
+    fn read_field_honors_walker_limits_container_cap() {
+        let ft = formats::FieldType::Container {
+            kind: 0x0e,
+            cpp_signature: None,
+            body: Vec::new(),
+        };
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&[2, 0, 0, 0]);
+        bytes.extend_from_slice(&[0xaa, 0xaa, 0xff, 0xff, 0xff, 0xff]);
+        bytes.extend_from_slice(&[0xbb, 0xbb, 0xff, 0xff, 0xff, 0xff]);
+        bytes.extend_from_slice(&[2, 0, 0, 0]);
+        bytes.extend_from_slice(&[0xcc, 0xcc, 0xff, 0xff, 0xff, 0xff]);
+        bytes.extend_from_slice(&[0xdd, 0xdd, 0xff, 0xff, 0xff, 0xff]);
+
+        // Default limits accept count=2.
+        assert!(read_field(&ft, &bytes, WalkerLimits::default()).is_some());
+
+        // Cap of 1 rejects count=2.
+        let tight = WalkerLimits {
+            max_container_records: 1,
+        };
+        assert!(read_field(&ft, &bytes, tight).is_none());
+
+        // Cap of exactly 2 accepts count=2 (boundary).
+        let at_cap = WalkerLimits {
+            max_container_records: 2,
+        };
+        assert!(read_field(&ft, &bytes, at_cap).is_some());
+    }
+
+    #[test]
+    fn walker_limits_default_matches_legacy_hardcoded() {
+        assert_eq!(WalkerLimits::default().max_container_records, 1000);
     }
 }
