@@ -30,6 +30,18 @@ exclude = [
 # `rvt` Python wheel with maturin (`maturin build --features python`).
 # Keeps the default Rust lib dependency footprint lean.
 python = ["dep:pyo3"]
+# Heap-profiling mode (Q-08). When enabled, binaries built from
+# `examples/dhat_*.rs` install the `dhat` global allocator and
+# emit a `dhat-heap.json` trace that `dhat-viewer` (web viewer at
+# https://nnethercote.github.io/dh_view/dh_view.html) renders as
+# a flamegraph of allocations by call-site.
+#
+# Build:
+#   cargo run --release --features dhat-heap --example dhat_schema -- \
+#     tests/fixtures/sample.rfa
+#
+# Then open the produced `dhat-heap.json` in dhat-viewer.
+dhat-heap = ["dep:dhat"]
 
 [dependencies]
 # Microsoft Compound File Binary (OLE) container — reads the outer
@@ -54,6 +66,10 @@ thiserror = "1"
 # compatible with every Python >= 3.8, avoiding per-minor-version
 # rebuilds. Only pulled in when the `python` feature is enabled.
 pyo3 = { version = "0.24", optional = true, features = ["extension-module", "abi3-py38"] }
+# Optional heap profiler (Q-08). Only pulled in when the `dhat-heap`
+# feature is enabled — default builds have zero cost. Pinned to 0.3
+# (current stable API).
+dhat = { version = "0.3", optional = true }
 
 [dev-dependencies]
 # Statistical benchmarking harness — drives `benches/*` and
