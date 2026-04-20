@@ -27,6 +27,7 @@
 
 pub mod category;
 pub mod level;
+pub mod styling;
 
 use crate::walker::ElementDecoder;
 
@@ -41,6 +42,10 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(level::LevelDecoder),
         Box::new(category::CategoryDecoder),
         Box::new(category::SubcategoryDecoder),
+        Box::new(styling::MaterialDecoder),
+        Box::new(styling::FillPatternDecoder),
+        Box::new(styling::LinePatternDecoder),
+        Box::new(styling::LineStyleDecoder),
     ]
 }
 
