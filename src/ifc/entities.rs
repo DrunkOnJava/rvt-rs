@@ -58,6 +58,12 @@ pub enum IfcEntity {
         /// IFCDIRECTION.
         #[serde(default)]
         rotation_radians: Option<f64>,
+        /// Optional rectangular extrusion geometry. When `Some`, the
+        /// writer emits the IfcExtrudedAreaSolid chain and wires the
+        /// element's Representation slot to it. When `None`, the
+        /// element stays geometry-free (Representation = $).
+        #[serde(default)]
+        extrusion: Option<Extrusion>,
     },
     TypeObject {
         name: String,
@@ -83,6 +89,28 @@ pub enum ClassificationSource {
 pub struct ClassificationItem {
     pub code: String,
     pub name: Option<String>,
+}
+
+/// Minimal rectangular-extrusion geometry descriptor for a
+/// BuildingElement. The writer turns this into an
+/// `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` +
+/// `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain
+/// and points the element's Representation slot at the chain.
+///
+/// All values in feet; the writer converts to metres at emit
+/// boundary (ft × 0.3048). The profile is centred on the element
+/// origin and the extrusion runs +Z.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Extrusion {
+    /// Profile width (local X, in feet). For a wall = length along
+    /// its location line. For a slab = plan dimension in X.
+    pub width_feet: f64,
+    /// Profile depth (local Y, in feet). For a wall = thickness.
+    /// For a slab = plan dimension in Y.
+    pub depth_feet: f64,
+    /// Extrusion height (local Z, in feet). For a wall = height;
+    /// for a slab = slab thickness.
+    pub height_feet: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

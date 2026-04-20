@@ -28,9 +28,9 @@
 //! IfcRelContainedInSpatialStructure (per-level containment is a
 //! follow-up per IFC-35).
 
-use rvt::elements::wall::{LocationLine, StructuralUsage, Wall};
+use rvt::elements::wall::{LocationLine, StructuralUsage, Wall, WallType};
 use rvt::ifc::MaterialInfo;
-use rvt::ifc::from_decoded::{wall_property_set, window_property_set};
+use rvt::ifc::from_decoded::{wall_extrusion, wall_property_set, window_property_set};
 use rvt::ifc::{BuilderOptions, ElementInput, Storey, build_ifc_model, write_step};
 use rvt::walker::{DecodedElement, InstanceField};
 
@@ -69,6 +69,12 @@ fn synthetic_project_emits_valid_ifc4() {
         location_line: Some(LocationLine::WallCenterline),
         ..Default::default()
     };
+    // 8" thick walls (0.667 ft). Passed to wall_extrusion below
+    // along with the per-wall length in feet.
+    let wall_type = WallType {
+        width_feet: Some(8.0 / 12.0),
+        ..Default::default()
+    };
     let win_sample = rvt::elements::openings::Window {
         sill_height_feet: Some(2.5),
         rotation_radians: Some(0.0),
@@ -88,6 +94,8 @@ fn synthetic_project_emits_valid_ifc4() {
             // each wall segment.
             location_feet: Some([0.0, 10.0, 0.0]),
             rotation_radians: Some(0.0),
+            // North/South walls run 20 ft east-west, 8" thick, 10 ft high.
+            extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 20.0)),
         },
         ElementInput {
             decoded: &south_wall,
@@ -98,6 +106,7 @@ fn synthetic_project_emits_valid_ifc4() {
             property_set: None,
             location_feet: Some([0.0, 0.0, 0.0]),
             rotation_radians: Some(0.0),
+            extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 20.0)),
         },
         ElementInput {
             decoded: &east_wall,
@@ -110,6 +119,9 @@ fn synthetic_project_emits_valid_ifc4() {
             // Rotated 90° so it runs +Y.
             location_feet: Some([20.0, 0.0, 10.0]),
             rotation_radians: Some(std::f64::consts::FRAC_PI_2),
+            // East/West walls run 10 ft in profile-local X (which is
+            // world-Y after the 90° rotation).
+            extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 10.0)),
         },
         ElementInput {
             decoded: &west_wall,
@@ -120,6 +132,7 @@ fn synthetic_project_emits_valid_ifc4() {
             property_set: None,
             location_feet: Some([0.0, 0.0, 0.0]),
             rotation_radians: Some(std::f64::consts::FRAC_PI_2),
+            extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 10.0)),
         },
         ElementInput {
             decoded: &floor,
@@ -130,6 +143,7 @@ fn synthetic_project_emits_valid_ifc4() {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         },
         ElementInput {
             decoded: &front_door,
@@ -140,6 +154,7 @@ fn synthetic_project_emits_valid_ifc4() {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         },
         ElementInput {
             decoded: &north_window,
@@ -150,6 +165,7 @@ fn synthetic_project_emits_valid_ifc4() {
             property_set: Some(window_property_set(&win_sample)),
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         },
         ElementInput {
             decoded: &south_window,
@@ -160,6 +176,7 @@ fn synthetic_project_emits_valid_ifc4() {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         },
         ElementInput {
             decoded: &stair,
@@ -170,6 +187,7 @@ fn synthetic_project_emits_valid_ifc4() {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         },
         ElementInput {
             decoded: &unknown,
@@ -180,6 +198,7 @@ fn synthetic_project_emits_valid_ifc4() {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         },
     ];
 
@@ -356,6 +375,40 @@ fn synthetic_project_emits_valid_ifc4() {
         "rotated X axis direction missing"
     );
 
+    // --- Extrusion geometry (IFC-16) ---
+    // 4 walls carry Extrusion → 4 each of the chain entities.
+    assert_eq!(
+        step.matches("IFCRECTANGLEPROFILEDEF(").count(),
+        4,
+        "expect 4 rectangle profiles"
+    );
+    assert_eq!(
+        step.matches("IFCEXTRUDEDAREASOLID(").count(),
+        4,
+        "expect 4 extruded solids"
+    );
+    assert_eq!(
+        step.matches("IFCSHAPEREPRESENTATION(").count(),
+        4,
+        "expect 4 shape representations"
+    );
+    assert_eq!(
+        step.matches("IFCPRODUCTDEFINITIONSHAPE(").count(),
+        4,
+        "expect 4 product-definition shapes"
+    );
+    // N/S walls = 20 ft long = 6.096 m profile width; 8" = 0.2032 m
+    // thick; 10 ft = 3.048 m high. Floats round to 6 decimals.
+    assert!(
+        step.contains("IFCRECTANGLEPROFILEDEF(.AREA.,$,") && step.contains(",6.096000,0.203200)"),
+        "N/S wall profile dims missing (20' × 8\")"
+    );
+    // E/W walls = 10 ft long = 3.048 m profile width.
+    assert!(
+        step.contains(",3.048000,0.203200)"),
+        "E/W wall profile dims missing (10' × 8\")"
+    );
+
     // --- Optional: dump to a fixture file when asked ---
     if std::env::var("DUMP_IFC").is_ok() {
         let out_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -381,6 +434,7 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         property_set: None,
         location_feet: None,
         rotation_radians: None,
+        extrusion: None,
     }];
     let opts = BuilderOptions {
         project_name: Some("Stable".into()),

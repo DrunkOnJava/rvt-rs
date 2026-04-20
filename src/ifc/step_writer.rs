@@ -469,6 +469,7 @@ impl StepWriter {
                 property_set,
                 location_feet,
                 rotation_radians,
+                extrusion,
             } = entity
             {
                 // Clamp out-of-range indices to storey[0] rather than
@@ -525,6 +526,68 @@ impl StepWriter {
                     placement_id,
                     format!("IFCLOCALPLACEMENT(#{placement_parent},#{element_axis})"),
                 );
+
+                // Emit the extrusion chain when geometry is present.
+                // Chain: IfcRectangleProfileDef → IfcExtrudedAreaSolid
+                // → IfcShapeRepresentation → IfcProductDefinitionShape.
+                // Profile placement uses a single fresh 2D axis per
+                // element (profile-local XY frame centred on origin).
+                let shape_ref = if let Some(ex) = extrusion {
+                    let x_dim = ex.width_feet * 0.3048;
+                    let y_dim = ex.depth_feet * 0.3048;
+                    let depth = ex.height_feet * 0.3048;
+                    // IfcRectangleProfileDef has a 2D placement; we
+                    // emit a fresh 2D origin + direction + 2D axis
+                    // per extrusion. Sharing a single 2D placement
+                    // across all extrusions would be possible but
+                    // muddies byte-by-byte diff tooling, so pay the
+                    // ~3-entity cost for clarity.
+                    let profile_origin = self.id();
+                    self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                    let profile_x_axis = self.id();
+                    self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
+                    let profile_placement = self.id();
+                    self.emit_entity(
+                        profile_placement,
+                        format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
+                    );
+                    let profile_id = self.id();
+                    self.emit_entity(
+                        profile_id,
+                        format!(
+                            "IFCRECTANGLEPROFILEDEF(.AREA.,$,#{profile_placement},{x_dim:.6},{y_dim:.6})"
+                        ),
+                    );
+                    // Solid-local placement: reuse the element's own
+                    // axis so the extrusion sits at the element origin.
+                    let solid_id = self.id();
+                    self.emit_entity(
+                        solid_id,
+                        format!(
+                            "IFCEXTRUDEDAREASOLID(#{profile_id},#{element_axis},#{z_axis},{depth:.6})"
+                        ),
+                    );
+                    // The representation groups the solid inside the
+                    // project's 3D geometric context (#geom_ctx) with
+                    // the IFC4-standard identifier + type for a
+                    // swept-solid body.
+                    let rep_id = self.id();
+                    self.emit_entity(
+                        rep_id,
+                        format!(
+                            "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','SweptSolid',(#{solid_id}))"
+                        ),
+                    );
+                    let prod_shape_id = self.id();
+                    self.emit_entity(
+                        prod_shape_id,
+                        format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{rep_id}))"),
+                    );
+                    Some(prod_shape_id)
+                } else {
+                    None
+                };
+
                 let el_id = self.id();
                 let name_quoted = quoted_or_dollar(&escape(name));
                 let tag_quoted = type_guid
@@ -532,6 +595,10 @@ impl StepWriter {
                     .map(escape)
                     .map(|t| format!("'{t}'"))
                     .unwrap_or_else(|| "$".into());
+                let rep_slot = match shape_ref {
+                    Some(id) => format!("#{id}"),
+                    None => "$".into(),
+                };
                 // IFC<TYPE>(GlobalId, OwnerHist, Name, Desc, ObjectType,
                 //   ObjectPlacement, Representation, Tag)
                 // Some subclasses (IfcDoor/IfcWindow) want extra predefined
@@ -541,12 +608,12 @@ impl StepWriter {
                 let ifc_upper = ifc_type.to_ascii_uppercase();
                 let line = if ifc_upper == "IFCDOOR" || ifc_upper == "IFCWINDOW" {
                     format!(
-                        "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},$,{tag_quoted},$,$)",
+                        "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},{rep_slot},{tag_quoted},$,$)",
                         make_guid(el_id),
                     )
                 } else {
                     format!(
-                        "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},$,{tag_quoted})",
+                        "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},{rep_slot},{tag_quoted})",
                         make_guid(el_id),
                     )
                 };
@@ -1092,6 +1159,7 @@ mod tests {
                     property_set: None,
                     location_feet: None,
                     rotation_radians: None,
+                    extrusion: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcSlab".into(),
@@ -1102,6 +1170,7 @@ mod tests {
                     property_set: None,
                     location_feet: None,
                     rotation_radians: None,
+                    extrusion: None,
                 },
                 IfcEntity::BuildingElement {
                     ifc_type: "IfcDoor".into(),
@@ -1112,6 +1181,7 @@ mod tests {
                     property_set: None,
                     location_feet: None,
                     rotation_radians: None,
+                    extrusion: None,
                 },
             ],
             classifications: Vec::new(),
@@ -1167,6 +1237,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             }],
             classifications: Vec::new(),
             units: Vec::new(),

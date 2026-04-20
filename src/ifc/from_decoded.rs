@@ -26,7 +26,7 @@
 //! orthogonally.
 
 use super::entities::{
-    Classification, IfcEntity, Property, PropertySet, PropertyValue, UnitAssignment,
+    Classification, Extrusion, IfcEntity, Property, PropertySet, PropertyValue, UnitAssignment,
 };
 use super::{IfcModel, MaterialInfo, Storey};
 use crate::elements::circulation::Stair;
@@ -70,6 +70,12 @@ pub struct ElementInput<'a> {
     /// Element yaw rotation in radians (rotation about the +Z
     /// axis). Only consulted when `location_feet` is `Some`.
     pub rotation_radians: Option<f64>,
+    /// Optional rectangular-extrusion geometry. When `Some`, the
+    /// writer emits an IfcExtrudedAreaSolid chain so BlenderBIM /
+    /// IfcOpenShell render the element as a 3D volume. See the
+    /// `wall_extrusion` / `slab_extrusion` helpers for the
+    /// typical recipe.
+    pub extrusion: Option<Extrusion>,
 }
 
 /// Options controlling the bridge's output.
@@ -103,6 +109,47 @@ pub struct BuilderOptions {
 /// `is_building_story = false` entries are skipped — those are
 /// reference planes used only by drafting views, not real floors
 /// (Revit's own IFC exporter makes the same filter).
+/// Build a rectangular `Extrusion` from a decoded [`Wall`] plus
+/// an explicit length. Revit doesn't carry a wall's length on the
+/// Wall element itself — it's derived from the location-curve
+/// handle (not yet wired through). Callers that know the length
+/// in feet can pass it directly; the bridge consumer is expected
+/// to resolve the location curve once the walker surfaces it.
+///
+/// - `length_feet` → profile width (local X).
+/// - `wall_type.width_feet` → profile depth (local Y = wall
+///   thickness). Falls back to 8 inches (0.667 ft) if None.
+/// - `wall.unconnected_height_feet` → extrusion height (local Z).
+///   Falls back to 10 ft when not available.
+pub fn wall_extrusion(
+    wall: &Wall,
+    wall_type: Option<&crate::elements::wall::WallType>,
+    length_feet: f64,
+) -> Extrusion {
+    Extrusion {
+        width_feet: length_feet,
+        depth_feet: wall_type.and_then(|wt| wt.width_feet).unwrap_or(8.0 / 12.0),
+        height_feet: wall.unconnected_height_feet.unwrap_or(10.0),
+    }
+}
+
+/// Build a rectangular `Extrusion` for a slab from its plan
+/// dimensions and a thickness from the [`FloorType`].
+///
+/// Defaults: thickness 12 inches (1 ft) when `floor_type` is
+/// `None` or lacks a thickness.
+pub fn slab_extrusion(
+    length_feet: f64,
+    width_feet: f64,
+    floor_type: Option<&crate::elements::floor::FloorType>,
+) -> Extrusion {
+    Extrusion {
+        width_feet: length_feet,
+        depth_feet: width_feet,
+        height_feet: floor_type.and_then(|ft| ft.thickness_feet).unwrap_or(1.0),
+    }
+}
+
 /// Build a `Pset_WallCommon`-style property set from a decoded
 /// [`Wall`]. Fields that are `None` are skipped — property sets
 /// only carry what we actually decoded.
@@ -280,6 +327,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             property_set: input.property_set.clone(),
             location_feet: input.location_feet,
             rotation_radians: input.rotation_radians,
+            extrusion: input.extrusion.clone(),
         });
     }
     let project_name = options.project_name.or_else(|| {
@@ -340,6 +388,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             },
             ElementInput {
                 decoded: &floor,
@@ -350,6 +399,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             },
             ElementInput {
                 decoded: &roof,
@@ -360,6 +410,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -382,6 +433,7 @@ mod tests {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         let hist = entity_type_histogram(&model);
@@ -400,6 +452,7 @@ mod tests {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         }];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
         assert!(
@@ -423,6 +476,7 @@ mod tests {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         }];
         let opts = BuilderOptions {
             project_name: Some("Acme HQ".into()),
@@ -454,6 +508,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             },
             ElementInput {
                 decoded: &w2,
@@ -464,6 +519,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             },
             ElementInput {
                 decoded: &w3,
@@ -474,6 +530,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
@@ -545,6 +602,7 @@ mod tests {
             property_set: None,
             location_feet: None,
             rotation_radians: None,
+            extrusion: None,
         }];
         let model = build_ifc_model(&inputs, opts);
         let s = super::super::write_step(&model);
@@ -591,6 +649,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             },
             ElementInput {
                 decoded: &door,
@@ -601,6 +660,7 @@ mod tests {
                 property_set: None,
                 location_feet: None,
                 rotation_radians: None,
+                extrusion: None,
             },
         ];
         let model = build_ifc_model(&inputs, BuilderOptions::default());
