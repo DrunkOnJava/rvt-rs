@@ -75,6 +75,27 @@ a few practices keep the repo healthy.
    redistribution rights) would dramatically widen validation —
    tracked as Q-01.
 
+   Seven permissive-licensed upstream repos contain usable corpus
+   material — see [`docs/corpus-hunt-2026-04-21.md`](docs/corpus-hunt-2026-04-21.md)
+   for the full list. Highest-leverage single targets:
+
+   - [`DynamoDS/DynamoRevit`](https://github.com/DynamoDS/DynamoRevit)
+     — `test/System/*.rfa` (MIT, © 2014 Autodesk)
+   - [`DynamoDS/DynamoWorkshops`](https://github.com/DynamoDS/DynamoWorkshops)
+     — 10 `.rvt` project files from Autodesk University (MIT)
+   - [`DynamoDS/RefineryToolkits`](https://github.com/DynamoDS/RefineryToolkits)
+     — `dt_GenerativeToolkit_TestRVT.rvt` (MIT)
+
+   Every committed fixture ships with a sibling `.license.json`
+   file carrying source repo + license SPDX identifier + SHA256
+   + original path. This preserves attribution and makes re-check
+   trivial.
+
+   Outreach targets for AEC educational content (not Sourcegraph-
+   indexable): Autodesk University session library, NIBS / GSA BIM
+   sample models, Penn State / Georgia Tech / TU Delft / ETH Zürich
+   AEC curricula. Email participation requests rather than scraping.
+
 Each layer has a clear validation oracle: rvt-info extracts
 document title + GUID via metadata; rvt-history gives the upgrade
 timeline via Phase D string scanning; IfcOpenShell validates IFC
