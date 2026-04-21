@@ -300,13 +300,52 @@ impl Exporter for RvtDocExporter {
         }
 
         // A single IfcProject entity at the model level (step_writer
-        // emits its STEP form; other entity types are wired in the
-        // walker-expansion phase).
-        let entities = vec![entities::IfcEntity::Project {
+        // emits its STEP form; other entity types are wired in below
+        // from the walker's element stream).
+        let mut entities = vec![entities::IfcEntity::Project {
             name: project_name.clone(),
             description: description.clone(),
             long_name: part.as_ref().and_then(|p| p.title.clone()),
         }];
+
+        // L5B-11.7 — pull every walker-recoverable element out of
+        // Global/Latest and emit one `BuildingElement` entity per
+        // hit. Unknown classes route to IFCBUILDINGELEMENTPROXY via
+        // `category_map::lookup`. Walker failure (stream missing,
+        // schema unparseable, inflate error) falls through with no
+        // element entities — we never regress the metadata-only
+        // output. The order — `Project` first, then elements — is
+        // load-bearing for `step_writer`, which walks `entities`
+        // in order and assumes index 0 is the project.
+        if let Ok(decoded_iter) = crate::walker::iter_elements(rf) {
+            for decoded in decoded_iter {
+                let mapping = super::ifc::category_map::lookup(&decoded.class);
+                let ifc_type = mapping
+                    .map(|m| m.ifc_type.to_string())
+                    .unwrap_or_else(|| "IFCBUILDINGELEMENTPROXY".to_string());
+                let name = match decoded.id {
+                    Some(id) => format!("{}-{}", decoded.class, id),
+                    None => format!("{}-unnamed", decoded.class),
+                };
+                let type_guid = decoded.id.map(|id| id.to_string());
+                entities.push(entities::IfcEntity::BuildingElement {
+                    ifc_type,
+                    name,
+                    type_guid,
+                    storey_index: None,
+                    material_index: None,
+                    property_set: None,
+                    location_feet: None,
+                    rotation_radians: None,
+                    extrusion: None,
+                    host_element_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: None,
+                });
+            }
+        }
 
         Ok(IfcModel {
             project_name,
