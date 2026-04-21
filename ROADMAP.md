@@ -85,6 +85,18 @@ A feature-complete Rust data model for a browser/desktop 3D viewer. All modules 
 - `rvt-ifc` CLI emits STEP IFC4 (VW1-17).
 - `share::ViewerState` + `encode_to_fragment` / `decode_from_fragment` — whole-viewer-state URL sharing (VW1-24).
 
+### Browser viewer (`wasm` feature + `viewer/`)
+
+A zero-upload, client-side Revit viewer that runs `rvt-rs` compiled to WebAssembly. Live at <https://drunkonjava.github.io/rvt-rs/viewer/>.
+
+- WASM build pipeline — `wasm` feature flag + `src/wasm.rs` with 14 JS-callable bindings (`openRvtBytes`, `quickSummary`, `buildSceneGraph`, `distinctIfcTypes`, `applyCategoryFilter`, `elementInfoPanel`, `buildSchedule`, `modelToGlb`, `renderPlanSvg`, `encodeToFragment`, `decodeFromFragment`, `cameraEye`, `defaultSectionBoxForView`, `defaultSheetOptions`) (VW1-01, VW1-02).
+- Three.js integration — `viewer/src/main.ts` wires `GLTFLoader`, `OrbitControls`, raycast element picking, scene-tree + category + info panels (VW1-03).
+- Drag-and-drop intake with filename-extension guard (VW1-23).
+- Dedicated-worker parse path — heavy lifting off the main thread; glTF buffer transferred via `postMessage({ transfer })` (VW1-19).
+- Progressive streaming — `quickSummary(bytes)` returns file metadata in sub-second time even for hundreds-of-MB RFAs, so the chrome fills in while the full parse continues (VW1-20).
+- GitHub Pages deploy — `.github/workflows/deploy-viewer.yml` builds the WASM, asserts no `fetch` / `XMLHttpRequest` / `WebSocket` imports in the compiled `.wasm` (VW1-21 invariant), then builds the Vite site and publishes (VW1-18).
+- Client-side-only privacy posture — CSP-locked HTML shell with `connect-src 'self'`, no CDNs, no telemetry, no analytics. Everything is parsed in-tab and discarded when the tab closes (VW1-21).
+
 ### Tooling
 
 - Eleven CLI binaries: `rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`. Every CLI supports `--redact` for PII-safe output where relevant.
