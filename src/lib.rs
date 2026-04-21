@@ -101,6 +101,7 @@
 // there is no feature flag or cfg that can turn this off.
 #![forbid(unsafe_code)]
 
+pub mod arc_wall_record;
 pub mod basic_file_info;
 pub mod class_index;
 pub mod class_tag_map;
