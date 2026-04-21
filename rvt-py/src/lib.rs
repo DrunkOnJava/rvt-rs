@@ -41,7 +41,7 @@ use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 
-use rvt::{RevitFile as RustRevitFile, ifc, walker};
+use rvt::{RevitFile as RustRevitFile, elem_table, ifc, walker};
 
 fn to_py_io<E: std::fmt::Display>(e: E) -> PyErr {
     PyIOError::new_err(e.to_string())
@@ -430,6 +430,45 @@ impl PyRevitFile {
         let model =
             ifc::Exporter::export(&ifc::RvtDocExporter, &mut self.inner).map_err(to_py_val)?;
         Ok(ifc::write_step(&model))
+    }
+
+    /// Parse Global/ElemTable header. Returns a dict with
+    /// `{element_count, record_count, header_flag, decompressed_bytes}`.
+    /// See `docs/elem-table-record-layout-2026-04-21.md`.
+    fn elem_table_header<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let header = elem_table::parse_header(&mut self.inner).map_err(to_py_val)?;
+        let d = PyDict::new(py);
+        d.set_item("element_count", header.element_count)?;
+        d.set_item("record_count", header.record_count)?;
+        d.set_item("header_flag", header.header_flag)?;
+        d.set_item("decompressed_bytes", header.decompressed_bytes)?;
+        Ok(d)
+    }
+
+    /// Parse Global/ElemTable records. Returns a list of dicts with
+    /// `{offset, id_primary, id_secondary}`. Handles the three layout
+    /// variants automatically (family 12 B, project 2023 28 B,
+    /// project 2024 40 B). On a 34 MB project this returns all
+    /// 26,425 records; on a family file, all declared records.
+    fn elem_table_records<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let records = elem_table::parse_records(&mut self.inner).map_err(to_py_val)?;
+        let list = PyList::empty(py);
+        for r in records {
+            let d = PyDict::new(py);
+            d.set_item("offset", r.offset)?;
+            d.set_item("id_primary", r.id_primary)?;
+            d.set_item("id_secondary", r.id_secondary)?;
+            list.append(d)?;
+        }
+        Ok(list)
+    }
+
+    /// Return the sorted, deduplicated list of ElementIds declared by
+    /// Global/ElemTable. Useful for walker coverage validation —
+    /// diff the walker's HandleIndex against this set to find
+    /// "declared but not located" elements.
+    fn declared_element_ids(&mut self) -> PyResult<Vec<u32>> {
+        elem_table::declared_element_ids(&mut self.inner).map_err(to_py_val)
     }
 
     fn __repr__(&mut self) -> String {
