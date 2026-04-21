@@ -23,7 +23,7 @@ fn main() {
         tagged.len(),
         schema.classes.len()
     );
-    println!("{:>6}  {:>3}  {:<40}  {}", "tag", "F#", "name", "parent");
+    println!("{:>6}  {:>3}  {:<40}  parent", "tag", "F#", "name");
     println!("{}", "-".repeat(100));
     for c in &tagged {
         println!(
