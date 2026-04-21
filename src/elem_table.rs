@@ -87,10 +87,15 @@ pub fn parse_records_rough(rf: &mut RevitFile, max_records: usize) -> Result<Vec
     let d = compression::inflate_at(&raw, 8).or_else(|_| compression::inflate_at(&raw, 0))?;
 
     // Conservative record-area start: 0x30 (past the header + padding).
-    // Locate the sentinel to know where records end.
+    // Locate the sentinel to know where records end. Scan FROM 0x30,
+    // not from 0 — the header region sometimes contains byte patterns
+    // that match 0xFFFF_FFFF (observed on real .rvt project files),
+    // and counting those as the record terminator makes `end < start`
+    // and the parser returns empty.
+    let start = 0x30;
     let sentinel: u32 = 0xFFFF_FFFF;
     let mut sentinel_at = None;
-    for i in (0..d.len().saturating_sub(4)).step_by(4) {
+    for i in (start..d.len().saturating_sub(4)).step_by(4) {
         if u32::from_le_bytes([d[i], d[i + 1], d[i + 2], d[i + 3]]) == sentinel {
             sentinel_at = Some(i);
             break;
@@ -98,7 +103,6 @@ pub fn parse_records_rough(rf: &mut RevitFile, max_records: usize) -> Result<Vec
     }
     let end = sentinel_at.unwrap_or(d.len());
 
-    let start = 0x30;
     if start >= end {
         return Ok(Vec::new());
     }
