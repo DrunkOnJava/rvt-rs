@@ -42,7 +42,7 @@ fn assert_no_panic<T>(
 
 // ---- fuzz_inflate_at_with_limits ----
 
-const INFLATE_LIMIT: usize = 1 * 1024 * 1024;
+const INFLATE_LIMIT: usize = 1024 * 1024;
 
 fn limits() -> InflateLimits {
     InflateLimits {
@@ -162,7 +162,7 @@ fn inflate_compressed_bomb_rejected_by_cap() {
         let len: u16 = 65535;
         data.extend_from_slice(&len.to_le_bytes());
         data.extend_from_slice(&(!len).to_le_bytes());
-        data.extend(std::iter::repeat(0u8).take(len as usize));
+        data.extend(std::iter::repeat_n(0u8, len as usize));
     }
     inflate_and_assert("compressed_bomb_4mb", &data);
 }
@@ -358,10 +358,7 @@ fn find_chunks_handles_many_adjacent_magics() {
     // Repeated gzip magic bytes with nothing after. A buggy scanner
     // could try to dereference each as the start of a real chunk
     // and overrun the end.
-    let data: Vec<u8> = std::iter::repeat([0x1f, 0x8b])
-        .take(128)
-        .flatten()
-        .collect();
+    let data: Vec<u8> = std::iter::repeat_n([0x1f, 0x8b], 128).flatten().collect();
     assert_no_panic("find_chunks_many_magics", &data, |d| {
         let _ = rvt::compression::find_gzip_offsets(d);
     });
@@ -478,9 +475,7 @@ fn elem_table_all_ff_payload_does_not_panic() {
     // the first two hits and uses their stride; any stride is OK
     // provided we don't panic.
     let mut buf = vec![0u8; 0x100];
-    for b in buf.iter_mut().take(0x80).skip(0x20) {
-        *b = 0xff;
-    }
+    buf[0x20..0x80].fill(0xff);
     elem_table_assert("all_ff_payload", &buf);
 }
 
@@ -490,9 +485,7 @@ fn elem_table_marker_at_stream_end_does_not_panic() {
     // parse_records_from_bytes must stop iterating before reading
     // past the end.
     let mut buf = vec![0u8; 40];
-    for b in buf.iter_mut().skip(32).take(4) {
-        *b = 0xff;
-    }
+    buf[32..36].fill(0xff);
     elem_table_assert("marker_at_end", &buf);
 }
 
@@ -523,13 +516,9 @@ fn elem_table_synth_project2024_shape_does_not_panic() {
     let mut buf = vec![0u8; 0x200];
     buf[0] = 0x0a;
     buf[2] = 0x02;
-    for b in buf.iter_mut().skip(0x22).take(8) {
-        *b = 0xff;
-    }
+    buf[0x22..0x2a].fill(0xff);
     buf[0x2e] = 0x01;
-    for b in buf.iter_mut().skip(0x4a).take(8) {
-        *b = 0xff;
-    }
+    buf[0x4a..0x52].fill(0xff);
     buf[0x56] = 0x02;
     elem_table_assert("synth_project2024", &buf);
 }

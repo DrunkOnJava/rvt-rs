@@ -11,16 +11,16 @@
 //! magnetar-io/revit-test-datasets but not redistributed here (LFS).
 //!
 //! What we measure per file:
-//!   * `open`                       — CFB parse + stream directory
-//!   * `summarize_strict`           — BasicFileInfo + schema + stream
-//!                                    enumeration (the "tell me what
-//!                                    this file is" path)
-//!   * `parse_schema`               — Formats/Latest decode on the
-//!                                    ~360 KB compressed schema
-//!   * `elem_table::parse_records`  — enumerate all declared
-//!                                    ElementIds from Global/ElemTable
-//!   * `read_adocument_lossy`       — ADocument walker entry-point
-//!                                    detection + 13-field decode
+//!
+//! * `open` — CFB parse + stream directory.
+//! * `summarize_strict` — BasicFileInfo + schema + stream enumeration
+//!   (the "tell me what this file is" path).
+//! * `parse_schema` — Formats/Latest decode on the ~360 KB compressed
+//!   schema.
+//! * `elem_table::parse_records` — enumerate all declared ElementIds
+//!   from Global/ElemTable.
+//! * `read_adocument_lossy` — ADocument walker entry-point detection +
+//!   13-field decode.
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rvt::{RevitFile, compression, elem_table, formats, streams, walker};

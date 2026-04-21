@@ -54,14 +54,15 @@ fn main() {
         // Dump 32 bytes before and 64 bytes at the entry offset
         let before_start = adoc_offset.saturating_sub(32);
         print!("  bytes before 0x{:x}: ", adoc_offset);
-        for i in before_start..adoc_offset {
-            print!("{:02x} ", d[i]);
+        for b in &d[before_start..adoc_offset] {
+            print!("{:02x} ", b);
         }
         println!();
 
         print!("  bytes at/after:       ");
-        for i in adoc_offset..(adoc_offset + 32).min(d.len()) {
-            print!("{:02x} ", d[i]);
+        let end = (adoc_offset + 32).min(d.len());
+        for b in &d[adoc_offset..end] {
+            print!("{:02x} ", b);
         }
         println!();
 

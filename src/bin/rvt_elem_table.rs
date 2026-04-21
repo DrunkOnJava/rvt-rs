@@ -99,10 +99,10 @@ fn run() -> anyhow::Result<()> {
     let first = &records[0];
     let layout_label = match first.raw.first() {
         Some(b) if *b == 0xFF && first.raw.get(7) == Some(&0xFF) => {
-            format!("Explicit (40 B stride, 8-byte FF marker)")
+            "Explicit (40 B stride, 8-byte FF marker)"
         }
-        Some(b) if *b == 0xFF => format!("Explicit (28 B stride, 4-byte FF marker)"),
-        _ => format!("Implicit (12 B stride, no marker)"),
+        Some(b) if *b == 0xFF => "Explicit (28 B stride, 4-byte FF marker)",
+        _ => "Implicit (12 B stride, no marker)",
     };
     println!("  layout: {layout_label}  first record offset: 0x{:x}", first.offset);
 
