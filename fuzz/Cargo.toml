@@ -77,3 +77,10 @@ path = "fuzz_targets/fuzz_step_writer.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_elem_table"
+path = "fuzz_targets/fuzz_elem_table.rs"
+test = false
+doc = false
+bench = false

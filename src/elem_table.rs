@@ -161,7 +161,15 @@ pub fn parse_header(rf: &mut RevitFile) -> Result<ElemTableHeader> {
     parse_header_bytes(&d)
 }
 
-fn parse_records_from_bytes(d: &[u8], layout: ElemTableLayout, limit: usize) -> Vec<ElemRecord> {
+/// Parse records from an already-decompressed ElemTable byte slice.
+/// Splits the pure-byte-slice path out from `parse_records` (which takes
+/// a `RevitFile` and handles the stream-read + inflate). Useful for fuzz
+/// targets and unit tests that want to feed synthetic inputs directly.
+///
+/// `limit` is the maximum number of records to return — typically
+/// `header.record_count` from `parse_header_bytes`. Returns fewer
+/// records if the stream runs out of bytes before `limit` is reached.
+pub fn parse_records_from_bytes(d: &[u8], layout: ElemTableLayout, limit: usize) -> Vec<ElemRecord> {
     let mut records = Vec::with_capacity(limit);
     let mut i = layout.start;
     while records.len() < limit && i + layout.stride <= d.len() {

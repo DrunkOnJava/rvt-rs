@@ -443,3 +443,93 @@ fn part_atom_nested_deep_does_not_panic() {
     }
     part_atom_assert("deeply_nested", s.as_bytes());
 }
+
+// ---- fuzz_elem_table ----
+
+fn elem_table_assert(label: &str, data: &[u8]) {
+    assert_no_panic(label, data, |d| {
+        let layout = rvt::elem_table::detect_layout(d);
+        let _ = rvt::elem_table::parse_records_from_bytes(d, layout, 10_000);
+    });
+}
+
+#[test]
+fn elem_table_empty_does_not_panic() {
+    elem_table_assert("empty", &[]);
+}
+
+#[test]
+fn elem_table_shorter_than_header_does_not_panic() {
+    // 16 bytes — well short of the 0x30 header requirement.
+    elem_table_assert("tiny_16b", &[0u8; 16]);
+}
+
+#[test]
+fn elem_table_all_zeros_0x100_does_not_panic() {
+    // No markers anywhere → detect_layout falls back to Implicit.
+    elem_table_assert("all_zeros_256b", &[0u8; 256]);
+}
+
+#[test]
+fn elem_table_all_ff_payload_does_not_panic() {
+    // Payload of all 0xFF bytes — each 4-byte aligned position
+    // matches the marker pattern, so naïve scanners would treat
+    // them as overlapping records. The production detector grabs
+    // the first two hits and uses their stride; any stride is OK
+    // provided we don't panic.
+    let mut buf = vec![0u8; 0x100];
+    for b in buf.iter_mut().take(0x80).skip(0x20) {
+        *b = 0xff;
+    }
+    elem_table_assert("all_ff_payload", &buf);
+}
+
+#[test]
+fn elem_table_marker_at_stream_end_does_not_panic() {
+    // Marker located where the body would overrun the buffer.
+    // parse_records_from_bytes must stop iterating before reading
+    // past the end.
+    let mut buf = vec![0u8; 40];
+    for b in buf.iter_mut().skip(32).take(4) {
+        *b = 0xff;
+    }
+    elem_table_assert("marker_at_end", &buf);
+}
+
+#[test]
+fn elem_table_synth_project2023_shape_does_not_panic() {
+    // Minimal project-2023-shape buffer: 28 B record with 4-byte
+    // FF marker, placed at offset 0x1e.
+    let mut buf = vec![0u8; 0x100];
+    buf[0] = 0x0a; // element_count = 10
+    buf[2] = 0x02; // record_count = 2
+    buf[0x1e] = 0xff;
+    buf[0x1f] = 0xff;
+    buf[0x20] = 0xff;
+    buf[0x21] = 0xff;
+    buf[0x22] = 0x01; // id_primary = 1
+    buf[0x3a] = 0xff;
+    buf[0x3b] = 0xff;
+    buf[0x3c] = 0xff;
+    buf[0x3d] = 0xff;
+    buf[0x3e] = 0x02; // id_primary = 2
+    elem_table_assert("synth_project2023", &buf);
+}
+
+#[test]
+fn elem_table_synth_project2024_shape_does_not_panic() {
+    // Minimal project-2024-shape buffer: 40 B record with 8-byte
+    // FF marker at offset 0x22.
+    let mut buf = vec![0u8; 0x200];
+    buf[0] = 0x0a;
+    buf[2] = 0x02;
+    for b in buf.iter_mut().skip(0x22).take(8) {
+        *b = 0xff;
+    }
+    buf[0x2e] = 0x01;
+    for b in buf.iter_mut().skip(0x4a).take(8) {
+        *b = 0xff;
+    }
+    buf[0x56] = 0x02;
+    elem_table_assert("synth_project2024", &buf);
+}
