@@ -261,6 +261,38 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     Ok(())
 }
 
+// ---- WRT-05: GUID preservation across write ----
+
+/// Read the BasicFileInfo GUID from a Revit file (WRT-05). Returns
+/// `Ok(None)` when the stream exists but no GUID was embedded. Used
+/// by the write-path invariant tests to confirm a write cycle
+/// preserves the file's identity.
+pub fn file_guid(path: &Path) -> Result<Option<String>> {
+    let mut rf = RevitFile::open(path)?;
+    let stream_name = "BasicFileInfo";
+    if !rf.stream_names().iter().any(|s| s == stream_name) {
+        return Ok(None);
+    }
+    let bytes = rf.read_stream(stream_name)?;
+    let info = crate::basic_file_info::BasicFileInfo::from_bytes(&bytes)
+        .map_err(|e| crate::Error::BasicFileInfo(format!("parse: {e}")))?;
+    Ok(info.guid)
+}
+
+/// Verify that a write cycle (copy / patch / rewrite) preserved
+/// the source file's GUID. Returns `Ok(true)` when both files
+/// carry the same GUID, `Ok(false)` when GUIDs diverge, and an
+/// error when either file is unreadable.
+///
+/// This is the primary WRT-05 invariant check — call it right
+/// after any [`write_with_patches`] / [`write_with_patches_verified`]
+/// to gate deploys on GUID preservation.
+pub fn guid_preserved(src: &Path, dst: &Path) -> Result<bool> {
+    let a = file_guid(src)?;
+    let b = file_guid(dst)?;
+    Ok(a == b)
+}
+
 // ---- WRT-13: Stream hash verification per write ----
 
 /// Per-stream verification outcome (WRT-13). One entry per
@@ -590,5 +622,147 @@ mod tests {
         let result = decompress_stream(&src, "Formats/Latest", StreamFraming::CustomPrefix8);
         assert!(result.is_err());
         std::fs::remove_file(&src).ok();
+    }
+
+    // ---- WRT-05: GUID preservation ----
+
+    /// Build a minimal CFB containing ONLY a `BasicFileInfo` stream
+    /// with the given raw UTF-16LE bytes. Enough to drive the GUID
+    /// invariant tests without a full Revit layout.
+    fn build_cfb_with_basic_file_info(path: &Path, info_bytes: &[u8]) -> Result<()> {
+        let f = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)?;
+        let mut cfb =
+            cfb::CompoundFile::create(f).map_err(|e| crate::Error::Cfb(format!("create: {e}")))?;
+        let mut s = cfb
+            .create_stream("/BasicFileInfo")
+            .map_err(|e| crate::Error::Cfb(format!("stream: {e}")))?;
+        s.write_all(info_bytes)
+            .map_err(|e| crate::Error::Cfb(format!("write: {e}")))?;
+        drop(s);
+        cfb.flush()
+            .map_err(|e| crate::Error::Cfb(format!("flush: {e}")))?;
+        Ok(())
+    }
+
+    #[test]
+    fn file_guid_round_trips_via_basic_file_info() {
+        let src = temp_path("guid.rvt");
+        let info = crate::basic_file_info::BasicFileInfo {
+            version: 2024,
+            build: Some("20230308_1635(x64)".into()),
+            original_path: None,
+            guid: Some("aabbccdd-1122-3344-5566-778899aabbcc".into()),
+            locale: None,
+            raw_text: String::new(),
+        };
+        build_cfb_with_basic_file_info(&src, &info.encode()).unwrap();
+        let guid = file_guid(&src).unwrap();
+        assert_eq!(
+            guid.as_deref(),
+            Some("aabbccdd-1122-3344-5566-778899aabbcc")
+        );
+        std::fs::remove_file(&src).ok();
+    }
+
+    #[test]
+    fn file_guid_returns_none_when_no_basic_file_info() {
+        let src = temp_path("no_guid.rvt");
+        build_tiny_cfb(&src, b"nothing-here").unwrap();
+        // build_tiny_cfb only creates Formats/Latest, no BasicFileInfo.
+        let guid = file_guid(&src).unwrap();
+        assert!(guid.is_none());
+        std::fs::remove_file(&src).ok();
+    }
+
+    #[test]
+    fn copy_file_preserves_guid() {
+        let src = temp_path("src_guid.rvt");
+        let dst = temp_path("dst_guid.rvt");
+        let info = crate::basic_file_info::BasicFileInfo {
+            version: 2024,
+            build: Some("20230308_1635(x64)".into()),
+            original_path: None,
+            guid: Some("12345678-9abc-def0-1234-56789abcdef0".into()),
+            locale: None,
+            raw_text: String::new(),
+        };
+        build_cfb_with_basic_file_info(&src, &info.encode()).unwrap();
+        copy_file(&src, &dst).unwrap();
+        assert!(guid_preserved(&src, &dst).unwrap());
+        std::fs::remove_file(&src).ok();
+        std::fs::remove_file(&dst).ok();
+    }
+
+    #[test]
+    fn write_with_no_basic_file_info_patch_preserves_guid() {
+        let src = temp_path("src_pres.rvt");
+        let dst = temp_path("dst_pres.rvt");
+        // Build a CFB with BasicFileInfo (carrying the GUID) plus a
+        // Formats/Latest stream (which we'll patch). Reuse the
+        // BasicFileInfo setup, then also add Formats/Latest.
+        let info = crate::basic_file_info::BasicFileInfo {
+            version: 2024,
+            build: Some("20230308_1635(x64)".into()),
+            original_path: None,
+            guid: Some("99999999-8888-7777-6666-555544443333".into()),
+            locale: None,
+            raw_text: String::new(),
+        };
+        {
+            let f = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&src)
+                .unwrap();
+            let mut cfb = cfb::CompoundFile::create(f).unwrap();
+            cfb.create_storage("/Formats").unwrap();
+            let mut s = cfb.create_stream("/BasicFileInfo").unwrap();
+            s.write_all(&info.encode()).unwrap();
+            drop(s);
+            let compressed = crate::compression::truncated_gzip_encode(b"original").unwrap();
+            let mut s2 = cfb.create_stream("/Formats/Latest").unwrap();
+            s2.write_all(&compressed).unwrap();
+            drop(s2);
+            cfb.flush().unwrap();
+        }
+        let patches = vec![StreamPatch {
+            stream_name: "Formats/Latest".into(),
+            new_decompressed: b"patched-bytes".to_vec(),
+            framing: StreamFraming::RawGzipFromZero,
+        }];
+        write_with_patches(&src, &dst, &patches).unwrap();
+        assert!(guid_preserved(&src, &dst).unwrap());
+        std::fs::remove_file(&src).ok();
+        std::fs::remove_file(&dst).ok();
+    }
+
+    #[test]
+    fn guid_diverges_when_dst_has_different_basic_file_info() {
+        let src = temp_path("a_guid.rvt");
+        let dst = temp_path("b_guid.rvt");
+        let info_a = crate::basic_file_info::BasicFileInfo {
+            version: 2024,
+            build: None,
+            original_path: None,
+            guid: Some("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".into()),
+            locale: None,
+            raw_text: String::new(),
+        };
+        let info_b = crate::basic_file_info::BasicFileInfo {
+            guid: Some("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".into()),
+            ..info_a.clone()
+        };
+        build_cfb_with_basic_file_info(&src, &info_a.encode()).unwrap();
+        build_cfb_with_basic_file_info(&dst, &info_b.encode()).unwrap();
+        assert!(!guid_preserved(&src, &dst).unwrap());
+        std::fs::remove_file(&src).ok();
+        std::fs::remove_file(&dst).ok();
     }
 }
