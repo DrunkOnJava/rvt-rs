@@ -174,6 +174,30 @@ class RevitFile:
         be parsed far enough to produce a minimal model.
         """
 
+    def elem_table_header(self) -> dict[str, int]:
+        """Parse ``Global/ElemTable`` header. Returns a dict with keys
+        ``element_count``, ``record_count``, ``header_flag``,
+        ``decompressed_bytes``.
+        """
+
+    def elem_table_records(self) -> list[dict[str, int]]:
+        """Parse ``Global/ElemTable`` records. Returns a list of dicts
+        each with ``offset``, ``id_primary``, ``id_secondary``.
+
+        Handles the three observed layout variants automatically:
+        family files (12 B implicit records), Revit 2023 projects
+        (28 B explicit with 4-byte FF marker), Revit 2024 projects
+        (40 B explicit with 8-byte FF marker). On a 34 MB project
+        this returns all 26,425 declared records.
+        """
+
+    def declared_element_ids(self) -> list[int]:
+        """Return the sorted, deduplicated list of ``ElementId``
+        values declared by ``Global/ElemTable``. Useful for walker
+        coverage validation — diff against the walker's ``HandleIndex``
+        to find "declared but not located" elements.
+        """
+
 
 def rvt_to_ifc(path: str) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
