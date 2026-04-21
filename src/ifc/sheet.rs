@@ -16,7 +16,7 @@ use super::entities::IfcEntity;
 use std::fmt::Write;
 
 /// Options controlling sheet SVG output (VW1-11).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SheetOptions {
     /// Plot width in SVG user units (pixels by default).
     pub width_px: u32,
