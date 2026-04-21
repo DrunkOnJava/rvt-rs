@@ -1,5 +1,10 @@
-// Dump the raw 32 bytes immediately around each class-name occurrence in
-// Formats/Latest so we can learn the tag encoding.
+//! Dump the raw 32 bytes immediately around each class-name
+//! occurrence in `Formats/Latest` so we can learn the tag encoding.
+//!
+//! Phase C discovery probe — fed the RE that produced the
+//! class-tag u16 + 0x8000 flag-bit layout now pinned in
+//! `src/formats.rs`. Takes one CLI arg: the path to a Revit file.
+
 use rvt::{RevitFile, compression, streams::FORMATS_LATEST};
 
 fn main() -> anyhow::Result<()> {
