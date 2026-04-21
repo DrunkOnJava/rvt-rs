@@ -2,9 +2,11 @@
 
 **Apache-2.0 clean-room Rust/Python toolkit for inspecting Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) without a Revit installation.** Opens the OLE/CFB container, decodes Revit's truncated-gzip streams, extracts metadata and previews, parses the embedded `Formats/Latest` schema, and classifies all observed schema field encodings across an 11-release 2016–2026 reference corpus.
 
-**This is not yet a full Revit model reader.** Schema-directed instance walking has a verified `ADocument` beachhead on Revit 2024–2026, 72 per-class decoders (Wall, Floor, Door, Window, Column, Beam, Duct, Pipe, ElectricalEquipment, and many more), and IFC4 STEP emission that produces a valid spatial tree with per-element entities, rectangular geometry, compound-layer materials, typed property sets, and door/window openings. Curved geometry (IFC-17/24), real-world corpus validation (Q-01), and a web viewer (VW1) are active research. See [What works today](#what-works-today) for the precise boundary.
+**This is not yet a full Revit model reader.** Schema-directed instance walking has a verified `ADocument` beachhead on Revit 2024–2026, **80 per-class decoders registered in `elements::all_decoders()`** (Wall, Floor, Door, Window, Column, Beam, Stair, Railing, Rebar, Room/Area/Space, Furniture, DesignOption, Phase, Workset, and many more), and IFC4 STEP emission that produces a valid spatial tree with per-element entities, rectangular geometry, compound-layer materials, typed property sets, and door/window openings. Real-world project-file corpus validation (Q-01) is active research — the shipped 11-release test corpus is family-scale (`.rfa`); one `.rvt` project probe already surfaced and fixed a latent bounds bug in `gzip_header_len`. See [What works today](#what-works-today) for the precise boundary.
 
-Rust 2024 edition (MSRV 1.85). Nine CLIs ship (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`) plus 30+ reproducible probes under `examples/`. Python bindings via pyo3+maturin — `pip install rvt`.
+**A zero-upload, client-side browser viewer ships alongside the library**, live at <https://drunkonjava.github.io/rvt-rs/>. Drop a `.rvt` / `.rfa` file onto the page — the WebAssembly build parses it in-tab, renders 3D via Three.js with orbit controls + element picking + scene tree, and offers one-click **Export glTF** / **Export IFC** / **Export plan SVG**. No upload, no account, no telemetry. CI asserts the compiled `.wasm` has zero `fetch` / `XMLHttpRequest` / `WebSocket` imports.
+
+Rust 2024 edition (MSRV 1.85). **Thirteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -19,17 +21,20 @@ Rust 2024 edition (MSRV 1.85). Nine CLIs ship (`rvt-analyze`, `rvt-info`, `rvt-s
 | Field-type classification | ✓ | **100% over `rac_basic_sample_family` 11-release corpus** — CI regression gate |
 | Cross-release tag-drift table | ✓ | First public 122×11 dataset |
 | Layer 5a ADocument walker | partial | Reliable on Revit 2024–2026; 2016–2023 entry-point detection pending |
-| Stream-level modifying writer | ✓ | 13/13 streams byte-preserving |
+| Stream-level modifying writer | ✓ | 13/13 streams byte-preserving; `rvt-write` CLI + JSON patch manifests |
 | Field-level semantic writer | pending | Phase 7 |
-| Layer 5b per-class decoders | partial | 72 decoders: Level/Category/Subcategory/Material/FillPattern/LinePattern/LineStyle/BasePoint/SurveyPoint/ProjectPosition/Grid/GridType/ReferencePlane/Wall/WallType/Floor/FloorType/Roof/RoofType/Ceiling/CeilingType/Door/Window/Column/StructuralColumn/Beam/StructuralFraming. Each decoder takes instance bytes → typed view. Validated on synthesized schema+bytes fixtures; real-file corpus validation is Q-01. |
+| Layer 5b per-class decoders | ✓ | **80 decoders registered in `elements::all_decoders()`**: Level/Category/Subcategory/Material/FillPattern/LinePattern/LineStyle/BasePoint/SurveyPoint/ProjectPosition/Grid/GridType/ReferencePlane/Wall/WallType/Floor/FloorType/Roof/RoofType/Ceiling/CeilingType/Door/Window/Column/StructuralColumn/Beam/StructuralFraming/Stair/StairType/Railing/RailingType/Room/Area/Space/Furniture/FurnitureSystem/Casework/Rebar/Foundation/Mass/GenericModel/View/Sheet/Schedule/ScheduleView/Titleblock/Viewport/Dimension/TextNote/Tag/Annotation/Revision/Phase/DesignOption/Workset/ParameterElement/SharedParameter/Symbol and every Electrical*/Mechanical*/Plumbing*/Specialty FamilyInstance subtype. Each decoder takes instance bytes → typed view. Validated on synthesized schema+bytes fixtures; real-project-file corpus validation is Q-01. |
 | IFC4 STEP export — spatial tree | ✓ | `IfcProject` + `IfcSite` + `IfcBuilding` + `IfcBuildingStorey` + OmniClass classifications |
-| IFC4 STEP export — elements | ✓ | `IfcWall`/`IfcSlab`/`IfcRoof`/`IfcCovering`/`IfcDoor`/`IfcWindow`/`IfcColumn`/`IfcBeam` constructors + `IfcLocalPlacement` + `IfcRelContainedInSpatialStructure`. Each element is valid IFC4 and appears in BlenderBIM / IfcOpenShell spatial browsers. |
+| IFC4 STEP export — elements | ✓ | `IfcWall`/`IfcSlab`/`IfcRoof`/`IfcCovering`/`IfcDoor`/`IfcWindow`/`IfcColumn`/`IfcBeam`/`IfcStair`/`IfcRailing`/`IfcFurniture`/`IfcFooting`/`IfcReinforcingBar`/`IfcSpace`/`IfcBuildingElementProxy` constructors + `IfcLocalPlacement` + `IfcRelContainedInSpatialStructure`. Each element is valid IFC4 and appears in BlenderBIM / IfcOpenShell spatial browsers. |
 | IFC4 STEP export — geometry | ✓ (rectangular) | `IfcExtrudedAreaSolid` + `IfcRectangleProfileDef` chain wired to the element's Representation slot. Rectangular profiles only (curved doors, non-orthogonal walls still pending — IFC-17/24). |
 | IFC4 STEP export — materials | ✓ | Single-material via `IfcMaterial` + `IfcRelAssociatesMaterial`; compound assemblies via `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` (IFC-28/29). Walls / floors / roofs with layered composition emit correctly. |
 | IFC4 STEP export — properties | ✓ | `IfcPropertySet` + `IfcPropertySingleValue` with typed values (`IfcText`, `IfcInteger`, `IfcReal`, `IfcBoolean`, `IfcLengthMeasure`, `IfcPlaneAngleMeasure`, `IfcAreaMeasure`, `IfcVolumeMeasure`, `IfcCountMeasure`, `IfcTimeMeasure`, `IfcMassMeasure`) wired via `IfcRelDefinesByProperties`. |
 | IFC4 STEP export — openings | ✓ | `IfcOpeningElement` + `IfcRelVoidsElement` + `IfcRelFillsElement` — doors and windows cut actual holes in their host walls (BlenderBIM verified). |
-| Geometry extraction | partial | Extrusion helpers ship for walls/slabs/roofs/ceilings/columns (IFC-16..26). Swept / revolved / BRep variants pending (IFC-17/18/19/20). |
-| Web viewer | pending | Phase 11 (VW1-01..24) |
+| Geometry extraction | partial | Extrusion helpers ship for walls/slabs/roofs/ceilings/columns/beams/stairs/doors/windows (GEO-27..35, IFC-16..26). Swept / revolved / BRep variants exist (IFC-17/18/19/20) but with `rvt` feature-flagged rectangular fallbacks in the default emission path. |
+| glTF 2.0 binary export | ✓ | `model_to_glb()` produces a valid `.glb` file that loads in Three.js's `GLTFLoader` (VW1-04). `rvt-gltf` CLI. |
+| 2D plan-view SVG export | ✓ | `render_plan_svg()` produces per-category-coloured SVG (walls black, doors blue, columns red, …) (VW1-11). `rvt-sheet` CLI. |
+| Browser viewer | ✓ | Live at <https://drunkonjava.github.io/rvt-rs/>. WebAssembly build of the core library + Three.js + Vite. Zero-upload, in-tab parse, Export glTF/IFC/SVG buttons, URL-based share via `share::ViewerState`. (VW1-01 through VW1-24 shipped.) |
+| Fuzz-regression harness | ✓ | 9 libFuzzer targets + 38 synthetic adversarial regression cases under `tests/fuzz_regressions.rs`. Caught a real `gzip_header_len` bounds bug on 9-byte truncated headers (Q-04). |
 
 ## Why the schema matters
 
@@ -37,7 +42,7 @@ The openBIM community — anchored by [buildingSMART International](https://www.
 
 The schema work here — decoding `Formats/Latest` and classifying 100% of field encodings across 11 Revit releases — is the dictionary a byte-level reader needs. Once per-element decoders (Phase 4 in [`TODO`](../../TODO-BLINDSIDE.md)) and geometry extraction (Phase 5) land on top, the resulting IFC export can carry more than what the Revit API chooses to expose. That is the thesis. It is not yet the delivered product.
 
-If you're building BIM/AEC tooling and want an Apache-2 Revit reader to compose into your stack, the current release covers metadata, schema introspection, 72 per-class decoders (Level, Wall, Floor, Roof, Ceiling, Door, Window, Column, Beam, Stair, Railing, Room, Furniture, Rebar, Phase, DesignOption, Workset, …), and IFC4 STEP emission with a real spatial tree + per-element entities. See [`tests/fixtures/synthetic-project.ifc`](tests/fixtures/synthetic-project.ifc) for a committed sample output you can open in BlenderBIM or IfcOpenShell — 60 lines of STEP with an `IfcProject`, `IfcSite`, `IfcBuilding`, three `IfcBuildingStorey`s (Ground / Second / Roof Deck at real elevations), and ten `IfcWall` / `IfcSlab` / `IfcDoor` / `IfcWindow` / `IfcStair` / `IfcBuildingElementProxy` entities all wired to the storey via `IfcRelContainedInSpatialStructure`. For per-element geometry (`IfcShapeRepresentation`), materials, and property sets, follow Phase 5 / 6 progress in [`CHANGELOG.md`](CHANGELOG.md).
+If you're building BIM/AEC tooling and want an Apache-2 Revit reader to compose into your stack, the current release covers metadata, schema introspection, **80 per-class decoders** (Level, Wall, Floor, Roof, Ceiling, Door, Window, Column, Beam, Stair, Railing, Room, Furniture, Rebar, Phase, DesignOption, Workset, and every Electrical/Mechanical/Plumbing FamilyInstance subtype), and IFC4 STEP emission with a real spatial tree + per-element entities + glTF 2.0 binary + 2D plan-view SVG. See [`tests/fixtures/synthetic-project.ifc`](tests/fixtures/synthetic-project.ifc) for a committed sample output you can open in BlenderBIM or IfcOpenShell — `IfcProject`, `IfcSite`, `IfcBuilding`, three `IfcBuildingStorey`s (Ground / Second / Roof Deck at real elevations), and ten `IfcWall` / `IfcSlab` / `IfcDoor` / `IfcWindow` / `IfcStair` / `IfcBuildingElementProxy` entities all wired to the storey via `IfcRelContainedInSpatialStructure`. Or just drop your file at <https://drunkonjava.github.io/rvt-rs/> and click Export IFC — same code path, running in your browser.
 
 ## Quick demo
 
@@ -60,6 +65,12 @@ open("out.ifc", "w").write(f.write_ifc())
 ```
 
 Install: `pip install rvt` — or build from source with [`maturin build --release --manifest-path rvt-py/Cargo.toml`](docs/python.md#from-source). Full API + Jupyter notebook walkthrough: [`docs/python.md`](docs/python.md) and [`docs/rvt-python-quickstart.ipynb`](docs/rvt-python-quickstart.ipynb).
+
+### In the browser
+
+Drop a `.rvt` / `.rfa` / `.rte` / `.rft` at <https://drunkonjava.github.io/rvt-rs/> — nothing leaves the tab. The viewer compiles the core library to WebAssembly (`wasm-pack build --target web --features wasm`), runs the parse in a dedicated worker, and renders 3D via Three.js. One-click buttons export the model as **glTF 2.0 binary**, **IFC4 STEP**, or **plan-view SVG**. URL state (camera pose + category filters) is shareable via the hash fragment.
+
+Privacy posture is CI-enforced: the deploy workflow (`.github/workflows/deploy-viewer.yml`) runs `wasm-objdump -j Import` on every build and fails if the compiled `.wasm` imports `fetch`, `XMLHttpRequest`, or `WebSocket`. See [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md).
 
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 
@@ -111,25 +122,31 @@ Three unintended disclosure patterns also surfaced in Autodesk's shipped referen
 
 ---
 
-## What works today
+## Library surface
 
-Library surface (all modules compile; see `src/` for type docs):
+All modules compile under both the default build and the `wasm` feature flag. See `src/` for type docs:
 
 | Module | What it does |
 |---|---|
-| `reader` | Open any Revit file, enumerate every OLE stream, fetch raw stream bytes |
-| `compression` | Truncated-gzip decode (`inflate_at`) + multi-chunk (`inflate_all_chunks`) |
-| `basic_file_info` | Version, build tag, GUID, creator path, locale |
-| `part_atom` | Atom XML with Autodesk `partatom` namespace — title, OmniClass, taxonomies |
-| `formats` | Parse `Formats/Latest` into `{name, offset, fields, tag, parent, declared_field_count}` |
+| `reader` | Open any Revit file with `OpenLimits`, enumerate every OLE stream, fetch raw stream bytes, bounded reads |
+| `compression` | Truncated-gzip decode (`inflate_at`, `inflate_at_auto`, `inflate_at_with_limits`) + multi-chunk (`inflate_all_chunks_with_limits`) + truncated-gzip encoder for write-back (`truncated_gzip_encode`) |
+| `basic_file_info` | Version, build tag, GUID, creator path, locale — read path + byte-back encoder (`BasicFileInfo::encode`) |
+| `part_atom` | Atom XML with Autodesk `partatom` namespace — title, OmniClass, taxonomies — read + encode |
+| `formats` | Parse + encode `Formats/Latest` with `FieldType` classification (100 % over the 11-release corpus) |
+| `walker` | Schema-directed instance walker + 80-decoder dispatch + `detect_adocument_start` entry-point finder |
+| `elements` | 80 `ElementDecoder` implementations (Wall, Floor, Door, Window, Column, Beam, Stair, Railing, Rebar, Room, Furniture, …) |
+| `geometry` | Curve / Face / Solid variants (Line, Arc, Ellipse, NURBS, Hermite, Ruled, Revolved, Extrusion, Sweep, Blend, SweptBlend, Boolean, Mesh, PointCloud) |
 | `object_graph` | `DocumentHistory`, string-record extractor for Global/Latest + Partitions/NN |
 | `class_index` | Quick class-name inventory (BTreeSet) |
 | `corpus` | Cross-version byte-delta classifier |
 | `elem_table` | `Global/ElemTable` header parser + rough record enumeration |
 | `partitions` | Partitions/NN 44-byte header decoder + gzip-chunk splitter |
-| `writer` | Byte-preserving round-trip `copy_file` through the OLE container |
-| `ifc` | IFC export scaffold: `IfcModel`, `Exporter` trait, `NullExporter`, mapping plan |
+| `writer` | Byte-preserving round-trip `copy_file` + `write_with_patches` (atomic temp-file rename, stream-hash verification) + GUID + history preservation |
+| `round_trip` | Per-class encoder round-trip verification (`verify_instance_round_trip`) |
+| `ifc` | Full IFC4 spatial tree + elements + materials + properties + openings + extrusion geometry + glTF 2.0 binary (`gltf::model_to_glb`) + plan-view SVG (`sheet::render_plan_svg`) + viewer data model (`scene_graph`, `camera`, `clipping`, `sheet`, `share`, `measure`, `annotation`, `pbr`) |
 | `streams` | Named constants for every invariant OLE stream in a Revit file |
+| `redact` | Shared PII scrubbers for all CLIs (`--redact` flag) |
+| `wasm` | `#[cfg(feature = "wasm")]` — 14 JS-callable wasm-bindgen bindings powering the browser viewer |
 | `error` | Structured error type (`Error` / `Result`) |
 
 Runtime capabilities:
@@ -144,7 +161,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-Nine CLIs ship in the box (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`):
+**Thirteen CLIs** ship in the box:
 
 ```bash
 cargo build --release
@@ -165,7 +182,7 @@ cargo build --release
 # Compare two versions of the same file (cross-version byte diff)
 ./target/release/rvt-diff --decompress 2018.rfa 2024.rfa
 
-# Dump the full class schema (395 classes, 1,114 fields)
+# Dump the full class schema (395 classes, 13,570 fields)
 ./target/release/rvt-schema my-project.rvt
 
 # Document upgrade history (which Revit releases have opened this file)
@@ -175,11 +192,29 @@ cargo build --release
 # (categories, OmniClass, Uniformat, Autodesk unit identifiers, …)
 ./target/release/rvt-history --partitions my-project.rvt
 
-# Hex-dump any decompressed stream (for Phase D work)
-./target/release/rvt-dump my-project.rvt --stream Global/Latest
+# Hex-dump every decompressed stream (for Phase D work)
+./target/release/rvt-dump my-project.rvt
+
+# IFC4 STEP export — spatial tree + elements + geometry + openings
+./target/release/rvt-ifc my-project.rvt -o out.ifc
+
+# glTF 2.0 binary export — loads in Three.js / Blender / any glTF viewer
+./target/release/rvt-gltf my-project.rvt -o out.glb
+
+# 2D plan-view SVG — per-category colours, ready for plot/laser-cut/printing
+./target/release/rvt-sheet my-project.rvt -o out.svg
+
+# Byte-preserving write path — patch stream bytes via JSON manifest
+./target/release/rvt-write my-project.rvt --patches patches.json -o patched.rvt
+
+# Per-file doc generator (schema + sample-data render for any RVT)
+./target/release/rvt-doc my-project.rvt -o doc.md
+
+# Cross-version corpus analysis (11 releases in one pass)
+./target/release/rvt-corpus /path/to/corpus-dir
 ```
 
-Fourteen reproducible probes live in `examples/` — one per FACT in the recon report:
+Thirty-six reproducible probes live in `examples/` — one per FACT in the recon report:
 
 ```bash
 cargo build --release --examples
@@ -250,10 +285,11 @@ these streams. The fix is to skip the 10-byte header manually and use
 | 4c.1 · Record framing | Tagged class records in `Formats/Latest` parse into structured records: `{tag, parent, ancestor_tag, declared_field_count}`; HostObjAttr → `{tag=107, parent=Symbol, ancestor_tag=0x0025 → APIVSTAMacroElem, declared_field_count=3}` | **Done** |
 | 4c.2 · Field-body decoding | `FieldType` enum classifies **100%** of schema fields across 8 variants (Primitive, String, Guid, ElementId, ElementIdRef, Pointer, Vector, Container). 11 discriminator bytes mapped, including generalized scalar-base Vector/Container (`{kind} 0x10 ...` / `{kind} 0x50 ...`) and the `0x0d` point-type base. | **Done (100.00% on 13,570 fields across the 11-version corpus; zero `Unknown`)** |
 | 4d · ElemTable | `Global/ElemTable` header parser + rough record enumeration; record semantics TBD (blocked on per-element schema lookup) | **Partial** |
-| 5 · IFC export | `IfcModel`, `Exporter` trait, `NullExporter`, full Revit→IFC mapping plan; emission unblocked by Q5.2 (100% field typing) | **Scaffolded (IFC emission the next frontier)** |
-| 6 · Write path | Byte-preserving read-modify-write round-trip (13/13 streams identical); **stream-level `write_with_patches` works end-to-end** — patch a stream, re-compress with truncated-gzip, re-embed. Field-level patching gated on 4c.2. | **Partial (stream-level done)** |
+| 5 · IFC4 export | Full spatial tree + per-element IFC entities + `IfcLocalPlacement` + `IfcExtrudedAreaSolid` + compound material layers + typed property sets + `IfcOpeningElement`/`IfcRelVoidsElement`/`IfcRelFillsElement` for doors and windows. Deterministic ISO-10303-21 output. IfcOpenShell + BlenderBIM verified. | **Done** (rectangular profiles; swept / revolved / BRep fallbacks ship but use rectangular in the default emission path — IFC-17/24 is the remaining refinement) |
+| 6 · Write path | Byte-preserving read-modify-write round-trip (13/13 streams identical); `rvt-write` CLI + JSON patch manifest + atomic temp-file rename + per-stream SHA verification (WRT-11..14). Stream-level patch is end-to-end; field-level semantic patching is Phase 7. | **Done (stream-level); field-level pending** |
+| 7 · Browser viewer | WebAssembly build of the core + Three.js + Vite + Pages deploy. Zero-upload, in-tab parse, export buttons for glTF/IFC/SVG, URL-state share. Live at <https://drunkonjava.github.io/rvt-rs/>. | **Done** (VW1-01..24) |
 
-All 5 original P0 research questions (Q4-Q7) are now **resolved**. Layer 4c.2 reaches **100.00% field-type classification** on the 11-version reference corpus (13,570 total schema fields, zero `Unknown`). The remaining single-session moat work is emitting IFC from the now-fully-typed schema graph. Every decoding question has an answer documented in the recon report.
+All 5 original P0 research questions (Q4-Q7) are **resolved**. Layer 4c.2 reaches **100.00% field-type classification** on the 11-version reference corpus (13,570 total schema fields, zero `Unknown`). IFC4 emission, glTF export, 2D plan view, and the browser viewer all ship. The next frontier is real-world project-file corpus validation (Q-01) — one `.rvt` probe already caught a `gzip_header_len` bounds bug that family files never hit.
 
 Key findings from this phase:
 
@@ -307,14 +343,17 @@ is absent, so partial corpora are okay — you'll just see
 cargo test --release
 ```
 
-Expected output:
+Expected output (as of 2026-04-21):
 
 ```
-test result: ok. 43 passed; 0 failed   (unit tests, in-tree)
-test result: ok.  8 passed; 0 failed   (integration tests, 11-version corpus)
+test result: ok. 697 passed; 0 failed   (lib unit tests)
+test result: ok.  38 passed; 0 failed   (fuzz-regression harness, Q-04)
+test result: ok.   9 passed; 0 failed   (integration tests, 11-version corpus)
+test result: ok.   3 passed; 0 failed   (ifc_roundtrip + ifc_synthetic_project/structural)
+...
 ```
 
-Integration tests are skipped if the sample RFAs are absent.
+Integration tests are skipped if the sample RFAs are absent. The fuzz-regression harness (`tests/fuzz_regressions.rs`) runs hand-crafted adversarial inputs through each libFuzzer target's entry point — no libFuzzer runtime needed — so any future commit that regresses crash-resistance trips the gate locally.
 
 ## License and trademarks
 
