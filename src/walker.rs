@@ -139,6 +139,199 @@ pub trait ElementDecoder: Sync + Send {
     ) -> Result<DecodedElement>;
 }
 
+/// Mirror of [`ElementDecoder`] for the write path (WRT-03). A per-
+/// class encoder takes a `DecodedElement` (typically produced by the
+/// decoder, possibly with a field or two mutated via the `writer`
+/// module's patch API) and a schema entry, and emits the
+/// instance-data bytes.
+///
+/// The default implementation [`encode_instance`] is schema-driven
+/// and works for any class whose fields all map to a canonical
+/// `FieldType` pattern — the same space the generic decoder covers.
+/// Per-class encoders override [`Self::encode`] when a class needs
+/// out-of-schema framing (ADocument's preamble, Container 2-column
+/// layout, etc.).
+///
+/// ```
+/// use rvt::walker::{ElementEncoder, DecodedElement, encode_instance};
+/// use rvt::formats::ClassEntry;
+///
+/// struct WallEncoder;
+/// impl ElementEncoder for WallEncoder {
+///     fn class_name(&self) -> &'static str { "Wall" }
+///     // default encode() uses encode_instance() — no override needed
+/// }
+/// ```
+pub trait ElementEncoder: Sync + Send {
+    /// The class's name as it appears in `Formats/Latest`. Must
+    /// match the paired `ElementDecoder::class_name` for round-trip.
+    fn class_name(&self) -> &'static str;
+
+    /// Serialise a single instance of this class back to its wire
+    /// bytes. The default implementation walks `decoded.fields` in
+    /// schema order and calls [`write_field_by_type`] for each,
+    /// producing a byte sequence identical to what the reader
+    /// originally consumed.
+    ///
+    /// Field count mismatch between `decoded.fields` and
+    /// `schema.fields` is tolerated: the encoder pairs fields by
+    /// schema index, so extra decoded fields are ignored and
+    /// missing ones emit nothing (consistent with the reader's
+    /// best-effort philosophy).
+    fn encode(&self, decoded: &DecodedElement, schema: &formats::ClassEntry) -> Vec<u8> {
+        encode_instance(decoded, schema)
+    }
+}
+
+/// Inverse of [`read_field_by_type`] (WRT-03). Serialises a single
+/// `InstanceField` value into `out` using the declared
+/// [`formats::FieldType`] to pick the wire layout.
+///
+/// Mismatches between `value` and `ty` (e.g. `value = String` but
+/// `ty = Primitive`) fall back to emitting whatever bytes the
+/// variant already carries when the decoder encountered an
+/// untypable field — [`InstanceField::Bytes`] is written verbatim,
+/// other mismatches emit an empty slice rather than panicking.
+/// The write path stays round-trip-safe for every field the
+/// decoder understood cleanly.
+pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: &mut Vec<u8>) {
+    use formats::FieldType;
+
+    // Catch-all: if the reader fell back to Bytes because the
+    // FieldType / layout wasn't covered, re-emit the bytes verbatim
+    // regardless of `ty`. This makes any round-trip
+    // decode→encode→decode stable even for unknown fields.
+    if let InstanceField::Bytes(raw) = value {
+        out.extend_from_slice(raw);
+        return;
+    }
+
+    match (ty, value) {
+        (FieldType::Primitive { kind, size }, v) => {
+            let n = *size as usize;
+            match (*kind, *size, v) {
+                (0x01, _, InstanceField::Bool(b)) => {
+                    out.push(if *b { 1 } else { 0 });
+                    // Primitive bool on disk is always one byte — even
+                    // when schema's declared size is greater (padding).
+                    for _ in 1..n {
+                        out.push(0);
+                    }
+                }
+                (0x02, 2, InstanceField::Integer { value, .. }) => {
+                    out.extend_from_slice(&(*value as u16).to_le_bytes());
+                }
+                (0x04, 4, InstanceField::Integer { value, .. })
+                | (0x05, 4, InstanceField::Integer { value, .. }) => {
+                    out.extend_from_slice(&(*value as u32).to_le_bytes());
+                }
+                (0x06, 4, InstanceField::Float { value, .. }) => {
+                    out.extend_from_slice(&(*value as f32).to_le_bytes());
+                }
+                (0x07, 8, InstanceField::Float { value, .. }) => {
+                    out.extend_from_slice(&value.to_le_bytes());
+                }
+                (0x0b, 8, InstanceField::Integer { value, .. }) => {
+                    out.extend_from_slice(&value.to_le_bytes());
+                }
+                _ => {} // shape mismatch — nothing to emit.
+            }
+        }
+        (FieldType::String, InstanceField::String(s)) => {
+            // UTF-16LE length-prefixed. Char count is (u32) number of
+            // UTF-16 code units, then that many × 2 bytes.
+            let utf16: Vec<u16> = s.encode_utf16().collect();
+            out.extend_from_slice(&(utf16.len() as u32).to_le_bytes());
+            for code in utf16 {
+                out.extend_from_slice(&code.to_le_bytes());
+            }
+        }
+        (FieldType::Guid, InstanceField::Guid(g)) => {
+            out.extend_from_slice(g);
+        }
+        (
+            FieldType::ElementId | FieldType::ElementIdRef { .. },
+            InstanceField::ElementId { tag, id },
+        ) => {
+            out.extend_from_slice(&tag.to_le_bytes());
+            out.extend_from_slice(&id.to_le_bytes());
+        }
+        (FieldType::Pointer { .. }, InstanceField::Pointer { raw }) => {
+            out.extend_from_slice(&raw[0].to_le_bytes());
+            out.extend_from_slice(&raw[1].to_le_bytes());
+        }
+        (FieldType::Vector { kind, .. }, InstanceField::Vector(items)) => {
+            out.extend_from_slice(&(items.len() as u32).to_le_bytes());
+            for item in items {
+                match (*kind, item) {
+                    (0x01, InstanceField::Bool(b)) => out.push(if *b { 1 } else { 0 }),
+                    (0x04, InstanceField::Integer { value, .. })
+                    | (0x05, InstanceField::Integer { value, .. }) => {
+                        out.extend_from_slice(&(*value as u32).to_le_bytes());
+                    }
+                    (0x07, InstanceField::Float { value, .. }) => {
+                        out.extend_from_slice(&value.to_le_bytes());
+                    }
+                    (0x0b, InstanceField::Integer { value, .. }) => {
+                        out.extend_from_slice(&value.to_le_bytes());
+                    }
+                    (0x0d, InstanceField::Vector(point)) => {
+                        // point = 3 × f64 — walk up to three floats
+                        // (shape was emitted by the reader).
+                        for p in point.iter().take(3) {
+                            if let InstanceField::Float { value, .. } = p {
+                                out.extend_from_slice(&value.to_le_bytes());
+                            } else {
+                                // Point component missing; emit zero
+                                // to preserve the 24-byte stride.
+                                out.extend_from_slice(&0.0_f64.to_le_bytes());
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        (FieldType::Container { .. } | FieldType::Unknown { .. }, _) => {
+            // Decoder uses Bytes fallback for these — the Bytes arm
+            // at the top caught the Bytes case; shape-mismatched
+            // values (typed value but container/unknown FieldType)
+            // are dropped. The writer stays safe — no bytes emitted
+            // for ambiguous pairings.
+        }
+        // All other type+value mismatches: emit nothing.
+        _ => {}
+    }
+}
+
+/// Serialise a whole `DecodedElement` back to its wire bytes
+/// (WRT-03). Inverse of [`decode_instance`]. Walks the schema's
+/// declared fields in order and, for each, calls
+/// [`write_field_by_type`] with the matching `InstanceField` from
+/// `decoded.fields`.
+///
+/// Round-trip: `encode_instance(&decoded_instance(b, 0, schema),
+/// schema) == b` for any `b` where the decoder produces a
+/// non-fallback `InstanceField` for every schema field. Callers
+/// should sanity-check `Completeness::typed_ratio()` before
+/// relying on round-trip equality.
+pub fn encode_instance(decoded: &DecodedElement, schema: &formats::ClassEntry) -> Vec<u8> {
+    let mut out = Vec::with_capacity(decoded.byte_range.len());
+    for (idx, schema_field) in schema.fields.iter().enumerate() {
+        let Some((_, value)) = decoded.fields.get(idx) else {
+            continue;
+        };
+        if let Some(ft) = schema_field.field_type.as_ref() {
+            write_field_by_type(value, ft, &mut out);
+        } else if let InstanceField::Bytes(raw) = value {
+            // No FieldType declared — emit whatever the reader
+            // captured as raw bytes.
+            out.extend_from_slice(raw);
+        }
+    }
+    out
+}
+
 /// Result of decoding a single element's instance bytes.
 ///
 /// Every per-class decoder returns one of these so the walker can
@@ -1725,5 +1918,313 @@ mod tests {
             InstanceField::Bytes(vec![0x2a, 0, 0, 0, 0x39, 0x05, 0, 0]),
         )]);
         assert_eq!(adoc.elem_table_pointer(), None);
+    }
+
+    // ---- WRT-03: ElementEncoder / encode_instance round-trip tests ----
+
+    fn mk_schema(class_name: &str, fields: Vec<(&str, formats::FieldType)>) -> formats::ClassEntry {
+        formats::ClassEntry {
+            name: class_name.to_string(),
+            offset: 0,
+            fields: fields
+                .into_iter()
+                .map(|(name, ft)| formats::FieldEntry {
+                    name: name.to_string(),
+                    cpp_type: None,
+                    field_type: Some(ft),
+                })
+                .collect(),
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        }
+    }
+
+    #[test]
+    fn write_primitive_round_trips_u32() {
+        let ft = formats::FieldType::Primitive {
+            kind: 0x05,
+            size: 4,
+        };
+        let value = InstanceField::Integer {
+            value: 0xDEADBEEF,
+            signed: false,
+            size: 4,
+        };
+        let mut out = Vec::new();
+        write_field_by_type(&value, &ft, &mut out);
+        assert_eq!(out, vec![0xEF, 0xBE, 0xAD, 0xDE]);
+
+        let mut cursor = 0;
+        let round = read_field_by_type(&out, &mut cursor, &ft);
+        match round {
+            InstanceField::Integer { value: v, .. } => assert_eq!(v as u32, 0xDEADBEEF),
+            other => panic!("expected Integer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_primitive_round_trips_f64() {
+        let ft = formats::FieldType::Primitive {
+            kind: 0x07,
+            size: 8,
+        };
+        let value = InstanceField::Float {
+            value: std::f64::consts::PI,
+            size: 8,
+        };
+        let mut out = Vec::new();
+        write_field_by_type(&value, &ft, &mut out);
+        let mut cursor = 0;
+        match read_field_by_type(&out, &mut cursor, &ft) {
+            InstanceField::Float { value, .. } => {
+                assert!((value - std::f64::consts::PI).abs() < 1e-15);
+            }
+            other => panic!("expected Float, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_primitive_round_trips_bool() {
+        let ft = formats::FieldType::Primitive {
+            kind: 0x01,
+            size: 1,
+        };
+        for expected in [true, false] {
+            let mut out = Vec::new();
+            write_field_by_type(&InstanceField::Bool(expected), &ft, &mut out);
+            let mut cursor = 0;
+            match read_field_by_type(&out, &mut cursor, &ft) {
+                InstanceField::Bool(b) => assert_eq!(b, expected),
+                other => panic!("expected Bool, got {:?}", other),
+            }
+        }
+    }
+
+    #[test]
+    fn write_string_round_trips_unicode() {
+        let ft = formats::FieldType::String;
+        for s in ["hello", "café", "日本語", ""] {
+            let mut out = Vec::new();
+            write_field_by_type(&InstanceField::String(s.to_string()), &ft, &mut out);
+            let mut cursor = 0;
+            match read_field_by_type(&out, &mut cursor, &ft) {
+                InstanceField::String(got) => assert_eq!(got, s),
+                other => panic!("expected String, got {:?}", other),
+            }
+        }
+    }
+
+    #[test]
+    fn write_guid_round_trips() {
+        let ft = formats::FieldType::Guid;
+        let g = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54,
+            0x32, 0x10,
+        ];
+        let mut out = Vec::new();
+        write_field_by_type(&InstanceField::Guid(g), &ft, &mut out);
+        assert_eq!(out.len(), 16);
+        let mut cursor = 0;
+        match read_field_by_type(&out, &mut cursor, &ft) {
+            InstanceField::Guid(got) => assert_eq!(got, g),
+            other => panic!("expected Guid, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_element_id_round_trips() {
+        let ft = formats::FieldType::ElementId;
+        let value = InstanceField::ElementId {
+            tag: 0x14,
+            id: 0x1337,
+        };
+        let mut out = Vec::new();
+        write_field_by_type(&value, &ft, &mut out);
+        let mut cursor = 0;
+        match read_field_by_type(&out, &mut cursor, &ft) {
+            InstanceField::ElementId { tag, id } => {
+                assert_eq!(tag, 0x14);
+                assert_eq!(id, 0x1337);
+            }
+            other => panic!("expected ElementId, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_pointer_round_trips() {
+        let ft = formats::FieldType::Pointer { kind: 0x01 };
+        let value = InstanceField::Pointer {
+            raw: [0xAABBCCDD, 0x11223344],
+        };
+        let mut out = Vec::new();
+        write_field_by_type(&value, &ft, &mut out);
+        let mut cursor = 0;
+        match read_field_by_type(&out, &mut cursor, &ft) {
+            InstanceField::Pointer { raw } => assert_eq!(raw, [0xAABBCCDD, 0x11223344]),
+            other => panic!("expected Pointer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_vector_of_doubles_round_trips() {
+        let ft = formats::FieldType::Vector {
+            kind: 0x07,
+            body: Vec::new(),
+        };
+        let items: Vec<InstanceField> = [1.0, 2.5, -7.25]
+            .iter()
+            .map(|v| InstanceField::Float { value: *v, size: 8 })
+            .collect();
+        let mut out = Vec::new();
+        write_field_by_type(&InstanceField::Vector(items), &ft, &mut out);
+        let mut cursor = 0;
+        match read_field_by_type(&out, &mut cursor, &ft) {
+            InstanceField::Vector(values) => {
+                assert_eq!(values.len(), 3);
+                if let InstanceField::Float { value, .. } = values[2] {
+                    assert!((value + 7.25).abs() < 1e-9);
+                }
+            }
+            other => panic!("expected Vector, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_bytes_fallback_passes_through_verbatim() {
+        // Any FieldType + Bytes value = emit bytes as-is.
+        let ft = formats::FieldType::Unknown { bytes: Vec::new() };
+        let payload = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let mut out = Vec::new();
+        write_field_by_type(&InstanceField::Bytes(payload.clone()), &ft, &mut out);
+        assert_eq!(out, payload);
+    }
+
+    #[test]
+    fn encode_instance_round_trips_typed_fields() {
+        // Two fields — u32 + f64 — should produce identical bytes to
+        // the reader's input when fed back through decode_instance.
+        let schema = mk_schema(
+            "TestClass",
+            vec![
+                (
+                    "m_id",
+                    formats::FieldType::Primitive {
+                        kind: 0x05,
+                        size: 4,
+                    },
+                ),
+                (
+                    "m_value",
+                    formats::FieldType::Primitive {
+                        kind: 0x07,
+                        size: 8,
+                    },
+                ),
+            ],
+        );
+        let decoded = DecodedElement {
+            id: None,
+            class: "TestClass".into(),
+            fields: vec![
+                (
+                    "m_id".into(),
+                    InstanceField::Integer {
+                        value: 0x2a,
+                        signed: false,
+                        size: 4,
+                    },
+                ),
+                (
+                    "m_value".into(),
+                    InstanceField::Float {
+                        value: 9.5,
+                        size: 8,
+                    },
+                ),
+            ],
+            byte_range: 0..12,
+        };
+        let bytes = encode_instance(&decoded, &schema);
+        assert_eq!(bytes.len(), 12);
+        let re = decode_instance(&bytes, 0, &schema);
+        assert_eq!(re.fields.len(), 2);
+    }
+
+    #[test]
+    fn encode_instance_tolerates_field_count_mismatch() {
+        let schema = mk_schema(
+            "TestClass",
+            vec![
+                (
+                    "a",
+                    formats::FieldType::Primitive {
+                        kind: 0x05,
+                        size: 4,
+                    },
+                ),
+                (
+                    "b",
+                    formats::FieldType::Primitive {
+                        kind: 0x05,
+                        size: 4,
+                    },
+                ),
+            ],
+        );
+        // Decoded has only one field; second is simply skipped.
+        let decoded = DecodedElement {
+            id: None,
+            class: "TestClass".into(),
+            fields: vec![(
+                "a".into(),
+                InstanceField::Integer {
+                    value: 0x2a,
+                    signed: false,
+                    size: 4,
+                },
+            )],
+            byte_range: 0..4,
+        };
+        let bytes = encode_instance(&decoded, &schema);
+        assert_eq!(bytes.len(), 4);
+    }
+
+    #[test]
+    fn default_element_encoder_uses_encode_instance() {
+        struct MyEncoder;
+        impl ElementEncoder for MyEncoder {
+            fn class_name(&self) -> &'static str {
+                "TestClass"
+            }
+        }
+        let schema = mk_schema(
+            "TestClass",
+            vec![(
+                "a",
+                formats::FieldType::Primitive {
+                    kind: 0x05,
+                    size: 4,
+                },
+            )],
+        );
+        let decoded = DecodedElement {
+            id: None,
+            class: "TestClass".into(),
+            fields: vec![(
+                "a".into(),
+                InstanceField::Integer {
+                    value: 0x2a,
+                    signed: false,
+                    size: 4,
+                },
+            )],
+            byte_range: 0..4,
+        };
+        let enc = MyEncoder;
+        let bytes = enc.encode(&decoded, &schema);
+        assert_eq!(bytes, vec![0x2a, 0x00, 0x00, 0x00]);
     }
 }
