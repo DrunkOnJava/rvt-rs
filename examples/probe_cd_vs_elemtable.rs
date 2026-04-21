@@ -53,7 +53,7 @@ fn main() {
         // (so we're confident it's a valid base record, not in the
         // variable-length region).
         if let Some(v) = read_u64(&cd, off) {
-            let marker_ok = &cd[off + 16..off + 20] == [0xFF, 0xFF, 0xFF, 0xFF];
+            let marker_ok = cd[off + 16..off + 20] == [0xFF, 0xFF, 0xFF, 0xFF];
             if marker_ok && v != 0 && v != u64::MAX {
                 cd_ids.insert(v);
             }
