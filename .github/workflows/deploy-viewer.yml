@@ -11,6 +11,8 @@ on:
     paths:
       - 'src/**'
       - 'viewer/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/deploy-viewer.yml'
   workflow_dispatch:
 
