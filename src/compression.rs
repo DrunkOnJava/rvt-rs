@@ -75,15 +75,23 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
         pos += 2 + xlen;
     }
     if flags & 0x08 != 0 {
-        // FNAME: null-terminated string
-        pos = data[pos..]
+        // FNAME: null-terminated string. Bounds-check `pos` first —
+        // the 10-byte base header might not fit if `offset + 10 >
+        // data.len()`, in which case slicing `data[pos..]` would
+        // panic. Discovered by libFuzzer fuzz_inflate_at_with_limits
+        // 2026-04-21 on input `1f 8b 08 b9` (FNAME+FHCRC flag set,
+        // 4-byte buffer).
+        pos = data
+            .get(pos..)?
             .iter()
             .position(|&b| b == 0)
             .map(|i| pos + i + 1)?;
     }
     if flags & 0x10 != 0 {
-        // FCOMMENT: null-terminated string
-        pos = data[pos..]
+        // FCOMMENT: null-terminated string. Same bounds-check
+        // rationale as FNAME above.
+        pos = data
+            .get(pos..)?
             .iter()
             .position(|&b| b == 0)
             .map(|i| pos + i + 1)?;

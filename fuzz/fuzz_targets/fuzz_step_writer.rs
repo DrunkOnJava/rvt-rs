@@ -341,6 +341,7 @@ fuzz_target!(|input: FuzzInput| {
             width_feet: sanitize_float(e.width_feet),
             depth_feet: sanitize_float(e.depth_feet),
             height_feet: sanitize_float(e.height_feet),
+            profile_override: None,
         });
 
         entities.push(IfcEntity::BuildingElement {
@@ -354,6 +355,10 @@ fuzz_target!(|input: FuzzInput| {
             rotation_radians,
             extrusion,
             host_element_index,
+            material_layer_set_index: None,
+            material_profile_set_index: None,
+            solid_shape: None,
+            representation_map_index: None,
         });
     }
 
@@ -365,6 +370,9 @@ fuzz_target!(|input: FuzzInput| {
         units,
         building_storeys,
         materials,
+        material_layer_sets: Vec::new(),
+        material_profile_sets: Vec::new(),
+        representation_maps: Vec::new(),
     };
 
     let opts = StepOptions {
