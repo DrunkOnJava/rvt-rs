@@ -305,7 +305,7 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
 }
 
 /// Encode an `ADocument`-level field (WRT-02). Mirrors
-/// [`read_field`] — handles `Pointer`, `ElementId` / `ElementIdRef`
+/// `read_field` — handles `Pointer`, `ElementId` / `ElementIdRef`
 /// (8-byte `tag,id` layout), and `Container { kind: 0x0e, .. }`
 /// (2-column layout via [`encode_ref_container`]). All other
 /// field types route through [`write_field_by_type`], which covers
@@ -373,7 +373,7 @@ pub fn encode_adocument_fields(
 }
 
 /// Encode a 2-column reference container (WRT-09) — the inverse of
-/// [`read_field`]'s `Container { kind: 0x0e, .. }` path. The on-
+/// `read_field`'s `Container { kind: 0x0e, .. }` path. The on-
 /// disk layout for this field shape is:
 ///
 /// ```text

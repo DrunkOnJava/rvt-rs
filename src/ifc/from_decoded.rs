@@ -245,7 +245,7 @@ pub fn wall_extrusion_from_location_line(
 /// `IfcRelAggregates(MultiLayerWall, [Layer1, Layer2, …])` pattern)
 /// or combine them into a single extrusion with the total thickness
 /// and attach the full layer set via
-/// [`BuildingElement::material_layer_set_index`] (IFC-28).
+/// `BuildingElement::material_layer_set_index` (IFC-28).
 ///
 /// Empty or zero-thickness layer lists return an empty vec.
 pub fn wall_layered_extrusions_from_location_line(
@@ -797,8 +797,8 @@ pub fn door_opening_extrusion(
 ///
 /// `host_level_elevation_feet` is the `Level.elevation_feet` of
 /// the level that hosts the window. `sill_height_feet` comes from
-/// the decoded [`Window.sill_height_feet`] (or
-/// [`Window::sill_height_inches`] / 12.0).
+/// the decoded `Window.sill_height_feet` (or
+/// `Window::sill_height_inches` / 12.0).
 pub fn window_placement_z_feet(host_level_elevation_feet: f64, sill_height_feet: f64) -> f64 {
     host_level_elevation_feet + sill_height_feet.max(0.0)
 }

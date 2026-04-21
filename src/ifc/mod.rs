@@ -69,6 +69,7 @@ pub mod category_map;
 pub mod clipping;
 pub mod entities;
 pub mod from_decoded;
+pub mod gltf;
 pub mod measure;
 pub mod pbr;
 pub mod scene_graph;
