@@ -121,6 +121,77 @@ impl SchemaTable {
         }
         d
     }
+
+    /// Resolve a class name to the first tag found by walking the
+    /// `parent` chain from the class up to the root (RE-18).
+    ///
+    /// Walks: `class → class.parent → class.parent.parent → …` until
+    /// an entry with `tag.is_some()` is found. Returns `(ancestor_name,
+    /// tag)` — the ancestor is `class_name` itself when the class is
+    /// directly tagged. Returns `None` when no ancestor carries a tag,
+    /// the class name is not in the schema, or a parent cycle is
+    /// detected (defensive — the schema has never contained one in
+    /// observed corpora but cheap to guard).
+    ///
+    /// # Motivation
+    ///
+    /// Of the 405 classes in a 2023 schema, only 80 carry tags. The
+    /// other 325 are abstract parents, mixins, or type-only
+    /// declarations. `Wall`, `Floor`, `Door`, `Window`, `Level`,
+    /// `Grid`, `FamilyInstance`, `Room` are all tagless; their tagged
+    /// concrete instances appear under subtype names like `ArcWall`
+    /// (`0x0191`) or `WallCGDriver` (`0x0197`). Hypothesis H7 from
+    /// `reports/element-framing/RE-09-synthesis.md` (confidence 0.7)
+    /// says tagless classes use their parent's tag on the wire — this
+    /// function is the helper for validating that hypothesis against
+    /// real partition bytes.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use rvt::{RevitFile, compression, formats, streams};
+    /// # let mut rf = RevitFile::open("some.rvt").unwrap();
+    /// # let raw = rf.read_stream(streams::FORMATS_LATEST).unwrap();
+    /// # let decomp = compression::inflate_at(&raw, 0).unwrap();
+    /// # let schema = formats::parse_schema(&decomp).unwrap();
+    /// // `Wall` is tagless in every observed release; its nearest
+    /// // tagged ancestor is a concrete subtype like `ArcWall`.
+    /// let (anc, tag) = schema.tagged_ancestor("Wall").unwrap_or(("<none>", 0));
+    /// ```
+    pub fn tagged_ancestor(&self, class_name: &str) -> Option<(&str, u16)> {
+        let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        let mut current = class_name;
+        loop {
+            if !seen.insert(current) {
+                return None;
+            }
+            let entry = self.classes.iter().find(|c| c.name == current)?;
+            if let Some(t) = entry.tag {
+                return Some((entry.name.as_str(), t));
+            }
+            current = entry.parent.as_deref()?;
+        }
+    }
+
+    /// Build a full `name → (ancestor, tag)` resolution map for every
+    /// class in the schema (RE-18). Useful for partition-chunk tag
+    /// scanning where you want a single pass over all classes to know
+    /// "given a chunk tagged 0x0191, what's the most specific class
+    /// name I should call it?" without re-walking the parent chain
+    /// per-record.
+    ///
+    /// Entries where no ancestor carries a tag are omitted — callers
+    /// who need the untagged set should filter `self.classes` by
+    /// checking `tagged_ancestor().is_none()`.
+    pub fn tagged_ancestor_map(&self) -> std::collections::BTreeMap<String, (String, u16)> {
+        let mut out = std::collections::BTreeMap::new();
+        for c in &self.classes {
+            if let Some((anc, tag)) = self.tagged_ancestor(&c.name) {
+                out.insert(c.name.clone(), (anc.to_string(), tag));
+            }
+        }
+        out
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -856,6 +927,112 @@ mod tests {
         assert!(looks_like_cpp_type(b"ElementId"));
         assert!(looks_like_cpp_type(b"int"));
         assert!(!looks_like_cpp_type(b"m_id")); // lowercase only = field name territory
+    }
+
+    fn mk_class(name: &str, tag: Option<u16>, parent: Option<&str>) -> ClassEntry {
+        ClassEntry {
+            name: name.into(),
+            offset: 0,
+            fields: Vec::new(),
+            tag,
+            parent: parent.map(|s| s.into()),
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        }
+    }
+
+    #[test]
+    fn tagged_ancestor_resolves_direct_tag() {
+        // ArcWall carries its own tag directly.
+        let schema = SchemaTable {
+            classes: vec![mk_class("ArcWall", Some(0x0191), Some("Wall"))],
+            cpp_types: vec![],
+            skipped_records: 0,
+        };
+        let (anc, tag) = schema.tagged_ancestor("ArcWall").unwrap();
+        assert_eq!(anc, "ArcWall");
+        assert_eq!(tag, 0x0191);
+    }
+
+    #[test]
+    fn tagged_ancestor_walks_parent_chain() {
+        // Untagged Wall → parent HostObject (untagged) → parent HostObjAttr
+        // (tagged 0x006b). Ancestor resolves to HostObjAttr.
+        let schema = SchemaTable {
+            classes: vec![
+                mk_class("Wall", None, Some("HostObject")),
+                mk_class("HostObject", None, Some("HostObjAttr")),
+                mk_class("HostObjAttr", Some(0x006b), None),
+            ],
+            cpp_types: vec![],
+            skipped_records: 0,
+        };
+        let (anc, tag) = schema.tagged_ancestor("Wall").unwrap();
+        assert_eq!(anc, "HostObjAttr");
+        assert_eq!(tag, 0x006b);
+    }
+
+    #[test]
+    fn tagged_ancestor_returns_none_when_no_tag_in_chain() {
+        // Class + parent neither carries a tag and the parent chain
+        // terminates cleanly without any tag ever appearing.
+        let schema = SchemaTable {
+            classes: vec![
+                mk_class("Abstract", None, Some("Root")),
+                mk_class("Root", None, None),
+            ],
+            cpp_types: vec![],
+            skipped_records: 0,
+        };
+        assert!(schema.tagged_ancestor("Abstract").is_none());
+    }
+
+    #[test]
+    fn tagged_ancestor_guards_against_cycles() {
+        // A → B → A. Must terminate (return None) instead of looping.
+        let schema = SchemaTable {
+            classes: vec![
+                mk_class("A", None, Some("B")),
+                mk_class("B", None, Some("A")),
+            ],
+            cpp_types: vec![],
+            skipped_records: 0,
+        };
+        assert!(schema.tagged_ancestor("A").is_none());
+    }
+
+    #[test]
+    fn tagged_ancestor_unknown_class_is_none() {
+        let schema = SchemaTable {
+            classes: vec![mk_class("Known", Some(0x0001), None)],
+            cpp_types: vec![],
+            skipped_records: 0,
+        };
+        assert!(schema.tagged_ancestor("Nonexistent").is_none());
+    }
+
+    #[test]
+    fn tagged_ancestor_map_covers_all_resolvable_classes() {
+        let schema = SchemaTable {
+            classes: vec![
+                mk_class("Wall", None, Some("HostObjAttr")),
+                mk_class("Floor", None, Some("HostObjAttr")),
+                mk_class("HostObjAttr", Some(0x006b), None),
+                mk_class("Unreachable", None, Some("MissingParent")),
+            ],
+            cpp_types: vec![],
+            skipped_records: 0,
+        };
+        let m = schema.tagged_ancestor_map();
+        assert_eq!(m.get("Wall").unwrap(), &("HostObjAttr".to_string(), 0x006b));
+        assert_eq!(m.get("Floor").unwrap(), &("HostObjAttr".to_string(), 0x006b));
+        assert_eq!(
+            m.get("HostObjAttr").unwrap(),
+            &("HostObjAttr".to_string(), 0x006b)
+        );
+        assert!(m.get("Unreachable").is_none());
+        assert_eq!(m.len(), 3);
     }
 
     #[test]
