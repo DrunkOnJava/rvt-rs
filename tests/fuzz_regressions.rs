@@ -367,6 +367,42 @@ fn find_chunks_handles_many_adjacent_magics() {
     });
 }
 
+// ---- truncated_gzip_encode round-trip ----
+
+#[test]
+fn truncated_gzip_encode_empty_round_trips() {
+    // Empty payload is a valid edge — WRT-11 validator must not
+    // panic on it.
+    assert_no_panic("tgz_encode_empty", &[], |d| {
+        let _ = rvt::compression::validate_truncated_gzip_round_trip(d);
+    });
+}
+
+#[test]
+fn truncated_gzip_encode_single_byte_round_trips() {
+    assert_no_panic("tgz_encode_one", &[0x42u8], |d| {
+        let _ = rvt::compression::validate_truncated_gzip_round_trip(d);
+    });
+}
+
+#[test]
+fn truncated_gzip_encode_64k_zeros_round_trips() {
+    // Boundary around the DEFLATE stored-block 65535-byte limit.
+    let zeros = vec![0x00u8; 65536];
+    assert_no_panic("tgz_encode_64k_zeros", &zeros, |d| {
+        let _ = rvt::compression::validate_truncated_gzip_round_trip(d);
+    });
+}
+
+#[test]
+fn truncated_gzip_prefix8_empty_round_trips() {
+    // The `with_prefix8` variant carries an 8-byte prefix before the
+    // gzip stream. Empty input still has to round-trip safely.
+    assert_no_panic("tgz_prefix8_empty", &[], |d| {
+        let _ = rvt::compression::validate_truncated_gzip_prefix8_round_trip(d);
+    });
+}
+
 // ---- fuzz_part_atom ----
 
 fn part_atom_assert(label: &str, data: &[u8]) {
