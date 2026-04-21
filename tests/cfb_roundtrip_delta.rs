@@ -17,7 +17,8 @@ mod common;
 
 use common::{ALL_YEARS, sample_for_year, samples_dir};
 use rvt::Result;
-use rvt::writer::write_with_patches;
+use rvt::streams::BASIC_FILE_INFO;
+use rvt::writer::{StreamFraming, StreamPatch, write_with_patches};
 use std::fs;
 
 fn corpus_available() -> bool {
@@ -77,6 +78,81 @@ fn cfb_roundtrip_delta_baseline() -> Result<()> {
     }
 
     // Cleanup.
+    let _ = fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
+/// WRT-10.3 non-empty-patch delta — exercise the sector-preservation
+/// path that rewrites a single stream in-place on an `open_rw`-opened
+/// copy of the source. Every UNPATCHED stream should keep its
+/// physical sectors; only the patched stream's sector chain (plus
+/// FAT entries describing it) should diverge from source.
+///
+/// Baseline before WRT-10.3: ~94% delta for this case too (full
+/// rebuild). After: single-stream patch should yield single-digit-%
+/// delta across every release.
+#[test]
+fn cfb_single_stream_patch_preserves_unpatched_sectors() -> Result<()> {
+    if !corpus_available() {
+        eprintln!(
+            "skipping single-stream patch delta: corpus missing at {}",
+            samples_dir().display()
+        );
+        return Ok(());
+    }
+
+    let tmp = std::env::temp_dir().join(format!("rvt-patch-delta-{}", std::process::id()));
+    fs::create_dir_all(&tmp).unwrap();
+
+    // The streams constant and writer types are pulled in at the
+    // top of the file; suppress dead-code warnings when the corpus
+    // is absent.
+    let _ = (StreamFraming::Verbatim, BASIC_FILE_INFO);
+
+    for year in ALL_YEARS {
+        let src = sample_for_year(year);
+        let dst = tmp.join(format!("patch-{year}.rfa"));
+
+        // Read the current BasicFileInfo bytes and re-write them
+        // unchanged. This is a trivial patch — every byte of the
+        // stream stays the same, so the ONLY delta should be any
+        // internal state that `cfb::open_rw`'s `create_stream`
+        // touches incidentally (timestamps, state bits).
+        let existing = {
+            let mut rf = rvt::RevitFile::open(&src)?;
+            rf.read_stream(BASIC_FILE_INFO)?
+        };
+        let patch = StreamPatch {
+            stream_name: BASIC_FILE_INFO.into(),
+            new_decompressed: existing,
+            framing: StreamFraming::Verbatim,
+        };
+        write_with_patches(&src, &dst, &[patch])?;
+
+        let src_bytes = fs::read(&src).unwrap();
+        let dst_bytes = fs::read(&dst).unwrap();
+        let delta = byte_delta(&src_bytes, &dst_bytes);
+        let pct = (delta as f64 * 100.0) / src_bytes.len() as f64;
+        eprintln!(
+            "year {year}: src={} B, dst={} B, delta={} ({pct:.2}%) — \
+             single-stream identity patch",
+            src_bytes.len(),
+            dst_bytes.len(),
+            delta
+        );
+
+        // Assertion: after WRT-10.3 sector-preservation, single-stream
+        // patches must produce < 25% byte delta. (Before: ~94% from
+        // full rebuild.) 25% is the safe threshold across all 11
+        // releases; observed actual is much lower — this assertion
+        // is a floor for "we're definitely better than full rebuild."
+        assert!(
+            pct < 25.0,
+            "{year}: single-stream patch delta {pct:.2}% exceeds 25% ceiling — \
+             sector-preservation path regressed to full-rebuild behaviour"
+        );
+    }
+
     let _ = fs::remove_dir_all(&tmp);
     Ok(())
 }
