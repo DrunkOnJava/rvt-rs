@@ -181,6 +181,46 @@ When you discover something new about the file format:
 This keeps every claim independently verifiable, which is the
 whole point of open reverse-engineering work.
 
+## Corpus env vars
+
+Tests, benchmarks, and probes that need real Revit files resolve
+their paths from environment variables so no contributor's home
+directory leaks into the repo (the CI `PII guard` job enforces
+this). Three variables are recognised, in decreasing specificity:
+
+- `RVT_FAMILY_2024` — full path to a single `.rfa` sample
+  (family-file probes).
+- `RVT_SAMPLES_DIR` — directory holding the 11-release
+  [`phi-ag/rvt`](https://github.com/phi-ag/rvt) corpus. Defaults
+  to `../../samples` relative to the crate root.
+- `RVT_PROJECT_CORPUS_DIR` — directory holding `.rvt` project
+  files. Defaults to `/private/tmp/rvt-corpus-probe/magnetar/Revit`
+  (the path the main contributor uses locally for the
+  [`magnetar-io/revit-test-datasets`](https://github.com/magnetar-io/revit-test-datasets)
+  MIT-licensed corpus).
+
+Tests and benches that need these files skip gracefully if the
+path doesn't exist, so a fresh clone runs all non-corpus-dependent
+suites green without any env setup. To enable the corpus suites:
+
+```bash
+# Family corpus (LFS-tracked, 11 releases 2016-2026)
+git clone https://github.com/phi-ag/rvt /tmp/phiag
+export RVT_SAMPLES_DIR=/tmp/phiag/examples/Autodesk
+
+# Project corpus (LFS-tracked, 2023 and 2024 real .rvt files)
+git clone https://github.com/magnetar-io/revit-test-datasets /tmp/magnetar
+export RVT_PROJECT_CORPUS_DIR=/tmp/magnetar/Revit
+
+cargo test                                          # full suite
+cargo bench --bench project_file                    # Q-07 multi-MB
+cargo run --release --example probe_latest_framing  # any probe
+```
+
+Never hardcode absolute paths in test or probe code — the PII
+guard job scans for `/Users/<name>/` and `/home/<name>/`
+patterns on every push.
+
 ## Legal note for contributors
 
 rvt-rs is Apache-2.0 licensed. By submitting a contribution, you
