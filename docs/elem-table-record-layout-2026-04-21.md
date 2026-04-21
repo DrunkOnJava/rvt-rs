@@ -148,10 +148,33 @@ Remaining unknowns that the 3-file corpus can't yet answer:
 - Is the 28 B → 40 B record-size shift a per-release change (2023
   vs 2024) or a per-project-size change (Einhoven is 913 KB,
   Core_Interior is 34 MB)?
-- What are the 16/28 payload bytes? Offset within
-  `Global/Latest`? Class-tag reference? Parent-element handle?
+- **Payload bytes do NOT encode a byte offset into `Global/Latest`.**
+  Follow-up probe (`examples/probe_elem_record_payload.rs`) dumped
+  the 16 B / 28 B payload across all 2614 + 26,425 records on the
+  two project files: they're predominantly zero on initial
+  element-index records. The only bytes that look like in-range
+  u32 offsets are incidental (3.6% of records at any given
+  4-byte position — no better than random). This means
+  `id_primary` → byte-offset binding must come from elsewhere:
+  either a separate index stream we haven't located, or (more
+  likely) a one-pass scan of `Global/Latest` where each element's
+  self-id is read from a schema-described `m_id` field and
+  captured into `HandleIndex`.
+- The records near the END of the stream use a DIFFERENT layout
+  (no leading FF marker, different field positions). On project
+  2023 the tail records start with a non-FF 4-byte value; on
+  project 2024 the layout shifts around offset 0x1020e2. These
+  are probably type-definition or version-history records packed
+  into the same stream. 2614 / 2615 and 26,425 / 26,425 clean
+  element-index records is the cleanup in the current parser —
+  good enough for the 2023 case, slightly lossy on 2024.
 - Are there multiple record types packed in the same stream
-  (header, element, group)?
+  (header, element, group, type, deletion)?
 
-Need more project-file samples to disambiguate. The 3-file corpus
-establishes the shape but not the full semantics.
+Implication for the walker→IFC pipeline: ElemTable is the
+**authoritative declared-ID set**, not the offset index. A
+`HandleIndex` can validate coverage against ElemTable but must
+derive offsets by decoding `Global/Latest` through the schema.
+Need more project-file samples to disambiguate the trailer
+region's semantics. The 3-file corpus establishes the shape but
+not the full semantics.

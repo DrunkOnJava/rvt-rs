@@ -105,3 +105,25 @@ fn project_2024_file_parses_all_declared_records() {
     assert_eq!(records[1].id_secondary, 2);
     assert_eq!(records[2].id_secondary, 3);
 }
+
+#[test]
+fn declared_element_ids_returns_sorted_deduped_set() {
+    // Project 2023 declares ~2615 ids; we expect at least 2000 unique
+    // sequential ids starting at 1.
+    let p = project_dir().join("Revit_IFC5_Einhoven.rvt");
+    if !p.exists() {
+        eprintln!("skipping: project 2023 corpus not present at {}", p.display());
+        return;
+    }
+    let mut rf = RevitFile::open(&p).expect("open");
+    let ids = elem_table::declared_element_ids(&mut rf).expect("declared ids");
+    assert!(
+        ids.len() >= 2000,
+        "expected >=2000 declared ids, got {}",
+        ids.len()
+    );
+    // Sorted + deduped invariants.
+    assert!(ids.windows(2).all(|w| w[0] < w[1]), "ids not strictly sorted");
+    // First declared id is 1 on this file.
+    assert_eq!(ids[0], 1);
+}
