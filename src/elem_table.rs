@@ -229,6 +229,24 @@ pub fn parse_records(rf: &mut RevitFile) -> Result<Vec<ElemRecord>> {
     Ok(parse_records_from_bytes(&d, layout, limit))
 }
 
+/// Authoritative set of declared ElementIds from Global/ElemTable.
+///
+/// Useful for walker coverage validation: after scanning `Global/Latest`
+/// and building a `HandleIndex`, compare its key set against this to
+/// quantify which elements the schema-directed walker found vs which the
+/// file claims to contain.
+///
+/// Note per `docs/elem-table-record-layout-2026-04-21.md`: record payload
+/// bytes do NOT encode a byte offset into `Global/Latest` — this function
+/// returns IDs only, not offsets.
+pub fn declared_element_ids(rf: &mut RevitFile) -> Result<Vec<u32>> {
+    let records = parse_records(rf)?;
+    let mut ids: Vec<u32> = records.iter().map(|r| r.id_primary).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
+}
+
 /// Attempt to enumerate records after the header. Conservative: stops at
 /// `max_records` or stream end. Prefer `parse_records` for new work — this
 /// wrapper is kept for backward-compat with pre-corpus-probe callers.
