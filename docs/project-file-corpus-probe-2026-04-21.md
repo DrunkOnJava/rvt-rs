@@ -69,6 +69,17 @@ The thesis-level claims are preserved across the project-file jump:
   invariant held — no panics, no OOMs, no overruns across all 20
   streams of the 34 MB file. The Q-04 fuzz-regression harness
   predicted this and it came out clean.
+- **IFC4 STEP export emits valid scaffold on real project files.**
+  `./target/release/rvt-ifc <real.rvt> -o out.ifc` produces
+  35-line ISO-10303-21 output with valid `FILE_SCHEMA(('IFC4'))`,
+  `IfcUnitAssignment` (mm/m²/m³/rad), `IfcOwnerHistory`, and spatial-
+  tree placeholders on both the 913 KB and 34 MB project files. The
+  STEP is syntactically valid for IfcOpenShell ingestion. The
+  per-element content (walls, doors, slabs, etc) isn't yet wired
+  through to the emission path — that's the known 'document-level
+  scaffold' scope in the README. What matters for this probe: no
+  crashes, no invalid STEP, no unit errors, no placement errors
+  under the existing emission paths.
 - **`Formats/Latest` is near-byte-invariant across variants.**
   Running `rvt-corpus` across the 2023 project, 2024 project, and
   2024 family sample finds **17,266 bytes byte-for-byte identical**
