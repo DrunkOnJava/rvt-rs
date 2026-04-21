@@ -51,7 +51,8 @@ fn main() {
     // Target kinds — the non-0x0e variants whose wire format is
     // undocumented in src/formats.rs beyond the outer kind byte.
     let targets: &[u8] = &[0x01, 0x02, 0x04, 0x05, 0x07, 0x0d];
-    let mut seen: BTreeMap<u8, (String, String, String, Vec<u8>, Option<String>)> = BTreeMap::new();
+    type Exemplar = (String, String, String, Vec<u8>, Option<String>);
+    let mut seen: BTreeMap<u8, Exemplar> = BTreeMap::new();
 
     for path in &paths {
         let Ok(mut rf) = RevitFile::open(path) else {

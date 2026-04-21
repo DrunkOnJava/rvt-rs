@@ -712,12 +712,27 @@ pub fn read_field_by_type(
             *cursor += 4 + count * esz;
             InstanceField::Vector(items)
         }
-        FieldType::Container { .. } => {
-            // 2-column container layout (kind=0x0e) is handled
-            // specially by the caller via `read_field` (the
-            // ADocument-walker-facing path). Generic callers that
-            // hit this branch get the raw bytes until per-variant
-            // support lands.
+        FieldType::Container { kind, .. } => {
+            // L5B-09.4: scalar-base Container (kinds 0x01/0x02/0x04/
+            // 0x05/0x07/0x0b/0x0d) use the same `[u32 count][count ×
+            // element]` wire layout as Vector — the sub=0x0050 tag
+            // only distinguishes semantic role (std::set / std::map
+            // keyset / …), not the scalar encoding. We reuse the
+            // Vector decode path by recursing with a synthesised
+            // Vector FieldType of the same kind.
+            //
+            // Reference containers (kind=0x0e) have a 2-column
+            // layout handled by the ADocument-walker-facing
+            // `read_field` (see `FieldType::Container { kind: 0x0e,
+            // .. }` arm there). Generic callers hitting the 0x0e
+            // arm here get 4 bytes as a fallback.
+            if matches!(*kind, 0x01 | 0x02 | 0x04 | 0x05 | 0x07 | 0x0b | 0x0d) {
+                let fake_vec = FieldType::Vector {
+                    kind: *kind,
+                    body: Vec::new(),
+                };
+                return read_field_by_type(bytes, cursor, &fake_vec);
+            }
             let slice = rem();
             let consumed = slice.len().min(4);
             let out = slice[..consumed].to_vec();
@@ -2268,6 +2283,92 @@ mod tests {
         match v {
             InstanceField::Pointer { raw } => assert_eq!(raw, [1, 2]),
             _ => panic!("expected Pointer"),
+        }
+    }
+
+    #[test]
+    fn read_field_container_u32_delegates_to_vector_layout() {
+        // L5B-09.4: scalar-base Container kinds share the Vector
+        // wire format `[u32 count][count × element]`. Exercise the
+        // 0x05 (u32) case: 3 elements, values 10/20/30.
+        let ft = formats::FieldType::Container {
+            kind: 0x05,
+            cpp_signature: None,
+            body: Vec::new(),
+        };
+        let mut bytes = vec![0x03, 0x00, 0x00, 0x00]; // count = 3
+        for v in [10u32, 20, 30] {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        let mut cursor = 0;
+        let field = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 4 + 3 * 4);
+        match field {
+            InstanceField::Vector(items) => {
+                assert_eq!(items.len(), 3);
+                for (i, expected) in [10i64, 20, 30].iter().enumerate() {
+                    match &items[i] {
+                        InstanceField::Integer { value, size, .. } => {
+                            assert_eq!(*value, *expected);
+                            assert_eq!(*size, 4);
+                        }
+                        other => panic!("items[{i}]: expected Integer, got {other:?}"),
+                    }
+                }
+            }
+            other => panic!("expected Vector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_container_f64_delegates_to_vector_layout() {
+        // Container kind 0x07 (f64) — 2 elements: 3.14, 2.71.
+        let ft = formats::FieldType::Container {
+            kind: 0x07,
+            cpp_signature: None,
+            body: Vec::new(),
+        };
+        let mut bytes = vec![0x02, 0x00, 0x00, 0x00]; // count = 2
+        for v in [1.5_f64, 9.75] {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        let mut cursor = 0;
+        let field = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 4 + 2 * 8);
+        match field {
+            InstanceField::Vector(items) => {
+                assert_eq!(items.len(), 2);
+                match &items[0] {
+                    InstanceField::Float { value, size } => {
+                        assert!((*value - 1.5).abs() < 1e-12);
+                        assert_eq!(*size, 8);
+                    }
+                    other => panic!("items[0]: expected Float, got {other:?}"),
+                }
+            }
+            other => panic!("expected Vector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_field_container_0x0e_still_falls_back() {
+        // Reference-typed Container (kind=0x0e) is NOT delegated to
+        // Vector — it has a different 2-column wire layout handled
+        // by `read_field` for the ADocument path. Ensure the
+        // read_field_by_type fallback still returns 4 raw bytes for
+        // external callers.
+        let ft = formats::FieldType::Container {
+            kind: 0x0e,
+            cpp_signature: None,
+            body: Vec::new(),
+        };
+        let bytes = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22];
+        let mut cursor = 0;
+        let field = read_field_by_type(&bytes, &mut cursor, &ft);
+        assert_eq!(cursor, 4);
+        match field {
+            InstanceField::Bytes(b) => assert_eq!(b, vec![0xDE, 0xAD, 0xBE, 0xEF]),
+            other => panic!("expected Bytes fallback, got {other:?}"),
         }
     }
 
