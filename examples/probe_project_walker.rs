@@ -1,10 +1,20 @@
+//! L5B-11 partial unblock — does the ADocument walker run cleanly on
+//! real `.rvt` project files from Revit 2023 + 2024? Previously
+//! documented as "reliable on 2024-2026 families only"; this probe
+//! exercises `walker::read_adocument_lossy` on each file and reports
+//! `(field count, entry offset, diagnostic count)`.
+//!
+//! Path resolves via `RVT_PROJECT_CORPUS_DIR` (default
+//! `/private/tmp/rvt-corpus-probe/magnetar/Revit`).
+
 use rvt::{RevitFile, walker};
 
 fn main() {
-    let files = [
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/Revit_IFC5_Einhoven.rvt",
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt",
-    ];
+    let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
+        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+    let p2023 = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
+    let p2024 = format!("{project_dir}/2024_Core_Interior.rvt");
+    let files = [p2023.as_str(), p2024.as_str()];
     for path in files {
         let mut rf = RevitFile::open(path).unwrap();
         let lossy = walker::read_adocument_lossy(&mut rf);
