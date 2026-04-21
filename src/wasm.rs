@@ -34,6 +34,7 @@ use crate::ifc::{
     },
     share::{ViewerState, decode_from_fragment, encode_to_fragment},
     sheet::{SheetOptions, render_plan_svg},
+    step_writer::write_step,
 };
 
 fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
@@ -111,6 +112,14 @@ pub fn js_build_schedule(model: JsValue) -> Result<JsValue, JsValue> {
 pub fn js_model_to_glb(model: JsValue) -> Result<Vec<u8>, JsValue> {
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     Ok(model_to_glb(&model))
+}
+
+/// Render `model` as an IFC4 STEP document. Returns the ISO-10303-21
+/// text; callers wrap it in a Blob for download.
+#[wasm_bindgen(js_name = modelToIfcStep)]
+pub fn js_model_to_ifc_step(model: JsValue) -> Result<String, JsValue> {
+    let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
+    Ok(write_step(&model))
 }
 
 /// Render `model` as a 2D SVG plan view (sheet). Options control

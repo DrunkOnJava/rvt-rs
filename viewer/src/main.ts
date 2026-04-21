@@ -32,6 +32,9 @@ const treeEl = $('tree');
 const categoriesEl = $('categories');
 const infoEl = $('info');
 const scheduleEl = $('schedule-summary');
+const exportGlbBtn = $('export-glb') as HTMLButtonElement;
+const exportIfcBtn = $('export-ifc') as HTMLButtonElement;
+const exportSvgBtn = $('export-svg') as HTMLButtonElement;
 
 // ---------- Three.js scene ----------
 const scene = new THREE.Scene();
@@ -127,6 +130,8 @@ interface SceneNode {
 let model: IfcModel | null = null;
 let sceneGraph: SceneNode | null = null;
 let distinctTypes: string[] = [];
+let lastGlb: Uint8Array | null = null;
+let lastFileStem = 'model';
 const hiddenTypes = new Set<string>();
 
 // ---------- Load flow ----------
@@ -172,12 +177,17 @@ async function loadBytes(file: File): Promise<void> {
     model = msg.model;
     sceneGraph = msg.scene;
     distinctTypes = msg.types;
+    lastGlb = msg.glb;
+    lastFileStem = file.name.replace(/\.(rvt|rfa|rte|rft)$/i, '');
     renderScene(msg.glb);
     renderTree();
     renderCategories();
     renderScheduleSummary(msg.schedule);
     fileMetaEl.textContent = `${file.name} · ${formatBytes(file.size)} · ${countEntities(msg.scene)} entities`;
     dropzone.classList.add('hidden');
+    exportGlbBtn.disabled = false;
+    exportIfcBtn.disabled = false;
+    exportSvgBtn.disabled = false;
     setStatus(`loaded · ${msg.types.length} categories`);
   });
   w.postMessage({ type: 'parse', bytes }, [bytes.buffer]);
@@ -355,6 +365,63 @@ document.body.addEventListener('drop', (ev) => {
     return;
   }
   void loadBytes(f);
+});
+
+// ---------- Export buttons (VW1-16 / VW1-17 / VW1-11 surfaced) ----------
+
+function download(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke on next tick so the download actually starts first.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+exportGlbBtn.addEventListener('click', () => {
+  if (!lastGlb) return;
+  const blob = new Blob([lastGlb.buffer as ArrayBuffer], {
+    type: 'model/gltf-binary',
+  });
+  download(`${lastFileStem}.glb`, blob);
+});
+
+exportIfcBtn.addEventListener('click', () => {
+  if (!model) return;
+  // The IFC STEP writer is synchronous + fast; no worker hop needed
+  // for the sample-family-sized models we've seen. If this ever blocks
+  // the main thread on big projects, move it into worker.ts.
+  void (async () => {
+    setStatus('rendering IFC STEP…');
+    try {
+      const { modelToIfcStep } = await import('../pkg/rvt.js');
+      const text = modelToIfcStep(model as unknown as object);
+      const blob = new Blob([text], { type: 'application/x-step' });
+      download(`${lastFileStem}.ifc`, blob);
+      setStatus(`exported ${lastFileStem}.ifc`);
+    } catch (err) {
+      setStatus(`IFC export failed: ${(err as Error).message ?? err}`);
+    }
+  })();
+});
+
+exportSvgBtn.addEventListener('click', () => {
+  if (!model) return;
+  void (async () => {
+    setStatus('rendering plan SVG…');
+    try {
+      const { renderPlanSvg } = await import('../pkg/rvt.js');
+      const svg = renderPlanSvg(model as unknown as object, null);
+      const blob = new Blob([svg], { type: 'image/svg+xml' });
+      download(`${lastFileStem}.svg`, blob);
+      setStatus(`exported ${lastFileStem}.svg`);
+    } catch (err) {
+      setStatus(`plan export failed: ${(err as Error).message ?? err}`);
+    }
+  })();
 });
 
 setStatus('ready · drop a file to begin');
