@@ -34,20 +34,34 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@9399c7bb15d4c7d47b27263d024f0a4978346ba4  # v1.9.0
         with:
           toolchain: stable
-          targets: wasm32-unknown-unknown
+          # The action takes `target` (singular). wasm-pack will still
+          # `rustup target add wasm32-unknown-unknown` if this is
+          # missing — listing it here just saves one step.
+          target: wasm32-unknown-unknown
 
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  # v0.4.0
         with:
           version: v0.14.0
 
-      - name: Build WASM
-        run: wasm-pack build --target web --features wasm --no-default-features --out-dir viewer/pkg
+      - name: Install wabt (for Import-table audit)
+        run: sudo apt-get update && sudo apt-get install -y wabt
 
-      - name: Verify no network imports in wasm
+      - name: Build WASM
+        # wasm-pack argument parsing is order-sensitive. Everything
+        # before `--` goes to wasm-pack; everything after goes to
+        # cargo. Default out-dir (`./pkg`) avoids an interaction
+        # where `--out-dir` after `--features` is forwarded to
+        # `cargo build`, which doesn't recognise it.
         run: |
-          sudo apt-get install -y wabt
-          if wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm | grep -iE '"(fetch|XMLHttpRequest|WebSocket)"'; then
+          wasm-pack build --target web -- --features wasm --no-default-features
+          rm -rf viewer/pkg
+          mv pkg viewer/pkg
+
+      - name: Verify no network imports in wasm (VW1-21)
+        run: |
+          if wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm | \
+               grep -iE '"(fetch|XMLHttpRequest|WebSocket)"'; then
             echo "::error::VW1-21 violation: wasm imports a network primitive"
             exit 1
           fi
@@ -56,12 +70,10 @@ jobs:
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8  # v4.0.2
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: viewer/package-lock.json
 
       - name: Install dependencies
         working-directory: viewer
-        run: npm ci || npm install
+        run: npm install
 
       - name: Typecheck
         working-directory: viewer
