@@ -999,7 +999,7 @@ pub fn read_adocument_with_limits(
         .ok_or_else(|| Error::BasicFileInfo("ADocument not in schema".into()))?;
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
-    let d = compression::inflate_at(&raw, 8)?;
+    let (_, d) = compression::inflate_at_auto(&raw)?;
     let Some(entry) = find_adocument_start_with_schema(&d, Some(adoc)) else {
         return Ok(None);
     };

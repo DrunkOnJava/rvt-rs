@@ -187,6 +187,36 @@ pub fn inflate_at(data: &[u8], offset: usize) -> Result<Vec<u8>> {
     inflate_at_with_limits(data, offset, InflateLimits::default())
 }
 
+/// Inflate a Revit Global/* stream without requiring the caller to
+/// know the custom-prefix length.
+///
+/// Family files (the phi-ag/rvt corpus through 2026) put an 8-byte
+/// custom header in front of the gzip body on most Global/* streams
+/// (`Global/History`, `Global/Latest`, `Global/PartitionTable`, etc).
+/// Project files (`.rvt`) don't always — on at least some releases
+/// (observed on a 2025-saved `.rvt`) `Global/History` starts with the
+/// gzip magic at offset 0 and has no custom prefix at all.
+///
+/// This helper probes for the first gzip magic in `data` via
+/// [`find_gzip_offsets`] and inflates from there. If no magic is
+/// found, it falls back to the family-file heuristic of offset 8 so
+/// callers still see a structured `Err(..)` for diagnostics rather
+/// than a silent mismatch.
+///
+/// Returns the tuple `(prefix_len, decompressed_bytes)` so callers
+/// that need to preserve the custom prefix on round-trip write can
+/// read it from `data[..prefix_len]`.
+pub fn inflate_at_auto(data: &[u8]) -> Result<(usize, Vec<u8>)> {
+    // Heuristic: the first gzip magic in the stream. Family files hit
+    // at offset 8; project files sometimes hit at offset 0. We always
+    // prefer the observed offset over a hard-coded constant because
+    // the hard-coded value panicked on the first project-file Global/
+    // History we probed.
+    let offset = find_gzip_offsets(data).into_iter().next().unwrap_or(8);
+    let out = inflate_at_with_limits(data, offset, InflateLimits::default())?;
+    Ok((offset, out))
+}
+
 /// Find every gzip magic byte-triple in `data`.
 /// Used for streams like `Partitions/NN` that pack multiple GZIP segments.
 pub fn find_gzip_offsets(data: &[u8]) -> Vec<usize> {
