@@ -1105,6 +1105,103 @@ pub fn read_adocument_lossy(
     Ok(Decoded::partial(inst, diagnostics))
 }
 
+/// Decode every element recoverable from `rf`'s `Global/Latest`
+/// stream, returning an iterator over [`DecodedElement`] values
+/// with their `id` field populated when a self-id was resolvable.
+///
+/// This is L5B-11.6 — the high-level walker entry point that
+/// [`ifc::RvtDocExporter`] will call to emit per-element IFC
+/// entities. Pipeline:
+///   1. Read + decompress `Formats/Latest` → [`SchemaTable`].
+///   2. Read + decompress `Global/Latest` → raw bytes.
+///   3. Run [`scan_candidates`] with `min_score = 0` — every offset
+///      where `trial_walk` produced a non-degenerate score. The
+///      `80` threshold is calibrated for the 16-field ADocument
+///      entry-point detector and filters out simple element
+///      classes whose `walk_score` is structurally bounded (most
+///      have fewer than 3 trailing ElementIds, which caps the
+///      score below the ADocument band).
+///   4. For each candidate, run [`decode_instance`] to produce a
+///      typed `DecodedElement`, then extract the self-id via
+///      [`find_self_id_field`].
+///   5. Dedup: first-seen (highest-score) wins — if two candidates
+///      claim the same `ElementId`, only the higher-score offset
+///      survives. Scoreless / id-zero candidates are still yielded
+///      so downstream exporters can inspect what the scanner saw.
+///
+/// Returns a materialised `Vec<DecodedElement>::into_iter()` rather
+/// than a lazy iterator — each element requires upfront schema +
+/// stream reads that are stateful (mut reader), so lazy iteration
+/// would leak lifetimes. `impl Iterator` preserves the combinator-
+/// friendly return type without committing to a concrete type.
+///
+/// Default `min_score = 0` is coarse by design — it produces a
+/// superset of the real element set, which the IFC exporter
+/// (L5B-11.7) then filters by cross-checking against
+/// `ElemTable`'s declared element-id set. Use
+/// [`iter_elements_with_options`] to tighten the threshold for
+/// diagnostic / scanning work.
+pub fn iter_elements(rf: &mut RevitFile) -> Result<impl Iterator<Item = DecodedElement>> {
+    iter_elements_with_options(rf, 0)
+}
+
+/// Same as [`iter_elements`], with caller-supplied candidate score
+/// threshold. Pass `i64::MIN + 1` to yield every
+/// `scan_candidates`-matched offset (useful for audit / coverage
+/// reporting against the `ElemTable` declared set).
+pub fn iter_elements_with_options(
+    rf: &mut RevitFile,
+    min_score: i64,
+) -> Result<impl Iterator<Item = DecodedElement>> {
+    let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
+    let formats_d = compression::inflate_at(&formats_raw, 0)?;
+    let schema = formats::parse_schema(&formats_d)?;
+
+    let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
+    let (_, d) = compression::inflate_at_auto(&raw)?;
+
+    let class_by_name: std::collections::HashMap<&str, &formats::ClassEntry> = schema
+        .classes
+        .iter()
+        .map(|c| (c.name.as_str(), c))
+        .collect();
+
+    let candidates = scan_candidates(&schema, &d, min_score);
+    let mut out = Vec::with_capacity(candidates.len());
+    let mut seen_ids = std::collections::HashSet::<u32>::new();
+
+    for cand in candidates {
+        let Some(cls) = class_by_name.get(cand.class_name.as_str()).copied() else {
+            continue;
+        };
+        let mut decoded = decode_instance(&d, cand.offset, cls);
+
+        // Extract the self-id without holding a borrow of
+        // `decoded` when we later assign `decoded.id`. The
+        // find_self_id_field index is stable and cheap to recompute.
+        let self_id = find_self_id_field(cls)
+            .and_then(|idx| decoded.fields.get(idx))
+            .and_then(|(_, field)| match field {
+                InstanceField::ElementId { id, .. } if *id != 0 => Some(*id),
+                _ => None,
+            });
+
+        if let Some(id) = self_id {
+            // First-seen wins — scan_candidates iterates in score-
+            // desc order, so the highest-score offset for each id
+            // is the one that ends up in the output.
+            if !seen_ids.insert(id) {
+                continue;
+            }
+            decoded.id = Some(id);
+        }
+
+        out.push(decoded);
+    }
+
+    Ok(out.into_iter())
+}
+
 #[cfg(test)]
 fn find_adocument_start(d: &[u8]) -> Option<usize> {
     find_adocument_start_with_schema(d, None)
