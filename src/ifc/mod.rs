@@ -121,7 +121,7 @@ pub use step_writer::write_step;
 
 /// In-memory IFC model — what a successful export produces. Wire format
 /// (STEP or IFC-JSON) is a separate concern handled by a serializer.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IfcModel {
     pub project_name: Option<String>,
     pub description: Option<String>,
@@ -161,7 +161,7 @@ pub struct IfcModel {
 }
 
 /// A single building storey derived from a Revit `Level` element.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Storey {
     pub name: String,
     /// Elevation in feet (Revit's native unit). The STEP writer
@@ -172,7 +172,7 @@ pub struct Storey {
 /// A single material entry ready for IFC emission. Derived from
 /// a decoded Revit `Material` element via
 /// [`from_decoded::materials_from_revit`].
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MaterialInfo {
     /// Display name ("Concrete", "Glass - Tinted", "Wood - Oak").
     pub name: String,

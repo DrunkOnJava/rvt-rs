@@ -42,6 +42,13 @@ python = ["dep:pyo3"]
 #
 # Then open the produced `dhat-heap.json` in dhat-viewer.
 dhat-heap = ["dep:dhat"]
+# Optional WASM bindings (VW1-01). Enabled when building for the
+# rvt-view browser viewer. Keeps the default Rust lib dependency
+# footprint lean — native builds never pull these in.
+#
+# Build:
+#   wasm-pack build --target web --features wasm --no-default-features
+wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
 
 [dependencies]
 # Microsoft Compound File Binary (OLE) container — reads the outer
@@ -70,6 +77,9 @@ pyo3 = { version = "0.24", optional = true, features = ["extension-module", "abi
 # feature is enabled — default builds have zero cost. Pinned to 0.3
 # (current stable API).
 dhat = { version = "0.3", optional = true }
+# Optional WASM bindings (VW1-01). See the `wasm` feature above.
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
 
 [dev-dependencies]
 # Statistical benchmarking harness — drives `benches/*` and

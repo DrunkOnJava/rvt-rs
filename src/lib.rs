@@ -127,5 +127,12 @@ pub mod writer;
 #[cfg(feature = "python")]
 mod python;
 
+// WASM bindings (VW1-01). Only compiled when the `wasm` feature is
+// enabled (typically via
+// `wasm-pack build --target web --features wasm --no-default-features`).
+// Default Rust builds and the Python wheel build are unaffected.
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
 pub use error::{Error, Result};
 pub use reader::RevitFile;
