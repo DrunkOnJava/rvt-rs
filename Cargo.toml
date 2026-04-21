@@ -159,6 +159,13 @@ harness = false
 name = "schema"
 harness = false
 
+# Q-07: multi-megabyte project-file benchmarks. Skips gracefully
+# when the magnetar-io/revit-test-datasets corpus isn't present.
+# Override path via `RVT_PROJECT_CORPUS_DIR`.
+[[bench]]
+name = "project_file"
+harness = false
+
 [lib]
 name = "rvt"
 path = "src/lib.rs"
