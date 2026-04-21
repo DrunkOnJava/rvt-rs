@@ -98,7 +98,7 @@ impl SceneNode {
 ///
 /// Viewers implement "layer toggles" by toggling IFC types in this
 /// filter and re-rendering the returned tree.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CategoryFilter {
     /// IFC types to hide. Matched case-insensitively against
     /// `SceneNode.ifc_type`. Use [`Self::hide`] to add a type,

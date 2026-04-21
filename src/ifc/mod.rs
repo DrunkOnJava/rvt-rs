@@ -71,6 +71,7 @@ pub mod from_decoded;
 pub mod measure;
 pub mod pbr;
 pub mod scene_graph;
+pub mod share;
 pub mod step_writer;
 
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model, entity_type_histogram};
