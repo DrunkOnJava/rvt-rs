@@ -353,6 +353,68 @@ impl FieldType {
             },
         }
     }
+
+    /// Encode (WRT-01) a `FieldType` back to its wire type-encoding
+    /// block — the inverse of [`FieldType::decode`]. Used by the
+    /// write path (`write_with_patches` field-level edits and the
+    /// forthcoming `ADocument` writer) to serialise schema records.
+    ///
+    /// Canonical-form guarantees:
+    ///
+    /// - `String` always emits the common `08 00 60 00` encoding,
+    ///   even when the source file used `08 60 00 00`.
+    /// - `Vector`-with-base-`0x0e` emits `sub = 0x0010` (the 0x0011
+    ///   alias collapses to 0x0010 on round-trip).
+    /// - `Container`-with-base-`0x0e` emits `sub = 0x0050` (0x0051
+    ///   alias similarly collapses).
+    /// - `Unknown` variants emit their captured bytes unchanged.
+    ///
+    /// Round-trip: `FieldType::decode(&x.encode()) == x` for every
+    /// canonical-form variant. The two collapsing cases (String alt
+    /// encoding, Vector/Container 0x0011/0x0051 aliases) round-trip
+    /// to the canonical form, never back to the alt.
+    pub fn encode(&self) -> Vec<u8> {
+        match self {
+            FieldType::Primitive { kind, .. } => vec![*kind, 0x00, 0x00, 0x00],
+            FieldType::String => vec![0x08, 0x00, 0x60, 0x00],
+            FieldType::Guid => vec![0x09, 0x00, 0x00, 0x00],
+            FieldType::ElementId => {
+                vec![0x0e, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00]
+            }
+            FieldType::ElementIdRef {
+                referenced_tag,
+                sub,
+            } => {
+                let tag_bytes = referenced_tag.to_le_bytes();
+                let sub_bytes = sub.to_le_bytes();
+                vec![
+                    0x0e,
+                    0x00,
+                    0x00,
+                    0x00,
+                    tag_bytes[0],
+                    tag_bytes[1],
+                    sub_bytes[0],
+                    sub_bytes[1],
+                ]
+            }
+            FieldType::Pointer { kind } => vec![0x0e, *kind, 0x00, 0x00],
+            FieldType::Vector { kind, body } => {
+                let mut out = vec![*kind, 0x10, 0x00, 0x00];
+                out.extend_from_slice(body);
+                out
+            }
+            FieldType::Container { kind, body, .. } => {
+                // The cpp_signature is embedded inside body (the
+                // decoder lifts it out as a convenience, but body
+                // retains the raw bytes verbatim). Emit body as-is.
+                let mut out = vec![*kind, 0x50, 0x00, 0x00];
+                out.extend_from_slice(body);
+                out
+            }
+            FieldType::Unknown { bytes } => bytes.clone(),
+        }
+    }
 }
 
 fn extract_container(kind: u8, body: &[u8]) -> FieldType {
@@ -1191,5 +1253,120 @@ mod tests {
         assert_eq!(d.declared_field_count_sum, 0);
         assert_eq!(d.field_count_mismatches, 0);
         assert_eq!(d.tagged_class_count, 0);
+    }
+
+    // ---- WRT-01: FieldType::encode round-trip tests ----
+
+    #[test]
+    fn encode_primitive_round_trips() {
+        for kind in [0x01_u8, 0x02, 0x04, 0x05, 0x06, 0x07, 0x0b] {
+            let original = FieldType::decode(&[kind, 0x00, 0x00, 0x00]);
+            let encoded = original.encode();
+            let decoded = FieldType::decode(&encoded);
+            assert_eq!(original, decoded, "primitive kind 0x{kind:02x} round-trip");
+        }
+    }
+
+    #[test]
+    fn encode_string_emits_canonical_form() {
+        let original = FieldType::String;
+        let encoded = original.encode();
+        assert_eq!(encoded, vec![0x08, 0x00, 0x60, 0x00]);
+        assert_eq!(FieldType::decode(&encoded), FieldType::String);
+    }
+
+    #[test]
+    fn encode_string_alt_form_collapses_on_round_trip() {
+        // Alt form 08 60 00 00 also decodes to String; encoder should
+        // emit the canonical form instead.
+        let alt = FieldType::decode(&[0x08, 0x60, 0x00, 0x00]);
+        assert_eq!(alt, FieldType::String);
+        let canonical = alt.encode();
+        assert_eq!(canonical, vec![0x08, 0x00, 0x60, 0x00]);
+    }
+
+    #[test]
+    fn encode_guid_round_trips() {
+        let g = FieldType::Guid;
+        assert_eq!(g.encode(), vec![0x09, 0x00, 0x00, 0x00]);
+        assert_eq!(FieldType::decode(&g.encode()), FieldType::Guid);
+    }
+
+    #[test]
+    fn encode_element_id_round_trips() {
+        let id = FieldType::ElementId;
+        let bytes = id.encode();
+        assert_eq!(bytes.len(), 8);
+        assert_eq!(FieldType::decode(&bytes), FieldType::ElementId);
+    }
+
+    #[test]
+    fn encode_element_id_ref_round_trips() {
+        let refed = FieldType::ElementIdRef {
+            referenced_tag: 0x0150,
+            sub: 0x0009,
+        };
+        let bytes = refed.encode();
+        let decoded = FieldType::decode(&bytes);
+        assert_eq!(decoded, refed);
+    }
+
+    #[test]
+    fn encode_pointer_round_trips() {
+        for kind in [0x01_u8, 0x02, 0x03] {
+            let p = FieldType::Pointer { kind };
+            let bytes = p.encode();
+            assert_eq!(FieldType::decode(&bytes), p);
+        }
+    }
+
+    #[test]
+    fn encode_vector_round_trips_for_scalar_bases() {
+        for kind in [0x01_u8, 0x02, 0x05, 0x06, 0x07, 0x0b] {
+            let body = vec![0xAA, 0xBB, 0xCC];
+            let v = FieldType::Vector {
+                kind,
+                body: body.clone(),
+            };
+            let bytes = v.encode();
+            assert_eq!(FieldType::decode(&bytes), v, "vector kind 0x{kind:02x}");
+        }
+    }
+
+    #[test]
+    fn encode_vector_reference_round_trips() {
+        let body = vec![0x14, 0x00, 0x00, 0x00];
+        let v = FieldType::Vector {
+            kind: 0x0e,
+            body: body.clone(),
+        };
+        let bytes = v.encode();
+        assert_eq!(FieldType::decode(&bytes), v);
+    }
+
+    #[test]
+    fn encode_container_round_trips_with_cpp_signature() {
+        // Build a body that embeds a plausible C++ signature so the
+        // decoder recovers cpp_signature on the other side.
+        let sig = b"std::map< unsigned, double >";
+        let mut body = Vec::new();
+        body.extend_from_slice(&(sig.len() as u16).to_le_bytes());
+        body.extend_from_slice(sig);
+        body.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]); // trailing data
+        let c = FieldType::Container {
+            kind: 0x0e,
+            cpp_signature: Some("std::map< unsigned, double >".to_string()),
+            body: body.clone(),
+        };
+        let bytes = c.encode();
+        let decoded = FieldType::decode(&bytes);
+        assert_eq!(decoded, c);
+    }
+
+    #[test]
+    fn encode_unknown_emits_captured_bytes() {
+        let raw = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x42];
+        let u = FieldType::Unknown { bytes: raw.clone() };
+        assert_eq!(u.encode(), raw);
     }
 }
