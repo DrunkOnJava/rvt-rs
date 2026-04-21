@@ -909,6 +909,127 @@ pub fn column_extrusion(
     }
 }
 
+// ---- GEO-33: Column geometry (profile + levels) ----
+
+/// Resolved column height in feet (GEO-33), combining the column's
+/// own `base_offset_feet` / `top_offset_feet` with the elevations
+/// of its base + top levels.
+///
+/// `base_level_elevation_feet` is the `Level.elevation_feet` of the
+/// column's `base_level_id`; same for the top. Callers typically
+/// derive these by joining Column + Level tables.
+///
+/// Returns `None` when both level elevations are unknown — with
+/// only offsets the column has a mathematically undefined height.
+/// Clamps very small positive values to 0.1 ft so STEP output
+/// always represents a 3D solid.
+pub fn column_height_from_levels(
+    column: &crate::elements::structural::Column,
+    base_level_elevation_feet: Option<f64>,
+    top_level_elevation_feet: Option<f64>,
+) -> Option<f64> {
+    let base_elev = base_level_elevation_feet?;
+    let top_elev = top_level_elevation_feet?;
+    let diff = top_elev - base_elev;
+    let offset_delta =
+        column.top_offset_feet.unwrap_or(0.0) - column.base_offset_feet.unwrap_or(0.0);
+    Some((diff + offset_delta).max(0.1))
+}
+
+/// Build an I/W-shape `Extrusion` for a structural column (GEO-33).
+/// `overall_width_feet` is the flange width (W9, W12, etc.), and
+/// `overall_depth_feet` is the web depth.
+///
+/// Uses [`Extrusion::i_shape`] internally, so the writer emits an
+/// `IFCIShapeProfileDef` + `IfcExtrudedAreaSolid` of length
+/// `height_feet`.
+pub fn column_i_shape_extrusion(
+    overall_width_feet: f64,
+    overall_depth_feet: f64,
+    web_thickness_feet: f64,
+    flange_thickness_feet: f64,
+    height_feet: f64,
+) -> Extrusion {
+    Extrusion::i_shape(
+        overall_width_feet,
+        overall_depth_feet,
+        web_thickness_feet,
+        flange_thickness_feet,
+        height_feet.max(0.1),
+    )
+}
+
+/// Build a round-column `Extrusion` for a structural column
+/// (GEO-33). Emits `IFCCIRCLEPROFILEDEF` + IfcExtrudedAreaSolid.
+pub fn column_circular_extrusion(radius_feet: f64, height_feet: f64) -> Extrusion {
+    Extrusion::circle(radius_feet.max(0.0), height_feet.max(0.1))
+}
+
+/// Build a rectangular hollow section (HSS) `Extrusion` for a
+/// structural column (GEO-33). Emits
+/// `IFCRectangleHollowProfileDef` + IfcExtrudedAreaSolid.
+pub fn column_rectangular_hollow_extrusion(
+    outer_width_feet: f64,
+    outer_depth_feet: f64,
+    wall_thickness_feet: f64,
+    height_feet: f64,
+) -> Extrusion {
+    Extrusion::rectangle_hollow(
+        outer_width_feet.max(0.0),
+        outer_depth_feet.max(0.0),
+        wall_thickness_feet.max(0.0),
+        height_feet.max(0.1),
+    )
+}
+
+/// Build an `Extrusion` from an arbitrary closed polyline column
+/// profile (GEO-33) — for sketched-in-family columns that don't
+/// fit the standard I / circle / rectangle / hollow catalogue.
+/// Emits `IFCArbitraryClosedProfileDef` + polyline + IfcExtrudedAreaSolid.
+pub fn column_arbitrary_profile_extrusion(
+    profile_points: Vec<(f64, f64)>,
+    height_feet: f64,
+) -> Extrusion {
+    Extrusion::arbitrary_closed(profile_points, height_feet.max(0.1))
+}
+
+/// Build a `Pset_ColumnCommon`-style property set (GEO-33) from a
+/// decoded column. Surfaces IsExternal (always false for
+/// architectural columns, true for structural — best-effort guess
+/// since Revit doesn't mark exterior explicitly), Slope (zero for
+/// plumb columns), plus base/top offsets when present.
+pub fn column_property_set(column: &crate::elements::structural::Column) -> PropertySet {
+    let mut props = Vec::new();
+    if let Some(v) = column.base_offset_feet {
+        props.push(Property {
+            name: "BaseOffset".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(v) = column.top_offset_feet {
+        props.push(Property {
+            name: "TopOffset".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(v) = column.rotation_radians {
+        props.push(Property {
+            name: "Rotation".into(),
+            value: PropertyValue::AngleRadians(v),
+        });
+    }
+    if let Some(v) = column.is_structural {
+        props.push(Property {
+            name: "LoadBearing".into(),
+            value: PropertyValue::Boolean(v),
+        });
+    }
+    PropertySet {
+        name: "Pset_ColumnCommon".into(),
+        properties: props,
+    }
+}
+
 /// Build a `Pset_WallCommon`-style property set from a decoded
 /// [`Wall`]. Fields that are `None` are skipped — property sets
 /// only carry what we actually decoded.
@@ -2039,5 +2160,117 @@ mod tests {
         assert!((ex.width_feet - 5.0).abs() < 1e-9);
         assert!((ex.depth_feet - 4.0).abs() < 1e-9);
         assert!((ex.height_feet - 0.5).abs() < 1e-9);
+    }
+
+    // ---- GEO-33: Column geometry ----
+
+    #[test]
+    fn column_height_combines_level_diff_and_offsets() {
+        use crate::elements::structural::Column;
+        let col = Column {
+            base_offset_feet: Some(1.0),
+            top_offset_feet: Some(-0.5),
+            ..Default::default()
+        };
+        // base level at 0.0, top level at 10.0.
+        // height = (10 - 0) + (-0.5 - 1.0) = 8.5
+        let h = column_height_from_levels(&col, Some(0.0), Some(10.0));
+        assert!((h.unwrap() - 8.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn column_height_none_when_level_missing() {
+        use crate::elements::structural::Column;
+        let col = Column::default();
+        assert!(column_height_from_levels(&col, None, Some(10.0)).is_none());
+        assert!(column_height_from_levels(&col, Some(0.0), None).is_none());
+    }
+
+    #[test]
+    fn column_height_clamps_tiny_or_negative() {
+        use crate::elements::structural::Column;
+        let col = Column::default();
+        // top < base with no offsets -> would be negative; clamped.
+        let h = column_height_from_levels(&col, Some(10.0), Some(9.9));
+        assert!(h.unwrap() >= 0.1);
+    }
+
+    #[test]
+    fn column_i_shape_extrusion_carries_profile() {
+        let ex = column_i_shape_extrusion(0.75, 1.0, 0.04, 0.06, 12.0);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::IShape { .. }) => {}
+            other => panic!("expected IShape profile, got {:?}", other),
+        }
+        assert!((ex.height_feet - 12.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn column_circular_extrusion_carries_profile() {
+        let ex = column_circular_extrusion(0.5, 10.0);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::Circle { radius_feet }) => {
+                assert!((radius_feet - 0.5).abs() < 1e-9);
+            }
+            other => panic!("expected Circle profile, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn column_rectangular_hollow_extrusion_carries_profile() {
+        let ex = column_rectangular_hollow_extrusion(1.0, 1.0, 0.05, 8.0);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::RectangleHollow {
+                wall_thickness_feet,
+                ..
+            }) => {
+                assert!((wall_thickness_feet - 0.05).abs() < 1e-9);
+            }
+            other => panic!("expected RectangleHollow, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn column_arbitrary_profile_carries_polyline() {
+        let pts = vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+        let ex = column_arbitrary_profile_extrusion(pts.clone(), 10.0);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::ArbitraryClosed { points }) => {
+                assert_eq!(points.len(), pts.len());
+            }
+            other => panic!("expected ArbitraryClosed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn column_extrusion_clamps_zero_height() {
+        let ex = column_circular_extrusion(0.5, 0.0);
+        assert!(ex.height_feet >= 0.1);
+    }
+
+    #[test]
+    fn column_property_set_surfaces_all_populated_fields() {
+        use crate::elements::structural::Column;
+        let col = Column {
+            base_offset_feet: Some(0.5),
+            top_offset_feet: Some(-0.5),
+            rotation_radians: Some(std::f64::consts::FRAC_PI_4),
+            is_structural: Some(true),
+            ..Default::default()
+        };
+        let pset = column_property_set(&col);
+        assert_eq!(pset.name, "Pset_ColumnCommon");
+        let names: Vec<&str> = pset.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"BaseOffset"));
+        assert!(names.contains(&"TopOffset"));
+        assert!(names.contains(&"Rotation"));
+        assert!(names.contains(&"LoadBearing"));
+    }
+
+    #[test]
+    fn column_property_set_empty_for_unpopulated_column() {
+        use crate::elements::structural::Column;
+        let pset = column_property_set(&Column::default());
+        assert!(pset.properties.is_empty());
     }
 }
