@@ -50,6 +50,22 @@
         font-size: 11px;
         color: #8b95a3;
       }
+      header .export-btn {
+        padding: 5px 11px;
+        background: #1a3a5f;
+        color: #d7dce3;
+        border: 1px solid #2a4a6f;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      header .export-btn:hover:not(:disabled) {
+        background: #264f7a;
+      }
+      header .export-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
       #sidebar-left,
       #sidebar-right {
         background: #0f141b;
@@ -183,6 +199,16 @@
       <header>
         <h1>rvt-rs · viewer</h1>
         <span class="meta" id="file-meta">drop a .rvt / .rfa / .rte / .rft file anywhere</span>
+        <span style="flex: 1"></span>
+        <button class="export-btn" id="export-glb" disabled title="Download 3D model as glTF 2.0 binary">
+          Export glTF
+        </button>
+        <button class="export-btn" id="export-ifc" disabled title="Download as IFC4 STEP">
+          Export IFC
+        </button>
+        <button class="export-btn" id="export-svg" disabled title="Download 2D plan view as SVG">
+          Export plan
+        </button>
       </header>
       <aside id="sidebar-left">
         <h2>Scene tree</h2>
