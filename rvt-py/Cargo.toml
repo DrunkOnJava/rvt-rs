@@ -8,6 +8,7 @@ description = "Python bindings for the `rvt` crate — pyo3 extension module beh
 authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]
 repository = "https://github.com/DrunkOnJava/rvt-rs"
 homepage = "https://github.com/DrunkOnJava/rvt-rs"
+readme = "README.md"
 publish = false  # Distributed via PyPI (as the `rvt` wheel), not crates.io.
 
 [lib]
