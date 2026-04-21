@@ -6,7 +6,7 @@
 
 **A zero-upload, client-side browser viewer ships alongside the library**, live at <https://drunkonjava.github.io/rvt-rs/>. Drop a `.rvt` / `.rfa` file onto the page — the WebAssembly build parses it in-tab, renders 3D via Three.js with orbit controls + element picking + scene tree, and offers one-click **Export glTF** / **Export IFC** / **Export plan SVG**. No upload, no account, no telemetry. CI asserts the compiled `.wasm` has zero `fetch` / `XMLHttpRequest` / `WebSocket` imports.
 
-Rust 2024 edition (MSRV 1.85). **Thirteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.85). **Fourteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -203,6 +203,9 @@ cargo build --release
 
 # 2D plan-view SVG — per-category colours, ready for plot/laser-cut/printing
 ./target/release/rvt-sheet my-project.rvt -o out.svg
+
+# Global/ElemTable dump — declared element-ids + record layout (family 12B / project 28B/40B)
+./target/release/rvt-elem-table my-project.rvt --limit 20
 
 # Byte-preserving write path — patch stream bytes via JSON manifest
 ./target/release/rvt-write my-project.rvt --patches patches.json -o patched.rvt

@@ -145,6 +145,10 @@ path = "src/bin/rvt_gltf.rs"
 name = "rvt-sheet"
 path = "src/bin/rvt_sheet.rs"
 
+[[bin]]
+name = "rvt-elem-table"
+path = "src/bin/rvt_elem_table.rs"
+
 # Criterion benchmark suite (Q-05). Run with `cargo bench` or
 # `cargo bench --bench compression`. See `docs/benchmarks.md`.
 [[bench]]
