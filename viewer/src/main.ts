@@ -194,7 +194,10 @@ function renderScene(glb: Uint8Array): void {
     });
     currentModel = null;
   }
-  const blob = new Blob([glb], { type: 'model/gltf-binary' });
+  // TS 5.7+ parameterises Uint8Array over ArrayBufferLike, which
+  // isn't assignable to BlobPart directly. Extract the underlying
+  // ArrayBuffer — it's a BlobPart unambiguously.
+  const blob = new Blob([glb.buffer as ArrayBuffer], { type: 'model/gltf-binary' });
   const url = URL.createObjectURL(blob);
   const loader = new GLTFLoader();
   loader.load(
