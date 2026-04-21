@@ -25,11 +25,15 @@ exclude = [
 # The SPDX identifier `Apache-2.0` is set above. The full license text
 # is in LICENSE at the crate root.
 
+[workspace]
+# SEC-12 + SEC-13: pyo3 bindings moved to their own member crate
+# (`rvt-py/`) so this core library can `#![forbid(unsafe_code)]`
+# unconditionally — no feature-gated escape hatch. The wheel on
+# PyPI still ships as a single `rvt` distribution; it's built via
+# `maturin build --manifest-path rvt-py/Cargo.toml`.
+members = [".", "rvt-py"]
+
 [features]
-# Optional Python bindings via pyo3. Enabled when building the
-# `rvt` Python wheel with maturin (`maturin build --features python`).
-# Keeps the default Rust lib dependency footprint lean.
-python = ["dep:pyo3"]
 # Heap-profiling mode (Q-08). When enabled, binaries built from
 # `examples/dhat_*.rs` install the `dhat` global allocator and
 # emit a `dhat-heap.json` trace that `dhat-viewer` (web viewer at
@@ -44,7 +48,9 @@ python = ["dep:pyo3"]
 dhat-heap = ["dep:dhat"]
 # Optional WASM bindings (VW1-01). Enabled when building for the
 # rvt-view browser viewer. Keeps the default Rust lib dependency
-# footprint lean — native builds never pull these in.
+# footprint lean — native builds never pull these in. The wasm
+# bindings are pure-safe Rust, so no `unsafe_code` allowance is
+# needed even with this feature on.
 #
 # Build:
 #   wasm-pack build --target web --features wasm --no-default-features
@@ -69,10 +75,6 @@ clap = { version = "4", features = ["derive"] }
 # Error ergonomics.
 anyhow = "1"
 thiserror = "1"
-# Optional: Python bindings. `abi3-py38` produces a single wheel
-# compatible with every Python >= 3.8, avoiding per-minor-version
-# rebuilds. Only pulled in when the `python` feature is enabled.
-pyo3 = { version = "0.24", optional = true, features = ["extension-module", "abi3-py38"] }
 # Optional heap profiler (Q-08). Only pulled in when the `dhat-heap`
 # feature is enabled — default builds have zero cost. Pinned to 0.3
 # (current stable API).
@@ -160,11 +162,10 @@ harness = false
 [lib]
 name = "rvt"
 path = "src/lib.rs"
-# `cdylib` builds the Python extension shared object via maturin;
-# `rlib` is needed so other Rust crates (tests, examples, the
-# binaries in src/bin/) can depend on the library. Both must be
-# present for `cargo test --features python` to link correctly.
-crate-type = ["cdylib", "rlib"]
+# Pure rlib now — the pyo3 cdylib moved to the `rvt-py` member
+# crate when we split in SEC-12/13. Tests, benches, examples,
+# binaries, and the `wasm` feature all consume the rlib.
+crate-type = ["rlib"]
 
 [profile.release]
 lto = true

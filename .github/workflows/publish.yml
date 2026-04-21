@@ -78,7 +78,11 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --features python --out dist
+          # SEC-12/13: wheel sources now come from the `rvt-py/`
+          # workspace member crate. The `--features python` switch
+          # is gone because `rvt-py` is a pyo3-only crate with no
+          # optional feature gating.
+          args: --release --out dist --manifest-path rvt-py/Cargo.toml
           # macos-latest is arm64 by default. If Griffin wants x86_64
           # macs too, add a separate job with `target: x86_64-apple-darwin`.
 
@@ -200,12 +204,13 @@ jobs:
       - name: Cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        # Don't use --all-features — the `python` feature pulls in
-        # pyo3 which requires Python headers and is separately
-        # distributed via maturin. `cargo publish` picks up the
-        # default features, which is what a `cargo add rvt` user
-        # will get.
-        run: cargo publish
+        # Default features only. `--all-features` would enable
+        # `wasm`, which requires wasm-bindgen / serde-wasm-bindgen
+        # in a way that shouldn't be forced on `cargo add rvt`
+        # users. The pyo3 bindings are in the separate `rvt-py`
+        # member crate (SEC-12/13), which has `publish = false`
+        # and ships via maturin to PyPI instead.
+        run: cargo publish -p rvt
 
   # Single publish step — gathers every wheel + sdist artifact from
   # the build jobs above and uploads them as one PyPI release. Running

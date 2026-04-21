@@ -41,7 +41,7 @@ use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 
-use crate::{RevitFile as RustRevitFile, ifc, walker};
+use rvt::{RevitFile as RustRevitFile, ifc, walker};
 
 fn to_py_io<E: std::fmt::Display>(e: E) -> PyErr {
     PyIOError::new_err(e.to_string())
@@ -150,11 +150,11 @@ impl PyRevitFile {
         max_stream_bytes: Option<u64>,
         max_inflate_bytes: Option<usize>,
     ) -> PyResult<Self> {
-        let default = crate::reader::OpenLimits::default();
-        let limits = crate::reader::OpenLimits {
+        let default = rvt::reader::OpenLimits::default();
+        let limits = rvt::reader::OpenLimits {
             max_file_bytes: max_file_bytes.unwrap_or(default.max_file_bytes),
             max_stream_bytes: max_stream_bytes.unwrap_or(default.max_stream_bytes),
-            inflate_limits: crate::compression::InflateLimits {
+            inflate_limits: rvt::compression::InflateLimits {
                 max_output_bytes: max_inflate_bytes
                     .unwrap_or(default.inflate_limits.max_output_bytes),
             },

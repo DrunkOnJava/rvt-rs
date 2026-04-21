@@ -876,13 +876,23 @@ dependencies = [
  "dhat",
  "encoding_rs",
  "flate2",
- "pyo3",
  "quick-xml",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "thiserror",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "rvt-py"
+version = "0.1.2"
+dependencies = [
+ "anyhow",
+ "pyo3",
+ "rvt",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
