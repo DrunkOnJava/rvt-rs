@@ -422,6 +422,158 @@ pub fn roof_extrusion(
     }
 }
 
+// ---- GEO-29: Roof geometry with slopes ----
+
+/// Convert a US-construction "rise:run" pitch (GEO-29) to radians.
+/// Rise is the vertical component, run is the horizontal — e.g.
+/// a "6 in 12" pitch passes `rise = 6.0, run = 12.0` and gets
+/// back roughly `0.4636` rad (26.57°).
+///
+/// Returns 0 when `run <= 0.0` so callers can pipe raw Revit
+/// parameter values through without pre-validating.
+pub fn roof_pitch_radians_from_rise_run(rise: f64, run: f64) -> f64 {
+    if run <= 0.0 {
+        return 0.0;
+    }
+    (rise / run).atan()
+}
+
+/// Convert a slope in degrees to radians (GEO-29). Helper for
+/// callers reading `RVT_PARAM_ROOF_SLOPE` as a plain degree value.
+pub fn roof_pitch_radians_from_degrees(degrees: f64) -> f64 {
+    degrees.to_radians()
+}
+
+/// Ridge-above-eave height (GEO-29) of a symmetric gabled roof
+/// spanning `span_feet` between the two eave walls, with rafters
+/// rising at `pitch_rad` from horizontal. The ridge sits at the
+/// midline, so `height = (span/2) * tan(pitch)`.
+///
+/// A flat roof (pitch 0) returns 0. Negative span or pitch are
+/// clamped to 0.
+pub fn gabled_roof_ridge_height(span_feet: f64, pitch_rad: f64) -> f64 {
+    let s = span_feet.max(0.0);
+    let p = pitch_rad.max(0.0);
+    (s * 0.5) * p.tan()
+}
+
+/// Ridge length (GEO-29) of a hipped roof with a rectangular
+/// footprint. For a hip with equal pitch on all four sides, the
+/// ridge runs along the longer dimension for
+/// `length - width` feet. When `length == width` the hip degen-
+/// erates to a pyramid and the returned ridge length is 0.
+///
+/// Inputs are normalised so callers can pass length/width in any
+/// order: the function uses `max - min` internally.
+pub fn hip_roof_ridge_length(length_feet: f64, width_feet: f64) -> f64 {
+    (length_feet.max(width_feet) - length_feet.min(width_feet)).max(0.0)
+}
+
+/// Build an `Extrusion` for a **gabled** roof (GEO-29): the gable
+/// profile is a triangle of base `span_feet` and height
+/// `(span_feet/2) * tan(pitch_rad)`, extruded along `length_feet`.
+///
+/// The caller gets an `IFCArbitraryClosedProfileDef` with three
+/// vertices (left eave, ridge, right eave) plus an
+/// `IfcExtrudedAreaSolid` of length `length_feet`. The resulting
+/// `rotation_radians` on the parent `ElementInput` should place
+/// the ridge parallel to `length_feet`.
+///
+/// A flat (pitch 0) roof falls back to `roof_extrusion(length,
+/// span, roof_type)` so the output is still a valid slab solid.
+pub fn gabled_roof_extrusion(
+    length_feet: f64,
+    span_feet: f64,
+    pitch_rad: f64,
+    roof_type: Option<&crate::elements::roof::RoofType>,
+) -> Extrusion {
+    if pitch_rad <= 0.0 || span_feet <= 0.0 {
+        return roof_extrusion(length_feet, span_feet, roof_type);
+    }
+    let half_span = span_feet * 0.5;
+    let ridge_h = gabled_roof_ridge_height(span_feet, pitch_rad);
+    let profile = vec![(-half_span, 0.0), (half_span, 0.0), (0.0, ridge_h)];
+    Extrusion::arbitrary_closed(profile, length_feet.max(0.0))
+}
+
+/// Build vertex + triangle data (GEO-29) for a **hipped** roof
+/// over a rectangular footprint. Returns `(vertices_feet,
+/// triangles)` ready for `SolidShape::FacetedBrep`.
+///
+/// Geometry: eight triangles — two trapezoids on the long sides
+/// (each split into 2 triangles) plus two triangles on the short
+/// sides. When `length == width` the ridge length is zero and the
+/// hip degenerates to a pyramid (4 triangles meeting at the apex).
+///
+/// All vertices sit in the element-local XY plane at `Z=0`
+/// (eaves) or `Z=ridge_height` (ridge line). Callers are
+/// responsible for translating to world coordinates.
+pub fn hip_roof_brep(
+    length_feet: f64,
+    width_feet: f64,
+    pitch_rad: f64,
+) -> (Vec<[f64; 3]>, Vec<super::entities::BrepTriangle>) {
+    let l = length_feet.max(0.0);
+    let w = width_feet.max(0.0);
+    let (long, short) = if l >= w { (l, w) } else { (w, l) };
+    let ridge = hip_roof_ridge_length(long, short);
+    let ridge_h = gabled_roof_ridge_height(short, pitch_rad.max(0.0));
+    let overhang = (long - ridge) * 0.5;
+
+    let swap = l < w;
+    // Eave rectangle (CCW from origin)
+    let eave = if !swap {
+        [
+            [0.0, 0.0, 0.0],    // 0
+            [long, 0.0, 0.0],   // 1
+            [long, short, 0.0], // 2
+            [0.0, short, 0.0],  // 3
+        ]
+    } else {
+        // When width > length we're laying the ridge along +Y,
+        // so (long, short) must be mapped back to (w, l) axes.
+        [
+            [0.0, 0.0, 0.0],
+            [short, 0.0, 0.0],
+            [short, long, 0.0],
+            [0.0, long, 0.0],
+        ]
+    };
+
+    // Ridge endpoints (axis-dependent)
+    let (ra, rb) = if !swap {
+        (
+            [overhang, short * 0.5, ridge_h],
+            [long - overhang, short * 0.5, ridge_h],
+        )
+    } else {
+        (
+            [short * 0.5, overhang, ridge_h],
+            [short * 0.5, long - overhang, ridge_h],
+        )
+    };
+
+    let mut vertices: Vec<[f64; 3]> = Vec::with_capacity(6);
+    vertices.extend_from_slice(&eave);
+    vertices.push(ra); // 4
+    vertices.push(rb); // 5
+
+    // Face winding: outward-facing normals. 4 = ra, 5 = rb.
+    // Long slope A: eave 0-1 up to ridge 5-4.
+    // Long slope B: eave 2-3 up to ridge 4-5.
+    // Short slope at A-end: eave 3-0 + ridge 4.
+    // Short slope at B-end: eave 1-2 + ridge 5.
+    let triangles = vec![
+        super::entities::BrepTriangle(0, 1, 5),
+        super::entities::BrepTriangle(0, 5, 4),
+        super::entities::BrepTriangle(2, 3, 4),
+        super::entities::BrepTriangle(2, 4, 5),
+        super::entities::BrepTriangle(3, 0, 4),
+        super::entities::BrepTriangle(1, 2, 5),
+    ];
+    (vertices, triangles)
+}
+
 /// Build a rectangular `Extrusion` for a ceiling. Thickness from
 /// [`crate::elements::ceiling::CeilingType`] falls back to 1 inch
 /// (ACT ceilings are typically 0.08 ft thick).
@@ -1262,5 +1414,125 @@ mod tests {
         let qto = floor_base_quantities(&[], None);
         assert_eq!(qto.name, "Qto_SlabBaseQuantities");
         assert!(qto.properties.is_empty());
+    }
+
+    // ---- GEO-29: Roof geometry with slopes ----
+
+    #[test]
+    fn roof_pitch_6_in_12_is_about_26_degrees() {
+        let rad = roof_pitch_radians_from_rise_run(6.0, 12.0);
+        let deg = rad.to_degrees();
+        assert!(
+            (deg - 26.565).abs() < 0.01,
+            "6:12 pitch should be ~26.57°, got {deg}"
+        );
+    }
+
+    #[test]
+    fn roof_pitch_12_in_12_is_45_degrees() {
+        let rad = roof_pitch_radians_from_rise_run(12.0, 12.0);
+        assert!((rad.to_degrees() - 45.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn roof_pitch_zero_run_returns_zero() {
+        assert_eq!(roof_pitch_radians_from_rise_run(5.0, 0.0), 0.0);
+        assert_eq!(roof_pitch_radians_from_rise_run(5.0, -1.0), 0.0);
+    }
+
+    #[test]
+    fn roof_pitch_from_degrees_matches() {
+        let deg = 30.0;
+        let rad = roof_pitch_radians_from_degrees(deg);
+        assert!((rad - std::f64::consts::FRAC_PI_6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn gabled_ridge_height_at_45_degrees() {
+        // span 20 ft at 45° → ridge 10 ft above eave.
+        let h = gabled_roof_ridge_height(20.0, std::f64::consts::FRAC_PI_4);
+        assert!((h - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn gabled_ridge_height_flat_is_zero() {
+        assert_eq!(gabled_roof_ridge_height(20.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn gabled_ridge_negative_inputs_clamp_to_zero() {
+        assert_eq!(gabled_roof_ridge_height(-5.0, 1.0), 0.0);
+        assert_eq!(gabled_roof_ridge_height(5.0, -1.0), 0.0);
+    }
+
+    #[test]
+    fn hip_roof_ridge_length_rectangle_is_diff() {
+        assert!((hip_roof_ridge_length(40.0, 20.0) - 20.0).abs() < 1e-9);
+        assert!((hip_roof_ridge_length(20.0, 40.0) - 20.0).abs() < 1e-9); // order-invariant
+    }
+
+    #[test]
+    fn hip_roof_pyramid_has_zero_ridge() {
+        assert_eq!(hip_roof_ridge_length(20.0, 20.0), 0.0);
+    }
+
+    #[test]
+    fn gabled_extrusion_emits_triangular_profile() {
+        let ex = gabled_roof_extrusion(30.0, 20.0, std::f64::consts::FRAC_PI_4, None);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::ArbitraryClosed { points }) => {
+                assert_eq!(points.len(), 3);
+                // The two eave points must share Y=0.
+                assert!((points[0].1 - 0.0).abs() < 1e-9);
+                assert!((points[1].1 - 0.0).abs() < 1e-9);
+                // The ridge (3rd point) sits above the midline.
+                assert!(points[2].1 > 0.0);
+            }
+            other => panic!("expected triangular profile, got {:?}", other),
+        }
+        assert!((ex.height_feet - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn gabled_extrusion_flat_falls_back_to_slab() {
+        let ex = gabled_roof_extrusion(30.0, 20.0, 0.0, None);
+        assert!(ex.profile_override.is_none()); // rectangular fallback
+        assert!((ex.width_feet - 30.0).abs() < 1e-9);
+        assert!((ex.depth_feet - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn hip_brep_has_six_vertices_six_triangles() {
+        let (v, t) = hip_roof_brep(40.0, 20.0, std::f64::consts::FRAC_PI_4);
+        assert_eq!(v.len(), 6);
+        assert_eq!(t.len(), 6); // 2 long-slope tris * 2 + 2 hip-end tris
+        // All triangle indices reference valid vertices.
+        for crate::ifc::entities::BrepTriangle(a, b, c) in &t {
+            assert!((*a as usize) < v.len());
+            assert!((*b as usize) < v.len());
+            assert!((*c as usize) < v.len());
+        }
+    }
+
+    #[test]
+    fn hip_brep_pyramid_still_produces_faces() {
+        // length == width → ridge collapses to a point but we still
+        // emit 6 triangles (two degenerate along the ridge).
+        let (v, t) = hip_roof_brep(20.0, 20.0, std::f64::consts::FRAC_PI_6);
+        assert_eq!(v.len(), 6);
+        assert_eq!(t.len(), 6);
+        // The two ridge-endpoints coincide at the apex.
+        assert!((v[4][0] - v[5][0]).abs() < 1e-9);
+        assert!((v[4][1] - v[5][1]).abs() < 1e-9);
+        assert!((v[4][2] - v[5][2]).abs() < 1e-9);
+    }
+
+    #[test]
+    fn hip_brep_swapped_axes_when_width_larger() {
+        // length < width should route the ridge along the Y axis.
+        let (v, _) = hip_roof_brep(20.0, 40.0, std::f64::consts::FRAC_PI_4);
+        // Ridge endpoint X ≈ short/2 = 10; Y inside [0, 40].
+        assert!((v[4][0] - 10.0).abs() < 1e-9);
+        assert!(v[4][1] > 0.0 && v[4][1] < 40.0);
     }
 }
