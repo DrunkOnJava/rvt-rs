@@ -256,6 +256,135 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
     }
 }
 
+/// Row of a schedule table (VW1-15) — one per `BuildingElement`
+/// in an IfcModel. Fields are pre-formatted strings so the
+/// viewer can render the table without additional
+/// unit-conversion logic.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScheduleRow {
+    pub entity_index: usize,
+    pub ifc_type: String,
+    pub name: String,
+    pub storey: String,
+    pub material: String,
+    /// The IFC element's GUID if present; empty when the source
+    /// didn't carry one.
+    pub guid: String,
+}
+
+/// Schedule-view payload (VW1-15). Pre-ordered by (storey
+/// elevation, name) for stable output — viewers that want a
+/// different sort should resort the returned vec.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Schedule {
+    pub rows: Vec<ScheduleRow>,
+}
+
+impl Schedule {
+    /// Row count.
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    /// `true` when no rows.
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    /// Filter to rows matching the given IFC type (case-
+    /// insensitive). Returns a new `Schedule`.
+    pub fn filter_by_ifc_type(&self, ifc_type: &str) -> Schedule {
+        let target = ifc_type.to_ascii_uppercase();
+        Schedule {
+            rows: self
+                .rows
+                .iter()
+                .filter(|r| r.ifc_type.to_ascii_uppercase() == target)
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// Render as CSV (VW1-15). Header row + one row per
+    /// `ScheduleRow` with fields in the same order as the
+    /// struct: entity_index, ifc_type, name, storey, material,
+    /// guid. Values with commas or quotes are double-quote
+    /// wrapped + inner quotes doubled, per RFC 4180.
+    pub fn to_csv(&self) -> String {
+        let mut out = String::new();
+        out.push_str("entity_index,ifc_type,name,storey,material,guid\n");
+        for r in &self.rows {
+            out.push_str(&format!("{},", r.entity_index));
+            out.push_str(&csv_field(&r.ifc_type));
+            out.push(',');
+            out.push_str(&csv_field(&r.name));
+            out.push(',');
+            out.push_str(&csv_field(&r.storey));
+            out.push(',');
+            out.push_str(&csv_field(&r.material));
+            out.push(',');
+            out.push_str(&csv_field(&r.guid));
+            out.push('\n');
+        }
+        out
+    }
+}
+
+fn csv_field(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+/// Build a tabular schedule of every `BuildingElement` in `model`
+/// (VW1-15). Non-BuildingElement entities are skipped. Rows are
+/// ordered by `(storey_elevation_feet, name)` so the output is
+/// stable across runs.
+pub fn build_schedule(model: &IfcModel) -> Schedule {
+    let mut rows: Vec<(f64, ScheduleRow)> = Vec::new();
+    for (idx, ent) in model.entities.iter().enumerate() {
+        if let IfcEntity::BuildingElement {
+            ifc_type,
+            name,
+            type_guid,
+            storey_index,
+            material_index,
+            ..
+        } = ent
+        {
+            let (storey, elev) = storey_index
+                .and_then(|i| model.building_storeys.get(i))
+                .map(|s| (s.name.clone(), s.elevation_feet))
+                .unwrap_or_else(|| ("".into(), f64::INFINITY));
+            let material = material_index
+                .and_then(|i| model.materials.get(i))
+                .map(|m| m.name.clone())
+                .unwrap_or_default();
+            rows.push((
+                elev,
+                ScheduleRow {
+                    entity_index: idx,
+                    ifc_type: ifc_type.clone(),
+                    name: name.clone(),
+                    storey,
+                    material,
+                    guid: type_guid.clone().unwrap_or_default(),
+                },
+            ));
+        }
+    }
+    rows.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.1.name.cmp(&b.1.name))
+    });
+    Schedule {
+        rows: rows.into_iter().map(|(_, r)| r).collect(),
+    }
+}
+
 /// Collect all distinct `ifc_type` strings present in the scene
 /// graph (VW1-09). Use as the source of truth for a viewer's
 /// "layer" toggle UI.
@@ -839,6 +968,172 @@ mod tests {
         let json = serde_json::to_string(&panel).unwrap();
         let back: ElementInfoPanel = serde_json::from_str(&json).unwrap();
         assert_eq!(back.name, "W");
+    }
+
+    // ---- VW1-15: Schedule tests ----
+
+    #[test]
+    fn empty_model_produces_empty_schedule() {
+        let s = build_schedule(&IfcModel::default());
+        assert!(s.is_empty());
+        assert_eq!(s.len(), 0);
+    }
+
+    #[test]
+    fn schedule_has_one_row_per_building_element() {
+        let model = IfcModel {
+            building_storeys: vec![Storey {
+                name: "Ground".into(),
+                elevation_feet: 0.0,
+            }],
+            entities: vec![
+                mk_element("W1", "IFCWALL", Some(0), None),
+                mk_element("S1", "IFCSLAB", Some(0), None),
+                mk_element("C1", "IFCCOLUMN", Some(0), None),
+            ],
+            ..Default::default()
+        };
+        let s = build_schedule(&model);
+        assert_eq!(s.len(), 3);
+    }
+
+    #[test]
+    fn schedule_skips_non_building_entities() {
+        let model = IfcModel {
+            entities: vec![
+                mk_element("W1", "IFCWALL", None, None),
+                IfcEntity::Project {
+                    name: Some("P".into()),
+                    description: None,
+                    long_name: None,
+                },
+            ],
+            ..Default::default()
+        };
+        assert_eq!(build_schedule(&model).len(), 1);
+    }
+
+    #[test]
+    fn schedule_rows_are_sorted_by_storey_then_name() {
+        let model = IfcModel {
+            building_storeys: vec![
+                Storey {
+                    name: "2nd".into(),
+                    elevation_feet: 10.0,
+                },
+                Storey {
+                    name: "Ground".into(),
+                    elevation_feet: 0.0,
+                },
+            ],
+            entities: vec![
+                mk_element("Z-upstairs", "IFCWALL", Some(0), None),
+                mk_element("A-ground", "IFCWALL", Some(1), None),
+                mk_element("B-ground", "IFCWALL", Some(1), None),
+            ],
+            ..Default::default()
+        };
+        let s = build_schedule(&model);
+        // Ground storey (elev 0) first, then 2nd (elev 10).
+        assert_eq!(s.rows[0].name, "A-ground");
+        assert_eq!(s.rows[1].name, "B-ground");
+        assert_eq!(s.rows[2].name, "Z-upstairs");
+    }
+
+    #[test]
+    fn schedule_resolves_material_name() {
+        let model = IfcModel {
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCWALL".into(),
+                name: "W1".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: Some(0),
+                property_set: None,
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
+                representation_map_index: None,
+            }],
+            materials: vec![super::super::MaterialInfo {
+                name: "Concrete".into(),
+                color_packed: None,
+                transparency: None,
+            }],
+            ..Default::default()
+        };
+        let s = build_schedule(&model);
+        assert_eq!(s.rows[0].material, "Concrete");
+    }
+
+    #[test]
+    fn schedule_filter_by_ifc_type_is_case_insensitive() {
+        let model = IfcModel {
+            entities: vec![
+                mk_element("W1", "IFCWALL", None, None),
+                mk_element("S1", "IFCSLAB", None, None),
+                mk_element("W2", "IFCWALL", None, None),
+            ],
+            ..Default::default()
+        };
+        let full = build_schedule(&model);
+        let walls = full.filter_by_ifc_type("ifcwall");
+        assert_eq!(walls.len(), 2);
+    }
+
+    #[test]
+    fn schedule_csv_has_header_plus_rows() {
+        let model = IfcModel {
+            building_storeys: vec![Storey {
+                name: "Ground".into(),
+                elevation_feet: 0.0,
+            }],
+            entities: vec![mk_element("W1", "IFCWALL", Some(0), None)],
+            ..Default::default()
+        };
+        let csv = build_schedule(&model).to_csv();
+        let lines: Vec<&str> = csv.lines().collect();
+        assert_eq!(lines[0], "entity_index,ifc_type,name,storey,material,guid");
+        assert!(lines[1].contains("IFCWALL"));
+        assert!(lines[1].contains("W1"));
+        assert!(lines[1].contains("Ground"));
+    }
+
+    #[test]
+    fn schedule_csv_escapes_commas_in_names() {
+        let model = IfcModel {
+            entities: vec![mk_element("Wall, Fancy", "IFCWALL", None, None)],
+            ..Default::default()
+        };
+        let csv = build_schedule(&model).to_csv();
+        assert!(csv.contains("\"Wall, Fancy\""));
+    }
+
+    #[test]
+    fn schedule_csv_escapes_double_quotes() {
+        let model = IfcModel {
+            entities: vec![mk_element("He said \"hi\"", "IFCWALL", None, None)],
+            ..Default::default()
+        };
+        let csv = build_schedule(&model).to_csv();
+        // Quotes inside a quoted field are doubled per RFC 4180.
+        assert!(csv.contains("\"He said \"\"hi\"\"\""));
+    }
+
+    #[test]
+    fn schedule_serde_roundtrips() {
+        let model = IfcModel {
+            entities: vec![mk_element("W1", "IFCWALL", None, None)],
+            ..Default::default()
+        };
+        let s = build_schedule(&model);
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Schedule = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, s);
     }
 
     #[test]
