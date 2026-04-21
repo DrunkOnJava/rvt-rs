@@ -6,56 +6,81 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
-### Added — 2026-04-21: walker → IFC + scalar Container decode + byte-identical roundtrip
+### Added — 2026-04-21: walker → IFC scaffolding, container decode, byte-identical CFB roundtrip, corpus hunt
 
-Shipped four coupled subsystems in one session:
+Shipped four subsystems. Honest status per-subsystem:
 
-- **Walker → IFC**: `walker::iter_elements(rf)` is the high-level
-  element iterator. Pipeline: `scan_candidates` (schema-directed
-  offset detector) → `find_self_id_field` (canonical m_id probe) →
-  `decode_instance` → dedup by ElementId. `ifc::RvtDocExporter::export`
-  now threads walker output into `BuildingElement` entities, routing
-  unknown classes to `IFCBUILDINGELEMENTPROXY`. Single `rvt-ifc` run
-  on the 2023 Einhoven project produces 12 element references in IFC
-  (9 walker-recovered + 3 framework). New integration test
-  `tests/walker_to_ifc_integration.rs` + IfcOpenShell CI gate enforce
-  per-release spatial hierarchy validity. Public walker surface:
-  `pub fn scan_candidates`, `pub fn find_self_id_field`,
-  `pub fn build_handle_index`, `pub fn iter_elements`,
-  `pub fn iter_elements_with_options`.
+- **Walker → IFC scaffolding (L5B-11) — does not decode real elements
+  on project files.** `walker::iter_elements(rf)` is wired, and
+  `ifc::RvtDocExporter::export` routes its output into
+  `BuildingElement` entities. On `Revit_IFC5_Einhoven.rvt` (Revit
+  2023 project file) the pipeline emits 9 `IFCBUILDINGELEMENTPROXY`
+  entities, all for the `HostObjAttr` class — the 3-field parent
+  class that matches permissively at nearly any offset. On
+  `2024_Core_Interior.rvt` the pipeline emits **zero** element
+  entities. No Wall, Floor, Door, Window, Stair, Column, Beam, Roof,
+  or Ceiling decode succeeds. The scanner finds 1 of 405 schema
+  classes. Root cause (per
+  `reports/element-framing/RE-01-synthesis.md`): real element
+  instance data lives in `Partitions/*` streams with a wire envelope
+  that has not been reverse-engineered. Global/Latest holds only
+  document-level metadata (ADocument, Levels, Grids, etc.). The
+  current walker scans the wrong stream. **Treat all walker→IFC
+  output on project files as placeholder scaffolding, not
+  functional element decode.**
 
-- **Scalar-base Container decode (L5B-09)**: `walker::read_field_by_type`
-  and `walker::write_field_by_type` now delegate scalar-base Container
-  kinds (0x01, 0x02, 0x04, 0x05, 0x07, 0x0b, 0x0d) to the Vector wire
-  layout (`[u32 count][count × element]`). Previously these fields
-  returned a 4-byte `InstanceField::Bytes` fallback. Round-trip is
-  byte-identical. 286 Container occurrences across the 13-file
-  corpus (11 family + 2 project) now decode + re-encode correctly.
-  Schema-side `FieldType::decode` over-reads documented in
-  `docs/container-wire-format-2026-04-21.md` for future cleanup.
+  Public walker API added (all functional; semantics above): `pub fn
+  scan_candidates`, `pub fn find_self_id_field`, `pub fn
+  build_handle_index`, `pub fn iter_elements`, `pub fn
+  iter_elements_with_options`. Integration test
+  `tests/walker_to_ifc_integration.rs` and the IfcOpenShell CI gate
+  only assert a non-negative count — they pass with the current
+  scaffolding behaviour.
 
-- **Byte-identical CFB roundtrip (WRT-10)**: `write_with_patches` now
-  takes a sector-preserving path for both empty and non-empty patch
-  sets. Empty patches: atomic `std::fs::copy + rename` (zero delta
-  across all 11 releases). Non-empty patches: copy src, open rw,
-  `create_stream` only the patched entries — unpatched streams keep
-  their source sector chains. Single-stream identity patch yields
-  zero delta on every release vs the old CFB-rebuild's ~94% delta.
-  New regression test `tests/cfb_roundtrip_delta.rs`.
+- **Scalar-base Container decode (L5B-09)** — verified on synthetic
+  tests only, unverified on real .rvt bytes.
+  `walker::read_field_by_type` and `walker::write_field_by_type` now
+  delegate scalar-base Container kinds (0x01, 0x02, 0x04, 0x05,
+  0x07, 0x0b, 0x0d) to the Vector wire layout
+  (`[u32 count][count × element]`). The round-trip test
+  (`container_scalar_round_trips_byte_identical`) uses synthesized
+  bytes; an instance round-trip sourced from a real .rvt is tracked
+  as WF-01..03 and has not been done. The "286 Container
+  occurrences" figure refers to *schema-side* field counts, not
+  decoded instance bytes.
 
-- **Real-world corpus hunt (Q-01)**: 7 MIT/Apache-licensed repos with
-  17 .rvt + 24 .rfa files identified — DynamoDS/DynamoRevit,
+- **Byte-identical CFB roundtrip (WRT-10) — verified.**
+  `write_with_patches` takes a sector-preserving path for both empty
+  and non-empty patch sets. Empty patches: atomic
+  `std::fs::copy + rename` (zero delta across all 11 family
+  releases + both project files). Non-empty identity patches (same
+  bytes in, same bytes out via `cfb::open_rw`): zero delta. Tests
+  pinning this: `tests/cfb_roundtrip_delta.rs`. Grow / shrink /
+  multi-stream patch cases are not yet tested (CFB-01..03).
+
+- **Real-world corpus hunt (Q-01) — license-verified, parse-unverified.**
+  7 MIT/Apache-licensed repos with 17 .rvt + 24 .rfa files
+  identified via Sourcegraph (DynamoDS/DynamoRevit,
   DynamoDS/RevitTestFramework, DynamoDS/DynamoWorkshops,
   DynamoDS/RefineryToolkits, DynamoDS/RefineryPrimer,
-  chuongmep/OpenMEP, theseus-rs/file-type. Automated clone +
-  validation script `tools/fetch-corpus.sh`. Rejected
-  erfajo/OrchidForDynamo (CC BY-ND with geographic restrictions) +
-  CSHS-CWRA/RavenHydroFramework (extension-collision false
-  positive). Documented in `docs/corpus-hunt-2026-04-21.md` +
-  `CONTRIBUTING.md`.
+  chuongmep/OpenMEP, theseus-rs/file-type). Rejected
+  erfajo/OrchidForDynamo (CC BY-ND) and CSHS-CWRA/RavenHydroFramework
+  (extension-collision false positive — RAVEN hydrology text
+  config). Clone script `tools/fetch-corpus.sh` is committed but
+  **never executed** — none of the 41 candidate files has been run
+  through `project_corpus_smoke`. License claim is solid; parse
+  compatibility is unknown. Tasks Q01-01..04 track the outstanding
+  execution.
 
 Test suite: 716 lib tests (+11 new) + patched-build + walker-to-IFC
 integration. cargo fmt + clippy -D warnings clean across all targets.
+
+Reverse-engineering reports from the session:
+`reports/element-framing/RE-01-synthesis.md` (partitions are where
+elements live), `RE-09-synthesis.md` (chunk-header hypothesis
+refuted), `RE-17-synthesis.md` (ContentDocuments is a separate
+index, different id space from ElemTable). 12 RE probes under
+`examples/probe_*`.
 
 ### Fixed — 2026-04-21: libFuzzer-caught panics in parsing paths
 
