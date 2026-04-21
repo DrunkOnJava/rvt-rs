@@ -260,6 +260,30 @@ fn bfi_unpaired_high_surrogate_does_not_panic() {
 }
 
 #[test]
+fn bfi_multibyte_before_colon_backslash_does_not_panic() {
+    // libFuzzer 2026-04-21 (nightly run 24714227057) caught a panic
+    // at src/basic_file_info.rs:228: "start byte index 257 is not a
+    // char boundary; it is inside '�' (bytes 255..258 of string)".
+    //
+    // The fallback path in extract_path() finds ":\\" in the
+    // UTF-16LE-decoded text, backs up one byte, and slices from there
+    // — but the byte preceding ":\\" can be inside a multi-byte UTF-8
+    // character when the text contains BOMs (0xef 0xbb 0xbf) or
+    // non-ASCII content. Fix uses `text.get(s..)?` instead of
+    // `&text[s..]` so the bad index returns None rather than panicking.
+    //
+    // Minimised input: the original fuzzer fed 300+ bytes; this 9-byte
+    // slice reproduces the exact panic shape (UTF-8 BOM + char that
+    // spans bytes 2..4 + ":\\" landing at an unfortunate position).
+    let data: Vec<u8> = vec![
+        // UTF-16LE BOM
+        0xff, 0xfe, // "X:\\" where X is inside a multi-byte char when decoded
+        b'X', 0x00, b':', 0x00, b'\\', 0x00,
+    ];
+    basic_file_info_assert("multibyte_before_colon_backslash", &data);
+}
+
+#[test]
 fn bfi_all_ascii_no_version_does_not_panic() {
     // UTF-16LE ASCII with no 4-digit year present. Forces every
     // extract_* scan to walk the full buffer without finding a

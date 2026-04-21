@@ -224,8 +224,14 @@ fn extract_path(text: &str) -> Option<String> {
     if !tail.starts_with("C:\\") && !tail.starts_with("D:\\") {
         // fallback: first occurrence of ":\\" anywhere
         let colon_backslash = text.find(":\\")?;
+        // `colon_backslash` points to the ':' byte. Back up one byte
+        // to include the drive letter, but land on a char boundary —
+        // the saturating_sub can point into the middle of a multi-byte
+        // UTF-8 character when text before ":\\" is non-ASCII (caught
+        // by libFuzzer fuzz_basic_file_info 2026-04-21 on input
+        // containing UTF-8 BOMs + Arabic bytes before a ":\\" literal).
         let s = colon_backslash.saturating_sub(1);
-        let tail = &text[s..];
+        let tail = text.get(s..)?;
         return take_until_rfa(tail);
     }
     take_until_rfa(tail)
