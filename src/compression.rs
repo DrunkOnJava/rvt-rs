@@ -278,6 +278,71 @@ pub fn truncated_gzip_encode_with_prefix8(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Validate (WRT-11) that [`truncated_gzip_encode`] and
+/// [`inflate_at`] are round-trip-exact inverses for the given
+/// payload. Encodes `bytes`, inflates the result, compares
+/// byte-for-byte.
+///
+/// Returns an [`Error::Decompress`] when any step fails or the
+/// round-trip produces a different byte sequence. The error
+/// message includes the first divergence offset when the
+/// re-decoded output differs.
+///
+/// Useful as a self-check before calling
+/// [`crate::writer::write_with_patches`] — if this fails, the
+/// writer would have produced a file that the reader couldn't
+/// re-open.
+pub fn validate_truncated_gzip_round_trip(bytes: &[u8]) -> Result<()> {
+    let encoded = truncated_gzip_encode(bytes)?;
+    let decoded = inflate_at(&encoded, 0)?;
+    if decoded != bytes {
+        let diff = decoded
+            .iter()
+            .zip(bytes.iter())
+            .position(|(a, b)| a != b)
+            .unwrap_or(decoded.len().min(bytes.len()));
+        return Err(Error::Decompress(format!(
+            "truncated_gzip round-trip mismatch at offset {diff}: encoded {} bytes, inflated to \
+             {} bytes, expected {} bytes",
+            encoded.len(),
+            decoded.len(),
+            bytes.len()
+        )));
+    }
+    Ok(())
+}
+
+/// Validate (WRT-11) that [`truncated_gzip_encode_with_prefix8`]
+/// is a round-trip-exact inverse for the given payload. Encodes
+/// with the 8-byte custom prefix, inflates at offset 8, compares
+/// byte-for-byte.
+pub fn validate_truncated_gzip_prefix8_round_trip(bytes: &[u8]) -> Result<()> {
+    let encoded = truncated_gzip_encode_with_prefix8(bytes)?;
+    // First 8 bytes are the custom prefix; caller-visible invariant
+    // is that they're zero.
+    if encoded.len() < 8 || encoded[..8] != [0u8; 8] {
+        return Err(Error::Decompress(
+            "prefix8 encode: first 8 bytes not zero — framing invariant broken".into(),
+        ));
+    }
+    let decoded = inflate_at(&encoded, 8)?;
+    if decoded != bytes {
+        let diff = decoded
+            .iter()
+            .zip(bytes.iter())
+            .position(|(a, b)| a != b)
+            .unwrap_or(decoded.len().min(bytes.len()));
+        return Err(Error::Decompress(format!(
+            "prefix8 round-trip mismatch at offset {diff}: encoded {} bytes (incl. 8-byte \
+             prefix), inflated to {} bytes, expected {} bytes",
+            encoded.len(),
+            decoded.len(),
+            bytes.len()
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,5 +409,99 @@ mod tests {
         let compressed = truncated_gzip_encode(payload).unwrap();
         let out = inflate_at_with_limits(&compressed, 0, InflateLimits::default()).unwrap();
         assert_eq!(&out[..], payload);
+    }
+
+    // ---- WRT-11: truncated-gzip encoder validation ----
+
+    #[test]
+    fn round_trip_empty_payload_is_ok() {
+        assert!(validate_truncated_gzip_round_trip(b"").is_ok());
+        assert!(validate_truncated_gzip_prefix8_round_trip(b"").is_ok());
+    }
+
+    #[test]
+    fn round_trip_single_byte_is_ok() {
+        for b in 0..=255_u8 {
+            let payload = [b];
+            validate_truncated_gzip_round_trip(&payload)
+                .unwrap_or_else(|e| panic!("round-trip failed for 0x{b:02x}: {e}"));
+        }
+    }
+
+    #[test]
+    fn round_trip_typical_schema_payload_is_ok() {
+        // Size + entropy pattern similar to a Formats/Latest chunk:
+        // ~8 KB of mixed ASCII + binary noise.
+        let mut payload = Vec::with_capacity(8 * 1024);
+        for i in 0..8 * 1024 {
+            payload.push(((i * 17 + 3) % 256) as u8);
+        }
+        validate_truncated_gzip_round_trip(&payload).unwrap();
+    }
+
+    #[test]
+    fn round_trip_large_payload_crosses_32k_deflate_window() {
+        // 128 KB — larger than the 32 KB DEFLATE sliding window so
+        // the encoder hits multi-block encoding.
+        let payload: Vec<u8> = (0..128 * 1024).map(|i| (i as u8).wrapping_mul(7)).collect();
+        validate_truncated_gzip_round_trip(&payload).unwrap();
+    }
+
+    #[test]
+    fn round_trip_highly_compressible_payload() {
+        // All zeros — DEFLATE compresses this to near-zero bytes.
+        // Previous regressions have come from zero-length DEFLATE
+        // blocks; keep this case pinned.
+        let payload = vec![0u8; 32 * 1024];
+        validate_truncated_gzip_round_trip(&payload).unwrap();
+    }
+
+    #[test]
+    fn round_trip_highly_incompressible_payload() {
+        // Deterministic "random" payload — DEFLATE output is larger
+        // than the input. Ensures the encoder handles pathological
+        // expansion without overflowing buffers.
+        let mut payload = Vec::with_capacity(1024);
+        let mut state = 0x12345_u32;
+        for _ in 0..1024 {
+            state = state.wrapping_mul(1103515245).wrapping_add(12345);
+            payload.push((state >> 16) as u8);
+        }
+        validate_truncated_gzip_round_trip(&payload).unwrap();
+    }
+
+    #[test]
+    fn prefix8_encoder_zero_fills_first_eight_bytes() {
+        let encoded = truncated_gzip_encode_with_prefix8(b"test").unwrap();
+        assert!(encoded.len() > 8);
+        assert_eq!(&encoded[..8], &[0u8; 8]);
+        // And byte 8 is the gzip magic.
+        assert_eq!(encoded[8], 0x1f);
+        assert_eq!(encoded[9], 0x8b);
+    }
+
+    #[test]
+    fn prefix8_round_trip_includes_framing_invariant_check() {
+        for payload in [
+            &b""[..],
+            &b"a"[..],
+            &b"Global/Latest typical chunk"[..],
+            &vec![0xFFu8; 4096][..],
+        ] {
+            validate_truncated_gzip_prefix8_round_trip(payload).unwrap();
+        }
+    }
+
+    #[test]
+    fn encoded_header_is_canonical_ten_bytes() {
+        // The encoder always emits the minimal 10-byte header:
+        //   1F 8B 08 00 00 00 00 00 00 FF
+        // so every round-trip starts from the same place.
+        let encoded = truncated_gzip_encode(b"x").unwrap();
+        assert!(encoded.len() > 10);
+        assert_eq!(
+            &encoded[..10],
+            &[0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff]
+        );
     }
 }
