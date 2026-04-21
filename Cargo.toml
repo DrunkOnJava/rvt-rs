@@ -175,3 +175,26 @@ strip = true
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+# wasm-pack configuration. The bundled `wasm-opt` in wasm-pack 0.14
+# doesn't accept rustc's bulk-memory output — it prints a wall of
+# "[wasm-validator error in function N] unexpected false: Bulk
+# memory operations require bulk memory" warnings, then returns a
+# non-zero exit in CI that kills the whole build (locally it also
+# emits the warnings but happens to write artifacts anyway).
+#
+# Bulk-memory is supported in every browser ≥ 2019 (Chrome 75+,
+# Firefox 79+, Safari 15+, Edge 79+), so we ship the raw output
+# from wasm-bindgen-cli — 728 KB uncompressed, ~180 KB gzipped — and
+# skip wasm-opt entirely. If we ever want the ~15 % size win back,
+# a newer binaryen (installed out-of-band) accepts
+# `--enable-bulk-memory` and the stanza can change to
+# `wasm-opt = ["-O", "--enable-bulk-memory"]`.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.profiling]
+wasm-opt = false
