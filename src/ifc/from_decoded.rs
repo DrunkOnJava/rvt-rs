@@ -287,6 +287,124 @@ pub fn slab_extrusion(
     }
 }
 
+/// Shoelace-formula area (GEO-28) for a closed planar polygon
+/// given as a sequence of `(x, y)` vertices in feet. Returns the
+/// unsigned area in square feet.
+///
+/// The caller does not need to close the loop explicitly — we treat
+/// the last vertex and the first vertex as connected. Degenerate
+/// inputs (< 3 points) return 0.
+///
+/// Used to compute `Qto_SlabBaseQuantities.GrossArea` / `NetArea`
+/// for IfcSlab / IfcFloor property sets, and as a sanity check that
+/// a decoded boundary really encloses area before it is extruded.
+pub fn polygon_area_sqft(points: &[(f64, f64)]) -> f64 {
+    if points.len() < 3 {
+        return 0.0;
+    }
+    let n = points.len();
+    let mut sum = 0.0;
+    for i in 0..n {
+        let (x0, y0) = points[i];
+        let (x1, y1) = points[(i + 1) % n];
+        sum += x0 * y1 - x1 * y0;
+    }
+    (sum * 0.5).abs()
+}
+
+/// Summed edge length (GEO-28) of a closed polygon given as a
+/// sequence of `(x, y)` vertices in feet. The last-to-first closing
+/// edge is included.
+///
+/// Matches `Qto_SlabBaseQuantities.Perimeter`. Returns 0 for inputs
+/// with fewer than 2 points.
+pub fn polygon_perimeter_feet(points: &[(f64, f64)]) -> f64 {
+    if points.len() < 2 {
+        return 0.0;
+    }
+    let n = points.len();
+    let mut sum = 0.0;
+    for i in 0..n {
+        let (x0, y0) = points[i];
+        let (x1, y1) = points[(i + 1) % n];
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+        sum += (dx * dx + dy * dy).sqrt();
+    }
+    sum
+}
+
+/// Build an `Extrusion` for a floor from its **decoded boundary
+/// sketch** (GEO-28).
+///
+/// Revit stores slab geometry as a 2D closed loop of model lines
+/// (the "sketch") plus a per-FloorType thickness. This helper
+/// threads the sketch directly into an
+/// `IFCArbitraryClosedProfileDef` + vertical extrusion, replacing
+/// the bounding-box approximation in [`slab_extrusion`] with the
+/// actual polygon. Thickness falls back to 12 inches when
+/// `floor_type` is `None` or lacks it.
+///
+/// Inputs with fewer than 3 points fall back to a 1×1 ft rectangle
+/// at the requested thickness so downstream STEP emission still
+/// produces a valid (if degenerate) solid.
+///
+/// Companion to [`wall_extrusion_from_location_line`] for the slab
+/// case. Paired with [`polygon_area_sqft`] and
+/// [`polygon_perimeter_feet`] to populate
+/// `Qto_SlabBaseQuantities`.
+pub fn floor_extrusion_from_boundary(
+    boundary: &[(f64, f64)],
+    floor_type: Option<&crate::elements::floor::FloorType>,
+) -> Extrusion {
+    let thickness = floor_type.and_then(|ft| ft.thickness_feet).unwrap_or(1.0);
+    if boundary.len() < 3 {
+        return Extrusion {
+            width_feet: 1.0,
+            depth_feet: 1.0,
+            height_feet: thickness,
+            profile_override: None,
+        };
+    }
+    Extrusion::arbitrary_closed(boundary.to_vec(), thickness)
+}
+
+/// Build a `Qto_SlabBaseQuantities`-style [`PropertySet`] (GEO-28)
+/// from a decoded floor boundary + thickness. Populates GrossArea,
+/// Perimeter, Depth, and GrossVolume. Empty boundaries yield an
+/// empty property set (no bogus zero-valued quantities).
+pub fn floor_base_quantities(
+    boundary: &[(f64, f64)],
+    floor_type: Option<&crate::elements::floor::FloorType>,
+) -> PropertySet {
+    let mut props = Vec::new();
+    let thickness = floor_type.and_then(|ft| ft.thickness_feet).unwrap_or(1.0);
+    if boundary.len() >= 3 {
+        let area = polygon_area_sqft(boundary);
+        let perim = polygon_perimeter_feet(boundary);
+        props.push(Property {
+            name: "GrossArea".into(),
+            value: PropertyValue::AreaSquareFeet(area),
+        });
+        props.push(Property {
+            name: "Perimeter".into(),
+            value: PropertyValue::LengthFeet(perim),
+        });
+        props.push(Property {
+            name: "Depth".into(),
+            value: PropertyValue::LengthFeet(thickness),
+        });
+        props.push(Property {
+            name: "GrossVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(area * thickness),
+        });
+    }
+    PropertySet {
+        name: "Qto_SlabBaseQuantities".into(),
+        properties: props,
+    }
+}
+
 /// Build a rectangular `Extrusion` for a roof. Identical shape to
 /// a slab — the IfcRoof emission already handles the semantic
 /// distinction. Thickness from [`crate::elements::roof::RoofType`]
@@ -1029,5 +1147,120 @@ mod tests {
         let wall = Wall::default();
         let out = wall_layered_extrusions_from_location_line(&wall, [0.0, 0.0], [5.0, 0.0], &[]);
         assert!(out.is_empty());
+    }
+
+    // ---- GEO-28: Floor geometry from boundary sketch ----
+
+    #[test]
+    fn polygon_area_unit_square_is_one_sqft() {
+        let sq = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+        assert!((polygon_area_sqft(&sq) - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn polygon_area_is_winding_order_invariant() {
+        let ccw = [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)];
+        let cw = [(0.0, 0.0), (0.0, 5.0), (10.0, 5.0), (10.0, 0.0)];
+        let a_ccw = polygon_area_sqft(&ccw);
+        let a_cw = polygon_area_sqft(&cw);
+        assert!((a_ccw - 50.0).abs() < 1e-9);
+        assert!((a_cw - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn polygon_area_l_shape() {
+        // L-shape: unit square with top-right corner cut out
+        //   (0,2)-(1,2)-(1,1)-(2,1)-(2,0)-(0,0)
+        // Area = 2*2 - 1*1 = 3 sqft
+        let ell = [
+            (0.0, 0.0),
+            (2.0, 0.0),
+            (2.0, 1.0),
+            (1.0, 1.0),
+            (1.0, 2.0),
+            (0.0, 2.0),
+        ];
+        assert!((polygon_area_sqft(&ell) - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn polygon_area_degenerate_returns_zero() {
+        assert_eq!(polygon_area_sqft(&[]), 0.0);
+        assert_eq!(polygon_area_sqft(&[(0.0, 0.0)]), 0.0);
+        assert_eq!(polygon_area_sqft(&[(0.0, 0.0), (1.0, 1.0)]), 0.0);
+    }
+
+    #[test]
+    fn polygon_perimeter_unit_square_is_four_feet() {
+        let sq = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+        assert!((polygon_perimeter_feet(&sq) - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn polygon_perimeter_rectangle_includes_closing_edge() {
+        let rect = [(0.0, 0.0), (10.0, 0.0), (10.0, 3.0), (0.0, 3.0)];
+        assert!((polygon_perimeter_feet(&rect) - 26.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn polygon_perimeter_degenerate_returns_zero() {
+        assert_eq!(polygon_perimeter_feet(&[]), 0.0);
+        assert_eq!(polygon_perimeter_feet(&[(0.0, 0.0)]), 0.0);
+    }
+
+    #[test]
+    fn floor_extrusion_from_boundary_uses_polygon_profile() {
+        use crate::elements::floor::FloorType;
+        let ft = FloorType {
+            thickness_feet: Some(0.5),
+            ..Default::default()
+        };
+        let boundary = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)];
+        let ex = floor_extrusion_from_boundary(&boundary, Some(&ft));
+        assert!((ex.height_feet - 0.5).abs() < 1e-9);
+        // arbitrary_closed sets width/depth to the bounding box of the points.
+        assert!((ex.width_feet - 10.0).abs() < 1e-9);
+        assert!((ex.depth_feet - 10.0).abs() < 1e-9);
+        // The profile_override carries the actual polygon.
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::ArbitraryClosed { points }) => {
+                assert_eq!(points.len(), 4);
+            }
+            other => panic!("expected ArbitraryClosed profile, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn floor_extrusion_falls_back_for_degenerate_boundary() {
+        let ex = floor_extrusion_from_boundary(&[], None);
+        assert_eq!(ex.width_feet, 1.0);
+        assert_eq!(ex.depth_feet, 1.0);
+        assert!((ex.height_feet - 1.0).abs() < 1e-9); // default thickness
+        assert!(ex.profile_override.is_none());
+    }
+
+    #[test]
+    fn floor_base_quantities_populates_four_properties() {
+        use crate::elements::floor::FloorType;
+        let ft = FloorType {
+            thickness_feet: Some(0.5),
+            ..Default::default()
+        };
+        let boundary = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)];
+        let qto = floor_base_quantities(&boundary, Some(&ft));
+        assert_eq!(qto.name, "Qto_SlabBaseQuantities");
+        assert_eq!(qto.properties.len(), 4);
+        let names: Vec<&str> = qto.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"GrossArea"));
+        assert!(names.contains(&"Perimeter"));
+        assert!(names.contains(&"Depth"));
+        assert!(names.contains(&"GrossVolume"));
+    }
+
+    #[test]
+    fn floor_base_quantities_empty_for_degenerate_boundary() {
+        let qto = floor_base_quantities(&[], None);
+        assert_eq!(qto.name, "Qto_SlabBaseQuantities");
+        assert!(qto.properties.is_empty());
     }
 }
