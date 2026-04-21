@@ -28,8 +28,9 @@ Everything in this section works today on `main` and is exercised by tests again
 
 ### Element decoding
 
-- **54 `ElementDecoder` implementations registered in `elements::all_decoders()`** covering: walls + wall types, floors + floor types, roofs + roof types, ceilings + ceiling types, doors, windows, curtain walls + grids + mullions + panels, stairs + stair types, railings + railing types, columns + structural columns, beams + structural framing, structural foundations, rebar, furniture + furniture systems + casework, generic model + mass + family instances, levels, grids + grid types, base / survey / project position, reference planes, materials + fill patterns + line patterns + line styles, categories + subcategories, phases + design options + worksets, symbols, views + sheets + schedules + schedule views, rooms + areas + spaces. Each decoder handles camelCase / snake_case / `m_`-prefixed field-name variants across all 11 releases.
-- `walker::read_adocument` is reliable on Revit 2024–2026 and returns `Ok(None)` on 2016–2023 when the entry-point detector cannot find a high-confidence offset (no wrong answers).
+- **80 `ElementDecoder` implementations registered in `elements::all_decoders()`** covering: walls + wall types, floors + floor types, roofs + roof types, ceilings + ceiling types, doors, windows, curtain walls + grids + mullions + panels, stairs + stair types, railings + railing types, columns + structural columns, beams + structural framing, structural foundations, rebar, furniture + furniture systems + casework, generic model + mass + family instances, levels, grids + grid types, base / survey / project position, reference planes, materials + fill patterns + line patterns + line styles, categories + subcategories, phases + design options + worksets, symbols, views + sheets + schedules + schedule views, rooms + areas + spaces, MEP family instances, annotations, dimensions, tags, text notes, revisions, parameter elements, and more. Each decoder handles camelCase / snake_case / `m_`-prefixed field-name variants across all 11 releases.
+- `walker::read_adocument` is reliable on Revit 2023–2026 projects (validated against real `.rvt` corpus 2026-04-21) and on all 11 releases for `.rfa` family files. Returns `Ok(None)` on 2016–2022 projects when the entry-point detector can't find a high-confidence offset (no wrong answers).
+- `elem_table::parse_records` enumerates the declared `ElementId` set on all three observed file variants — family (12 B implicit records), Revit 2023 projects (28 B explicit with 4-byte `FF` marker), Revit 2024 projects (40 B explicit with 8-byte marker). Gives clean sequential IDs 1..N on 2614 / 26,425 real-project records. See [`docs/elem-table-record-layout-2026-04-21.md`](docs/elem-table-record-layout-2026-04-21.md).
 
 ### IFC4 export
 
@@ -99,10 +100,12 @@ A zero-upload, client-side Revit viewer that runs `rvt-rs` compiled to WebAssemb
 
 ### Tooling
 
-- Eleven CLI binaries: `rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`. Every CLI supports `--redact` for PII-safe output where relevant.
+- Fourteen CLI binaries: `rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `gen-fixture`. Every CLI supports `--redact` for PII-safe output where relevant.
 - Python bindings via pyo3 + maturin — `pip install rvt`. Surface: `RevitFile` class with `version`, `original_path`, `build`, `guid`, `part_atom_title`, `stream_names()`, `read_stream(name)`, `schema_json()`, `basic_file_info_json()`, `part_atom_json()`, `read_adocument()`, `write_ifc()` and a one-shot `rvt.rvt_to_ifc(path)` helper. PEP 561 typed via `__init__.pyi`. CI builds wheels on Ubuntu, macOS, Windows (Python ≥ 3.8, abi3).
 - Stream-level modifying writer (`writer::write_with_patches`) — 13/13 streams byte-preserving round-trip on the 2024 sample; atomic temp-file + rename; pre-flight validation that every patch's stream name exists.
-- 30+ reproducible probes under [`examples/`](examples/), one per documented finding in the recon report.
+- 36+ reproducible probes under [`examples/`](examples/), one per documented finding in the recon report.
+- Four `criterion` benchmark suites under `benches/` — compression, basic_file_info, schema, and project_file (multi-megabyte real-file timings on 913 KB and 34 MB RVTs). See [`docs/benchmarks.md`](docs/benchmarks.md).
+- `dhat` heap-profile examples under `examples/dhat_*.rs` (Q-08).
 - Integration tests against the 11-release corpus (skipped gracefully when LFS samples are absent).
 - CI: Ubuntu / macOS / Windows matrix, 100 % field-type coverage regression gate, Python wheel build + test, `cargo deny check`, `cargo audit`.
 
@@ -139,7 +142,7 @@ Ordered by dependency and by how much each unblocks downstream. Earlier items cl
 5. **Reader-side geometry extraction** — the assembly helpers (GEO-27..34) exist and take caller-supplied dimensions. What's still pending is the *reader* surfacing those dimensions: wall base curve + height, floor boundary polygon, roof pitch, stair run/landing data — all currently require the caller to measure from a Revit UI screenshot or accept the walker's fallback. Unlocks end-to-end "open RVT → accurate 3D model" without human-supplied dimensions.
 6. **Real-world RVT corpus** — the `rac_basic_sample_family` family is a validated baseline but families are a narrower slice of the format than projects. A set of community-donated `.rvt` project files (with redistribution rights) widens what we can assert (task Q-01).
 7. **`IfcRepresentationMap` type instancing** — emit each wall / door / window type once as a shared representation and reference it from every instance, dropping file size dramatically on projects with many repeated types (tasks IFC-21, IFC-22).
-8. **Walker extension to Revit 2016–2023** — `walker::read_adocument` detects the entry-point band across all 11 releases but cleanly decodes all 13 ADocument fields only on 2024–2026. Per-band entry-point heuristics for the older releases (tasks L5B-11, recon report §Q6.5-F).
+8. **Walker extension to Revit 2016–2022 project files** — `walker::read_adocument` is validated on 2023–2026 project files (as of 2026-04-21 corpus probe) and on all 11 releases of family files. The 2016–2022 project band is still open — needs corpus. Tasks L5B-11, recon report §Q6.5-F.
 9. **IFC export validation in CI** — install IfcOpenShell, run `rvt-ifc` on the corpus, assert the output loads and that `by_type("IfcWall")` returns non-empty for files with walls. Regression-fixture RVTs with known element counts (tasks IFC-41..44).
 
 ## Longer horizon
