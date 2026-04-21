@@ -28,8 +28,8 @@ fn parse_header_returns_zero_flag_when_no_header_flag_bytes_present() {
     buf[0] = 0x01; // element_count = 1
     buf[2] = 0x02; // record_count = 2
     // Leave 0x1e and 0x22 as zero.
-    let header =
-        elem_table_parse_header_from_synth(&buf).expect("header parse should succeed on no-flag input");
+    let header = elem_table_parse_header_from_synth(&buf)
+        .expect("header parse should succeed on no-flag input");
     assert_eq!(header.element_count, 1);
     assert_eq!(header.record_count, 2);
     assert_eq!(

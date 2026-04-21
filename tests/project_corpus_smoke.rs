@@ -99,16 +99,16 @@ fn exercise_full_pipeline(path: &PathBuf) -> Result<(), String> {
     let raw = rf
         .read_stream(streams::FORMATS_LATEST)
         .map_err(|e| format!("read Formats/Latest: {e}"))?;
-    let (_, decomp) = compression::inflate_at_auto(&raw)
-        .map_err(|e| format!("inflate Formats/Latest: {e}"))?;
+    let (_, decomp) =
+        compression::inflate_at_auto(&raw).map_err(|e| format!("inflate Formats/Latest: {e}"))?;
     let schema = formats::parse_schema(&decomp).map_err(|e| format!("parse_schema: {e}"))?;
     if schema.classes.is_empty() {
         return Err("parse_schema returned no classes".into());
     }
 
     // ElemTable header + records.
-    let header = elem_table::parse_header(&mut rf)
-        .map_err(|e| format!("elem_table::parse_header: {e}"))?;
+    let header =
+        elem_table::parse_header(&mut rf).map_err(|e| format!("elem_table::parse_header: {e}"))?;
     let records = elem_table::parse_records(&mut rf)
         .map_err(|e| format!("elem_table::parse_records: {e}"))?;
     if records.is_empty() {
@@ -123,8 +123,8 @@ fn exercise_full_pipeline(path: &PathBuf) -> Result<(), String> {
     }
 
     // ADocument walker — lossy so diagnostics accumulate instead of erroring.
-    let doc = walker::read_adocument_lossy(&mut rf)
-        .map_err(|e| format!("read_adocument_lossy: {e}"))?;
+    let doc =
+        walker::read_adocument_lossy(&mut rf).map_err(|e| format!("read_adocument_lossy: {e}"))?;
     if doc.value.fields.is_empty() {
         return Err("read_adocument_lossy returned empty fields".into());
     }

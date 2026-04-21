@@ -78,10 +78,7 @@ fn main() {
             let body = &r.raw[marker_len..];
             for (pos, chunk) in body.chunks_exact(4).enumerate() {
                 let v = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                if pos < latest_relative_u32s_at.len()
-                    && v != 0
-                    && (v as usize) < latest_size
-                {
+                if pos < latest_relative_u32s_at.len() && v != 0 && (v as usize) < latest_size {
                     latest_relative_u32s_at[pos] += 1;
                 }
             }

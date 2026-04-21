@@ -104,7 +104,10 @@ fn run() -> anyhow::Result<()> {
         Some(b) if *b == 0xFF => "Explicit (28 B stride, 4-byte FF marker)",
         _ => "Implicit (12 B stride, no marker)",
     };
-    println!("  layout: {layout_label}  first record offset: 0x{:x}", first.offset);
+    println!(
+        "  layout: {layout_label}  first record offset: 0x{:x}",
+        first.offset
+    );
 
     let take = records.len().min(cli.limit);
     println!("\nFirst {take} records:");
