@@ -6,6 +6,46 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed — 2026-04-21: libFuzzer-caught panics in parsing paths
+
+Nightly Fuzz workflow was failing on a phantom `actions/upload-artifact`
+SHA pin; fixing that unblocked the matrix, which then surfaced three
+real panics in the parser that had been shipping since earlier commits:
+
+- **`compression::gzip_header_len`** panicked with "range start index
+  10 out of range for slice of length 4" on adversarial gzip headers
+  where the FNAME (0x08) or FCOMMENT (0x10) flag was set but the
+  buffer didn't contain the full 10-byte base header. `data[pos..]`
+  in the FNAME/FCOMMENT branches was slicing past the buffer end.
+  Fixed with `data.get(pos..)?` — returns `None` on out-of-bounds
+  instead of panicking. Regression test pins the minimised 4-byte
+  input `[0x1f, 0x8b, 0x08, 0xb9]`.
+
+- **`basic_file_info::extract_path`** panicked with "start byte index
+  N is not a char boundary" when the UTF-16LE-decoded
+  `BasicFileInfo` text contained multi-byte UTF-8 content (BOM markers,
+  Arabic, CJK) immediately before a `":\\"` literal. The fallback
+  branch used `saturating_sub(1)` to back up one byte from the `':'`
+  position, which could land inside a multi-byte character. Fixed
+  with `text.get(s..)?` — returns `None` on a non-boundary index.
+  Regression test pins a UTF-16LE input with BOM + `:\\` at a bad
+  byte offset.
+
+- **`fuzz_step_writer` harness** panicked in its own
+  `ElementTag::Other(String).truncate(32)` path for the same reason —
+  byte-32 can land inside a multi-byte char. Fixed by reusing the
+  file's existing `truncate_string` helper (which walks char
+  boundaries). Pure fuzz-harness fix, not a rvt-core bug.
+
+Also: CI plumbing repair — the nightly Fuzz workflow pinned
+`actions/upload-artifact@834a144...` which doesn't exist as a v4 SHA.
+Repointed to the real v4.6.2 SHA (`ea165f8d...`), added the new
+`fuzz_elem_table` target to the matrix (9 → 10 targets). All 10
+targets now pass the full 5-minute libFuzzer budget on mutation-heavy
+corpora — zero crashes across ~50 M test cases.
+
+Fuzz regression count: 45 → 47. No behaviour change on valid inputs.
+
 ### Added — 2026-04-21: ElemTable project-file record layout
 
 First cross-variant support for `Global/ElemTable`. The pre-probe
