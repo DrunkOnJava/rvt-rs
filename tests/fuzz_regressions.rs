@@ -130,6 +130,21 @@ fn inflate_fhcrc_past_end_does_not_panic() {
 }
 
 #[test]
+fn inflate_fname_short_buffer_before_base_header_does_not_panic() {
+    // libFuzzer 2026-04-21 discovered this 4-byte input that panicked
+    // `gzip_header_len` with "range start index 10 out of range for
+    // slice of length 4". Shape: [gzip magic (2) + CM (1) + FLG (1)]
+    // where FLG has the FNAME bit (0x08) set so the FNAME-scan branch
+    // runs — but the base 10-byte header doesn't fit in the buffer,
+    // so `data[pos..]` at line 79 went out of bounds.
+    //
+    // Fix: bounds-check `pos <= data.len()` via `data.get(pos..)?`
+    // before scanning for the null terminator. Regression guard.
+    let data = [0x1f, 0x8b, 0x08, 0xb9];
+    inflate_and_assert("fname_short_buffer_before_header", &data);
+}
+
+#[test]
 fn inflate_at_offset_past_end_does_not_panic() {
     // Caller passes an offset that's already past the end of the
     // buffer. The fuzz target wouldn't exercise this (libFuzzer
