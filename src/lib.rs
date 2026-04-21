@@ -116,6 +116,7 @@ pub mod part_atom;
 pub mod partitions;
 pub mod reader;
 pub mod redact;
+pub mod round_trip;
 pub mod streams;
 pub mod walker;
 pub mod writer;
