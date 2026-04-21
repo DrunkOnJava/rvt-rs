@@ -574,6 +574,139 @@ pub fn hip_roof_brep(
     (vertices, triangles)
 }
 
+// ---- GEO-32: Stair geometry (runs + landings + risers + treads) ----
+
+/// Pitch (GEO-32) of a straight stair run in radians, derived
+/// from calibrated riser height + tread depth. `atan(rise / run)`.
+/// A zero-depth tread (infinitely steep ladder) returns `PI/2`.
+pub fn stair_pitch_radians(riser_height_feet: f64, tread_depth_feet: f64) -> f64 {
+    if tread_depth_feet <= 0.0 {
+        return std::f64::consts::FRAC_PI_2;
+    }
+    (riser_height_feet / tread_depth_feet).atan()
+}
+
+/// Total run length (GEO-32) of a straight stair, in feet. A
+/// straight stair with N risers has N-1 treads between risers
+/// (the top landing is a separate element), so the horizontal
+/// distance covered is `(riser_count - 1) * tread_depth`.
+///
+/// Callers that model a tread at the top of the run as part of
+/// the stair flight should pass `riser_count` unchanged and add
+/// `tread_depth` to the result.
+pub fn stair_run_length_feet(riser_count: u32, tread_depth_feet: f64) -> f64 {
+    if riser_count == 0 {
+        return 0.0;
+    }
+    (riser_count - 1) as f64 * tread_depth_feet.max(0.0)
+}
+
+/// Build the sawtooth profile (GEO-32) of a straight stair flight
+/// as a closed 2D polygon, suitable for
+/// [`Extrusion::arbitrary_closed`]. Extruded along the stair
+/// width, this yields an `IfcExtrudedAreaSolid` shaped like the
+/// classic cross-section every real stair has.
+///
+/// The profile is traced from the bottom-back corner `(0, 0)`
+/// upward along the back "stringer" line, stepping over each
+/// tread/riser pair, then down the slope to the starting point.
+///
+/// `riser_count == 0` returns an empty vec (caller should handle
+/// the degenerate case — typically by falling back to a plain
+/// rectangular extrusion of a landing).
+pub fn stair_sawtooth_profile(
+    riser_count: u32,
+    riser_height_feet: f64,
+    tread_depth_feet: f64,
+) -> Vec<(f64, f64)> {
+    if riser_count == 0 {
+        return Vec::new();
+    }
+    let rc = riser_count as f64;
+    let total_rise = rc * riser_height_feet;
+    let total_run = stair_run_length_feet(riser_count, tread_depth_feet);
+    let mut pts: Vec<(f64, f64)> = Vec::with_capacity(2 * riser_count as usize + 3);
+
+    // Back stringer: vertical from (0, 0) up to (0, total_rise).
+    pts.push((0.0, 0.0));
+    pts.push((0.0, total_rise));
+    // Top-nose of the last tread.
+    pts.push((tread_depth_feet, total_rise));
+    // Walk down the flight: alternating riser-down then tread-forward.
+    for i in (0..riser_count).rev() {
+        // Riser down from current height to the next tread.
+        let x = (riser_count - 1 - i) as f64 * tread_depth_feet + tread_depth_feet;
+        let y = i as f64 * riser_height_feet;
+        pts.push((x, y));
+        // Tread nose at this height (move forward by one tread).
+        let x_next = x + tread_depth_feet;
+        pts.push((x_next, y));
+    }
+    // Final run back to origin: the last pushed point is at the
+    // front edge of the bottom tread (x = total_run + tread_depth,
+    // y = 0). Close by dropping to (0, 0) via the floor line.
+    let _ = total_run; // silence unused-variable when tread_depth == 0
+    pts
+}
+
+/// Build an `Extrusion` for a straight stair flight (GEO-32) using
+/// the sawtooth profile, extruded perpendicular to the run by
+/// `width_feet`.
+///
+/// Falls back to a plain rectangular extrusion (run_length × 1 ft
+/// slab) when the sawtooth would be degenerate (zero risers or
+/// negative dimensions) so STEP emission always succeeds.
+pub fn stair_run_extrusion(stair: &Stair, width_feet: f64) -> Extrusion {
+    let riser_count = stair.actual_riser_count.unwrap_or(0);
+    let riser_h = stair.actual_riser_height_feet.unwrap_or(0.0);
+    let tread_d = stair.actual_tread_depth_feet.unwrap_or(0.0);
+    let w = width_feet.max(0.0);
+    if riser_count == 0 || riser_h <= 0.0 || tread_d <= 0.0 || w <= 0.0 {
+        return Extrusion {
+            width_feet: stair_run_length_feet(riser_count, tread_d).max(1.0),
+            depth_feet: w.max(1.0),
+            height_feet: 1.0,
+            profile_override: None,
+        };
+    }
+    let pts = stair_sawtooth_profile(riser_count, riser_h, tread_d);
+    Extrusion::arbitrary_closed(pts, w)
+}
+
+/// Build a rectangular `Extrusion` for a single stair **tread**
+/// board (GEO-32). Treads are modelled as thin slabs of
+/// `tread_depth × width × thickness` — callers emitting stairs
+/// as an IfcStair + child IfcStairFlight + per-tread IfcMember
+/// use this to shape each member.
+pub fn stair_tread_extrusion(
+    tread_depth_feet: f64,
+    width_feet: f64,
+    thickness_feet: f64,
+) -> Extrusion {
+    Extrusion {
+        width_feet: tread_depth_feet.max(0.0),
+        depth_feet: width_feet.max(0.0),
+        height_feet: thickness_feet.max(0.0),
+        profile_override: None,
+    }
+}
+
+/// Build a rectangular `Extrusion` for a stair **landing**
+/// (GEO-32). Semantically an IfcSlab with PredefinedType LANDING
+/// in IFC4; shape-wise identical to any rectangular slab.
+pub fn stair_landing_extrusion(
+    length_feet: f64,
+    width_feet: f64,
+    thickness_feet: f64,
+) -> Extrusion {
+    Extrusion {
+        width_feet: length_feet.max(0.0),
+        depth_feet: width_feet.max(0.0),
+        height_feet: thickness_feet.max(0.0),
+        profile_override: None,
+    }
+}
+
 // ---- GEO-31 / GEO-30: Window + Door geometry and opening voids ----
 
 /// Small margin (GEO-31) added to an opening's width + height above
@@ -1807,5 +1940,104 @@ mod tests {
         assert!(names.contains(&"OverallWidth"));
         assert!(names.contains(&"OverallHeight"));
         assert!(names.contains(&"Depth"));
+    }
+
+    // ---- GEO-32: Stair geometry ----
+
+    #[test]
+    fn stair_pitch_standard_7_11_is_about_32_degrees() {
+        // 7" riser (0.5833 ft) over 11" tread (0.9167 ft) — common
+        // US code-compliant stair. Pitch ≈ 32.47°.
+        let rad = stair_pitch_radians(7.0 / 12.0, 11.0 / 12.0);
+        assert!(
+            (rad.to_degrees() - 32.47).abs() < 0.1,
+            "7/11 pitch should be ~32.47°, got {}",
+            rad.to_degrees()
+        );
+    }
+
+    #[test]
+    fn stair_pitch_zero_tread_is_90_degrees() {
+        assert!((stair_pitch_radians(1.0, 0.0) - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn stair_run_length_is_n_minus_one_treads() {
+        // 16 risers × 1 ft tread = 15 ft of horizontal run.
+        assert!((stair_run_length_feet(16, 1.0) - 15.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn stair_run_length_zero_riser_is_zero() {
+        assert_eq!(stair_run_length_feet(0, 1.0), 0.0);
+    }
+
+    #[test]
+    fn stair_sawtooth_has_right_vertex_count() {
+        // 3-riser stair → expect back stringer (2) + top nose (1)
+        // + (riser-down + tread-nose) × 3 = 2 + 1 + 6 = 9 vertices.
+        let pts = stair_sawtooth_profile(3, 0.5, 1.0);
+        assert_eq!(pts.len(), 9);
+    }
+
+    #[test]
+    fn stair_sawtooth_starts_at_origin_and_rises_to_top() {
+        let pts = stair_sawtooth_profile(3, 0.5, 1.0);
+        // First vertex sits at the origin of the flight.
+        assert_eq!(pts[0], (0.0, 0.0));
+        // Second vertex is the top of the back stringer — full rise.
+        assert_eq!(pts[1], (0.0, 1.5)); // 3 × 0.5
+    }
+
+    #[test]
+    fn stair_sawtooth_empty_for_zero_risers() {
+        assert!(stair_sawtooth_profile(0, 0.5, 1.0).is_empty());
+    }
+
+    #[test]
+    fn stair_run_extrusion_uses_arbitrary_closed_profile() {
+        use crate::elements::circulation::Stair;
+        let stair = Stair {
+            actual_riser_count: Some(10),
+            actual_riser_height_feet: Some(0.5833),
+            actual_tread_depth_feet: Some(0.9167),
+            ..Default::default()
+        };
+        let ex = stair_run_extrusion(&stair, 4.0);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::ArbitraryClosed { points }) => {
+                assert!(points.len() >= 2 + 1 + 2 * 10);
+            }
+            other => panic!("expected sawtooth profile, got {:?}", other),
+        }
+        assert!((ex.height_feet - 4.0).abs() < 1e-9); // extrusion length = stair width
+    }
+
+    #[test]
+    fn stair_run_extrusion_falls_back_for_missing_dimensions() {
+        use crate::elements::circulation::Stair;
+        let stair = Stair::default();
+        let ex = stair_run_extrusion(&stair, 4.0);
+        assert!(ex.profile_override.is_none());
+        // Width/depth/height all default to >= 1 ft so STEP is valid.
+        assert!(ex.width_feet >= 1.0);
+        assert!(ex.depth_feet >= 1.0);
+        assert!(ex.height_feet >= 1.0);
+    }
+
+    #[test]
+    fn stair_tread_extrusion_matches_dimensions() {
+        let ex = stair_tread_extrusion(1.0, 4.0, 0.1);
+        assert!((ex.width_feet - 1.0).abs() < 1e-9);
+        assert!((ex.depth_feet - 4.0).abs() < 1e-9);
+        assert!((ex.height_feet - 0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn stair_landing_extrusion_matches_dimensions() {
+        let ex = stair_landing_extrusion(5.0, 4.0, 0.5);
+        assert!((ex.width_feet - 5.0).abs() < 1e-9);
+        assert!((ex.depth_feet - 4.0).abs() < 1e-9);
+        assert!((ex.height_feet - 0.5).abs() < 1e-9);
     }
 }
