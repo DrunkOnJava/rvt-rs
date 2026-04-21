@@ -304,6 +304,74 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
     }
 }
 
+/// Encode an `ADocument`-level field (WRT-02). Mirrors
+/// [`read_field`] — handles `Pointer`, `ElementId` / `ElementIdRef`
+/// (8-byte `tag,id` layout), and `Container { kind: 0x0e, .. }`
+/// (2-column layout via [`encode_ref_container`]). All other
+/// field types route through [`write_field_by_type`], which covers
+/// the general wire shape.
+///
+/// Use this when encoding ADocument instance bytes back into
+/// Global/Latest, because the ADocument reader uses `read_field`
+/// rather than the generic `read_field_by_type`.
+pub fn write_adocument_field(value: &InstanceField, ft: &formats::FieldType, out: &mut Vec<u8>) {
+    match (ft, value) {
+        (formats::FieldType::Pointer { .. }, InstanceField::Pointer { raw }) => {
+            out.extend_from_slice(&raw[0].to_le_bytes());
+            out.extend_from_slice(&raw[1].to_le_bytes());
+        }
+        (
+            formats::FieldType::ElementId | formats::FieldType::ElementIdRef { .. },
+            InstanceField::ElementId { tag, id },
+        ) => {
+            out.extend_from_slice(&tag.to_le_bytes());
+            out.extend_from_slice(&id.to_le_bytes());
+        }
+        (
+            formats::FieldType::Container { kind: 0x0e, .. },
+            InstanceField::RefContainer { col_a, col_b },
+        ) => {
+            out.extend_from_slice(&encode_ref_container(col_a, col_b));
+        }
+        // Any Bytes fallback is emitted verbatim regardless of ft.
+        (_, InstanceField::Bytes(raw)) => {
+            out.extend_from_slice(raw);
+        }
+        // Everything else delegates to the generic writer.
+        _ => write_field_by_type(value, ft, out),
+    }
+}
+
+/// Serialise an ADocument instance back to its wire bytes (WRT-02).
+/// Inverse of the read_adocument decode path.
+///
+/// Walks `adoc.fields` in schema order (not decoded order, so the
+/// caller's decoded `InstanceField` list is paired by index with
+/// `schema.fields`) and uses [`write_adocument_field`] per field.
+///
+/// Callers producing a new Global/Latest payload append the result
+/// to the decoded prefix bytes (everything before `entry_offset`),
+/// then re-encode with `truncated_gzip_encode_with_prefix8` and
+/// pass through `write_with_patches` as a `CustomPrefix8` stream
+/// patch.
+pub fn encode_adocument_fields(
+    schema: &formats::ClassEntry,
+    fields: &[(String, InstanceField)],
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    for (idx, schema_field) in schema.fields.iter().enumerate() {
+        let Some((_, value)) = fields.get(idx) else {
+            break;
+        };
+        if let Some(ft) = schema_field.field_type.as_ref() {
+            write_adocument_field(value, ft, &mut out);
+        } else if let InstanceField::Bytes(raw) = value {
+            out.extend_from_slice(raw);
+        }
+    }
+    out
+}
+
 /// Encode a 2-column reference container (WRT-09) — the inverse of
 /// [`read_field`]'s `Container { kind: 0x0e, .. }` path. The on-
 /// disk layout for this field shape is:
@@ -2278,6 +2346,196 @@ mod tests {
             }
             other => panic!("expected RefContainer, got {:?}", other),
         }
+    }
+
+    // ---- WRT-02: ADocument writer round-trip ----
+
+    #[test]
+    fn write_adocument_field_pointer_round_trips() {
+        let ft = formats::FieldType::Pointer { kind: 0x01 };
+        let value = InstanceField::Pointer {
+            raw: [0xDEADBEEF, 0x1337],
+        };
+        let mut out = Vec::new();
+        write_adocument_field(&value, &ft, &mut out);
+        assert_eq!(out.len(), 8);
+        let (consumed, decoded) = read_field(&ft, &out, WalkerLimits::default()).expect("read ok");
+        assert_eq!(consumed, 8);
+        match decoded {
+            InstanceField::Pointer { raw } => {
+                assert_eq!(raw, [0xDEADBEEF, 0x1337]);
+            }
+            other => panic!("expected Pointer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_adocument_field_element_id_round_trips() {
+        let ft = formats::FieldType::ElementId;
+        let value = InstanceField::ElementId {
+            tag: 0x14,
+            id: 0x42,
+        };
+        let mut out = Vec::new();
+        write_adocument_field(&value, &ft, &mut out);
+        let (_, decoded) = read_field(&ft, &out, WalkerLimits::default()).unwrap();
+        match decoded {
+            InstanceField::ElementId { tag, id } => {
+                assert_eq!(tag, 0x14);
+                assert_eq!(id, 0x42);
+            }
+            other => panic!("expected ElementId, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_adocument_field_container_round_trips_two_columns() {
+        let ft = formats::FieldType::Container {
+            kind: 0x0e,
+            cpp_signature: None,
+            body: Vec::new(),
+        };
+        let value = InstanceField::RefContainer {
+            col_a: vec![0x10, 0x20, 0x30],
+            col_b: vec![0x01, 0x02, 0x03],
+        };
+        let mut out = Vec::new();
+        write_adocument_field(&value, &ft, &mut out);
+        let (_, decoded) = read_field(&ft, &out, WalkerLimits::default()).unwrap();
+        match decoded {
+            InstanceField::RefContainer { col_a, col_b } => {
+                assert_eq!(col_a, vec![0x10, 0x20, 0x30]);
+                assert_eq!(col_b, vec![0x01, 0x02, 0x03]);
+            }
+            other => panic!("expected RefContainer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_adocument_field_bytes_passes_through_verbatim() {
+        let ft = formats::FieldType::Unknown { bytes: Vec::new() };
+        let value = InstanceField::Bytes(vec![0xAA, 0xBB, 0xCC, 0xDD]);
+        let mut out = Vec::new();
+        write_adocument_field(&value, &ft, &mut out);
+        assert_eq!(out, vec![0xAA, 0xBB, 0xCC, 0xDD]);
+    }
+
+    #[test]
+    fn encode_adocument_fields_walks_schema_order() {
+        // Schema with: pointer, container, primitive u32.
+        let schema = formats::ClassEntry {
+            name: "ADocument".into(),
+            offset: 0,
+            fields: vec![
+                formats::FieldEntry {
+                    name: "m_ptr".into(),
+                    cpp_type: None,
+                    field_type: Some(formats::FieldType::Pointer { kind: 1 }),
+                },
+                formats::FieldEntry {
+                    name: "m_elem_table".into(),
+                    cpp_type: None,
+                    field_type: Some(formats::FieldType::Container {
+                        kind: 0x0e,
+                        cpp_signature: None,
+                        body: Vec::new(),
+                    }),
+                },
+                formats::FieldEntry {
+                    name: "m_version".into(),
+                    cpp_type: None,
+                    field_type: Some(formats::FieldType::Primitive {
+                        kind: 0x05,
+                        size: 4,
+                    }),
+                },
+            ],
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        };
+        let fields = vec![
+            ("m_ptr".into(), InstanceField::Pointer { raw: [0x11, 0x22] }),
+            (
+                "m_elem_table".into(),
+                InstanceField::RefContainer {
+                    col_a: vec![0x1, 0x2],
+                    col_b: vec![0x3, 0x4],
+                },
+            ),
+            (
+                "m_version".into(),
+                InstanceField::Integer {
+                    value: 2024,
+                    signed: false,
+                    size: 4,
+                },
+            ),
+        ];
+        let bytes = encode_adocument_fields(&schema, &fields);
+        // 8 (pointer) + 32 (2-col container, 2×(4+2×6)) + 4 (u32) = 44 bytes.
+        assert_eq!(bytes.len(), 44);
+
+        // Round-trip: read each field back through the ADocument path.
+        let mut cursor = 0;
+        let (n1, v1) = read_field(
+            schema.fields[0].field_type.as_ref().unwrap(),
+            &bytes[cursor..],
+            WalkerLimits::default(),
+        )
+        .unwrap();
+        cursor += n1;
+        let (n2, v2) = read_field(
+            schema.fields[1].field_type.as_ref().unwrap(),
+            &bytes[cursor..],
+            WalkerLimits::default(),
+        )
+        .unwrap();
+        cursor += n2;
+        // Primitive u32 uses read_field_by_type, not read_field.
+        let mut pcur = 0usize;
+        let v3 = read_field_by_type(
+            &bytes[cursor..],
+            &mut pcur,
+            schema.fields[2].field_type.as_ref().unwrap(),
+        );
+
+        assert!(matches!(v1, InstanceField::Pointer { raw } if raw == [0x11, 0x22]));
+        assert!(matches!(v2, InstanceField::RefContainer { col_a, col_b }
+                if col_a == vec![0x1, 0x2] && col_b == vec![0x3, 0x4]));
+        assert!(matches!(v3, InstanceField::Integer { value, .. } if value == 2024));
+    }
+
+    #[test]
+    fn encode_adocument_fields_tolerates_missing_decoded_field() {
+        // Schema declares 2 fields, decoded only has 1 — writer stops
+        // at the shorter one (consistent with encode_instance).
+        let schema = formats::ClassEntry {
+            name: "ADocument".into(),
+            offset: 0,
+            fields: vec![
+                formats::FieldEntry {
+                    name: "a".into(),
+                    cpp_type: None,
+                    field_type: Some(formats::FieldType::Pointer { kind: 1 }),
+                },
+                formats::FieldEntry {
+                    name: "b".into(),
+                    cpp_type: None,
+                    field_type: Some(formats::FieldType::ElementId),
+                },
+            ],
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        };
+        let fields = vec![("a".into(), InstanceField::Pointer { raw: [1, 2] })];
+        let bytes = encode_adocument_fields(&schema, &fields);
+        assert_eq!(bytes.len(), 8); // just the pointer
     }
 
     #[test]
