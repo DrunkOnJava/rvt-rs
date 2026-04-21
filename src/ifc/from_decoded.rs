@@ -173,6 +173,101 @@ pub fn wall_extrusion(
     }
 }
 
+/// Length in feet of a straight 2D location-curve segment (GEO-27).
+///
+/// Revit walls store their geometry as a 2D location line — two
+/// points in the project XY plane. The wall body is the rectangle
+/// swept from this line, with thickness perpendicular to the line
+/// direction and height along +Z.
+///
+/// This helper computes the length of a straight segment between
+/// two endpoints. Callers with multi-segment polylines should call
+/// it once per segment and build a [`wall_extrusion`] for each, or
+/// use [`wall_extrusion_from_location_line`] for the single-segment
+/// common case.
+pub fn wall_segment_length_feet(start: [f64; 2], end: [f64; 2]) -> f64 {
+    let dx = end[0] - start[0];
+    let dy = end[1] - start[1];
+    (dx * dx + dy * dy).sqrt()
+}
+
+/// Planar rotation (about +Z, radians) of a straight location-line
+/// segment (GEO-27). Zero when the line runs along +X; π/2 for +Y;
+/// -π/2 for -Y; etc.
+///
+/// Used alongside [`wall_segment_length_feet`] to compute the
+/// IfcWall's `rotation_radians` so the extrusion profile faces
+/// the correct direction. Callers threading multi-segment walls
+/// call this per segment.
+pub fn wall_segment_angle_radians(start: [f64; 2], end: [f64; 2]) -> f64 {
+    let dx = end[0] - start[0];
+    let dy = end[1] - start[1];
+    dy.atan2(dx)
+}
+
+/// Build a rectangular `Extrusion` from a decoded [`Wall`] + its
+/// 2D location-line endpoints (GEO-27).
+///
+/// Equivalent to calling [`wall_extrusion`] with the computed
+/// segment length, but expresses the caller's intent directly:
+/// "this wall goes from `start` to `end` in the project XY plane."
+///
+/// - Profile width = segment length (Euclidean distance between
+///   endpoints in feet).
+/// - Profile depth = `wall_type.width_feet` (thickness), falling
+///   back to 8 inches.
+/// - Extrusion height = `wall.unconnected_height_feet` or 10 ft.
+///
+/// Companion [`wall_segment_angle_radians`] gives the rotation to
+/// thread into `ElementInput.rotation_radians` so the profile
+/// faces the right way.
+pub fn wall_extrusion_from_location_line(
+    wall: &Wall,
+    wall_type: Option<&crate::elements::wall::WallType>,
+    start: [f64; 2],
+    end: [f64; 2],
+) -> Extrusion {
+    wall_extrusion(wall, wall_type, wall_segment_length_feet(start, end))
+}
+
+/// Decompose a compound wall into its per-layer extrusions (GEO-27).
+///
+/// A real Revit wall carries a layer set (gypsum / insulation /
+/// sheathing / brick). Each layer has its own thickness but the
+/// whole stack shares the wall's length and height. This helper
+/// takes the location line + the layer thicknesses (in outermost-
+/// to-innermost order) and returns one [`Extrusion`] per layer,
+/// each offset inward along the thickness axis by the cumulative
+/// sum of previous layers.
+///
+/// The returned vec preserves layer order. Callers can emit each
+/// layer as its own `BuildingElement` (IFC4's
+/// `IfcRelAggregates(MultiLayerWall, [Layer1, Layer2, …])` pattern)
+/// or combine them into a single extrusion with the total thickness
+/// and attach the full layer set via
+/// [`BuildingElement::material_layer_set_index`] (IFC-28).
+///
+/// Empty or zero-thickness layer lists return an empty vec.
+pub fn wall_layered_extrusions_from_location_line(
+    wall: &Wall,
+    start: [f64; 2],
+    end: [f64; 2],
+    layer_thicknesses_feet: &[f64],
+) -> Vec<Extrusion> {
+    let length = wall_segment_length_feet(start, end);
+    let height = wall.unconnected_height_feet.unwrap_or(10.0);
+    layer_thicknesses_feet
+        .iter()
+        .filter(|t| **t > 0.0)
+        .map(|thickness| Extrusion {
+            width_feet: length,
+            depth_feet: *thickness,
+            height_feet: height,
+            profile_override: None,
+        })
+        .collect()
+}
+
 /// Build a rectangular `Extrusion` for a slab from its plan
 /// dimensions and a thickness from the
 /// [`crate::elements::floor::FloorType`].
@@ -844,5 +939,95 @@ mod tests {
             step.matches("IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(),
             1
         );
+    }
+
+    // ----- GEO-27: wall geometry from location curve + layers -----
+
+    #[test]
+    fn wall_segment_length_cardinal_directions() {
+        // +X run: length equals |dx|.
+        assert!((wall_segment_length_feet([0.0, 0.0], [10.0, 0.0]) - 10.0).abs() < 1e-9);
+        // +Y run: length equals |dy|.
+        assert!((wall_segment_length_feet([0.0, 0.0], [0.0, 7.5]) - 7.5).abs() < 1e-9);
+        // Diagonal 3-4-5 triangle.
+        assert!((wall_segment_length_feet([0.0, 0.0], [3.0, 4.0]) - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wall_segment_length_reverse_direction_matches() {
+        // Length is direction-independent.
+        let fwd = wall_segment_length_feet([0.0, 0.0], [3.0, 4.0]);
+        let rev = wall_segment_length_feet([3.0, 4.0], [0.0, 0.0]);
+        assert!((fwd - rev).abs() < 1e-12);
+    }
+
+    #[test]
+    fn wall_segment_angle_cardinal_directions() {
+        use std::f64::consts::{FRAC_PI_2, PI};
+        // +X → 0 rad.
+        assert!(wall_segment_angle_radians([0.0, 0.0], [1.0, 0.0]).abs() < 1e-9);
+        // +Y → π/2.
+        assert!((wall_segment_angle_radians([0.0, 0.0], [0.0, 1.0]) - FRAC_PI_2).abs() < 1e-9);
+        // -X → π.
+        assert!((wall_segment_angle_radians([0.0, 0.0], [-1.0, 0.0]).abs() - PI).abs() < 1e-9);
+        // -Y → -π/2.
+        assert!((wall_segment_angle_radians([0.0, 0.0], [0.0, -1.0]) + FRAC_PI_2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wall_extrusion_from_location_line_computes_length() {
+        use crate::elements::wall::{Wall, WallType};
+        let wall = Wall {
+            unconnected_height_feet: Some(10.0),
+            ..Default::default()
+        };
+        let wall_type = WallType {
+            width_feet: Some(8.0 / 12.0),
+            ..Default::default()
+        };
+        let ex =
+            wall_extrusion_from_location_line(&wall, Some(&wall_type), [0.0, 0.0], [20.0, 0.0]);
+        assert!((ex.width_feet - 20.0).abs() < 1e-9);
+        assert!((ex.depth_feet - 8.0 / 12.0).abs() < 1e-9);
+        assert!((ex.height_feet - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wall_layered_extrusions_preserves_order_and_thickness() {
+        use crate::elements::wall::Wall;
+        let wall = Wall {
+            unconnected_height_feet: Some(9.0),
+            ..Default::default()
+        };
+        let layers = [0.25, 0.5, 0.125]; // 3 inches / 6 inches / 1.5 inches
+        let out =
+            wall_layered_extrusions_from_location_line(&wall, [0.0, 0.0], [10.0, 0.0], &layers);
+        assert_eq!(out.len(), 3);
+        for (idx, ex) in out.iter().enumerate() {
+            assert!((ex.width_feet - 10.0).abs() < 1e-9);
+            assert!((ex.depth_feet - layers[idx]).abs() < 1e-9);
+            assert!((ex.height_feet - 9.0).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn wall_layered_extrusions_skips_zero_thickness_layers() {
+        use crate::elements::wall::Wall;
+        let wall = Wall::default();
+        let layers = [0.25, 0.0, 0.125, -1.0]; // includes invalid values
+        let out =
+            wall_layered_extrusions_from_location_line(&wall, [0.0, 0.0], [1.0, 0.0], &layers);
+        // Zero and negative thicknesses are dropped.
+        assert_eq!(out.len(), 2);
+        assert!((out[0].depth_feet - 0.25).abs() < 1e-9);
+        assert!((out[1].depth_feet - 0.125).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wall_layered_extrusions_empty_input_returns_empty() {
+        use crate::elements::wall::Wall;
+        let wall = Wall::default();
+        let out = wall_layered_extrusions_from_location_line(&wall, [0.0, 0.0], [5.0, 0.0], &[]);
+        assert!(out.is_empty());
     }
 }
