@@ -6,7 +6,63 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added — 2026-04-21: ElemTable project-file record layout
+
+First cross-variant support for `Global/ElemTable`. The pre-probe
+parser assumed family-file 12 B implicit records and returned
+zero-to-two records on real `.rvt` project files. After hex-dump
+reverse engineering ([`docs/elem-table-record-layout-2026-04-21.md`](docs/elem-table-record-layout-2026-04-21.md)):
+
+- **`elem_table::detect_layout(&[u8]) -> ElemTableLayout`** — finds the
+  first two FF markers in the stream and takes their stride. Falls
+  back to Implicit 12 B from `0x30` when no markers are present
+  (family files).
+- **`elem_table::parse_records(&mut RevitFile) -> Vec<ElemRecord>`** —
+  returns every declared record on all three observed variants.
+  Before/after on the 3-file corpus:
+
+  | Variant | Before | After |
+  | --- | --- | --- |
+  | Family 2024 (`.rfa`) | 45 | 1975 |
+  | Project 2023 (`.rvt`, 913 KB) | 2 | 2614 |
+  | Project 2024 (`.rvt`, 34 MB) | 2 | 26,425 |
+
+- **`elem_table::declared_element_ids`** — sorted deduped ID set for
+  walker coverage validation.
+- **`parse_records_from_bytes`** — public for fuzz targets and
+  synthetic-input unit tests.
+- **`rvt-elem-table` CLI** — 14th shipped binary; dumps header +
+  records for any `.rvt`/`.rfa` with JSON and raw-hex modes.
+- **Python bindings**: `RevitFile.elem_table_header()`,
+  `elem_table_records()`, `declared_element_ids()` with full type
+  stubs in `__init__.pyi`.
+- **Criterion bench `project_file`** (Q-07) — 913 KB / 34 MB timings
+  against real corpus. `summarize_strict` ≈ 8 ms on the 34 MB file.
+- **Fuzz target `fuzz_elem_table`** + 7 regression tests locking the
+  3 observed layouts and edge cases (all-zeros, single marker,
+  consecutive markers, markers at stream end).
+- **Full-pipeline smoke test** (`tests/project_corpus_smoke.rs`) —
+  corpus-driven sweep asserting open/summarize/schema/elem-table/
+  walker/IFC all succeed on every `.rvt` under `RVT_PROJECT_CORPUS_DIR`.
+
+Known gap: per-record payload (16/28 B) does NOT encode a byte
+offset into `Global/Latest` (confirmed across 29,039 records — see
+[`docs/global-latest-framing-probe-2026-04-21.md`](docs/global-latest-framing-probe-2026-04-21.md)).
+Walker → IFC element emission still needs a schema-directed scan of
+`Global/Latest` itself.
+
 ### Security
+
+- **vite bumped 5.4 → 8.0.9** — resolves Dependabot advisories
+  [GHSA-4w7w-66w2-5vf9](https://github.com/advisories/GHSA-4w7w-66w2-5vf9)
+  (CVE-2026-39365, path traversal in optimized-deps `.map` handling)
+  and [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99)
+  (transitive esbuild permissive dev-server CORS). Both are dev-server
+  issues — they don't ship in the production viewer bundle — but the
+  viewer's GitHub Pages build uses `vite build` in CI so keeping the
+  toolchain current is the sane default. `npm run typecheck` and
+  `npm run build` both clean under the new version; TypeScript is
+  unchanged.
 
 - **pyo3 bumped 0.22 → 0.24** — resolves Dependabot advisory
   [GHSA-pph8-gcv7-4qj5](https://github.com/advisories/GHSA-pph8-gcv7-4qj5)
