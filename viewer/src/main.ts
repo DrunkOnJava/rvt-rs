@@ -138,10 +138,30 @@ async function loadBytes(file: File): Promise<void> {
   w.addEventListener('message', (ev: MessageEvent<unknown>) => {
     const msg = ev.data as
       | { type: 'progress'; step: string }
+      | {
+          type: 'summary';
+          summary: { version: number; build?: string; guid?: string; class_name_count?: number };
+        }
       | { type: 'ready'; model: IfcModel; scene: SceneNode; types: string[]; glb: Uint8Array; schedule: unknown }
       | { type: 'error'; message: string };
     if (msg.type === 'progress') {
       setStatus(msg.step);
+      return;
+    }
+    if (msg.type === 'summary') {
+      // VW1-20 — show the fast metadata the moment the worker has
+      // cracked BasicFileInfo, before the full parse finishes.
+      const bits = [
+        `${file.name}`,
+        formatBytes(file.size),
+        `Revit ${msg.summary.version}`,
+      ];
+      if (msg.summary.build) bits.push(msg.summary.build);
+      if (msg.summary.class_name_count !== undefined) {
+        bits.push(`${msg.summary.class_name_count} classes`);
+      }
+      fileMetaEl.textContent = bits.join(' · ');
+      dropzone.classList.add('hidden');
       return;
     }
     if (msg.type === 'error') {

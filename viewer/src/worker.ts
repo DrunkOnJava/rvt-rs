@@ -16,6 +16,7 @@ import init, {
   modelToGlb,
   distinctIfcTypes,
   buildSchedule,
+  quickSummary,
 } from '../pkg/rvt.js';
 
 type ParseMsg = { type: 'parse'; bytes: Uint8Array };
@@ -30,6 +31,20 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
       step: 'initializing wasm',
     });
     await init();
+
+    // VW1-20 — progressive streaming. Emit the cheap metadata
+    // first (sub-second even on hundreds-of-MB files) so the UI
+    // can populate the top bar / storey list / version while the
+    // expensive full-model parse continues.
+    (self as unknown as { postMessage: (m: unknown) => void }).postMessage({
+      type: 'progress',
+      step: 'reading file metadata',
+    });
+    const summary = quickSummary(msg.bytes);
+    (self as unknown as { postMessage: (m: unknown) => void }).postMessage({
+      type: 'summary',
+      summary,
+    });
 
     (self as unknown as { postMessage: (m: unknown) => void }).postMessage({
       type: 'progress',
