@@ -32,11 +32,11 @@ PyPI release workflow (issue #89) publishes wheels on tag.
 pip install maturin
 git clone https://github.com/DrunkOnJava/rvt-rs
 cd rvt-rs
-maturin build --release --features python
+maturin build --release --manifest-path rvt-py/Cargo.toml
 pip install target/wheels/rvt-*.whl
 ```
 
-For day-to-day development, `maturin develop --features python`
+For day-to-day development, `maturin develop --manifest-path rvt-py/Cargo.toml`
 installs the extension in editable mode into the active virtualenv.
 
 ## Quick start
@@ -420,7 +420,7 @@ on exotic layouts. File an issue with the Revit release year and
 
 ### Wheel won't build from source
 
-`maturin build --features python` needs:
+`maturin build --manifest-path rvt-py/Cargo.toml` needs:
 
 - Rust ≥ 1.85
 - Python development headers (`python3-dev` on Linux, Xcode

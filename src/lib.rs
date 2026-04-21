@@ -86,18 +86,20 @@
 //! advice.
 
 #![warn(rust_2024_compatibility)]
-// SEC-11: forbid `unsafe` in the library crate. Revit files come
-// from untrusted sources, so any raw-pointer or uninit-memory
-// manoeuvre is a potential parser vulnerability. `forbid` is one
-// step stronger than `deny` — it cannot be locally overridden with
-// `#[allow(unsafe_code)]`, so nobody can sneak an `unsafe` block
-// through review. The optional pyo3 bindings in `src/python.rs` are
-// the one legitimate place where `unsafe fn` can appear (pyo3's
-// `#[pyclass]` macros expand to `unsafe impl`), so that module is
-// compiled under the `python` feature and opts out locally via its
-// own `#![allow(unsafe_op_in_unsafe_fn)]` header. Nothing in the
-// core library itself is permitted to invoke `unsafe`.
-#![cfg_attr(not(feature = "python"), forbid(unsafe_code))]
+// SEC-11 + SEC-12 + SEC-13: forbid `unsafe` in the core library.
+// Revit files come from untrusted sources, so any raw-pointer or
+// uninit-memory manoeuvre is a potential parser vulnerability.
+// `forbid` is one step stronger than `deny` — it cannot be locally
+// overridden with `#[allow(unsafe_code)]`, so nobody can sneak an
+// `unsafe` block through review.
+//
+// The pyo3 Python bindings are the one legitimate place where
+// `unsafe fn` / `unsafe impl` appear (pyo3's `#[pyclass]` macros
+// expand into them). SEC-12 moved those bindings to the separate
+// `rvt-py` workspace member crate, which has its own `unsafe_code`
+// allowance. This root crate is unconditionally `forbid`-ed —
+// there is no feature flag or cfg that can turn this off.
+#![forbid(unsafe_code)]
 
 pub mod basic_file_info;
 pub mod class_index;
@@ -121,16 +123,20 @@ pub mod streams;
 pub mod walker;
 pub mod writer;
 
-// Python bindings via pyo3. Only compiled when the `python` feature
-// is enabled (typically via `maturin build --features python`).
-// Default Rust builds are unaffected.
-#[cfg(feature = "python")]
-mod python;
+// Python bindings live in their own workspace member crate
+// (`rvt-py/`) as of SEC-12 / SEC-13, so pyo3's unavoidable
+// `unsafe impl` / `unsafe fn` macro-expansions don't require
+// this crate to relax its unconditional `#![forbid(unsafe_code)]`.
+// The wheel on PyPI is still called `rvt`; build it with
+// `maturin build --manifest-path rvt-py/Cargo.toml`.
 
 // WASM bindings (VW1-01). Only compiled when the `wasm` feature is
 // enabled (typically via
 // `wasm-pack build --target web --features wasm --no-default-features`).
 // Default Rust builds and the Python wheel build are unaffected.
+// The wasm bindings are pure-safe Rust — wasm-bindgen macros do not
+// expand into `unsafe`, so this module is compatible with the
+// root crate's `#![forbid(unsafe_code)]`.
 #[cfg(feature = "wasm")]
 pub mod wasm;
 

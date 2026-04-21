@@ -59,7 +59,7 @@ print(f.read_adocument()["fields"][-1])  # {name: m_devBranchInfo, kind: element
 open("out.ifc", "w").write(f.write_ifc())
 ```
 
-Install: `pip install rvt` — or build from source with [`maturin build --release --features python`](docs/python.md#from-source). Full API + Jupyter notebook walkthrough: [`docs/python.md`](docs/python.md) and [`docs/rvt-python-quickstart.ipynb`](docs/rvt-python-quickstart.ipynb).
+Install: `pip install rvt` — or build from source with [`maturin build --release --manifest-path rvt-py/Cargo.toml`](docs/python.md#from-source). Full API + Jupyter notebook walkthrough: [`docs/python.md`](docs/python.md) and [`docs/rvt-python-quickstart.ipynb`](docs/rvt-python-quickstart.ipynb).
 
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 

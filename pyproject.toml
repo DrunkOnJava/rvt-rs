@@ -26,10 +26,12 @@ Documentation = "https://github.com/DrunkOnJava/rvt-rs/blob/main/README.md"
 Issues = "https://github.com/DrunkOnJava/rvt-rs/issues"
 
 [tool.maturin]
-# Python extension module lives behind the `python` feature so the
-# default Rust lib build doesn't pull pyo3.
-features = ["python"]
-# Version comes from Cargo.toml's [package.version].
+# SEC-12/13: pyo3 bindings live in the `rvt-py/` workspace member
+# crate. The wheel is still called `rvt` on PyPI, but the Rust
+# sources come from there.
+manifest-path = "rvt-py/Cargo.toml"
+# Version comes from `rvt-py/Cargo.toml`'s [package.version], kept
+# in lock-step with the root crate.
 # `module-name` is "rvt._rvt" so the compiled extension becomes a
 # submodule of the pure-Python `rvt` package under `python/`. The
 # package's `__init__.py` re-exports everything from `_rvt`, and
