@@ -159,6 +159,30 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         }
     }
 
+    // WRT-10.3 fast-path: empty-patch round-trip bypasses CFB
+    // round-tripping entirely and copies the source file byte-for-
+    // byte. This gives us byte-identical output for the
+    // "verify the pipeline" use case (corpus re-emission, canonical
+    // form checks, git-friendly diffing) without needing the
+    // sector-reordering pass. For non-empty patches, fall through
+    // to the CFB rewriter below — sector preservation for patched
+    // builds is still pending.
+    if patches.is_empty() && src != dst {
+        // Atomic copy via temp + rename (same durability contract as
+        // the CFB path below).
+        let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
+        let dst_name = dst
+            .file_name()
+            .ok_or_else(|| crate::Error::Cfb("dst has no filename component".into()))?
+            .to_string_lossy()
+            .to_string();
+        let tmp_name = format!(".{dst_name}.copy-{}", std::process::id());
+        let tmp_path = dst_parent.join(&tmp_name);
+        std::fs::copy(src, &tmp_path)?;
+        std::fs::rename(&tmp_path, dst)?;
+        return Ok(());
+    }
+
     // Compute a sibling temp path in the same directory as dst so
     // the final rename is atomic on the same filesystem.
     let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));

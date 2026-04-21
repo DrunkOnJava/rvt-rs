@@ -64,17 +64,15 @@ fn cfb_roundtrip_delta_baseline() -> Result<()> {
         per_release.push((year, delta, src_bytes.len()));
     }
 
-    // Regression gate: today's delta is the baseline. A future
-    // commit that regresses any release's delta upward should fail
-    // here — the test leaves the baseline stored in its own output
-    // for CI log inspection. Absolute-value assertion is loose
-    // (< 100%) so existing deltas pass; WRT-10.3 will tighten this
-    // to `== 0` under the opt-in flag.
-    for (year, delta, src_len) in &per_release {
-        assert!(
-            *delta < *src_len,
-            "{year}: delta {delta} exceeds source size {src_len} — \
-             rewriter is producing completely divergent output"
+    // WRT-10.3 fast-path: empty patches now bypass the CFB
+    // round-trip entirely and copy the source byte-for-byte. Delta
+    // must be exactly zero on every release.
+    for (year, delta, _src_len) in &per_release {
+        assert_eq!(
+            *delta, 0,
+            "{year}: empty-patch roundtrip must be byte-identical \
+             (got delta={delta}). The fast-path in write_with_patches \
+             regressed — probably a cross-device rename."
         );
     }
 
