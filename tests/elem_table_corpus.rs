@@ -98,4 +98,10 @@ fn project_2024_file_parses_all_declared_records() {
     assert_eq!(records[0].id_primary, 1);
     assert_eq!(records[1].id_primary, 2);
     assert_eq!(records[2].id_primary, 3);
+    // On observed 2024 projects, id_secondary matches id_primary on the
+    // initial element-index records (bound at body+24, not body+20 —
+    // regression-guarded here against a real-corpus bug we caught).
+    assert_eq!(records[0].id_secondary, 1);
+    assert_eq!(records[1].id_secondary, 2);
+    assert_eq!(records[2].id_secondary, 3);
 }
