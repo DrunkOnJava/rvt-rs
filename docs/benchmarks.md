@@ -1,11 +1,10 @@
 # rvt-rs benchmarks
 
-Performance measurement methodology, currently-measured CLI timings, and
-the planned library-level benchmark suites that do **not yet exist**. The
-project does not yet have a formal `criterion`-based microbench harness;
-the numbers that do exist are `hyperfine`-driven end-to-end CLI timings.
-This page documents both: what is measured today, and what is still
-placeholder.
+Performance measurement methodology, `hyperfine` CLI-level timings, and
+four `criterion` library-level suites. The suites cover the inner-loop
+paths every CLI hits (compression, BasicFileInfo, schema) plus a
+multi-megabyte project-file suite (Q-07) that times open/summarize/
+schema/elem_table/walker against 913 KB and 34 MB real `.rvt` files.
 
 ## Methodology
 
@@ -29,37 +28,48 @@ placeholder.
 - **Corpus:** git-LFS-pulled [`phi-ag/rvt`](https://github.com/phi-ag/rvt)
   sample set, 11 Revit releases 2016-2026. All small-category files.
 
-## Benchmark suites planned
+## Criterion suites
 
-Each of these is a separate `criterion` suite intended to live under
-`benches/` once wired up. None exist yet; treat as design spec.
+Four `criterion` suites under `benches/`. Run with `cargo bench --bench
+<name>`; overall `cargo bench` runs all four.
 
-| Suite | What it measures | Status |
+| Suite | What it measures | Fixture |
 |---|---|---|
-| `bench_identify` | File identification: OLE/CFB magic check + CFB header scan, without decompressing any stream. Isolates `reader::open` + `streams::has_stream` cost. | Not yet written — see [issue #TBD](https://github.com/DrunkOnJava/rvt-rs/issues) |
-| `bench_schema` | Full class-schema enumeration: `Formats/Latest` decompress + tagged-record walk + all 395 classes × 13,570 fields typed. | Not yet written — see [issue #TBD](https://github.com/DrunkOnJava/rvt-rs/issues) |
-| `bench_decode_class` | Element decode, **per class, per 1000 instances**, using the 29 shipped Layer 5b decoders (Level, Wall, Floor, Roof, Door, Window, Column, Beam, …). Fixtures are synthesized schema+bytes (same harness as the existing class-decoder unit tests) rather than real-file corpora. | Not yet written — see [issue #TBD](https://github.com/DrunkOnJava/rvt-rs/issues) |
-| `bench_ifc_emit` | End-to-end project-to-STEP IFC4 emission: Revit file in → `IfcProject` + `IfcSite` + `IfcBuilding` + storeys + per-element entities out. Measures the full `rvt-ifc` pipeline. | Not yet written — see [issue #TBD](https://github.com/DrunkOnJava/rvt-rs/issues) |
+| `compression` | Raw inflate throughput on synthetic gzip chunks. Isolates `compression::inflate_at` from any surrounding CFB / schema work. | In-memory |
+| `basic_file_info` | UTF-16LE key-value parse on a realistic BasicFileInfo buffer. Hot path for `rvt-info` / `rvt-history`. | In-memory synthesized |
+| `schema` | Floor-time timing for `formats::parse_schema` on an empty input. Richer real-schema timings are in the `project_file` suite below. | In-memory |
+| `project_file` | Open / summarize / schema-parse / elem-table records / ADocument walker on 913 KB and 34 MB real `.rvt` project files. Skips when the corpus isn't present. | magnetar-io/revit-test-datasets (LFS) |
 
-### Results table (planned)
+### Multi-megabyte results (Q-07)
 
-Populated once the `criterion` suites exist. Every cell is `TBD` until
-real numbers land.
+`cargo bench --bench project_file -- --quick --warm-up-time 1
+--measurement-time 3` on Apple M2 Max, Rust release profile (`lto =
+true, codegen-units = 1`), macOS 14:
 
-| Operation | Fixture size | Time (median) | Allocations | Comparison |
-|---|---|---|---|---|
-| `bench_identify` | small (~400 KB) | TBD | TBD | TBD |
-| `bench_identify` | medium | TBD | TBD | TBD |
-| `bench_identify` | large | TBD | TBD | TBD |
-| `bench_schema` | small (~400 KB) | TBD | TBD | TBD |
-| `bench_schema` | medium | TBD | TBD | TBD |
-| `bench_schema` | large | TBD | TBD | TBD |
-| `bench_decode_class` / Wall | 1000 synthesized instances | TBD | TBD | TBD |
-| `bench_decode_class` / Door | 1000 synthesized instances | TBD | TBD | TBD |
-| `bench_decode_class` / Column | 1000 synthesized instances | TBD | TBD | TBD |
-| `bench_ifc_emit` | small (~400 KB) | TBD | TBD | TBD |
-| `bench_ifc_emit` | medium | TBD | TBD | TBD |
-| `bench_ifc_emit` | large | TBD | TBD | TBD |
+| Operation | 913 KB (2023 project) | 34 MB (2024 project) | Scaling |
+|---|---:|---:|---:|
+| `RevitFile::open` | 67.9 µs | 3.65 ms | 53× (matches file-size ratio of ~37×, I/O-bound) |
+| `summarize_strict` | 5.08 ms | 8.03 ms | 1.58× (sub-linear — schema is invariant) |
+| `parse_schema` | 287 µs | 275 µs | ≈ constant (schema size doesn't scale) |
+| `elem_table::parse_records` | 232 µs | 5.61 ms | 24× (tracks record count 2614 → 26,425) |
+| `walker::read_adocument_lossy` | 22.9 ms | 31.0 ms | 1.35× (ADocument entry is small region) |
+
+Takeaways:
+
+- **Full summary in 8 ms on a 34 MB project** — rvt-rs is viable for
+  interactive/IDE-speed workflows on realistic project files, not just
+  family samples.
+- **Schema parse is constant** across the two files because Revit ships
+  the same schema bytes for a given release (see the "17,266 bytes
+  byte-identical across family/project" finding in
+  [`docs/project-file-corpus-probe-2026-04-21.md`](project-file-corpus-probe-2026-04-21.md)).
+- **ElemTable enumeration is the sub-linear bottleneck** — 5.6 ms for
+  26,425 records ≈ 212 ns per record, dominated by bounds checks and
+  vector allocation. Fine for batch work; would need a streaming iterator
+  if someone wanted to ship real-time parsing of million-element files.
+- **Walker read_adocument_lossy ≈ 30 ms** holds flat because the ADocument
+  record is the same 13-field shape regardless of project size —
+  walking to it takes the same time once the stream directory is loaded.
 
 ## Current measurements (hyperfine, CLI-level)
 
@@ -134,30 +144,31 @@ The script expects the phi-ag corpus at
 `../../samples/_phiag/examples/Autodesk/`. Override with
 `RVT_SAMPLES_DIR=/path/to/samples ./tools/bench.sh`.
 
-### Planned (criterion, library-level)
-
-Once the `benches/` suites are wired up:
+### Criterion (library-level)
 
 ```bash
-# Run all planned benchmark suites
-cargo bench --all
+# Run every criterion suite
+cargo bench
 
 # Run a single suite
-cargo bench --bench bench_schema
+cargo bench --bench compression
+cargo bench --bench basic_file_info
+cargo bench --bench schema
+
+# Q-07 multi-MB project file suite (skips if corpus absent;
+# override path with RVT_PROJECT_CORPUS_DIR)
+cargo bench --bench project_file
 ```
 
-The `benches/` directory does not yet exist — it will be created when
-the first suite lands. See [Benchmark suites planned](#benchmark-suites-planned).
+The `project_file` suite requires the magnetar-io/revit-test-datasets
+corpus (MIT, git-LFS); without it, each sub-benchmark emits a
+`skipping: … not present` message and exits green.
 
 ## Honest limitations
 
-- **No large-scale real-project corpus.** Every number on this page
-  comes from Autodesk's ~400 KB `rac_basic_sample_family` RFA — a
-  family fixture, not a full building model. A Revit project with
-  hundreds of thousands of elements will stress the decoder
-  differently, and none of the published timings extrapolate linearly.
-  Medium (1-50 MB) and large (50 MB+) fixtures are not in the corpus
-  yet.
+- **Medium-corpus coverage but no large-corpus coverage yet.** The
+  project_file suite covers 913 KB and 34 MB project files. 50 MB+ fixtures
+  remain open; contributions welcome. See Q-01 in the TODO.
 - **Synthetic fixtures for per-class decode.** The 29 Layer 5b decoders
   are validated against synthesized schema+bytes fixtures (same harness
   as the class-decoder unit tests). Real-file corpus validation is open
