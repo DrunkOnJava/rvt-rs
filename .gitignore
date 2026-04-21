@@ -120,3 +120,5 @@ pkg/
 viewer/pkg/
 viewer/node_modules/
 viewer/dist/
+
+_corpus_candidates/
