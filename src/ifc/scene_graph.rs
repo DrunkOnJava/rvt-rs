@@ -157,6 +157,105 @@ impl CategoryFilter {
     }
 }
 
+/// Element info panel payload (VW1-08). The shape a viewer's
+/// "click to inspect" UI reads — a single JSON-ready struct
+/// describing an element's identity, location, and property set.
+///
+/// Populate via [`element_info_panel`] given a scene node's
+/// `entity_index` and the underlying model.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElementInfoPanel {
+    pub name: String,
+    pub ifc_type: String,
+    pub type_guid: Option<String>,
+    /// Storey display name when the element is contained in one.
+    pub storey_name: Option<String>,
+    /// Storey elevation in feet (native Revit unit). `None` when
+    /// the element hasn't been bound to a storey.
+    pub storey_elevation_feet: Option<f64>,
+    /// World-space location in feet, if the element has one.
+    pub location_feet: Option<[f64; 3]>,
+    /// Yaw rotation in radians (about +Z), if set.
+    pub rotation_radians: Option<f64>,
+    /// Material display name resolved through the model's
+    /// material list. `None` when the element has no material
+    /// associated.
+    pub material_name: Option<String>,
+    /// Flat `(property_name, formatted_value)` pairs from the
+    /// element's `Pset_*Common` property set. Empty when no
+    /// property set is attached.
+    pub properties: Vec<(String, String)>,
+}
+
+/// Build an element-info panel payload (VW1-08) for the entity at
+/// `entity_index` in `model`. Returns `None` when the index is
+/// out of range or the entity at that index isn't a
+/// `BuildingElement` (project / type-object entities have no
+/// viewer-side info panel).
+pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<ElementInfoPanel> {
+    let ent = model.entities.get(entity_index)?;
+    let IfcEntity::BuildingElement {
+        ifc_type,
+        name,
+        type_guid,
+        storey_index,
+        material_index,
+        property_set,
+        location_feet,
+        rotation_radians,
+        ..
+    } = ent
+    else {
+        return None;
+    };
+    let (storey_name, storey_elevation_feet) = match storey_index {
+        Some(i) => model
+            .building_storeys
+            .get(*i)
+            .map(|s| (Some(s.name.clone()), Some(s.elevation_feet)))
+            .unwrap_or((None, None)),
+        None => (None, None),
+    };
+    let material_name = material_index.and_then(|i| model.materials.get(i).map(|m| m.name.clone()));
+    let properties: Vec<(String, String)> = property_set
+        .as_ref()
+        .map(|pset| {
+            pset.properties
+                .iter()
+                .map(|p| (p.name.clone(), format_property_value(&p.value)))
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(ElementInfoPanel {
+        name: name.clone(),
+        ifc_type: ifc_type.clone(),
+        type_guid: type_guid.clone(),
+        storey_name,
+        storey_elevation_feet,
+        location_feet: *location_feet,
+        rotation_radians: *rotation_radians,
+        material_name,
+        properties,
+    })
+}
+
+fn format_property_value(v: &super::entities::PropertyValue) -> String {
+    use super::entities::PropertyValue;
+    match v {
+        PropertyValue::Text(s) => s.clone(),
+        PropertyValue::Integer(i) => i.to_string(),
+        PropertyValue::Real(r) => format!("{r:.3}"),
+        PropertyValue::Boolean(b) => b.to_string(),
+        PropertyValue::LengthFeet(f) => format!("{f:.3} ft"),
+        PropertyValue::AngleRadians(r) => format!("{:.3}°", r.to_degrees()),
+        PropertyValue::AreaSquareFeet(a) => format!("{a:.2} sqft"),
+        PropertyValue::VolumeCubicFeet(c) => format!("{c:.2} cuft"),
+        PropertyValue::CountValue(c) => c.to_string(),
+        PropertyValue::TimeSeconds(t) => format!("{t:.1} s"),
+        other => format!("{other:?}"),
+    }
+}
+
 /// Collect all distinct `ifc_type` strings present in the scene
 /// graph (VW1-09). Use as the source of truth for a viewer's
 /// "layer" toggle UI.
@@ -609,6 +708,137 @@ mod tests {
         assert!(back.is_hidden("IFCWALL"));
         assert!(back.is_hidden("IFCCOLUMN"));
         assert!(!back.is_hidden("IFCSLAB"));
+    }
+
+    // ---- VW1-08: element info panel tests ----
+
+    #[test]
+    fn info_panel_returns_none_for_out_of_range_index() {
+        let model = IfcModel::default();
+        assert!(element_info_panel(&model, 0).is_none());
+    }
+
+    #[test]
+    fn info_panel_returns_none_for_non_building_entity() {
+        let model = IfcModel {
+            entities: vec![IfcEntity::Project {
+                name: Some("P".into()),
+                description: None,
+                long_name: None,
+            }],
+            ..Default::default()
+        };
+        assert!(element_info_panel(&model, 0).is_none());
+    }
+
+    #[test]
+    fn info_panel_surfaces_name_and_type() {
+        let model = IfcModel {
+            entities: vec![mk_element("Wall-1", "IFCWALL", Some(0), None)],
+            building_storeys: vec![Storey {
+                name: "Ground".into(),
+                elevation_feet: 0.0,
+            }],
+            ..Default::default()
+        };
+        let panel = element_info_panel(&model, 0).unwrap();
+        assert_eq!(panel.name, "Wall-1");
+        assert_eq!(panel.ifc_type, "IFCWALL");
+        assert_eq!(panel.storey_name.as_deref(), Some("Ground"));
+        assert_eq!(panel.storey_elevation_feet, Some(0.0));
+    }
+
+    #[test]
+    fn info_panel_resolves_material_through_model_list() {
+        let model = IfcModel {
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCWALL".into(),
+                name: "Wall".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: Some(0),
+                property_set: None,
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
+                representation_map_index: None,
+            }],
+            materials: vec![super::super::MaterialInfo {
+                name: "Concrete".into(),
+                color_packed: None,
+                transparency: None,
+            }],
+            ..Default::default()
+        };
+        let panel = element_info_panel(&model, 0).unwrap();
+        assert_eq!(panel.material_name.as_deref(), Some("Concrete"));
+    }
+
+    #[test]
+    fn info_panel_formats_property_values() {
+        use super::super::entities::{Property, PropertySet, PropertyValue};
+        let pset = PropertySet {
+            name: "Pset_WallCommon".into(),
+            properties: vec![
+                Property {
+                    name: "Height".into(),
+                    value: PropertyValue::LengthFeet(10.5),
+                },
+                Property {
+                    name: "IsExternal".into(),
+                    value: PropertyValue::Boolean(true),
+                },
+            ],
+        };
+        let model = IfcModel {
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IFCWALL".into(),
+                name: "Wall".into(),
+                type_guid: None,
+                storey_index: None,
+                material_index: None,
+                property_set: Some(pset),
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
+                representation_map_index: None,
+            }],
+            ..Default::default()
+        };
+        let panel = element_info_panel(&model, 0).unwrap();
+        assert_eq!(panel.properties.len(), 2);
+        let height = panel
+            .properties
+            .iter()
+            .find(|(n, _)| n == "Height")
+            .unwrap();
+        assert!(height.1.contains("10.500 ft"));
+        let ext = panel
+            .properties
+            .iter()
+            .find(|(n, _)| n == "IsExternal")
+            .unwrap();
+        assert_eq!(ext.1, "true");
+    }
+
+    #[test]
+    fn info_panel_is_serde_roundtrippable() {
+        let model = IfcModel {
+            entities: vec![mk_element("W", "IFCWALL", None, None)],
+            ..Default::default()
+        };
+        let panel = element_info_panel(&model, 0).unwrap();
+        let json = serde_json::to_string(&panel).unwrap();
+        let back: ElementInfoPanel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, "W");
     }
 
     #[test]
