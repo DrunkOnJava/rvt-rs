@@ -129,6 +129,58 @@ prefix. Already fixed in commit for ADR-002 — `inflate_at_auto`
 probes for the first gzip magic and inflates from there, falling
 back to offset 8 only if no magic is present.
 
+## What's genuinely blocked on more RE
+
+### Walker → IFC element emission (option A from the
+tonight's decision prompt)
+
+`rvt-ifc` produces a valid IFC4 STEP **scaffold** (IfcProject +
+IfcSite + IfcBuilding + IfcUnitAssignment) on real project files,
+but the per-element walk into IFC entities (IfcWall, IfcSlab,
+IfcDoor, etc.) is not wired up yet on the exporter side. Tracing
+through the code:
+
+- `RvtDocExporter::export` in `src/ifc/mod.rs` has the comment
+  *"other entity types are wired in the walker-expansion phase"* —
+  explicit TODO for the per-element wiring.
+- `ElementDecoder` trait + 80 registered decoders + a full
+  `from_decoded::*` helper suite all exist, but no top-level
+  `walker::iter_elements(rf) -> Vec<DecodedElement>` function
+  orchestrates them yet.
+- The ADocument root on the 2023 project has 13 fields, all
+  pointers (`m_elemTable = Pointer [2097249, 49]`, etc). Following
+  those pointers requires parsing `Global/ElemTable` record
+  semantics.
+- `elem_table::parse_records_rough` works on family files (45
+  records on the 2024 sample) but returns only **2 records** on
+  the 2024 project file even though the header reports 26,425
+  records in a 1 MB decompressed stream. The sentinel-scan
+  early-terminates on a `0xFFFF_FFFF` pattern that appears in the
+  project file's record body, not just as a trailer — project-file
+  records evidently pack u32 data differently from family files.
+
+One bounds fix landed in this commit: `parse_records_rough` now
+starts its sentinel scan at offset `0x30` (past the header) rather
+than offset 0, closing a trivial bug where the header region
+contained byte patterns that looked like the sentinel. That's a
+strict improvement but doesn't solve the deeper record-semantics
+gap — it's a genuine RE follow-up needing more project-file corpus
+to triangulate.
+
+Concretely unblocking walker → IFC needs:
+
+1. Real-world project-file **ElemTable record layout** (not yet
+   known — 26,425 records × the actual byte pattern per record).
+2. Top-level **`walker::iter_elements(rf)` orchestration** (not
+   shipped — dispatch pattern from `all_decoders()` exists, but
+   the iteration spine needs the record layout first).
+3. **Class-tag → IFC entity mapper** in `ifc::from_decoded` (parts
+   shipped — the per-element geometry helpers exist, the top-level
+   `DecodedElement → IfcEntity` switch doesn't).
+
+That's a real multi-session feature. Documented honestly so the
+next contributor knows where to start.
+
 ## New research threads
 
 ### Multiple `Partitions/NN` streams in project files
