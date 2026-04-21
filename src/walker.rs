@@ -292,6 +292,23 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
                 }
             }
         }
+        (FieldType::Container { kind, .. }, InstanceField::Vector(_))
+            if matches!(*kind, 0x01 | 0x02 | 0x04 | 0x05 | 0x07 | 0x0b | 0x0d) =>
+        {
+            // L5B-09.5: scalar-base Container round-trips through the
+            // same `[u32 count][count × element]` wire layout as
+            // Vector (reader delegates in the opposite direction).
+            // Recurse with a synthesised Vector FieldType so the
+            // reader's decoded Vector of items serialises back to
+            // the same bytes. Reference Containers (kind=0x0e) still
+            // need the explicit ADocument-side `write_adocument_field`
+            // path (2-column layout).
+            let fake_vec = FieldType::Vector {
+                kind: *kind,
+                body: Vec::new(),
+            };
+            write_field_by_type(value, &fake_vec, out);
+        }
         (FieldType::Container { .. } | FieldType::Unknown { .. }, _) => {
             // Decoder uses Bytes fallback for these — the Bytes arm
             // at the top caught the Bytes case; shape-mismatched
@@ -2347,6 +2364,57 @@ mod tests {
                 }
             }
             other => panic!("expected Vector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn container_scalar_round_trips_byte_identical() {
+        // L5B-09.5: read-then-write a scalar Container through
+        // read_field_by_type + write_field_by_type should produce
+        // byte-identical output to the input. Exercise kinds 0x01,
+        // 0x05, 0x07, 0x0d.
+        let cases: Vec<(u8, Vec<u8>)> = vec![
+            // 0x01 bool: count=3, elements 1, 0, 1
+            (0x01, vec![3, 0, 0, 0, 1, 0, 1]),
+            // 0x05 u32: count=2, elements 0x00000100, 0x0000000A
+            (
+                0x05,
+                vec![2, 0, 0, 0, 0x00, 0x01, 0x00, 0x00, 0x0A, 0, 0, 0],
+            ),
+            // 0x07 f64: count=1, element = 1.5
+            (0x07, {
+                let mut v = vec![1, 0, 0, 0];
+                v.extend_from_slice(&1.5_f64.to_le_bytes());
+                v
+            }),
+            // 0x0d point: count=1, one 24-byte point (3.0, 4.0, 5.0)
+            (0x0d, {
+                let mut v = vec![1, 0, 0, 0];
+                for f in [3.0_f64, 4.0, 5.0] {
+                    v.extend_from_slice(&f.to_le_bytes());
+                }
+                v
+            }),
+        ];
+        for (kind, wire) in cases {
+            let ft = formats::FieldType::Container {
+                kind,
+                cpp_signature: None,
+                body: Vec::new(),
+            };
+            let mut cursor = 0;
+            let decoded = read_field_by_type(&wire, &mut cursor, &ft);
+            assert_eq!(
+                cursor,
+                wire.len(),
+                "kind 0x{kind:02x}: reader consumed wrong number of bytes"
+            );
+            let mut rewritten = Vec::new();
+            write_field_by_type(&decoded, &ft, &mut rewritten);
+            assert_eq!(
+                rewritten, wire,
+                "kind 0x{kind:02x}: round-trip produced different bytes"
+            );
         }
     }
 
