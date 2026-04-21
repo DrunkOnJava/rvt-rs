@@ -1237,6 +1237,105 @@ pub fn detect_adocument_start(
     }
 }
 
+/// Candidate scan result — one plausible `(offset, class)` pair
+/// produced by [`scan_candidates`].
+///
+/// The `score` reflects how well the `trial_walk` of `class_name`
+/// at `offset` lined up with real-looking ElementId values (see
+/// [`walk_score`]). Callers apply a threshold (typically ≥ 80)
+/// before trusting the match.
+#[derive(Debug, Clone)]
+pub struct ScanCandidate {
+    /// Byte offset in the buffer where the candidate instance starts.
+    pub offset: usize,
+    /// Schema class this candidate claims to be an instance of.
+    pub class_name: String,
+    /// Class-tag u16 the pre-filter matched at `offset - 2`.
+    pub class_tag: u16,
+    /// Heuristic score from `walk_score`; higher is more confident.
+    pub score: i64,
+}
+
+/// Scan `bytes` for plausible element-instance starts using the
+/// schema's class-tag table as a pre-filter.
+///
+/// Pipeline:
+/// 1. Build a map `u16 class_tag -> &ClassEntry` from the schema.
+/// 2. At each even-byte-aligned offset in `bytes`, read a `u16`
+///    and check whether it matches any known class tag.
+/// 3. For each hit, run `trial_walk(class, &bytes[offset + 2..])`
+///    — the instance data starts **after** the 2-byte class-tag
+///    prefix. If the walk succeeds, score it.
+/// 4. Return all candidates above `min_score`, sorted by score
+///    descending.
+///
+/// Cost: `O(bytes.len() / 2 × avg_classes_per_tag)`. On a 1 MB
+/// `Global/Latest` with ~400 classes, typical tag-table lookup is
+/// `O(1)` (no collisions observed) so this is effectively linear.
+///
+/// Caveat: this is the *raw* candidate list. A downstream pass
+/// (see `build_handle_index`) still needs to extract the self-id
+/// from each candidate and dispute-resolve when multiple candidates
+/// at different offsets claim the same id.
+pub fn scan_candidates(
+    schema: &formats::SchemaTable,
+    bytes: &[u8],
+    min_score: i64,
+) -> Vec<ScanCandidate> {
+    // Index the schema by class tag. Classes without an explicit
+    // tag (parent-only entries) are skipped — they won't appear as
+    // instance headers anyway.
+    let mut tag_to_class: std::collections::HashMap<u16, Vec<&formats::ClassEntry>> =
+        std::collections::HashMap::with_capacity(schema.classes.len());
+    for cls in &schema.classes {
+        if let Some(tag) = cls.tag {
+            tag_to_class.entry(tag).or_default().push(cls);
+        }
+    }
+
+    let mut out: Vec<ScanCandidate> = Vec::new();
+    if bytes.len() < 4 {
+        return out;
+    }
+
+    // 2-byte-aligned scan — class tags are u16 on the wire and are
+    // always aligned to the containing record's start. A 1-byte
+    // shift wouldn't give a valid instance.
+    let end = bytes.len().saturating_sub(2);
+    let mut i = 0usize;
+    while i + 2 <= end {
+        let tag = u16::from_le_bytes([bytes[i], bytes[i + 1]]);
+        if let Some(classes) = tag_to_class.get(&tag) {
+            // Instance data starts AFTER the tag. Give trial_walk
+            // the post-tag slice.
+            let instance_start = i + 2;
+            if instance_start < bytes.len() {
+                for cls in classes {
+                    if let Some(walk) = trial_walk(cls, &bytes[instance_start..]) {
+                        let score = walk_score(&walk);
+                        if score >= min_score {
+                            out.push(ScanCandidate {
+                                offset: instance_start,
+                                class_name: cls.name.clone(),
+                                class_tag: tag,
+                                score,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        i += 2;
+    }
+
+    // Sort by score descending so the highest-confidence matches
+    // surface first. Stable sort keeps within-score order == scan
+    // order, which is also byte-ascending — useful for downstream
+    // deduplication.
+    out.sort_by_key(|c| std::cmp::Reverse(c.score));
+    out
+}
+
 /// Doc-hidden fuzz entry point for the ADocument entry-point detector.
 ///
 /// Exposes the private [`find_adocument_start_with_schema`] so that
@@ -1342,18 +1441,39 @@ fn heuristic_find(d: &[u8]) -> Option<usize> {
     None
 }
 
-fn trial_walk(adoc: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u32)>> {
+/// Trial-decode every declared field of `cls` starting at byte 0 of
+/// `bytes`. Returns `Some(walk)` if every field decoded without
+/// running off the buffer end; `None` otherwise.
+///
+/// The returned `walk` pairs are `(tag, id)` per field — only the
+/// Pointer / ElementId / ElementIdRef / Container{0x0e} cases
+/// populate meaningful values (used by `walk_score`). All other
+/// field types push a `(u32::MAX, u32::MAX)` sentinel that the
+/// scorer filters out.
+///
+/// Generalised 2026-04-21 from the ADocument-only version — now
+/// handles Primitive / String / Guid / Vector / Container{non-0x0e}
+/// via `read_field_by_type`, so the function can be driven against
+/// any class in the schema (not just ADocument). That's the pre-req
+/// for the `scan_candidates` + walker → IFC pipeline.
+pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u32)>> {
     let mut cursor = 0;
     let mut out = Vec::new();
-    for field in &adoc.fields {
+    let limits = WalkerLimits::default();
+    for field in &cls.fields {
         let ft = field.field_type.as_ref()?;
-        let (consumed, tag_id) = match ft {
+        let tag_id = match ft {
+            // Pointer: 8 bytes, no score contribution
             formats::FieldType::Pointer { .. } => {
                 if cursor + 8 > bytes.len() {
                     return None;
                 }
-                (8, (u32::MAX, u32::MAX))
+                cursor += 8;
+                (u32::MAX, u32::MAX)
             }
+            // ElementId / ElementIdRef: 8 bytes, captures (tag, id)
+            // which walk_score uses to judge plausibility of the
+            // candidate offset.
             formats::FieldType::ElementId | formats::FieldType::ElementIdRef { .. } => {
                 if cursor + 8 > bytes.len() {
                     return None;
@@ -1370,8 +1490,13 @@ fn trial_walk(adoc: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u32)
                     bytes[cursor + 6],
                     bytes[cursor + 7],
                 ]);
-                (8, (tag, id))
+                cursor += 8;
+                (tag, id)
             }
+            // Container kind=0x0e: 2-column reference table. Size
+            // depends on a count prefix. Validates count symmetry
+            // across the two columns — a corrupt or mis-aligned
+            // candidate offset rarely survives this check.
             formats::FieldType::Container { kind: 0x0e, .. } => {
                 if cursor + 4 > bytes.len() {
                     return None;
@@ -1398,17 +1523,64 @@ fn trial_walk(adoc: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u32)
                 if col2_count != count {
                     return None;
                 }
-                (2 * col_bytes, (u32::MAX, u32::MAX))
+                cursor += 2 * col_bytes;
+                (u32::MAX, u32::MAX)
             }
-            _ => return None,
+            // All other field types — Primitive, String, Guid,
+            // Vector, Bool, non-0x0e Container — delegate to the
+            // general field reader. It advances the cursor and
+            // returns a fallback `Bytes` on short input; we detect
+            // that by checking whether the cursor overran the
+            // buffer (in which case the candidate isn't viable).
+            other => {
+                let before = cursor;
+                let _value = read_field_by_type(bytes, &mut cursor, other);
+                if cursor > bytes.len() {
+                    return None;
+                }
+                // `read_field_by_type` can legitimately emit a
+                // zero-advance on zero-size primitives — guard
+                // against infinite loops on degenerate schema
+                // entries by requiring forward progress per field
+                // (exception: fields with an explicit zero size).
+                if cursor == before {
+                    match other {
+                        formats::FieldType::Primitive { size: 0, .. } => {
+                            // Legitimately zero-width — keep going.
+                        }
+                        _ => return None,
+                    }
+                }
+                (u32::MAX, u32::MAX)
+            }
         };
         out.push(tag_id);
-        cursor += consumed;
     }
+    // Touch `limits` so future callers can plumb caller-supplied
+    // WalkerLimits through if they want to constrain container
+    // sizes or string lengths from a candidate-scanning harness.
+    let _ = limits;
     Some(out)
 }
 
-fn walk_score(walk: &[(u32, u32)]) -> i64 {
+/// Heuristic score for a `trial_walk` result.
+///
+/// Uses the last three `(tag, id)` tuples emitted by the walk (which
+/// correspond to the last three ElementId/ElementIdRef fields in the
+/// class — ADocument has three consecutive ones at the end of its
+/// record, and most element classes have a similar trailing-id
+/// pattern) to judge how plausible the candidate offset is.
+///
+/// Scoring rubric:
+/// * Sequential small ids (< 10,000) in the trailing slots: strong +
+/// * Two- or three-id clustered range: strong +
+/// * Tags that are zero (a common sentinel for "no tag"): mild +
+/// * Ids outside u16 range: strong −
+/// * Fewer than three real ids or all-zero ids: `i64::MIN`
+///
+/// Callers compare against thresholds (≥90 confident, 80-89 scored,
+/// <80 NotFound) — see `DetectionResult::strategy`.
+pub fn walk_score(walk: &[(u32, u32)]) -> i64 {
     if walk.len() < 3 {
         return i64::MIN;
     }
@@ -1526,6 +1698,92 @@ mod tests {
     fn find_adocument_start_returns_none_on_empty_stream() {
         assert_eq!(find_adocument_start(&[]), None);
         assert_eq!(find_adocument_start(&[0u8; 0x200]), None);
+    }
+
+    #[test]
+    fn scan_candidates_returns_empty_on_empty_schema() {
+        let schema = formats::SchemaTable {
+            classes: Vec::new(),
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        let out = scan_candidates(&schema, &[0u8; 100], 0);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn scan_candidates_handles_buffer_shorter_than_4_bytes() {
+        let schema = formats::SchemaTable {
+            classes: Vec::new(),
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        let out = scan_candidates(&schema, &[], i64::MIN);
+        assert!(out.is_empty());
+        let out = scan_candidates(&schema, &[0, 1], i64::MIN);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn scan_candidates_sorts_by_score_descending() {
+        // Minimal synthesis: two classes both tagged — the scanner
+        // should return matches for whichever class scores higher.
+        // We don't assert specific scores, just that ordering holds.
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let simple_cls = ClassEntry {
+            name: "Simple".into(),
+            tag: Some(0xABCD),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            fields: vec![
+                FieldEntry {
+                    name: "m_a".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_b".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_c".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+            ],
+        };
+        let schema = formats::SchemaTable {
+            classes: vec![simple_cls],
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        // Build a buffer with the tag at offset 0, then 24 bytes
+        // of synthetic (tag, id) pairs: (0, 1), (0, 2), (0, 3)
+        // — all u32::MAX tag sentinels fall through to "real"
+        // path, sequential small ids trigger the +25 cluster
+        // bonus.
+        let mut buf = vec![0u8; 64];
+        buf[0] = 0xCD;
+        buf[1] = 0xAB; // tag = 0xABCD
+        buf[2..6].copy_from_slice(&0u32.to_le_bytes());
+        buf[6..10].copy_from_slice(&1u32.to_le_bytes());
+        buf[10..14].copy_from_slice(&0u32.to_le_bytes());
+        buf[14..18].copy_from_slice(&2u32.to_le_bytes());
+        buf[18..22].copy_from_slice(&0u32.to_le_bytes());
+        buf[22..26].copy_from_slice(&3u32.to_le_bytes());
+        let out = scan_candidates(&schema, &buf, i64::MIN);
+        assert!(
+            !out.is_empty(),
+            "expected at least one candidate for tagged simple class"
+        );
+        // Within a run the scores should be non-increasing.
+        for pair in out.windows(2) {
+            assert!(pair[0].score >= pair[1].score);
+        }
     }
 
     #[test]
