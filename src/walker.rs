@@ -304,6 +304,41 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
     }
 }
 
+/// Encode a 2-column reference container (WRT-09) — the inverse of
+/// [`read_field`]'s `Container { kind: 0x0e, .. }` path. The on-
+/// disk layout for this field shape is:
+///
+/// ```text
+/// [u32 LE count_a] [count_a × (u16 LE id + 4 bytes padding)]
+/// [u32 LE count_b] [count_b × (u16 LE id + 4 bytes padding)]
+/// ```
+///
+/// When `col_a.len() != col_b.len()` the reader falls back to a
+/// single-column shape. This writer always emits the full two-
+/// column form — if callers want the single-column fallback, they
+/// should pass an empty `col_b` (which emits an empty column with
+/// `count_b = 0`, matching the on-disk shape for a missing pair).
+///
+/// Per-element padding is zero-filled — the reader ignores those
+/// four bytes, so the value is write-time free.
+pub fn encode_ref_container(col_a: &[u16], col_b: &[u16]) -> Vec<u8> {
+    const ELEM_SIZE: usize = 6;
+    let count_a = col_a.len();
+    let count_b = col_b.len();
+    let mut out = Vec::with_capacity(2 * (4 + ELEM_SIZE * count_a.max(count_b)));
+    out.extend_from_slice(&(count_a as u32).to_le_bytes());
+    for id in col_a {
+        out.extend_from_slice(&id.to_le_bytes());
+        out.extend_from_slice(&[0u8; 4]); // padding
+    }
+    out.extend_from_slice(&(count_b as u32).to_le_bytes());
+    for id in col_b {
+        out.extend_from_slice(&id.to_le_bytes());
+        out.extend_from_slice(&[0u8; 4]); // padding
+    }
+    out
+}
+
 /// Serialise a whole `DecodedElement` back to its wire bytes
 /// (WRT-03). Inverse of [`decode_instance`]. Walks the schema's
 /// declared fields in order and, for each, calls
@@ -2190,6 +2225,74 @@ mod tests {
         };
         let bytes = encode_instance(&decoded, &schema);
         assert_eq!(bytes.len(), 4);
+    }
+
+    // ---- WRT-09: Container 2-column framing round-trip ----
+
+    #[test]
+    fn encode_ref_container_round_trips_balanced_columns() {
+        let col_a = vec![1u16, 2, 3, 4, 5];
+        let col_b = vec![10u16, 20, 30, 40, 50];
+        let bytes = encode_ref_container(&col_a, &col_b);
+        // Length: 2 × (4 + 5×6) = 2 × 34 = 68 bytes.
+        assert_eq!(bytes.len(), 68);
+        let ft = formats::FieldType::Container {
+            kind: 0x0e,
+            cpp_signature: None,
+            body: Vec::new(),
+        };
+        let (consumed, field) = read_field(&ft, &bytes, WalkerLimits::default()).expect("read ok");
+        assert_eq!(consumed, 68);
+        match field {
+            InstanceField::RefContainer { col_a: a, col_b: b } => {
+                assert_eq!(a, col_a);
+                assert_eq!(b, col_b);
+            }
+            other => panic!("expected RefContainer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn encode_ref_container_empty_is_two_zero_length_prefixes() {
+        let bytes = encode_ref_container(&[], &[]);
+        assert_eq!(bytes.len(), 8);
+        assert_eq!(&bytes[..4], &[0u8; 4]);
+        assert_eq!(&bytes[4..], &[0u8; 4]);
+    }
+
+    #[test]
+    fn encode_ref_container_single_row_round_trips() {
+        let bytes = encode_ref_container(&[42], &[99]);
+        // 2 × (4 + 6) = 20 bytes.
+        assert_eq!(bytes.len(), 20);
+        let ft = formats::FieldType::Container {
+            kind: 0x0e,
+            cpp_signature: None,
+            body: Vec::new(),
+        };
+        let (_, field) = read_field(&ft, &bytes, WalkerLimits::default()).unwrap();
+        match field {
+            InstanceField::RefContainer { col_a, col_b } => {
+                assert_eq!(col_a, vec![42]);
+                assert_eq!(col_b, vec![99]);
+            }
+            other => panic!("expected RefContainer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn encode_ref_container_pads_each_record_to_six_bytes() {
+        let bytes = encode_ref_container(&[0x1234], &[0xabcd]);
+        // Expected bytes:
+        //   [01 00 00 00]               count_a = 1
+        //   [34 12 00 00 00 00]         id_a + 4-byte padding
+        //   [01 00 00 00]               count_b = 1
+        //   [cd ab 00 00 00 00]         id_b + 4-byte padding
+        assert_eq!(bytes.len(), 20);
+        assert_eq!(&bytes[0..4], &[0x01, 0x00, 0x00, 0x00]);
+        assert_eq!(&bytes[4..10], &[0x34, 0x12, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(&bytes[10..14], &[0x01, 0x00, 0x00, 0x00]);
+        assert_eq!(&bytes[14..20], &[0xcd, 0xab, 0x00, 0x00, 0x00, 0x00]);
     }
 
     #[test]
