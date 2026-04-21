@@ -54,6 +54,7 @@ jobs:
           - fuzz_part_atom
           - fuzz_walker_entry_detect
           - fuzz_step_writer
+          - fuzz_elem_table
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
