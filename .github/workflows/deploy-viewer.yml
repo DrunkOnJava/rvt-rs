@@ -1,0 +1,88 @@
+name: Deploy viewer
+
+# VW1-18 — build the WASM + the Vite site and publish to
+# https://drunkonjava.github.io/rvt-rs/viewer/ via GitHub Pages.
+# Runs on every push to main that touches viewer/ or src/ (so the
+# WASM stays fresh), plus manual runs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'viewer/**'
+      - '.github/workflows/deploy-viewer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@9399c7bb15d4c7d47b27263d024f0a4978346ba4  # v1.9.0
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  # v0.4.0
+        with:
+          version: v0.14.0
+
+      - name: Build WASM
+        run: wasm-pack build --target web --features wasm --no-default-features --out-dir viewer/pkg
+
+      - name: Verify no network imports in wasm
+        run: |
+          sudo apt-get install -y wabt
+          if wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm | grep -iE '"(fetch|XMLHttpRequest|WebSocket)"'; then
+            echo "::error::VW1-21 violation: wasm imports a network primitive"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8  # v4.0.2
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: viewer/package-lock.json
+
+      - name: Install dependencies
+        working-directory: viewer
+        run: npm ci || npm install
+
+      - name: Typecheck
+        working-directory: viewer
+        run: npm run typecheck
+
+      - name: Build viewer
+        working-directory: viewer
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3.0.1
+        with:
+          path: viewer/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac1b1f02101  # v4.0.5

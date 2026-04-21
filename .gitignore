@@ -114,3 +114,9 @@ yarn-error.log*
 *.rte
 *.rft
 !docs/**/*.rvt.md
+
+# wasm-pack output (built in CI, not committed)
+pkg/
+viewer/pkg/
+viewer/node_modules/
+viewer/dist/
