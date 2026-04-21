@@ -279,6 +279,47 @@ def test_repr_contains_version(sample_2024):
     assert "2024" in r
 
 
+# ---------------------------------------------------------------------
+# ElemTable bindings (2026-04-21 — family-file 12 B implicit layout)
+# ---------------------------------------------------------------------
+
+def test_elem_table_header_fields_present(sample_2024):
+    h = sample_2024.elem_table_header()
+    for key in ("element_count", "record_count", "header_flag", "decompressed_bytes"):
+        assert key in h, f"missing key {key}"
+        assert isinstance(h[key], int)
+    # Family 2024 has header_flag = 0x0011; flag == 0 on project files.
+    # For this fixture (family) we expect the magic to be present.
+    assert h["header_flag"] == 0x0011
+    # Declared counts should be positive.
+    assert h["element_count"] > 0
+    assert h["record_count"] > 0
+
+
+def test_elem_table_records_are_well_formed(sample_2024):
+    recs = sample_2024.elem_table_records()
+    assert isinstance(recs, list)
+    assert len(recs) > 0, "expected at least one record on the family sample"
+    # Every entry must be a dict with the three documented keys.
+    for r in recs:
+        for key in ("offset", "id_primary", "id_secondary"):
+            assert key in r, f"record missing key {key}: {r}"
+            assert isinstance(r[key], int)
+    # Offsets should be strictly increasing (records live sequentially).
+    offsets = [r["offset"] for r in recs]
+    assert all(a < b for a, b in zip(offsets, offsets[1:])), (
+        "ElemTable records not in ascending offset order"
+    )
+
+
+def test_declared_element_ids_are_sorted_and_unique(sample_2024):
+    ids = sample_2024.declared_element_ids()
+    assert isinstance(ids, list)
+    assert len(ids) > 0
+    # Strictly ascending (sorted + deduped).
+    assert all(a < b for a, b in zip(ids, ids[1:])), "ids not sorted"
+
+
 def test_rvt_to_ifc_matches_write_ifc_method(sample_2024):
     # The free function `rvt_to_ifc(path)` should be equivalent
     # (up to the timestamp in FILE_NAME, which we strip before
