@@ -335,13 +335,9 @@ mod tests {
     fn detect_project_2024_layout_40b_8byte_marker() {
         // Synthesize header + two 40B records with 8-byte FF markers.
         let mut buf = vec![0u8; 0x80];
-        for off in 0x22..0x2a {
-            buf[off] = 0xff;
-        }
+        buf[0x22..0x2a].fill(0xff);
         buf[0x2e] = 0x01;
-        for off in 0x4a..0x52 {
-            buf[off] = 0xff;
-        }
+        buf[0x4a..0x52].fill(0xff);
         buf[0x56] = 0x02;
         let layout = detect_layout(&buf);
         assert_eq!(layout.framing, RecordFraming::Explicit { marker_len: 8 });
@@ -389,14 +385,10 @@ mod tests {
         let mut buf = vec![0u8; 0x200];
         buf[2] = 0x02;
         buf[3] = 0x00;
-        for off in 0x22..0x2a {
-            buf[off] = 0xff;
-        }
+        buf[0x22..0x2a].fill(0xff);
         buf[0x2e] = 0x01;
         buf[0x42] = 0x01;
-        for off in 0x4a..0x52 {
-            buf[off] = 0xff;
-        }
+        buf[0x4a..0x52].fill(0xff);
         // next record_start=0x4a. body=0x52. body+4=0x56, body+24=0x6a.
         buf[0x56] = 0x02;
         buf[0x6a] = 0x02;

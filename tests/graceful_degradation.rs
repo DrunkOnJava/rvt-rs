@@ -65,9 +65,7 @@ fn detect_layout_on_single_ff_marker_does_not_panic() {
     // layout detector must fall back to Implicit rather than computing
     // a zero or negative stride.
     let mut buf = vec![0u8; 0x100];
-    for off in 0x20..0x24 {
-        buf[off] = 0xff;
-    }
+    buf[0x20..0x24].fill(0xff);
     let layout = elem_table::detect_layout(&buf);
     assert_eq!(
         layout.framing,
