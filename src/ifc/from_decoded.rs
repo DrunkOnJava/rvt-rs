@@ -574,6 +574,166 @@ pub fn hip_roof_brep(
     (vertices, triangles)
 }
 
+// ---- GEO-31 / GEO-30: Window + Door geometry and opening voids ----
+
+/// Small margin (GEO-31) added to an opening's width + height above
+/// the window/door frame, so the void in the host wall extends a
+/// hair past the frame and leaves no z-fighting sliver when the
+/// viewer renders both. Value in feet. IFC4 does not mandate this
+/// margin; it's a rendering hygiene nicety.
+pub const DEFAULT_OPENING_MARGIN_FEET: f64 = 0.01;
+
+/// Build a rectangular `Extrusion` for a **window** frame body
+/// (GEO-31). The three dimensions map as:
+///
+/// - `width_feet` — profile width along the host wall.
+/// - `height_feet` — vertical extrusion distance (window height).
+/// - `depth_feet` — profile depth perpendicular to the host wall;
+///   typically equal to the host wall's thickness so the window
+///   sits flush.
+///
+/// The resulting IfcExtrudedAreaSolid's local Z runs **upward** —
+/// the vertical "direction" of the window. Consumers that want the
+/// depth perpendicular to the wall should pass it as
+/// `depth_feet`; the writer handles orientation via the parent
+/// `ElementInput.rotation_radians` shared with the host wall.
+pub fn window_extrusion(width_feet: f64, height_feet: f64, depth_feet: f64) -> Extrusion {
+    Extrusion {
+        width_feet: width_feet.max(0.0),
+        depth_feet: depth_feet.max(0.0),
+        height_feet: height_feet.max(0.0),
+        profile_override: None,
+    }
+}
+
+/// Build the opening-void `Extrusion` for a window (GEO-31) — the
+/// rectangular hole cut into the host wall. Equal-shape to
+/// [`window_extrusion`] but inflated by `margin_feet` on width and
+/// height to avoid z-fighting with the window body. Depth passes
+/// through as-is so the void exactly spans the wall thickness.
+///
+/// Feed into `ElementInput.extrusion` on the IfcOpeningElement
+/// entry whose `host_element_index` points at the window's host
+/// wall. The writer's
+/// [`crate::ifc::entities::IfcEntity::BuildingElement`] handler
+/// emits `IfcOpeningElement` + `IfcRelVoidsElement` +
+/// `IfcRelFillsElement` automatically when it sees that wiring.
+pub fn window_opening_extrusion(
+    width_feet: f64,
+    height_feet: f64,
+    wall_thickness_feet: f64,
+    margin_feet: f64,
+) -> Extrusion {
+    let m = margin_feet.max(0.0);
+    Extrusion {
+        width_feet: (width_feet + 2.0 * m).max(0.0),
+        depth_feet: wall_thickness_feet.max(0.0),
+        height_feet: (height_feet + 2.0 * m).max(0.0),
+        profile_override: None,
+    }
+}
+
+/// Build a rectangular `Extrusion` for a **door** body (GEO-30).
+/// Same dimension mapping as [`window_extrusion`] — the semantic
+/// difference is purely in the host wall void (no sill).
+pub fn door_extrusion(width_feet: f64, height_feet: f64, depth_feet: f64) -> Extrusion {
+    window_extrusion(width_feet, height_feet, depth_feet)
+}
+
+/// Build the opening-void `Extrusion` for a door (GEO-30). Same
+/// shape as [`window_opening_extrusion`] — the door/window
+/// distinction lives in the host's IfcDoor/IfcWindow entity, not
+/// in the void itself.
+pub fn door_opening_extrusion(
+    width_feet: f64,
+    height_feet: f64,
+    wall_thickness_feet: f64,
+    margin_feet: f64,
+) -> Extrusion {
+    window_opening_extrusion(width_feet, height_feet, wall_thickness_feet, margin_feet)
+}
+
+/// Offset (GEO-31) a 3D placement from the host level's elevation
+/// up by the window's sill height, returning the new Z.
+///
+/// Revit stores a window's insertion point at the host level's
+/// elevation — the sill height is an *additive* per-instance
+/// property. This helper gives callers the Z they should set on
+/// `ElementInput.location_feet[2]` so the window sits at its true
+/// vertical position.
+///
+/// `host_level_elevation_feet` is the `Level.elevation_feet` of
+/// the level that hosts the window. `sill_height_feet` comes from
+/// the decoded [`Window.sill_height_feet`] (or
+/// [`Window::sill_height_inches`] / 12.0).
+pub fn window_placement_z_feet(host_level_elevation_feet: f64, sill_height_feet: f64) -> f64 {
+    host_level_elevation_feet + sill_height_feet.max(0.0)
+}
+
+/// Build a `Pset_WindowCommon`-style property set from a decoded
+/// [`Window`] **plus its typed dimensions** (GEO-31). Includes
+/// everything that [`window_property_set`] already emits, plus
+/// OverallWidth / OverallHeight / Depth (inch-equivalents) when
+/// the caller has them. Fields are skipped when zero or negative.
+pub fn window_dimensions_property_set(
+    window: &Window,
+    width_feet: f64,
+    height_feet: f64,
+    depth_feet: f64,
+) -> PropertySet {
+    let mut pset = window_property_set(window);
+    if width_feet > 0.0 {
+        pset.properties.push(Property {
+            name: "OverallWidth".into(),
+            value: PropertyValue::LengthFeet(width_feet),
+        });
+    }
+    if height_feet > 0.0 {
+        pset.properties.push(Property {
+            name: "OverallHeight".into(),
+            value: PropertyValue::LengthFeet(height_feet),
+        });
+    }
+    if depth_feet > 0.0 {
+        pset.properties.push(Property {
+            name: "Depth".into(),
+            value: PropertyValue::LengthFeet(depth_feet),
+        });
+    }
+    pset
+}
+
+/// Build a `Pset_DoorCommon`-style property set from a decoded
+/// [`Door`] plus typed dimensions (GEO-30). Analogous to
+/// [`window_dimensions_property_set`].
+pub fn door_dimensions_property_set(
+    door: &Door,
+    width_feet: f64,
+    height_feet: f64,
+    depth_feet: f64,
+) -> PropertySet {
+    let mut pset = door_property_set(door);
+    if width_feet > 0.0 {
+        pset.properties.push(Property {
+            name: "OverallWidth".into(),
+            value: PropertyValue::LengthFeet(width_feet),
+        });
+    }
+    if height_feet > 0.0 {
+        pset.properties.push(Property {
+            name: "OverallHeight".into(),
+            value: PropertyValue::LengthFeet(height_feet),
+        });
+    }
+    if depth_feet > 0.0 {
+        pset.properties.push(Property {
+            name: "Depth".into(),
+            value: PropertyValue::LengthFeet(depth_feet),
+        });
+    }
+    pset
+}
+
 /// Build a rectangular `Extrusion` for a ceiling. Thickness from
 /// [`crate::elements::ceiling::CeilingType`] falls back to 1 inch
 /// (ACT ceilings are typically 0.08 ft thick).
@@ -1534,5 +1694,118 @@ mod tests {
         // Ridge endpoint X ≈ short/2 = 10; Y inside [0, 40].
         assert!((v[4][0] - 10.0).abs() < 1e-9);
         assert!(v[4][1] > 0.0 && v[4][1] < 40.0);
+    }
+
+    // ---- GEO-31 / GEO-30: Window + Door geometry ----
+
+    #[test]
+    fn window_extrusion_matches_requested_dimensions() {
+        let ex = window_extrusion(3.0, 4.0, 0.5);
+        assert!((ex.width_feet - 3.0).abs() < 1e-9);
+        assert!((ex.depth_feet - 0.5).abs() < 1e-9);
+        assert!((ex.height_feet - 4.0).abs() < 1e-9);
+        assert!(ex.profile_override.is_none());
+    }
+
+    #[test]
+    fn window_extrusion_clamps_negative_to_zero() {
+        let ex = window_extrusion(-1.0, -2.0, -0.5);
+        assert_eq!(ex.width_feet, 0.0);
+        assert_eq!(ex.depth_feet, 0.0);
+        assert_eq!(ex.height_feet, 0.0);
+    }
+
+    #[test]
+    fn window_opening_inflates_width_and_height_but_not_depth() {
+        let void = window_opening_extrusion(3.0, 4.0, 0.5, 0.1);
+        assert!((void.width_feet - 3.2).abs() < 1e-9); // 3 + 2*0.1
+        assert!((void.depth_feet - 0.5).abs() < 1e-9); // unchanged
+        assert!((void.height_feet - 4.2).abs() < 1e-9); // 4 + 2*0.1
+    }
+
+    #[test]
+    fn window_opening_zero_margin_matches_window_size() {
+        let win = window_extrusion(3.0, 4.0, 0.5);
+        let void = window_opening_extrusion(3.0, 4.0, 0.5, 0.0);
+        assert!((win.width_feet - void.width_feet).abs() < 1e-9);
+        assert!((win.height_feet - void.height_feet).abs() < 1e-9);
+        assert!((win.depth_feet - void.depth_feet).abs() < 1e-9);
+    }
+
+    #[test]
+    fn door_extrusion_mirrors_window_extrusion() {
+        let door = door_extrusion(3.0, 7.0, 0.5);
+        let win = window_extrusion(3.0, 7.0, 0.5);
+        assert_eq!(door.width_feet, win.width_feet);
+        assert_eq!(door.height_feet, win.height_feet);
+        assert_eq!(door.depth_feet, win.depth_feet);
+    }
+
+    #[test]
+    fn door_opening_mirrors_window_opening() {
+        let door_void = door_opening_extrusion(3.0, 7.0, 0.5, 0.05);
+        let win_void = window_opening_extrusion(3.0, 7.0, 0.5, 0.05);
+        assert_eq!(door_void.width_feet, win_void.width_feet);
+        assert_eq!(door_void.height_feet, win_void.height_feet);
+        assert_eq!(door_void.depth_feet, win_void.depth_feet);
+    }
+
+    #[test]
+    fn window_placement_z_adds_sill_to_level_elevation() {
+        assert!((window_placement_z_feet(10.0, 3.0) - 13.0).abs() < 1e-9);
+        assert_eq!(window_placement_z_feet(10.0, 0.0), 10.0);
+    }
+
+    #[test]
+    fn window_placement_z_negative_sill_clamps_to_level() {
+        // Sub-grade sills make no physical sense — clamp so the
+        // window never drops below its host level.
+        assert_eq!(window_placement_z_feet(10.0, -5.0), 10.0);
+    }
+
+    #[test]
+    fn window_dimensions_property_set_merges_geometry_with_decoded_props() {
+        use crate::elements::openings::Window;
+        let window = Window {
+            sill_height_feet: Some(3.0),
+            rotation_radians: Some(std::f64::consts::FRAC_PI_2),
+            ..Default::default()
+        };
+        let pset = window_dimensions_property_set(&window, 3.0, 4.0, 0.5);
+        assert_eq!(pset.name, "Pset_WindowCommon");
+        // Two from window_property_set + three geometry entries.
+        let names: Vec<&str> = pset.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"SillHeight"));
+        assert!(names.contains(&"Rotation"));
+        assert!(names.contains(&"OverallWidth"));
+        assert!(names.contains(&"OverallHeight"));
+        assert!(names.contains(&"Depth"));
+    }
+
+    #[test]
+    fn window_dimensions_property_set_skips_zero_dimensions() {
+        use crate::elements::openings::Window;
+        let window = Window::default();
+        let pset = window_dimensions_property_set(&window, 0.0, 4.0, 0.0);
+        let names: Vec<&str> = pset.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(!names.contains(&"OverallWidth"));
+        assert!(names.contains(&"OverallHeight"));
+        assert!(!names.contains(&"Depth"));
+    }
+
+    #[test]
+    fn door_dimensions_property_set_merges_geometry() {
+        use crate::elements::openings::Door;
+        let door = Door {
+            flip_hand: Some(true),
+            ..Default::default()
+        };
+        let pset = door_dimensions_property_set(&door, 3.0, 7.0, 0.5);
+        assert_eq!(pset.name, "Pset_DoorCommon");
+        let names: Vec<&str> = pset.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"FlipHand"));
+        assert!(names.contains(&"OverallWidth"));
+        assert!(names.contains(&"OverallHeight"));
+        assert!(names.contains(&"Depth"));
     }
 }
