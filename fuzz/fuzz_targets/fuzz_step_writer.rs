@@ -105,12 +105,12 @@ impl ElementTag {
             Self::Furniture => "IfcFurniture".into(),
             Self::Other(s) => {
                 // Clamp to 32 chars so the `Other` variant doesn't
-                // dominate runtime via escape cost.
-                let mut t = s.clone();
-                if t.len() > 32 {
-                    t.truncate(32);
-                }
-                t
+                // dominate runtime via escape cost. Use the
+                // char-boundary-safe `truncate_string` helper rather
+                // than String::truncate — libFuzzer 2026-04-21 caught
+                // a panic here on an `Other(..)` value with multi-byte
+                // UTF-8 content where byte-32 fell inside a char.
+                truncate_string(s.clone(), 32)
             }
         }
     }
