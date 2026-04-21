@@ -60,6 +60,45 @@
 //! IfcOpenShell, BlenderBIM, and the buildingSMART validator family.
 //! No IfcOpenShell runtime dependency is needed — the STEP writer is
 //! pure Rust.
+//!
+//! # Module index
+//!
+//! IFC4 exporter subsystem:
+//!
+//! | Module | What it does |
+//! |---|---|
+//! | [`category_map`] | Revit class → IFC4 type mapping (IFC-01) |
+//! | [`entities`] | IFC4 entity taxonomy (walls, floors, doors, …) |
+//! | [`from_decoded`] | Bridge: decoded Revit elements → IfcModel |
+//! | [`step_writer`] | IfcModel → ISO-10303-21 STEP text |
+//!
+//! VW1 viewer data model — Rust-side primitives a browser /
+//! desktop viewer binds to:
+//!
+//! | Module | What it does |
+//! |---|---|
+//! | [`scene_graph`] | Project → storey → element tree (VW1-05) + schedule (VW1-15) |
+//! | [`pbr`] | Revit Material → glTF PBR mapping (VW1-06) |
+//! | [`camera`] | Orbit-camera state + controls (VW1-07) |
+//! | [`clipping`] | ClippingPlane + SectionBox + ViewMode (VW1-10/14) |
+//! | [`measure`] | Distance / angle / polygon-area (VW1-13) |
+//! | [`annotation`] | Note / leader / polyline / pin markups (VW1-12) |
+//! | [`share`] | ViewerState URL-fragment serialization (VW1-24) |
+//! | [`gltf`] | glTF 2.0 GLB binary exporter (VW1-04) |
+//! | [`sheet`] | 2D SVG plan view emission (VW1-11) |
+//!
+//! Typical viewer pipeline:
+//!
+//! 1. `IfcModel` produced via [`RvtDocExporter`]
+//! 2. [`scene_graph::build_scene_graph`] for the navigation tree
+//! 3. [`scene_graph::CategoryFilter`] applied per user toggles
+//! 4. [`gltf::model_to_glb`] for the 3D canvas, or
+//!    [`sheet::render_plan_svg`] for the 2D drawing panel
+//! 5. [`camera::CameraState`] + [`clipping::ViewMode`] drive the
+//!    viewport's projection + spatial filter
+//! 6. [`scene_graph::element_info_panel`] powers click-to-inspect
+//! 7. [`share::encode_to_fragment`] serializes the whole state into
+//!    a URL for collaboration
 
 use crate::Result;
 
