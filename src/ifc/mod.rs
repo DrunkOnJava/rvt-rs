@@ -66,6 +66,7 @@ use crate::Result;
 pub mod category_map;
 pub mod entities;
 pub mod from_decoded;
+pub mod scene_graph;
 pub mod step_writer;
 
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model, entity_type_histogram};
