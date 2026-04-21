@@ -181,7 +181,11 @@ fn parse_records_from_bytes(d: &[u8], layout: ElemTableLayout, limit: usize) -> 
                     let b =
                         u32::from_le_bytes([d[body + 4], d[body + 5], d[body + 6], d[body + 7]]);
                     (a, b)
-                } else if layout.stride == 40 && body + 24 <= d.len() {
+                } else if layout.stride == 40 && body + 28 <= d.len() {
+                    // 40-byte layout (observed on Revit 2024 projects):
+                    //   [8 B marker][4 B zero][u32 id_primary][16 B zero/payload][u32 id_secondary][8 B payload]
+                    // id_primary is at body+4, id_secondary at body+24
+                    // (record offsets +12 and +32 respectively).
                     let a = u32::from_le_bytes([
                         d[body + 4],
                         d[body + 5],
@@ -189,10 +193,10 @@ fn parse_records_from_bytes(d: &[u8], layout: ElemTableLayout, limit: usize) -> 
                         d[body + 7],
                     ]);
                     let b = u32::from_le_bytes([
-                        d[body + 20],
-                        d[body + 21],
-                        d[body + 22],
-                        d[body + 23],
+                        d[body + 24],
+                        d[body + 25],
+                        d[body + 26],
+                        d[body + 27],
                     ]);
                     (a, b)
                 } else {
@@ -352,24 +356,26 @@ mod tests {
     }
 
     #[test]
-    fn parse_records_project_2024_layout_reads_id_at_offset_plus_12_and_28() {
+    fn parse_records_project_2024_layout_reads_id_at_offset_plus_12_and_32() {
+        // 40-byte record, record_start=0x22. body=record_start+8=0x2a.
+        // id_primary at body+4 = 0x2e (record_start+12).
+        // id_secondary at body+24 = 0x42 (record_start+32).
         let mut buf = vec![0u8; 0x200];
         buf[2] = 0x02;
         buf[3] = 0x00;
         for off in 0x22..0x2a {
             buf[off] = 0xff;
         }
-        // body starts at 0x2a: [4 B zero][u32 id_primary][12 B zero/payload][u32 id_secondary][8 B payload]
-        buf[0x2e] = 0x01; // id_primary at body+4 = 0x2e
-        buf[0x3a] = 0x01; // id_secondary at body+20 = 0x3e … wait, let's recompute.
-        // body = 0x2a. body+4 = 0x2e. body+20 = 0x3e.
-        buf[0x3e] = 0x01;
+        buf[0x2e] = 0x01;
+        buf[0x42] = 0x01;
         for off in 0x4a..0x52 {
             buf[off] = 0xff;
         }
-        buf[0x56] = 0x02; // body+4 = 0x52+4 = 0x56
-        buf[0x66] = 0x02; // body+20 = 0x52+20 = 0x66
+        // next record_start=0x4a. body=0x52. body+4=0x56, body+24=0x6a.
+        buf[0x56] = 0x02;
+        buf[0x6a] = 0x02;
         let layout = detect_layout(&buf);
+        assert_eq!(layout.stride, 40);
         let records = parse_records_from_bytes(&buf, layout, 2);
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].id_primary, 1);
