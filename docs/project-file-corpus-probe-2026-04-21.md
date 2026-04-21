@@ -23,10 +23,9 @@ probe operates on the files in place via a local clone / download.
 
 ## What held
 
-The thesis-level Phase D claims are preserved across the project-file
-jump:
+The thesis-level claims are preserved across the project-file jump:
 
-- **Schema → data linkage (Finding #1).** On
+- **Schema → data linkage (Phase D Finding #1).** On
   `2024_Core_Interior.rvt`, tag `0x0061` (`AbsCurveGStep`) hits 20,035
   times in the ~1 MB decompressed `Global/Latest`, at **323× the
   uniform-random rate**. Family-file finding was "340× in 938 KB
@@ -38,6 +37,31 @@ jump:
   `GeomStep`, `0x0046` `ATFProvenanceBaseCell`) are the same
   class families that dominate family-file Global/Latest. The schema
   is the type dictionary for both file variants.
+- **100% field-type classification generalises (Q5.2).** Both
+  project files decode every field in their `Formats/Latest` schema
+  with **zero `Unknown`** variants:
+
+  | File | Fields | Unknown | Classified |
+  |---|---|---|---|
+  | `Revit_IFC5_Einhoven.rvt` | 1161 | 0 | 100.00 % |
+  | `2024_Core_Interior.rvt` | 1114 | 0 | 100.00 % |
+
+  The `FieldType` enum's 11 discriminator bytes mapped against the
+  family corpus generalise cleanly to project files. See
+  `examples/probe_project_coverage.rs`.
+- **ADocument walker works on Revit 2023 project files (L5B-11
+  partial).** Previously documented as "reliable on 2024–2026;
+  2016–2023 entry-point detection pending" — but both the 2023 and
+  2024 project files emit a clean walk:
+
+  | File | Fields read | Entry offset | Diagnostics |
+  |---|---|---|---|
+  | `Revit_IFC5_Einhoven.rvt` (2023) | 13 | 0x1ee5 | 0 |
+  | `2024_Core_Interior.rvt` (2024) | 13 | 0x157e0 | 0 |
+
+  L5B-11 remains open for the 2016–2022 range (no project corpus),
+  but the 2023 block is now covered. See
+  `examples/probe_project_walker.rs`.
 - **Schema table size.** 398 classes in the 2024 project vs 395 in
   the 2024 family sample — within measurement noise. The class
   inventory doesn't meaningfully differ between file variants.
@@ -45,6 +69,13 @@ jump:
   invariant held — no panics, no OOMs, no overruns across all 20
   streams of the 34 MB file. The Q-04 fuzz-regression harness
   predicted this and it came out clean.
+- **`Formats/Latest` is near-byte-invariant across variants.**
+  Running `rvt-corpus` across the 2023 project, 2024 project, and
+  2024 family sample finds **17,266 bytes byte-for-byte identical**
+  and another 406,434 bytes low-variance (differ in small regions)
+  across all three. The schema Revit ships is the same architectural
+  artefact for family and project files — the 364-byte run starting
+  at offset 0 (class-name table) is identical across all variants.
 
 ## What needed correction
 
