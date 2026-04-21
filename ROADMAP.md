@@ -43,9 +43,51 @@ Everything in this section works today on `main` and is exercised by tests again
 - Deterministic STEP output under `StepOptions { timestamp }` — fixed timestamp produces byte-identical files. ISO-10303-21-correct Unicode escaping (`\X2\HHHH\X0\`, `\X4\HHHHHHHH\X0\`).
 - A committed sample output — [`tests/fixtures/synthetic-project.ifc`](tests/fixtures/synthetic-project.ifc) — opens cleanly in BlenderBIM and IfcOpenShell.
 
+### Extrusion-geometry assembly from decoded fields
+
+- Wall: location-line endpoints + layer thicknesses → `IfcExtrudedAreaSolid` (GEO-27).
+- Floor: boundary polygon + thickness → `IFCARBITRARYCLOSEDPROFILEDEF` extrusion + `Qto_SlabBaseQuantities` (GEO-28).
+- Roof: gable triangular profile + hip faceted-brep with computed pitch (GEO-29).
+- Door + Window: body + opening-void extrusions with configurable z-fighting margin, plus sill-height placement helper (GEO-30, GEO-31).
+- Stair: sawtooth cross-section profile (back stringer + alternating riser/tread) + tread + landing rectangular extrusions (GEO-32).
+- Column: I-shape / circular / rectangular-hollow / arbitrary-closed profiles + level-delta height resolution (GEO-33).
+- Beam: same profile variants + axis yaw/pitch + 3D span helpers (GEO-34).
+
+### Stream-level write path
+
+- `FieldType::encode` — inverse of `FieldType::decode`, canonical-form emitting (WRT-01).
+- `encode_instance` + `ElementEncoder` trait + `write_field_by_type` — schema-driven inverse of the walker reader (WRT-03).
+- `encode_adocument_fields` + `write_adocument_field` — ADocument-level inverse including the 2-column Container variant (WRT-02, WRT-09).
+- `round_trip::verify_instance_round_trip` — decode → re-encode → byte-compare harness with per-field divergence location (WRT-04).
+- `validate_truncated_gzip_round_trip` + `..._prefix8_..` — pre-write gzip encoder validators (WRT-11).
+- `BasicFileInfo::encode` / `PartAtom::encode` — per-stream writers (WRT-07, WRT-08).
+- `writer::file_guid` + `guid_preserved` — file-identity invariant check after any write (WRT-05).
+- `writer::file_history_entries` + `history_entries_preserved` — upgrade-history invariant check (WRT-06).
+- `writer::decompress_stream` + `verify_patches_applied` + `write_with_patches_verified` — atomic temp+rename write with per-stream decompression verification (WRT-12, WRT-13).
+- `rvt-write` CLI — applies a JSON manifest of `StreamPatch` entries + verifies the round-trip (WRT-14).
+
+### Viewer data model (Rust side — `rvt::ifc`)
+
+A feature-complete Rust data model for a browser/desktop 3D viewer. All modules are serde-serializable so a WASM build passes JSON across the FFI boundary cleanly.
+
+- `scene_graph::build_scene_graph` — project → storey → element tree with hosted doors/windows nested under their wall (VW1-05).
+- `pbr::PbrMaterial` — name-driven Revit `Material` → glTF-2.0 metallic-roughness translation (glass double-sided, metal metallic=1, wood/concrete roughness tuned) (VW1-06).
+- `camera::CameraState` + orbit/pan/zoom/frame-bbox controls (VW1-07).
+- `scene_graph::element_info_panel` — click-to-inspect JSON payload with storey + material + formatted property-set values (VW1-08).
+- `scene_graph::CategoryFilter` — hide-by-IFC-type pruning of the scene graph (VW1-09).
+- `clipping::ViewMode` (Plan / ThreeD / Section) + default section-box per mode (VW1-10).
+- `sheet::render_plan_svg` — 2D plan-view SVG with per-category colour (walls black, doors blue, columns red, …) (VW1-11).
+- `annotation::AnnotationLayer` — Note / Leader / Polyline / Pin user markups (VW1-12).
+- `measure` — distance / angle / polygon-area primitives + tagged `Measurement` enum (VW1-13).
+- `clipping::ClippingPlane` + `SectionBox` — oriented half-space + AABB spatial culling (VW1-14).
+- `scene_graph::Schedule` + CSV export with RFC 4180 escaping (VW1-15).
+- `gltf::model_to_glb` — dep-free binary glTF-2.0 exporter (VW1-04). The `rvt-gltf` CLI wraps this (VW1-16).
+- `rvt-ifc` CLI emits STEP IFC4 (VW1-17).
+- `share::ViewerState` + `encode_to_fragment` / `decode_from_fragment` — whole-viewer-state URL sharing (VW1-24).
+
 ### Tooling
 
-- Nine CLI binaries: `rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`. Every CLI supports `--redact` for PII-safe output.
+- Eleven CLI binaries: `rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`. Every CLI supports `--redact` for PII-safe output where relevant.
 - Python bindings via pyo3 + maturin — `pip install rvt`. Surface: `RevitFile` class with `version`, `original_path`, `build`, `guid`, `part_atom_title`, `stream_names()`, `read_stream(name)`, `schema_json()`, `basic_file_info_json()`, `part_atom_json()`, `read_adocument()`, `write_ifc()` and a one-shot `rvt.rvt_to_ifc(path)` helper. PEP 561 typed via `__init__.pyi`. CI builds wheels on Ubuntu, macOS, Windows (Python ≥ 3.8, abi3).
 - Stream-level modifying writer (`writer::write_with_patches`) — 13/13 streams byte-preserving round-trip on the 2024 sample; atomic temp-file + rename; pre-flight validation that every patch's stream name exists.
 - 30+ reproducible probes under [`examples/`](examples/), one per documented finding in the recon report.
@@ -82,7 +124,7 @@ Ordered by dependency and by how much each unblocks downstream. Earlier items cl
 2. **Revit unit → `IfcSIUnit` mapping** — read `autodesk.unit.*` identifiers from Partitions/NN and emit the correct `IfcUnitAssignment` (tasks IFC-39, IFC-40). Blocks correct scale in consumer viewers — today a mis-unit file can render at the wrong physical size.
 3. **Sweep geometry for curved walls and non-rectangular extrusions** — `IfcSweptSolid` + `IfcRevolvedAreaSolid` + `IfcArbitraryClosedProfileDef` (tasks IFC-17, IFC-18, IFC-24). Unblocks curved walls, non-rectangular doors and windows, and profile-shape columns.
 4. **`IfcBooleanResult` for arbitrary voids** — beyond the door/window `IfcOpeningElement` pattern, for penetrations that don't align to a nominal opening (task IFC-19).
-5. **Element-specific geometry assembly from the schema** — wall base curve + height + layer stack → swept solid; floor boundary sketch + thickness → planar extrusion; roof pitch + boundary → sloped extrusion; stair run + landing + riser + tread (tasks GEO-27..34). Today the extrusion helpers take caller-supplied dimensions; these tasks make the reader recover them from the file itself.
+5. **Reader-side geometry extraction** — the assembly helpers (GEO-27..34) exist and take caller-supplied dimensions. What's still pending is the *reader* surfacing those dimensions: wall base curve + height, floor boundary polygon, roof pitch, stair run/landing data — all currently require the caller to measure from a Revit UI screenshot or accept the walker's fallback. Unlocks end-to-end "open RVT → accurate 3D model" without human-supplied dimensions.
 6. **Real-world RVT corpus** — the `rac_basic_sample_family` family is a validated baseline but families are a narrower slice of the format than projects. A set of community-donated `.rvt` project files (with redistribution rights) widens what we can assert (task Q-01).
 7. **`IfcRepresentationMap` type instancing** — emit each wall / door / window type once as a shared representation and reference it from every instance, dropping file size dramatically on projects with many repeated types (tasks IFC-21, IFC-22).
 8. **Walker extension to Revit 2016–2023** — `walker::read_adocument` detects the entry-point band across all 11 releases but cleanly decodes all 13 ADocument fields only on 2024–2026. Per-band entry-point heuristics for the older releases (tasks L5B-11, recon report §Q6.5-F).
@@ -92,8 +134,9 @@ Ordered by dependency and by how much each unblocks downstream. Earlier items cl
 
 These depend on multiple foundation pieces landing and are named for calibration, not as commitments.
 
-- **Write support** — schema-aware field writer, per-class encoder trait, round-trip verification harness that asserts byte-identical where possible and semantic-identical everywhere. GUID preservation, history chain preservation, CFB structural writer. Tasks WRT-01..14. Gated on per-class decoders reaching production parity.
-- **Browser-based 3D viewer** (`rvt-view`) — WASM build of `rvt-core`, JS bindings via wasm-bindgen, Three.js integration, glTF exporter, scene-graph builder, element picking, category layer toggles, sheet rendering, measurement tool, clipping planes, schedule viewer, drag-and-drop user-RVT support. Tasks VW1-01..24. Gated on geometry extraction (`Next up` §5) producing drawable solids.
+- **CFB structural writer** (`WRT-10`) — current output uses the `cfb` crate's default OLE2 sector ordering, which differs from Revit's own writer. Decompressed streams round-trip byte-for-byte on read, but raw file bytes don't. Needs sector-layout reverse engineering from the corpus.
+- **Browser-based 3D viewer frontend** — the Rust-side data model is feature-complete (scene graph, PBR, camera, filter, view modes, annotations, measurement, clipping, schedule, glTF exporter, URL share). What remains is the frontend integration layer: WASM build of `rvt-core` (VW1-01), wasm-bindgen JS bindings (VW1-02), Three.js wrapper (VW1-03), WebWorker offloading for large files (VW1-19), progressive streaming (VW1-20), GitHub Pages static-site deploy (VW1-18), demo RVT catalogue (VW1-22), drag-and-drop file upload (VW1-23), client-side-only privacy posture (VW1-21). All Rust-side primitives are in `src/ifc/` and fully tested.
+- **Workspace split** (`SEC-12`, `SEC-13`) — `rvt-core` (pure parser, `forbid(unsafe_code)`) / `rvt-cli` (binaries) / `rvt-py` (pyo3 with isolated `unsafe`) / `rvt-ifc` (exporter). The split doesn't block anything today but tightens the clean-room posture for the PyO3 macro expansion's `unsafe` escape hatch.
 - **Performance work** — criterion benchmark suite (open, schema-parse, read_adocument, ifc_export per file size), memory profiling with dhat, CI performance regression gate. Tasks Q-05..09.
 - **IFC2X3 / IFC4.3 target selection** — the category map is structured to make this a table swap. Not scheduled; waiting on consumer demand.
 - **Revit link resolution** — following `.rvt` → `.rvt` / `.rfa` / `.ifc` references to produce a unified IFC. Large undertaking; deliberately out of the near-term plan.
