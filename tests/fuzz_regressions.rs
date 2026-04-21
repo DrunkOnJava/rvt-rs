@@ -91,6 +91,57 @@ fn inflate_garbage_after_header_does_not_panic() {
 }
 
 #[test]
+fn inflate_bogus_fextra_length_does_not_panic() {
+    // Gzip header with FEXTRA flag (0x04) set, claiming a 65535-byte
+    // extra field that isn't actually present. `gzip_header_len`
+    // should either return `None` (preferred) or a value within
+    // bounds; slicing past the buffer is the bug.
+    let data = [
+        0x1f, 0x8b, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // header
+        0xff, 0xff, // XLEN = 65535, no body follows
+    ];
+    inflate_and_assert("bogus_fextra_xlen", &data);
+}
+
+#[test]
+fn inflate_fname_no_null_terminator_does_not_panic() {
+    // Gzip header with FNAME flag (0x08) set, no null terminator
+    // in the remaining bytes. The scanner in gzip_header_len must
+    // fail gracefully rather than walk into unmapped memory.
+    let mut data = vec![0x1f, 0x8b, 0x08, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    data.extend(b"filename-with-no-null-terminator-whatsoever");
+    inflate_and_assert("fname_no_null", &data);
+}
+
+#[test]
+fn inflate_fcomment_no_null_terminator_does_not_panic() {
+    // Same shape as the FNAME case but for FCOMMENT (flag 0x10).
+    let mut data = vec![0x1f, 0x8b, 0x08, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    data.extend(b"comment with no null byte anywhere in it");
+    inflate_and_assert("fcomment_no_null", &data);
+}
+
+#[test]
+fn inflate_fhcrc_past_end_does_not_panic() {
+    // FHCRC flag set, but the buffer ends at the base header — so
+    // the extra 2-byte CRC read runs off the end.
+    let data = [0x1f, 0x8b, 0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    inflate_and_assert("fhcrc_past_end", &data);
+}
+
+#[test]
+fn inflate_at_offset_past_end_does_not_panic() {
+    // Caller passes an offset that's already past the end of the
+    // buffer. The fuzz target wouldn't exercise this (libFuzzer
+    // always passes 0 as the offset), but callers on the wire
+    // can.
+    let data = [0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    assert_no_panic("offset_past_end", &data, |d| {
+        let _ = inflate_at_with_limits(d, d.len() + 10, limits());
+    });
+}
+
+#[test]
 fn inflate_compressed_bomb_rejected_by_cap() {
     // Hand-rolled DEFLATE block that decodes to 4 MiB of 0x00 bytes.
     // The 1 MiB cap must reject this cleanly — either `Err` or an
@@ -226,6 +277,29 @@ fn schema_short_garbage_does_not_panic() {
 }
 
 #[test]
+fn schema_tiny_length_prefix_does_not_panic() {
+    // First byte claims a length of 0; schema parser should not
+    // infinite-loop or index past end.
+    parse_schema_assert("tiny_len_prefix", &[0x00; 32]);
+}
+
+#[test]
+fn schema_huge_declared_count_does_not_panic() {
+    // Looks like a header claiming an astronomical class count,
+    // then no actual class bytes. The parser should refuse or
+    // return partial — never panic or allocate for-real.
+    let mut bytes = vec![0xff; 4]; // claim u32::MAX classes
+    bytes.extend(vec![0x00; 96]); // thin tail
+    parse_schema_assert("huge_declared_count", &bytes);
+}
+
+#[test]
+fn schema_ffff_prefix_does_not_panic() {
+    // 4 KB of 0xFF — every length prefix reads as enormous.
+    parse_schema_assert("all_ff_4k", &vec![0xff; 4096]);
+}
+
+#[test]
 fn schema_garbage_page_does_not_panic() {
     // 4096 bytes of pseudo-random — hits most of the parser's inner
     // loops with "plausible" length-prefix values.
@@ -233,6 +307,64 @@ fn schema_garbage_page_does_not_panic() {
         .map(|i| i.wrapping_mul(2654435761).to_le_bytes()[0].wrapping_add(17))
         .collect();
     parse_schema_assert("garbage_4k", &bytes);
+}
+
+// ---- walker::detect_entry_offset + find_chunks ----
+
+#[test]
+fn walker_detect_entry_handles_empty_input() {
+    // walker::detect_entry_offset takes a decompressed ADocument
+    // blob and scans for the class-tag pattern. Empty input must
+    // return `None`/score 0 without panicking.
+    assert_no_panic("walker_detect_empty", &[], |d| {
+        let _ = rvt::walker::detect_adocument_start(d, None);
+    });
+}
+
+#[test]
+fn walker_detect_entry_handles_tiny_input() {
+    assert_no_panic("walker_detect_tiny", &[0xaa, 0xbb, 0xcc, 0xdd], |d| {
+        let _ = rvt::walker::detect_adocument_start(d, None);
+    });
+}
+
+#[test]
+fn walker_detect_entry_handles_uniform_bytes() {
+    // All-zero 4 KB — forces the scanner to walk the full buffer
+    // without bailing early on a mismatch.
+    assert_no_panic("walker_detect_zeros_4k", &vec![0x00u8; 4096], |d| {
+        let _ = rvt::walker::detect_adocument_start(d, None);
+    });
+}
+
+#[test]
+fn find_chunks_handles_empty_input() {
+    assert_no_panic("find_chunks_empty", &[], |d| {
+        let _ = rvt::compression::find_gzip_offsets(d);
+    });
+}
+
+#[test]
+fn find_chunks_handles_partial_magic() {
+    // 1f 8b is the gzip magic. A buffer of 1f 8b alone should
+    // not cause the chunk finder to over-read.
+    assert_no_panic("find_chunks_partial_magic", &[0x1f, 0x8b], |d| {
+        let _ = rvt::compression::find_gzip_offsets(d);
+    });
+}
+
+#[test]
+fn find_chunks_handles_many_adjacent_magics() {
+    // Repeated gzip magic bytes with nothing after. A buggy scanner
+    // could try to dereference each as the start of a real chunk
+    // and overrun the end.
+    let data: Vec<u8> = std::iter::repeat([0x1f, 0x8b])
+        .take(128)
+        .flatten()
+        .collect();
+    assert_no_panic("find_chunks_many_magics", &data, |d| {
+        let _ = rvt::compression::find_gzip_offsets(d);
+    });
 }
 
 // ---- fuzz_part_atom ----
