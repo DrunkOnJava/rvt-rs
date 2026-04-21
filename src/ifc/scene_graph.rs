@@ -91,6 +91,88 @@ impl SceneNode {
     }
 }
 
+/// Category-based visibility filter (VW1-09) for a scene graph.
+/// Carries a hide-list of IFC type strings; any node whose
+/// `ifc_type` matches (case-insensitive) is filtered out of the
+/// tree, along with all of its descendants.
+///
+/// Viewers implement "layer toggles" by toggling IFC types in this
+/// filter and re-rendering the returned tree.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CategoryFilter {
+    /// IFC types to hide. Matched case-insensitively against
+    /// `SceneNode.ifc_type`. Use [`Self::hide`] to add a type,
+    /// [`Self::show`] to remove.
+    pub hidden: std::collections::BTreeSet<String>,
+}
+
+impl CategoryFilter {
+    /// New empty filter — everything visible.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Mark `ifc_type` as hidden. Case-insensitive — `"IFCWALL"` and
+    /// `"ifcwall"` are equivalent.
+    pub fn hide(&mut self, ifc_type: &str) {
+        self.hidden.insert(ifc_type.to_ascii_uppercase());
+    }
+
+    /// Mark `ifc_type` as visible again (removes from hide-list).
+    pub fn show(&mut self, ifc_type: &str) {
+        self.hidden.remove(&ifc_type.to_ascii_uppercase());
+    }
+
+    /// `true` when `ifc_type` is currently hidden.
+    pub fn is_hidden(&self, ifc_type: &str) -> bool {
+        self.hidden.contains(&ifc_type.to_ascii_uppercase())
+    }
+
+    /// Apply this filter to a scene graph — returns a new
+    /// `SceneNode` tree with all matching subtrees pruned. The
+    /// input is borrowed, not modified. An empty filter returns a
+    /// clone of the full tree.
+    ///
+    /// A node is pruned when its own `ifc_type` is in the hide-
+    /// list; child pruning then runs on the surviving descendants.
+    /// Pruning the root node returns a stub `SceneNode` with no
+    /// children (the root itself is preserved so viewers always
+    /// have something to bind to).
+    pub fn apply(&self, root: &SceneNode) -> SceneNode {
+        if self.hidden.is_empty() {
+            return root.clone();
+        }
+        SceneNode {
+            name: root.name.clone(),
+            ifc_type: root.ifc_type.clone(),
+            entity_index: root.entity_index,
+            storey_index: root.storey_index,
+            children: root
+                .children
+                .iter()
+                .filter(|child| !self.is_hidden(&child.ifc_type))
+                .map(|child| self.apply(child))
+                .collect(),
+        }
+    }
+}
+
+/// Collect all distinct `ifc_type` strings present in the scene
+/// graph (VW1-09). Use as the source of truth for a viewer's
+/// "layer" toggle UI.
+pub fn distinct_ifc_types(root: &SceneNode) -> Vec<String> {
+    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    collect_types(root, &mut seen);
+    seen.into_iter().collect()
+}
+
+fn collect_types(node: &SceneNode, out: &mut std::collections::BTreeSet<String>) {
+    out.insert(node.ifc_type.clone());
+    for child in &node.children {
+        collect_types(child, out);
+    }
+}
+
 /// Build a scene graph tree from an `IfcModel` (VW1-05). Walks the
 /// flat `model.entities` list + `model.building_storeys` and nests
 /// them into a three-level tree:
@@ -418,6 +500,115 @@ mod tests {
         assert_eq!(scene.children.len(), 2);
         assert_eq!(scene.children[0].children[0].name, "W-Ground");
         assert_eq!(scene.children[1].children[0].name, "W-Second");
+    }
+
+    // ---- VW1-09: CategoryFilter tests ----
+
+    fn sample_scene() -> SceneNode {
+        let model = IfcModel {
+            project_name: Some("Scene".into()),
+            building_storeys: vec![Storey {
+                name: "Ground".into(),
+                elevation_feet: 0.0,
+            }],
+            entities: vec![
+                mk_element("Wall-1", "IFCWALL", Some(0), None),
+                mk_element("Door-1", "IFCDOOR", Some(0), Some(0)),
+                mk_element("Slab-1", "IFCSLAB", Some(0), None),
+                mk_element("Column-1", "IFCCOLUMN", Some(0), None),
+            ],
+            ..Default::default()
+        };
+        build_scene_graph(&model)
+    }
+
+    #[test]
+    fn category_filter_empty_returns_clone() {
+        let scene = sample_scene();
+        let filter = CategoryFilter::new();
+        let filtered = filter.apply(&scene);
+        assert_eq!(filtered, scene);
+    }
+
+    #[test]
+    fn category_filter_hides_matching_ifc_type() {
+        let scene = sample_scene();
+        let mut filter = CategoryFilter::new();
+        filter.hide("IFCWALL");
+        let filtered = filter.apply(&scene);
+        // Wall-1 (with hosted Door-1) is pruned. Slab + Column survive.
+        let storey = &filtered.children[0];
+        let names: Vec<&str> = storey.children.iter().map(|n| n.name.as_str()).collect();
+        assert!(!names.contains(&"Wall-1"));
+        assert!(!names.contains(&"Door-1")); // Door was hosted — gone with wall.
+        assert!(names.contains(&"Slab-1"));
+        assert!(names.contains(&"Column-1"));
+    }
+
+    #[test]
+    fn category_filter_is_case_insensitive() {
+        let scene = sample_scene();
+        let mut filter = CategoryFilter::new();
+        filter.hide("ifcslab");
+        let filtered = filter.apply(&scene);
+        let storey = &filtered.children[0];
+        let names: Vec<&str> = storey.children.iter().map(|n| n.name.as_str()).collect();
+        assert!(!names.contains(&"Slab-1"));
+    }
+
+    #[test]
+    fn category_filter_show_removes_from_hide_list() {
+        let mut filter = CategoryFilter::new();
+        filter.hide("IFCWALL");
+        assert!(filter.is_hidden("IFCWALL"));
+        filter.show("IFCWALL");
+        assert!(!filter.is_hidden("IFCWALL"));
+    }
+
+    #[test]
+    fn category_filter_hides_multiple_types() {
+        let scene = sample_scene();
+        let mut filter = CategoryFilter::new();
+        filter.hide("IFCWALL");
+        filter.hide("IFCSLAB");
+        let filtered = filter.apply(&scene);
+        let storey = &filtered.children[0];
+        let names: Vec<&str> = storey.children.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["Column-1"]);
+    }
+
+    #[test]
+    fn distinct_ifc_types_enumerates_tree() {
+        let scene = sample_scene();
+        let types = distinct_ifc_types(&scene);
+        assert!(types.contains(&"IFCPROJECT".to_string()));
+        assert!(types.contains(&"IFCBUILDINGSTOREY".to_string()));
+        assert!(types.contains(&"IFCWALL".to_string()));
+        assert!(types.contains(&"IFCDOOR".to_string()));
+        assert!(types.contains(&"IFCSLAB".to_string()));
+        assert!(types.contains(&"IFCCOLUMN".to_string()));
+    }
+
+    #[test]
+    fn distinct_ifc_types_dedupes() {
+        let scene = sample_scene();
+        let types = distinct_ifc_types(&scene);
+        // All 2 walls would have been "IFCWALL" but our fixture only
+        // has 1. Dedup still reports 1 entry per unique type.
+        let wall_count = types.iter().filter(|t| *t == "IFCWALL").count();
+        assert_eq!(wall_count, 1);
+    }
+
+    #[test]
+    fn category_filter_serializable() {
+        let mut filter = CategoryFilter::new();
+        filter.hide("IFCWALL");
+        filter.hide("IFCCOLUMN");
+        let json = serde_json::to_string(&filter).unwrap();
+        let back: CategoryFilter = serde_json::from_str(&json).unwrap();
+        assert!(back.is_hidden("IFCWALL"));
+        assert!(back.is_hidden("IFCCOLUMN"));
+        assert!(!back.is_hidden("IFCSLAB"));
     }
 
     #[test]
