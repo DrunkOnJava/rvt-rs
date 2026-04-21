@@ -162,10 +162,13 @@ harness = false
 [lib]
 name = "rvt"
 path = "src/lib.rs"
-# Pure rlib now — the pyo3 cdylib moved to the `rvt-py` member
-# crate when we split in SEC-12/13. Tests, benches, examples,
-# binaries, and the `wasm` feature all consume the rlib.
-crate-type = ["rlib"]
+# `rlib` for native consumers (tests, benches, examples, binaries);
+# `cdylib` for the wasm-pack output when the `wasm` feature is
+# active. The pyo3 cdylib moved to `rvt-py` in SEC-12/13, so this
+# cdylib never runs through the pyo3 macro expansion — the root
+# crate stays `#![forbid(unsafe_code)]` regardless of which
+# crate-type is selected at link time.
+crate-type = ["rlib", "cdylib"]
 
 [profile.release]
 lto = true
