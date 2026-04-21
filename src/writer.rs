@@ -293,6 +293,41 @@ pub fn guid_preserved(src: &Path, dst: &Path) -> Result<bool> {
     Ok(a == b)
 }
 
+// ---- WRT-06: History chain preservation ----
+
+/// Read the document-history entries from a Revit file (WRT-06).
+/// Returns the ordered list of Revit-version strings embedded in
+/// `Global/Latest` — oldest first, same order as
+/// [`crate::object_graph::DocumentHistory::entries`].
+///
+/// Returns `Ok(Vec::new())` when no Global/Latest stream exists or
+/// when the stream has no embedded "Revit …" markers. Err when the
+/// stream read or decompression fails.
+pub fn file_history_entries(path: &Path) -> Result<Vec<String>> {
+    let mut rf = RevitFile::open(path)?;
+    let stream_name = crate::streams::GLOBAL_LATEST;
+    if !rf.stream_names().iter().any(|s| s == stream_name) {
+        return Ok(Vec::new());
+    }
+    match crate::object_graph::DocumentHistory::from_revit_file(&mut rf) {
+        Ok(h) => Ok(h.entries),
+        Err(_) => Ok(Vec::new()),
+    }
+}
+
+/// Verify that a write cycle preserved the document-history chain
+/// (WRT-06). Returns `Ok(true)` when src and dst share the exact
+/// same ordered entry list, `Ok(false)` on divergence, and Err
+/// when either file is unreadable.
+///
+/// Pair with [`guid_preserved`] for a two-value "file-identity
+/// preserved" predicate after any [`write_with_patches`] cycle.
+pub fn history_entries_preserved(src: &Path, dst: &Path) -> Result<bool> {
+    let a = file_history_entries(src)?;
+    let b = file_history_entries(dst)?;
+    Ok(a == b)
+}
+
 // ---- WRT-13: Stream hash verification per write ----
 
 /// Per-stream verification outcome (WRT-13). One entry per
@@ -762,6 +797,141 @@ mod tests {
         build_cfb_with_basic_file_info(&src, &info_a.encode()).unwrap();
         build_cfb_with_basic_file_info(&dst, &info_b.encode()).unwrap();
         assert!(!guid_preserved(&src, &dst).unwrap());
+        std::fs::remove_file(&src).ok();
+        std::fs::remove_file(&dst).ok();
+    }
+
+    // ---- WRT-06: History chain preservation ----
+
+    /// Build a synthetic Global/Latest decompressed payload with
+    /// embedded UTF-16LE "Revit …" version strings. Mirrors the
+    /// byte shape DocumentHistory::from_decompressed scans for.
+    fn synth_global_latest_with_history(versions: &[&str]) -> Vec<u8> {
+        let mut out = Vec::new();
+        // 8 bytes of header padding — the Revit format has ~0x48
+        // bytes of framing but the scanner finds the first "Revit "
+        // marker itself, so any leading bytes work.
+        out.extend_from_slice(&[0u8; 64]);
+        for v in versions {
+            // Pad between entries so the scanner doesn't coalesce them.
+            out.extend_from_slice(&[0u8; 4]);
+            for unit in v.encode_utf16() {
+                out.extend_from_slice(&unit.to_le_bytes());
+            }
+            // Null terminator so the scanner stops at the string end.
+            out.extend_from_slice(&[0, 0]);
+        }
+        out
+    }
+
+    fn build_cfb_with_global_latest(path: &Path, decompressed: &[u8]) -> Result<()> {
+        let f = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)?;
+        let mut cfb =
+            cfb::CompoundFile::create(f).map_err(|e| crate::Error::Cfb(format!("create: {e}")))?;
+        cfb.create_storage("/Global")
+            .map_err(|e| crate::Error::Cfb(format!("storage: {e}")))?;
+        let compressed = crate::compression::truncated_gzip_encode_with_prefix8(decompressed)?;
+        let mut s = cfb
+            .create_stream("/Global/Latest")
+            .map_err(|e| crate::Error::Cfb(format!("stream: {e}")))?;
+        s.write_all(&compressed)
+            .map_err(|e| crate::Error::Cfb(format!("write: {e}")))?;
+        drop(s);
+        cfb.flush()
+            .map_err(|e| crate::Error::Cfb(format!("flush: {e}")))?;
+        Ok(())
+    }
+
+    #[test]
+    fn file_history_recovers_synthetic_chain() {
+        let src = temp_path("history.rvt");
+        let decomp = synth_global_latest_with_history(&[
+            "Revit 2018 - Initial",
+            "Revit 2020 - Upgrade",
+            "Revit 2024",
+        ]);
+        build_cfb_with_global_latest(&src, &decomp).unwrap();
+        let entries = file_history_entries(&src).unwrap();
+        assert!(entries.iter().any(|e| e.contains("2018")));
+        assert!(entries.iter().any(|e| e.contains("2024")));
+        std::fs::remove_file(&src).ok();
+    }
+
+    #[test]
+    fn file_history_returns_empty_when_no_global_latest() {
+        let src = temp_path("no_history.rvt");
+        build_tiny_cfb(&src, b"nothing").unwrap();
+        let entries = file_history_entries(&src).unwrap();
+        assert!(entries.is_empty());
+        std::fs::remove_file(&src).ok();
+    }
+
+    #[test]
+    fn copy_file_preserves_history_chain() {
+        let src = temp_path("src_hist.rvt");
+        let dst = temp_path("dst_hist.rvt");
+        let decomp =
+            synth_global_latest_with_history(&["Revit 2022 - Original", "Revit 2024 - Upgrade"]);
+        build_cfb_with_global_latest(&src, &decomp).unwrap();
+        copy_file(&src, &dst).unwrap();
+        assert!(history_entries_preserved(&src, &dst).unwrap());
+        std::fs::remove_file(&src).ok();
+        std::fs::remove_file(&dst).ok();
+    }
+
+    #[test]
+    fn write_with_patches_non_global_preserves_history() {
+        let src = temp_path("src_hist2.rvt");
+        let dst = temp_path("dst_hist2.rvt");
+        // Build a CFB with both Global/Latest (carrying history) and
+        // Formats/Latest (which we'll patch).
+        let decomp = synth_global_latest_with_history(&["Revit 2024 - only"]);
+        {
+            let f = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&src)
+                .unwrap();
+            let mut cfb = cfb::CompoundFile::create(f).unwrap();
+            cfb.create_storage("/Global").unwrap();
+            cfb.create_storage("/Formats").unwrap();
+            let glob = crate::compression::truncated_gzip_encode_with_prefix8(&decomp).unwrap();
+            let mut s1 = cfb.create_stream("/Global/Latest").unwrap();
+            s1.write_all(&glob).unwrap();
+            drop(s1);
+            let fmt = crate::compression::truncated_gzip_encode(b"formats-body").unwrap();
+            let mut s2 = cfb.create_stream("/Formats/Latest").unwrap();
+            s2.write_all(&fmt).unwrap();
+            drop(s2);
+            cfb.flush().unwrap();
+        }
+        let patches = vec![StreamPatch {
+            stream_name: "Formats/Latest".into(),
+            new_decompressed: b"new-formats".to_vec(),
+            framing: StreamFraming::RawGzipFromZero,
+        }];
+        write_with_patches(&src, &dst, &patches).unwrap();
+        assert!(history_entries_preserved(&src, &dst).unwrap());
+        std::fs::remove_file(&src).ok();
+        std::fs::remove_file(&dst).ok();
+    }
+
+    #[test]
+    fn history_diverges_when_global_latest_changed() {
+        let src = temp_path("hist_a.rvt");
+        let dst = temp_path("hist_b.rvt");
+        let decomp_a = synth_global_latest_with_history(&["Revit 2018"]);
+        let decomp_b = synth_global_latest_with_history(&["Revit 2024"]);
+        build_cfb_with_global_latest(&src, &decomp_a).unwrap();
+        build_cfb_with_global_latest(&dst, &decomp_b).unwrap();
+        assert!(!history_entries_preserved(&src, &dst).unwrap());
         std::fs::remove_file(&src).ok();
         std::fs::remove_file(&dst).ok();
     }
