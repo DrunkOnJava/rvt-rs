@@ -121,6 +121,10 @@ path = "src/bin/rvt_ifc.rs"
 name = "gen-fixture"
 path = "src/bin/gen_fixture.rs"
 
+[[bin]]
+name = "rvt-write"
+path = "src/bin/rvt_write.rs"
+
 # Criterion benchmark suite (Q-05). Run with `cargo bench` or
 # `cargo bench --bench compression`. See `docs/benchmarks.md`.
 [[bench]]
