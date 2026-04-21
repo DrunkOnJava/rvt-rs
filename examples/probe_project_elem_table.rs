@@ -4,10 +4,22 @@
 use rvt::{RevitFile, elem_table};
 
 fn main() {
+    // Paths resolved via env vars so the probe doesn't leak any
+    // contributor's home directory into the repo (CI PII guard).
+    let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
+        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+    let family_path = std::env::var("RVT_FAMILY_2024").unwrap_or_else(|_| {
+        format!(
+            "{}/samples/racbasicsamplefamily-2024.rfa",
+            std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| "../../samples".into())
+        )
+    });
+    let project_2023 = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
+    let project_2024 = format!("{project_dir}/2024_Core_Interior.rvt");
     let files = [
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/Revit_IFC5_Einhoven.rvt",
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt",
-        "/Users/griffin/Developer/re/rvt-recon-2026-04-19/samples/racbasicsamplefamily-2024.rfa",
+        project_2023.as_str(),
+        project_2024.as_str(),
+        family_path.as_str(),
     ];
     for path in files {
         let mut rf = RevitFile::open(path).unwrap();

@@ -33,19 +33,22 @@ fn dump(label: &str, bytes: &[u8], from: usize, to: usize) {
 }
 
 fn main() {
+    // Resolve paths via env vars so this probe doesn't leak any user's
+    // local home directory into the repo (PII guard in CI flags those).
+    let family_path = std::env::var("RVT_FAMILY_2024").unwrap_or_else(|_| {
+        format!(
+            "{}/samples/racbasicsamplefamily-2024.rfa",
+            std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| "../../samples".into())
+        )
+    });
+    let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
+        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+    let project_2023 = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
+    let project_2024 = format!("{project_dir}/2024_Core_Interior.rvt");
     let files = [
-        (
-            "FAMILY 2024",
-            "/Users/griffin/Developer/re/rvt-recon-2026-04-19/samples/racbasicsamplefamily-2024.rfa",
-        ),
-        (
-            "PROJECT 2023",
-            "/private/tmp/rvt-corpus-probe/magnetar/Revit/Revit_IFC5_Einhoven.rvt",
-        ),
-        (
-            "PROJECT 2024",
-            "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt",
-        ),
+        ("FAMILY 2024", family_path.as_str()),
+        ("PROJECT 2023", project_2023.as_str()),
+        ("PROJECT 2024", project_2024.as_str()),
     ];
     for (label, path) in files {
         let mut rf = RevitFile::open(path).unwrap();
