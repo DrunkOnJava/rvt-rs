@@ -183,6 +183,82 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         return Ok(());
     }
 
+    // WRT-10.3: non-empty patch sector-preservation path.
+    //
+    // Strategy: copy src to a temp file, open it with `cfb::open_rw`,
+    // and rewrite ONLY the patched streams in-place. The `cfb` crate
+    // reuses the stream's existing sector chain when the new content
+    // fits (and extends only the tail when it grows), so every
+    // unpatched stream's sectors stay physically where they were in
+    // the source. This reduces the byte delta from ~94% (full
+    // rebuild) to "only the patched streams' sectors and the FAT
+    // entries that describe them" — usually well under 5% for a
+    // single-stream patch.
+    if src != dst {
+        drop(rf); // release the read-only handle before we reopen rw.
+
+        let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
+        let dst_name = dst
+            .file_name()
+            .ok_or_else(|| crate::Error::Cfb("dst has no filename component".into()))?
+            .to_string_lossy()
+            .to_string();
+        let tmp_name = format!(".{dst_name}.rw-{}", std::process::id());
+        let tmp_path = dst_parent.join(&tmp_name);
+
+        struct InplaceGuard {
+            path: Option<std::path::PathBuf>,
+        }
+        impl Drop for InplaceGuard {
+            fn drop(&mut self) {
+                if let Some(p) = self.path.take() {
+                    let _ = std::fs::remove_file(&p);
+                }
+            }
+        }
+        let mut guard = InplaceGuard {
+            path: Some(tmp_path.clone()),
+        };
+
+        std::fs::copy(src, &tmp_path)?;
+        {
+            let mut rw = cfb::open_rw(&tmp_path)
+                .map_err(|e| crate::Error::Cfb(format!("open_rw {}: {e}", tmp_path.display())))?;
+            for p in patches {
+                let data = match p.framing {
+                    StreamFraming::RawGzipFromZero => {
+                        compression::truncated_gzip_encode(&p.new_decompressed)?
+                    }
+                    StreamFraming::CustomPrefix8 => {
+                        compression::truncated_gzip_encode_with_prefix8(&p.new_decompressed)?
+                    }
+                    StreamFraming::Verbatim => p.new_decompressed.clone(),
+                };
+                let path = if p.stream_name.starts_with('/') {
+                    p.stream_name.clone()
+                } else {
+                    format!("/{}", p.stream_name)
+                };
+                // `create_stream` truncates + rewrites an existing
+                // stream by design, which is what we want. The cfb
+                // crate reuses the prior sector chain when content
+                // fits and extends only the tail when it grows.
+                let mut s = rw
+                    .create_stream(&path)
+                    .map_err(|e| crate::Error::Cfb(format!("create_stream {path}: {e}")))?;
+                s.write_all(&data)
+                    .map_err(|e| crate::Error::Cfb(format!("write_all {path}: {e}")))?;
+                s.flush()
+                    .map_err(|e| crate::Error::Cfb(format!("flush {path}: {e}")))?;
+            }
+            rw.flush()
+                .map_err(|e| crate::Error::Cfb(format!("flush: {e}")))?;
+        }
+        std::fs::rename(&tmp_path, dst)?;
+        guard.path = None;
+        return Ok(());
+    }
+
     // Compute a sibling temp path in the same directory as dst so
     // the final rename is atomic on the same filesystem.
     let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
