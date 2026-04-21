@@ -1030,6 +1030,157 @@ pub fn column_property_set(column: &crate::elements::structural::Column) -> Prop
     }
 }
 
+// ---- GEO-34: Beam geometry (profile + curve path) ----
+
+/// 3D length (GEO-34) of a straight beam from `start` to `end` in
+/// feet. Euclidean distance including Z component, so it also
+/// works for sloped members.
+pub fn beam_length_3d_feet(start: crate::geometry::Point3, end: crate::geometry::Point3) -> f64 {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let dz = end.z - start.z;
+    (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
+/// Yaw angle (GEO-34) of a beam's axis in the project XY plane,
+/// in radians. Zero when the beam runs along +X, π/2 for +Y,
+/// -π/2 for -Y, π for -X. Useful for rotating the extrusion
+/// profile so it sits perpendicular to the beam's axis.
+pub fn beam_axis_yaw_radians(start: crate::geometry::Point3, end: crate::geometry::Point3) -> f64 {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    dy.atan2(dx)
+}
+
+/// Slope angle (GEO-34) of a beam's axis, in radians, measured
+/// from the project horizontal plane. Zero for flat beams,
+/// positive when the end is higher than the start.
+///
+/// Returns 0 for zero-length beams (degenerate input) so callers
+/// can thread the result into `rotation_radians` without further
+/// guards.
+pub fn beam_axis_pitch_radians(
+    start: crate::geometry::Point3,
+    end: crate::geometry::Point3,
+) -> f64 {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let dz = end.z - start.z;
+    let horiz = (dx * dx + dy * dy).sqrt();
+    if horiz == 0.0 && dz == 0.0 {
+        return 0.0;
+    }
+    dz.atan2(horiz)
+}
+
+/// `true` when a beam is horizontal within `eps_feet` (GEO-34) —
+/// useful for distinguishing floor-framing beams from raked
+/// trusses or sloped braces before emitting a representation.
+pub fn beam_is_horizontal(
+    start: crate::geometry::Point3,
+    end: crate::geometry::Point3,
+    eps_feet: f64,
+) -> bool {
+    (end.z - start.z).abs() < eps_feet
+}
+
+/// Build an I/W-shape `Extrusion` for a structural beam (GEO-34)
+/// — same profile math as [`column_i_shape_extrusion`] but the
+/// caller supplies the **beam length** along its axis. Emit as
+/// `IFCIShapeProfileDef` + `IfcExtrudedAreaSolid`.
+pub fn beam_i_shape_extrusion(
+    overall_width_feet: f64,
+    overall_depth_feet: f64,
+    web_thickness_feet: f64,
+    flange_thickness_feet: f64,
+    length_feet: f64,
+) -> Extrusion {
+    Extrusion::i_shape(
+        overall_width_feet,
+        overall_depth_feet,
+        web_thickness_feet,
+        flange_thickness_feet,
+        length_feet.max(0.1),
+    )
+}
+
+/// Build a rectangular-hollow-section `Extrusion` for a beam
+/// (GEO-34). HSS tube members — common for tube-steel joists
+/// and decorative exposed framing. Emits
+/// `IFCRECTANGLEHOLLOWPROFILEDEF`.
+pub fn beam_rectangular_hollow_extrusion(
+    outer_width_feet: f64,
+    outer_depth_feet: f64,
+    wall_thickness_feet: f64,
+    length_feet: f64,
+) -> Extrusion {
+    Extrusion::rectangle_hollow(
+        outer_width_feet.max(0.0),
+        outer_depth_feet.max(0.0),
+        wall_thickness_feet.max(0.0),
+        length_feet.max(0.1),
+    )
+}
+
+/// Build an `Extrusion` from an arbitrary closed polyline beam
+/// profile (GEO-34) — for sketched-in-family beams outside the
+/// standard I / HSS catalogue. Emits
+/// `IFCARBITRARYCLOSEDPROFILEDEF` + polyline + IfcExtrudedAreaSolid.
+pub fn beam_arbitrary_profile_extrusion(
+    profile_points: Vec<(f64, f64)>,
+    length_feet: f64,
+) -> Extrusion {
+    Extrusion::arbitrary_closed(profile_points, length_feet.max(0.1))
+}
+
+/// Build a rectangular `Extrusion` for a beam (GEO-34). Used when
+/// the caller doesn't yet have profile data off the Symbol and
+/// just needs a reasonable block-shaped body.
+pub fn beam_rectangular_extrusion(width_feet: f64, depth_feet: f64, length_feet: f64) -> Extrusion {
+    Extrusion {
+        width_feet: width_feet.max(0.0),
+        depth_feet: depth_feet.max(0.0),
+        height_feet: length_feet.max(0.1),
+        profile_override: None,
+    }
+}
+
+/// Build a `Pset_BeamCommon`-style property set (GEO-34) from a
+/// decoded beam. Surfaces start/end level offsets,
+/// cross-section-rotation, and a `Span` computed from the 3D
+/// length when both endpoints are present.
+pub fn beam_property_set(beam: &crate::elements::structural::Beam) -> PropertySet {
+    let mut props = Vec::new();
+    if let Some(v) = beam.start_level_offset_feet {
+        props.push(Property {
+            name: "StartLevelOffset".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(v) = beam.end_level_offset_feet {
+        props.push(Property {
+            name: "EndLevelOffset".into(),
+            value: PropertyValue::LengthFeet(v),
+        });
+    }
+    if let Some(v) = beam.cross_section_rotation_radians {
+        props.push(Property {
+            name: "CrossSectionRotation".into(),
+            value: PropertyValue::AngleRadians(v),
+        });
+    }
+    if let (Some(s), Some(e)) = (beam.start, beam.end) {
+        props.push(Property {
+            name: "Span".into(),
+            value: PropertyValue::LengthFeet(beam_length_3d_feet(s, e)),
+        });
+    }
+    PropertySet {
+        name: "Pset_BeamCommon".into(),
+        properties: props,
+    }
+}
+
 /// Build a `Pset_WallCommon`-style property set from a decoded
 /// [`Wall`]. Fields that are `None` are skipped — property sets
 /// only carry what we actually decoded.
@@ -2271,6 +2422,146 @@ mod tests {
     fn column_property_set_empty_for_unpopulated_column() {
         use crate::elements::structural::Column;
         let pset = column_property_set(&Column::default());
+        assert!(pset.properties.is_empty());
+    }
+
+    // ---- GEO-34: Beam geometry ----
+
+    #[test]
+    fn beam_length_3d_includes_z_component() {
+        use crate::geometry::Point3;
+        let l = beam_length_3d_feet(Point3::new(0.0, 0.0, 0.0), Point3::new(3.0, 4.0, 0.0));
+        assert!((l - 5.0).abs() < 1e-9); // 3-4-5 triangle
+        let l2 = beam_length_3d_feet(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 1.0));
+        assert!((l2 - 3.0).abs() < 1e-9); // 2-2-1 → 3
+    }
+
+    #[test]
+    fn beam_axis_yaw_aligns_with_axes() {
+        use crate::geometry::Point3;
+        let origin = Point3::new(0.0, 0.0, 0.0);
+        assert!(beam_axis_yaw_radians(origin, Point3::new(10.0, 0.0, 0.0)).abs() < 1e-9);
+        assert!(
+            (beam_axis_yaw_radians(origin, Point3::new(0.0, 10.0, 0.0))
+                - std::f64::consts::FRAC_PI_2)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (beam_axis_yaw_radians(origin, Point3::new(-10.0, 0.0, 0.0)) - std::f64::consts::PI)
+                .abs()
+                < 1e-9
+        );
+    }
+
+    #[test]
+    fn beam_axis_pitch_flat_is_zero() {
+        use crate::geometry::Point3;
+        assert!(
+            beam_axis_pitch_radians(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 0.0, 0.0)).abs()
+                < 1e-9
+        );
+    }
+
+    #[test]
+    fn beam_axis_pitch_rising_is_positive() {
+        use crate::geometry::Point3;
+        // 10 ft run, 10 ft rise → 45° slope.
+        let p = beam_axis_pitch_radians(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 0.0, 10.0));
+        assert!((p - std::f64::consts::FRAC_PI_4).abs() < 1e-9);
+    }
+
+    #[test]
+    fn beam_axis_pitch_vertical_is_90_degrees() {
+        use crate::geometry::Point3;
+        // zero horizontal run → vertical; atan2(dz, 0) = ±PI/2.
+        let p = beam_axis_pitch_radians(Point3::new(0.0, 0.0, 0.0), Point3::new(0.0, 0.0, 10.0));
+        assert!((p - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn beam_axis_pitch_zero_vector_returns_zero() {
+        use crate::geometry::Point3;
+        let o = Point3::new(0.0, 0.0, 0.0);
+        assert_eq!(beam_axis_pitch_radians(o, o), 0.0);
+    }
+
+    #[test]
+    fn beam_is_horizontal_honours_eps() {
+        use crate::geometry::Point3;
+        let start = Point3::new(0.0, 0.0, 0.0);
+        let slight = Point3::new(10.0, 0.0, 0.001);
+        assert!(beam_is_horizontal(start, slight, 0.01));
+        assert!(!beam_is_horizontal(start, slight, 0.0001));
+    }
+
+    #[test]
+    fn beam_i_shape_extrusion_carries_profile() {
+        let ex = beam_i_shape_extrusion(0.5, 1.0, 0.04, 0.06, 20.0);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::IShape { .. }) => {}
+            other => panic!("expected IShape profile, got {:?}", other),
+        }
+        assert!((ex.height_feet - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn beam_rectangular_hollow_carries_wall_thickness() {
+        let ex = beam_rectangular_hollow_extrusion(1.0, 0.5, 0.05, 15.0);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::RectangleHollow {
+                wall_thickness_feet,
+                ..
+            }) => {
+                assert!((wall_thickness_feet - 0.05).abs() < 1e-9);
+            }
+            other => panic!("expected RectangleHollow profile, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn beam_arbitrary_profile_preserves_points() {
+        let pts = vec![(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)];
+        let ex = beam_arbitrary_profile_extrusion(pts.clone(), 10.0);
+        match ex.profile_override {
+            Some(crate::ifc::entities::ProfileDef::ArbitraryClosed { points }) => {
+                assert_eq!(points.len(), pts.len());
+            }
+            other => panic!("expected ArbitraryClosed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn beam_rectangular_extrusion_has_no_profile_override() {
+        let ex = beam_rectangular_extrusion(0.5, 0.5, 10.0);
+        assert!(ex.profile_override.is_none());
+    }
+
+    #[test]
+    fn beam_property_set_populates_all_fields() {
+        use crate::elements::structural::Beam;
+        use crate::geometry::Point3;
+        let beam = Beam {
+            start: Some(Point3::new(0.0, 0.0, 0.0)),
+            end: Some(Point3::new(10.0, 0.0, 0.0)),
+            start_level_offset_feet: Some(0.5),
+            end_level_offset_feet: Some(0.5),
+            cross_section_rotation_radians: Some(std::f64::consts::FRAC_PI_4),
+            ..Default::default()
+        };
+        let pset = beam_property_set(&beam);
+        assert_eq!(pset.name, "Pset_BeamCommon");
+        let names: Vec<&str> = pset.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"StartLevelOffset"));
+        assert!(names.contains(&"EndLevelOffset"));
+        assert!(names.contains(&"CrossSectionRotation"));
+        assert!(names.contains(&"Span"));
+    }
+
+    #[test]
+    fn beam_property_set_empty_when_nothing_decoded() {
+        use crate::elements::structural::Beam;
+        let pset = beam_property_set(&Beam::default());
         assert!(pset.properties.is_empty());
     }
 }
