@@ -16,6 +16,26 @@ Everything below is real code from the repo — `src/ifc/from_decoded.rs`,
 building, writes it to `tests/fixtures/synthetic-project.ifc`, and asserts
 the entity counts and byte patterns that this post describes.
 
+> **Status note — 2026-04-21.** This post describes the IFC4 exporter's
+> internal design end-to-end. The exporter works correctly **when fed
+> `DecodedElement` inputs from the synthetic test fixtures**. The
+> upstream walker that would produce `DecodedElement`s from a real
+> `.rvt` on disk does **not** yet decode typed elements on real project
+> files — `walker::scan_candidates` finds only `HostObjAttr` (1/405
+> schema classes) on `Revit_IFC5_Einhoven.rvt` and zero elements on
+> `2024_Core_Interior.rvt`. Root cause (see
+> `reports/element-framing/RE-01-synthesis.md`): element instance data
+> lives in the `Partitions/*` streams with a wire envelope that has not
+> yet been reverse-engineered. The exporter described below will
+> produce typed walls / floors / doors / etc. on real files once that
+> extraction is cracked; today on real files it emits
+> `IFCBUILDINGELEMENTPROXY` placeholders. Everything else in this post
+> — spatial tree, `IfcLocalPlacement`, `IfcExtrudedAreaSolid`,
+> `IfcMaterialLayerSet`, `IfcOpeningElement` → `IfcRelVoidsElement` /
+> `IfcRelFillsElement`, `IfcPropertySingleValue` — is faithful to the
+> committed code and the synthetic fixture. It's the input pipeline,
+> not the IFC output pipeline, that still needs work.
+
 ## The shape of the problem
 
 IFC4 is serialised as ISO-10303-21, the STEP text format. Every entity is a
