@@ -160,3 +160,59 @@ fn walker_to_ifc_einhoven_project_has_nonzero_elements() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
+    // DEC-05 per RE-14.3: verify that the record-level ArcWall decoder
+    // path in RvtDocExporter produces IFCWALL entities > 0 on a real
+    // corpus file. The empirical RE-14.3 count is 28 standard ArcWall
+    // records on Einhoven Partitions/5 (2 compound + 4 metadata/index
+    // records are correctly not decoded by the standard path).
+    let project_dir = match std::env::var("RVT_PROJECT_CORPUS_DIR") {
+        Ok(d) => d,
+        Err(_) => {
+            eprintln!("skipping DEC-05 assertion: RVT_PROJECT_CORPUS_DIR unset");
+            return Ok(());
+        }
+    };
+    let path = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
+    if !std::path::Path::new(&path).exists() {
+        eprintln!("skipping DEC-05: corpus file missing at {path}");
+        return Ok(());
+    }
+
+    let mut rf = RevitFile::open(&path)?;
+    let model = RvtDocExporter.export(&mut rf)?;
+
+    // Count IFCWALL entities in the model (by scanning entity variants
+    // that carry an `ifc_type` field equal to "IFCWALL").
+    let wall_count = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            rvt::ifc::entities::IfcEntity::BuildingElement { ifc_type, .. } => {
+                Some(ifc_type.as_str())
+            }
+            _ => None,
+        })
+        .filter(|t| *t == "IFCWALL")
+        .count();
+    assert!(
+        wall_count >= 10,
+        "expected ≥10 IFCWALL entities on Einhoven (RE-14.3 observed 26 \
+         standard ArcWall records); got {wall_count}"
+    );
+
+    let step = write_step(&model);
+    let step_wall_count = step.matches("IFCWALL(").count();
+    assert!(
+        step_wall_count >= 1,
+        "STEP writer emitted {step_wall_count} IFCWALL lines — expected ≥1"
+    );
+
+    eprintln!(
+        "DEC-05: Einhoven yields {wall_count} IFCWALL model entities, \
+         {step_wall_count} IFCWALL lines in STEP output"
+    );
+    Ok(())
+}
