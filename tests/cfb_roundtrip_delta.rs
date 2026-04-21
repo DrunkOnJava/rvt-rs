@@ -17,7 +17,7 @@ mod common;
 
 use common::{ALL_YEARS, sample_for_year, samples_dir};
 use rvt::Result;
-use rvt::streams::BASIC_FILE_INFO;
+use rvt::streams::{BASIC_FILE_INFO, PART_ATOM};
 use rvt::writer::{StreamFraming, StreamPatch, write_with_patches};
 use std::fs;
 
@@ -151,6 +151,230 @@ fn cfb_single_stream_patch_preserves_unpatched_sectors() -> Result<()> {
             "{year}: single-stream patch delta {pct:.2}% exceeds 25% ceiling — \
              sector-preservation path regressed to full-rebuild behaviour"
         );
+    }
+
+    let _ = fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
+/// CFB-01: patched stream GROWS. Append 4KB to BasicFileInfo (one
+/// extra sector). Must: (a) file stays readable, (b) patched stream
+/// round-trips the new content, (c) unpatched streams still open
+/// cleanly and return their original bytes.
+#[test]
+fn cfb_patch_growing_stream_preserves_unpatched() -> Result<()> {
+    if !corpus_available() {
+        eprintln!(
+            "skipping growing-stream patch test: corpus missing at {}",
+            samples_dir().display()
+        );
+        return Ok(());
+    }
+
+    let tmp = std::env::temp_dir().join(format!("rvt-grow-{}", std::process::id()));
+    fs::create_dir_all(&tmp).unwrap();
+
+    for year in ALL_YEARS {
+        let src = sample_for_year(year);
+        let dst = tmp.join(format!("grow-{year}.rfa"));
+
+        // Snapshot the original PartAtom bytes to compare after patch.
+        let (original_bfi, original_partatom) = {
+            let mut rf = rvt::RevitFile::open(&src)?;
+            let bfi = rf.read_stream(BASIC_FILE_INFO)?;
+            let pa = rf.read_stream(PART_ATOM)?;
+            (bfi, pa)
+        };
+
+        // Grow BasicFileInfo by 4 KB of trailer padding.
+        let mut grown = original_bfi.clone();
+        grown.extend(std::iter::repeat_n(0u8, 4096));
+        let patch = StreamPatch {
+            stream_name: BASIC_FILE_INFO.into(),
+            new_decompressed: grown.clone(),
+            framing: StreamFraming::Verbatim,
+        };
+        write_with_patches(&src, &dst, &[patch])?;
+
+        // (a) dst is openable as a Revit file.
+        let mut rw = rvt::RevitFile::open(&dst)?;
+
+        // (b) patched stream round-trips the grown content.
+        let bfi_after = rw.read_stream(BASIC_FILE_INFO)?;
+        assert_eq!(
+            bfi_after, grown,
+            "{year}: grown BasicFileInfo did not round-trip"
+        );
+
+        // (c) unpatched stream (PartAtom) still opens and matches source.
+        let pa_after = rw.read_stream(PART_ATOM)?;
+        assert_eq!(
+            pa_after, original_partatom,
+            "{year}: unpatched PartAtom bytes changed after growing patch"
+        );
+    }
+
+    let _ = fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
+/// CFB-02: patched stream SHRINKS. Cut BasicFileInfo in half.
+/// cfb::open_rw may or may not reclaim the freed sectors; what we
+/// require is that (a) the file stays valid, (b) the stream reads
+/// back at its new length, (c) unpatched streams are unaffected.
+#[test]
+fn cfb_patch_shrinking_stream_preserves_unpatched() -> Result<()> {
+    if !corpus_available() {
+        eprintln!(
+            "skipping shrinking-stream patch test: corpus missing at {}",
+            samples_dir().display()
+        );
+        return Ok(());
+    }
+
+    let tmp = std::env::temp_dir().join(format!("rvt-shrink-{}", std::process::id()));
+    fs::create_dir_all(&tmp).unwrap();
+
+    for year in ALL_YEARS {
+        let src = sample_for_year(year);
+        let dst = tmp.join(format!("shrink-{year}.rfa"));
+
+        let (original_bfi, original_partatom) = {
+            let mut rf = rvt::RevitFile::open(&src)?;
+            let bfi = rf.read_stream(BASIC_FILE_INFO)?;
+            let pa = rf.read_stream(PART_ATOM)?;
+            (bfi, pa)
+        };
+        // Skip years where BFI is already tiny.
+        if original_bfi.len() < 32 {
+            continue;
+        }
+
+        let shrunk = original_bfi[..original_bfi.len() / 2].to_vec();
+        let patch = StreamPatch {
+            stream_name: BASIC_FILE_INFO.into(),
+            new_decompressed: shrunk.clone(),
+            framing: StreamFraming::Verbatim,
+        };
+        write_with_patches(&src, &dst, &[patch])?;
+
+        let mut rw = rvt::RevitFile::open(&dst)?;
+        let bfi_after = rw.read_stream(BASIC_FILE_INFO)?;
+        assert_eq!(
+            bfi_after, shrunk,
+            "{year}: shrunk BasicFileInfo did not round-trip"
+        );
+
+        let pa_after = rw.read_stream(PART_ATOM)?;
+        assert_eq!(
+            pa_after, original_partatom,
+            "{year}: unpatched PartAtom bytes changed after shrinking patch"
+        );
+    }
+
+    let _ = fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
+/// CFB-03: two streams patched simultaneously. Verify both round-trip
+/// correctly and all OTHER streams in the file still read cleanly.
+#[test]
+fn cfb_multi_stream_patch_preserves_rest() -> Result<()> {
+    if !corpus_available() {
+        eprintln!(
+            "skipping multi-stream patch test: corpus missing at {}",
+            samples_dir().display()
+        );
+        return Ok(());
+    }
+
+    let tmp = std::env::temp_dir().join(format!("rvt-multi-{}", std::process::id()));
+    fs::create_dir_all(&tmp).unwrap();
+
+    for year in ALL_YEARS {
+        let src = sample_for_year(year);
+        let dst = tmp.join(format!("multi-{year}.rfa"));
+
+        // Snapshot every stream's bytes before patching so we can
+        // compare unpatched streams after.
+        let all_streams: Vec<(String, Vec<u8>)> = {
+            let mut rf = rvt::RevitFile::open(&src)?;
+            let names = rf.stream_names();
+            let mut out = Vec::with_capacity(names.len());
+            for name in names {
+                let data = rf.read_stream(&name)?;
+                out.push((name, data));
+            }
+            out
+        };
+
+        // Build patches for the two targets, using their original bytes
+        // grown by 1 KB each. That's a "changed content + grown size"
+        // pair of patches — exercises multi-stream mutation without
+        // adding complexity we can't assert against.
+        let bfi_original = all_streams
+            .iter()
+            .find(|(n, _)| n == BASIC_FILE_INFO)
+            .map(|(_, b)| b.clone());
+        let pa_original = all_streams
+            .iter()
+            .find(|(n, _)| n == PART_ATOM)
+            .map(|(_, b)| b.clone());
+
+        let Some(bfi_original) = bfi_original else {
+            continue;
+        };
+        let Some(pa_original) = pa_original else {
+            continue;
+        };
+
+        let mut new_bfi = bfi_original.clone();
+        new_bfi.extend(std::iter::repeat_n(0xAAu8, 1024));
+        let mut new_pa = pa_original.clone();
+        new_pa.extend(std::iter::repeat_n(0xBBu8, 1024));
+
+        let patches = vec![
+            StreamPatch {
+                stream_name: BASIC_FILE_INFO.into(),
+                new_decompressed: new_bfi.clone(),
+                framing: StreamFraming::Verbatim,
+            },
+            StreamPatch {
+                stream_name: PART_ATOM.into(),
+                new_decompressed: new_pa.clone(),
+                framing: StreamFraming::Verbatim,
+            },
+        ];
+        write_with_patches(&src, &dst, &patches)?;
+
+        // Both patches must round-trip.
+        let mut rw = rvt::RevitFile::open(&dst)?;
+        assert_eq!(
+            rw.read_stream(BASIC_FILE_INFO)?,
+            new_bfi,
+            "{year}: BasicFileInfo didn't round-trip after multi-stream patch"
+        );
+        assert_eq!(
+            rw.read_stream(PART_ATOM)?,
+            new_pa,
+            "{year}: PartAtom didn't round-trip after multi-stream patch"
+        );
+
+        // Every OTHER stream must read back identical to source.
+        for (name, original) in &all_streams {
+            if name == BASIC_FILE_INFO || name == PART_ATOM {
+                continue;
+            }
+            let after = rw.read_stream(name)?;
+            assert_eq!(
+                &after,
+                original,
+                "{year}: unpatched stream {name} changed after multi-stream patch \
+                 (src={} B, dst={} B)",
+                original.len(),
+                after.len()
+            );
+        }
     }
 
     let _ = fs::remove_dir_all(&tmp);
