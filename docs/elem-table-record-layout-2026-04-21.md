@@ -119,8 +119,29 @@ The rough parser needs three things to work on real `.rvt` files:
    is accurate (1975 / 2615 / 26425), so walk exactly that many
    records and stop.
 
-This would convert "2 records on the 2024 project" into the full
-26,425 records and unblock the walker → IFC wiring.
+### Landed
+
+`elem_table::parse_records(&mut RevitFile) -> Vec<ElemRecord>` (alongside
+the pre-existing `parse_records_rough` for backward compat) implements
+all three steps via a new `detect_layout()` scanner that finds the
+first two FF markers and takes their stride. Verified against the
+3-file corpus:
+
+| Variant | Before (rough) | After (parse_records) |
+|---|---|---|
+| Family 2024 (`.rfa`) | 45 records (12 B implicit from 0x30) | 1975 records (uses header count) |
+| Project 2023 (`.rvt`) | 2 records (sentinel early-term) | 2614 records (28 B from 0x1E) |
+| Project 2024 (`.rvt`) | 2 records (sentinel early-term) | 26,425 records (40 B from 0x22) |
+
+`tests/elem_table_corpus.rs` pins these counts in CI when the magnetar
+corpus is present (skips gracefully when not). First 3 `id_primary`
+values on both project files are `1, 2, 3` — sequential element ids,
+exactly what the walker needs to index into `Global/Latest`.
+
+This unblocks the record-enumeration half of walker → IFC emission.
+The remaining half — binding `ElemRecord.id_primary` to a byte offset
+inside `Global/Latest` — requires decoding the per-record payload
+(16 B on 2023, 28 B on 2024). See "Remaining unknowns" below.
 
 Remaining unknowns that the 3-file corpus can't yet answer:
 
