@@ -39,8 +39,11 @@ impl DocumentHistory {
     /// Extract document history from a Revit file.
     pub fn from_revit_file(rf: &mut RevitFile) -> Result<Self> {
         let bytes = rf.read_stream(GLOBAL_LATEST)?;
-        // Global/Latest has a custom 8-byte header followed by gzip at offset 8
-        let decompressed = compression::inflate_at(&bytes, 8)?;
+        // Family files prefix the gzip body with an 8-byte custom header;
+        // `.rvt` project files observed in the wild sometimes have no
+        // prefix and the magic sits at offset 0. `inflate_at_auto` picks
+        // whichever the file actually has.
+        let (_, decompressed) = compression::inflate_at_auto(&bytes)?;
         Self::from_decompressed(&decompressed)
     }
 
@@ -177,7 +180,7 @@ pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
 /// Pull all string records from a Revit file's `Global/Latest` stream.
 pub fn string_records_from_file(rf: &mut crate::RevitFile) -> Result<Vec<StringRecord>> {
     let bytes = rf.read_stream(GLOBAL_LATEST)?;
-    let decomp = compression::inflate_at(&bytes, 8)?;
+    let (_, decomp) = compression::inflate_at_auto(&bytes)?;
     Ok(extract_string_records(&decomp))
 }
 
