@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "description": "Pre-loaded RVT demos (VW1-22) for the rvt-view browser viewer. Each entry points at a file the static-site deploy bundles alongside the viewer, plus enough metadata for a landing-page catalog.",
+  "attribution": "phi-ag/rvt — 11-release sample family (rac_basic_sample_family.rfa across Revit 2016-2026). Redistribution confirmed in the upstream repo's LICENSE.",
+  "source_repo": "https://github.com/phi-ag/rvt",
+  "demos": [
+    {
+      "id": "rac-basic-2024",
+      "name": "RAC Basic Sample Family (2024)",
+      "file": "demos/rac_basic_sample_family_2024.rfa",
+      "revit_version": 2024,
+      "format": "rfa",
+      "size_bytes": 1080832,
+      "element_count_hint": 88,
+      "thumbnail": "demos/thumbnails/rac_basic_2024.png",
+      "description": "Family-scale sample — the canonical reference across every rvt-rs test.",
+      "tags": ["family", "furniture", "reference"]
+    },
+    {
+      "id": "rac-basic-2026",
+      "name": "RAC Basic Sample Family (2026)",
+      "file": "demos/rac_basic_sample_family_2026.rfa",
+      "revit_version": 2026,
+      "format": "rfa",
+      "size_bytes": 1093120,
+      "element_count_hint": 88,
+      "thumbnail": "demos/thumbnails/rac_basic_2026.png",
+      "description": "Same family upgraded through every Revit release — shows cross-version reading.",
+      "tags": ["family", "furniture", "cross-version"]
+    },
+    {
+      "id": "synthetic-project",
+      "name": "Synthetic IFC project fixture",
+      "file": "demos/synthetic-project.ifc",
+      "revit_version": null,
+      "format": "ifc",
+      "size_bytes": 18432,
+      "element_count_hint": 12,
+      "thumbnail": "demos/thumbnails/synthetic_project.png",
+      "description": "Hand-built IFC4 fixture — shows what the exporter produces without a Revit input.",
+      "tags": ["ifc", "synthetic", "exporter-demo"]
+    },
+    {
+      "id": "synthetic-structural",
+      "name": "Synthetic structural fixture",
+      "file": "demos/synthetic-structural.ifc",
+      "revit_version": null,
+      "format": "ifc",
+      "size_bytes": 8192,
+      "element_count_hint": 8,
+      "thumbnail": "demos/thumbnails/synthetic_structural.png",
+      "description": "Columns + beams + structural framing — exercises the IfcMember routing + RepresentationMap paths.",
+      "tags": ["ifc", "structural", "exporter-demo"]
+    }
+  ],
+  "schema_note": "Frontend loader reads this file at build time, copies every entry to the site's /demos/ path, and renders a gallery with thumbnails on the landing page. The `element_count_hint` is a display value — the actual viewer runs its own element enumeration on load.",
+  "privacy_note": "Every demo listed here has redistribution rights confirmed. Adding a new demo requires either (a) the contributor holds copyright and chooses to open-source it, or (b) the file is already under an open license allowing redistribution (e.g. phi-ag/rvt's MIT / sample-content clause). See docs/viewer-privacy-posture.md (VW1-21) for the broader client-side-only posture."
+}
