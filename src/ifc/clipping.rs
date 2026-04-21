@@ -1,5 +1,5 @@
-//! Clipping planes (VW1-14) — section box + half-space culling for
-//! the scene graph.
+//! Clipping planes (VW1-14) + view modes (VW1-10) — spatial culling
+//! primitives and the viewer's plan/3D/section state machine.
 //!
 //! A `ClippingPlane` is an oriented half-space: `dot(point - origin,
 //! normal) >= 0` is "kept," negative is "clipped." A `SectionBox` is
@@ -145,6 +145,75 @@ impl SectionBox {
     }
 }
 
+/// Viewer camera / projection mode (VW1-10). Viewers bind this to
+/// a segmented-control UI; each mode dictates which clipping +
+/// projection defaults apply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ViewMode {
+    /// Orthographic top-down plan view — typical default for
+    /// floor plans. Usually paired with a horizontal `z_min <= z
+    /// <= z_max` section box at the chosen storey.
+    Plan,
+    /// Perspective 3D view. Free-flying camera.
+    ThreeD,
+    /// Vertical elevation / section — orthographic camera facing
+    /// along the Y axis (or rotated via separate state).
+    Section,
+}
+
+impl ViewMode {
+    /// Default section box for this mode (VW1-10). `Plan` slices
+    /// to a horizontal band at the storey elevation ± 10 ft;
+    /// `Section` returns a vertical strip along the X axis;
+    /// `ThreeD` returns the infinite box (no spatial clipping).
+    ///
+    /// Callers override with their own SectionBox when the user
+    /// draws an explicit cut.
+    pub fn default_section_box(
+        self,
+        storey_elevation_feet: f64,
+        model_bbox: SectionBox,
+    ) -> SectionBox {
+        match self {
+            ViewMode::Plan => {
+                let z = storey_elevation_feet;
+                SectionBox {
+                    min: [model_bbox.min[0], model_bbox.min[1], z - 0.5],
+                    max: [model_bbox.max[0], model_bbox.max[1], z + 10.0],
+                }
+            }
+            ViewMode::Section => SectionBox {
+                min: [model_bbox.min[0], -0.5, model_bbox.min[2]],
+                max: [model_bbox.max[0], 0.5, model_bbox.max[2]],
+            },
+            ViewMode::ThreeD => SectionBox::infinite(),
+        }
+    }
+
+    /// Whether this view uses an orthographic camera. `Plan` and
+    /// `Section` do; `ThreeD` uses perspective.
+    pub fn is_orthographic(self) -> bool {
+        matches!(self, ViewMode::Plan | ViewMode::Section)
+    }
+
+    /// Human-readable label for menus / toolbars.
+    pub fn label(self) -> &'static str {
+        match self {
+            ViewMode::Plan => "Plan",
+            ViewMode::ThreeD => "3D",
+            ViewMode::Section => "Section",
+        }
+    }
+}
+
+impl Default for ViewMode {
+    /// 3D is the safest "always looks like something" default.
+    fn default() -> Self {
+        Self::ThreeD
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,5 +326,71 @@ mod tests {
     fn section_box_infinite_size_is_inf() {
         let b = SectionBox::infinite();
         assert!(b.size()[0].is_infinite());
+    }
+
+    // ---- VW1-10: ViewMode tests ----
+
+    #[test]
+    fn view_mode_default_is_3d() {
+        assert_eq!(ViewMode::default(), ViewMode::ThreeD);
+    }
+
+    #[test]
+    fn view_mode_labels() {
+        assert_eq!(ViewMode::Plan.label(), "Plan");
+        assert_eq!(ViewMode::ThreeD.label(), "3D");
+        assert_eq!(ViewMode::Section.label(), "Section");
+    }
+
+    #[test]
+    fn view_mode_orthographic_flag() {
+        assert!(ViewMode::Plan.is_orthographic());
+        assert!(ViewMode::Section.is_orthographic());
+        assert!(!ViewMode::ThreeD.is_orthographic());
+    }
+
+    #[test]
+    fn plan_mode_clips_to_storey_band() {
+        let model_bbox = SectionBox::new([0.0, 0.0, 0.0], [100.0, 100.0, 50.0]);
+        let box_ = ViewMode::Plan.default_section_box(10.0, model_bbox);
+        assert_eq!(box_.min[2], 9.5);
+        assert_eq!(box_.max[2], 20.0);
+        // XY extents passed through.
+        assert_eq!(box_.min[0], 0.0);
+        assert_eq!(box_.max[0], 100.0);
+    }
+
+    #[test]
+    fn section_mode_clips_to_vertical_strip() {
+        let model_bbox = SectionBox::new([-50.0, -30.0, 0.0], [50.0, 30.0, 20.0]);
+        let box_ = ViewMode::Section.default_section_box(0.0, model_bbox);
+        assert_eq!(box_.min[1], -0.5);
+        assert_eq!(box_.max[1], 0.5);
+        // X and Z extents pass through.
+        assert_eq!(box_.min[0], -50.0);
+        assert_eq!(box_.max[2], 20.0);
+    }
+
+    #[test]
+    fn threed_mode_returns_infinite_box() {
+        let model_bbox = SectionBox::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+        let box_ = ViewMode::ThreeD.default_section_box(0.0, model_bbox);
+        assert!(box_.min[0].is_infinite());
+        assert!(box_.max[2].is_infinite());
+    }
+
+    #[test]
+    fn view_mode_is_serde_roundtrippable() {
+        for m in [ViewMode::Plan, ViewMode::ThreeD, ViewMode::Section] {
+            let json = serde_json::to_string(&m).unwrap();
+            let back: ViewMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, m);
+        }
+    }
+
+    #[test]
+    fn view_mode_serialize_uses_snake_case() {
+        let json = serde_json::to_string(&ViewMode::ThreeD).unwrap();
+        assert_eq!(json, "\"three_d\"");
     }
 }
