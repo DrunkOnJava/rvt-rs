@@ -2,9 +2,10 @@
 //!
 //! Proves that the reader and writer are byte-exact inverses for any
 //! instance the reader understands cleanly. Use this module to gate
-//! changes to [`walker::read_field_by_type`] / [`walker::decode_instance`]
-//! against their [`walker::write_field_by_type`] /
-//! [`walker::encode_instance`] counterparts — a reader change that
+//! changes to [`crate::walker::read_field_by_type`] /
+//! [`crate::walker::decode_instance`] against their
+//! [`crate::walker::write_field_by_type`] /
+//! [`crate::walker::encode_instance`] counterparts — a reader change that
 //! breaks round-trip will surface here instead of silently mangling
 //! writes in production.
 //!
@@ -41,7 +42,7 @@
 //! - **Byte-exact**: `encode_instance(decode_instance(b, 0, s), s)` returns
 //!   the exact same byte slice the reader consumed from `b[range]`.
 //! - **Typed-clean**: every schema field in the decoded instance is a
-//!   typed [`walker::InstanceField`] variant (not `Bytes` fallback).
+//!   typed [`crate::walker::InstanceField`] variant (not `Bytes` fallback).
 //!
 //! Byte-exact implies typed-clean when the reader is faithful. A
 //! typed-clean result that isn't byte-exact is a bug in either the
