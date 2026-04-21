@@ -50,6 +50,18 @@ pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&model).map_err(err_str)
 }
 
+/// Quick summary — reads only the cheap metadata (BasicFileInfo +
+/// PartAtom + stream inventory) and returns instantly even for
+/// multi-hundred-megabyte RFAs. Used by the viewer for the
+/// progressive-loading splash before the full model parse
+/// completes. Returns a [`crate::reader::Summary`] as a JS object.
+#[wasm_bindgen(js_name = quickSummary)]
+pub fn quick_summary(bytes: &[u8]) -> Result<JsValue, JsValue> {
+    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
+    let summary = rf.summarize_lossy().map_err(err_str)?.value;
+    serde_wasm_bindgen::to_value(&summary).map_err(err_str)
+}
+
 /// Build the scene-graph tree for a model.
 #[wasm_bindgen(js_name = buildSceneGraph)]
 pub fn js_build_scene_graph(model: JsValue) -> Result<JsValue, JsValue> {
