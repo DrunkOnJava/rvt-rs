@@ -66,6 +66,7 @@ use crate::Result;
 pub mod category_map;
 pub mod entities;
 pub mod from_decoded;
+pub mod pbr;
 pub mod scene_graph;
 pub mod step_writer;
 
