@@ -47,7 +47,10 @@ fn family_files_use_implicit_12b_layout() {
 fn project_2023_file_parses_all_declared_records() {
     let p = project_dir().join("Revit_IFC5_Einhoven.rvt");
     if !p.exists() {
-        eprintln!("skipping: project 2023 corpus not present at {}", p.display());
+        eprintln!(
+            "skipping: project 2023 corpus not present at {}",
+            p.display()
+        );
         return;
     }
     let mut rf = RevitFile::open(&p).expect("open project 2023");
@@ -81,7 +84,10 @@ fn project_2023_file_parses_all_declared_records() {
 fn project_2024_file_parses_all_declared_records() {
     let p = project_dir().join("2024_Core_Interior.rvt");
     if !p.exists() {
-        eprintln!("skipping: project 2024 corpus not present at {}", p.display());
+        eprintln!(
+            "skipping: project 2024 corpus not present at {}",
+            p.display()
+        );
         return;
     }
     let mut rf = RevitFile::open(&p).expect("open project 2024");
@@ -112,7 +118,10 @@ fn declared_element_ids_returns_sorted_deduped_set() {
     // sequential ids starting at 1.
     let p = project_dir().join("Revit_IFC5_Einhoven.rvt");
     if !p.exists() {
-        eprintln!("skipping: project 2023 corpus not present at {}", p.display());
+        eprintln!(
+            "skipping: project 2023 corpus not present at {}",
+            p.display()
+        );
         return;
     }
     let mut rf = RevitFile::open(&p).expect("open");
@@ -123,7 +132,10 @@ fn declared_element_ids_returns_sorted_deduped_set() {
         ids.len()
     );
     // Sorted + deduped invariants.
-    assert!(ids.windows(2).all(|w| w[0] < w[1]), "ids not strictly sorted");
+    assert!(
+        ids.windows(2).all(|w| w[0] < w[1]),
+        "ids not strictly sorted"
+    );
     // First declared id is 1 on this file.
     assert_eq!(ids[0], 1);
 }

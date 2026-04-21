@@ -8,20 +8,44 @@ use rvt::{RevitFile, compression, streams};
 fn dump(label: &str, bytes: &[u8], from: usize, to: usize) {
     println!("=== {} ({}..{}) ===", label, from, to);
     for row in (from..to.min(bytes.len())).step_by(16) {
-        let hex: Vec<_> = bytes[row..row + 16].iter().map(|b| format!("{:02x}", b)).collect();
+        let hex: Vec<_> = bytes[row..row + 16]
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect();
         let ascii: String = bytes[row..row + 16]
             .iter()
-            .map(|&b| if b.is_ascii_graphic() || b == b' ' { b as char } else { '.' })
+            .map(|&b| {
+                if b.is_ascii_graphic() || b == b' ' {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
             .collect();
-        println!("  0x{:04x}  {} {}  |{}|", row, hex[..8].join(" "), hex[8..].join(" "), ascii);
+        println!(
+            "  0x{:04x}  {} {}  |{}|",
+            row,
+            hex[..8].join(" "),
+            hex[8..].join(" "),
+            ascii
+        );
     }
 }
 
 fn main() {
     let files = [
-        ("FAMILY 2024", "/Users/griffin/Developer/re/rvt-recon-2026-04-19/samples/racbasicsamplefamily-2024.rfa"),
-        ("PROJECT 2023", "/private/tmp/rvt-corpus-probe/magnetar/Revit/Revit_IFC5_Einhoven.rvt"),
-        ("PROJECT 2024", "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt"),
+        (
+            "FAMILY 2024",
+            "/Users/griffin/Developer/re/rvt-recon-2026-04-19/samples/racbasicsamplefamily-2024.rfa",
+        ),
+        (
+            "PROJECT 2023",
+            "/private/tmp/rvt-corpus-probe/magnetar/Revit/Revit_IFC5_Einhoven.rvt",
+        ),
+        (
+            "PROJECT 2024",
+            "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt",
+        ),
     ];
     for (label, path) in files {
         let mut rf = RevitFile::open(path).unwrap();

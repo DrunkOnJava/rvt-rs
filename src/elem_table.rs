@@ -169,7 +169,11 @@ pub fn parse_header(rf: &mut RevitFile) -> Result<ElemTableHeader> {
 /// `limit` is the maximum number of records to return — typically
 /// `header.record_count` from `parse_header_bytes`. Returns fewer
 /// records if the stream runs out of bytes before `limit` is reached.
-pub fn parse_records_from_bytes(d: &[u8], layout: ElemTableLayout, limit: usize) -> Vec<ElemRecord> {
+pub fn parse_records_from_bytes(
+    d: &[u8],
+    layout: ElemTableLayout,
+    limit: usize,
+) -> Vec<ElemRecord> {
     let mut records = Vec::with_capacity(limit);
     let mut i = layout.start;
     while records.len() < limit && i + layout.stride <= d.len() {
@@ -194,12 +198,8 @@ pub fn parse_records_from_bytes(d: &[u8], layout: ElemTableLayout, limit: usize)
                     //   [8 B marker][4 B zero][u32 id_primary][16 B zero/payload][u32 id_secondary][8 B payload]
                     // id_primary is at body+4, id_secondary at body+24
                     // (record offsets +12 and +32 respectively).
-                    let a = u32::from_le_bytes([
-                        d[body + 4],
-                        d[body + 5],
-                        d[body + 6],
-                        d[body + 7],
-                    ]);
+                    let a =
+                        u32::from_le_bytes([d[body + 4], d[body + 5], d[body + 6], d[body + 7]]);
                     let b = u32::from_le_bytes([
                         d[body + 24],
                         d[body + 25],
