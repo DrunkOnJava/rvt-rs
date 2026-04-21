@@ -1336,6 +1336,145 @@ pub fn scan_candidates(
     out
 }
 
+/// Locate the field index in `cls` that carries the instance's own
+/// `ElementId` (the "self-id"). Used by [`build_handle_index`] to
+/// extract the id from each scan_candidates hit so the
+/// `ElementId → byte offset` map can be populated.
+///
+/// Detection order (first match wins):
+///   1. Field named exactly `m_id` with type `ElementId` or
+///      `ElementIdRef`. This is the canonical Revit convention —
+///      `src/formats.rs` line 1186 pins it as the name used by
+///      `UserID` and other concrete element classes.
+///   2. Field named `m_id64`, `m_handle`, or `m_elementId` with a
+///      matching ElementId type. These appear on a handful of
+///      classes (e.g. history records) where the primary id uses an
+///      alternate name.
+///   3. First field whose type is the bare `ElementId` variant
+///      (unit). `ElementIdRef { referenced_tag, .. }` fields point
+///      to *other* classes — the self-id is always a bare `ElementId`
+///      because a class can't statically name its own tag in the
+///      schema record.
+///
+/// Returns `None` for:
+///   - parent-only classes that have no `ElementId` field at all,
+///   - classes where every `ElementId` field is actually a
+///     `ElementIdRef` (meaning every id is a pointer to another
+///     element's id, never the instance's own).
+///
+/// Callers treat `None` as "this class cannot be indexed" — it is
+/// not an error, just a signal that `build_handle_index` should
+/// skip candidates for this class.
+pub fn find_self_id_field(cls: &formats::ClassEntry) -> Option<usize> {
+    use formats::FieldType;
+
+    // Priority 1/2: canonical self-id names, in preference order.
+    const CANONICAL_NAMES: &[&str] = &["m_id", "m_id64", "m_handle", "m_elementId"];
+    for canonical in CANONICAL_NAMES {
+        if let Some((idx, _)) = cls.fields.iter().enumerate().find(|(_, f)| {
+            f.name == *canonical
+                && matches!(
+                    f.field_type,
+                    Some(FieldType::ElementId) | Some(FieldType::ElementIdRef { .. })
+                )
+        }) {
+            return Some(idx);
+        }
+    }
+
+    // Priority 3: first bare ElementId (not ElementIdRef). A bare
+    // ElementId is the only type that could hold the instance's own
+    // id — ElementIdRef embeds a *referenced* tag, which by
+    // construction cannot match the owning class's own tag.
+    for (idx, f) in cls.fields.iter().enumerate() {
+        if matches!(f.field_type, Some(FieldType::ElementId)) {
+            return Some(idx);
+        }
+    }
+
+    None
+}
+
+/// Build a [`HandleIndex`] from a decompressed `Global/Latest` buffer
+/// by running [`scan_candidates`] + [`find_self_id_field`] and
+/// extracting each candidate's self-id.
+///
+/// Pipeline:
+///   1. `scan_candidates(schema, bytes, min_score)` → coarse list,
+///      sorted by score descending.
+///   2. For each candidate (score-desc):
+///      - Look up the `ClassEntry` by name.
+///      - Find the self-id field via [`find_self_id_field`]. If the
+///        class has no indexable self-id, skip it.
+///      - Decode the instance via [`decode_instance`] and read the
+///        self-id field's `(tag, id)` pair.
+///      - Skip id == 0 (Revit's sentinel for "no id").
+///      - Insert `(id → offset)` using "first seen wins" semantics
+///        — since candidates are in score-desc order, this keeps
+///        the highest-scoring offset for each id when multiple
+///        candidates claim the same id.
+///
+/// Recommended `min_score`:
+///   - `80` — matches the ADocument detector's production threshold;
+///     filters most false-positive matches on 3-field parent classes.
+///   - `0` — debug: surface every candidate that trial-walked
+///     successfully, including trivial ones.
+///   - `i64::MIN + 1` — exhaustive: no filtering. Useful for
+///     comparing scan coverage against `ElemTable`'s declared
+///     ElementId set.
+///
+/// Cost: `O(N × decode)` where N is the number of scan_candidates
+/// hits. For a typical 1 MB `Global/Latest` with the default
+/// `min_score = 80`, N ≈ 2000–6000 depending on the file's class
+/// density.
+pub fn build_handle_index(
+    schema: &formats::SchemaTable,
+    bytes: &[u8],
+    min_score: i64,
+) -> HandleIndex {
+    let mut index = HandleIndex::new();
+    let candidates = scan_candidates(schema, bytes, min_score);
+
+    // Fast name → ClassEntry lookup so the per-candidate hot loop
+    // doesn't re-scan `schema.classes`.
+    let class_by_name: std::collections::HashMap<&str, &formats::ClassEntry> = schema
+        .classes
+        .iter()
+        .map(|c| (c.name.as_str(), c))
+        .collect();
+
+    for cand in &candidates {
+        let Some(cls) = class_by_name.get(cand.class_name.as_str()).copied() else {
+            continue;
+        };
+        let Some(id_idx) = find_self_id_field(cls) else {
+            continue;
+        };
+
+        // Decode the whole instance — it's cheap (schema fields are
+        // short and read_field_by_type has no allocation beyond the
+        // field values). We discard everything but the self-id.
+        let decoded = decode_instance(bytes, cand.offset, cls);
+
+        if let Some((_, InstanceField::ElementId { id, .. })) = decoded.fields.get(id_idx) {
+            // Zero is Revit's "no-id" sentinel — never index it.
+            // Scores above min_score but with id=0 typically come
+            // from offsets where a class-tag byte pair coincides
+            // with an all-zero padding region. Skipping them
+            // cleans up the index without losing real elements.
+            if *id != 0 {
+                // First-seen-wins: because `candidates` is in score-
+                // desc order, this preserves the highest-score
+                // offset for each id. BTreeMap::entry + or_insert
+                // gives that semantics atomically.
+                index.map.entry(*id).or_insert(cand.offset);
+            }
+        }
+    }
+
+    index
+}
+
 /// Doc-hidden fuzz entry point for the ADocument entry-point detector.
 ///
 /// Exposes the private [`find_adocument_start_with_schema`] so that
@@ -1784,6 +1923,243 @@ mod tests {
         for pair in out.windows(2) {
             assert!(pair[0].score >= pair[1].score);
         }
+    }
+
+    #[test]
+    fn build_handle_index_empty_schema_returns_empty_index() {
+        let schema = formats::SchemaTable {
+            classes: Vec::new(),
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        let idx = build_handle_index(&schema, &[0u8; 100], 0);
+        assert!(idx.is_empty());
+    }
+
+    #[test]
+    fn build_handle_index_extracts_self_id_and_skips_zero() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        // 3 ElementId fields — walk_score requires at least 3 trailing
+        // ElementIds to score above i64::MIN. m_id carries the self-id;
+        // m_owner/m_other hold related references.
+        let cls = ClassEntry {
+            name: "Indexable".into(),
+            tag: Some(0xBEEF),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            fields: vec![
+                FieldEntry {
+                    name: "m_id".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_owner".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_other".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+            ],
+        };
+        let schema = formats::SchemaTable {
+            classes: vec![cls],
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        // Instance 1 at offset 0 (tag=0xBEEF):
+        //   - m_id:    (tag=0, id=42)  — self-id, becomes the key
+        //   - m_owner: (tag=0, id=1)   — trailing ids for walk_score
+        //   - m_other: (tag=0, id=2)
+        // Instance 2 at offset 34: same tag, m_id.id=0 — skipped.
+        let mut buf = vec![0u8; 128];
+        buf[0] = 0xEF;
+        buf[1] = 0xBE;
+        // Instance 1 fields start at offset 2 (after 2-byte tag).
+        buf[2..6].copy_from_slice(&0u32.to_le_bytes()); // m_id tag
+        buf[6..10].copy_from_slice(&42u32.to_le_bytes()); // m_id id
+        buf[10..14].copy_from_slice(&0u32.to_le_bytes()); // m_owner tag
+        buf[14..18].copy_from_slice(&1u32.to_le_bytes()); // m_owner id
+        buf[18..22].copy_from_slice(&0u32.to_le_bytes()); // m_other tag
+        buf[22..26].copy_from_slice(&2u32.to_le_bytes()); // m_other id
+        // Instance 2 at offset 34 — m_id is all zeros (skipped).
+        buf[34] = 0xEF;
+        buf[35] = 0xBE;
+        // Populate m_owner/m_other for instance 2 so walk_score is
+        // valid (>= i64::MIN). m_id stays zero — the point of the test.
+        buf[36..40].copy_from_slice(&0u32.to_le_bytes()); // m_id tag (=0)
+        buf[40..44].copy_from_slice(&0u32.to_le_bytes()); // m_id id (=0 → skipped)
+        buf[44..48].copy_from_slice(&0u32.to_le_bytes());
+        buf[48..52].copy_from_slice(&11u32.to_le_bytes());
+        buf[52..56].copy_from_slice(&0u32.to_le_bytes());
+        buf[56..60].copy_from_slice(&12u32.to_le_bytes());
+        let idx = build_handle_index(&schema, &buf, i64::MIN + 1);
+        assert_eq!(
+            idx.get(42),
+            Some(2),
+            "instance 1 should map id 42 → offset 2 (after class tag)"
+        );
+        assert_eq!(
+            idx.get(0),
+            None,
+            "id=0 is the no-id sentinel, must not be indexed"
+        );
+    }
+
+    #[test]
+    fn build_handle_index_skips_classes_without_self_id_field() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        // Class with no ElementId field — nothing to index.
+        let cls = ClassEntry {
+            name: "Parent".into(),
+            tag: Some(0xABAB),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(1),
+            was_parent_only: true,
+            fields: vec![FieldEntry {
+                name: "m_name".into(),
+                cpp_type: None,
+                field_type: Some(FieldType::String),
+            }],
+        };
+        let schema = formats::SchemaTable {
+            classes: vec![cls],
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        // Buffer with the class tag but no id — should insert nothing.
+        let mut buf = vec![0u8; 64];
+        buf[0] = 0xAB;
+        buf[1] = 0xAB;
+        let idx = build_handle_index(&schema, &buf, i64::MIN + 1);
+        assert!(idx.is_empty());
+    }
+
+    #[test]
+    fn find_self_id_field_prefers_m_id() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let cls = ClassEntry {
+            name: "Wall".into(),
+            tag: Some(0x0080),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            fields: vec![
+                FieldEntry {
+                    name: "m_ownerId".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_id".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_extraId".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+            ],
+        };
+        assert_eq!(find_self_id_field(&cls), Some(1));
+    }
+
+    #[test]
+    fn find_self_id_field_falls_back_to_first_bare_elementid() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let cls = ClassEntry {
+            name: "Weird".into(),
+            tag: Some(0x0100),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            fields: vec![
+                // ElementIdRef should be skipped — it points elsewhere.
+                FieldEntry {
+                    name: "m_ownerFamilyId".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementIdRef {
+                        referenced_tag: 0x0080,
+                        sub: 0,
+                    }),
+                },
+                // First bare ElementId, no canonical name — wins.
+                FieldEntry {
+                    name: "m_anonId".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+            ],
+        };
+        assert_eq!(find_self_id_field(&cls), Some(1));
+    }
+
+    #[test]
+    fn find_self_id_field_returns_none_when_no_elementid() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let cls = ClassEntry {
+            name: "Empty".into(),
+            tag: None,
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(1),
+            was_parent_only: true,
+            fields: vec![FieldEntry {
+                name: "m_name".into(),
+                cpp_type: None,
+                field_type: Some(FieldType::String),
+            }],
+        };
+        assert_eq!(find_self_id_field(&cls), None);
+    }
+
+    #[test]
+    fn find_self_id_field_rejects_elementidref_only_matches() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        // A class that has ONLY ElementIdRef fields — every id is a
+        // pointer to somebody else. Cannot be indexed.
+        let cls = ClassEntry {
+            name: "AllRef".into(),
+            tag: Some(0x0200),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(2),
+            was_parent_only: false,
+            fields: vec![
+                FieldEntry {
+                    name: "m_a".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementIdRef {
+                        referenced_tag: 0x0080,
+                        sub: 0,
+                    }),
+                },
+                FieldEntry {
+                    name: "m_b".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementIdRef {
+                        referenced_tag: 0x0081,
+                        sub: 0,
+                    }),
+                },
+            ],
+        };
+        assert_eq!(find_self_id_field(&cls), None);
     }
 
     #[test]
