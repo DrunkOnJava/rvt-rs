@@ -310,10 +310,24 @@ impl FieldType {
                 kind: k,
                 body: body_after_header.clone(),
             },
-            // Scalar containers — `XX 50 00 00 ...`. Reference containers
-            // (0x0e 0x50 / 0x0e 0x51) are handled further down because
-            // they may carry embedded C++ signatures.
-            k if is_vector_capable && sub == 0x0050 => extract_container(k, &body_after_header),
+            // Scalar containers — `XX 50 00 00`. Always 4-byte headers
+            // with no body (per `docs/container-wire-format-2026-04-21.md`
+            // — only 0x0e carries a variable payload). Reference
+            // containers (0x0e 0x50 / 0x0e 0x51) are handled further
+            // down because they may embed a C++ signature.
+            //
+            // Historical note: this arm previously delegated to
+            // `extract_container(k, &body_after_header)`, which
+            // greedily captured the next ~28 bytes of the schema
+            // record as "body". The L5B-09.1/.2 probes found those
+            // bytes were actually the next field's header spilling
+            // into this one's payload. Empty-body is the correct
+            // wire semantics for scalar-base containers.
+            k if is_vector_capable && sub == 0x0050 => FieldType::Container {
+                kind: k,
+                cpp_signature: None,
+                body: Vec::new(),
+            },
             // UTF-16LE string. Two equivalent wire encodings are known:
             //   `08 00 60 00` (sub=0x6000)  — common form
             //   `08 60 00 00` (sub=0x0060)  — alternate form
