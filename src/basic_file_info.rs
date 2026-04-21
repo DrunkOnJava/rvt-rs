@@ -59,6 +59,89 @@ impl BasicFileInfo {
             raw_text: raw,
         })
     }
+
+    /// Encode a `BasicFileInfo` back to UTF-16LE bytes (WRT-07).
+    /// Inverse of [`Self::from_bytes`].
+    ///
+    /// Uses the canonical 2019+ pattern:
+    ///
+    /// ```text
+    /// {year}  {build} {path} {locale} {guid}
+    /// ```
+    ///
+    /// Any missing optional field is omitted (alongside its leading
+    /// space) so the extract-\* parsers see the same empty-state
+    /// they would in a real file without that field. Callers who
+    /// want a specific older (2016-2018) pattern should use
+    /// [`Self::encode_with_build_wrapper`] instead.
+    ///
+    /// Round-trip guarantee: `BasicFileInfo::from_bytes(&bfi.encode())`
+    /// yields a `BasicFileInfo` whose `version`, `build`,
+    /// `original_path`, `guid`, and `locale` equal the original's.
+    /// `raw_text` may differ (it's the decoder's reconstruction,
+    /// not a byte-level echo).
+    pub fn encode(&self) -> Vec<u8> {
+        let mut text = format!("{}", self.version);
+        if let Some(build) = self.build.as_deref() {
+            text.push_str("  ");
+            text.push_str(build);
+        }
+        if let Some(path) = self.original_path.as_deref() {
+            text.push(' ');
+            text.push_str(path);
+        }
+        if let Some(locale) = self.locale.as_deref() {
+            text.push(' ');
+            text.push_str(locale);
+        }
+        if let Some(guid) = self.guid.as_deref() {
+            text.push(' ');
+            text.push_str(guid);
+        }
+        // Trailing space so the reader's GUID scanner (which uses an
+        // exclusive upper bound) can find a GUID sitting at what
+        // would otherwise be the string's exact final position.
+        text.push(' ');
+        utf16le(&text)
+    }
+
+    /// Encode using the 2016-2018 pattern where `build` is wrapped
+    /// in `(Build: …)`. Useful when a downstream tool expects the
+    /// pre-2019 on-disk format exactly.
+    pub fn encode_with_build_wrapper(&self) -> Vec<u8> {
+        let mut text = format!("Autodesk Revit {}", self.version);
+        if let Some(build) = self.build.as_deref() {
+            // Strip any (x64) suffix — the wrapper wants the raw
+            // YYYYMMDD_HHMM token. Keep it verbatim if already
+            // quoted.
+            text.push_str(&format!(" (Build: {build})"));
+        }
+        if let Some(path) = self.original_path.as_deref() {
+            text.push(' ');
+            text.push_str(path);
+        }
+        if let Some(locale) = self.locale.as_deref() {
+            text.push(' ');
+            text.push_str(locale);
+        }
+        if let Some(guid) = self.guid.as_deref() {
+            text.push(' ');
+            text.push_str(guid);
+        }
+        // Trailing space — see `encode` for the rationale.
+        text.push(' ');
+        utf16le(&text)
+    }
+}
+
+/// Encode a UTF-8 string as UTF-16LE bytes. Helper shared by the
+/// [`BasicFileInfo::encode`] family.
+fn utf16le(s: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(s.len() * 2);
+    for unit in s.encode_utf16() {
+        out.extend_from_slice(&unit.to_le_bytes());
+    }
+    out
 }
 
 fn extract_version(text: &str) -> Option<u32> {
@@ -256,5 +339,97 @@ mod tests {
     fn guid_detection() {
         assert!(is_guid("d713e470-abcd-4321-9876-123456789012"));
         assert!(!is_guid("not-a-guid"));
+    }
+
+    // ---- WRT-07: BasicFileInfo writer round-trip ----
+
+    fn make_info() -> BasicFileInfo {
+        BasicFileInfo {
+            version: 2024,
+            build: Some("20230308_1635(x64)".into()),
+            original_path: Some("C:\\Users\\testuser\\Desktop\\sample.rfa".into()),
+            guid: Some("d713e470-abcd-4321-9876-123456789012".into()),
+            locale: Some("ENU".into()),
+            raw_text: String::new(),
+        }
+    }
+
+    #[test]
+    fn encode_round_trips_all_fields() {
+        let original = make_info();
+        let bytes = original.encode();
+        let decoded = BasicFileInfo::from_bytes(&bytes).unwrap();
+        assert_eq!(decoded.version, original.version);
+        assert_eq!(decoded.build, original.build);
+        assert_eq!(decoded.original_path, original.original_path);
+        assert_eq!(decoded.guid, original.guid);
+        assert_eq!(decoded.locale, original.locale);
+    }
+
+    #[test]
+    fn encode_produces_utf16le_bytes() {
+        let info = make_info();
+        let bytes = info.encode();
+        // UTF-16LE always has an even byte count.
+        assert_eq!(bytes.len() % 2, 0);
+        // First two bytes decode as '2' (0x0032) LE = [0x32, 0x00].
+        assert_eq!(bytes[..2], [0x32, 0x00]);
+    }
+
+    #[test]
+    fn encode_with_build_wrapper_produces_pre_2019_pattern() {
+        let info = BasicFileInfo {
+            version: 2018,
+            build: Some("20170130_1515(x64)".into()),
+            original_path: None,
+            guid: None,
+            locale: None,
+            raw_text: String::new(),
+        };
+        let bytes = info.encode_with_build_wrapper();
+        // Decode back as UTF-16LE and look for the wrapper.
+        let (cow, _, _) = UTF_16LE.decode(&bytes);
+        assert!(
+            cow.contains("(Build: 20170130_1515(x64))"),
+            "expected Build: wrapper, got {cow}"
+        );
+        // Round-trip still recovers the build tag.
+        let re = BasicFileInfo::from_bytes(&bytes).unwrap();
+        assert_eq!(re.build.as_deref(), Some("20170130_1515(x64)"));
+        assert_eq!(re.version, 2018);
+    }
+
+    #[test]
+    fn encode_omits_missing_optional_fields() {
+        let info = BasicFileInfo {
+            version: 2020,
+            build: None,
+            original_path: None,
+            guid: None,
+            locale: None,
+            raw_text: String::new(),
+        };
+        let bytes = info.encode();
+        let decoded = BasicFileInfo::from_bytes(&bytes).unwrap();
+        assert_eq!(decoded.version, 2020);
+        assert!(decoded.build.is_none());
+        assert!(decoded.original_path.is_none());
+        assert!(decoded.guid.is_none());
+        assert!(decoded.locale.is_none());
+    }
+
+    #[test]
+    fn encode_round_trip_survives_only_version() {
+        let info = BasicFileInfo {
+            version: 2026,
+            build: None,
+            original_path: None,
+            guid: None,
+            locale: None,
+            raw_text: String::new(),
+        };
+        let bytes = info.encode();
+        let re = BasicFileInfo::from_bytes(&bytes).unwrap();
+        assert_eq!(re.version, 2026);
     }
 }
