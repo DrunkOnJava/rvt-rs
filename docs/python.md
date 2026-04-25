@@ -123,6 +123,11 @@ rvt.RevitFile(
     max_file_bytes: int | None = None,
     max_stream_bytes: int | None = None,
     max_inflate_bytes: int | None = None,
+    max_walker_scan_bytes: int | None = None,
+    max_walker_candidates: int | None = None,
+    max_walker_trial_offsets: int | None = None,
+    max_walker_record_decode_bytes: int | None = None,
+    max_walker_container_records: int | None = None,
 ) -> RevitFile
 ```
 
@@ -138,6 +143,11 @@ Resource limits map directly to the Rust `OpenLimits` /
 | `max_file_bytes` | 2 GiB (`2 * 1024³`) | File size cap, enforced before reading |
 | `max_stream_bytes` | 256 MiB (`256 * 1024²`) | Per-stream size cap in `read_stream` |
 | `max_inflate_bytes` | 256 MiB (`256 * 1024²`) | Decompressed output cap per inflate call |
+| `max_walker_scan_bytes` | 128 MiB (`128 * 1024²`) | Decompressed `Global/Latest` bytes scanned by walker fallback paths |
+| `max_walker_candidates` | 100,000 | Maximum schema-scan candidates retained |
+| `max_walker_trial_offsets` | 16,000,000 | Maximum trial decodes attempted by walker scans |
+| `max_walker_record_decode_bytes` | 1 MiB (`1024²`) | Maximum bytes inspected while decoding one walker candidate |
+| `max_walker_container_records` | 1,000 | Maximum reference-container records accepted by walker decoders |
 
 Passing `None` for any parameter keeps the Rust-side default.
 Hostile input that would otherwise force multi-GB allocations is
@@ -326,10 +336,11 @@ if `BasicFileInfo` can't be parsed.
 
 ## Parse-safety controls
 
-The constructor accepts three optional `Option<u64/usize>` caps
+The constructor accepts optional `Option<u64/usize>` caps
 that pass through to the Rust `OpenLimits` / `InflateLimits`
 structs defined in [`src/reader.rs`](../src/reader.rs) and
-[`src/compression.rs`](../src/compression.rs):
+[`src/compression.rs`](../src/compression.rs), plus walker scan
+caps from [`src/walker.rs`](../src/walker.rs):
 
 - `max_file_bytes` (default 2 GiB) — enforced with a `stat`
   pre-check; over-sized files error before any read.
@@ -338,6 +349,10 @@ structs defined in [`src/reader.rs`](../src/reader.rs) and
 - `max_inflate_bytes` (default 256 MiB) — enforced per inflate
   call in the truncated-gzip decompressor; protects against
   compressed-bomb input.
+- `max_walker_scan_bytes`, `max_walker_candidates`,
+  `max_walker_trial_offsets`, `max_walker_record_decode_bytes`,
+  and `max_walker_container_records` — bound schema-directed
+  fallback scans and return warnings in lossy diagnostics when hit.
 
 All three defaults are conservative for desktop use. Tighten them
 for untrusted input:
@@ -349,6 +364,7 @@ f = rvt.RevitFile(
     max_file_bytes=100 * 1024 * 1024,
     max_stream_bytes=100 * 1024 * 1024,
     max_inflate_bytes=64 * 1024 * 1024,
+    max_walker_scan_bytes=16 * 1024 * 1024,
 )
 ```
 

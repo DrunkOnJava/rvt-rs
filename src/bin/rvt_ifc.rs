@@ -14,6 +14,7 @@ use rvt::{
         DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, PlaceholderExporter,
         RvtDocExporter, write_step,
     },
+    walker::WalkerLimits,
 };
 use std::path::PathBuf;
 
@@ -76,19 +77,35 @@ struct Args {
     /// an export confidence summary.
     #[arg(long, value_name = "PATH")]
     diagnostics: Option<PathBuf>,
+    /// Maximum decompressed Global/Latest bytes scanned by the walker.
+    #[arg(long)]
+    max_walker_scan_bytes: Option<usize>,
+    /// Maximum schema-scan candidates retained by the walker.
+    #[arg(long)]
+    max_walker_candidates: Option<usize>,
+    /// Maximum trial decodes attempted by the walker.
+    #[arg(long)]
+    max_walker_trial_offsets: Option<usize>,
+    /// Maximum bytes inspected while decoding one walker candidate.
+    #[arg(long)]
+    max_walker_record_decode_bytes: Option<usize>,
+    /// Maximum records accepted in walker reference containers.
+    #[arg(long)]
+    max_walker_container_records: Option<usize>,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut rf = RevitFile::open(&args.input)?;
     let quality_mode = ExportQualityMode::from(args.mode);
+    let walker_limits = walker_limits_from_args(&args);
 
     let result = if args.placeholder {
         PlaceholderExporter.export_with_diagnostics(&mut rf)?
     } else if args.diagnostic_proxies {
-        DiagnosticRvtDocExporter.export_with_diagnostics(&mut rf)?
+        DiagnosticRvtDocExporter.export_with_diagnostics_and_limits(&mut rf, walker_limits)?
     } else {
-        RvtDocExporter.export_with_diagnostics(&mut rf)?
+        RvtDocExporter.export_with_diagnostics_and_limits(&mut rf, walker_limits)?
     };
     let model = result.model;
     let diagnostics = result.diagnostics;
@@ -125,6 +142,27 @@ fn main() -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+fn walker_limits_from_args(args: &Args) -> WalkerLimits {
+    let defaults = WalkerLimits::default();
+    WalkerLimits {
+        max_scan_bytes: args
+            .max_walker_scan_bytes
+            .unwrap_or(defaults.max_scan_bytes),
+        max_candidates: args
+            .max_walker_candidates
+            .unwrap_or(defaults.max_candidates),
+        max_trial_offsets: args
+            .max_walker_trial_offsets
+            .unwrap_or(defaults.max_trial_offsets),
+        max_per_record_decode_bytes: args
+            .max_walker_record_decode_bytes
+            .unwrap_or(defaults.max_per_record_decode_bytes),
+        max_container_records: args
+            .max_walker_container_records
+            .unwrap_or(defaults.max_container_records),
+    }
 }
 
 fn write_diagnostics_sidecar(

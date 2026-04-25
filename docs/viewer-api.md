@@ -195,6 +195,17 @@ pub fn open_rvt_bytes_with_diagnostics(bytes: &[u8]) -> Result<JsValue, JsError>
     Ok(serde_wasm_bindgen::to_value(&result)?)
 }
 
+#[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsAndLimits)]
+pub fn open_rvt_bytes_with_diagnostics_and_limits(
+    bytes: &[u8],
+    limits: JsValue,
+) -> Result<JsValue, JsError> {
+    let mut rf = RevitFile::open_bytes(bytes.to_vec())?;
+    let limits = walker_limits_from_js(limits)?;
+    let result = RvtDocExporter.export_with_diagnostics_and_limits(&mut rf, limits)?;
+    Ok(serde_wasm_bindgen::to_value(&result)?)
+}
+
 #[wasm_bindgen]
 pub fn scene_graph(model_json: JsValue) -> Result<JsValue, JsError> {
     let model: IfcModel = serde_wasm_bindgen::from_value(model_json)?;

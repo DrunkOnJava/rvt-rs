@@ -491,14 +491,35 @@ pub struct RvtDocExporter;
 
 impl Exporter for RvtDocExporter {
     fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel> {
-        export_rvt_doc(rf, RvtDocExportMode::Default)
+        self.export_with_limits(rf, crate::walker::WalkerLimits::default())
     }
 }
 
 impl RvtDocExporter {
+    pub fn export_with_limits(
+        &self,
+        rf: &mut crate::RevitFile,
+        limits: crate::walker::WalkerLimits,
+    ) -> Result<IfcModel> {
+        export_rvt_doc(rf, RvtDocExportMode::Default, limits)
+    }
+
     pub fn export_with_diagnostics(&self, rf: &mut crate::RevitFile) -> Result<ExportResult> {
-        let model = self.export(rf)?;
-        let diagnostics = build_export_diagnostics(rf, &model, ExportDiagnosticsMode::Default);
+        self.export_with_diagnostics_and_limits(rf, crate::walker::WalkerLimits::default())
+    }
+
+    pub fn export_with_diagnostics_and_limits(
+        &self,
+        rf: &mut crate::RevitFile,
+        limits: crate::walker::WalkerLimits,
+    ) -> Result<ExportResult> {
+        let model = self.export_with_limits(rf, limits)?;
+        let diagnostics = build_export_diagnostics_with_limits(
+            rf,
+            &model,
+            ExportDiagnosticsMode::Default,
+            limits,
+        );
         Ok(ExportResult { model, diagnostics })
     }
 }
@@ -514,15 +535,35 @@ pub struct DiagnosticRvtDocExporter;
 
 impl Exporter for DiagnosticRvtDocExporter {
     fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel> {
-        export_rvt_doc(rf, RvtDocExportMode::DiagnosticProxies)
+        self.export_with_limits(rf, crate::walker::WalkerLimits::default())
     }
 }
 
 impl DiagnosticRvtDocExporter {
+    pub fn export_with_limits(
+        &self,
+        rf: &mut crate::RevitFile,
+        limits: crate::walker::WalkerLimits,
+    ) -> Result<IfcModel> {
+        export_rvt_doc(rf, RvtDocExportMode::DiagnosticProxies, limits)
+    }
+
     pub fn export_with_diagnostics(&self, rf: &mut crate::RevitFile) -> Result<ExportResult> {
-        let model = self.export(rf)?;
-        let diagnostics =
-            build_export_diagnostics(rf, &model, ExportDiagnosticsMode::DiagnosticProxies);
+        self.export_with_diagnostics_and_limits(rf, crate::walker::WalkerLimits::default())
+    }
+
+    pub fn export_with_diagnostics_and_limits(
+        &self,
+        rf: &mut crate::RevitFile,
+        limits: crate::walker::WalkerLimits,
+    ) -> Result<ExportResult> {
+        let model = self.export_with_limits(rf, limits)?;
+        let diagnostics = build_export_diagnostics_with_limits(
+            rf,
+            &model,
+            ExportDiagnosticsMode::DiagnosticProxies,
+            limits,
+        );
         Ok(ExportResult { model, diagnostics })
     }
 }
@@ -533,7 +574,11 @@ enum RvtDocExportMode {
     DiagnosticProxies,
 }
 
-fn export_rvt_doc(rf: &mut crate::RevitFile, mode: RvtDocExportMode) -> Result<IfcModel> {
+fn export_rvt_doc(
+    rf: &mut crate::RevitFile,
+    mode: RvtDocExportMode,
+    walker_limits: crate::walker::WalkerLimits,
+) -> Result<IfcModel> {
     // Identity from PartAtom if present; fall back to
     // BasicFileInfo's original path.
     let part = rf.part_atom().ok();
@@ -606,9 +651,9 @@ fn export_rvt_doc(rf: &mut crate::RevitFile, mode: RvtDocExportMode) -> Result<I
     // output. The order — `Project` first, then elements — is
     // load-bearing for `step_writer`, which walks `entities`
     // in order and assumes index 0 is the project.
-    append_production_walker_elements(rf, &mut entities);
+    append_production_walker_elements(rf, &mut entities, walker_limits);
     if mode == RvtDocExportMode::DiagnosticProxies {
-        append_diagnostic_walker_proxy_candidates(rf, &mut entities);
+        append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
 
     // RE-14.3 — record-level ArcWall decode path. The walker's
@@ -686,8 +731,13 @@ fn export_rvt_doc(rf: &mut crate::RevitFile, mode: RvtDocExportMode) -> Result<I
 fn append_production_walker_elements(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
+    walker_limits: crate::walker::WalkerLimits,
 ) {
-    if let Ok(decoded_iter) = crate::walker::iter_elements(rf) {
+    if let Ok(decoded_iter) = crate::walker::iter_elements_with_limits(
+        rf,
+        crate::walker::PRODUCTION_ELEMENT_MIN_SCORE,
+        walker_limits,
+    ) {
         for decoded in decoded_iter {
             let mapping = category_map::lookup(&decoded.class);
             let ifc_type = mapping
@@ -721,8 +771,9 @@ fn append_production_walker_elements(
 fn append_diagnostic_walker_proxy_candidates(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
+    walker_limits: crate::walker::WalkerLimits,
 ) {
-    for candidate in collect_diagnostic_walker_proxy_candidates(rf).candidates {
+    for candidate in collect_diagnostic_walker_proxy_candidates(rf, walker_limits).candidates {
         let name = match candidate.decoded.id {
             Some(id) => format!("{}-{}", candidate.decoded.class, id),
             None => format!(
@@ -765,6 +816,7 @@ struct DiagnosticProxyCandidateCollection {
 
 fn collect_diagnostic_walker_proxy_candidates(
     rf: &mut crate::RevitFile,
+    walker_limits: crate::walker::WalkerLimits,
 ) -> DiagnosticProxyCandidateCollection {
     let mut collection = DiagnosticProxyCandidateCollection::default();
 
@@ -819,22 +871,33 @@ fn collect_diagnostic_walker_proxy_candidates(
         .iter()
         .map(|class| (class.name.as_str(), class))
         .collect();
-    let candidates = crate::walker::scan_candidates(
+    let scan = crate::walker::scan_candidates_with_limits(
         &schema,
         &latest,
         crate::walker::DIAGNOSTIC_ELEMENT_MIN_SCORE,
+        walker_limits,
     );
+    if let Some(hit) = scan.limit_hit {
+        collection
+            .warnings
+            .push(format!("{}: {}", hit.code(), hit.message()));
+    }
     let mut seen_ids = std::collections::BTreeSet::<u32>::new();
     let mut seen_offsets = std::collections::BTreeSet::<usize>::new();
 
-    for candidate in candidates {
+    for candidate in scan.candidates {
         if candidate.score >= crate::walker::PRODUCTION_ELEMENT_MIN_SCORE {
             continue;
         }
         let Some(class) = class_by_name.get(candidate.class_name.as_str()).copied() else {
             continue;
         };
-        let mut decoded = crate::walker::decode_instance(&latest, candidate.offset, class);
+        let mut decoded = crate::walker::decode_instance_with_limits(
+            &latest,
+            candidate.offset,
+            class,
+            walker_limits,
+        );
         let self_id = crate::walker::find_self_id_field(class)
             .and_then(|index| decoded.fields.get(index))
             .and_then(|(_, field)| match field {
@@ -922,10 +985,19 @@ pub fn build_export_diagnostics(
     model: &IfcModel,
     mode: ExportDiagnosticsMode,
 ) -> ExportDiagnostics {
+    build_export_diagnostics_with_limits(rf, model, mode, crate::walker::WalkerLimits::default())
+}
+
+pub fn build_export_diagnostics_with_limits(
+    rf: &mut crate::RevitFile,
+    model: &IfcModel,
+    mode: ExportDiagnosticsMode,
+    walker_limits: crate::walker::WalkerLimits,
+) -> ExportDiagnostics {
     let bfi = rf.basic_file_info().ok();
     let part = rf.part_atom().ok();
     let stream_names = rf.stream_names();
-    let diagnostic_candidates = collect_diagnostic_walker_proxy_candidates(rf);
+    let diagnostic_candidates = collect_diagnostic_walker_proxy_candidates(rf, walker_limits);
     let exported = exported_model_diagnostics(model);
     let diagnostic_proxy_elements = count_diagnostic_proxy_elements(model);
     let arcwall_records = count_arcwall_records(model);

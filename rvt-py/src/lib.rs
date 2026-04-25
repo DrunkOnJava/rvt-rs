@@ -58,8 +58,16 @@ fn write_ifc_with_quality_mode(
     rf: &mut RustRevitFile,
     mode: ifc::ExportQualityMode,
 ) -> PyResult<String> {
+    write_ifc_with_quality_mode_and_limits(rf, mode, walker::WalkerLimits::default())
+}
+
+fn write_ifc_with_quality_mode_and_limits(
+    rf: &mut RustRevitFile,
+    mode: ifc::ExportQualityMode,
+    walker_limits: walker::WalkerLimits,
+) -> PyResult<String> {
     let result = ifc::RvtDocExporter
-        .export_with_diagnostics(rf)
+        .export_with_diagnostics_and_limits(rf, walker_limits)
         .map_err(to_py_val)?;
     mode.validate(&result.diagnostics).map_err(to_py_val)?;
     Ok(ifc::write_step(&result.model))
@@ -146,11 +154,17 @@ fn instance_to_dict<'py>(
 #[pyclass(name = "RevitFile", module = "rvt")]
 struct PyRevitFile {
     inner: RustRevitFile,
+    walker_limits: walker::WalkerLimits,
 }
 
 #[pymethods]
 impl PyRevitFile {
     /// Open a Revit file with optional size limits.
+    ///
+    /// `max_file_bytes`, `max_stream_bytes`, `max_inflate_bytes`, and
+    /// the walker scan limits cap the resources the reader will use.
+    /// Hostile input that would otherwise force multi-GB allocations is
+    /// rejected up-front or reported through lossy diagnostics.
     ///
     /// `max_file_bytes`, `max_stream_bytes`, and `max_inflate_bytes`
     /// cap the resources the reader will use. Each defaults to the
@@ -158,12 +172,17 @@ impl PyRevitFile {
     /// stream, 256 MiB inflate). Hostile input that would otherwise
     /// force multi-GB allocations is rejected up-front.
     #[new]
-    #[pyo3(signature = (path, max_file_bytes=None, max_stream_bytes=None, max_inflate_bytes=None))]
+    #[pyo3(signature = (path, max_file_bytes=None, max_stream_bytes=None, max_inflate_bytes=None, max_walker_scan_bytes=None, max_walker_candidates=None, max_walker_trial_offsets=None, max_walker_record_decode_bytes=None, max_walker_container_records=None))]
     fn new(
         path: &str,
         max_file_bytes: Option<u64>,
         max_stream_bytes: Option<u64>,
         max_inflate_bytes: Option<usize>,
+        max_walker_scan_bytes: Option<usize>,
+        max_walker_candidates: Option<usize>,
+        max_walker_trial_offsets: Option<usize>,
+        max_walker_record_decode_bytes: Option<usize>,
+        max_walker_container_records: Option<usize>,
     ) -> PyResult<Self> {
         let default = rvt::reader::OpenLimits::default();
         let limits = rvt::reader::OpenLimits {
@@ -174,8 +193,21 @@ impl PyRevitFile {
                     .unwrap_or(default.inflate_limits.max_output_bytes),
             },
         };
+        let walker_default = walker::WalkerLimits::default();
+        let walker_limits = walker::WalkerLimits {
+            max_scan_bytes: max_walker_scan_bytes.unwrap_or(walker_default.max_scan_bytes),
+            max_candidates: max_walker_candidates.unwrap_or(walker_default.max_candidates),
+            max_trial_offsets: max_walker_trial_offsets.unwrap_or(walker_default.max_trial_offsets),
+            max_per_record_decode_bytes: max_walker_record_decode_bytes
+                .unwrap_or(walker_default.max_per_record_decode_bytes),
+            max_container_records: max_walker_container_records
+                .unwrap_or(walker_default.max_container_records),
+        };
         let inner = RustRevitFile::open_with_limits(path, limits).map_err(to_py_io)?;
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            walker_limits,
+        })
     }
 
     /// Revit release year (e.g. 2024), or `None` if `BasicFileInfo`
@@ -362,7 +394,9 @@ impl PyRevitFile {
     /// }
     /// ```
     fn read_adocument<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
-        let Some(inst) = walker::read_adocument(&mut self.inner).map_err(to_py_io)? else {
+        let Some(inst) = walker::read_adocument_with_limits(&mut self.inner, self.walker_limits)
+            .map_err(to_py_io)?
+        else {
             return Ok(None);
         };
         instance_to_dict(py, &inst).map(Some)
@@ -374,7 +408,18 @@ impl PyRevitFile {
     /// Contract: success means every field decoded cleanly — mirrors
     /// the Rust `walker::read_adocument_strict` bar.
     fn read_adocument_strict<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let inst = walker::read_adocument_strict(&mut self.inner).map_err(to_py_val)?;
+        let Some(inst) = walker::read_adocument_with_limits(&mut self.inner, self.walker_limits)
+            .map_err(to_py_val)?
+        else {
+            return Err(to_py_val("ADocument record not located"));
+        };
+        let c = inst.completeness();
+        if !c.is_fully_typed() {
+            return Err(to_py_val(format!(
+                "ADocument decode incomplete: {} of {} fields fell back to raw bytes",
+                c.raw_bytes_fallback, c.total
+            )));
+        }
         instance_to_dict(py, &inst)
     }
 
@@ -399,13 +444,21 @@ impl PyRevitFile {
     ///     print(d["partial_fields"])
     /// ```
     fn read_adocument_lossy<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let decoded = walker::read_adocument_lossy(&mut self.inner).map_err(to_py_io)?;
+        let decoded = walker::read_adocument_lossy_with_limits(&mut self.inner, self.walker_limits)
+            .map_err(to_py_io)?;
         let out = PyDict::new(py);
         let value = instance_to_dict(py, &decoded.value)?;
         out.set_item("value", value)?;
         out.set_item("complete", decoded.complete)?;
         out.set_item("partial_fields", decoded.diagnostics.partial_fields.clone())?;
         out.set_item("failed_streams", decoded.diagnostics.failed_streams.clone())?;
+        let warnings: Vec<String> = decoded
+            .diagnostics
+            .warnings
+            .iter()
+            .map(|w| format!("{}: {}", w.code, w.message))
+            .collect();
+        out.set_item("warnings", warnings)?;
         match decoded.diagnostics.confidence {
             Some(c) => out.set_item("confidence", c as f64)?,
             None => out.set_item("confidence", py.None())?,
@@ -444,7 +497,7 @@ impl PyRevitFile {
     #[pyo3(signature = (mode = "scaffold"))]
     fn write_ifc(&mut self, mode: &str) -> PyResult<String> {
         let mode = parse_export_quality_mode(mode)?;
-        write_ifc_with_quality_mode(&mut self.inner, mode)
+        write_ifc_with_quality_mode_and_limits(&mut self.inner, mode, self.walker_limits)
     }
 
     /// Produce the JSON diagnostics sidecar for the default IFC export.
@@ -453,7 +506,7 @@ impl PyRevitFile {
     /// for bug reports, support bundles, and automated readiness checks.
     fn export_diagnostics_json(&mut self) -> PyResult<String> {
         let result = ifc::RvtDocExporter
-            .export_with_diagnostics(&mut self.inner)
+            .export_with_diagnostics_and_limits(&mut self.inner, self.walker_limits)
             .map_err(to_py_val)?;
         serde_json::to_string(&result.diagnostics).map_err(to_py_val)
     }
