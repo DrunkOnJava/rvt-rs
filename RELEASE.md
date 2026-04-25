@@ -112,6 +112,27 @@ project treats a silent skipped step the same as an untested change.
     writing fresh copy; the drafts have been audit-reviewed for
     overclaiming.
 
+## Post-Publish Install Verification
+
+Run these from a clean shell after the GitHub release, crates.io publish, PyPI
+publish, and viewer deploy finish. Replace `X.Y.Z` with the released version.
+
+```bash
+cargo install rvt --version X.Y.Z --locked
+rvt-inspect --version
+
+python -m venv /tmp/rvt-release-smoke
+. /tmp/rvt-release-smoke/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "rvt==X.Y.Z"
+python -c "import rvt; print(rvt.__version__)"
+```
+
+Open <https://drunkonjava.github.io/rvt-rs/> in a fresh browser session and
+confirm the viewer loads. If a redistributable sample is available, inspect it
+with both `rvt-inspect` and the viewer diagnostics download and compare the
+failure mode.
+
 ## Hotfix process
 
 When a critical issue (security advisory, data-loss regression, broken

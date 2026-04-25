@@ -8,7 +8,7 @@
 
 **A zero-upload, client-side browser viewer ships alongside the library**, live at <https://drunkonjava.github.io/rvt-rs/>. Drop a `.rvt` / `.rfa` file onto the page — the WebAssembly build parses it in-tab, renders 3D via Three.js with orbit controls + element picking + scene tree, and offers one-click **Export glTF** / **Export IFC** / **Export plan SVG**. No upload, no account, no telemetry. CI asserts the compiled `.wasm` has zero `fetch` / `XMLHttpRequest` / `WebSocket` imports.
 
-For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). For the short support boundary, read [`docs/status.md`](docs/status.md) and the supported MVP input profile in [`docs/supported-profile.md`](docs/supported-profile.md). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
+For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). Installation paths live in [`docs/install.md`](docs/install.md). For the short support boundary, read [`docs/status.md`](docs/status.md) and the supported MVP input profile in [`docs/supported-profile.md`](docs/supported-profile.md). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
 
 Rust 2024 edition (MSRV 1.85). **Fifteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
@@ -87,6 +87,8 @@ open("out.ifc", "w").write(f.write_ifc())
 ```
 
 Install: `pip install rvt` — or build from source with [`maturin build --release --manifest-path rvt-py/Cargo.toml`](docs/python.md#from-source). Full API + Jupyter notebook walkthrough: [`docs/python.md`](docs/python.md) and [`docs/rvt-python-quickstart.ipynb`](docs/rvt-python-quickstart.ipynb).
+See [`docs/install.md`](docs/install.md) for cargo, PyPI, source, and viewer
+install/smoke-test paths.
 
 ### In the browser
 

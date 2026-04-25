@@ -15,6 +15,9 @@ it for mypy / pyright.
 
 ## Install
 
+For all installation paths, including release smoke tests, see
+[`install.md`](install.md).
+
 ### From PyPI
 
 ```bash
