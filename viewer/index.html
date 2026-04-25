@@ -292,6 +292,33 @@
         white-space: pre-wrap;
         word-break: break-word;
       }
+      .support-matrix {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 12px;
+        font-size: 11px;
+        line-height: 1.35;
+      }
+      .support-row {
+        display: grid;
+        grid-template-columns: 74px 1fr;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid #1a1f28;
+      }
+      .support-row .k {
+        color: #8b95a3;
+      }
+      .support-row .v {
+        color: #d7dce3;
+      }
+      .support-link {
+        color: #6bb7ff;
+        text-decoration: none;
+      }
+      .support-link:hover {
+        text-decoration: underline;
+      }
     </style>
   </head>
   <body>
@@ -340,6 +367,28 @@
           <summary>Diagnostics details</summary>
           <pre id="diagnostics-json"></pre>
         </details>
+        <h2>Supported profile</h2>
+        <div class="support-matrix" aria-label="Supported Revit file profile">
+          <div class="support-row">
+            <span class="k">Inspect</span>
+            <span class="v">.rvt, .rfa, .rte, and .rft metadata/schema across the verified 2016-2026 family corpus.</span>
+          </div>
+          <div class="support-row">
+            <span class="k">IFC now</span>
+            <span class="v">Valid scaffold output; typed real-project evidence is narrow and version-gated.</span>
+          </div>
+          <div class="support-row">
+            <span class="k">MVP target</span>
+            <span class="v">Revit 2023/2024 architectural projects: levels, walls, floors, doors, windows, rooms, materials.</span>
+          </div>
+          <div class="support-row">
+            <span class="k">Not ready</span>
+            <span class="v">Arbitrary real-model geometry, MEP/structure-heavy projects, and semantic Revit editing.</span>
+          </div>
+          <a class="support-link" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/supported-profile.md">
+            Profile details
+          </a>
+        </div>
         <h2>Element info</h2>
         <div id="info">Click an element in the 3-D view.</div>
         <h2>Schedule</h2>

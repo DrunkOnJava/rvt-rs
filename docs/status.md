@@ -6,6 +6,10 @@ This page is the public source of truth for what rvt-rs can do today. It is
 intentionally blunt so users can decide quickly whether the tool fits their
 workflow.
 
+The current support boundary is tracked in the
+[supported MVP input profile](supported-profile.md). Keep that page, this
+status summary, the README, and the viewer support matrix aligned.
+
 ## User-Facing Summary
 
 rvt-rs is useful today for inspecting Revit files without Revit, extracting
@@ -31,7 +35,7 @@ conversion.
 | Decode typed elements from real project files | Research | Production iteration is conservative; diagnostic scans still show parent/proxy candidates, not dependable typed walls/floors/doors | Full model conversion is not ready. |
 | Typed decoder structs | Partial | `elements::all_decoders()` has 80 registered decoders | Useful as library building blocks and synthesized-fixture tests. |
 | IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; diagnostic mode can include low-confidence proxy provenance; `rvt-ifc --diagnostics` emits a JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict output | Correct writer path exists, but real-file inputs are incomplete. |
-| Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, and plain-language decode/export confidence panel | Useful for local inspection; geometry reflects decoded coverage. |
+| Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, plain-language decode/export confidence panel, and supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Byte-preserving patch path tests | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |
 | User-facing inspect CLI | Partial | `rvt-inspect` reports file health, decoded coverage, IFC export readiness, warnings, next steps, and stable JSON | Useful for support triage without Revit internals. |
