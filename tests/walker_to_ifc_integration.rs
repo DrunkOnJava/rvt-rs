@@ -416,7 +416,8 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
     }
 
     let mut rf = RevitFile::open(&path)?;
-    let model = RvtDocExporter.export(&mut rf)?;
+    let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+    let model = result.model;
 
     // Count IFCWALL entities in the model (by scanning entity variants
     // that carry an `ifc_type` field equal to "IFCWALL").
@@ -436,6 +437,37 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
         "expected ≥10 IFCWALL entities on Einhoven (RE-14.3 observed 26 \
          standard ArcWall records); got {wall_count}"
     );
+    let wall_geometry_count = model
+        .entities
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                rvt::ifc::entities::IfcEntity::BuildingElement {
+                    ifc_type,
+                    location_feet: Some(_),
+                    extrusion: Some(_),
+                    ..
+                } if ifc_type == "IFCWALL"
+            )
+        })
+        .count();
+    assert!(
+        wall_geometry_count >= 10,
+        "expected ≥10 IFCWALL entities with rough ArcWall extrusion geometry; got {wall_geometry_count}"
+    );
+    assert!(
+        result.diagnostics.exported.building_elements_with_geometry >= wall_geometry_count,
+        "diagnostics should report the geometry-bearing wall count"
+    );
+    assert!(
+        !result
+            .diagnostics
+            .unsupported_features
+            .iter()
+            .any(|feature| feature == "real_file_element_geometry"),
+        "real_file_element_geometry should not remain unsupported once ArcWall geometry is emitted"
+    );
 
     let step = write_step(&model);
     let step_wall_count = step.matches("IFCWALL(").count();
@@ -443,10 +475,18 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
         step_wall_count >= 1,
         "STEP writer emitted {step_wall_count} IFCWALL lines — expected ≥1"
     );
+    assert!(
+        step.matches("IFCEXTRUDEDAREASOLID(").count() >= wall_geometry_count,
+        "STEP should emit one swept solid per geometry-bearing ArcWall"
+    );
+    assert!(
+        step.matches("IFCSHAPEREPRESENTATION(").count() >= wall_geometry_count,
+        "STEP should attach shape representations to geometry-bearing ArcWalls"
+    );
 
     eprintln!(
         "DEC-05: Einhoven yields {wall_count} IFCWALL model entities, \
-         {step_wall_count} IFCWALL lines in STEP output"
+         {wall_geometry_count} with geometry, {step_wall_count} IFCWALL lines in STEP output"
     );
     Ok(())
 }

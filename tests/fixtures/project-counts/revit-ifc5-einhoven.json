@@ -25,6 +25,15 @@
       "decoder_tolerance": 0,
       "tracking_issue": 30
     },
+    "wall_geometry": {
+      "status": "decoder_baseline",
+      "expected": 24,
+      "source": "rvt-rs ArcWall rough rectangular extrusion output on 2026-04-25; not an authoritative full-project geometry count",
+      "decoder_metric": "diagnostics.exported.building_elements_with_geometry",
+      "decoder_expected": 24,
+      "decoder_tolerance": 0,
+      "tracking_issue": 30
+    },
     "floors": {
       "status": "unknown",
       "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed floor manifest is available yet."

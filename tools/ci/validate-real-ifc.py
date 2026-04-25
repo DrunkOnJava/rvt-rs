@@ -128,13 +128,13 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
 
     with_geometry = int(exported.get("building_elements_with_geometry", 0))
     shapes = count(model, "IfcProductDefinitionShape")
+    if with_geometry < 1:
+        fail("expected at least one geometry-bearing real-project building element")
     if with_geometry > 0 and shapes < with_geometry:
         fail(
             "IfcProductDefinitionShape count regressed: "
             f"got {shapes}, expected at least {with_geometry}"
         )
-    if with_geometry == 0:
-        require_unsupported(diagnostics, "real_file_element_geometry")
 
     material_count = int(exported.get("material_count", 0))
     if material_count > 0:

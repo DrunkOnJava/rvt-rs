@@ -694,8 +694,7 @@ fn export_rvt_doc(
                 if let Ok(rec) =
                     crate::arc_wall_record::ArcWallRecord::decode_standard(&concat, off)
                 {
-                    let (sx, sy, sz) = rec.start_point();
-                    let _end = rec.end_point();
+                    let geometry = arcwall_geometry_from_record(&rec);
                     entities.push(entities::IfcEntity::BuildingElement {
                         ifc_type: "IFCWALL".to_string(),
                         name: format!("ArcWall-{partition}-{off}"),
@@ -703,9 +702,9 @@ fn export_rvt_doc(
                         storey_index: None,
                         material_index: None,
                         property_set: None,
-                        location_feet: Some([sx, sy, sz]),
-                        rotation_radians: None,
-                        extrusion: None,
+                        location_feet: geometry.as_ref().map(|(location, _, _)| *location),
+                        rotation_radians: geometry.as_ref().map(|(_, rotation, _)| *rotation),
+                        extrusion: geometry.map(|(_, _, extrusion)| extrusion),
                         host_element_index: None,
                         material_layer_set_index: None,
                         material_profile_set_index: None,
@@ -731,6 +730,43 @@ fn export_rvt_doc(
         material_profile_sets: Vec::new(),
         representation_maps: Vec::new(),
     })
+}
+
+fn arcwall_geometry_from_record(
+    record: &crate::arc_wall_record::ArcWallRecord,
+) -> Option<([f64; 3], f64, entities::Extrusion)> {
+    let (sx, sy, sz) = record.start_point();
+    let (ex, ey, ez) = record.end_point();
+    if ![sx, sy, sz, ex, ey, ez]
+        .into_iter()
+        .all(|coord| coord.is_finite())
+    {
+        return None;
+    }
+
+    let length_feet = from_decoded::wall_segment_length_feet([sx, sy], [ex, ey]);
+    if !length_feet.is_finite() || length_feet < 0.01 {
+        return None;
+    }
+
+    let raw_height = (ez - sz).abs();
+    let height_feet = if raw_height.is_finite() && raw_height >= 0.1 {
+        raw_height
+    } else {
+        10.0
+    };
+    let location_feet = [(sx + ex) / 2.0, (sy + ey) / 2.0, sz.min(ez)];
+    let rotation_radians = from_decoded::wall_segment_angle_radians([sx, sy], [ex, ey]);
+    Some((
+        location_feet,
+        rotation_radians,
+        entities::Extrusion {
+            width_feet: length_feet,
+            depth_feet: 8.0 / 12.0,
+            height_feet,
+            profile_override: None,
+        },
+    ))
 }
 
 #[derive(Debug, Default)]
@@ -1411,6 +1447,38 @@ mod tests {
     fn placeholder_exporter_default_model_has_no_name() {
         let m = IfcModel::default();
         assert!(m.project_name.is_none());
+    }
+
+    fn arcwall_record_with_coords(coords: [f64; 6]) -> crate::arc_wall_record::ArcWallRecord {
+        crate::arc_wall_record::ArcWallRecord {
+            tag: crate::arc_wall_record::ARC_WALL_TAG,
+            variant: crate::arc_wall_record::ARC_WALL_VARIANT_STANDARD,
+            fixed_header_0: crate::arc_wall_record::SCHEMA_FAMILY_MARKER,
+            count_version: 1,
+            type_code: 3,
+            coords,
+            coords_dup: coords,
+            trailer: crate::arc_wall_record::RECORD_TRAILER,
+        }
+    }
+
+    #[test]
+    fn arcwall_geometry_uses_midpoint_rotation_length_and_height() {
+        let record = arcwall_record_with_coords([0.0, 0.0, 2.0, 3.0, 4.0, 14.0]);
+        let (location, rotation, extrusion) =
+            arcwall_geometry_from_record(&record).expect("valid geometry");
+
+        assert_eq!(location, [1.5, 2.0, 2.0]);
+        assert!((rotation - 4.0f64.atan2(3.0)).abs() < 1e-9);
+        assert!((extrusion.width_feet - 5.0).abs() < 1e-9);
+        assert!((extrusion.depth_feet - (8.0 / 12.0)).abs() < 1e-9);
+        assert!((extrusion.height_feet - 12.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn arcwall_geometry_rejects_degenerate_xy_segment() {
+        let record = arcwall_record_with_coords([1.0, 2.0, 0.0, 1.0, 2.0, 10.0]);
+        assert!(arcwall_geometry_from_record(&record).is_none());
     }
 
     #[test]
