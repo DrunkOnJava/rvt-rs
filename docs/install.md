@@ -118,7 +118,9 @@ npm run build
 
 ## Post-Publish Verification
 
-Release managers should verify every published artifact from a clean shell:
+Release managers should verify every published artifact from a clean shell. The
+full release gate is in [release-checklist.md](release-checklist.md); the short
+post-publish smoke is:
 
 ```bash
 cargo install rvt --version X.Y.Z --locked

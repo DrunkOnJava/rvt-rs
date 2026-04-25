@@ -12,8 +12,10 @@ name: Publish (crates.io + PyPI)
 #   2. PyPI — the Python package index. Trusted-publisher OIDC
 #      (no secret needed after one-time account setup).
 #
-# Both run AFTER validate-wheel-install passes on every OS, so a
-# broken wheel can't reach either registry.
+# Release publication runs only after wheel install, source install,
+# CLI sample, viewer load, and docs preview checks pass. Real PyPI
+# publication also waits for crates.io publication so the two package
+# channels cannot split-brain on a rejected Rust crate.
 #
 # Uses PyPI's Trusted Publisher feature (OIDC): no PYPI_API_TOKEN
 # secret is stored in the repo. PyPI trusts this specific workflow
@@ -41,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       test-pypi:
-        description: "Publish to TestPyPI instead of PyPI"
+        description: "Also publish to TestPyPI after release verification"
         type: boolean
         default: false
 
@@ -164,6 +166,94 @@ jobs:
               print(f"got expected error: {type(e).__name__}")
           EOF
 
+  release-source-smoke:
+    name: Cargo install + CLI sample smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch sample corpus
+        uses: actions/checkout@v4
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          key: release-source-smoke
+      - name: Install crate from release source
+        run: cargo install --path . --locked --root /tmp/rvt-release-install
+      - name: Run CLIs on sample file
+        env:
+          RVT_SAMPLE: ${{ github.workspace }}/_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa
+          RVT_BIN: /tmp/rvt-release-install/bin
+        run: |
+          set -euo pipefail
+          "${RVT_BIN}/rvt-inspect" --version
+          "${RVT_BIN}/rvt-info" "${RVT_SAMPLE}"
+          "${RVT_BIN}/rvt-inspect" "${RVT_SAMPLE}" --json > /tmp/rvt.inspect.json
+          "${RVT_BIN}/rvt-ifc" "${RVT_SAMPLE}" \
+            -o /tmp/rvt.ifc \
+            --diagnostics /tmp/rvt.diagnostics.json
+          test -s /tmp/rvt.inspect.json
+          test -s /tmp/rvt.ifc
+          test -s /tmp/rvt.diagnostics.json
+
+  docs-rs-preview:
+    name: docs.rs build preview
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "--cfg docsrs -D warnings"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          key: release-docs
+      - name: Build docs with warnings denied
+        run: cargo +nightly doc --no-deps --all-features -p rvt
+
+  viewer-release-smoke:
+    name: Viewer artifact load smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch sample corpus
+        uses: actions/checkout@v4
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa # v0.4.0
+        with:
+          version: v0.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Build WASM package
+        run: |
+          wasm-pack build --target web -- --features wasm --no-default-features
+          rm -rf viewer/pkg
+          mv pkg viewer/pkg
+      - name: Install viewer dependencies
+        working-directory: viewer
+        run: npm ci
+      - name: Install Playwright Chromium
+        working-directory: viewer
+        run: npx playwright install --with-deps chromium
+      - name: Build viewer
+        working-directory: viewer
+        run: npm run build
+      - name: Verify viewer loads sample without network regressions
+        working-directory: viewer
+        env:
+          RVT_VIEWER_SAMPLE: ../_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa
+        run: npm run test:network
+
   # Q-10: crates.io publish. Runs BEFORE the PyPI publish so if the
   # crate is rejected (yanked name conflict, verify-failure, etc.)
   # the Python side doesn't ship with a mismatched version. Requires
@@ -175,7 +265,13 @@ jobs:
   publish-crate:
     name: Publish to crates.io
     runs-on: ubuntu-latest
-    needs: [build-wheels, build-sdist, validate-wheel-install]
+    needs:
+      - build-wheels
+      - build-sdist
+      - validate-wheel-install
+      - release-source-smoke
+      - docs-rs-preview
+      - viewer-release-smoke
     # Don't re-publish when the user explicitly asked for TestPyPI-only.
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     permissions:
@@ -212,24 +308,58 @@ jobs:
         # and ships via maturin to PyPI instead.
         run: cargo publish -p rvt
 
-  # Single publish step — gathers every wheel + sdist artifact from
-  # the build jobs above and uploads them as one PyPI release. Running
-  # inside the `pypi` environment activates the trusted publisher.
-  # Now also gated on `validate-wheel-install` passing on every OS
-  # AND `publish-crate` succeeding on tag pushes.
-  publish:
-    name: Publish to ${{ inputs.test-pypi && 'TestPyPI' || 'PyPI' }}
+  publish-testpypi:
+    name: Publish to TestPyPI
     runs-on: ubuntu-latest
-    # On tag push: require `publish-crate` to succeed first. On
-    # manual workflow_dispatch: skip the crates.io dependency since
-    # that job won't run.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.test-pypi }}
     needs:
       - build-wheels
       - build-sdist
       - validate-wheel-install
+      - release-source-smoke
+      - docs-rs-preview
+      - viewer-release-smoke
     environment:
-      name: ${{ inputs.test-pypi && 'testpypi' || 'pypi' }}
-      url: ${{ inputs.test-pypi && 'https://test.pypi.org/p/rvt' || 'https://pypi.org/p/rvt' }}
+      name: testpypi
+      url: https://test.pypi.org/p/rvt
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+      - name: Flatten into dist/
+        shell: bash
+        run: |
+          mkdir -p dist
+          find dist-artifacts -type f \( -name '*.whl' -o -name '*.tar.gz' \) -exec mv {} dist/ \;
+          ls -la dist/
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  # Real PyPI releases are tag-only and wait for crates.io publish to
+  # succeed first. This prevents a split-brain release where the Python
+  # package ships but the matching Rust crate was rejected.
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    needs:
+      - build-wheels
+      - build-sdist
+      - validate-wheel-install
+      - release-source-smoke
+      - docs-rs-preview
+      - viewer-release-smoke
+      - publish-crate
+    environment:
+      name: pypi
+      url: https://pypi.org/p/rvt
     permissions:
       # `id-token: write` is the OIDC token needed for trusted
       # publishing. `contents: read` is the default. No other perms.
@@ -246,14 +376,7 @@ jobs:
           mkdir -p dist
           find dist-artifacts -type f \( -name '*.whl' -o -name '*.tar.gz' \) -exec mv {} dist/ \;
           ls -la dist/
-      - name: Publish to TestPyPI
-        if: ${{ inputs.test-pypi }}
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
       - name: Publish to PyPI
-        if: ${{ !inputs.test-pypi }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           # No `password:` — trusted publisher OIDC is auto-detected
