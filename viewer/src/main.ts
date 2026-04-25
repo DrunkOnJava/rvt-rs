@@ -256,6 +256,7 @@ async function loadBytes(file: File): Promise<void> {
 function renderEmptyStatusPanel(): void {
   statusPanelEl.innerHTML = '';
   statusPanelEl.appendChild(statusRow('File', 'warn', 'No file opened'));
+  statusPanelEl.appendChild(statusRow('Mode', 'warn', 'Waiting for file'));
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Waiting for file'));
   statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Waiting for file'));
   statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Waiting for file'));
@@ -267,6 +268,7 @@ function renderEmptyStatusPanel(): void {
 function renderLoadingStatusPanel(filename: string): void {
   statusPanelEl.innerHTML = '';
   statusPanelEl.appendChild(statusRow('File', 'warn', `Reading ${filename}`));
+  statusPanelEl.appendChild(statusRow('Mode', 'warn', 'Evaluating file'));
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Not parsed yet'));
   statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Not decoded yet'));
   statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Not decoded yet'));
@@ -277,6 +279,13 @@ function renderLoadingStatusPanel(filename: string): void {
 function renderErrorStatusPanel(message: string): void {
   statusPanelEl.innerHTML = '';
   statusPanelEl.appendChild(statusRow('File', 'bad', 'Could not open file'));
+  statusPanelEl.appendChild(
+    statusRow(
+      'Mode',
+      'bad',
+      'Corrupt or unreadable file · not a readable Revit OLE/CFB container',
+    ),
+  );
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Not parsed'));
   statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Not decoded'));
   statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Not decoded'));
@@ -456,6 +465,10 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
         : `Opened · ${input.stream_count ?? 0} streams`,
     ),
   );
+  const failureMode = classifyFailureMode(diagnostics);
+  statusPanelEl.appendChild(
+    statusRow('Mode', failureMode.kind, `${failureMode.title} · ${failureMode.summary}`),
+  );
   statusPanelEl.appendChild(
     statusRow(
       'Schema',
@@ -502,6 +515,74 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
 }
 
 type StatusKind = 'ok' | 'warn' | 'bad';
+
+interface FailureModeStatus {
+  kind: StatusKind;
+  title: string;
+  summary: string;
+}
+
+function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus {
+  const input = diagnostics.input ?? {};
+  const decoded = diagnostics.decoded ?? {};
+  const exported = diagnostics.exported ?? {};
+  const confidence = diagnostics.confidence ?? {};
+  const warnings = diagnostics.warnings ?? [];
+  const unsupported = diagnostics.unsupported_features ?? [];
+  const revitVersion = input.revit_version;
+  const buildingElements = exported.building_elements ?? 0;
+  const geometryElements = exported.building_elements_with_geometry ?? 0;
+  const diagnosticCandidates = decoded.diagnostic_proxy_candidates ?? 0;
+  const level = confidence.level ?? 'unknown';
+
+  if (typeof revitVersion === 'number' && (revitVersion < 2016 || revitVersion > 2026)) {
+    return {
+      kind: 'warn',
+      title: 'Unsupported Revit version',
+      summary: 'outside the verified support range',
+    };
+  }
+  if (level === 'unknown') {
+    return {
+      kind: 'bad',
+      title: 'Parser bug, please report',
+      summary: 'diagnostics did not include an export readiness level',
+    };
+  }
+  if (input.has_formats_latest === false || input.has_global_latest === false) {
+    return {
+      kind: 'warn',
+      title: 'Partial decode',
+      summary: 'required schema/model streams were not decoded completely',
+    };
+  }
+  if (buildingElements === 0 && diagnosticCandidates > 0) {
+    return {
+      kind: 'warn',
+      title: 'Supported file, unsupported model layout',
+      summary: 'only diagnostic candidates were found',
+    };
+  }
+  if (level === 'scaffold' || buildingElements === 0) {
+    return {
+      kind: 'warn',
+      title: 'Scaffold-only export',
+      summary: 'no validated building elements were decoded',
+    };
+  }
+  if (unsupported.length > 0 || warnings.length > 0 || geometryElements === 0) {
+    return {
+      kind: 'warn',
+      title: 'Partial decode',
+      summary: 'warnings, unsupported features, or missing geometry remain',
+    };
+  }
+  return {
+    kind: 'ok',
+    title: 'Supported profile',
+    summary: 'decoded output meets the current export profile',
+  };
+}
 
 function statusRow(label: string, kind: StatusKind, value: string): HTMLElement {
   const row = document.createElement('div');
