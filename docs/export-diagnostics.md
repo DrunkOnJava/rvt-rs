@@ -61,6 +61,8 @@ Important nested fields:
 | `decoded.production_walker_elements` | integer | Elements accepted by the conservative production walker path. |
 | `decoded.diagnostic_proxy_candidates` | integer | Low-confidence candidates available to diagnostic export. |
 | `decoded.arcwall_records` | integer | Version-gated ArcWall records exported as `IFCWALL`. |
+| `decoded.recovered_unit_identifiers` | array | Revit `autodesk.unit.*` identifiers selected for IFC unit assignment. |
+| `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
@@ -89,7 +91,11 @@ Important nested fields:
     "arcwall_records": 0,
     "class_counts": {
       "HostObjAttr": 9
-    }
+    },
+    "recovered_unit_identifiers": [
+      "autodesk.unit.unit:meters-1.0.0"
+    ],
+    "unknown_unit_identifiers": []
   },
   "exported": {
     "total_entities": 1,
@@ -97,7 +103,7 @@ Important nested fields:
     "building_elements_with_geometry": 0,
     "by_ifc_type": {},
     "classification_count": 0,
-    "unit_assignment_count": 0,
+    "unit_assignment_count": 1,
     "material_count": 0,
     "storey_count": 0
   },
