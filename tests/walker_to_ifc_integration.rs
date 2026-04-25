@@ -24,7 +24,9 @@
 mod common;
 
 use common::{ALL_YEARS, sample_for_year, samples_dir};
-use rvt::ifc::{Exporter, RvtDocExporter, entities::IfcEntity, write_step};
+use rvt::ifc::{
+    DiagnosticRvtDocExporter, Exporter, RvtDocExporter, entities::IfcEntity, write_step,
+};
 use rvt::{Result, RevitFile, walker};
 
 fn corpus_available() -> bool {
@@ -218,6 +220,74 @@ fn production_iter_elements_filters_hostobjattr_diagnostic_candidates() -> Resul
             .iter()
             .any(|element| element.class == "HostObjAttr"),
         "diagnostic element iteration should still expose HostObjAttr candidates for research"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn diagnostic_ifc_export_includes_hostobjattr_proxies_with_provenance() -> Result<()> {
+    let project_dir = match std::env::var("RVT_PROJECT_CORPUS_DIR") {
+        Ok(d) => d,
+        Err(_) => {
+            eprintln!("skipping diagnostic IFC proxy assertion: RVT_PROJECT_CORPUS_DIR unset");
+            return Ok(());
+        }
+    };
+    let path = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
+    if !std::path::Path::new(&path).exists() {
+        eprintln!("skipping diagnostic IFC proxy assertion: corpus file missing at {path}");
+        return Ok(());
+    }
+
+    let mut rf = RevitFile::open(&path)?;
+    let model = DiagnosticRvtDocExporter.export(&mut rf)?;
+    let diagnostic_proxy = model.entities.iter().find_map(|entity| match entity {
+        IfcEntity::BuildingElement {
+            ifc_type,
+            name,
+            property_set: Some(property_set),
+            ..
+        } if ifc_type == "IFCBUILDINGELEMENTPROXY"
+            && name.starts_with("HostObjAttr-")
+            && property_set.name == "Pset_RvtRsDiagnosticCandidate" =>
+        {
+            Some(property_set)
+        }
+        _ => None,
+    });
+    let Some(property_set) = diagnostic_proxy else {
+        panic!("diagnostic export should include HostObjAttr proxy candidates with provenance");
+    };
+
+    let property_names: std::collections::BTreeSet<&str> = property_set
+        .properties
+        .iter()
+        .map(|property| property.name.as_str())
+        .collect();
+    for required in [
+        "DiagnosticReason",
+        "DecodedClass",
+        "SourceStream",
+        "ByteStart",
+        "ByteEnd",
+        "CandidateScore",
+        "ElementId",
+    ] {
+        assert!(
+            property_names.contains(required),
+            "diagnostic property set should contain {required}; got {property_names:?}"
+        );
+    }
+
+    let step = write_step(&model);
+    assert!(
+        step.contains("IFCBUILDINGELEMENTPROXY("),
+        "diagnostic STEP output should emit proxy constructors"
+    );
+    assert!(
+        step.contains("Pset_RvtRsDiagnosticCandidate"),
+        "diagnostic STEP output should preserve provenance property set"
     );
 
     Ok(())

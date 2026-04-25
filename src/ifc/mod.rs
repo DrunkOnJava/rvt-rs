@@ -251,179 +251,348 @@ pub struct RvtDocExporter;
 
 impl Exporter for RvtDocExporter {
     fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel> {
-        // Identity from PartAtom if present; fall back to
-        // BasicFileInfo's original path.
-        let part = rf.part_atom().ok();
-        let bfi = rf.basic_file_info().ok();
-        let project_name = part
-            .as_ref()
-            .and_then(|pa| pa.title.clone())
-            .or_else(|| bfi.as_ref().and_then(|b| b.original_path.clone()));
-
-        let description = {
-            let mut d = Vec::new();
-            if let Some(b) = &bfi {
-                d.push(format!("Revit {} export", b.version));
-                if let Some(message) =
-                    crate::arc_wall_record::ArcWallRecord::standard_decoder_status(b.version)
-                        .diagnostic_message()
-                {
-                    d.push(message);
-                }
-            }
-            if let Some(p) = &part {
-                if let Some(id) = &p.id {
-                    d.push(format!("id={id}"));
-                }
-            }
-            if d.is_empty() {
-                None
-            } else {
-                Some(d.join("; "))
-            }
-        };
-
-        // OmniClass / Uniformat classification references, if present
-        // in PartAtom.
-        let mut classifications = Vec::new();
-        if let Some(p) = &part {
-            let omni_items: Vec<_> = p
-                .categories
-                .iter()
-                .filter(|c| c.term.starts_with(char::is_numeric) && c.term.contains('.'))
-                .map(|c| entities::ClassificationItem {
-                    code: c.term.clone(),
-                    name: None,
-                })
-                .collect();
-            if !omni_items.is_empty() {
-                classifications.push(entities::Classification {
-                    source: entities::ClassificationSource::OmniClass,
-                    edition: None,
-                    items: omni_items,
-                });
-            }
-        }
-
-        // A single IfcProject entity at the model level (step_writer
-        // emits its STEP form; other entity types are wired in below
-        // from the walker's element stream).
-        let mut entities = vec![entities::IfcEntity::Project {
-            name: project_name.clone(),
-            description: description.clone(),
-            long_name: part.as_ref().and_then(|p| p.title.clone()),
-        }];
-
-        // L5B-11.7 — pull every walker-recoverable element out of
-        // Global/Latest and emit one `BuildingElement` entity per
-        // hit. Unknown classes route to IFCBUILDINGELEMENTPROXY via
-        // `category_map::lookup`. Walker failure (stream missing,
-        // schema unparseable, inflate error) falls through with no
-        // element entities — we never regress the metadata-only
-        // output. The order — `Project` first, then elements — is
-        // load-bearing for `step_writer`, which walks `entities`
-        // in order and assumes index 0 is the project.
-        if let Ok(decoded_iter) = crate::walker::iter_elements(rf) {
-            for decoded in decoded_iter {
-                let mapping = super::ifc::category_map::lookup(&decoded.class);
-                let ifc_type = mapping
-                    .map(|m| m.ifc_type.to_string())
-                    .unwrap_or_else(|| "IFCBUILDINGELEMENTPROXY".to_string());
-                let name = match decoded.id {
-                    Some(id) => format!("{}-{}", decoded.class, id),
-                    None => format!("{}-unnamed", decoded.class),
-                };
-                let type_guid = decoded.id.map(|id| id.to_string());
-                entities.push(entities::IfcEntity::BuildingElement {
-                    ifc_type,
-                    name,
-                    type_guid,
-                    storey_index: None,
-                    material_index: None,
-                    property_set: None,
-                    location_feet: None,
-                    rotation_radians: None,
-                    extrusion: None,
-                    host_element_index: None,
-                    material_layer_set_index: None,
-                    material_profile_set_index: None,
-                    solid_shape: None,
-                    representation_map_index: None,
-                });
-            }
-        }
-
-        // RE-14.3 — record-level ArcWall decode path. The walker's
-        // generic schema-driven iter_elements() does not recognise
-        // Partitions/* record framing, so ArcWall instances (tag
-        // 0x0191) are invisible to that path. We scan the partition
-        // streams directly here and emit one IFCWALL per standard
-        // ArcWall record, alongside the walker's generic output. The
-        // scanner is version-gated because the 2024 ArcWall envelope
-        // has a different tag/variant distribution.
-        //
-        // See `reports/element-framing/RE-14.3-synthesis.md` for the
-        // wire-format evidence this is based on, and
-        // `tests/arc_wall_corpus.rs` for the real-file coverage.
-        let partition_streams: Vec<String> = rf
-            .stream_names()
-            .into_iter()
-            .filter(|s| s.starts_with("Partitions/"))
-            .collect();
-        if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
-            for partition in &partition_streams {
-                let Ok(raw) = rf.read_stream(partition) else {
-                    continue;
-                };
-                let chunks = crate::compression::inflate_all_chunks(&raw);
-                let concat: Vec<u8> = chunks.into_iter().flatten().collect();
-                if concat.len() < crate::arc_wall_record::STANDARD_RECORD_MIN_SIZE {
-                    continue;
-                }
-                let scan = crate::arc_wall_record::ArcWallRecord::scan_standard_for_revit_version(
-                    revit_version,
-                    &concat,
-                );
-                for off in scan.offsets {
-                    if let Ok(rec) =
-                        crate::arc_wall_record::ArcWallRecord::decode_standard(&concat, off)
-                    {
-                        let (sx, sy, sz) = rec.start_point();
-                        let _end = rec.end_point();
-                        entities.push(entities::IfcEntity::BuildingElement {
-                            ifc_type: "IFCWALL".to_string(),
-                            name: format!("ArcWall-{partition}-{off}"),
-                            type_guid: None,
-                            storey_index: None,
-                            material_index: None,
-                            property_set: None,
-                            location_feet: Some([sx, sy, sz]),
-                            rotation_radians: None,
-                            extrusion: None,
-                            host_element_index: None,
-                            material_layer_set_index: None,
-                            material_profile_set_index: None,
-                            solid_shape: None,
-                            representation_map_index: None,
-                        });
-                    }
-                }
-            }
-        }
-
-        Ok(IfcModel {
-            project_name,
-            description,
-            entities,
-            classifications,
-            units: Vec::new(),
-            building_storeys: Vec::new(),
-            materials: Vec::new(),
-            material_layer_sets: Vec::new(),
-            material_profile_sets: Vec::new(),
-            representation_maps: Vec::new(),
-        })
+        export_rvt_doc(rf, RvtDocExportMode::Default)
     }
+}
+
+/// Diagnostic document exporter.
+///
+/// This exporter starts from the same conservative model as
+/// [`RvtDocExporter`], then appends low-confidence schema-scan hits as
+/// `IFCBUILDINGELEMENTPROXY` elements with `Pset_RvtRsDiagnosticCandidate`
+/// provenance. It is intended for reverse-engineering and issue
+/// attachments, not for normal model exchange.
+pub struct DiagnosticRvtDocExporter;
+
+impl Exporter for DiagnosticRvtDocExporter {
+    fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel> {
+        export_rvt_doc(rf, RvtDocExportMode::DiagnosticProxies)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RvtDocExportMode {
+    Default,
+    DiagnosticProxies,
+}
+
+fn export_rvt_doc(rf: &mut crate::RevitFile, mode: RvtDocExportMode) -> Result<IfcModel> {
+    // Identity from PartAtom if present; fall back to
+    // BasicFileInfo's original path.
+    let part = rf.part_atom().ok();
+    let bfi = rf.basic_file_info().ok();
+    let project_name = part
+        .as_ref()
+        .and_then(|pa| pa.title.clone())
+        .or_else(|| bfi.as_ref().and_then(|b| b.original_path.clone()));
+
+    let description = {
+        let mut d = Vec::new();
+        if let Some(b) = &bfi {
+            d.push(format!("Revit {} export", b.version));
+            if let Some(message) =
+                crate::arc_wall_record::ArcWallRecord::standard_decoder_status(b.version)
+                    .diagnostic_message()
+            {
+                d.push(message);
+            }
+        }
+        if let Some(p) = &part {
+            if let Some(id) = &p.id {
+                d.push(format!("id={id}"));
+            }
+        }
+        if d.is_empty() {
+            None
+        } else {
+            Some(d.join("; "))
+        }
+    };
+
+    // OmniClass / Uniformat classification references, if present
+    // in PartAtom.
+    let mut classifications = Vec::new();
+    if let Some(p) = &part {
+        let omni_items: Vec<_> = p
+            .categories
+            .iter()
+            .filter(|c| c.term.starts_with(char::is_numeric) && c.term.contains('.'))
+            .map(|c| entities::ClassificationItem {
+                code: c.term.clone(),
+                name: None,
+            })
+            .collect();
+        if !omni_items.is_empty() {
+            classifications.push(entities::Classification {
+                source: entities::ClassificationSource::OmniClass,
+                edition: None,
+                items: omni_items,
+            });
+        }
+    }
+
+    // A single IfcProject entity at the model level (step_writer
+    // emits its STEP form; other entity types are wired in below
+    // from the walker's element stream).
+    let mut entities = vec![entities::IfcEntity::Project {
+        name: project_name.clone(),
+        description: description.clone(),
+        long_name: part.as_ref().and_then(|p| p.title.clone()),
+    }];
+
+    // L5B-11.7 — pull every walker-recoverable element out of
+    // Global/Latest and emit one `BuildingElement` entity per
+    // hit. Unknown classes route to IFCBUILDINGELEMENTPROXY via
+    // `category_map::lookup`. Walker failure (stream missing,
+    // schema unparseable, inflate error) falls through with no
+    // element entities — we never regress the metadata-only
+    // output. The order — `Project` first, then elements — is
+    // load-bearing for `step_writer`, which walks `entities`
+    // in order and assumes index 0 is the project.
+    append_production_walker_elements(rf, &mut entities);
+    if mode == RvtDocExportMode::DiagnosticProxies {
+        append_diagnostic_walker_proxy_candidates(rf, &mut entities);
+    }
+
+    // RE-14.3 — record-level ArcWall decode path. The walker's
+    // generic schema-driven iter_elements() does not recognise
+    // Partitions/* record framing, so ArcWall instances (tag
+    // 0x0191) are invisible to that path. We scan the partition
+    // streams directly here and emit one IFCWALL per standard
+    // ArcWall record, alongside the walker's generic output. The
+    // scanner is version-gated because the 2024 ArcWall envelope
+    // has a different tag/variant distribution.
+    //
+    // See `reports/element-framing/RE-14.3-synthesis.md` for the
+    // wire-format evidence this is based on, and
+    // `tests/arc_wall_corpus.rs` for the real-file coverage.
+    let partition_streams: Vec<String> = rf
+        .stream_names()
+        .into_iter()
+        .filter(|s| s.starts_with("Partitions/"))
+        .collect();
+    if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
+        for partition in &partition_streams {
+            let Ok(raw) = rf.read_stream(partition) else {
+                continue;
+            };
+            let chunks = crate::compression::inflate_all_chunks(&raw);
+            let concat: Vec<u8> = chunks.into_iter().flatten().collect();
+            if concat.len() < crate::arc_wall_record::STANDARD_RECORD_MIN_SIZE {
+                continue;
+            }
+            let scan = crate::arc_wall_record::ArcWallRecord::scan_standard_for_revit_version(
+                revit_version,
+                &concat,
+            );
+            for off in scan.offsets {
+                if let Ok(rec) =
+                    crate::arc_wall_record::ArcWallRecord::decode_standard(&concat, off)
+                {
+                    let (sx, sy, sz) = rec.start_point();
+                    let _end = rec.end_point();
+                    entities.push(entities::IfcEntity::BuildingElement {
+                        ifc_type: "IFCWALL".to_string(),
+                        name: format!("ArcWall-{partition}-{off}"),
+                        type_guid: None,
+                        storey_index: None,
+                        material_index: None,
+                        property_set: None,
+                        location_feet: Some([sx, sy, sz]),
+                        rotation_radians: None,
+                        extrusion: None,
+                        host_element_index: None,
+                        material_layer_set_index: None,
+                        material_profile_set_index: None,
+                        solid_shape: None,
+                        representation_map_index: None,
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(IfcModel {
+        project_name,
+        description,
+        entities,
+        classifications,
+        units: Vec::new(),
+        building_storeys: Vec::new(),
+        materials: Vec::new(),
+        material_layer_sets: Vec::new(),
+        material_profile_sets: Vec::new(),
+        representation_maps: Vec::new(),
+    })
+}
+
+fn append_production_walker_elements(
+    rf: &mut crate::RevitFile,
+    entities: &mut Vec<entities::IfcEntity>,
+) {
+    if let Ok(decoded_iter) = crate::walker::iter_elements(rf) {
+        for decoded in decoded_iter {
+            let mapping = category_map::lookup(&decoded.class);
+            let ifc_type = mapping
+                .map(|m| m.ifc_type.to_string())
+                .unwrap_or_else(|| "IFCBUILDINGELEMENTPROXY".to_string());
+            let name = match decoded.id {
+                Some(id) => format!("{}-{}", decoded.class, id),
+                None => format!("{}-unnamed", decoded.class),
+            };
+            let type_guid = decoded.id.map(|id| id.to_string());
+            entities.push(entities::IfcEntity::BuildingElement {
+                ifc_type,
+                name,
+                type_guid,
+                storey_index: None,
+                material_index: None,
+                property_set: None,
+                location_feet: None,
+                rotation_radians: None,
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
+                representation_map_index: None,
+            });
+        }
+    }
+}
+
+fn append_diagnostic_walker_proxy_candidates(
+    rf: &mut crate::RevitFile,
+    entities: &mut Vec<entities::IfcEntity>,
+) {
+    let Ok(formats_raw) = rf.read_stream(crate::streams::FORMATS_LATEST) else {
+        return;
+    };
+    let Ok(formats_d) = crate::compression::inflate_at(&formats_raw, 0) else {
+        return;
+    };
+    let Ok(schema) = crate::formats::parse_schema(&formats_d) else {
+        return;
+    };
+    let Ok(raw) = rf.read_stream(crate::streams::GLOBAL_LATEST) else {
+        return;
+    };
+    let Ok((_, latest)) = crate::compression::inflate_at_auto(&raw) else {
+        return;
+    };
+
+    let class_by_name: std::collections::HashMap<&str, &crate::formats::ClassEntry> = schema
+        .classes
+        .iter()
+        .map(|class| (class.name.as_str(), class))
+        .collect();
+    let candidates = crate::walker::scan_candidates(
+        &schema,
+        &latest,
+        crate::walker::DIAGNOSTIC_ELEMENT_MIN_SCORE,
+    );
+    let mut seen_ids = std::collections::BTreeSet::<u32>::new();
+    let mut seen_offsets = std::collections::BTreeSet::<usize>::new();
+
+    for candidate in candidates {
+        if candidate.score >= crate::walker::PRODUCTION_ELEMENT_MIN_SCORE {
+            continue;
+        }
+        let Some(class) = class_by_name.get(candidate.class_name.as_str()).copied() else {
+            continue;
+        };
+        let mut decoded = crate::walker::decode_instance(&latest, candidate.offset, class);
+        let self_id = crate::walker::find_self_id_field(class)
+            .and_then(|index| decoded.fields.get(index))
+            .and_then(|(_, field)| match field {
+                crate::walker::InstanceField::ElementId { id, .. } if *id != 0 => Some(*id),
+                _ => None,
+            });
+        if let Some(id) = self_id {
+            if !seen_ids.insert(id) {
+                continue;
+            }
+            decoded.id = Some(id);
+        } else if !seen_offsets.insert(candidate.offset) {
+            continue;
+        }
+
+        let name = match decoded.id {
+            Some(id) => format!("{}-{}", decoded.class, id),
+            None => format!("{}-offset-{:x}", decoded.class, decoded.byte_range.start),
+        };
+        let property_set = diagnostic_candidate_property_set(&decoded, candidate.score);
+
+        entities.push(entities::IfcEntity::BuildingElement {
+            ifc_type: "IFCBUILDINGELEMENTPROXY".to_string(),
+            name,
+            type_guid: decoded.id.map(|id| id.to_string()),
+            storey_index: None,
+            material_index: None,
+            property_set: Some(property_set),
+            location_feet: None,
+            rotation_radians: None,
+            extrusion: None,
+            host_element_index: None,
+            material_layer_set_index: None,
+            material_profile_set_index: None,
+            solid_shape: None,
+            representation_map_index: None,
+        });
+    }
+}
+
+fn diagnostic_candidate_property_set(
+    decoded: &crate::walker::DecodedElement,
+    score: i64,
+) -> entities::PropertySet {
+    let mut properties = vec![
+        entities::Property {
+            name: "DiagnosticReason".into(),
+            value: entities::PropertyValue::Text(
+                "low-confidence schema scan candidate; omitted from default export".into(),
+            ),
+        },
+        entities::Property {
+            name: "DecodedClass".into(),
+            value: entities::PropertyValue::Text(decoded.class.clone()),
+        },
+        entities::Property {
+            name: "SourceStream".into(),
+            value: entities::PropertyValue::Text(crate::streams::GLOBAL_LATEST.into()),
+        },
+        entities::Property {
+            name: "ByteStart".into(),
+            value: entities::PropertyValue::Integer(usize_to_i64_saturating(
+                decoded.byte_range.start,
+            )),
+        },
+        entities::Property {
+            name: "ByteEnd".into(),
+            value: entities::PropertyValue::Integer(usize_to_i64_saturating(
+                decoded.byte_range.end,
+            )),
+        },
+        entities::Property {
+            name: "CandidateScore".into(),
+            value: entities::PropertyValue::Integer(score),
+        },
+    ];
+    if let Some(id) = decoded.id {
+        properties.push(entities::Property {
+            name: "ElementId".into(),
+            value: entities::PropertyValue::Integer(i64::from(id)),
+        });
+    }
+
+    entities::PropertySet {
+        name: "Pset_RvtRsDiagnosticCandidate".into(),
+        properties,
+    }
+}
+
+fn usize_to_i64_saturating(value: usize) -> i64 {
+    i64::try_from(value).unwrap_or(i64::MAX)
 }
 
 #[cfg(test)]
