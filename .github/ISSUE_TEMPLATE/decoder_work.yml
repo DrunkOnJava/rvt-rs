@@ -1,0 +1,90 @@
+name: Decoder work
+description: Propose or claim work on a Revit class, partition record, or geometry decoder.
+title: "Decoder: "
+labels: ["re-finding", "area:reader", "type:research", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for byte-level decoder work. Keep claims evidence-backed and clean-room: public file bytes, public symbols, reproducible probes, and redistributable fixtures only.
+  - type: input
+    id: target
+    attributes:
+      label: Decoder target
+      description: Revit class, stream, partition record, or geometry shape.
+      placeholder: "ArcWall standard records in Partitions/5"
+    validations:
+      required: true
+  - type: dropdown
+    id: file_type
+    attributes:
+      label: File type observed
+      options:
+        - ".rvt"
+        - ".rfa"
+        - ".rte"
+        - ".rft"
+        - "Multiple"
+        - "Unknown"
+    validations:
+      required: true
+  - type: dropdown
+    id: revit_release
+    attributes:
+      label: Revit release observed
+      options:
+        - "2026"
+        - "2025"
+        - "2024"
+        - "2023"
+        - "2022"
+        - "2021"
+        - "2020"
+        - "2019"
+        - "2018"
+        - "2017"
+        - "2016"
+        - "Multiple"
+        - "Unknown"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Hex snippets, offsets, command output, fixture path, and links to probes.
+      render: text
+      placeholder: |
+        cargo run --release --example probe_arcwall_records -- path/to/file.rvt Partitions/5
+        offset 0x1234: ...
+    validations:
+      required: true
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: What the bytes appear to mean, with a confidence value.
+      placeholder: "Confidence 0.75: bytes +0x12..+0x42 are two XYZ endpoints in internal feet."
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: The test, corpus gate, or probe result that would prove this decoder works.
+    validations:
+      required: true
+  - type: textarea
+    id: falsifiability
+    attributes:
+      label: Falsifiability
+      description: What observation would prove the hypothesis wrong?
+    validations:
+      required: true
+  - type: checkboxes
+    id: clean_room
+    attributes:
+      label: Clean-room confirmation
+      options:
+        - label: "This finding is based only on allowed sources under CLEANROOM.md."
+          required: true

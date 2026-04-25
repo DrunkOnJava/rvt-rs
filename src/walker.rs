@@ -1142,9 +1142,9 @@ pub fn read_adocument_lossy(
 /// with their `id` field populated when a self-id was resolvable.
 ///
 /// This is L5B-11.6 — the high-level walker entry point that
-/// [`ifc::RvtDocExporter`] will call to emit per-element IFC
+/// [`crate::ifc::RvtDocExporter`] will call to emit per-element IFC
 /// entities. Pipeline:
-///   1. Read + decompress `Formats/Latest` → [`SchemaTable`].
+///   1. Read + decompress `Formats/Latest` → [`crate::formats::SchemaTable`].
 ///   2. Read + decompress `Global/Latest` → raw bytes.
 ///   3. Run [`scan_candidates`] with `min_score = 0` — every offset
 ///      where `trial_walk` produced a non-degenerate score. The

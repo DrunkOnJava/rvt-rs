@@ -1,6 +1,6 @@
 # Compatibility matrix
 
-What rvt-rs can and cannot do today, grouped by Revit release, file type, decoded element class, and IFC4 export detail. Every row here is checked against current source code. If a claim in this file disagrees with the source, the source wins and this file is wrong.
+What rvt-rs can and cannot do today, grouped by Revit release, file type, decoded element class, and IFC4 export detail. Every row here is checked against current source code. If a claim in this file disagrees with the source, the source wins and this file is wrong. For the shorter user-facing status summary, see [`docs/status.md`](status.md).
 
 Scope sources:
 
@@ -40,10 +40,10 @@ All four extensions share the same Microsoft Compound File Binary container, the
 
 | Type | Extension | Read | IFC4 export |
 |---|---|---|---|
-| Project | `.rvt` | yes | yes (spatial tree + per-element entities; see §4) |
-| Family | `.rfa` | yes | yes (same pipeline) |
-| Project template | `.rte` | yes | yes (same pipeline) |
-| Family template | `.rft` | yes | yes (same pipeline) |
+| Project | `.rvt` | yes | partial: spatial tree/diagnostics; typed elements depend on decoded coverage |
+| Family | `.rfa` | yes | partial: same pipeline |
+| Project template | `.rte` | yes | partial: same pipeline |
+| Family template | `.rft` | yes | partial: same pipeline |
 
 Notes:
 
@@ -52,7 +52,7 @@ Notes:
 
 ## 3. Element class decode coverage
 
-**72 classes decoded today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` — the walker dispatch table built at runtime. Grouped by domain below.
+**80 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` — the walker dispatch table built at runtime. Grouped by domain below.
 
 Each decoder takes schema-directed instance bytes (from `walker::decode_instance`) and projects them into a typed Rust struct. Decoders are validated on synthesized schema+bytes fixtures; real-file corpus validation is tracked as Q-01 in the recon report.
 
@@ -116,10 +116,12 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - `Dimension`, `Tag`, `TextNote`, `Annotation` ([`annotations.rs`](../src/elements/annotations.rs))
 - Dimensions include linear / angular / radial / arc-length subtypes via the `DimensionKind` discriminator projected from the schema; tag orientation and horizontal alignment enums are exposed on `TagOrientation` and `HorizontalAlignment`.
 
-### Parameters (2)
+### Parameters and value carriers (10)
 
 - `ParameterElement`, `SharedParameter` ([`parameters.rs`](../src/elements/parameters.rs))
 - Both expose the `StorageType` enum (`None`, `Integer`, `Double`, `String`, `ElementId`, `Other`) so callers can route parameter values into property-set emission (see §4 IFC-31).
+- `AProperty`, `APropertyBoolean`, `APropertyInteger`, `APropertyEnum`, `APropertyDouble1`, `APropertyDouble3`, `APropertyFloat`, `APropertyFloat3` ([`parameters.rs`](../src/elements/parameters.rs))
+- These value-carrier decoders are building blocks for parameter extraction. Real-file parameter recovery still depends on the object-graph and partition-record linkage described in [`docs/status.md`](status.md).
 
 ### MEP — mechanical / electrical / plumbing (11)
 
@@ -129,7 +131,7 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - Generic MEP: `SpecialtyEquipment` ([`mep.rs`](../src/elements/mep.rs))
 - All MEP instances project onto a shared `MepInstance` typed view with an optional `MepSystemClassification` (Supply / Return / Exhaust / …) so IFC distribution-system emission (IFC-10, future) can key off it without re-reading the schema.
 
-Group sum: 7 + 13 + 7 + 6 + 6 + 4 + 7 + 5 + 4 + 2 + 11 = **72**, matching `all_decoders().len()`.
+Group sum: 7 + 13 + 7 + 6 + 6 + 4 + 7 + 5 + 4 + 10 + 11 = **80**, matching `all_decoders().len()`.
 
 ## 4. IFC4 export coverage
 
@@ -138,7 +140,7 @@ The bridge [`ifc::build_ifc_model`](../src/ifc/from_decoded.rs) maps each decode
 Column definitions:
 
 - **IFC entity + placement**: a valid `IfcWall` / `IfcSlab` / … is constructed and wired to the storey via `IfcRelContainedInSpatialStructure`. Always yes for every Revit class that has a mapping in [`category_map.rs`](../src/ifc/category_map.rs); unknown classes fall back to `IfcBuildingElementProxy` rather than being dropped.
-- **Extruded geometry**: an `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` + `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain is emitted and attached to the element's `Representation` slot, iff the caller supplies an `Extrusion` via one of the helpers in [`from_decoded.rs`](../src/ifc/from_decoded.rs) (`wall_extrusion`, `slab_extrusion`, `roof_extrusion`, `ceiling_extrusion`, `column_extrusion`). The helpers exist for the classes marked "yes"; they do not exist yet for the classes marked "helper not yet".
+- **Extruded geometry**: an `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` + `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain is emitted and attached to the element's `Representation` slot, iff the caller supplies an `Extrusion` via one of the helpers in [`from_decoded.rs`](../src/ifc/from_decoded.rs) (`wall_extrusion`, `slab_extrusion`, `roof_extrusion`, `ceiling_extrusion`, `column_extrusion`). The helpers exist for the classes marked "yes"; they do not exist yet for the classes marked "no helper".
 - **Material association**: an `IfcMaterial` + `IfcRelAssociatesMaterial` is emitted iff the caller populates `BuilderOptions.materials` (see [`materials_from_revit`](../src/ifc/from_decoded.rs)) and sets `ElementInput.material_index`. For compound hosts, `ElementInput.material_layer_set_index` routes through an `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` chain (IFC-28 / IFC-29); for profile-driven members, `material_profile_set_index` routes through `IfcMaterialProfileSet` + `IfcMaterialProfileSetUsage` (IFC-30). Precedence order is `profile_set > layer_set > single material` — whichever is set wins.
 - **Property set**: an `IfcPropertySet` + `IfcPropertySingleValue` + `IfcRelDefinesByProperties` (IFC-31 / IFC-33) is emitted iff the caller supplies a `PropertySet` via a dedicated helper (`wall_property_set`, `door_property_set`, `window_property_set`, `stair_property_set` exist today). Quantity-typed properties route through `IfcQuantityArea` / `IfcQuantityVolume` / `IfcQuantityCount` / `IfcQuantityTime` / `IfcQuantityWeight` (IFC-32), with Imperial-to-SI conversion done at emission time (square-feet → m², cubic-feet → m³, pounds → kg).
 - **Opening / fill**: for doors / windows, iff the caller sets `host_element_index` and `extrusion` on the opening, the writer emits `IfcOpeningElement` + `IfcRelVoidsElement` (host → opening, IFC-37) + `IfcRelFillsElement` (opening → door/window, IFC-38).
@@ -146,41 +148,41 @@ Column definitions:
 | Revit class | IFC entity | Placement + storey | Extrusion helper | Material assoc | Property set | Opening / fill |
 |---|---|---|---|---|---|---|
 | Level | IfcBuildingStorey | built-in | n/a | n/a | n/a | n/a |
-| Grid | IfcGrid | yes | helper not yet | n/a | n/a | n/a |
+| Grid | IfcGrid | yes | no helper | n/a | n/a | n/a |
 | Wall | IfcWall (STANDARD) | yes | yes (`wall_extrusion`) | yes | yes (`wall_property_set`) | n/a |
-| CurtainWall | IfcCurtainWall | yes | helper not yet | helper not yet | helper not yet | n/a |
+| CurtainWall | IfcCurtainWall | yes | no helper | no helper | no helper | n/a |
 | Door | IfcDoor | yes | caller-supplied | yes | yes (`door_property_set`) | yes |
 | Window | IfcWindow | yes | caller-supplied | yes | yes (`window_property_set`) | yes |
-| Floor | IfcSlab (FLOOR) | yes | yes (`slab_extrusion`) | yes | helper not yet | n/a |
-| Roof | IfcRoof | yes | yes (`roof_extrusion`) | yes | helper not yet | n/a |
-| Ceiling | IfcCovering (CEILING) | yes | yes (`ceiling_extrusion`) | yes | helper not yet | n/a |
-| Stair | IfcStair | yes | helper not yet | yes | yes (`stair_property_set`) | n/a |
-| Railing | IfcRailing | yes | helper not yet | yes | helper not yet | n/a |
-| Ramp | IfcRamp | yes | helper not yet | yes | helper not yet | n/a |
-| Column | IfcColumn (COLUMN) | yes | yes (`column_extrusion`) | yes | helper not yet | n/a |
-| StructuralColumn | IfcColumn (COLUMN) | yes | yes (`column_extrusion`) | yes | helper not yet | n/a |
-| StructuralFraming | IfcBeam (BEAM) | yes | helper not yet | yes | helper not yet | n/a |
-| StructuralFoundation | IfcFooting | yes | helper not yet | yes | helper not yet | n/a |
-| Rebar | IfcReinforcingBar | yes | helper not yet | yes | helper not yet | n/a |
-| Room | IfcSpace (INTERNAL) | yes | helper not yet | n/a | helper not yet | n/a |
-| Area | IfcSpace | yes | helper not yet | n/a | helper not yet | n/a |
-| Space | IfcSpace | yes | helper not yet | n/a | helper not yet | n/a |
-| Furniture | IfcFurniture | yes | helper not yet | yes | helper not yet | n/a |
-| FurnitureSystem | IfcFurniture (USERDEFINED) | yes | helper not yet | yes | helper not yet | n/a |
-| Casework | IfcFurniture | yes | helper not yet | yes | helper not yet | n/a |
-| LightingFixture | IfcLightFixture | yes | helper not yet | yes | helper not yet | n/a |
-| LightingDevice | IfcLightFixture (USERDEFINED) | yes | helper not yet | yes | helper not yet | n/a |
-| ElectricalEquipment | IfcElectricAppliance | yes | helper not yet | yes | helper not yet | n/a |
-| ElectricalFixture | IfcLightFixture | yes | helper not yet | yes | helper not yet | n/a |
-| MechanicalEquipment | IfcFlowController | yes | helper not yet | yes | helper not yet | n/a |
-| Duct | IfcDuctSegment | yes | helper not yet | yes | helper not yet | n/a |
-| DuctFitting | IfcDuctFitting | yes | helper not yet | yes | helper not yet | n/a |
-| Pipe | IfcPipeSegment | yes | helper not yet | yes | helper not yet | n/a |
-| PipeFitting | IfcPipeFitting | yes | helper not yet | yes | helper not yet | n/a |
-| PlumbingFixture | IfcSanitaryTerminal | yes | helper not yet | yes | helper not yet | n/a |
-| SpecialtyEquipment | IfcBuildingElementProxy (USERDEFINED) | yes | helper not yet | yes | helper not yet | n/a |
-| Mass | IfcBuildingElementProxy (USERDEFINED) | yes | helper not yet | n/a | helper not yet | n/a |
-| GenericModel | IfcBuildingElementProxy | yes | helper not yet | n/a | helper not yet | n/a |
+| Floor | IfcSlab (FLOOR) | yes | yes (`slab_extrusion`) | yes | no helper | n/a |
+| Roof | IfcRoof | yes | yes (`roof_extrusion`) | yes | no helper | n/a |
+| Ceiling | IfcCovering (CEILING) | yes | yes (`ceiling_extrusion`) | yes | no helper | n/a |
+| Stair | IfcStair | yes | no helper | yes | yes (`stair_property_set`) | n/a |
+| Railing | IfcRailing | yes | no helper | yes | no helper | n/a |
+| Ramp | IfcRamp | yes | no helper | yes | no helper | n/a |
+| Column | IfcColumn (COLUMN) | yes | yes (`column_extrusion`) | yes | no helper | n/a |
+| StructuralColumn | IfcColumn (COLUMN) | yes | yes (`column_extrusion`) | yes | no helper | n/a |
+| StructuralFraming | IfcBeam (BEAM) | yes | no helper | yes | no helper | n/a |
+| StructuralFoundation | IfcFooting | yes | no helper | yes | no helper | n/a |
+| Rebar | IfcReinforcingBar | yes | no helper | yes | no helper | n/a |
+| Room | IfcSpace (INTERNAL) | yes | no helper | n/a | no helper | n/a |
+| Area | IfcSpace | yes | no helper | n/a | no helper | n/a |
+| Space | IfcSpace | yes | no helper | n/a | no helper | n/a |
+| Furniture | IfcFurniture | yes | no helper | yes | no helper | n/a |
+| FurnitureSystem | IfcFurniture (USERDEFINED) | yes | no helper | yes | no helper | n/a |
+| Casework | IfcFurniture | yes | no helper | yes | no helper | n/a |
+| LightingFixture | IfcLightFixture | yes | no helper | yes | no helper | n/a |
+| LightingDevice | IfcLightFixture (USERDEFINED) | yes | no helper | yes | no helper | n/a |
+| ElectricalEquipment | IfcElectricAppliance | yes | no helper | yes | no helper | n/a |
+| ElectricalFixture | IfcLightFixture | yes | no helper | yes | no helper | n/a |
+| MechanicalEquipment | IfcFlowController | yes | no helper | yes | no helper | n/a |
+| Duct | IfcDuctSegment | yes | no helper | yes | no helper | n/a |
+| DuctFitting | IfcDuctFitting | yes | no helper | yes | no helper | n/a |
+| Pipe | IfcPipeSegment | yes | no helper | yes | no helper | n/a |
+| PipeFitting | IfcPipeFitting | yes | no helper | yes | no helper | n/a |
+| PlumbingFixture | IfcSanitaryTerminal | yes | no helper | yes | no helper | n/a |
+| SpecialtyEquipment | IfcBuildingElementProxy (USERDEFINED) | yes | no helper | yes | no helper | n/a |
+| Mass | IfcBuildingElementProxy (USERDEFINED) | yes | no helper | n/a | no helper | n/a |
+| GenericModel | IfcBuildingElementProxy | yes | no helper | n/a | no helper | n/a |
 | (unknown class) | IfcBuildingElementProxy | yes | n/a | n/a | n/a | n/a |
 
 Notes:
@@ -192,7 +194,7 @@ Notes:
 
 ## 5. Known limitations
 
-- **No write path for Revit files**. Stream-level patching ([`writer::write_with_patches`](../src/writer.rs)) can replace the bytes of a named stream, re-compress with truncated gzip, and re-embed into a byte-preserving sibling file (13/13 streams identical on the 2024 sample round-trip). Field-level semantic writes (edit a specific Wall's unconnected height and round-trip back to a Revit-openable `.rvt`) are not implemented. Phase 7.
+- **No semantic write path for Revit files**. Stream-level patching ([`writer::write_with_patches`](../src/writer.rs)) can replace the bytes of a named stream, re-compress with truncated gzip, and re-embed into a byte-preserving sibling file (13/13 streams identical on the 2024 sample round-trip). Field-level semantic writes (edit a specific Wall's unconnected height and round-trip back to a Revit-openable `.rvt`) are not implemented.
 - **No format versions before Revit 2016**. Earlier Revit releases used a different compression + schema framing that this library has not been probed against. No claim is made about 2015-or-earlier.
 - **No IFC2X3 or IFC4.3 export**. The STEP writer targets IFC4 only. The category map is structured to make a future IFC2X3 / IFC4.3 swap a table replacement, but it has not been swapped.
 - **No encrypted or password-protected files**. Revit's "Protected" models use a wrapper format this library does not attempt to strip. CFB open will succeed on the outer container but inner streams will be gibberish.
