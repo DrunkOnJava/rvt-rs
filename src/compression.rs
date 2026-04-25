@@ -56,7 +56,10 @@ impl Default for InflateLimits {
 
 /// Returns `true` iff `data` starts with the gzip magic at the given offset.
 pub fn has_gzip_magic(data: &[u8], offset: usize) -> bool {
-    data.get(offset..offset + 3) == Some(GZIP_MAGIC.as_slice())
+    offset
+        .checked_add(GZIP_MAGIC.len())
+        .and_then(|end| data.get(offset..end))
+        == Some(GZIP_MAGIC.as_slice())
 }
 
 /// Length of the gzip header starting at `offset`, or `None` if no magic.
@@ -67,12 +70,14 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
     if !has_gzip_magic(data, offset) {
         return None;
     }
-    let flags = *data.get(offset + 3)?;
-    let mut pos = offset + 10;
+    let flags = *data.get(offset.checked_add(3)?)?;
+    let mut pos = offset.checked_add(10)?;
     if flags & 0x04 != 0 {
         // FEXTRA: 2-byte LE length, then that many bytes
-        let xlen = u16::from_le_bytes([*data.get(pos)?, *data.get(pos + 1)?]) as usize;
-        pos += 2 + xlen;
+        let xlen_end = pos.checked_add(2)?;
+        let xlen_bytes = data.get(pos..xlen_end)?;
+        let xlen = u16::from_le_bytes([xlen_bytes[0], xlen_bytes[1]]) as usize;
+        pos = xlen_end.checked_add(xlen)?;
     }
     if flags & 0x08 != 0 {
         // FNAME: null-terminated string. Bounds-check `pos` first —
@@ -85,7 +90,7 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
             .get(pos..)?
             .iter()
             .position(|&b| b == 0)
-            .map(|i| pos + i + 1)?;
+            .and_then(|i| pos.checked_add(i)?.checked_add(1))?;
     }
     if flags & 0x10 != 0 {
         // FCOMMENT: null-terminated string. Same bounds-check
@@ -94,11 +99,11 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
             .get(pos..)?
             .iter()
             .position(|&b| b == 0)
-            .map(|i| pos + i + 1)?;
+            .and_then(|i| pos.checked_add(i)?.checked_add(1))?;
     }
     if flags & 0x02 != 0 {
         // FHCRC: 2-byte header CRC
-        pos += 2;
+        pos = pos.checked_add(2)?;
     }
     // The base 10-byte header is set unconditionally at `pos = offset
     // + 10` above, but none of the `data.get(..)` probes on the
@@ -146,7 +151,12 @@ pub fn inflate_at_with_limits(
 ) -> Result<Vec<u8>> {
     let header_len =
         gzip_header_len(data, offset).ok_or_else(|| Error::Decompress("no gzip header".into()))?;
-    let body = &data[offset + header_len..];
+    let body_start = offset
+        .checked_add(header_len)
+        .ok_or_else(|| Error::Decompress("gzip header offset overflow".into()))?;
+    let body = data
+        .get(body_start..)
+        .ok_or_else(|| Error::Decompress("gzip header extends past input".into()))?;
     // Clamp initial capacity. `body.len() * 4` was the historical hint
     // but without an upper bound it's a memory-amplification vector.
     let cap = body.len().saturating_mul(4).min(limits.max_output_bytes);
@@ -161,7 +171,10 @@ pub fn inflate_at_with_limits(
         if n == 0 {
             break;
         }
-        if out.len() + n > limits.max_output_bytes {
+        let next_len = out.len().checked_add(n).ok_or_else(|| {
+            Error::DecompressLimitExceeded("DEFLATE output length overflow".into())
+        })?;
+        if next_len > limits.max_output_bytes {
             return Err(Error::DecompressLimitExceeded(format!(
                 "DEFLATE at offset {offset} would exceed {} bytes",
                 limits.max_output_bytes

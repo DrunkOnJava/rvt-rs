@@ -174,9 +174,18 @@ pub fn parse_records_from_bytes(
     layout: ElemTableLayout,
     limit: usize,
 ) -> Vec<ElemRecord> {
-    let mut records = Vec::with_capacity(limit);
+    let mut records = Vec::new();
+    if layout.stride == 0 {
+        return records;
+    }
     let mut i = layout.start;
-    while records.len() < limit && i + layout.stride <= d.len() {
+    while records.len() < limit {
+        let Some(record_end) = i.checked_add(layout.stride) else {
+            break;
+        };
+        if record_end > d.len() {
+            break;
+        }
         let (id_primary, id_secondary) = match layout.framing {
             RecordFraming::Implicit => {
                 let a = u32::from_le_bytes([d[i], d[i + 1], d[i + 2], d[i + 3]]);
@@ -184,16 +193,30 @@ pub fn parse_records_from_bytes(
                 (a, b)
             }
             RecordFraming::Explicit { marker_len } => {
-                let body = i + marker_len;
-                if body + 8 > d.len() {
+                let Some(body) = i.checked_add(marker_len) else {
+                    break;
+                };
+                if body > record_end {
                     break;
                 }
                 if layout.stride == 28 {
+                    let Some(body_end) = body.checked_add(8) else {
+                        break;
+                    };
+                    if body_end > record_end {
+                        break;
+                    }
                     let a = u32::from_le_bytes([d[body], d[body + 1], d[body + 2], d[body + 3]]);
                     let b =
                         u32::from_le_bytes([d[body + 4], d[body + 5], d[body + 6], d[body + 7]]);
                     (a, b)
-                } else if layout.stride == 40 && body + 28 <= d.len() {
+                } else if layout.stride == 40 {
+                    let Some(body_end) = body.checked_add(28) else {
+                        break;
+                    };
+                    if body_end > record_end {
+                        break;
+                    }
                     // 40-byte layout (observed on Revit 2024 projects):
                     //   [8 B marker][4 B zero][u32 id_primary][16 B zero/payload][u32 id_secondary][8 B payload]
                     // id_primary is at body+4, id_secondary at body+24
@@ -208,19 +231,25 @@ pub fn parse_records_from_bytes(
                     ]);
                     (a, b)
                 } else {
+                    let Some(body_end) = body.checked_add(4) else {
+                        break;
+                    };
+                    if body_end > record_end {
+                        break;
+                    }
                     let a = u32::from_le_bytes([d[body], d[body + 1], d[body + 2], d[body + 3]]);
                     (a, a)
                 }
             }
         };
-        let raw = d[i..i + layout.stride].to_vec();
+        let raw = d[i..record_end].to_vec();
         records.push(ElemRecord {
             offset: i,
             id_primary,
             id_secondary,
             raw,
         });
-        i += layout.stride;
+        i = record_end;
     }
     records
 }
