@@ -14,6 +14,14 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/deploy-viewer.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'viewer/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/deploy-viewer.yml'
   workflow_dispatch:
 
 permissions:
@@ -37,6 +45,13 @@ jobs:
         with:
           repository: phi-ag/rvt
           path: _corpus
+          lfs: true
+
+      - name: Checkout public project corpus
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
           lfs: true
 
       - name: Install Rust toolchain
@@ -96,11 +111,11 @@ jobs:
         working-directory: viewer
         run: npm run build
 
-      - name: Browser no-network invariant
+      - name: Browser regression tests
         working-directory: viewer
         env:
-          RVT_VIEWER_SAMPLE: ../_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa
-        run: npm run test:network
+          RVT_VIEWER_SAMPLE: ../_project_corpus/Revit/Revit_IFC5_Einhoven.rvt
+        run: npm run test:browser
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3.0.1
@@ -108,6 +123,7 @@ jobs:
           path: viewer/dist
 
   deploy:
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     environment:
