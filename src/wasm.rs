@@ -24,7 +24,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::RevitFile;
 use crate::ifc::{
-    Exporter, IfcModel, RvtDocExporter,
+    IfcModel, RvtDocExporter,
     camera::CameraState,
     clipping::{SectionBox, ViewMode},
     gltf::model_to_glb,
@@ -36,6 +36,16 @@ use crate::ifc::{
     sheet::{SheetOptions, render_plan_svg},
     step_writer::write_step,
 };
+use serde::Deserialize;
+
+#[derive(Debug, Default, Deserialize)]
+struct WasmWalkerLimits {
+    max_scan_bytes: Option<usize>,
+    max_candidates: Option<usize>,
+    max_trial_offsets: Option<usize>,
+    max_record_decode_bytes: Option<usize>,
+    max_container_records: Option<usize>,
+}
 
 fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
     JsValue::from_str(&e.to_string())
@@ -47,7 +57,19 @@ fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
 #[wasm_bindgen(js_name = openRvtBytes)]
 pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsValue> {
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
-    let model = RvtDocExporter.export(&mut rf).map_err(err_str)?;
+    let model = RvtDocExporter
+        .export_with_limits(&mut rf, crate::walker::WalkerLimits::default())
+        .map_err(err_str)?;
+    serde_wasm_bindgen::to_value(&model).map_err(err_str)
+}
+
+/// Open an RVT / RFA byte slice with explicit walker scan limits.
+#[wasm_bindgen(js_name = openRvtBytesWithLimits)]
+pub fn open_rvt_bytes_with_limits(bytes: &[u8], limits: JsValue) -> Result<JsValue, JsValue> {
+    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
+    let model = RvtDocExporter
+        .export_with_limits(&mut rf, walker_limits_from_js(limits)?)
+        .map_err(err_str)?;
     serde_wasm_bindgen::to_value(&model).map_err(err_str)
 }
 
@@ -59,7 +81,21 @@ pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsValue> {
 pub fn open_rvt_bytes_with_diagnostics(bytes: &[u8]) -> Result<JsValue, JsValue> {
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let result = RvtDocExporter
-        .export_with_diagnostics(&mut rf)
+        .export_with_diagnostics_and_limits(&mut rf, crate::walker::WalkerLimits::default())
+        .map_err(err_str)?;
+    serde_wasm_bindgen::to_value(&result).map_err(err_str)
+}
+
+/// Open an RVT / RFA byte slice and return `{ model, diagnostics }`
+/// with explicit walker scan limits.
+#[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsAndLimits)]
+pub fn open_rvt_bytes_with_diagnostics_and_limits(
+    bytes: &[u8],
+    limits: JsValue,
+) -> Result<JsValue, JsValue> {
+    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
+    let result = RvtDocExporter
+        .export_with_diagnostics_and_limits(&mut rf, walker_limits_from_js(limits)?)
         .map_err(err_str)?;
     serde_wasm_bindgen::to_value(&result).map_err(err_str)
 }
@@ -196,4 +232,25 @@ pub fn js_default_sheet_options() -> Result<JsValue, JsValue> {
 // f32; this forces explicit coercion).
 fn serde_js_options_bridge(input: JsValue) -> Result<JsValue, JsValue> {
     Ok(input)
+}
+
+fn walker_limits_from_js(input: JsValue) -> Result<crate::walker::WalkerLimits, JsValue> {
+    if input.is_null() || input.is_undefined() {
+        return Ok(crate::walker::WalkerLimits::default());
+    }
+    let parsed: WasmWalkerLimits = serde_wasm_bindgen::from_value(input).map_err(err_str)?;
+    let defaults = crate::walker::WalkerLimits::default();
+    Ok(crate::walker::WalkerLimits {
+        max_scan_bytes: parsed.max_scan_bytes.unwrap_or(defaults.max_scan_bytes),
+        max_candidates: parsed.max_candidates.unwrap_or(defaults.max_candidates),
+        max_trial_offsets: parsed
+            .max_trial_offsets
+            .unwrap_or(defaults.max_trial_offsets),
+        max_per_record_decode_bytes: parsed
+            .max_record_decode_bytes
+            .unwrap_or(defaults.max_per_record_decode_bytes),
+        max_container_records: parsed
+            .max_container_records
+            .unwrap_or(defaults.max_container_records),
+    })
 }

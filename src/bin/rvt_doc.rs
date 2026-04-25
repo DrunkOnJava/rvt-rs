@@ -8,7 +8,9 @@
 //! reconnaissance.md` §Q6.5).
 
 use clap::Parser;
-use rvt::walker::{ADocumentInstance, InstanceField, read_adocument};
+use rvt::walker::{
+    ADocumentInstance, InstanceField, WalkerLimits, read_adocument_lossy_with_limits,
+};
 use rvt::{RevitFile, redact};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -25,6 +27,18 @@ struct Args {
     /// fields surfaced.
     #[arg(long)]
     redact: bool,
+    /// Maximum decompressed Global/Latest bytes scanned by the walker.
+    #[arg(long)]
+    max_walker_scan_bytes: Option<usize>,
+    /// Maximum trial decodes attempted by ADocument detection.
+    #[arg(long)]
+    max_walker_trial_offsets: Option<usize>,
+    /// Maximum bytes inspected while decoding one walker candidate.
+    #[arg(long)]
+    max_walker_record_decode_bytes: Option<usize>,
+    /// Maximum records accepted in walker reference containers.
+    #[arg(long)]
+    max_walker_container_records: Option<usize>,
 }
 
 #[derive(Serialize)]
@@ -122,14 +136,24 @@ fn main() -> anyhow::Result<()> {
     };
 
     let mut rf = RevitFile::open(&args.path)?;
-    let maybe_inst = read_adocument(&mut rf)?;
+    let decoded = read_adocument_lossy_with_limits(&mut rf, walker_limits_from_args(&args))?;
+    let maybe_inst = if decoded
+        .diagnostics
+        .failed_streams
+        .iter()
+        .any(|s| s == "ADocument")
+    {
+        None
+    } else {
+        Some(decoded.value)
+    };
     let version = rf.basic_file_info().ok().map(|b| b.version).unwrap_or(0);
 
     let (entry, fields, notes) = match maybe_inst {
         Some(inst) => {
             let e = format!("0x{:06x}", inst.entry_offset);
             let f = render(&inst);
-            let mut n = Vec::new();
+            let mut n = diagnostic_notes(&decoded.diagnostics);
             if !(2024..=2026).contains(&inst.version) {
                 n.push(
                     "Walker currently validated on Revit 2024–2026. \
@@ -139,17 +163,17 @@ fn main() -> anyhow::Result<()> {
             }
             (Some(e), f, n)
         }
-        None => (
-            None,
-            Vec::new(),
-            vec![
+        None => (None, Vec::new(), {
+            let mut notes = diagnostic_notes(&decoded.diagnostics);
+            notes.push(
                 "ADocument record not locatable in this release's stream \
                  layout. This is expected for Revit 2016–2023 today \
                  (see §Q6.5 of docs/rvt-moat-break-reconnaissance.md \
                  for current status)."
                     .into(),
-            ],
-        ),
+            );
+            notes
+        }),
     };
 
     let out = Output {
@@ -210,4 +234,31 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn walker_limits_from_args(args: &Args) -> WalkerLimits {
+    let defaults = WalkerLimits::default();
+    WalkerLimits {
+        max_scan_bytes: args
+            .max_walker_scan_bytes
+            .unwrap_or(defaults.max_scan_bytes),
+        max_candidates: defaults.max_candidates,
+        max_trial_offsets: args
+            .max_walker_trial_offsets
+            .unwrap_or(defaults.max_trial_offsets),
+        max_per_record_decode_bytes: args
+            .max_walker_record_decode_bytes
+            .unwrap_or(defaults.max_per_record_decode_bytes),
+        max_container_records: args
+            .max_walker_container_records
+            .unwrap_or(defaults.max_container_records),
+    }
+}
+
+fn diagnostic_notes(diagnostics: &rvt::parse_mode::Diagnostics) -> Vec<String> {
+    diagnostics
+        .warnings
+        .iter()
+        .map(|w| format!("{}: {}", w.code, w.message))
+        .collect()
 }

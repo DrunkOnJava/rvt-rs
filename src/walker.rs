@@ -21,7 +21,7 @@
 //! | `Pointer { .. }` | 8 bytes `[u32 slot_a][u32 slot_b]` — `00 00 00 00 00 00 00 00` means NULL; `0xff…f` also NULL-like |
 //! | `ElementId` / `ElementIdRef` | 8 bytes `[u32 tag_or_zero][u32 id]` — `id` is the runtime element identifier |
 //! | `Container { kind: 0x0e, .. }` | 2-column — `[u32 count][count × 6-byte [u16 id][u32 mask]][u32 count2][count2 × 6-byte records]` |
-//! | Other `FieldType` variants | not yet exercised in ADocument — TBD |
+//! | Other `FieldType` variants | not observed in current ADocument fixtures; retained as raw bytes until a validated wire shape is available |
 
 use crate::{Error, Result, RevitFile, compression, formats, streams};
 
@@ -777,6 +777,20 @@ pub fn read_field_by_type(
 /// `id: None` (callers that can extract the ID from the record
 /// header should set it after calling this).
 pub fn decode_instance(bytes: &[u8], start: usize, class: &formats::ClassEntry) -> DecodedElement {
+    decode_instance_with_limits(bytes, start, class, WalkerLimits::default())
+}
+
+pub fn decode_instance_with_limits(
+    bytes: &[u8],
+    start: usize,
+    class: &formats::ClassEntry,
+    limits: WalkerLimits,
+) -> DecodedElement {
+    let end = start
+        .checked_add(limits.max_per_record_decode_bytes)
+        .map(|n| n.min(bytes.len()))
+        .unwrap_or(bytes.len());
+    let bytes = bytes.get(..end).unwrap_or(bytes);
     let mut cursor = start;
     let mut fields = Vec::with_capacity(class.fields.len());
     for field in &class.fields {
@@ -798,26 +812,74 @@ pub fn decode_instance(bytes: &[u8], start: usize, class: &formats::ClassEntry) 
     }
 }
 
-/// Resource caps applied while the walker decodes an instance
+/// Resource cap that stopped or truncated a walker scan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalkerLimitHit {
+    MaxScanBytes,
+    MaxCandidates,
+    MaxTrialOffsets,
+    MaxPerRecordDecodeBytes,
+}
+
+impl WalkerLimitHit {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::MaxScanBytes => "walker-max-scan-bytes",
+            Self::MaxCandidates => "walker-max-candidates",
+            Self::MaxTrialOffsets => "walker-max-trial-offsets",
+            Self::MaxPerRecordDecodeBytes => "walker-max-record-decode-bytes",
+        }
+    }
+
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::MaxScanBytes => "walker scan stopped at max_scan_bytes",
+            Self::MaxCandidates => "walker candidate list stopped at max_candidates",
+            Self::MaxTrialOffsets => "walker trial scan stopped at max_trial_offsets",
+            Self::MaxPerRecordDecodeBytes => {
+                "walker candidate decode stopped at max_per_record_decode_bytes"
+            }
+        }
+    }
+}
+
+/// Resource caps applied while the walker scans and decodes instances
 /// (API-11). Every size- or count-prefixed wire value that could
 /// drive an allocation is compared against the matching cap; values
-/// above the cap trigger a graceful fallback (the field is emitted
-/// as `InstanceField::Bytes` with the original bytes captured), not
-/// a panic.
+/// above the cap trigger a graceful fallback or a diagnostic limit
+/// hit, not a panic.
 ///
-/// Defaults match the hard-coded limits that shipped in v0.1.2 so
-/// existing callers get identical behaviour without opting in.
+/// Defaults preserve ordinary corpus behaviour while making scan
+/// work finite for adversarial files.
 /// Tighten the limits when parsing adversarial / untrusted input:
 ///
 /// ```
 /// use rvt::walker::WalkerLimits;
 /// let tight = WalkerLimits {
+///     max_scan_bytes: 16 * 1024 * 1024,
 ///     max_container_records: 64,
 ///     ..WalkerLimits::default()
 /// };
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct WalkerLimits {
+    /// Maximum decompressed `Global/Latest` bytes considered by
+    /// brute-force walker scans. Bytes beyond this cap are ignored
+    /// and a [`WalkerLimitHit::MaxScanBytes`] diagnostic is surfaced
+    /// by diagnostic APIs. Default 128 MiB.
+    pub max_scan_bytes: usize,
+    /// Maximum candidates materialised by [`scan_candidates_with_limits`].
+    /// Default 100,000.
+    pub max_candidates: usize,
+    /// Maximum trial decodes attempted by schema-directed scans.
+    /// For ADocument detection this bounds byte-by-byte fallback
+    /// scanning; for element scans this bounds class-tag hits. Default
+    /// 16,000,000.
+    pub max_trial_offsets: usize,
+    /// Maximum bytes a single candidate decode may inspect. Default
+    /// 1 MiB, far above observed record sizes and low enough to bound
+    /// hostile size-prefix paths.
+    pub max_per_record_decode_bytes: usize,
     /// Maximum record count accepted in a 2-column `Container`
     /// (`kind = 0x0e`). Above this, the field falls back to raw
     /// bytes. Default 1000, which is already a generous cap for
@@ -829,6 +891,10 @@ pub struct WalkerLimits {
 impl Default for WalkerLimits {
     fn default() -> Self {
         Self {
+            max_scan_bytes: 128 * 1024 * 1024,
+            max_candidates: 100_000,
+            max_trial_offsets: 16_000_000,
+            max_per_record_decode_bytes: 1024 * 1024,
             max_container_records: 1000,
         }
     }
@@ -1021,6 +1087,13 @@ pub fn read_adocument_with_limits(
     rf: &mut RevitFile,
     limits: WalkerLimits,
 ) -> Result<Option<ADocumentInstance>> {
+    Ok(read_adocument_internal(rf, limits)?.0)
+}
+
+fn read_adocument_internal(
+    rf: &mut RevitFile,
+    limits: WalkerLimits,
+) -> Result<(Option<ADocumentInstance>, Option<DetectionResult>)> {
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
     let formats_d = compression::inflate_at(&formats_raw, 0)?;
     let schema = formats::parse_schema(&formats_d)?;
@@ -1032,8 +1105,9 @@ pub fn read_adocument_with_limits(
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
     let (_, d) = compression::inflate_at_auto(&raw)?;
-    let Some(entry) = find_adocument_start_with_schema(&d, Some(adoc)) else {
-        return Ok(None);
+    let detection = detect_adocument_start_with_limits(&d, Some(adoc), limits);
+    let Some(entry) = detection.offset else {
+        return Ok((None, Some(detection)));
     };
 
     let mut cursor = entry;
@@ -1053,11 +1127,14 @@ pub fn read_adocument_with_limits(
     }
 
     let version = rf.basic_file_info().ok().map(|b| b.version).unwrap_or(0);
-    Ok(Some(ADocumentInstance {
-        entry_offset: entry,
-        version,
-        fields,
-    }))
+    Ok((
+        Some(ADocumentInstance {
+            entry_offset: entry,
+            version,
+            fields,
+        }),
+        Some(detection),
+    ))
 }
 
 /// Strict variant of [`read_adocument`] (API-07). Returns `Err` if
@@ -1109,10 +1186,24 @@ pub fn read_adocument_strict(rf: &mut RevitFile) -> Result<ADocumentInstance> {
 pub fn read_adocument_lossy(
     rf: &mut RevitFile,
 ) -> Result<crate::parse_mode::Decoded<ADocumentInstance>> {
-    use crate::parse_mode::{Decoded, Diagnostics};
+    read_adocument_lossy_with_limits(rf, WalkerLimits::default())
+}
 
-    let Some(inst) = read_adocument(rf)? else {
+pub fn read_adocument_lossy_with_limits(
+    rf: &mut RevitFile,
+    limits: WalkerLimits,
+) -> Result<crate::parse_mode::Decoded<ADocumentInstance>> {
+    use crate::parse_mode::{Decoded, Diagnostics, Warning};
+
+    let (maybe_inst, detection) = read_adocument_internal(rf, limits)?;
+    let mut diagnostics = Diagnostics::default();
+    if let Some(hit) = detection.and_then(|d| d.limit_hit) {
+        diagnostics.warn(Warning::new(hit.code(), hit.message()));
+    }
+
+    let Some(inst) = maybe_inst else {
         let mut d = Diagnostics::default();
+        d.extend(diagnostics);
         d.fail_stream("ADocument");
         let placeholder = ADocumentInstance {
             entry_offset: 0,
@@ -1123,11 +1214,10 @@ pub fn read_adocument_lossy(
     };
 
     let c = inst.completeness();
-    if c.is_fully_typed() {
+    if c.is_fully_typed() && diagnostics.is_empty() {
         return Ok(Decoded::complete(inst));
     }
 
-    let mut diagnostics = Diagnostics::default();
     for (name, value) in &inst.fields {
         if matches!(value, InstanceField::Bytes(_)) {
             diagnostics.partial_field(name.clone());
@@ -1173,7 +1263,7 @@ pub fn read_adocument_lossy(
 /// [`DIAGNOSTIC_ELEMENT_MIN_SCORE`] for reverse-engineering probes
 /// that need the broad candidate set.
 pub fn iter_elements(rf: &mut RevitFile) -> Result<impl Iterator<Item = DecodedElement>> {
-    iter_elements_with_options(rf, PRODUCTION_ELEMENT_MIN_SCORE)
+    iter_elements_with_limits(rf, PRODUCTION_ELEMENT_MIN_SCORE, WalkerLimits::default())
 }
 
 /// Same as [`iter_elements`], with caller-supplied candidate score
@@ -1188,6 +1278,16 @@ pub fn iter_elements_with_options(
     rf: &mut RevitFile,
     min_score: i64,
 ) -> Result<impl Iterator<Item = DecodedElement>> {
+    iter_elements_with_limits(rf, min_score, WalkerLimits::default())
+}
+
+/// Same as [`iter_elements_with_options`], with explicit walker
+/// resource caps.
+pub fn iter_elements_with_limits(
+    rf: &mut RevitFile,
+    min_score: i64,
+    limits: WalkerLimits,
+) -> Result<impl Iterator<Item = DecodedElement>> {
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
     let formats_d = compression::inflate_at(&formats_raw, 0)?;
     let schema = formats::parse_schema(&formats_d)?;
@@ -1201,7 +1301,7 @@ pub fn iter_elements_with_options(
         .map(|c| (c.name.as_str(), c))
         .collect();
 
-    let candidates = scan_candidates(&schema, &d, min_score);
+    let candidates = scan_candidates_with_limits(&schema, &d, min_score, limits).candidates;
     let mut out = Vec::with_capacity(candidates.len());
     let mut seen_ids = std::collections::HashSet::<u32>::new();
 
@@ -1209,7 +1309,7 @@ pub fn iter_elements_with_options(
         let Some(cls) = class_by_name.get(cand.class_name.as_str()).copied() else {
             continue;
         };
-        let mut decoded = decode_instance(&d, cand.offset, cls);
+        let mut decoded = decode_instance_with_limits(&d, cand.offset, cls, limits);
 
         // Extract the self-id without holding a borrow of
         // `decoded` when we later assign `decoded.id`. The
@@ -1289,6 +1389,8 @@ pub struct DetectionResult {
     /// its own). A low count on a large stream can indicate a wire
     /// layout the walker doesn't recognise.
     pub candidates_evaluated: usize,
+    /// First resource cap reached while scanning, if any.
+    pub limit_hit: Option<WalkerLimitHit>,
     pub strategy: DetectionStrategy,
 }
 
@@ -1305,16 +1407,26 @@ pub fn detect_adocument_start(
     d: &[u8],
     adoc_schema: Option<&formats::ClassEntry>,
 ) -> DetectionResult {
+    detect_adocument_start_with_limits(d, adoc_schema, WalkerLimits::default())
+}
+
+pub fn detect_adocument_start_with_limits(
+    d: &[u8],
+    adoc_schema: Option<&formats::ClassEntry>,
+    limits: WalkerLimits,
+) -> DetectionResult {
+    let (scan_bytes, scan_limit_hit) = bounded_scan_bytes(d, limits);
     // Strategy 1: sequential-id-table end + 8-zero signature scan.
-    if let Some(h) = heuristic_find(d) {
+    if let Some(h) = heuristic_find(scan_bytes) {
         if let Some(cls) = adoc_schema {
-            if let Some(w) = trial_walk(cls, &d[h..]) {
+            if let TrialWalkOutcome::Match(w) = trial_walk_checked(cls, &scan_bytes[h..], limits) {
                 let sc = walk_score(&w);
                 if sc >= 90 {
                     return DetectionResult {
                         offset: Some(h),
                         score: Some(sc),
                         candidates_evaluated: 1,
+                        limit_hit: scan_limit_hit,
                         strategy: DetectionStrategy::Heuristic,
                     };
                 }
@@ -1324,6 +1436,7 @@ pub fn detect_adocument_start(
                 offset: Some(h),
                 score: None,
                 candidates_evaluated: 0,
+                limit_hit: scan_limit_hit,
                 strategy: DetectionStrategy::Heuristic,
             };
         }
@@ -1332,13 +1445,24 @@ pub fn detect_adocument_start(
     if let Some(cls) = adoc_schema {
         let mut best: Option<(i64, usize)> = None;
         let mut evaluated = 0usize;
-        let end = d.len().saturating_sub(256);
+        let mut limit_hit = scan_limit_hit;
+        let end = scan_bytes.len().saturating_sub(256);
         for offset in 0x100..end {
-            if let Some(walk) = trial_walk(cls, &d[offset..]) {
-                evaluated += 1;
-                let sc = walk_score(&walk);
-                if best.as_ref().is_none_or(|(bs, _)| sc > *bs) {
-                    best = Some((sc, offset));
+            if evaluated >= limits.max_trial_offsets {
+                limit_hit.get_or_insert(WalkerLimitHit::MaxTrialOffsets);
+                break;
+            }
+            evaluated += 1;
+            match trial_walk_checked(cls, &scan_bytes[offset..], limits) {
+                TrialWalkOutcome::Match(walk) => {
+                    let sc = walk_score(&walk);
+                    if best.as_ref().is_none_or(|(bs, _)| sc > *bs) {
+                        best = Some((sc, offset));
+                    }
+                }
+                TrialWalkOutcome::NoMatch => {}
+                TrialWalkOutcome::Limit(hit) => {
+                    limit_hit.get_or_insert(hit);
                 }
             }
         }
@@ -1348,6 +1472,7 @@ pub fn detect_adocument_start(
                     offset: Some(off),
                     score: Some(sc),
                     candidates_evaluated: evaluated,
+                    limit_hit,
                     strategy: DetectionStrategy::Scored,
                 };
             }
@@ -1357,14 +1482,23 @@ pub fn detect_adocument_start(
                 offset: None,
                 score: Some(sc),
                 candidates_evaluated: evaluated,
+                limit_hit,
                 strategy: DetectionStrategy::NotFound,
             };
         }
+        return DetectionResult {
+            offset: None,
+            score: None,
+            candidates_evaluated: evaluated,
+            limit_hit,
+            strategy: DetectionStrategy::NotFound,
+        };
     }
     DetectionResult {
         offset: None,
         score: None,
         candidates_evaluated: 0,
+        limit_hit: scan_limit_hit,
         strategy: DetectionStrategy::NotFound,
     }
 }
@@ -1386,6 +1520,14 @@ pub struct ScanCandidate {
     pub class_tag: u16,
     /// Heuristic score from `walk_score`; higher is more confident.
     pub score: i64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ScanCandidatesResult {
+    pub candidates: Vec<ScanCandidate>,
+    pub scanned_bytes: usize,
+    pub trial_offsets_evaluated: usize,
+    pub limit_hit: Option<WalkerLimitHit>,
 }
 
 /// Scan `bytes` for plausible element-instance starts using the
@@ -1414,6 +1556,15 @@ pub fn scan_candidates(
     bytes: &[u8],
     min_score: i64,
 ) -> Vec<ScanCandidate> {
+    scan_candidates_with_limits(schema, bytes, min_score, WalkerLimits::default()).candidates
+}
+
+pub fn scan_candidates_with_limits(
+    schema: &formats::SchemaTable,
+    bytes: &[u8],
+    min_score: i64,
+    limits: WalkerLimits,
+) -> ScanCandidatesResult {
     // Index the schema by class tag. Classes without an explicit
     // tag (parent-only entries) are skipped — they won't appear as
     // instance headers anyway.
@@ -1425,9 +1576,17 @@ pub fn scan_candidates(
         }
     }
 
+    let (bytes, scan_limit_hit) = bounded_scan_bytes(bytes, limits);
     let mut out: Vec<ScanCandidate> = Vec::new();
+    let mut trial_offsets_evaluated = 0usize;
+    let mut limit_hit = scan_limit_hit;
     if bytes.len() < 4 {
-        return out;
+        return ScanCandidatesResult {
+            candidates: out,
+            scanned_bytes: bytes.len(),
+            trial_offsets_evaluated,
+            limit_hit,
+        };
     }
 
     // 2-byte-aligned scan — class tags are u16 on the wire and are
@@ -1443,19 +1602,40 @@ pub fn scan_candidates(
             let instance_start = i + 2;
             if instance_start < bytes.len() {
                 for cls in classes {
-                    if let Some(walk) = trial_walk(cls, &bytes[instance_start..]) {
-                        let score = walk_score(&walk);
-                        if score >= min_score {
-                            out.push(ScanCandidate {
-                                offset: instance_start,
-                                class_name: cls.name.clone(),
-                                class_tag: tag,
-                                score,
-                            });
+                    if trial_offsets_evaluated >= limits.max_trial_offsets {
+                        limit_hit.get_or_insert(WalkerLimitHit::MaxTrialOffsets);
+                        break;
+                    }
+                    trial_offsets_evaluated += 1;
+                    match trial_walk_checked(cls, &bytes[instance_start..], limits) {
+                        TrialWalkOutcome::Match(walk) => {
+                            let score = walk_score(&walk);
+                            if score >= min_score {
+                                out.push(ScanCandidate {
+                                    offset: instance_start,
+                                    class_name: cls.name.clone(),
+                                    class_tag: tag,
+                                    score,
+                                });
+                                if out.len() >= limits.max_candidates {
+                                    limit_hit.get_or_insert(WalkerLimitHit::MaxCandidates);
+                                    break;
+                                }
+                            }
+                        }
+                        TrialWalkOutcome::NoMatch => {}
+                        TrialWalkOutcome::Limit(hit) => {
+                            limit_hit.get_or_insert(hit);
                         }
                     }
                 }
             }
+        }
+        if matches!(
+            limit_hit,
+            Some(WalkerLimitHit::MaxCandidates | WalkerLimitHit::MaxTrialOffsets)
+        ) {
+            break;
         }
         i += 2;
     }
@@ -1465,7 +1645,12 @@ pub fn scan_candidates(
     // order, which is also byte-ascending — useful for downstream
     // deduplication.
     out.sort_by_key(|c| std::cmp::Reverse(c.score));
-    out
+    ScanCandidatesResult {
+        candidates: out,
+        scanned_bytes: bytes.len(),
+        trial_offsets_evaluated,
+        limit_hit,
+    }
 }
 
 /// Minimum candidate score used by production element iteration.
@@ -1578,8 +1763,17 @@ pub fn build_handle_index(
     bytes: &[u8],
     min_score: i64,
 ) -> HandleIndex {
+    build_handle_index_with_limits(schema, bytes, min_score, WalkerLimits::default())
+}
+
+pub fn build_handle_index_with_limits(
+    schema: &formats::SchemaTable,
+    bytes: &[u8],
+    min_score: i64,
+    limits: WalkerLimits,
+) -> HandleIndex {
     let mut index = HandleIndex::new();
-    let candidates = scan_candidates(schema, bytes, min_score);
+    let candidates = scan_candidates_with_limits(schema, bytes, min_score, limits).candidates;
 
     // Fast name → ClassEntry lookup so the per-candidate hot loop
     // doesn't re-scan `schema.classes`.
@@ -1600,7 +1794,7 @@ pub fn build_handle_index(
         // Decode the whole instance — it's cheap (schema fields are
         // short and read_field_by_type has no allocation beyond the
         // field values). We discard everything but the self-id.
-        let decoded = decode_instance(bytes, cand.offset, cls);
+        let decoded = decode_instance_with_limits(bytes, cand.offset, cls, limits);
 
         if let Some((_, InstanceField::ElementId { id, .. })) = decoded.fields.get(id_idx) {
             // Zero is Revit's "no-id" sentinel — never index it.
@@ -1652,36 +1846,7 @@ fn find_adocument_start_with_schema(
     d: &[u8],
     adoc_schema: Option<&formats::ClassEntry>,
 ) -> Option<usize> {
-    // Strategy 1: sequential-id-table end + 8-zero signature scan.
-    if let Some(h) = heuristic_find(d) {
-        if let Some(cls) = adoc_schema {
-            if trial_walk(cls, &d[h..]).is_some_and(|w| walk_score(&w) >= 90) {
-                return Some(h);
-            }
-        } else {
-            return Some(h);
-        }
-    }
-    // Strategy 2: score-based byte-aligned brute-force scan. Only
-    // runs when a schema is supplied.
-    if let Some(cls) = adoc_schema {
-        let mut best: Option<(i64, usize)> = None;
-        let end = d.len().saturating_sub(256);
-        for offset in 0x100..end {
-            if let Some(walk) = trial_walk(cls, &d[offset..]) {
-                let sc = walk_score(&walk);
-                if best.as_ref().is_none_or(|(bs, _)| sc > *bs) {
-                    best = Some((sc, offset));
-                }
-            }
-        }
-        if let Some((sc, off)) = best {
-            if sc >= 80 {
-                return Some(off);
-            }
-        }
-    }
-    None
+    detect_adocument_start(d, adoc_schema).offset
 }
 
 fn heuristic_find(d: &[u8]) -> Option<usize> {
@@ -1742,16 +1907,49 @@ fn heuristic_find(d: &[u8]) -> Option<usize> {
 /// any class in the schema (not just ADocument). That's the pre-req
 /// for the `scan_candidates` + walker → IFC pipeline.
 pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u32)>> {
+    trial_walk_with_limits(cls, bytes, WalkerLimits::default())
+}
+
+pub fn trial_walk_with_limits(
+    cls: &formats::ClassEntry,
+    bytes: &[u8],
+    limits: WalkerLimits,
+) -> Option<Vec<(u32, u32)>> {
+    match trial_walk_checked(cls, bytes, limits) {
+        TrialWalkOutcome::Match(walk) => Some(walk),
+        TrialWalkOutcome::NoMatch | TrialWalkOutcome::Limit(_) => None,
+    }
+}
+
+enum TrialWalkOutcome {
+    Match(Vec<(u32, u32)>),
+    NoMatch,
+    Limit(WalkerLimitHit),
+}
+
+fn trial_walk_checked(
+    cls: &formats::ClassEntry,
+    bytes: &[u8],
+    limits: WalkerLimits,
+) -> TrialWalkOutcome {
+    let source_len = bytes.len();
+    let capped = source_len > limits.max_per_record_decode_bytes;
+    let bytes = &bytes[..source_len.min(limits.max_per_record_decode_bytes)];
     let mut cursor = 0;
     let mut out = Vec::new();
-    let limits = WalkerLimits::default();
     for field in &cls.fields {
-        let ft = field.field_type.as_ref()?;
+        let Some(ft) = field.field_type.as_ref() else {
+            return TrialWalkOutcome::NoMatch;
+        };
         let tag_id = match ft {
             // Pointer: 8 bytes, no score contribution
             formats::FieldType::Pointer { .. } => {
                 if cursor + 8 > bytes.len() {
-                    return None;
+                    return if capped {
+                        TrialWalkOutcome::Limit(WalkerLimitHit::MaxPerRecordDecodeBytes)
+                    } else {
+                        TrialWalkOutcome::NoMatch
+                    };
                 }
                 cursor += 8;
                 (u32::MAX, u32::MAX)
@@ -1761,7 +1959,11 @@ pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u
             // candidate offset.
             formats::FieldType::ElementId | formats::FieldType::ElementIdRef { .. } => {
                 if cursor + 8 > bytes.len() {
-                    return None;
+                    return if capped {
+                        TrialWalkOutcome::Limit(WalkerLimitHit::MaxPerRecordDecodeBytes)
+                    } else {
+                        TrialWalkOutcome::NoMatch
+                    };
                 }
                 let tag = u32::from_le_bytes([
                     bytes[cursor],
@@ -1784,7 +1986,11 @@ pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u
             // candidate offset rarely survives this check.
             formats::FieldType::Container { kind: 0x0e, .. } => {
                 if cursor + 4 > bytes.len() {
-                    return None;
+                    return if capped {
+                        TrialWalkOutcome::Limit(WalkerLimitHit::MaxPerRecordDecodeBytes)
+                    } else {
+                        TrialWalkOutcome::NoMatch
+                    };
                 }
                 let count = u32::from_le_bytes([
                     bytes[cursor],
@@ -1792,12 +1998,26 @@ pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u
                     bytes[cursor + 2],
                     bytes[cursor + 3],
                 ]) as usize;
-                if count > 1000 {
-                    return None;
+                if count > limits.max_container_records {
+                    return TrialWalkOutcome::NoMatch;
                 }
-                let col_bytes = 4 + count * 6;
-                if cursor + col_bytes + 4 > bytes.len() {
-                    return None;
+                let Some(col_payload_bytes) = count.checked_mul(6) else {
+                    return TrialWalkOutcome::NoMatch;
+                };
+                let Some(col_bytes) = 4usize.checked_add(col_payload_bytes) else {
+                    return TrialWalkOutcome::NoMatch;
+                };
+                let Some(col2_count_end) =
+                    cursor.checked_add(col_bytes).and_then(|n| n.checked_add(4))
+                else {
+                    return TrialWalkOutcome::NoMatch;
+                };
+                if col2_count_end > bytes.len() {
+                    return if capped {
+                        TrialWalkOutcome::Limit(WalkerLimitHit::MaxPerRecordDecodeBytes)
+                    } else {
+                        TrialWalkOutcome::NoMatch
+                    };
                 }
                 let col2_count = u32::from_le_bytes([
                     bytes[cursor + col_bytes],
@@ -1806,9 +2026,22 @@ pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u
                     bytes[cursor + col_bytes + 3],
                 ]) as usize;
                 if col2_count != count {
-                    return None;
+                    return TrialWalkOutcome::NoMatch;
                 }
-                cursor += 2 * col_bytes;
+                let Some(total) = col_bytes.checked_mul(2) else {
+                    return TrialWalkOutcome::NoMatch;
+                };
+                let Some(total_end) = cursor.checked_add(total) else {
+                    return TrialWalkOutcome::NoMatch;
+                };
+                if total_end > bytes.len() {
+                    return if capped {
+                        TrialWalkOutcome::Limit(WalkerLimitHit::MaxPerRecordDecodeBytes)
+                    } else {
+                        TrialWalkOutcome::NoMatch
+                    };
+                }
+                cursor = total_end;
                 (u32::MAX, u32::MAX)
             }
             // All other field types — Primitive, String, Guid,
@@ -1821,7 +2054,7 @@ pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u
                 let before = cursor;
                 let _value = read_field_by_type(bytes, &mut cursor, other);
                 if cursor > bytes.len() {
-                    return None;
+                    return TrialWalkOutcome::NoMatch;
                 }
                 // `read_field_by_type` can legitimately emit a
                 // zero-advance on zero-size primitives — guard
@@ -1833,7 +2066,13 @@ pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u
                         formats::FieldType::Primitive { size: 0, .. } => {
                             // Legitimately zero-width — keep going.
                         }
-                        _ => return None,
+                        _ => {
+                            return if capped {
+                                TrialWalkOutcome::Limit(WalkerLimitHit::MaxPerRecordDecodeBytes)
+                            } else {
+                                TrialWalkOutcome::NoMatch
+                            };
+                        }
                     }
                 }
                 (u32::MAX, u32::MAX)
@@ -1841,11 +2080,18 @@ pub fn trial_walk(cls: &formats::ClassEntry, bytes: &[u8]) -> Option<Vec<(u32, u
         };
         out.push(tag_id);
     }
-    // Touch `limits` so future callers can plumb caller-supplied
-    // WalkerLimits through if they want to constrain container
-    // sizes or string lengths from a candidate-scanning harness.
-    let _ = limits;
-    Some(out)
+    TrialWalkOutcome::Match(out)
+}
+
+fn bounded_scan_bytes(bytes: &[u8], limits: WalkerLimits) -> (&[u8], Option<WalkerLimitHit>) {
+    if bytes.len() > limits.max_scan_bytes {
+        (
+            &bytes[..limits.max_scan_bytes],
+            Some(WalkerLimitHit::MaxScanBytes),
+        )
+    } else {
+        (bytes, None)
+    }
 }
 
 /// Heuristic score for a `trial_walk` result.
@@ -2007,6 +2253,247 @@ mod tests {
         assert!(out.is_empty());
         let out = scan_candidates(&schema, &[0, 1], i64::MIN);
         assert!(out.is_empty());
+    }
+
+    #[test]
+    fn scan_candidates_reports_max_scan_bytes_limit() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let cls = ClassEntry {
+            name: "Limited".into(),
+            tag: Some(0xCAFE),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            fields: vec![
+                FieldEntry {
+                    name: "m_a".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_b".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_c".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+            ],
+        };
+        let schema = formats::SchemaTable {
+            classes: vec![cls],
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        let mut buf = vec![0u8; 80];
+        buf[64] = 0xfe;
+        buf[65] = 0xca;
+        let result = scan_candidates_with_limits(
+            &schema,
+            &buf,
+            i64::MIN,
+            WalkerLimits {
+                max_scan_bytes: 32,
+                ..WalkerLimits::default()
+            },
+        );
+        assert!(result.candidates.is_empty());
+        assert_eq!(result.scanned_bytes, 32);
+        assert_eq!(result.limit_hit, Some(WalkerLimitHit::MaxScanBytes));
+    }
+
+    #[test]
+    fn scan_candidates_reports_max_candidates_limit() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let cls = ClassEntry {
+            name: "Limited".into(),
+            tag: Some(0xBEEF),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            fields: vec![
+                FieldEntry {
+                    name: "m_a".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_b".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_c".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+            ],
+        };
+        let schema = formats::SchemaTable {
+            classes: vec![cls],
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        let mut buf = vec![0u8; 96];
+        for offset in [0usize, 34] {
+            buf[offset] = 0xef;
+            buf[offset + 1] = 0xbe;
+            for (idx, id) in [1u32, 2, 3].into_iter().enumerate() {
+                let base = offset + 2 + idx * 8;
+                buf[base..base + 4].copy_from_slice(&0u32.to_le_bytes());
+                buf[base + 4..base + 8].copy_from_slice(&id.to_le_bytes());
+            }
+        }
+        let result = scan_candidates_with_limits(
+            &schema,
+            &buf,
+            i64::MIN,
+            WalkerLimits {
+                max_candidates: 1,
+                ..WalkerLimits::default()
+            },
+        );
+        assert_eq!(result.candidates.len(), 1);
+        assert_eq!(result.limit_hit, Some(WalkerLimitHit::MaxCandidates));
+    }
+
+    #[test]
+    fn scan_candidates_reports_per_record_decode_limit() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let cls = ClassEntry {
+            name: "Limited".into(),
+            tag: Some(0xABCD),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            fields: vec![
+                FieldEntry {
+                    name: "m_a".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_b".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_c".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+            ],
+        };
+        let schema = formats::SchemaTable {
+            classes: vec![cls],
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        let mut buf = vec![0u8; 64];
+        buf[0] = 0xcd;
+        buf[1] = 0xab;
+        let result = scan_candidates_with_limits(
+            &schema,
+            &buf,
+            i64::MIN,
+            WalkerLimits {
+                max_per_record_decode_bytes: 8,
+                ..WalkerLimits::default()
+            },
+        );
+        assert!(result.candidates.is_empty());
+        assert_eq!(
+            result.limit_hit,
+            Some(WalkerLimitHit::MaxPerRecordDecodeBytes)
+        );
+    }
+
+    #[test]
+    fn scan_candidates_rejects_truncated_second_container_payload() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let cls = ClassEntry {
+            name: "ContainerOnly".into(),
+            tag: Some(0xB00B),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(1),
+            was_parent_only: false,
+            fields: vec![FieldEntry {
+                name: "m_refs".into(),
+                cpp_type: None,
+                field_type: Some(FieldType::Container {
+                    kind: 0x0e,
+                    cpp_signature: None,
+                    body: Vec::new(),
+                }),
+            }],
+        };
+        let schema = formats::SchemaTable {
+            classes: vec![cls],
+            cpp_types: Vec::new(),
+            skipped_records: 0,
+        };
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0xB00Bu16.to_le_bytes());
+        buf.extend_from_slice(&1u32.to_le_bytes());
+        buf.extend_from_slice(&[0u8; 6]);
+        buf.extend_from_slice(&1u32.to_le_bytes());
+
+        let result = scan_candidates_with_limits(&schema, &buf, i64::MIN, WalkerLimits::default());
+        assert!(result.candidates.is_empty());
+        assert_eq!(result.limit_hit, None);
+    }
+
+    #[test]
+    fn detect_adocument_start_reports_trial_offset_limit() {
+        use formats::{ClassEntry, FieldEntry, FieldType};
+        let cls = ClassEntry {
+            name: "ADocument".into(),
+            tag: Some(0x0004),
+            parent: None,
+            ancestor_tag: None,
+            offset: 0,
+            declared_field_count: Some(3),
+            was_parent_only: false,
+            fields: vec![
+                FieldEntry {
+                    name: "m_a".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_b".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+                FieldEntry {
+                    name: "m_c".into(),
+                    cpp_type: None,
+                    field_type: Some(FieldType::ElementId),
+                },
+            ],
+        };
+        let bytes = vec![0u8; 1024];
+        let result = detect_adocument_start_with_limits(
+            &bytes,
+            Some(&cls),
+            WalkerLimits {
+                max_trial_offsets: 2,
+                ..WalkerLimits::default()
+            },
+        );
+        assert_eq!(result.strategy, DetectionStrategy::NotFound);
+        assert_eq!(result.candidates_evaluated, 2);
+        assert_eq!(result.limit_hit, Some(WalkerLimitHit::MaxTrialOffsets));
     }
 
     #[test]
@@ -2699,18 +3186,27 @@ mod tests {
         // Cap of 1 rejects count=2.
         let tight = WalkerLimits {
             max_container_records: 1,
+            ..WalkerLimits::default()
         };
         assert!(read_field(&ft, &bytes, tight).is_none());
 
         // Cap of exactly 2 accepts count=2 (boundary).
         let at_cap = WalkerLimits {
             max_container_records: 2,
+            ..WalkerLimits::default()
         };
         assert!(read_field(&ft, &bytes, at_cap).is_some());
     }
 
     #[test]
     fn walker_limits_default_matches_legacy_hardcoded() {
+        assert_eq!(WalkerLimits::default().max_scan_bytes, 128 * 1024 * 1024);
+        assert_eq!(WalkerLimits::default().max_candidates, 100_000);
+        assert_eq!(WalkerLimits::default().max_trial_offsets, 16_000_000);
+        assert_eq!(
+            WalkerLimits::default().max_per_record_decode_bytes,
+            1024 * 1024
+        );
         assert_eq!(WalkerLimits::default().max_container_records, 1000);
     }
 
@@ -2724,6 +3220,7 @@ mod tests {
         assert_eq!(r.offset, None);
         assert_eq!(r.score, None);
         assert_eq!(r.candidates_evaluated, 0);
+        assert_eq!(r.limit_hit, None);
     }
 
     #[test]

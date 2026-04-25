@@ -53,6 +53,11 @@ class RevitFile:
         max_file_bytes: Optional[int] = None,
         max_stream_bytes: Optional[int] = None,
         max_inflate_bytes: Optional[int] = None,
+        max_walker_scan_bytes: Optional[int] = None,
+        max_walker_candidates: Optional[int] = None,
+        max_walker_trial_offsets: Optional[int] = None,
+        max_walker_record_decode_bytes: Optional[int] = None,
+        max_walker_container_records: Optional[int] = None,
     ) -> None:
         """Open a Revit file from a filesystem path, with optional
         resource limits.
@@ -65,6 +70,18 @@ class RevitFile:
         :param max_inflate_bytes: maximum decompressed output per
             inflate call (default 256 MiB). Protects against
             compressed-bomb DoS.
+        :param max_walker_scan_bytes: maximum decompressed
+            ``Global/Latest`` bytes scanned by the walker (default
+            128 MiB).
+        :param max_walker_candidates: maximum schema-scan candidates
+            retained by the walker (default 100,000).
+        :param max_walker_trial_offsets: maximum trial decodes
+            attempted by schema-directed walker scans (default
+            16,000,000).
+        :param max_walker_record_decode_bytes: maximum bytes inspected
+            while decoding one walker candidate (default 1 MiB).
+        :param max_walker_container_records: maximum reference
+            container records accepted by the walker (default 1,000).
 
         Raises ``IOError`` on missing files, non-CFB input, file-size
         over ``max_file_bytes``, or other read errors.
