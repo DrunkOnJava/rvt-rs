@@ -1159,7 +1159,7 @@ pub fn read_adocument_lossy(
 ///   5. Dedup: first-seen (highest-score) wins — if two candidates
 ///      claim the same `ElementId`, only the higher-score offset
 ///      survives. Scoreless / id-zero candidates are still yielded
-///      so downstream exporters can inspect what the scanner saw.
+///      only by the explicit diagnostic path.
 ///
 /// Returns a materialised `Vec<DecodedElement>::into_iter()` rather
 /// than a lazy iterator — each element requires upfront schema +
@@ -1167,20 +1167,23 @@ pub fn read_adocument_lossy(
 /// would leak lifetimes. `impl Iterator` preserves the combinator-
 /// friendly return type without committing to a concrete type.
 ///
-/// Default `min_score = 0` is coarse by design — it produces a
-/// superset of the real element set, which the IFC exporter
-/// (L5B-11.7) then filters by cross-checking against
-/// `ElemTable`'s declared element-id set. Use
-/// [`iter_elements_with_options`] to tighten the threshold for
-/// diagnostic / scanning work.
+/// Default `min_score = 80` is conservative by design. It avoids
+/// surfacing low-score parent-class artifacts such as `HostObjAttr`
+/// as production elements. Use [`iter_elements_with_options`] with
+/// [`DIAGNOSTIC_ELEMENT_MIN_SCORE`] for reverse-engineering probes
+/// that need the broad candidate set.
 pub fn iter_elements(rf: &mut RevitFile) -> Result<impl Iterator<Item = DecodedElement>> {
-    iter_elements_with_options(rf, 0)
+    iter_elements_with_options(rf, PRODUCTION_ELEMENT_MIN_SCORE)
 }
 
 /// Same as [`iter_elements`], with caller-supplied candidate score
 /// threshold. Pass `i64::MIN + 1` to yield every
 /// `scan_candidates`-matched offset (useful for audit / coverage
 /// reporting against the `ElemTable` declared set).
+///
+/// This is the diagnostic/probe API. Production callers should use
+/// [`iter_elements`], which applies [`PRODUCTION_ELEMENT_MIN_SCORE`]
+/// and avoids low-confidence parent-only matches.
 pub fn iter_elements_with_options(
     rf: &mut RevitFile,
     min_score: i64,
@@ -1464,6 +1467,20 @@ pub fn scan_candidates(
     out.sort_by_key(|c| std::cmp::Reverse(c.score));
     out
 }
+
+/// Minimum candidate score used by production element iteration.
+///
+/// The threshold matches the ADocument detector's "confident enough
+/// to trust" band and filters low-score parent-class artifacts such
+/// as `HostObjAttr` hits observed on real project files.
+pub const PRODUCTION_ELEMENT_MIN_SCORE: i64 = 80;
+
+/// Minimum candidate score for diagnostic element scans.
+///
+/// This intentionally keeps broad, noisy candidate output available
+/// for reverse-engineering probes without using it in production
+/// APIs or user-facing IFC export.
+pub const DIAGNOSTIC_ELEMENT_MIN_SCORE: i64 = 0;
 
 /// Locate the field index in `cls` that carries the instance's own
 /// `ElementId` (the "self-id"). Used by [`build_handle_index`] to
