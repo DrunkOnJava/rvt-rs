@@ -73,8 +73,25 @@ When the viewer deploys to GitHub Pages or a similar static host:
   PostHog, etc.) — these send URLs, and URL fragments in this
   viewer can contain file hashes the user hasn't chosen to
   disclose.
-- A `Content-Security-Policy` header that blocks `connect-src`
-  entirely except for blob URIs.
+- A `Content-Security-Policy` header that keeps `connect-src`
+  restricted to `'self'` and `blob:`. The same-origin allowance
+  exists only because the `wasm-pack` JavaScript loader fetches the
+  static `rvt_bg.wasm` bundle from the viewer origin; `blob:` is
+  needed for Three.js to read the in-memory GLB object URL generated
+  from local WASM output. Application data requests are not allowed.
+
+Allowed browser requests are limited to initial same-origin static
+assets needed to boot the viewer:
+
+- the HTML document;
+- Vite-generated JavaScript chunks, including the worker script;
+- the generated `rvt_bg.wasm` WebAssembly binary;
+- optional same-origin source maps or favicon requests from the
+  browser tooling/runtime.
+
+`blob:` and `data:` URLs are local browser object URLs, not network
+requests; the viewer uses them for GLB rendering and user-initiated
+downloads.
 
 ## Auditability
 
@@ -83,10 +100,15 @@ Three checks make the posture verifiable post-facto:
 1. `cargo deny check` — no crate in the dep tree has a known
    telemetry history.
 2. `wasm-objdump` on the compiled viewer — grep the import
-   section for `fetch` / `XMLHttpRequest` / `WebSocket`.
-3. Live test — open `rvt-view` in a browser with devtools' Network
-   tab open; load a demo RVT; assert zero requests fire after the
-   initial page load.
+   section for `fetch`, `XMLHttpRequest`, `WebSocket`,
+   `EventSource`, or `sendBeacon`.
+3. Playwright browser test
+   (`viewer/tests/no-network.spec.ts`) — load the built viewer,
+   open the public sample RFA, allow only same-origin static
+   boot assets, then assert zero HTTP/WebSocket requests after the
+   model is loaded.
 
-The CI job for check #2 is tracked as part of VW1-01 (WASM build
-pipeline).
+The CI viewer deploy job runs checks #2 and #3. Browser-network
+failures print the request URL, method, phase, resource type, and
+Chrome DevTools Protocol initiator so regressions point directly
+at the offending code path.

@@ -32,6 +32,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
 
+      - name: Checkout public RVT sample corpus
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
+          lfs: true
+
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@9399c7bb15d4c7d47b27263d024f0a4978346ba4  # v1.9.0
         with:
@@ -63,7 +70,7 @@ jobs:
       - name: Verify no network imports in wasm (VW1-21)
         run: |
           if wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm | \
-               grep -iE '"(fetch|XMLHttpRequest|WebSocket)"'; then
+               grep -iE '"(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon)"'; then
             echo "::error::VW1-21 violation: wasm imports a network primitive"
             exit 1
           fi
@@ -75,7 +82,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: viewer
-        run: npm install
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: viewer
+        run: npx playwright install --with-deps chromium
 
       - name: Typecheck
         working-directory: viewer
@@ -84,6 +95,12 @@ jobs:
       - name: Build viewer
         working-directory: viewer
         run: npm run build
+
+      - name: Browser no-network invariant
+        working-directory: viewer
+        env:
+          RVT_VIEWER_SAMPLE: ../_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa
+        run: npm run test:network
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3.0.1
