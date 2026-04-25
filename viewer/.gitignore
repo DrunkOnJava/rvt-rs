@@ -1,4 +1,6 @@
 node_modules/
 dist/
 pkg/
+playwright-report/
+test-results/
 .DS_Store
