@@ -57,6 +57,12 @@ When a submitter can provide counts, prefer this shape in the issue:
 Known counts are not required for submission, but they are the fastest path to a
 regression fixture because they give CI a concrete oracle.
 
+Project count manifests live under
+[`tests/fixtures/project-counts/`](../tests/fixtures/project-counts/). Each
+manifest must mark every target category as `known`, `known_gap`,
+`decoder_baseline`, or `unknown`; unknown counts require a reason so missing
+source data is visible during review.
+
 ## Local Health Checks
 
 Inventory an existing corpus directory:
@@ -76,6 +82,7 @@ Run the smoke test directly:
 
 ```bash
 RVT_PROJECT_CORPUS_DIR=path/to/corpus cargo test --test project_corpus_smoke -- --nocapture
+RVT_PROJECT_CORPUS_DIR=path/to/corpus cargo test --test project_count_fixtures -- --nocapture
 ```
 
 The test suite skips gracefully when corpus paths are absent. CI should use
