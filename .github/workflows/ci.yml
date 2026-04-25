@@ -224,7 +224,7 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
           lfs: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
@@ -425,7 +425,7 @@ jobs:
           repository: phi-ag/rvt
           path: _corpus
           lfs: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
