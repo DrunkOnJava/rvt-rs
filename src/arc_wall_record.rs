@@ -76,8 +76,9 @@ pub const STANDARD_RECORD_MIN_SIZE: usize = 0x73;
 
 /// A standard (non-compound) ArcWall record decoded from raw partition bytes.
 ///
-/// Variants other than `0x07fa` are not decoded by this type; see
-/// [`decode_compound`] (not yet implemented) for compound walls.
+/// Variants other than `0x07fa` are not decoded by this type. Compound
+/// wall records use a different envelope and are tracked as separate
+/// reverse-engineering work.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ArcWallRecord {
     /// Tag value read from the record. Always `0x0191` for valid records.
@@ -114,8 +115,8 @@ impl ArcWallRecord {
     /// - `filter_pad` is not zero
     /// - `variant` is not `0x07fa`
     ///
-    /// Callers should use [`crate::walker::scan_arc_walls`] to
-    /// locate valid offsets; this function does not scan, it only
+    /// Callers should use [`Self::find_all`] to locate valid offsets;
+    /// this function does not scan, it only
     /// validates + decodes at the given position.
     pub fn decode_standard(buf: &[u8], offset: usize) -> Result<Self> {
         if offset + STANDARD_RECORD_MIN_SIZE > buf.len() {

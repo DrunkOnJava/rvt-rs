@@ -4,6 +4,17 @@ Thanks for your interest. This project is small and evolving
 quickly, so contribution guidelines are intentionally light — but
 a few practices keep the repo healthy.
 
+Before opening a pull request, run:
+
+```bash
+tools/quality.sh
+```
+
+The script runs fmt, clippy, rustdoc, tests, and any installed supply-chain
+tools. `cargo-audit` and `cargo-deny` are optional locally but enforced in CI;
+set `RVT_REQUIRE_AUDIT=1` or `RVT_REQUIRE_DENY=1` when you want missing tools to
+fail locally too.
+
 ## What's welcome
 
 - **Bug reports** with a minimal reproducer (the smallest `.rfa`
@@ -103,8 +114,8 @@ output against the full IFC4 schema (enforced in CI per IFC-41).
 
 See `docs/rvt-moat-break-reconnaissance.md` §Q6 for Layer 5a's
 research trail, including the documented refutation of the Q6.2
-hypothesis. See `TODO-BLINDSIDE.md` (repo parent dir, local-only)
-for the full per-task decomposition.
+hypothesis. See [`TODO.md`](TODO.md) and the GitHub milestones for
+the full per-task decomposition.
 
 ## What needs discussion first
 
@@ -136,6 +147,10 @@ Open an issue (or a draft PR) before starting work on any of:
 - **No PII in tests.** Use synthetic fixtures — `testuser`,
   `111111`, `FY-20XX`, etc. The redaction tests in
   `src/redact.rs` are the canonical examples.
+- **Keep public status honest.** If a change affects user-visible
+  capability, update [`docs/status.md`](docs/status.md),
+  [`ROADMAP.md`](ROADMAP.md), or [`docs/compatibility.md`](docs/compatibility.md)
+  in the same PR.
 - **Every probe under `examples/`** gets a module-level doc
   comment explaining *what FACT it proves* and *how to verify*
   the result against the 11-version corpus.

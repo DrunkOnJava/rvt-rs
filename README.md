@@ -8,6 +8,8 @@
 
 **A zero-upload, client-side browser viewer ships alongside the library**, live at <https://drunkonjava.github.io/rvt-rs/>. Drop a `.rvt` / `.rfa` file onto the page — the WebAssembly build parses it in-tab, renders 3D via Three.js with orbit controls + element picking + scene tree, and offers one-click **Export glTF** / **Export IFC** / **Export plan SVG**. No upload, no account, no telemetry. CI asserts the compiled `.wasm` has zero `fetch` / `XMLHttpRequest` / `WebSocket` imports.
 
+For the short, non-technical support boundary, read [`docs/status.md`](docs/status.md). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
+
 Rust 2024 edition (MSRV 1.85). **Fourteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
@@ -54,7 +56,7 @@ Rust 2024 edition (MSRV 1.85). **Fourteen CLIs ship** (`rvt-analyze`, `rvt-info`
 
 The openBIM community — anchored by [buildingSMART International](https://www.buildingsmart.org/) and the IFC standard — has spent years working on Revit interoperability. Autodesk's own [revit-ifc](https://github.com/Autodesk/revit-ifc) exporter runs **inside** Revit using the Revit API, so it can only emit what the API surfaces. Real-world IFC exports from Revit are described, routinely and publicly, as *"very limited"* (thinkmoult.com), *"data loss"* (Reddit r/bim), and *"out of the box, just crap"* (the [OSArch Wiki's guide to Revit for openBIM](https://wiki.osarch.org/index.php?title=Revit_setup_for_OpenBIM)).
 
-The schema work here — decoding `Formats/Latest` and classifying 100% of field encodings across 11 Revit releases — is the dictionary a byte-level reader needs. Once per-element decoders (Phase 4 in [`TODO`](../../TODO-BLINDSIDE.md)) and geometry extraction (Phase 5) land on top, the resulting IFC export can carry more than what the Revit API chooses to expose. That is the thesis. It is not yet the delivered product.
+The schema work here — decoding `Formats/Latest` and classifying 100% of field encodings across 11 Revit releases — is the dictionary a byte-level reader needs. Once the partition-stream decoder work in [`TODO.md`](TODO.md) lands, the resulting IFC export can carry more than what the Revit API chooses to expose. That is the thesis. It is not yet the delivered product.
 
 If you're building BIM/AEC tooling and want an Apache-2 Revit reader to compose into your stack, the current release covers:
 
@@ -181,7 +183,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-**Thirteen CLIs** ship in the box:
+**Fourteen CLIs** ship in the box:
 
 ```bash
 cargo build --release

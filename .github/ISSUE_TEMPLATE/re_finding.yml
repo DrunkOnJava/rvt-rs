@@ -1,0 +1,52 @@
+name: Reverse-engineering finding
+description: Document a reproducible observation about the RVT on-disk format.
+title: "RE: "
+labels: ["re-finding", "type:research", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for observations that may or may not become decoder work. If you already know the target decoder, the Decoder work form is usually better.
+  - type: textarea
+    id: observation
+    attributes:
+      label: Observation
+      description: One concise statement of what you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Raw bytes, offsets, diffs across releases, command output, or fixture paths.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: What you think the evidence means, with confidence from 0.0 to 1.0.
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+      description: Probe command, test case, or exact reproduction steps.
+    validations:
+      required: true
+  - type: textarea
+    id: falsifiability
+    attributes:
+      label: Falsifiability
+      description: What observation would prove this wrong?
+    validations:
+      required: true
+  - type: checkboxes
+    id: clean_room
+    attributes:
+      label: Clean-room confirmation
+      options:
+        - label: "This finding is based only on allowed sources under CLEANROOM.md."
+          required: true

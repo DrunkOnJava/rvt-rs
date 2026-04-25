@@ -1,7 +1,7 @@
 name: Corpus submission
-description: Offer a Revit file for inclusion in the public rvt-rs test corpus.
+description: Offer a redistributable Revit file for inclusion in the public rvt-rs test corpus.
 title: "Corpus: "
-labels: ["corpus", "needs-triage"]
+labels: ["corpus", "area:corpus", "type:test", "needs-triage"]
 body:
   - type: markdown
     attributes:
@@ -10,7 +10,7 @@ body:
 
         **Submission is strictly opt-in.** You are responsible for confirming that you have the legal right to share the file publicly, and that the file contains no confidential, client-owned, or personally identifying content. rvt-rs maintainers cannot verify rights on your behalf.
 
-        If you are unsure whether you can share a given file, please do not submit it. Private bug-reproducer fixtures that cannot be shared publicly belong in a bug report, not a corpus submission.
+        If you are unsure whether you can share a given file, please do not submit it. Private bug-reproducer fixtures that cannot be shared publicly belong in a bug report, not a corpus submission. See `docs/corpus.md` for the accepted metadata shape.
   - type: dropdown
     id: revit_version
     attributes:
@@ -47,12 +47,20 @@ body:
       placeholder: "2.5"
     validations:
       required: true
+  - type: input
+    id: sha256
+    attributes:
+      label: SHA256
+      description: Lowercase hex digest of the exact file, when available.
+      placeholder: "0123abcd..."
   - type: checkboxes
     id: sharing_rights_confirmed
     attributes:
       label: Sharing rights
       options:
         - label: "I confirm I have the right to share this file publicly and it contains no confidential content."
+          required: true
+        - label: "I understand accepted public corpus files may be redistributed with this repository or its test fixtures."
           required: true
   - type: dropdown
     id: license
@@ -71,6 +79,20 @@ body:
       label: Notable features
       description: Anything that makes this file useful for coverage — unusual elements, large extents, specific subsystems, known edge cases.
       placeholder: "Structural project with 400+ beams, mixed families, MEP systems, Revit worksharing enabled."
+  - type: textarea
+    id: expected_counts
+    attributes:
+      label: Expected counts
+      description: Optional known counts from Revit or another trusted source.
+      render: json
+      placeholder: |
+        {
+          "levels": 2,
+          "walls": 24,
+          "floors": 3,
+          "doors": 8,
+          "windows": 14
+        }
   - type: textarea
     id: attachment_method
     attributes:
