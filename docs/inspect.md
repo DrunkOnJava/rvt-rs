@@ -18,6 +18,7 @@ The report answers:
 
 | Section | Meaning |
 |---|---|
+| `failure_mode` | Stable user-facing classification such as `unsupported_revit_version`, `unsupported_model_layout`, `partial_decode`, or `scaffold_only_export`. |
 | `file` | File opened, Revit version/build, verified version range, stream count, schema parse status. |
 | `decoded` | Class count, validated elements, diagnostic candidates, ArcWall records, geometry count. |
 | `export` | IFC readiness level, score, building element counts, unsupported features. |
@@ -33,6 +34,9 @@ geometry were decoded.
 
 | Result | Meaning |
 |---|---|
+| `failure_mode.kind` is `corrupt_file` | The input could not be opened as a readable Revit OLE/CFB container. |
+| `failure_mode.kind` is `unsupported_revit_version` | The file opened, but its Revit version is outside the verified support range. |
+| `failure_mode.kind` is `unsupported_model_layout` | The file is in a supported container/version range, but decoded records did not meet the production model confidence bar. |
 | File/schema fields present, no export warnings | Inspection succeeded and no obvious export caveat was reported. |
 | `export.level` is `scaffold` | The IFC path can write a valid framework, but no validated building elements were decoded. |
 | `decoded.diagnostic_candidates` is greater than zero | Research scans found low-confidence candidates that are not production model elements. |

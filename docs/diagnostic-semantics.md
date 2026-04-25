@@ -66,6 +66,21 @@ successful model conversion.
 | Corrupt or non-CFB file | Fails | Fails | Not a Revit container rvt-rs can read. |
 | Unsupported record layout | Success with unsupported-feature diagnostics or fails at strict quality gate | Depends on requested mode | Valid bug report input if diagnostics are attached. |
 
+## User-Facing Failure Modes
+
+`rvt-inspect` reports `failure_mode.kind` in JSON, and the viewer shows the same
+classification in its file-status panel.
+
+| Kind | Meaning |
+|---|---|
+| `supported_profile` | The decoded output meets the current export profile. |
+| `unsupported_revit_version` | The file opened, but its Revit version is outside the verified support range. |
+| `unsupported_model_layout` | The container/version is acceptable, but model records did not meet the production confidence bar. |
+| `corrupt_file` | The input could not be opened as a readable Revit OLE/CFB container. |
+| `partial_decode` | Some model data was recovered, but warnings, unsupported features, or missing geometry remain. |
+| `scaffold_only_export` | IFC can be written as a framework, but no validated building elements were decoded. |
+| `parser_bug_please_report` | The file opened, but diagnostics could not classify export readiness. |
+
 ## Warning Examples
 
 Users should expect warnings like these when output is incomplete:

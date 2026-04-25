@@ -34,12 +34,28 @@ struct Cli {
 #[derive(Debug, Serialize)]
 struct InspectReport {
     schema_version: u32,
+    failure_mode: FailureMode,
     file: FileHealth,
     decoded: DecodedHealth,
     export: ExportReadiness,
     warnings: Vec<String>,
     next_steps: Vec<String>,
     export_diagnostics: ExportDiagnostics,
+}
+
+#[derive(Debug, Serialize)]
+struct InspectErrorReport {
+    schema_version: u32,
+    failure_mode: FailureMode,
+    error: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct FailureMode {
+    kind: String,
+    title: String,
+    summary: String,
+    severity: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -76,16 +92,32 @@ struct ExportReadiness {
 }
 
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
+    let cli = Cli::parse();
+    match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("error: {err}");
+            let failure_mode = corrupt_or_unreadable_failure_mode();
+            if cli.json {
+                let report = InspectErrorReport {
+                    schema_version: INSPECT_SCHEMA_VERSION,
+                    failure_mode,
+                    error: err.to_string(),
+                };
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => println!("{json}"),
+                    Err(json_err) => eprintln!("error: {json_err}"),
+                }
+            } else {
+                eprintln!("failure mode: {}", failure_mode.title);
+                eprintln!("{}", failure_mode.summary);
+                eprintln!("error: {err}");
+            }
             ExitCode::from(1)
         }
     }
 }
 
-fn run(cli: Cli) -> anyhow::Result<()> {
+fn run(cli: &Cli) -> anyhow::Result<()> {
     let report = build_report(&cli.file, !cli.no_redact)?;
     if cli.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -116,10 +148,18 @@ fn build_report(path: &std::path::Path, redact: bool) -> anyhow::Result<InspectR
         geometry_elements: diagnostics.exported.building_elements_with_geometry,
     };
     let export = export_readiness(&diagnostics);
+    let failure_mode = classify_failure_mode(
+        supported_revit_version,
+        schema_parsed,
+        &decoded,
+        &diagnostics,
+        &export,
+    );
     let next_steps = next_steps(&diagnostics, schema_parsed);
 
     Ok(InspectReport {
         schema_version: INSPECT_SCHEMA_VERSION,
+        failure_mode,
         file: FileHealth {
             input_path,
             file_size_bytes,
@@ -137,6 +177,96 @@ fn build_report(path: &std::path::Path, redact: bool) -> anyhow::Result<InspectR
         next_steps,
         export_diagnostics: diagnostics,
     })
+}
+
+fn classify_failure_mode(
+    supported_revit_version: bool,
+    schema_parsed: bool,
+    decoded: &DecodedHealth,
+    diagnostics: &ExportDiagnostics,
+    export: &ExportReadiness,
+) -> FailureMode {
+    if !supported_revit_version {
+        return failure_mode(
+            "unsupported_revit_version",
+            "Unsupported Revit version",
+            "This file opened, but its Revit version is outside the verified support range.",
+            "warning",
+        );
+    }
+
+    if export.level == "unknown" {
+        return failure_mode(
+            "parser_bug_please_report",
+            "Parser bug, please report",
+            "The file opened, but export readiness could not be classified from diagnostics.",
+            "error",
+        );
+    }
+
+    if !schema_parsed {
+        return failure_mode(
+            "partial_decode",
+            "Partial decode",
+            "The file opened, but required schema streams were not decoded completely.",
+            "warning",
+        );
+    }
+
+    if export.building_elements == 0 && decoded.diagnostic_candidates > 0 {
+        return failure_mode(
+            "unsupported_model_layout",
+            "Supported file, unsupported model layout",
+            "The file opened, but only diagnostic candidates were found; no validated model elements met the production confidence bar.",
+            "warning",
+        );
+    }
+
+    if export.level == "scaffold" || export.building_elements == 0 {
+        return failure_mode(
+            "scaffold_only_export",
+            "Scaffold-only export",
+            "The IFC path can write a valid framework, but no validated building elements were decoded.",
+            "warning",
+        );
+    }
+
+    if !diagnostics.unsupported_features.is_empty()
+        || !diagnostics.warnings.is_empty()
+        || export.building_elements_with_geometry == 0
+    {
+        return failure_mode(
+            "partial_decode",
+            "Partial decode",
+            "Some model data was recovered, but warnings, unsupported features, or missing geometry remain.",
+            "warning",
+        );
+    }
+
+    failure_mode(
+        "supported_profile",
+        "Supported profile",
+        "The decoded output meets the currently supported export profile.",
+        "ok",
+    )
+}
+
+fn corrupt_or_unreadable_failure_mode() -> FailureMode {
+    failure_mode(
+        "corrupt_file",
+        "Corrupt or unreadable file",
+        "The input could not be opened as a readable Revit OLE/CFB container.",
+        "error",
+    )
+}
+
+fn failure_mode(kind: &str, title: &str, summary: &str, severity: &str) -> FailureMode {
+    FailureMode {
+        kind: kind.to_string(),
+        title: title.to_string(),
+        summary: summary.to_string(),
+        severity: severity.to_string(),
+    }
 }
 
 fn redact_summary(summary: &mut rvt::reader::Summary) {
@@ -233,6 +363,13 @@ fn print_human_report(report: &InspectReport) {
     if let Some(original_path) = &report.file.original_path {
         println!("  Original path: {original_path}");
     }
+
+    println!("\nFailure mode");
+    println!(
+        "  {} ({})",
+        report.failure_mode.title, report.failure_mode.kind
+    );
+    println!("  {}", report.failure_mode.summary);
 
     println!("\nDecoded coverage");
     println!("  Class names: {}", report.decoded.class_name_count);
