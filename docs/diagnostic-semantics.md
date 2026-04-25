@@ -45,6 +45,11 @@ successful model conversion.
 | Unsupported record layout | The file contains a record shape the current decoder does not understand for that version/profile. | The file may be valid Revit; rvt-rs needs more corpus evidence or decoder work. |
 | Partial decode | Some file sections or fields decoded and others did not. | Inspect the warnings before using output downstream. |
 
+Geometry gaps are also reported in `export_diagnostics.skipped` with
+machine-readable `unsupported_geometry_*` reasons. These include missing or
+unsupported curve/placement data, profile/body data, host links, storey/level
+assignment, and dimensions.
+
 ## Export Quality Levels
 
 | Level | Meaning | Typical next step |

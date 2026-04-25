@@ -602,15 +602,15 @@ function statusRow(label: string, kind: StatusKind, value: string): HTMLElement 
 }
 
 function warningSummary(warnings: string[], unsupported: string[]): string {
-  const parts: string[] = [];
   if (warnings.length > 0) {
-    parts.push(`${warnings.length} warning${warnings.length === 1 ? '' : 's'}`);
+    const suffix = warnings.length > 1 ? ` · ${warnings.length - 1} more` : '';
+    return `${warnings[0]}${suffix}`;
   }
   if (unsupported.length > 0) {
-    parts.push(`${unsupported.length} unsupported feature${unsupported.length === 1 ? '' : 's'}`);
+    const suffix = unsupported.length > 1 ? ` · ${unsupported.length - 1} more` : '';
+    return `${unsupported[0]}${suffix}`;
   }
-  if (parts.length === 0) return 'No export warnings';
-  return parts.join(' · ');
+  return 'No export warnings';
 }
 
 function exportQualityLabel(level: string): string {
