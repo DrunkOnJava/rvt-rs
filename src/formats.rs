@@ -1026,12 +1026,15 @@ mod tests {
         };
         let m = schema.tagged_ancestor_map();
         assert_eq!(m.get("Wall").unwrap(), &("HostObjAttr".to_string(), 0x006b));
-        assert_eq!(m.get("Floor").unwrap(), &("HostObjAttr".to_string(), 0x006b));
+        assert_eq!(
+            m.get("Floor").unwrap(),
+            &("HostObjAttr".to_string(), 0x006b)
+        );
         assert_eq!(
             m.get("HostObjAttr").unwrap(),
             &("HostObjAttr".to_string(), 0x006b)
         );
-        assert!(m.get("Unreachable").is_none());
+        assert!(!m.contains_key("Unreachable"));
         assert_eq!(m.len(), 3);
     }
 

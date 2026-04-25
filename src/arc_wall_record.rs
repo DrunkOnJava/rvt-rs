@@ -1,5 +1,27 @@
 //! Raw-byte decoder for ArcWall (tag 0x0191) partition records.
 //!
+//! # Scope: **Revit 2023 only.**
+//!
+//! The 2023 record envelope used by this module (tag `0x0191`, variant
+//! marker `0x07fa`, fixed header `0x00088004`, 6 f64 coords × 2) is
+//! **not** present in Revit 2024 files. On 2024 files:
+//!
+//! - ArcWall's tag drifted to `0x019c` (not `0x0191`).
+//! - The record variant distribution at +0x10 shifted entirely;
+//!   zero records carry the 2023 `0x07fa` marker.
+//! - 2024 needs a separate decoder implementation.
+//!
+//! See `reports/element-framing/RE-13-synthesis.md` for the cross-
+//! version drift evidence and open questions (Q18-Q20, hypotheses
+//! H17-H19, decisions D23-D27 scoping this module's coverage).
+//!
+//! Callers that need 2024 support should check the file's
+//! `BasicFileInfo.version` before invoking this decoder, and route
+//! 2024+ files to the future `arc_wall_record_2024` module (not yet
+//! implemented — blocked on RE-14.4).
+//!
+//! # Origin (why the shape is what it is)
+//!
 //! This module decodes records directly from `Partitions/N` bytes,
 //! bypassing the schema-driven `ElementDecoder` trait. The reason
 //! for a separate module is that the partition-level wire format
@@ -10,8 +32,8 @@
 //!
 //! See `reports/element-framing/RE-14.3-synthesis.md` for the
 //! empirical evidence this implementation is based on:
-//! 32 records on Einhoven `Partitions/5`, 28 decodable as standard
-//! walls, 2 as compound walls, 1 index, 3 metadata.
+//! 32 records on Einhoven `Partitions/5` (Revit 2023), 28 decodable
+//! as standard walls, 2 as compound walls, 1 index, 3 metadata.
 //!
 //! # Wire format (standard variant)
 //!
@@ -34,7 +56,9 @@
 
 use crate::{Error, Result};
 
-/// ArcWall tag (stable across Revit 2023+ releases).
+/// ArcWall tag on Revit 2023. On 2024 the tag drifted to `0x019c`
+/// — this constant is for 2023 decode only. See RE-13 synthesis for
+/// the cross-version drift analysis.
 pub const ARC_WALL_TAG: u16 = 0x0191;
 /// Record envelope marker for "standard" wall records.
 pub const ARC_WALL_VARIANT_STANDARD: u16 = 0x07fa;
@@ -319,8 +343,7 @@ mod tests {
 
     #[test]
     fn rejects_buffer_too_short() {
-        let err =
-            ArcWallRecord::decode_standard(&RECORD_4_HEX[..20], 0).unwrap_err();
+        let err = ArcWallRecord::decode_standard(&RECORD_4_HEX[..20], 0).unwrap_err();
         assert!(err.to_string().contains("too short"));
     }
 

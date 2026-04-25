@@ -120,7 +120,8 @@ fn main() {
     for (i, &off) in occurrences.iter().enumerate() {
         let end = (off + dump_len).min(concat.len());
         let bytes = &concat[off..end];
-        println!("\n  #{i:>2} @ offset {off:>6} (delta_next={}):",
+        println!(
+            "\n  #{i:>2} @ offset {off:>6} (delta_next={}):",
             if i + 1 < occurrences.len() {
                 (occurrences[i + 1] - off).to_string()
             } else {
@@ -136,7 +137,13 @@ fn main() {
                 .join(" ");
             let ascii_part: String = chunk
                 .iter()
-                .map(|b| if b.is_ascii_graphic() || *b == b' ' { *b as char } else { '.' })
+                .map(|b| {
+                    if b.is_ascii_graphic() || *b == b' ' {
+                        *b as char
+                    } else {
+                        '.'
+                    }
+                })
                 .collect();
             println!("    +{:03x}: {:<48}  {}", row * 16, hex_part, ascii_part);
         }
@@ -167,7 +174,10 @@ fn main() {
     }
     let mut top_u32: Vec<(u32, usize)> = u32_votes.into_iter().filter(|(_, v)| *v >= 4).collect();
     top_u32.sort_by_key(|(_, v)| std::cmp::Reverse(*v));
-    println!("    {:>12}  {:>12}  {:>10}", "u32 (hex)", "decimal", "records");
+    println!(
+        "    {:>12}  {:>12}  {:>10}",
+        "u32 (hex)", "decimal", "records"
+    );
     for (v, count) in top_u32.iter().take(20) {
         println!("    0x{v:08x}  {v:>12}  {count:>10}");
     }
