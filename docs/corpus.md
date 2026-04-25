@@ -71,6 +71,17 @@ Inventory an existing corpus directory:
 tools/corpus-health.sh path/to/corpus
 ```
 
+Classify corpus failures into issue-ready buckets:
+
+```bash
+rvt-corpus doctor path/to/corpus -f json
+```
+
+The doctor report groups files as `not_cfb`, `missing_revit_streams`,
+`corrupt_gzip`, `schema_parse_failure`, `unsupported_version`,
+`partial_walker_decode`, or `empty_ifc_export`, and includes suggested GitHub
+labels for each bucket.
+
 Fetch permissive candidate repositories, then inventory them:
 
 ```bash
