@@ -214,9 +214,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Fetch project corpus
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
+          lfs: true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          key: ifcopenshell-real-project
       - name: Install IfcOpenShell (prebuilt wheel)
         run: |
           python -m pip install --upgrade pip
@@ -305,46 +315,26 @@ jobs:
           print(f"  IfcFacetedBrep: 1 (tetrahedron)")
           PY
 
-      # L5B-11.8: real-file walker → IFC end-to-end gate. Emit a
-      # fresh IFC4 STEP from one of the family samples via `rvt-ifc`,
-      # then load it in IfcOpenShell and assert: schema is IFC4, the
-      # IfcProject exists, and every element entity that the walker
-      # threaded through resolves without dangling references. This
-      # gate catches regressions that the synthetic-fixture checks
-      # can't see — e.g. a walker change that silently emits zero
-      # elements on real files, or breaks step_writer's handling of
-      # BuildingElement entities appended after the Project.
-      - name: Build rvt-ifc + walker->IFC real-file gate
+      # M5-03: real-project walker → IFC end-to-end gate. Emit a
+      # fresh IFC4 STEP from the small 2023 Einhoven project via
+      # `rvt-ifc`, then load it in IfcOpenShell and cross-check
+      # entity counts, spatial containment, unit assignment, and
+      # current geometry/material limitations against diagnostics.
+      # This makes the real-file gate non-vacuous in CI instead of
+      # silently skipping when no local corpus happens to exist.
+      - name: Build rvt-ifc + validate real-project IFC
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
           cargo build --release --bin rvt-ifc
-          # The family corpus resolves via RVT_SAMPLES_DIR (used by
-          # `tests/common::samples_dir`) — if phi-ag/rvt was checked
-          # out, point at it; otherwise skip (family samples aren't
-          # redistributed by this repo).
-          if [ -d "${RVT_SAMPLES_DIR:-./_corpus/examples/Autodesk}" ]; then
-            SAMPLE=$(ls "${RVT_SAMPLES_DIR:-./_corpus/examples/Autodesk}"/*.rfa 2>/dev/null | head -1)
-          fi
-          if [ -z "$SAMPLE" ]; then
-            echo "skipping walker->IFC real-file gate: no family sample available"
-            exit 0
-          fi
-          ./target/release/rvt-ifc "$SAMPLE" -o /tmp/walker-real-file.ifc
-          python - <<'PY'
-          import ifcopenshell
-          f = ifcopenshell.open("/tmp/walker-real-file.ifc")
-          assert f.schema == "IFC4", f"schema: {f.schema}"
-          # Project must exist (metadata-only baseline).
-          assert len(f.by_type("IfcProject")) == 1, "lost IfcProject"
-          # Walker may emit zero elements on family files — that's
-          # acceptable. But if any BuildingElementProxy entities were
-          # emitted, each must resolve without dangling references
-          # (IfcOpenShell would have raised during open() otherwise).
-          proxies = f.by_type("IfcBuildingElementProxy")
-          print(f"L5B-11.8 walker->IFC gate passed:")
-          print(f"  schema: {f.schema}")
-          print(f"  IfcProject: 1")
-          print(f"  IfcBuildingElementProxy (walker-recovered): {len(proxies)}")
-          PY
+          SAMPLE="${RVT_PROJECT_CORPUS_DIR}/Revit_IFC5_Einhoven.rvt"
+          test -f "$SAMPLE"
+          ./target/release/rvt-ifc "$SAMPLE" \
+            -o /tmp/walker-real-project.ifc \
+            --diagnostics /tmp/walker-real-project.diagnostics.json
+          python tools/ci/validate-real-ifc.py \
+            /tmp/walker-real-project.ifc \
+            /tmp/walker-real-project.diagnostics.json
 
   doc:
     name: cargo doc

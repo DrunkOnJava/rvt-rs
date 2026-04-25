@@ -57,6 +57,24 @@ This is the independent third-party gate. rvt-rs's own tests assert
 what the writer emits; IfcOpenShell asserts what the IFC4 spec
 accepts.
 
+The same job also checks out the small
+[`magnetar-io/revit-test-datasets`](https://github.com/magnetar-io/revit-test-datasets)
+project corpus, runs `rvt-ifc` against `Revit_IFC5_Einhoven.rvt`,
+and validates the freshly generated STEP file with
+[`tools/ci/validate-real-ifc.py`](../tools/ci/validate-real-ifc.py).
+That real-project gate cross-checks:
+
+- `IFC4` schema plus one `IfcProject`, `IfcSite`, `IfcBuilding`, and
+  at least one `IfcBuildingStorey`.
+- Entity counts reported by `rvt-ifc --diagnostics` against the
+  IfcOpenShell object graph, currently including the Einhoven
+  `IfcWall` population.
+- `IfcRelContainedInSpatialStructure` coverage for exported building
+  elements.
+- Unit assignment presence.
+- Current unsupported geometry/material limitations remain explicit
+  in diagnostics until real-file geometry and materials are decoded.
+
 ### Layer 3 — 357 lib unit tests covering every emission path
 
 **Job**: `test` (unit tests).
