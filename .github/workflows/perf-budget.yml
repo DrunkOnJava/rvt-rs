@@ -58,7 +58,7 @@ jobs:
             --require-category medium \
             --json-out target/perf-budgets/perf-budget.json \
             "${args[@]}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: perf-budget-json
