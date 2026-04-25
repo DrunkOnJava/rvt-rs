@@ -72,8 +72,9 @@ That real-project gate cross-checks:
 - `IfcRelContainedInSpatialStructure` coverage for exported building
   elements.
 - Unit assignment presence.
-- Current unsupported geometry/material limitations remain explicit
-  in diagnostics until real-file geometry and materials are decoded.
+- Remaining geometry/material limitations stay explicit in diagnostics;
+  when a real-project export has geometry, the validator requires matching
+  `IfcProductDefinitionShape` coverage.
 
 ### Layer 3 — 357 lib unit tests covering every emission path
 

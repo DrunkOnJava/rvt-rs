@@ -97,6 +97,9 @@ fn metric_actual(metric: &str, diagnostics: &rvt::ifc::ExportDiagnostics, step: 
     match metric {
         "diagnostics.exported.storey_count" => diagnostics.exported.storey_count,
         "diagnostics.exported.material_count" => diagnostics.exported.material_count,
+        "diagnostics.exported.building_elements_with_geometry" => {
+            diagnostics.exported.building_elements_with_geometry
+        }
         metric if metric.starts_with("diagnostics.exported.by_ifc_type.") => {
             let ifc_type = metric
                 .strip_prefix("diagnostics.exported.by_ifc_type.")

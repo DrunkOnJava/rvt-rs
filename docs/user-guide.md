@@ -17,7 +17,8 @@ Use rvt-rs when you need to:
   status.
 - Preview what model data rvt-rs decoded.
 - Export diagnostics that explain why a file is unsupported or partial.
-- Produce an IFC4 STEP scaffold for support and interoperability testing.
+- Produce IFC4 STEP output for support and interoperability testing; geometry
+  is limited to the model parts the current decoders recover.
 
 Do not use rvt-rs yet as the only conversion path for production BIM delivery,
 coordination, quantity takeoff, fabrication, permitting, or contractual model
