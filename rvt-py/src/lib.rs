@@ -39,7 +39,7 @@
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyList};
+use pyo3::types::{PyAny, PyBytes, PyDict, PyList};
 
 use rvt::{RevitFile as RustRevitFile, elem_table, ifc, walker};
 
@@ -88,59 +88,94 @@ fn instance_to_dict<'py>(
     for (name, value) in &inst.fields {
         let fd = PyDict::new(py);
         fd.set_item("name", name)?;
-        match value {
-            walker::InstanceField::Pointer { raw } => {
-                fd.set_item("kind", "pointer")?;
-                fd.set_item("slot_a", raw[0])?;
-                fd.set_item("slot_b", raw[1])?;
-            }
-            walker::InstanceField::ElementId { tag, id } => {
-                fd.set_item("kind", "element_id")?;
-                fd.set_item("tag", *tag)?;
-                fd.set_item("id", *id)?;
-            }
-            walker::InstanceField::RefContainer { col_a, col_b } => {
-                fd.set_item("kind", "ref_container")?;
-                fd.set_item("count", col_a.len())?;
-                fd.set_item("col_a", col_a.clone())?;
-                fd.set_item("col_b", col_b.clone())?;
-            }
-            walker::InstanceField::Integer {
-                value,
-                signed,
-                size,
-            } => {
-                fd.set_item("kind", "integer")?;
-                fd.set_item("value", *value)?;
-                fd.set_item("signed", *signed)?;
-                fd.set_item("size", *size)?;
-            }
-            walker::InstanceField::Float { value, size } => {
-                fd.set_item("kind", "float")?;
-                fd.set_item("value", *value)?;
-                fd.set_item("size", *size)?;
-            }
-            walker::InstanceField::Bool(v) => {
-                fd.set_item("kind", "bool")?;
-                fd.set_item("value", *v)?;
-            }
-            walker::InstanceField::Guid(bytes) => {
-                fd.set_item("kind", "guid")?;
-                fd.set_item("bytes", bytes.to_vec())?;
-            }
-            walker::InstanceField::String(s) => {
-                fd.set_item("kind", "string")?;
-                fd.set_item("value", s.as_str())?;
-            }
-            walker::InstanceField::Vector(items) => {
-                fd.set_item("kind", "vector")?;
-                fd.set_item("len", items.len())?;
-            }
-            walker::InstanceField::Bytes(b) => {
-                fd.set_item("kind", "bytes")?;
-                fd.set_item("len", b.len())?;
-            }
+        set_instance_field_items(&fd, value)?;
+        fields.append(fd)?;
+    }
+    d.set_item("fields", fields)?;
+    Ok(d)
+}
+
+fn set_instance_field_items(
+    out: &Bound<'_, PyDict>,
+    value: &walker::InstanceField,
+) -> PyResult<()> {
+    match value {
+        walker::InstanceField::Pointer { raw } => {
+            out.set_item("kind", "pointer")?;
+            out.set_item("slot_a", raw[0])?;
+            out.set_item("slot_b", raw[1])?;
         }
+        walker::InstanceField::ElementId { tag, id } => {
+            out.set_item("kind", "element_id")?;
+            out.set_item("tag", *tag)?;
+            out.set_item("id", *id)?;
+        }
+        walker::InstanceField::RefContainer { col_a, col_b } => {
+            out.set_item("kind", "ref_container")?;
+            out.set_item("count", col_a.len())?;
+            out.set_item("col_a", col_a.clone())?;
+            out.set_item("col_b", col_b.clone())?;
+        }
+        walker::InstanceField::Integer {
+            value,
+            signed,
+            size,
+        } => {
+            out.set_item("kind", "integer")?;
+            out.set_item("value", *value)?;
+            out.set_item("signed", *signed)?;
+            out.set_item("size", *size)?;
+        }
+        walker::InstanceField::Float { value, size } => {
+            out.set_item("kind", "float")?;
+            out.set_item("value", *value)?;
+            out.set_item("size", *size)?;
+        }
+        walker::InstanceField::Bool(v) => {
+            out.set_item("kind", "bool")?;
+            out.set_item("value", *v)?;
+        }
+        walker::InstanceField::Guid(bytes) => {
+            out.set_item("kind", "guid")?;
+            out.set_item("bytes", bytes.to_vec())?;
+        }
+        walker::InstanceField::String(s) => {
+            out.set_item("kind", "string")?;
+            out.set_item("value", s.as_str())?;
+        }
+        walker::InstanceField::Vector(items) => {
+            out.set_item("kind", "vector")?;
+            out.set_item("len", items.len())?;
+        }
+        walker::InstanceField::Bytes(b) => {
+            out.set_item("kind", "bytes")?;
+            out.set_item("len", b.len())?;
+        }
+    }
+    Ok(())
+}
+
+fn decoded_element_to_dict<'py>(
+    py: Python<'py>,
+    element: &walker::DecodedElement,
+) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    match element.id {
+        Some(id) => d.set_item("id", id)?,
+        None => d.set_item("id", py.None())?,
+    }
+    d.set_item("class_name", element.class.as_str())?;
+
+    let range = PyDict::new(py);
+    range.set_item("start", element.byte_range.start)?;
+    range.set_item("end", element.byte_range.end)?;
+    d.set_item("byte_range", range)?;
+
+    let fields = PyList::empty(py);
+    for (name, value) in &element.fields {
+        let fd = PyDict::new(py);
+        fd.set_item("name", name)?;
+        set_instance_field_items(&fd, value)?;
         fields.append(fd)?;
     }
     d.set_item("fields", fields)?;
@@ -173,6 +208,7 @@ impl PyRevitFile {
     /// force multi-GB allocations is rejected up-front.
     #[new]
     #[pyo3(signature = (path, max_file_bytes=None, max_stream_bytes=None, max_inflate_bytes=None, max_walker_scan_bytes=None, max_walker_candidates=None, max_walker_trial_offsets=None, max_walker_record_decode_bytes=None, max_walker_container_records=None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         path: &str,
         max_file_bytes: Option<u64>,
@@ -490,6 +526,52 @@ impl PyRevitFile {
         Ok(out)
     }
 
+    /// Conservative production decoded elements as Python dicts.
+    ///
+    /// Each element has `id`, `class_name`, `byte_range`, and
+    /// `fields`. The fields use the same `name` / `kind` shape as
+    /// `read_adocument()`.
+    fn decoded_elements<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let elements: Vec<_> = walker::iter_elements_with_limits(
+            &mut self.inner,
+            walker::PRODUCTION_ELEMENT_MIN_SCORE,
+            self.walker_limits,
+        )
+        .map_err(to_py_val)?
+        .collect();
+
+        let out = PyList::empty(py);
+        for element in &elements {
+            out.append(decoded_element_to_dict(py, element)?)?;
+        }
+        Ok(out)
+    }
+
+    /// Count conservative production decoded elements.
+    ///
+    /// Returns `{ "total": int, "by_class": dict[str, int] }`.
+    /// The `total` value matches
+    /// `export_diagnostics()["decoded"]["production_walker_elements"]`.
+    fn element_counts<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let mut by_class = std::collections::BTreeMap::<String, usize>::new();
+        let mut total = 0usize;
+        for element in walker::iter_elements_with_limits(
+            &mut self.inner,
+            walker::PRODUCTION_ELEMENT_MIN_SCORE,
+            self.walker_limits,
+        )
+        .map_err(to_py_val)?
+        {
+            total += 1;
+            *by_class.entry(element.class).or_insert(0) += 1;
+        }
+
+        let out = PyDict::new(py);
+        out.set_item("total", total)?;
+        out.set_item("by_class", by_class)?;
+        Ok(out)
+    }
+
     /// Produce an IFC4 STEP string for this Revit file via
     /// `ifc::RvtDocExporter`. Document-level export — project name,
     /// description, units, classifications. Raises `ValueError` if
@@ -509,6 +591,13 @@ impl PyRevitFile {
             .export_with_diagnostics_and_limits(&mut self.inner, self.walker_limits)
             .map_err(to_py_val)?;
         serde_json::to_string(&result.diagnostics).map_err(to_py_val)
+    }
+
+    /// Produce the default IFC export diagnostics as a Python dict.
+    fn export_diagnostics<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let json = self.export_diagnostics_json()?;
+        let json_module = py.import("json")?;
+        json_module.call_method1("loads", (json,))
     }
 
     /// Parse Global/ElemTable header. Returns a dict with
