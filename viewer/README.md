@@ -5,6 +5,9 @@ Zero-upload, client-side Revit viewer powered by
 
 Hosted at <https://drunkonjava.github.io/rvt-rs/viewer/>.
 
+Install and local build paths are documented in
+[`docs/install.md`](../docs/install.md).
+
 ## Privacy posture (VW1-21)
 
 - **Nothing leaves the browser tab.** The dropped `.rvt` / `.rfa` /
