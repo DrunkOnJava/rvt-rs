@@ -72,7 +72,7 @@ rvt-rs has a stream-level writer, not a semantic Revit editor.
 |---|---|---|
 | Byte-preserving copy | Copy the CFB container without changing any stream bytes. | You need a local safety copy or a write-path smoke test. |
 | Stream patching | Replace the complete bytes of a named OLE stream, with explicit framing for raw/truncated-gzip streams. | You are building controlled tooling around known stream payloads. |
-| Semantic editing | Change a Revit concept such as wall height, room name, level elevation, or parameter value. | Not supported yet. This needs field-level encoders and Revit semantic validation. |
+| Semantic editing | Change a Revit concept such as wall height, room name, level elevation, or parameter value. | Not supported yet. This needs field-level encoders and Revit semantic validation; see [ADR-002](decisions/ADR-002-semantic-write-api-gate.md). |
 
 `rvt-write` applies JSON patch manifests atomically: it validates every target
 stream name before writing, writes through a sibling temp file, verifies patched
