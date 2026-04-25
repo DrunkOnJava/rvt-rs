@@ -200,6 +200,10 @@ jobs:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: cargo test --release --test cfb_roundtrip_delta -- --nocapture
+      - name: Run project known-count fixture tests
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: cargo test --release --test project_count_fixtures -- --nocapture
 
   ifcopenshell-validate:
     # IFC-41: load the committed synthetic-project.ifc fixture in

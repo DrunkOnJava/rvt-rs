@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "id": "magnetar-revit-ifc5-einhoven",
+  "project_file": "Revit_IFC5_Einhoven.rvt",
+  "reference_ifc_file": null,
+  "source": {
+    "repo": "magnetar-io/revit-test-datasets",
+    "license": "MIT",
+    "revit_release": 2023,
+    "rvt_sha256": "d3a0c6d37d3f47a1726bc5aa7fe3880ed3c13bbe819b5e64680f6710b15aa948",
+    "rvt_bytes": 913408,
+    "notes": "No paired Revit IFC export or owner schedule is currently available for this file. Authoritative model counts remain explicit unknowns; the wall row pins current ArcWall decoder output only."
+  },
+  "counts": {
+    "levels": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed level manifest is available yet."
+    },
+    "walls": {
+      "status": "decoder_baseline",
+      "expected": 24,
+      "source": "rvt-rs ArcWall decoder output on 2026-04-25; not an authoritative full-project wall count",
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWALL",
+      "decoder_expected": 24,
+      "decoder_tolerance": 0,
+      "tracking_issue": 30
+    },
+    "floors": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed floor manifest is available yet."
+    },
+    "roofs": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed roof manifest is available yet."
+    },
+    "doors": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed door manifest is available yet."
+    },
+    "windows": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed window manifest is available yet."
+    },
+    "rooms_spaces": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed room/space manifest is available yet."
+    },
+    "columns": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed column manifest is available yet."
+    },
+    "beams": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed beam manifest is available yet."
+    },
+    "mep": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed MEP manifest is available yet."
+    },
+    "materials": {
+      "status": "unknown",
+      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed material manifest is available yet."
+    },
+    "units": {
+      "status": "decoder_baseline",
+      "expected": 1,
+      "source": "rvt-rs generated IFC unit-assignment constructor count on 2026-04-25",
+      "decoder_metric": "step.IFCUNITASSIGNMENT",
+      "decoder_expected": 1,
+      "decoder_tolerance": 0,
+      "tracking_issue": 29
+    }
+  }
+}

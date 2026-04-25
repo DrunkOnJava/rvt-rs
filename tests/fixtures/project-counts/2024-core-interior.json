@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "id": "magnetar-2024-core-interior",
+  "project_file": "2024_Core_Interior.rvt",
+  "reference_ifc_file": "2024_Core_Interior.ifc",
+  "source": {
+    "repo": "magnetar-io/revit-test-datasets",
+    "license": "MIT",
+    "revit_release": 2024,
+    "rvt_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
+    "rvt_bytes": 33718272,
+    "reference_ifc_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
+    "reference_ifc_bytes": 20392,
+    "notes": "The paired IFC export is the only authoritative count source currently available for this project. It appears to be an element-export fixture, not a full project schedule."
+  },
+  "counts": {
+    "levels": {
+      "status": "known_gap",
+      "expected": 15,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCBUILDINGSTOREY",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.storey_count",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
+      "tracking_issue": 33,
+      "unsupported_feature": "revit_levels_to_ifc_storeys"
+    },
+    "walls": {
+      "status": "known",
+      "expected": 0,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCWALL",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWALL",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "floors": {
+      "status": "known_gap",
+      "expected": 1,
+      "source": "paired Revit IFC export; exported as IFCSHADINGDEVICE named Floor:Structural Slab",
+      "source_ifc_type": "IFCSHADINGDEVICE",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSHADINGDEVICE",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
+      "tracking_issue": 31,
+      "unsupported_feature": "partition_decoders_for_doors_windows_floors_and_mvp_classes"
+    },
+    "roofs": {
+      "status": "known",
+      "expected": 0,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCROOF",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCROOF",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "doors": {
+      "status": "known",
+      "expected": 0,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCDOOR",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCDOOR",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "windows": {
+      "status": "known",
+      "expected": 0,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCWINDOW",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWINDOW",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "rooms_spaces": {
+      "status": "known",
+      "expected": 0,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCSPACE",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSPACE",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "columns": {
+      "status": "known",
+      "expected": 0,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCCOLUMN",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCCOLUMN",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "beams": {
+      "status": "known",
+      "expected": 0,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCBEAM",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCBEAM",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "mep": {
+      "status": "known",
+      "expected": 0,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCFLOWTERMINAL",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCFLOWTERMINAL",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "materials": {
+      "status": "known_gap",
+      "expected": 1,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCMATERIAL",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.material_count",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
+      "tracking_issue": 34,
+      "unsupported_feature": "revit_materials_and_compound_assemblies"
+    },
+    "units": {
+      "status": "known",
+      "expected": 1,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCUNITASSIGNMENT",
+      "tolerance": 0,
+      "decoder_metric": "step.IFCUNITASSIGNMENT",
+      "decoder_expected": 1,
+      "decoder_tolerance": 0
+    },
+    "property_sets": {
+      "status": "known_gap",
+      "expected": 25,
+      "source": "paired Revit IFC export",
+      "source_ifc_type": "IFCPROPERTYSET",
+      "tolerance": 0,
+      "decoder_metric": "step.IFCPROPERTYSET",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
+      "tracking_issue": 35,
+      "unsupported_feature": "partition_decoders_for_doors_windows_floors_and_mvp_classes"
+    }
+  }
+}
