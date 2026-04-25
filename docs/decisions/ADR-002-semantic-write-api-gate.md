@@ -129,7 +129,9 @@ Validation has three tiers:
 | Revit-openability | A licensed Revit instance opens the file and reports no repair/corruption dialog. | Required before claiming production-safe semantic writing. |
 
 Until Revit-openability validation exists, semantic write docs must use
-phrasing such as "experimental" and "not production-safe".
+phrasing such as "experimental" and "not production-safe". ADR-003
+defines how Revit-openability evidence is collected and how it differs
+from structural or semantic validation.
 
 ## Backup And Atomic Write
 
