@@ -10,7 +10,7 @@
 
 For the short, non-technical support boundary, read [`docs/status.md`](docs/status.md). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
 
-Rust 2024 edition (MSRV 1.85). **Fourteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.85). **Fifteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -200,6 +200,10 @@ cargo build --release
 
 # Pull the embedded thumbnail
 ./target/release/rvt-info --extract-preview preview.png my-project.rvt
+
+# Plain-language file health and IFC export readiness
+./target/release/rvt-inspect my-project.rvt
+./target/release/rvt-inspect my-project.rvt --json
 
 # Compare two versions of the same file (cross-version byte diff)
 ./target/release/rvt-diff --decompress 2018.rfa 2024.rfa

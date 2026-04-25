@@ -34,6 +34,7 @@ conversion.
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, and plain-language decode/export confidence panel | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Byte-preserving patch path tests | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |
+| User-facing inspect CLI | Partial | `rvt-inspect` reports file health, decoded coverage, IFC export readiness, warnings, next steps, and stable JSON | Useful for support triage without Revit internals. |
 
 ## Roadmap Position
 
