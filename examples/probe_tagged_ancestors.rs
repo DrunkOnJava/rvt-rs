@@ -83,10 +83,7 @@ fn main() {
             let mut depth = 0usize;
             let mut current = c.name.as_str();
             let mut found: Option<(&str, u16)> = None;
-            loop {
-                let Some(entry) = schema.classes.iter().find(|x| x.name == current) else {
-                    break;
-                };
+            while let Some(entry) = schema.classes.iter().find(|x| x.name == current) {
                 if let Some(t) = entry.tag {
                     found = Some((entry.name.as_str(), t));
                     break;
@@ -113,9 +110,7 @@ fn main() {
             }
         }
 
-        println!(
-            "  Schema: {total} classes ({direct_tag} directly tagged, {untagged} untagged)"
-        );
+        println!("  Schema: {total} classes ({direct_tag} directly tagged, {untagged} untagged)");
         println!(
             "  Untagged: {resolved_via_ancestor} resolved via ancestor chain, \
              {} unresolvable",

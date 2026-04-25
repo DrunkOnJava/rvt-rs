@@ -7,7 +7,7 @@
 //! file isn't present — Autodesk sample files are not redistributed
 //! by this crate.
 
-use rvt::arc_wall_record::{ArcWallRecord, ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD};
+use rvt::arc_wall_record::{ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD, ArcWallRecord};
 use rvt::{RevitFile, compression};
 use std::path::PathBuf;
 
@@ -29,9 +29,7 @@ fn einhoven_partitions_5_yields_decodable_arcwalls() {
     }
 
     let mut rf = RevitFile::open(&path).expect("open Einhoven");
-    let raw = rf
-        .read_stream("Partitions/5")
-        .expect("read Partitions/5");
+    let raw = rf.read_stream("Partitions/5").expect("read Partitions/5");
     let chunks = compression::inflate_all_chunks(&raw);
     let concat: Vec<u8> = chunks.into_iter().flatten().collect();
     assert!(
@@ -99,9 +97,7 @@ fn einhoven_partitions_0_has_no_arcwalls() {
     }
 
     let mut rf = RevitFile::open(&path).expect("open Einhoven");
-    let raw = rf
-        .read_stream("Partitions/0")
-        .expect("read Partitions/0");
+    let raw = rf.read_stream("Partitions/0").expect("read Partitions/0");
     let chunks = compression::inflate_all_chunks(&raw);
     let concat: Vec<u8> = chunks.into_iter().flatten().collect();
 

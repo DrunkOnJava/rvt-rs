@@ -8,21 +8,22 @@
 //!
 //! This probe distinguishes signal from noise systematically:
 //!
-//!   - For each schema class with a tag, compute:
-//!       observed   = count of u16-LE positions in partition where
-//!                    bytes match the tag
-//!       expected   = partition_u16_position_count / 65536
-//!                    (uniform-random baseline)
-//!       ratio      = observed / expected
+//! - For each schema class with a tag, compute:
 //!
-//!   - Tags with ratio >> 1.0 are non-random. They likely appear as
-//!     part of a real on-disk structure (class markers, record
-//!     headers, element-type discriminators).
+//!   ```text
+//!   observed = count of u16-LE positions in partition where bytes match the tag
+//!   expected = partition_u16_position_count / 65536
+//!   ratio    = observed / expected
+//!   ```
 //!
-//!   - Tags with ratio ≈ 1.0 are byte-coincidence noise.
+//! - Tags with ratio >> 1.0 are non-random. They likely appear as
+//!   part of a real on-disk structure (class markers, record
+//!   headers, element-type discriminators).
 //!
-//!   - Tags with ratio << 1.0 either don't exist in the partition
-//!     or appear at specific excluded positions — also information.
+//! - Tags with ratio ≈ 1.0 are byte-coincidence noise.
+//!
+//! - Tags with ratio << 1.0 either don't exist in the partition
+//!   or appear at specific excluded positions — also information.
 //!
 //! The output is a ranked table per partition: tag, class name,
 //! observed count, expected count, signal ratio, log10 ratio. The
@@ -63,10 +64,7 @@ fn main() {
             .filter_map(|c| c.tag.map(|t| (t, c.name.as_str())))
             .collect();
 
-        println!(
-            "\n=== {file}: {} tagged classes ===",
-            tag_to_name.len()
-        );
+        println!("\n=== {file}: {} tagged classes ===", tag_to_name.len());
 
         for s in partition_list {
             let Ok(raw) = rf.read_stream(s) else {
