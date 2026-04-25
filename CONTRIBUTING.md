@@ -15,6 +15,10 @@ tools. `cargo-audit` and `cargo-deny` are optional locally but enforced in CI;
 set `RVT_REQUIRE_AUDIT=1` or `RVT_REQUIRE_DENY=1` when you want missing tools to
 fail locally too.
 
+Supply-chain rules for Rust crates, viewer npm dependencies, advisory ignores,
+and GitHub Actions pinning are documented in
+[`docs/supply-chain-policy.md`](docs/supply-chain-policy.md).
+
 ## What's welcome
 
 - **Bug reports** with a minimal reproducer (the smallest `.rfa`

@@ -21,3 +21,14 @@ updates:
     commit-message:
       prefix: deps
       include: scope
+  - package-ecosystem: npm
+    directory: /viewer
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - viewer
+      - javascript
+    commit-message:
+      prefix: deps
+      include: scope
