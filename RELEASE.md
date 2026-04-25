@@ -43,7 +43,8 @@ Every `vX.Y.Z` release:
 
 - Has a signed git tag `vX.Y.Z` on `main`.
 - Has a GitHub release page generated from the tag, with changelog
-  excerpt and pre-built artefacts from the `publish.yml` workflow.
+  excerpt, a link to the [user guide](docs/user-guide.md), and pre-built
+  artefacts from the `publish.yml` workflow.
 - Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt)
   via `cargo publish`.
 - Publishes Python wheels (one per OS: Linux, macOS, Windows) and an
@@ -100,8 +101,10 @@ project treats a silent skipped step the same as an untested change.
     still can't ship to crates.io.
 12. **Draft the GitHub release.** On the repo's Releases page, draft a
     new release from the `vX.Y.Z` tag. Title `rvt-rs vX.Y.Z`. Body =
-    the `CHANGELOG.md` excerpt for this version, verbatim. Publish
-    once the `publish.yml` run has finished and artefacts are attached.
+    the `CHANGELOG.md` excerpt for this version, verbatim, followed by
+    `User guide: https://github.com/DrunkOnJava/rvt-rs/blob/vX.Y.Z/docs/user-guide.md`
+    with the real tag substituted. Publish once the `publish.yml` run has
+    finished and artefacts are attached.
 13. **Announce (optional).** If the release is worth calling out,
     drafts live under `docs/launch/` — currently `hn-show-hn.md` and
     `reddit-r-rust.md`, with further channels (buildingSMART forum,
