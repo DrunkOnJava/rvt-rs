@@ -15,10 +15,11 @@
 //! version drift evidence and open questions (Q18-Q20, hypotheses
 //! H17-H19, decisions D23-D27 scoping this module's coverage).
 //!
-//! Callers that need 2024 support should check the file's
-//! `BasicFileInfo.version` before invoking this decoder, and route
-//! 2024+ files to the future `arc_wall_record_2024` module (not yet
-//! implemented — blocked on RE-14.4).
+//! Production callers should use
+//! [`ArcWallRecord::scan_standard_for_revit_version`] instead of
+//! calling the raw pattern scanner directly. Unsupported releases
+//! return an empty result with a structured status so exporters do not
+//! apply the 2023 byte pattern to 2024+ partition streams.
 //!
 //! # Origin (why the shape is what it is)
 //!
@@ -74,6 +75,45 @@ pub const RECORD_TRAILER: u8 = 0x03;
 /// Minimum bytes required to decode a standard ArcWall record.
 pub const STANDARD_RECORD_MIN_SIZE: usize = 0x73;
 
+/// Revit releases covered by this 2023 standard-variant decoder.
+pub const ARC_WALL_STANDARD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023];
+
+/// Status for a version-scoped standard ArcWall scan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArcWallScanStatus {
+    /// The caller supplied a Revit release covered by this decoder.
+    Supported { revit_version: u32 },
+    /// The caller supplied a release whose ArcWall record envelope is
+    /// known or assumed to differ from the 2023 standard layout.
+    UnsupportedVersion { revit_version: u32 },
+}
+
+impl ArcWallScanStatus {
+    /// Human-readable diagnostic suitable for CLI/export metadata.
+    pub fn diagnostic_message(self) -> Option<String> {
+        match self {
+            ArcWallScanStatus::Supported { .. } => None,
+            ArcWallScanStatus::UnsupportedVersion { revit_version } => Some(format!(
+                "ArcWall standard decoder skipped: Revit {revit_version} is outside supported versions {ARC_WALL_STANDARD_SUPPORTED_REVIT_VERSIONS:?}"
+            )),
+        }
+    }
+
+    /// True when the scan may apply the 2023 standard record pattern.
+    pub fn is_supported(self) -> bool {
+        matches!(self, ArcWallScanStatus::Supported { .. })
+    }
+}
+
+/// Result of a version-scoped ArcWall scan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArcWallScanReport {
+    /// Whether the scan ran or was suppressed by the release guard.
+    pub status: ArcWallScanStatus,
+    /// Byte offsets where [`ArcWallRecord::decode_standard`] succeeds.
+    pub offsets: Vec<usize>,
+}
+
 /// A standard (non-compound) ArcWall record decoded from raw partition bytes.
 ///
 /// Variants other than `0x07fa` are not decoded by this type. Compound
@@ -107,6 +147,20 @@ pub struct ArcWallRecord {
 }
 
 impl ArcWallRecord {
+    /// Returns the version-scope status for this standard decoder.
+    pub fn standard_decoder_status(revit_version: u32) -> ArcWallScanStatus {
+        if ARC_WALL_STANDARD_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+            ArcWallScanStatus::Supported { revit_version }
+        } else {
+            ArcWallScanStatus::UnsupportedVersion { revit_version }
+        }
+    }
+
+    /// True when this decoder covers the supplied Revit release.
+    pub fn supports_revit_version(revit_version: u32) -> bool {
+        Self::standard_decoder_status(revit_version).is_supported()
+    }
+
     /// Decode a standard ArcWall record starting at `buf[offset..]`.
     ///
     /// Returns `Err` when any of the following fail:
@@ -237,6 +291,22 @@ impl ArcWallRecord {
         out
     }
 
+    /// Version-gated scanner for production use.
+    ///
+    /// Unsupported Revit releases return an empty offset list even if
+    /// the byte buffer happens to contain the 2023 tag/variant pattern.
+    /// This prevents false-positive IFC walls on releases whose ArcWall
+    /// record envelope has not been proven compatible.
+    pub fn scan_standard_for_revit_version(revit_version: u32, buf: &[u8]) -> ArcWallScanReport {
+        let status = Self::standard_decoder_status(revit_version);
+        let offsets = if status.is_supported() {
+            Self::find_all(buf)
+        } else {
+            Vec::new()
+        };
+        ArcWallScanReport { status, offsets }
+    }
+
     /// Convenience: returns the first 3 coordinates as a 3-tuple.
     /// Hypothesis H16 (conf 0.75) says these are the first 3D point
     /// (wall start).
@@ -356,6 +426,48 @@ mod tests {
         buf.extend_from_slice(&[0u8; 100]);
         let found = ArcWallRecord::find_all(&buf);
         assert_eq!(found, vec![100]);
+    }
+
+    #[test]
+    fn version_gated_scan_allows_supported_2023_pattern() {
+        let mut buf = vec![0u8; 100];
+        buf.extend_from_slice(RECORD_4_HEX);
+        buf.extend_from_slice(&[0u8; 100]);
+
+        let report = ArcWallRecord::scan_standard_for_revit_version(2023, &buf);
+        assert_eq!(
+            report.status,
+            ArcWallScanStatus::Supported {
+                revit_version: 2023
+            }
+        );
+        assert_eq!(report.offsets, vec![100]);
+        assert_eq!(report.status.diagnostic_message(), None);
+    }
+
+    #[test]
+    fn version_gated_scan_suppresses_unsupported_2024_pattern() {
+        let mut buf = vec![0u8; 100];
+        buf.extend_from_slice(RECORD_4_HEX);
+        buf.extend_from_slice(&[0u8; 100]);
+
+        let report = ArcWallRecord::scan_standard_for_revit_version(2024, &buf);
+        assert_eq!(
+            report.status,
+            ArcWallScanStatus::UnsupportedVersion {
+                revit_version: 2024
+            }
+        );
+        assert!(
+            report.offsets.is_empty(),
+            "2024 must not reuse the 2023 ArcWall record envelope"
+        );
+        let diagnostic = report
+            .status
+            .diagnostic_message()
+            .expect("unsupported status should produce a diagnostic");
+        assert!(diagnostic.contains("Revit 2024"));
+        assert!(diagnostic.contains("[2023]"));
     }
 
     #[test]

@@ -7,7 +7,9 @@
 //! file isn't present — Autodesk sample files are not redistributed
 //! by this crate.
 
-use rvt::arc_wall_record::{ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD, ArcWallRecord};
+use rvt::arc_wall_record::{
+    ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD, ArcWallRecord, ArcWallScanStatus,
+};
 use rvt::{RevitFile, compression};
 use std::path::PathBuf;
 
@@ -29,6 +31,7 @@ fn einhoven_partitions_5_yields_decodable_arcwalls() {
     }
 
     let mut rf = RevitFile::open(&path).expect("open Einhoven");
+    let version = rf.basic_file_info().expect("read BasicFileInfo").version;
     let raw = rf.read_stream("Partitions/5").expect("read Partitions/5");
     let chunks = compression::inflate_all_chunks(&raw);
     let concat: Vec<u8> = chunks.into_iter().flatten().collect();
@@ -39,7 +42,14 @@ fn einhoven_partitions_5_yields_decodable_arcwalls() {
     );
 
     // Scan for standard-variant ArcWall records.
-    let offsets = ArcWallRecord::find_all(&concat);
+    let scan = ArcWallRecord::scan_standard_for_revit_version(version, &concat);
+    assert_eq!(
+        scan.status,
+        ArcWallScanStatus::Supported {
+            revit_version: 2023
+        }
+    );
+    let offsets = scan.offsets;
     assert!(
         offsets.len() >= 10,
         "expected ≥10 standard ArcWall records on Einhoven Partitions/5, \
@@ -101,12 +111,51 @@ fn einhoven_partitions_0_has_no_arcwalls() {
     let chunks = compression::inflate_all_chunks(&raw);
     let concat: Vec<u8> = chunks.into_iter().flatten().collect();
 
-    let offsets = ArcWallRecord::find_all(&concat);
+    let version = rf.basic_file_info().expect("read BasicFileInfo").version;
+    let offsets = ArcWallRecord::scan_standard_for_revit_version(version, &concat).offsets;
     assert_eq!(
         offsets.len(),
         0,
         "RE-14.2 observed zero ArcWall records on Einhoven Partitions/0 — \
          got {}",
         offsets.len()
+    );
+}
+
+#[test]
+fn core_interior_2024_suppresses_2023_arcwall_pattern() {
+    let path = project_dir().join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!(
+            "skipping 2024 arc_wall guard test: {} not present",
+            path.display()
+        );
+        return;
+    }
+
+    let mut rf = RevitFile::open(&path).expect("open 2024 Core Interior");
+    let version = rf.basic_file_info().expect("read BasicFileInfo").version;
+    assert_eq!(version, 2024, "fixture should identify as Revit 2024");
+
+    let raw = match rf.read_stream("Partitions/46") {
+        Ok(raw) => raw,
+        Err(e) => {
+            eprintln!("skipping 2024 arc_wall guard test: cannot read Partitions/46: {e}");
+            return;
+        }
+    };
+    let chunks = compression::inflate_all_chunks(&raw);
+    let concat: Vec<u8> = chunks.into_iter().flatten().collect();
+
+    let scan = ArcWallRecord::scan_standard_for_revit_version(version, &concat);
+    assert_eq!(
+        scan.status,
+        ArcWallScanStatus::UnsupportedVersion {
+            revit_version: 2024
+        }
+    );
+    assert!(
+        scan.offsets.is_empty(),
+        "2024 Core Interior must not run the 2023 ArcWall decoder"
     );
 }

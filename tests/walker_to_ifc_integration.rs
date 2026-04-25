@@ -216,3 +216,44 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn arcwall_2024_project_does_not_run_2023_decoder() -> Result<()> {
+    let project_dir = match std::env::var("RVT_PROJECT_CORPUS_DIR") {
+        Ok(d) => d,
+        Err(_) => {
+            eprintln!("skipping 2024 ArcWall guard assertion: RVT_PROJECT_CORPUS_DIR unset");
+            return Ok(());
+        }
+    };
+    let path = format!("{project_dir}/2024_Core_Interior.rvt");
+    if !std::path::Path::new(&path).exists() {
+        eprintln!("skipping 2024 ArcWall guard assertion: corpus file missing at {path}");
+        return Ok(());
+    }
+
+    let mut rf = RevitFile::open(&path)?;
+    let model = RvtDocExporter.export(&mut rf)?;
+
+    let arcwall_names: Vec<&str> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            rvt::ifc::entities::IfcEntity::BuildingElement { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .filter(|name| name.starts_with("ArcWall-"))
+        .collect();
+    assert!(
+        arcwall_names.is_empty(),
+        "2024 export must not emit ArcWall-* entities from the 2023 decoder: {arcwall_names:?}"
+    );
+
+    let description = model.description.as_deref().unwrap_or_default();
+    assert!(
+        description.contains("ArcWall standard decoder skipped: Revit 2024"),
+        "2024 export should surface the ArcWall version gate diagnostic, got: {description}"
+    );
+
+    Ok(())
+}
