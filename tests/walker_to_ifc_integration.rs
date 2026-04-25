@@ -16,17 +16,16 @@
 //!
 //! - **Project corpus** (gated on `RVT_PROJECT_CORPUS_DIR`, typically
 //!   `/private/tmp/rvt-corpus-probe/magnetar/Revit`): the 2023
-//!   Einhoven sample *must* produce at least one `BuildingElement`
-//!   entity — the walker pinned this at 9 HostObjAttr hits in the
-//!   L5B-11.7 bring-up. This is the production assertion that the
-//!   walker→IFC plumbing actually threads data through rather than
-//!   silently emitting metadata-only output.
+//!   Einhoven sample must produce non-empty element output through
+//!   the version-gated ArcWall partition decoder, while production
+//!   walker iteration must suppress low-confidence `HostObjAttr`
+//!   candidates that remain available to diagnostic probes.
 
 mod common;
 
 use common::{ALL_YEARS, sample_for_year, samples_dir};
 use rvt::ifc::{Exporter, RvtDocExporter, entities::IfcEntity, write_step};
-use rvt::{Result, RevitFile};
+use rvt::{Result, RevitFile, walker};
 
 fn corpus_available() -> bool {
     ALL_YEARS.iter().all(|y| sample_for_year(*y).exists())
@@ -40,6 +39,19 @@ fn count_building_elements(model: &rvt::ifc::IfcModel) -> usize {
         .iter()
         .filter(|e| matches!(e, IfcEntity::BuildingElement { .. }))
         .count()
+}
+
+fn count_step_building_elements_for_model(model: &rvt::ifc::IfcModel, step: &str) -> usize {
+    let mut ifc_types = std::collections::BTreeSet::new();
+    for entity in &model.entities {
+        if let IfcEntity::BuildingElement { ifc_type, .. } = entity {
+            ifc_types.insert(ifc_type.as_str());
+        }
+    }
+    ifc_types
+        .into_iter()
+        .map(|ifc_type| step.matches(&format!("{ifc_type}(")).count())
+        .sum()
 }
 
 #[test]
@@ -96,18 +108,15 @@ fn walker_to_ifc_every_family_release_produces_valid_step() -> Result<()> {
             "{year}: walker wiring lost the IfcProject entity"
         );
 
-        // Element count in the entity list must match the element
-        // count emitted by step_writer. Use a loose grep — any of
-        // the concrete element IFC types produced by the walker
-        // fallback path counts.
-        let step_be_count = step.matches("IFCBUILDINGELEMENTPROXY(").count();
-        // step_writer adds framework-level proxies for openings etc,
-        // so `step_be_count >= be_count` is the invariant we can
-        // safely assert — not strict equality.
+        // Element count in the entity list must be reflected in the
+        // serialised STEP output. Count only the IFC element types the
+        // model actually contains so this stays valid as production
+        // output moves away from generic proxies.
+        let step_be_count = count_step_building_elements_for_model(&model, &step);
         assert!(
             step_be_count >= be_count,
             "{year}: model claims {be_count} BuildingElement entities but STEP \
-             emitted only {step_be_count} IFCBUILDINGELEMENTPROXY lines"
+             emitted only {step_be_count} matching element constructor lines"
         );
     }
     Ok(())
@@ -116,10 +125,8 @@ fn walker_to_ifc_every_family_release_produces_valid_step() -> Result<()> {
 #[test]
 fn walker_to_ifc_einhoven_project_has_nonzero_elements() -> Result<()> {
     // This is the production-coverage assertion: a real project
-    // `.rvt` from Revit 2023 must yield >= 1 walker-recovered
-    // element. If it doesn't, the walker → IFC plumbing regressed
-    // (or scan_candidates' score threshold was tightened without
-    // also tightening the scan_candidates -> iter_elements dedup).
+    // `.rvt` from Revit 2023 must yield >= 1 element without falling
+    // back to the old low-confidence HostObjAttr proxy output.
     let project_dir = match std::env::var("RVT_PROJECT_CORPUS_DIR") {
         Ok(d) => d,
         Err(_) => {
@@ -143,21 +150,76 @@ fn walker_to_ifc_einhoven_project_has_nonzero_elements() -> Result<()> {
          tightened or scan_candidates regressed."
     );
 
-    // Also check STEP output — the walker-emitted entities must
+    let host_obj_attr_count = model
+        .entities
+        .iter()
+        .filter(|e| match e {
+            IfcEntity::BuildingElement { name, .. } => name.starts_with("HostObjAttr-"),
+            _ => false,
+        })
+        .count();
+    assert_eq!(
+        host_obj_attr_count, 0,
+        "production IFC export must not surface HostObjAttr-* proxy elements"
+    );
+
+    // Also check STEP output — model element entities must
     // actually appear in the serialised IFC.
     let step = write_step(&model);
-    let proxy_count = step.matches("IFCBUILDINGELEMENTPROXY(").count();
+    let step_element_count = count_step_building_elements_for_model(&model, &step);
     assert!(
-        proxy_count >= be_count,
-        "STEP writer emitted {proxy_count} IFCBUILDINGELEMENTPROXY lines \
+        step_element_count >= be_count,
+        "STEP writer emitted {step_element_count} matching element lines \
          but the model claims {be_count} BuildingElement entities — \
          step_writer is dropping walker output"
     );
 
     eprintln!(
         "Einhoven 2023: {be_count} walker BuildingElements, \
-         {proxy_count} IFCBUILDINGELEMENTPROXY in STEP"
+         {step_element_count} matching element constructor lines in STEP"
     );
+    Ok(())
+}
+
+#[test]
+fn production_iter_elements_filters_hostobjattr_diagnostic_candidates() -> Result<()> {
+    let project_dir = match std::env::var("RVT_PROJECT_CORPUS_DIR") {
+        Ok(d) => d,
+        Err(_) => {
+            eprintln!(
+                "skipping iter_elements false-positive assertion: RVT_PROJECT_CORPUS_DIR unset"
+            );
+            return Ok(());
+        }
+    };
+    let path = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
+    if !std::path::Path::new(&path).exists() {
+        eprintln!("skipping iter_elements false-positive assertion: corpus file missing at {path}");
+        return Ok(());
+    }
+
+    let mut production_rf = RevitFile::open(&path)?;
+    let production: Vec<_> = walker::iter_elements(&mut production_rf)?.collect();
+    assert!(
+        production
+            .iter()
+            .all(|element| element.class != "HostObjAttr"),
+        "production iter_elements must not return HostObjAttr parent-only candidates: {production:?}"
+    );
+
+    let mut diagnostic_rf = RevitFile::open(&path)?;
+    let diagnostic: Vec<_> = walker::iter_elements_with_options(
+        &mut diagnostic_rf,
+        walker::DIAGNOSTIC_ELEMENT_MIN_SCORE,
+    )?
+    .collect();
+    assert!(
+        diagnostic
+            .iter()
+            .any(|element| element.class == "HostObjAttr"),
+        "diagnostic element iteration should still expose HostObjAttr candidates for research"
+    );
+
     Ok(())
 }
 

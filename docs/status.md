@@ -28,7 +28,7 @@ conversion.
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus | Developers can inspect class and field structure. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
-| Decode typed elements from real project files | Research | Current scanner reaches parent/proxy classes, not dependable typed walls/floors/doors | Full model conversion is not ready. |
+| Decode typed elements from real project files | Research | Production iteration is conservative; diagnostic scans still show parent/proxy candidates, not dependable typed walls/floors/doors | Full model conversion is not ready. |
 | Typed decoder structs | Partial | `elements::all_decoders()` has 80 registered decoders | Useful as library building blocks and synthesized-fixture tests. |
 | IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell | Correct writer path exists, but real-file inputs are incomplete. |
 | Browser viewer | Partial | GitHub Pages deployment and no-network WASM import gate | Useful for local inspection; geometry reflects decoded coverage. |

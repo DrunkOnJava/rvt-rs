@@ -6,10 +6,9 @@
 //! `/private/tmp/rvt-corpus-probe/magnetar/Revit`).
 //!
 //! This is a coverage probe, not a correctness check — the reported
-//! "elements" include every scan_candidates hit that decoded
-//! successfully, which over-counts against `ElemTable`'s declared
-//! set until `build_handle_index` + self-id extraction is cross-
-//! checked (L5B-11.7 wires that into the IFC exporter).
+//! "elements" use the explicit diagnostic threshold, so they include
+//! low-confidence candidates that production `iter_elements` filters
+//! out before user-facing export.
 
 use rvt::{RevitFile, walker};
 
@@ -26,7 +25,7 @@ fn main() {
             println!("{name}: open failed");
             continue;
         };
-        match walker::iter_elements(&mut rf) {
+        match walker::iter_elements_with_options(&mut rf, walker::DIAGNOSTIC_ELEMENT_MIN_SCORE) {
             Ok(iter) => {
                 let elements: Vec<_> = iter.collect();
                 let mut by_class: std::collections::BTreeMap<String, usize> =
