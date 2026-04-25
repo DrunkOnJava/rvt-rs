@@ -54,6 +54,14 @@ minor release; incompatible changes must increment this number.
 | `warnings` | array | User-facing caveats for this specific export. |
 | `confidence` | object | Coarse export-readiness level and booleans for metadata/elements/geometry. |
 
+`skipped.reason` is stable enough for automation. Geometry-related reasons use
+the `unsupported_geometry_*` prefix and currently include
+`unsupported_geometry_curve`, `unsupported_geometry_profile`,
+`unsupported_geometry_unresolved_host`, `unsupported_geometry_missing_level`,
+and `unsupported_geometry_missing_dimensions`. A single element can appear in
+more than one geometry bucket because these are condition counts, not a
+deduplicated element total.
+
 Important nested fields:
 
 | Field | Type | Meaning |

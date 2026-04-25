@@ -191,7 +191,8 @@
         ],
         "properties": {
           "reason": {
-            "type": "string"
+            "type": "string",
+            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry."
           },
           "count": {
             "type": "integer",

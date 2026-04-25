@@ -1175,12 +1175,15 @@ pub fn build_export_diagnostics_with_limits(
                 .collect(),
         });
     }
+    let geometry_gaps = geometry_gap_skipped_items(model);
+    skipped.extend(geometry_gaps.iter().cloned());
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
     if exported.building_elements == 0 {
         warnings.push("No building elements were exported; output is scaffold-only.".into());
     }
+    append_geometry_gap_warnings(&mut warnings, &exported, &geometry_gaps);
     if model.units.is_empty() {
         warnings
             .push("No Revit unit assignment was recovered; STEP output uses default units.".into());
@@ -1313,6 +1316,129 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         material_count: model.materials.len(),
         storey_count: model.building_storeys.len(),
     }
+}
+
+#[derive(Debug)]
+struct GeometryGapBucket {
+    reason: &'static str,
+    count: usize,
+    classes: std::collections::BTreeMap<String, usize>,
+    sample_names: Vec<String>,
+}
+
+impl GeometryGapBucket {
+    fn new(reason: &'static str) -> Self {
+        Self {
+            reason,
+            count: 0,
+            classes: std::collections::BTreeMap::new(),
+            sample_names: Vec::new(),
+        }
+    }
+
+    fn add(&mut self, ifc_type: &str, name: &str) {
+        self.count += 1;
+        *self.classes.entry(ifc_type.to_string()).or_insert(0) += 1;
+        if self.sample_names.len() < 12 {
+            self.sample_names.push(name.to_string());
+        }
+    }
+
+    fn into_item(self) -> Option<SkippedExportItem> {
+        (self.count > 0).then(|| SkippedExportItem {
+            reason: self.reason.into(),
+            count: self.count,
+            classes: self.classes,
+            sample_names: self.sample_names,
+        })
+    }
+}
+
+fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
+    let mut unsupported_curve = GeometryGapBucket::new("unsupported_geometry_curve");
+    let mut unsupported_profile = GeometryGapBucket::new("unsupported_geometry_profile");
+    let mut unresolved_host = GeometryGapBucket::new("unsupported_geometry_unresolved_host");
+    let mut missing_level = GeometryGapBucket::new("unsupported_geometry_missing_level");
+    let mut missing_dimensions = GeometryGapBucket::new("unsupported_geometry_missing_dimensions");
+
+    for entity in &model.entities {
+        let entities::IfcEntity::BuildingElement {
+            ifc_type,
+            name,
+            storey_index,
+            location_feet,
+            extrusion,
+            host_element_index,
+            solid_shape,
+            representation_map_index,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+
+        let has_body_shape =
+            extrusion.is_some() || solid_shape.is_some() || representation_map_index.is_some();
+
+        if storey_index.is_none() {
+            missing_level.add(ifc_type, name);
+        }
+        if location_feet.is_none() {
+            unsupported_curve.add(ifc_type, name);
+        }
+        if !has_body_shape {
+            missing_dimensions.add(ifc_type, name);
+        }
+        if location_feet.is_some() && !has_body_shape {
+            unsupported_profile.add(ifc_type, name);
+        }
+        if hosted_geometry_type(ifc_type) && host_element_index.is_none() {
+            unresolved_host.add(ifc_type, name);
+        }
+    }
+
+    [
+        unsupported_curve,
+        unsupported_profile,
+        unresolved_host,
+        missing_level,
+        missing_dimensions,
+    ]
+    .into_iter()
+    .filter_map(GeometryGapBucket::into_item)
+    .collect()
+}
+
+fn hosted_geometry_type(ifc_type: &str) -> bool {
+    matches!(
+        ifc_type,
+        "IFCDOOR" | "IFCWINDOW" | "IFCOPENINGELEMENT" | "IFCOPENINGSTANDARDCASE"
+    )
+}
+
+fn append_geometry_gap_warnings(
+    warnings: &mut Vec<String>,
+    exported: &ExportedModelDiagnostics,
+    geometry_gaps: &[SkippedExportItem],
+) {
+    if exported.building_elements > 0 && exported.building_elements_with_geometry == 0 {
+        warnings.push(
+            "No exported building elements include decoded geometry; see skipped diagnostics for missing curve/profile/dimension data."
+                .into(),
+        );
+    }
+    if geometry_gaps.is_empty() {
+        return;
+    }
+
+    let summary = geometry_gaps
+        .iter()
+        .map(|item| format!("{}={}", item.reason, item.count))
+        .collect::<Vec<_>>()
+        .join(", ");
+    warnings.push(format!(
+        "Unsupported or incomplete geometry was reported: {summary}."
+    ));
 }
 
 fn count_arcwall_records(model: &IfcModel) -> usize {
@@ -1479,6 +1605,86 @@ mod tests {
     fn arcwall_geometry_rejects_degenerate_xy_segment() {
         let record = arcwall_record_with_coords([1.0, 2.0, 0.0, 1.0, 2.0, 10.0]);
         assert!(arcwall_geometry_from_record(&record).is_none());
+    }
+
+    fn diagnostic_building_element(
+        ifc_type: &str,
+        name: &str,
+        storey_index: Option<usize>,
+        location_feet: Option<[f64; 3]>,
+        extrusion: Option<entities::Extrusion>,
+        host_element_index: Option<usize>,
+    ) -> entities::IfcEntity {
+        entities::IfcEntity::BuildingElement {
+            ifc_type: ifc_type.to_string(),
+            name: name.to_string(),
+            type_guid: None,
+            storey_index,
+            material_index: None,
+            property_set: None,
+            location_feet,
+            rotation_radians: None,
+            extrusion,
+            host_element_index,
+            material_layer_set_index: None,
+            material_profile_set_index: None,
+            solid_shape: None,
+            representation_map_index: None,
+        }
+    }
+
+    #[test]
+    fn geometry_gap_diagnostics_report_missing_curve_profile_host_level_and_dimensions() {
+        let model = IfcModel {
+            entities: vec![
+                diagnostic_building_element(
+                    "IFCWALL",
+                    "WallWithoutGeometry",
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+                diagnostic_building_element(
+                    "IFCWINDOW",
+                    "WindowWithoutHostOrProfile",
+                    Some(0),
+                    Some([1.0, 2.0, 3.0]),
+                    None,
+                    None,
+                ),
+            ],
+            ..IfcModel::default()
+        };
+
+        let gaps = geometry_gap_skipped_items(&model);
+        let by_reason: std::collections::BTreeMap<&str, usize> = gaps
+            .iter()
+            .map(|item| (item.reason.as_str(), item.count))
+            .collect();
+
+        assert_eq!(by_reason["unsupported_geometry_curve"], 1);
+        assert_eq!(by_reason["unsupported_geometry_profile"], 1);
+        assert_eq!(by_reason["unsupported_geometry_unresolved_host"], 1);
+        assert_eq!(by_reason["unsupported_geometry_missing_level"], 1);
+        assert_eq!(by_reason["unsupported_geometry_missing_dimensions"], 2);
+        assert!(gaps.iter().any(|item| {
+            item.sample_names
+                .iter()
+                .any(|name| name == "WindowWithoutHostOrProfile")
+        }));
+
+        let exported = exported_model_diagnostics(&model);
+        let mut warnings = Vec::new();
+        append_geometry_gap_warnings(&mut warnings, &exported, &gaps);
+        assert!(warnings.iter().any(|warning| {
+            warning.contains("No exported building elements include decoded geometry")
+        }));
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.contains("unsupported_geometry_unresolved_host=1"))
+        );
     }
 
     #[test]
