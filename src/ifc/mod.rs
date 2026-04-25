@@ -36,7 +36,7 @@
 //!    | Revit concept | IFC mapping |
 //!    |---|---|
 //!    | Project metadata (PartAtom) | `IfcProject` (done) |
-//!    | Unit set (autodesk.unit.*) | `IfcUnitAssignment` / `IfcSIUnit` (pending real read) |
+//!    | Unit set (autodesk.unit.*) | `IfcUnitAssignment` / `IfcSIUnit` (best-effort modal read) |
 //!    | Level | `IfcBuildingStorey` (pending Layer 5b) |
 //!    | Wall | `IfcWall` + geometry (pending Phase 5) |
 //!    | Floor/Roof/Ceiling | `IfcSlab` / `IfcRoof` / `IfcCovering` (pending) |
@@ -240,6 +240,8 @@ pub struct DecodedExportDiagnostics {
     pub diagnostic_proxy_candidates: usize,
     pub arcwall_records: usize,
     pub class_counts: std::collections::BTreeMap<String, usize>,
+    pub recovered_unit_identifiers: Vec<String>,
+    pub unknown_unit_identifiers: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -479,14 +481,15 @@ impl PlaceholderExporter {
 }
 
 /// Document-level exporter — populates an `IfcModel` with project
-/// metadata from PartAtom + BasicFileInfo + (when locatable) ADocument's
-/// walker-read instance fields. Produces a spec-valid but structurally
+/// metadata from PartAtom + BasicFileInfo + recovered `autodesk.unit.*`
+/// records + (when locatable) ADocument's walker-read instance fields.
+/// Produces a spec-valid but structurally
 /// minimal IFC4 file when paired with `step_writer::write_step`.
 ///
-/// Current coverage: project name + document description + (soon)
-/// OmniClass classification reference. Pending walker expansion:
-/// units from `autodesk.unit.*` identifiers, categories from the
-/// family-graph references, building-element geometry.
+/// Current coverage: project name + document description + OmniClass
+/// classification references + best-effort project unit assignment.
+/// Pending walker expansion: categories from the family-graph
+/// references and building-element geometry.
 pub struct RvtDocExporter;
 
 impl Exporter for RvtDocExporter {
@@ -714,18 +717,133 @@ fn export_rvt_doc(
         }
     }
 
+    let recovered_units = recover_project_units(rf);
+
     Ok(IfcModel {
         project_name,
         description,
         entities,
         classifications,
-        units: Vec::new(),
+        units: recovered_units.assignments,
         building_storeys: Vec::new(),
         materials: Vec::new(),
         material_layer_sets: Vec::new(),
         material_profile_sets: Vec::new(),
         representation_maps: Vec::new(),
     })
+}
+
+#[derive(Debug, Default)]
+struct RecoveredProjectUnits {
+    assignments: Vec<entities::UnitAssignment>,
+    unknown_identifiers: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct UnitCandidate {
+    identifier: String,
+    count: usize,
+    mapping: String,
+}
+
+fn recover_project_units(rf: &mut crate::RevitFile) -> RecoveredProjectUnits {
+    let mut identifiers = Vec::new();
+    // `Global/Latest` includes Forge vocabulary tables in newer files;
+    // those are catalog entries, not project-selected display units.
+    // The observed project unit/spec records live in `Partitions/NN`.
+    if let Ok(records) = crate::object_graph::string_records_from_partitions(rf) {
+        identifiers.extend(records.into_iter().map(|record| record.value));
+    }
+    recover_project_units_from_identifiers(identifiers)
+}
+
+fn recover_project_units_from_identifiers<I, S>(identifiers: I) -> RecoveredProjectUnits
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut counts = std::collections::BTreeMap::<String, usize>::new();
+    for identifier in identifiers {
+        let value = identifier.as_ref().trim();
+        if value.starts_with("autodesk.unit.") {
+            *counts.entry(value.to_string()).or_insert(0) += 1;
+        }
+    }
+
+    let mut per_type = std::collections::HashMap::<entities::IfcUnitType, UnitCandidate>::new();
+    let mut unknown_identifiers = Vec::new();
+    for (identifier, count) in counts {
+        let forge_unit = entities::ForgeUnit::from_forge_identifier(&identifier);
+        let Some(emission) = forge_unit.ifc_emission() else {
+            unknown_identifiers.push(identifier);
+            continue;
+        };
+        let unit_type = unit_type_for_emission(&emission);
+        let candidate = UnitCandidate {
+            identifier,
+            count,
+            mapping: ifc_mapping_label(&emission),
+        };
+        match per_type.get(&unit_type) {
+            Some(current)
+                if current.count > candidate.count
+                    || (current.count == candidate.count
+                        && current.identifier <= candidate.identifier) => {}
+            _ => {
+                per_type.insert(unit_type, candidate);
+            }
+        }
+    }
+
+    let assignments = [
+        entities::IfcUnitType::Length,
+        entities::IfcUnitType::Area,
+        entities::IfcUnitType::Volume,
+        entities::IfcUnitType::PlaneAngle,
+        entities::IfcUnitType::Mass,
+        entities::IfcUnitType::Time,
+    ]
+    .into_iter()
+    .filter_map(|unit_type| per_type.remove(&unit_type))
+    .map(|candidate| entities::UnitAssignment {
+        forge_identifier: candidate.identifier,
+        ifc_mapping: Some(candidate.mapping),
+    })
+    .collect();
+
+    RecoveredProjectUnits {
+        assignments,
+        unknown_identifiers,
+    }
+}
+
+fn unit_type_for_emission(emission: &entities::IfcUnitEmission) -> entities::IfcUnitType {
+    match emission {
+        entities::IfcUnitEmission::Si { unit_type, .. }
+        | entities::IfcUnitEmission::ConversionBased { unit_type, .. } => *unit_type,
+    }
+}
+
+fn ifc_mapping_label(emission: &entities::IfcUnitEmission) -> String {
+    match emission {
+        entities::IfcUnitEmission::Si {
+            unit_type,
+            prefix,
+            name,
+        } => match prefix {
+            Some(prefix) => format!("{}:{prefix}:{name}", unit_type.as_step_token()),
+            None => format!("{}:{name}", unit_type.as_step_token()),
+        },
+        entities::IfcUnitEmission::ConversionBased {
+            unit_type,
+            derived_name,
+            factor_to_si,
+            si_base_name,
+        } => format!(
+            "{}:{derived_name}:factor_to_{si_base_name}={factor_to_si}",
+            unit_type.as_step_token()
+        ),
+    }
 }
 
 fn append_production_walker_elements(
@@ -1022,6 +1140,7 @@ pub fn build_export_diagnostics_with_limits(
         });
     }
 
+    let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
     if exported.building_elements == 0 {
         warnings.push("No building elements were exported; output is scaffold-only.".into());
@@ -1029,6 +1148,22 @@ pub fn build_export_diagnostics_with_limits(
     if model.units.is_empty() {
         warnings
             .push("No Revit unit assignment was recovered; STEP output uses default units.".into());
+    }
+    let mut unmapped_unit_values: Vec<_> = recovered_units
+        .unknown_identifiers
+        .iter()
+        .filter(|identifier| identifier.starts_with("autodesk.unit.unit:"))
+        .cloned()
+        .collect();
+    if !unmapped_unit_values.is_empty() {
+        let sample = {
+            unmapped_unit_values.truncate(8);
+            unmapped_unit_values
+        };
+        warnings.push(format!(
+            "Unmapped Revit unit identifiers were preserved in diagnostics: {}",
+            sample.join(", ")
+        ));
     }
     if model.building_storeys.is_empty() {
         warnings.push(
@@ -1091,6 +1226,12 @@ pub fn build_export_diagnostics_with_limits(
             diagnostic_proxy_candidates: diagnostic_candidates.candidates.len(),
             arcwall_records,
             class_counts: candidate_class_counts,
+            recovered_unit_identifiers: model
+                .units
+                .iter()
+                .map(|unit| unit.forge_identifier.clone())
+                .collect(),
+            unknown_unit_identifiers: recovered_units.unknown_identifiers,
         },
         exported,
         skipped,
@@ -1265,9 +1406,61 @@ fn export_confidence_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn placeholder_exporter_default_model_has_no_name() {
         let m = IfcModel::default();
         assert!(m.project_name.is_none());
+    }
+
+    #[test]
+    fn project_unit_recovery_selects_modal_metric_units() {
+        let recovered = recover_project_units_from_identifiers([
+            "autodesk.unit.unit:meters-1.0.0",
+            "autodesk.unit.unit:meters-1.0.0",
+            "autodesk.unit.unit:millimeters-1.0.1",
+            "autodesk.unit.unit:squareMeters-1.0.1",
+            "autodesk.unit.unit:cubicMeters-1.0.1",
+            "autodesk.unit.unit:degrees-1.0.1",
+        ]);
+
+        let ids: Vec<_> = recovered
+            .assignments
+            .iter()
+            .map(|unit| unit.forge_identifier.as_str())
+            .collect();
+        assert!(ids.contains(&"autodesk.unit.unit:meters-1.0.0"));
+        assert!(ids.contains(&"autodesk.unit.unit:squareMeters-1.0.1"));
+        assert!(ids.contains(&"autodesk.unit.unit:cubicMeters-1.0.1"));
+        assert!(ids.contains(&"autodesk.unit.unit:degrees-1.0.1"));
+        assert!(!ids.contains(&"autodesk.unit.unit:millimeters-1.0.1"));
+        assert!(recovered.unknown_identifiers.is_empty());
+    }
+
+    #[test]
+    fn project_unit_recovery_maps_imperial_and_preserves_unknowns() {
+        let recovered = recover_project_units_from_identifiers([
+            "autodesk.unit.unit:feet-1.0.1",
+            "autodesk.unit.unit:feet-1.0.1",
+            "autodesk.unit.unit:meters-1.0.0",
+            "autodesk.unit.unit:squareFeet-1.0.1",
+            "autodesk.unit.unit:cubicFeet-1.0.1",
+            "autodesk.unit.unit:pounds-1.0.1",
+            "autodesk.unit.symbol:degree-1.0.1",
+        ]);
+
+        let ids: Vec<_> = recovered
+            .assignments
+            .iter()
+            .map(|unit| unit.forge_identifier.as_str())
+            .collect();
+        assert!(ids.contains(&"autodesk.unit.unit:feet-1.0.1"));
+        assert!(ids.contains(&"autodesk.unit.unit:squareFeet-1.0.1"));
+        assert!(ids.contains(&"autodesk.unit.unit:cubicFeet-1.0.1"));
+        assert!(ids.contains(&"autodesk.unit.unit:pounds-1.0.1"));
+        assert_eq!(
+            recovered.unknown_identifiers,
+            vec!["autodesk.unit.symbol:degree-1.0.1"]
+        );
     }
 }

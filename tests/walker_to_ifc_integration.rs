@@ -148,6 +148,34 @@ fn export_diagnostics_sidecar_reports_default_ifc_readiness() -> Result<()> {
         diagnostics.exported.building_elements,
         count_building_elements(&result.model)
     );
+    assert!(
+        diagnostics.exported.unit_assignment_count >= 1,
+        "2024 family corpus should recover at least one Revit unit assignment"
+    );
+    assert!(
+        diagnostics
+            .decoded
+            .recovered_unit_identifiers
+            .iter()
+            .any(|unit| unit == "autodesk.unit.unit:meters-1.0.0"),
+        "2024 family corpus should report its modal metric length unit"
+    );
+    assert!(
+        !diagnostics
+            .unsupported_features
+            .iter()
+            .any(|feature| feature == "project_units_from_revit_bytes"),
+        "unit recovery should remove project_units_from_revit_bytes from unsupported features"
+    );
+    let step = write_step(&result.model);
+    assert!(
+        step.contains("IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)"),
+        "real-file unit recovery should emit metre length units instead of defaulting to millimetres"
+    );
+    assert!(
+        !step.contains("IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)"),
+        "real-file unit recovery must not blindly use the legacy millimetre length default"
+    );
     assert_eq!(
         diagnostics.confidence.warning_count,
         diagnostics.warnings.len()

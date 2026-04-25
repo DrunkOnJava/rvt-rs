@@ -112,6 +112,20 @@
             "type": "integer",
             "minimum": 0
           }
+        },
+        "recovered_unit_identifiers": {
+          "type": "array",
+          "description": "Best-effort project unit identifiers selected from Revit autodesk.unit.* records and threaded into IfcUnitAssignment.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unknown_unit_identifiers": {
+          "type": "array",
+          "description": "Observed autodesk.unit.* identifiers that did not map to a known IFC unit emission.",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
