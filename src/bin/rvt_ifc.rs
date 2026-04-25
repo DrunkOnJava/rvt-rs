@@ -37,18 +37,40 @@ struct Args {
     /// validated typed model elements.
     #[arg(long, conflicts_with = "placeholder")]
     diagnostic_proxies: bool,
+    /// Write a JSON diagnostics sidecar for bug reports and support.
+    ///
+    /// The sidecar includes input metadata, decoded/exported element counts,
+    /// skipped low-confidence candidates, unsupported features, warnings, and
+    /// an export confidence summary.
+    #[arg(long, value_name = "PATH")]
+    diagnostics: Option<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut rf = RevitFile::open(&args.input)?;
 
-    let model = if args.placeholder {
-        PlaceholderExporter.export(&mut rf)?
+    let (model, diagnostics) = if args.placeholder {
+        if args.diagnostics.is_some() {
+            let result = PlaceholderExporter.export_with_diagnostics(&mut rf)?;
+            (result.model, Some(result.diagnostics))
+        } else {
+            (PlaceholderExporter.export(&mut rf)?, None)
+        }
     } else if args.diagnostic_proxies {
-        DiagnosticRvtDocExporter.export(&mut rf)?
+        if args.diagnostics.is_some() {
+            let result = DiagnosticRvtDocExporter.export_with_diagnostics(&mut rf)?;
+            (result.model, Some(result.diagnostics))
+        } else {
+            (DiagnosticRvtDocExporter.export(&mut rf)?, None)
+        }
     } else {
-        RvtDocExporter.export(&mut rf)?
+        if args.diagnostics.is_some() {
+            let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+            (result.model, Some(result.diagnostics))
+        } else {
+            (RvtDocExporter.export(&mut rf)?, None)
+        }
     };
 
     let step = write_step(&model);
@@ -64,6 +86,15 @@ fn main() -> anyhow::Result<()> {
         step.len(),
         out_path.display()
     );
+    if let (Some(diagnostics_path), Some(diagnostics)) = (&args.diagnostics, diagnostics) {
+        let json = serde_json::to_vec_pretty(&diagnostics)?;
+        std::fs::write(diagnostics_path, &json)?;
+        eprintln!(
+            "rvt-ifc: wrote diagnostics {} bytes to {}",
+            json.len(),
+            diagnostics_path.display()
+        );
+    }
     if model.project_name.is_none() {
         eprintln!(
             "note: no project name extracted; output IFC uses \"Untitled\". \

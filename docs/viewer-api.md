@@ -181,11 +181,18 @@ For VW1-01/02/03, `wasm-bindgen` wraps the above with JavaScript-
 callable surface:
 
 ```rust
-#[wasm_bindgen]
-pub fn open_rvt(bytes: &[u8]) -> Result<JsValue, JsError> {
+#[wasm_bindgen(js_name = openRvtBytes)]
+pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsError> {
     let mut rf = RevitFile::open_bytes(bytes.to_vec())?;
     let model = RvtDocExporter.export(&mut rf)?;
     Ok(serde_wasm_bindgen::to_value(&model)?)
+}
+
+#[wasm_bindgen(js_name = openRvtBytesWithDiagnostics)]
+pub fn open_rvt_bytes_with_diagnostics(bytes: &[u8]) -> Result<JsValue, JsError> {
+    let mut rf = RevitFile::open_bytes(bytes.to_vec())?;
+    let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+    Ok(serde_wasm_bindgen::to_value(&result)?)
 }
 
 #[wasm_bindgen]

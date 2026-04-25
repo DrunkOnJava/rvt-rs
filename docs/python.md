@@ -94,6 +94,7 @@ Every signature below is verified against
 rvt.__version__  # str — same as the Rust crate version (Cargo.toml)
 
 rvt.rvt_to_ifc(path: str) -> str
+rvt.rvt_to_ifc_diagnostics(path: str) -> str
 ```
 
 `rvt_to_ifc(path)` opens the file, runs the document-level IFC4
@@ -101,6 +102,10 @@ exporter (`ifc::RvtDocExporter`), and returns the IFC4 STEP text.
 Equivalent to `rvt.RevitFile(path).write_ifc()`. Raises `IOError`
 on open failure, `ValueError` if the file parses as CFB but the
 exporter can't build a model.
+
+`rvt_to_ifc_diagnostics(path)` returns the JSON diagnostics sidecar
+for the same export path. The schema matches `rvt-ifc --diagnostics`
+and is documented in [`docs/export-diagnostics.md`](export-diagnostics.md).
 
 ### `rvt.RevitFile`
 
@@ -276,11 +281,15 @@ Field kinds:
 
 ```python
 write_ifc(self) -> str
+export_diagnostics_json(self) -> str
 ```
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`. This is
 document-level export: project name, description, units,
 classifications — not per-element geometry. Raises `ValueError`
 if the file can't be parsed far enough to build a model.
+
+`export_diagnostics_json()` returns the JSON diagnostics sidecar
+for the default IFC export without writing files.
 
 ```python
 __repr__(self) -> str

@@ -174,6 +174,11 @@ class RevitFile:
         be parsed far enough to produce a minimal model.
         """
 
+    def export_diagnostics_json(self) -> str:
+        """Produce the JSON diagnostics sidecar for the default IFC
+        export. The schema matches ``rvt-ifc --diagnostics``.
+        """
+
     def elem_table_header(self) -> dict[str, int]:
         """Parse ``Global/ElemTable`` header. Returns a dict with keys
         ``element_count``, ``record_count``, ``header_flag``,
@@ -203,4 +208,10 @@ def rvt_to_ifc(path: str) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
     IFC4 STEP text. Equivalent to
     ``RevitFile(path).write_ifc()``.
+    """
+
+
+def rvt_to_ifc_diagnostics(path: str) -> str:
+    """One-shot: open ``path``, run ``RvtDocExporter``, return the
+    JSON diagnostics sidecar.
     """

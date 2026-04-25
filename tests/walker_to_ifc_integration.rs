@@ -125,6 +125,46 @@ fn walker_to_ifc_every_family_release_produces_valid_step() -> Result<()> {
 }
 
 #[test]
+fn export_diagnostics_sidecar_reports_default_ifc_readiness() -> Result<()> {
+    if !corpus_available() {
+        eprintln!(
+            "skipping export diagnostics assertion: family corpus missing at {}",
+            samples_dir().display()
+        );
+        return Ok(());
+    }
+
+    let mut rf = RevitFile::open(sample_for_year(2024))?;
+    let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+    let diagnostics = result.diagnostics;
+
+    assert_eq!(diagnostics.schema_version, 1);
+    assert_eq!(diagnostics.mode, rvt::ifc::ExportDiagnosticsMode::Default);
+    assert!(diagnostics.input.has_formats_latest);
+    assert!(diagnostics.input.has_global_latest);
+    assert!(diagnostics.exported.total_entities >= 1);
+    assert_eq!(
+        diagnostics.exported.building_elements,
+        count_building_elements(&result.model)
+    );
+    assert_eq!(
+        diagnostics.confidence.warning_count,
+        diagnostics.warnings.len()
+    );
+
+    let json = serde_json::to_value(&diagnostics).expect("diagnostics should serialize");
+    assert_eq!(json["schema_version"], 1);
+    assert_eq!(json["mode"], "default");
+    assert!(json["input"].is_object());
+    assert!(json["decoded"].is_object());
+    assert!(json["exported"].is_object());
+    assert!(json["warnings"].is_array());
+    assert!(json["confidence"].is_object());
+
+    Ok(())
+}
+
+#[test]
 fn walker_to_ifc_einhoven_project_has_nonzero_elements() -> Result<()> {
     // This is the production-coverage assertion: a real project
     // `.rvt` from Revit 2023 must yield >= 1 element without falling
