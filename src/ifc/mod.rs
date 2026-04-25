@@ -264,6 +264,12 @@ impl Exporter for RvtDocExporter {
             let mut d = Vec::new();
             if let Some(b) = &bfi {
                 d.push(format!("Revit {} export", b.version));
+                if let Some(message) =
+                    crate::arc_wall_record::ArcWallRecord::standard_decoder_status(b.version)
+                        .diagnostic_message()
+                {
+                    d.push(message);
+                }
             }
             if let Some(p) = &part {
                 if let Some(id) = &p.id {
@@ -352,7 +358,9 @@ impl Exporter for RvtDocExporter {
         // Partitions/* record framing, so ArcWall instances (tag
         // 0x0191) are invisible to that path. We scan the partition
         // streams directly here and emit one IFCWALL per standard
-        // ArcWall record, alongside the walker's generic output.
+        // ArcWall record, alongside the walker's generic output. The
+        // scanner is version-gated because the 2024 ArcWall envelope
+        // has a different tag/variant distribution.
         //
         // See `reports/element-framing/RE-14.3-synthesis.md` for the
         // wire-format evidence this is based on, and
@@ -362,38 +370,43 @@ impl Exporter for RvtDocExporter {
             .into_iter()
             .filter(|s| s.starts_with("Partitions/"))
             .collect();
-        for partition in &partition_streams {
-            let Ok(raw) = rf.read_stream(partition) else {
-                continue;
-            };
-            let chunks = crate::compression::inflate_all_chunks(&raw);
-            let concat: Vec<u8> = chunks.into_iter().flatten().collect();
-            if concat.len() < crate::arc_wall_record::STANDARD_RECORD_MIN_SIZE {
-                continue;
-            }
-            let offsets = crate::arc_wall_record::ArcWallRecord::find_all(&concat);
-            for off in offsets {
-                if let Ok(rec) =
-                    crate::arc_wall_record::ArcWallRecord::decode_standard(&concat, off)
-                {
-                    let (sx, sy, sz) = rec.start_point();
-                    let _end = rec.end_point();
-                    entities.push(entities::IfcEntity::BuildingElement {
-                        ifc_type: "IFCWALL".to_string(),
-                        name: format!("ArcWall-{partition}-{off}"),
-                        type_guid: None,
-                        storey_index: None,
-                        material_index: None,
-                        property_set: None,
-                        location_feet: Some([sx, sy, sz]),
-                        rotation_radians: None,
-                        extrusion: None,
-                        host_element_index: None,
-                        material_layer_set_index: None,
-                        material_profile_set_index: None,
-                        solid_shape: None,
-                        representation_map_index: None,
-                    });
+        if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
+            for partition in &partition_streams {
+                let Ok(raw) = rf.read_stream(partition) else {
+                    continue;
+                };
+                let chunks = crate::compression::inflate_all_chunks(&raw);
+                let concat: Vec<u8> = chunks.into_iter().flatten().collect();
+                if concat.len() < crate::arc_wall_record::STANDARD_RECORD_MIN_SIZE {
+                    continue;
+                }
+                let scan = crate::arc_wall_record::ArcWallRecord::scan_standard_for_revit_version(
+                    revit_version,
+                    &concat,
+                );
+                for off in scan.offsets {
+                    if let Ok(rec) =
+                        crate::arc_wall_record::ArcWallRecord::decode_standard(&concat, off)
+                    {
+                        let (sx, sy, sz) = rec.start_point();
+                        let _end = rec.end_point();
+                        entities.push(entities::IfcEntity::BuildingElement {
+                            ifc_type: "IFCWALL".to_string(),
+                            name: format!("ArcWall-{partition}-{off}"),
+                            type_guid: None,
+                            storey_index: None,
+                            material_index: None,
+                            property_set: None,
+                            location_feet: Some([sx, sy, sz]),
+                            rotation_radians: None,
+                            extrusion: None,
+                            host_element_index: None,
+                            material_layer_set_index: None,
+                            material_profile_set_index: None,
+                            solid_shape: None,
+                            representation_map_index: None,
+                        });
+                    }
                 }
             }
         }
