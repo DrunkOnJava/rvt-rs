@@ -23,6 +23,10 @@ Include, if possible:
 3. Your platform and Rust toolchain version.
 4. A description of the impact (denial of service, memory safety,
    silent data corruption, information disclosure, etc.).
+5. For parser crashes, rerun the failing command or API call with
+   `RUST_BACKTRACE=1` and include the backtrace, the command line, and
+   whether the input was passed through the CLI, Rust API, Python API,
+   Wasm API, or viewer.
 
 I will acknowledge receipt within 72 hours. We aim to patch
 confirmed issues within 7 days for high-severity items and within

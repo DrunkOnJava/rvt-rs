@@ -173,11 +173,18 @@ impl ArcWallRecord {
     /// this function does not scan, it only
     /// validates + decodes at the given position.
     pub fn decode_standard(buf: &[u8], offset: usize) -> Result<Self> {
-        if offset + STANDARD_RECORD_MIN_SIZE > buf.len() {
+        let record_end = offset
+            .checked_add(STANDARD_RECORD_MIN_SIZE)
+            .ok_or_else(|| {
+                Error::Cfb(format!(
+                    "ArcWall decode: offset overflow at offset {offset}"
+                ))
+            })?;
+        if record_end > buf.len() {
             return Err(Error::Cfb(format!(
                 "ArcWall decode: buffer too short ({} < {} at offset {})",
                 buf.len(),
-                offset + STANDARD_RECORD_MIN_SIZE,
+                record_end,
                 offset
             )));
         }

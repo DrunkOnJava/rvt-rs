@@ -18,8 +18,8 @@
 //! we additionally assert the output-size cap is honoured on `Ok`.
 
 use rvt::basic_file_info::BasicFileInfo;
-use rvt::compression::{InflateLimits, inflate_at_with_limits};
-use rvt::formats::parse_schema;
+use rvt::compression::{InflateLimits, gzip_header_len, has_gzip_magic, inflate_at_with_limits};
+use rvt::formats::{FieldType, parse_schema};
 use rvt::part_atom::PartAtom;
 use rvt::reader::OpenLimits;
 use rvt::{Result as RvtResult, RevitFile};
@@ -153,6 +153,24 @@ fn inflate_at_offset_past_end_does_not_panic() {
     let data = [0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     assert_no_panic("offset_past_end", &data, |d| {
         let _ = inflate_at_with_limits(d, d.len() + 10, limits());
+    });
+}
+
+#[test]
+fn gzip_header_huge_offset_does_not_panic() {
+    let data = [0x1f, 0x8b, 0x08, 0x00];
+    assert_no_panic("gzip_header_huge_offset", &data, |d| {
+        let _ = has_gzip_magic(d, usize::MAX);
+        let _ = gzip_header_len(d, usize::MAX);
+        let _ = gzip_header_len(d, usize::MAX - 1);
+    });
+}
+
+#[test]
+fn inflate_at_huge_offset_does_not_panic() {
+    let data = [0x1f, 0x8b, 0x08, 0x00];
+    assert_no_panic("inflate_at_huge_offset", &data, |d| {
+        let _ = inflate_at_with_limits(d, usize::MAX, limits());
     });
 }
 
@@ -348,7 +366,7 @@ fn schema_garbage_page_does_not_panic() {
     parse_schema_assert("garbage_4k", &bytes);
 }
 
-// ---- walker::detect_entry_offset + find_chunks ----
+// ---- walker::detect_entry_offset + partitions::find_chunks ----
 
 #[test]
 fn walker_detect_entry_handles_empty_input() {
@@ -379,7 +397,8 @@ fn walker_detect_entry_handles_uniform_bytes() {
 #[test]
 fn find_chunks_handles_empty_input() {
     assert_no_panic("find_chunks_empty", &[], |d| {
-        let _ = rvt::compression::find_gzip_offsets(d);
+        let _ = rvt::partitions::find_chunks(d);
+        let _ = rvt::partitions::header_bytes(d);
     });
 }
 
@@ -388,7 +407,8 @@ fn find_chunks_handles_partial_magic() {
     // 1f 8b is the gzip magic. A buffer of 1f 8b alone should
     // not cause the chunk finder to over-read.
     assert_no_panic("find_chunks_partial_magic", &[0x1f, 0x8b], |d| {
-        let _ = rvt::compression::find_gzip_offsets(d);
+        let _ = rvt::partitions::find_chunks(d);
+        let _ = rvt::partitions::header_bytes(d);
     });
 }
 
@@ -399,7 +419,18 @@ fn find_chunks_handles_many_adjacent_magics() {
     // and overrun the end.
     let data: Vec<u8> = std::iter::repeat_n([0x1f, 0x8b], 128).flatten().collect();
     assert_no_panic("find_chunks_many_magics", &data, |d| {
-        let _ = rvt::compression::find_gzip_offsets(d);
+        let _ = rvt::partitions::find_chunks(d);
+        let _ = rvt::partitions::header_bytes(d);
+    });
+}
+
+#[test]
+fn partitions_header_handles_short_and_full_inputs() {
+    assert_no_panic("partition_header_short", &[0u8; 43], |d| {
+        let _ = rvt::partitions::parse_header(d);
+    });
+    assert_no_panic("partition_header_full", &[0xffu8; 44], |d| {
+        let _ = rvt::partitions::parse_header(d);
     });
 }
 
@@ -560,4 +591,95 @@ fn elem_table_synth_project2024_shape_does_not_panic() {
     buf[0x4a..0x52].fill(0xff);
     buf[0x56] = 0x02;
     elem_table_assert("synth_project2024", &buf);
+}
+
+#[test]
+fn elem_table_public_layout_stride_zero_does_not_panic() {
+    let layout = rvt::elem_table::ElemTableLayout {
+        start: 0,
+        stride: 0,
+        framing: rvt::elem_table::RecordFraming::Implicit,
+    };
+    assert_no_panic("elem_table_stride_zero", &[0u8; 64], |d| {
+        let _ = rvt::elem_table::parse_records_from_bytes(d, layout, 10);
+    });
+}
+
+#[test]
+fn elem_table_public_layout_huge_start_does_not_panic() {
+    let layout = rvt::elem_table::ElemTableLayout {
+        start: usize::MAX - 1,
+        stride: 12,
+        framing: rvt::elem_table::RecordFraming::Implicit,
+    };
+    assert_no_panic("elem_table_huge_start", &[0u8; 64], |d| {
+        let _ = rvt::elem_table::parse_records_from_bytes(d, layout, 10);
+    });
+}
+
+#[test]
+fn elem_table_public_layout_huge_marker_does_not_panic() {
+    let layout = rvt::elem_table::ElemTableLayout {
+        start: 0,
+        stride: 12,
+        framing: rvt::elem_table::RecordFraming::Explicit {
+            marker_len: usize::MAX,
+        },
+    };
+    assert_no_panic("elem_table_huge_marker", &[0u8; 64], |d| {
+        let _ = rvt::elem_table::parse_records_from_bytes(d, layout, 10);
+    });
+}
+
+// ---- direct public field/parser helpers ----
+
+#[test]
+fn field_type_decode_short_inputs_do_not_panic() {
+    for (label, data) in [
+        ("field_type_empty", &[][..]),
+        ("field_type_one_byte", &[0x07][..]),
+        ("field_type_two_bytes", &[0x07, 0x10][..]),
+        ("field_type_container_prefix", &[0x0e, 0x50, 0x00][..]),
+    ] {
+        assert_no_panic(label, data, |d| {
+            let _ = FieldType::decode(d);
+        });
+    }
+}
+
+#[test]
+fn read_field_by_type_huge_cursor_does_not_panic() {
+    let ty = FieldType::Primitive {
+        kind: 0x07,
+        size: 8,
+    };
+    assert_no_panic("read_field_huge_cursor", &[0u8; 16], |d| {
+        let mut cursor = usize::MAX;
+        let _ = rvt::walker::read_field_by_type(d, &mut cursor, &ty);
+    });
+}
+
+#[test]
+fn read_field_by_type_huge_string_count_does_not_panic() {
+    let ty = FieldType::String;
+    assert_no_panic("read_field_huge_string_count", &[0xffu8; 8], |d| {
+        let mut cursor = 0usize;
+        let _ = rvt::walker::read_field_by_type(d, &mut cursor, &ty);
+    });
+}
+
+#[test]
+fn arc_wall_decode_huge_offset_does_not_panic() {
+    assert_no_panic("arc_wall_huge_offset", &[0u8; 128], |d| {
+        let _ = rvt::arc_wall_record::ArcWallRecord::decode_standard(d, usize::MAX);
+    });
+}
+
+#[test]
+fn object_graph_extractors_handle_adversarial_bytes() {
+    let bytes = [0xffu8; 512];
+    assert_no_panic("object_graph_extract_string_records", &bytes, |d| {
+        let _ = rvt::object_graph::extract_string_records(d);
+        let _ = rvt::object_graph::DocumentHistory::from_decompressed(d);
+    });
 }
