@@ -11,8 +11,11 @@
 //!   file. The framing invariants (gzip-truncation, 8-byte prefix
 //!   on `Global/*`, Revit wrapper on `RevitPreview4.0` and
 //!   `Contents`) are preserved via [`StreamFraming`]. Round-trip
-//!   tests verify the 13 streams in the 2024 sample stay
-//!   semantically identical after patch-less write.
+//!   tests cover byte-identical copy, unchanged identity patches,
+//!   stream growth, stream shrink, multi-stream patches, missing
+//!   stream rejection, corrupt gzip verification, and GUID/history
+//!   preservation on real family/project fixtures when the corpora
+//!   are available.
 //!
 //! # What does not work yet
 //!
@@ -22,9 +25,9 @@
 //!   `TODO-BLINDSIDE.md`. Stream-level patching + the 100%
 //!   classified schema are the pieces that unblock it.
 //! - **CFB structural writing at Revit's exact sector layout**:
-//!   current output uses the `cfb` crate's default sector
-//!   ordering, which differs from Revit's own writer. Streams are
-//!   byte-identical on read; raw file bytes are not.
+//!   non-empty patches preserve unpatched stream bytes and identity
+//!   metadata, but the raw container bytes can still differ because
+//!   the `cfb` crate owns FAT/directory maintenance.
 //! # Atomicity
 //!
 //! [`write_with_patches`] writes to a sibling temp file and renames
@@ -642,6 +645,28 @@ mod tests {
         Ok(())
     }
 
+    fn build_cfb_with_raw_formats_latest(path: &Path, bytes: &[u8]) -> Result<()> {
+        let f = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)?;
+        let mut cfb =
+            cfb::CompoundFile::create(f).map_err(|e| crate::Error::Cfb(format!("create: {e}")))?;
+        cfb.create_storage("/Formats")
+            .map_err(|e| crate::Error::Cfb(format!("storage: {e}")))?;
+        let mut s = cfb
+            .create_stream("/Formats/Latest")
+            .map_err(|e| crate::Error::Cfb(format!("stream: {e}")))?;
+        s.write_all(bytes)
+            .map_err(|e| crate::Error::Cfb(format!("write: {e}")))?;
+        drop(s);
+        cfb.flush()
+            .map_err(|e| crate::Error::Cfb(format!("flush: {e}")))?;
+        Ok(())
+    }
+
     #[test]
     fn verify_patches_applied_round_trips_clean_edit() {
         let src = temp_path("src.rvt");
@@ -756,6 +781,29 @@ mod tests {
         // so inflate_at(raw, 8) will fail.
         let result = decompress_stream(&src, "Formats/Latest", StreamFraming::CustomPrefix8);
         assert!(result.is_err());
+        std::fs::remove_file(&src).ok();
+    }
+
+    #[test]
+    fn verify_patches_applied_reports_corrupt_gzip() {
+        let src = temp_path("corrupt-gzip.rvt");
+        build_cfb_with_raw_formats_latest(&src, b"not a gzip stream").unwrap();
+        let patches = vec![StreamPatch {
+            stream_name: "Formats/Latest".into(),
+            new_decompressed: b"expected".to_vec(),
+            framing: StreamFraming::RawGzipFromZero,
+        }];
+
+        let report = verify_patches_applied(&src, &patches).unwrap();
+        assert_eq!(report.streams.len(), 1);
+        assert_eq!(report.failure_count(), 1);
+        let failure = &report.streams[0];
+        assert!(!failure.match_);
+        assert_eq!(failure.actual_len, 0);
+        assert!(
+            failure.decompress_error.is_some(),
+            "corrupt gzip must be reported as a decompression failure"
+        );
         std::fs::remove_file(&src).ok();
     }
 

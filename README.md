@@ -50,7 +50,7 @@ Rust 2024 edition (MSRV 1.85). **Fifteen CLIs ship** (`rvt-analyze`, `rvt-info`,
 | Community corpus parse verification | not executed | `tools/fetch-corpus.sh` is committed but never run. The 41 candidate files across 7 MIT/Apache repos have not been checked against `project_corpus_smoke`. License verification is solid; parse compatibility is unknown. Tracked as Q01-01..04. |
 | Partition-stream wire format | not reverse-engineered | 12 RE probes in `examples/probe_*` tested five hypotheses; all refuted. `Global/ContentDocuments` identified as a structured index but its id space does not match `ElemTable`'s (6/30705 overlap). Blocker on element extraction. |
 | Scalar-Container wire format on real bytes | assumption only | L5B-09 fix assumes Vector-equivalent layout for kinds 0x01/0x02/0x04/0x05/0x07/0x0b/0x0d. Round-trip tests use synthesized bytes; no real-.rvt round-trip has been exercised. Tracked as WF-01..03. |
-| Patched CFB roundtrip for grow/shrink cases | partial | Empty and identity-patch cases are byte-identical. Stream-grows-by-N, stream-shrinks, and multi-stream patch cases untested. Tracked as CFB-01..03. |
+| Patched CFB roundtrip for grow/shrink cases | covered | Family corpus tests cover identity, grow, shrink, multi-stream, and missing-stream patches; project-corpus tests cover identity/grow/shrink/multi while preserving unpatched streams plus GUID/history. |
 
 ## Why the schema matters
 
@@ -244,7 +244,7 @@ cargo build --release
 # Global/ElemTable dump — declared element-ids + record layout (family 12B / project 28B/40B)
 ./target/release/rvt-elem-table my-project.rvt --limit 20
 
-# Byte-preserving write path — patch stream bytes via JSON manifest
+# Stream-level write path — patch named OLE streams via JSON manifest
 ./target/release/rvt-write my-project.rvt --patches patches.json -o patched.rvt
 
 # Per-file doc generator (schema + sample-data render for any RVT)
@@ -324,9 +324,9 @@ these streams. The fix is to skip the 10-byte header manually and use
 | 4b · Schema→data link | Tags from `Formats/Latest` occur at ~340× the noise rate in `Global/Latest`; schema IS the live type dictionary for the object graph | **Done** |
 | 4c.1 · Record framing | Tagged class records in `Formats/Latest` parse into structured records: `{tag, parent, ancestor_tag, declared_field_count}`; HostObjAttr → `{tag=107, parent=Symbol, ancestor_tag=0x0025 → APIVSTAMacroElem, declared_field_count=3}` | **Done** |
 | 4c.2 · Field-body decoding | `FieldType` enum classifies **100%** of schema fields across 8 variants (Primitive, String, Guid, ElementId, ElementIdRef, Pointer, Vector, Container). 11 discriminator bytes mapped, including generalized scalar-base Vector/Container (`{kind} 0x10 ...` / `{kind} 0x50 ...`) and the `0x0d` point-type base. | **Done (100.00% on 13,570 fields across the 11-version corpus; zero `Unknown`)** |
-| 4d · ElemTable | `Global/ElemTable` header parser + rough record enumeration; record semantics TBD (blocked on per-element schema lookup) | **Partial** |
+| 4d · ElemTable | `Global/ElemTable` header parser + rough record enumeration; record semantics remain unresolved pending per-element schema lookup | **Partial** |
 | 5 · IFC4 export | Full spatial tree + per-element IFC entities + `IfcLocalPlacement` + `IfcExtrudedAreaSolid` + compound material layers + typed property sets + `IfcOpeningElement`/`IfcRelVoidsElement`/`IfcRelFillsElement` for doors and windows. Deterministic ISO-10303-21 output. IfcOpenShell + BlenderBIM verified. | **Done** (rectangular profiles; swept / revolved / BRep fallbacks ship but use rectangular in the default emission path — IFC-17/24 is the remaining refinement) |
-| 6 · Write path | Byte-preserving read-modify-write round-trip (13/13 streams identical); `rvt-write` CLI + JSON patch manifest + atomic temp-file rename + per-stream SHA verification (WRT-11..14). Stream-level patch is end-to-end; field-level semantic patching is Phase 7. | **Done (stream-level); field-level pending** |
+| 6 · Write path | Byte-preserving copy for unchanged files; stream-level patching for named OLE streams with atomic temp-file rename, per-stream verification, grow/shrink/multi-stream coverage, and GUID/history preservation checks. Field-level semantic patching is Phase 7. | **Done (stream-level); field-level pending** |
 | 7 · Browser viewer | WebAssembly build of the core + Three.js + Vite + Pages deploy. Zero-upload, in-tab parse, export buttons for glTF/IFC/SVG, URL-state share. Live at <https://drunkonjava.github.io/rvt-rs/>. | **Done** (VW1-01..24) |
 
 All 5 original P0 research questions (Q4-Q7) are **resolved**. Layer 4c.2 reaches **100.00% field-type classification** on the 11-version reference corpus (13,570 total schema fields, zero `Unknown`). IFC4 emission, glTF export, 2D plan view, and the browser viewer all ship. The next frontier is real-world project-file corpus validation (Q-01) — one `.rvt` probe already caught a `gzip_header_len` bounds bug that family files never hit.
