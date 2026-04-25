@@ -255,6 +255,37 @@ def test_read_adocument_last_three_elementids_match_rust(sample_2024):
         assert field["id"] == exp_id
 
 
+def test_decoded_elements_and_counts_match_export_diagnostics(sample_2024):
+    elements = sample_2024.decoded_elements()
+    counts = sample_2024.element_counts()
+    diagnostics = sample_2024.export_diagnostics()
+
+    assert isinstance(elements, list)
+    assert isinstance(counts, dict)
+    assert isinstance(counts["by_class"], dict)
+    assert counts["total"] == len(elements)
+    assert counts["total"] == diagnostics["decoded"]["production_walker_elements"]
+
+    by_class = {}
+    for element in elements:
+        assert "id" in element
+        assert isinstance(element["class_name"], str)
+        assert set(element["byte_range"]) == {"start", "end"}
+        assert isinstance(element["fields"], list)
+        by_class[element["class_name"]] = by_class.get(element["class_name"], 0) + 1
+    assert counts["by_class"] == by_class
+
+
+def test_export_diagnostics_dict_matches_json(sample_2024):
+    import json
+
+    parsed = json.loads(sample_2024.export_diagnostics_json())
+    direct = sample_2024.export_diagnostics()
+    assert direct == parsed
+    assert direct["schema_version"] == 1
+    assert "confidence" in direct
+
+
 def test_write_ifc_produces_valid_ifc4(sample_2024):
     ifc = sample_2024.write_ifc()
     assert isinstance(ifc, str)

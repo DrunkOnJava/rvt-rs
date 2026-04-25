@@ -7,7 +7,7 @@ pyright pick it up.
 """
 from __future__ import annotations
 
-from typing import Final, Optional, Union
+from typing import Any, Final, Optional, Union
 
 __version__: Final[str]
 
@@ -36,6 +36,23 @@ Keys:
 - ``entry_offset`` (int): byte offset in decompressed Global/Latest.
 - ``version`` (int): Revit release year.
 - ``fields`` (list[TypedField]): one entry per schema-declared field.
+"""
+
+TypedDecodedElement = dict[str, Any]
+"""Return shape of one entry in `RevitFile.decoded_elements()`.
+
+Keys:
+- ``id`` (int | None): resolved ElementId when available.
+- ``class_name`` (str): schema class name.
+- ``byte_range`` (dict[str, int]): ``start`` and ``end`` offsets in
+  decompressed stream bytes.
+- ``fields`` (list[TypedField]): decoded schema fields.
+"""
+
+TypedElementCounts = dict[str, Union[int, dict[str, int]]]
+"""Return shape of `RevitFile.element_counts()`.
+
+Keys: ``total`` (int) and ``by_class`` (dict[str, int]).
 """
 
 
@@ -185,6 +202,19 @@ class RevitFile:
         See module docs for the field-kind schema.
         """
 
+    def decoded_elements(self) -> list[TypedDecodedElement]:
+        """Return conservative production decoded elements.
+
+        Each entry has ``id``, ``class_name``, ``byte_range``, and
+        ``fields``. The field dictionaries use the same kind-specific
+        shape as ``read_adocument()["fields"]``.
+        """
+
+    def element_counts(self) -> TypedElementCounts:
+        """Return decoded element counts as ``{"total": int,
+        "by_class": dict[str, int]}``.
+        """
+
     def write_ifc(self, mode: str = "scaffold") -> str:
         """Produce an IFC4 STEP string for this file via the
         ``RvtDocExporter``.
@@ -198,6 +228,11 @@ class RevitFile:
     def export_diagnostics_json(self) -> str:
         """Produce the JSON diagnostics sidecar for the default IFC
         export. The schema matches ``rvt-ifc --diagnostics``.
+        """
+
+    def export_diagnostics(self) -> dict[str, Any]:
+        """Produce the default IFC export diagnostics as a Python
+        dict. Equivalent to ``json.loads(export_diagnostics_json())``.
         """
 
     def elem_table_header(self) -> dict[str, int]:
