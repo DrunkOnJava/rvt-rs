@@ -168,10 +168,14 @@ class RevitFile:
         See module docs for the field-kind schema.
         """
 
-    def write_ifc(self) -> str:
+    def write_ifc(self, mode: str = "scaffold") -> str:
         """Produce an IFC4 STEP string for this file via the
-        ``RvtDocExporter``. Raises ``ValueError`` if the file can't
-        be parsed far enough to produce a minimal model.
+        ``RvtDocExporter``.
+
+        ``mode`` is one of ``"scaffold"``, ``"typed-no-geometry"``,
+        ``"geometry"``, or ``"strict"``. Stronger modes raise
+        ``ValueError`` when the recovered model data is not complete
+        enough for that quality level.
         """
 
     def export_diagnostics_json(self) -> str:
@@ -204,10 +208,10 @@ class RevitFile:
         """
 
 
-def rvt_to_ifc(path: str) -> str:
+def rvt_to_ifc(path: str, mode: str = "scaffold") -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
     IFC4 STEP text. Equivalent to
-    ``RevitFile(path).write_ifc()``.
+    ``RevitFile(path).write_ifc(mode=mode)``.
     """
 
 

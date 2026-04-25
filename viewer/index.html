@@ -50,6 +50,33 @@
         font-size: 11px;
         color: #8b95a3;
       }
+      header .quality-pill {
+        min-width: 112px;
+        padding: 4px 8px;
+        border: 1px solid #2a4a6f;
+        border-radius: 4px;
+        color: #d7dce3;
+        background: #151b24;
+        font-size: 11px;
+        text-align: center;
+        white-space: nowrap;
+      }
+      header .quality-pill.scaffold {
+        border-color: #6a4f22;
+        color: #ffd28a;
+      }
+      header .quality-pill.typed {
+        border-color: #3c5f86;
+        color: #9fd0ff;
+      }
+      header .quality-pill.geometry {
+        border-color: #2e684b;
+        color: #94e3b6;
+      }
+      header .quality-pill.diagnostic {
+        border-color: #6a4f22;
+        color: #ffd28a;
+      }
       header .export-btn {
         padding: 5px 11px;
         background: #1a3a5f;
@@ -200,6 +227,7 @@
         <h1>rvt-rs · viewer</h1>
         <span class="meta" id="file-meta">drop a .rvt / .rfa / .rte / .rft file anywhere</span>
         <span style="flex: 1"></span>
+        <span class="quality-pill" id="export-quality">quality: pending</span>
         <button class="export-btn" id="export-glb" disabled title="Download 3D model as glTF 2.0 binary">
           Export glTF
         </button>

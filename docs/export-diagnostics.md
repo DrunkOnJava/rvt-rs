@@ -14,6 +14,17 @@ export-readiness checks. It does not contain raw model bytes.
 rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json
 ```
 
+Use `--mode` when automation needs to reject incomplete output instead of
+accepting a scaffold IFC:
+
+```bash
+rvt-ifc model.rvt -o model.ifc --mode strict --diagnostics model.diagnostics.json
+```
+
+Supported quality gates are `scaffold`, `typed-no-geometry`, `geometry`, and
+`strict`. `strict` fails before writing IFC when required model data is missing;
+when `--diagnostics` is present, the sidecar is still written for triage.
+
 Diagnostic proxy mode can also write the sidecar:
 
 ```bash

@@ -266,6 +266,16 @@ def test_write_ifc_produces_valid_ifc4(sample_2024):
     assert "0610 x 0915mm" in ifc
 
 
+def test_write_ifc_accepts_explicit_scaffold_mode(sample_2024):
+    ifc = sample_2024.write_ifc(mode="scaffold")
+    assert "IFCPROJECT" in ifc
+
+
+def test_write_ifc_strict_mode_rejects_incomplete_export(sample_2024):
+    with pytest.raises(ValueError, match="strict"):
+        sample_2024.write_ifc(mode="strict")
+
+
 def test_write_ifc_produces_exactly_one_ifcproject(sample_2024):
     ifc = sample_2024.write_ifc()
     # Count occurrences of the entity constructor, not the type

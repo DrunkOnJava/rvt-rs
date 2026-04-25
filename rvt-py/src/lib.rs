@@ -50,6 +50,21 @@ fn to_py_val<E: std::fmt::Display>(e: E) -> PyErr {
     PyValueError::new_err(e.to_string())
 }
 
+fn parse_export_quality_mode(mode: &str) -> PyResult<ifc::ExportQualityMode> {
+    ifc::ExportQualityMode::parse(mode).map_err(to_py_val)
+}
+
+fn write_ifc_with_quality_mode(
+    rf: &mut RustRevitFile,
+    mode: ifc::ExportQualityMode,
+) -> PyResult<String> {
+    let result = ifc::RvtDocExporter
+        .export_with_diagnostics(rf)
+        .map_err(to_py_val)?;
+    mode.validate(&result.diagnostics).map_err(to_py_val)?;
+    Ok(ifc::write_step(&result.model))
+}
+
 /// Shared serialiser: ADocumentInstance → Python dict. Used by the
 /// three ADocument accessors (plain / strict / lossy) so they all
 /// return the same shape.
@@ -426,10 +441,10 @@ impl PyRevitFile {
     /// `ifc::RvtDocExporter`. Document-level export — project name,
     /// description, units, classifications. Raises `ValueError` if
     /// the file can't be parsed far enough to produce a model.
-    fn write_ifc(&mut self) -> PyResult<String> {
-        let model =
-            ifc::Exporter::export(&ifc::RvtDocExporter, &mut self.inner).map_err(to_py_val)?;
-        Ok(ifc::write_step(&model))
+    #[pyo3(signature = (mode = "scaffold"))]
+    fn write_ifc(&mut self, mode: &str) -> PyResult<String> {
+        let mode = parse_export_quality_mode(mode)?;
+        write_ifc_with_quality_mode(&mut self.inner, mode)
     }
 
     /// Produce the JSON diagnostics sidecar for the default IFC export.
@@ -495,10 +510,11 @@ impl PyRevitFile {
 /// exporter, return the STEP string. Equivalent to
 /// `rvt.RevitFile(path).write_ifc()`.
 #[pyfunction]
-fn rvt_to_ifc(path: &str) -> PyResult<String> {
+#[pyo3(signature = (path, mode = "scaffold"))]
+fn rvt_to_ifc(path: &str, mode: &str) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
-    let model = ifc::Exporter::export(&ifc::RvtDocExporter, &mut rf).map_err(to_py_val)?;
-    Ok(ifc::write_step(&model))
+    let mode = parse_export_quality_mode(mode)?;
+    write_ifc_with_quality_mode(&mut rf, mode)
 }
 
 /// One-shot helper: open a Revit file, run the default IFC exporter,
