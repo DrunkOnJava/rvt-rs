@@ -36,7 +36,7 @@ conversion.
 | Typed decoder structs | Partial | `elements::all_decoders()` has 80 registered decoders | Useful as library building blocks and synthesized-fixture tests. |
 | IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; diagnostic mode can include low-confidence proxy provenance; `rvt-ifc --diagnostics` emits a JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict output | Correct writer path exists, but real-file inputs are incomplete. |
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, plain-language decode/export confidence panel, and supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
-| Stream-level writer | Partial | Byte-preserving patch path tests | Useful for controlled stream replacement, not semantic Revit editing. |
+| Stream-level writer | Partial | Family/project corpus patch tests cover identity, grow, shrink, multi-stream, missing-stream, corrupt-gzip verification, and GUID/history preservation | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |
 | User-facing inspect CLI | Partial | `rvt-inspect` reports file health, decoded coverage, IFC export readiness, warnings, next steps, and stable JSON | Useful for support triage without Revit internals. |
 

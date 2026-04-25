@@ -16,10 +16,13 @@
 mod common;
 
 use common::{ALL_YEARS, sample_for_year, samples_dir};
-use rvt::Result;
-use rvt::streams::{BASIC_FILE_INFO, PART_ATOM};
-use rvt::writer::{StreamFraming, StreamPatch, write_with_patches};
+use rvt::streams::{BASIC_FILE_INFO, GLOBAL_LATEST, PART_ATOM};
+use rvt::writer::{
+    StreamFraming, StreamPatch, guid_preserved, history_entries_preserved, write_with_patches,
+};
+use rvt::{Error, Result, RevitFile};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 fn corpus_available() -> bool {
     ALL_YEARS.iter().all(|y| sample_for_year(*y).exists())
@@ -31,6 +34,108 @@ fn byte_delta(a: &[u8], b: &[u8]) -> usize {
     let n = a.len().min(b.len());
     let diff_in_overlap = a[..n].iter().zip(&b[..n]).filter(|(x, y)| x != y).count();
     diff_in_overlap + a.len().abs_diff(b.len())
+}
+
+fn project_corpus_dir() -> PathBuf {
+    std::env::var("RVT_PROJECT_CORPUS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("_project_corpus/Revit"))
+}
+
+fn representative_project_sample() -> Option<PathBuf> {
+    let dir = project_corpus_dir();
+    if let Some(preferred) = [
+        "2024_Core_Interior.rvt",
+        "Revit_IFC5_Einhoven.rvt",
+        "MyRevitProject.rvt",
+    ]
+    .into_iter()
+    .map(|name| dir.join(name))
+    .find(|path| path.exists())
+    {
+        return Some(preferred);
+    }
+
+    let mut rvts: Vec<PathBuf> = fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rvt"))
+        .collect();
+    rvts.sort();
+    rvts.into_iter().next()
+}
+
+fn snapshot_streams(path: &Path) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut rf = RevitFile::open(path)?;
+    let mut streams = Vec::new();
+    for name in rf.stream_names() {
+        let bytes = rf.read_stream(&name)?;
+        streams.push((name, bytes));
+    }
+    Ok(streams)
+}
+
+fn mutable_project_targets(streams: &[(String, Vec<u8>)]) -> Vec<(String, Vec<u8>)> {
+    let mut candidates: Vec<(String, Vec<u8>)> = streams
+        .iter()
+        .filter(|(name, bytes)| {
+            name != BASIC_FILE_INFO && name != GLOBAL_LATEST && bytes.len() >= 64
+        })
+        .cloned()
+        .collect();
+    candidates.sort_by_key(|(name, _)| match name.as_str() {
+        PART_ATOM => 0,
+        "Contents" => 1,
+        "RevitPreview4.0" => 2,
+        _ => 3,
+    });
+    candidates
+}
+
+fn assert_patch_roundtrip(
+    src: &Path,
+    dst: &Path,
+    snapshots: &[(String, Vec<u8>)],
+    patches: &[StreamPatch],
+) -> Result<()> {
+    write_with_patches(src, dst, patches)?;
+
+    let mut written = RevitFile::open(dst)?;
+    for patch in patches {
+        let actual = written.read_stream(&patch.stream_name)?;
+        assert_eq!(
+            actual, patch.new_decompressed,
+            "{}: patched stream did not round-trip",
+            patch.stream_name
+        );
+    }
+
+    for (name, original) in snapshots {
+        if patches.iter().any(|patch| patch.stream_name == *name) {
+            continue;
+        }
+        let actual = written.read_stream(name)?;
+        assert_eq!(
+            &actual,
+            original,
+            "{}: unpatched stream changed (src={} B, dst={} B)",
+            name,
+            original.len(),
+            actual.len()
+        );
+    }
+
+    assert!(
+        guid_preserved(src, dst)?,
+        "document GUID changed after stream patch"
+    );
+    assert!(
+        history_entries_preserved(src, dst)?,
+        "document history changed after stream patch"
+    );
+
+    Ok(())
 }
 
 #[test]
@@ -78,6 +183,40 @@ fn cfb_roundtrip_delta_baseline() -> Result<()> {
     }
 
     // Cleanup.
+    let _ = fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
+#[test]
+fn cfb_missing_stream_patch_errors_without_output() -> Result<()> {
+    let src = sample_for_year(2024);
+    if !src.exists() {
+        eprintln!(
+            "skipping missing-stream patch test: corpus missing at {}",
+            src.display()
+        );
+        return Ok(());
+    }
+
+    let tmp = std::env::temp_dir().join(format!("rvt-missing-stream-{}", std::process::id()));
+    fs::create_dir_all(&tmp).unwrap();
+    let dst = tmp.join("missing-stream.rfa");
+    let patch = StreamPatch {
+        stream_name: "Does/Not/Exist".into(),
+        new_decompressed: b"no-op would be unsafe".to_vec(),
+        framing: StreamFraming::Verbatim,
+    };
+
+    let err = write_with_patches(&src, &dst, &[patch]).expect_err("missing stream must error");
+    assert!(
+        matches!(&err, Error::StreamNotFound(name) if name == "Does/Not/Exist"),
+        "expected StreamNotFound, got {err:?}"
+    );
+    assert!(
+        !dst.exists(),
+        "writer created an output file even though patch validation failed"
+    );
+
     let _ = fs::remove_dir_all(&tmp);
     Ok(())
 }
@@ -376,6 +515,82 @@ fn cfb_multi_stream_patch_preserves_rest() -> Result<()> {
             );
         }
     }
+
+    let _ = fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
+#[test]
+fn cfb_project_patch_modes_preserve_identity_and_unpatched_streams() -> Result<()> {
+    let Some(src) = representative_project_sample() else {
+        eprintln!(
+            "skipping project patch test: no representative project under {}",
+            project_corpus_dir().display()
+        );
+        return Ok(());
+    };
+
+    let snapshots = snapshot_streams(&src)?;
+    let targets = mutable_project_targets(&snapshots);
+    if targets.len() < 2 {
+        eprintln!(
+            "skipping project patch test: {} has fewer than two mutable streams",
+            src.display()
+        );
+        return Ok(());
+    }
+
+    let tmp = std::env::temp_dir().join(format!("rvt-project-patch-{}", std::process::id()));
+    fs::create_dir_all(&tmp).unwrap();
+
+    let (target_a, bytes_a) = &targets[0];
+    let (target_b, bytes_b) = &targets[1];
+
+    let identity = [StreamPatch {
+        stream_name: target_a.clone(),
+        new_decompressed: bytes_a.clone(),
+        framing: StreamFraming::Verbatim,
+    }];
+    assert_patch_roundtrip(
+        &src,
+        &tmp.join("project-identity.rvt"),
+        &snapshots,
+        &identity,
+    )?;
+
+    let mut grown = bytes_a.clone();
+    grown.extend(std::iter::repeat_n(0xA5u8, 2048));
+    let grow = [StreamPatch {
+        stream_name: target_a.clone(),
+        new_decompressed: grown,
+        framing: StreamFraming::Verbatim,
+    }];
+    assert_patch_roundtrip(&src, &tmp.join("project-grow.rvt"), &snapshots, &grow)?;
+
+    let shrunk = bytes_b[..bytes_b.len() / 2].to_vec();
+    let shrink = [StreamPatch {
+        stream_name: target_b.clone(),
+        new_decompressed: shrunk,
+        framing: StreamFraming::Verbatim,
+    }];
+    assert_patch_roundtrip(&src, &tmp.join("project-shrink.rvt"), &snapshots, &shrink)?;
+
+    let mut multi_a = bytes_a.clone();
+    multi_a.extend(std::iter::repeat_n(0x11u8, 512));
+    let multi_b = bytes_b[..bytes_b.len() / 2].to_vec();
+    let multi = [
+        StreamPatch {
+            stream_name: target_a.clone(),
+            new_decompressed: multi_a,
+            framing: StreamFraming::Verbatim,
+        },
+        StreamPatch {
+            stream_name: target_b.clone(),
+            new_decompressed: multi_b,
+            framing: StreamFraming::Verbatim,
+        },
+    ];
+    assert_patch_roundtrip(&src, &tmp.join("project-multi.rvt"), &snapshots, &multi)?;
 
     let _ = fs::remove_dir_all(&tmp);
     Ok(())

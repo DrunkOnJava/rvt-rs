@@ -64,6 +64,26 @@ The text output is intended for quick triage. The JSON output is intended for
 automation and GitHub issues. By default, paths are redacted so the report is
 safer to share.
 
+## Write Or Patch A File
+
+rvt-rs has a stream-level writer, not a semantic Revit editor.
+
+| Operation | What it means | Use when |
+|---|---|---|
+| Byte-preserving copy | Copy the CFB container without changing any stream bytes. | You need a local safety copy or a write-path smoke test. |
+| Stream patching | Replace the complete bytes of a named OLE stream, with explicit framing for raw/truncated-gzip streams. | You are building controlled tooling around known stream payloads. |
+| Semantic editing | Change a Revit concept such as wall height, room name, level elevation, or parameter value. | Not supported yet. This needs field-level encoders and Revit semantic validation. |
+
+`rvt-write` applies JSON patch manifests atomically: it validates every target
+stream name before writing, writes through a sibling temp file, verifies patched
+streams after write, and preserves unpatched streams. Corpus tests cover
+identity, grow, shrink, and multi-stream patches on family files and a real
+project fixture; GUID and history preservation are checked for project patches.
+
+```bash
+rvt-write model.rvt --patches patches.json -o patched.rvt
+```
+
 ## Export IFC
 
 The default IFC mode writes a valid IFC4 framework when possible:

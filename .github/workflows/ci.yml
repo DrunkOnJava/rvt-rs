@@ -170,6 +170,37 @@ jobs:
           expect IFCRELFILLSELEMENT 1
           expect IFCEXTRUDEDAREASOLID 7
 
+  writer-patch-corpus:
+    # M9-01: stream-level writer coverage for real family + project
+    # fixtures. Keeps grow/shrink/multi-stream/missing-stream cases
+    # from silently regressing while semantic editing remains out of
+    # scope.
+    name: Writer patch corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Fetch family corpus
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
+          lfs: true
+      - name: Fetch project corpus
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          key: writer-patch-corpus
+      - name: Run stream patch corpus tests
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: cargo test --release --test cfb_roundtrip_delta -- --nocapture
+
   ifcopenshell-validate:
     # IFC-41: load the committed synthetic-project.ifc fixture in
     # IfcOpenShell and assert it opens without errors, carries the
