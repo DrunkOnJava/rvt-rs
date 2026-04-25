@@ -89,7 +89,7 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 # `html_reports` renders per-run HTML + SVG so CI artefacts are
 # browsable. Version pinned to the 0.5 line (MSRV-compatible with
 # our 1.85 floor).
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports"] }
 
 # Seven shipped binaries. All depend on the `rvt` library crate.
 
