@@ -332,13 +332,26 @@ def test_declared_element_ids_are_sorted_and_unique(sample_2024):
 
 def test_rvt_to_ifc_matches_write_ifc_method(sample_2024):
     # The free function `rvt_to_ifc(path)` should be equivalent
-    # (up to the timestamp in FILE_NAME, which we strip before
-    # comparing).
+    # up to wall-clock metadata injected independently by each export.
     import re
+
     p = sample_for_year(2024)
     via_fn = rvt.rvt_to_ifc(str(p))
     via_method = sample_2024.write_ifc()
-    norm = lambda s: re.sub(r"FILE_NAME\([^)]*\);", "FILE_NAME(...);", s)
+
+    def norm(s):
+        s = re.sub(
+            r"^(FILE_NAME\('[^']*',)'[^']*'(,.*\);)$",
+            r"\g<1>'<timestamp>'\g<2>",
+            s,
+            flags=re.MULTILINE,
+        )
+        return re.sub(
+            r"(IFCOWNERHISTORY\([^;\n]*,)\d+(\);)",
+            r"\g<1><timestamp>\g<2>",
+            s,
+        )
+
     assert norm(via_fn) == norm(via_method)
 
 
