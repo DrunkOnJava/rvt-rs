@@ -25,7 +25,8 @@ mod common;
 
 use common::{ALL_YEARS, sample_for_year, samples_dir};
 use rvt::ifc::{
-    DiagnosticRvtDocExporter, Exporter, RvtDocExporter, entities::IfcEntity, write_step,
+    DiagnosticRvtDocExporter, ExportQualityMode, Exporter, RvtDocExporter, entities::IfcEntity,
+    write_step,
 };
 use rvt::{Result, RevitFile, walker};
 
@@ -160,6 +161,39 @@ fn export_diagnostics_sidecar_reports_default_ifc_readiness() -> Result<()> {
     assert!(json["exported"].is_object());
     assert!(json["warnings"].is_array());
     assert!(json["confidence"].is_object());
+
+    Ok(())
+}
+
+#[test]
+fn export_quality_modes_reject_incomplete_outputs() -> Result<()> {
+    if !corpus_available() {
+        eprintln!(
+            "skipping export quality mode assertion: family corpus missing at {}",
+            samples_dir().display()
+        );
+        return Ok(());
+    }
+
+    let mut rf = RevitFile::open(sample_for_year(2024))?;
+    let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+
+    ExportQualityMode::Scaffold
+        .validate(&result.diagnostics)
+        .expect("scaffold mode should preserve historical IFC output");
+    let strict_err = ExportQualityMode::Strict
+        .validate(&result.diagnostics)
+        .expect_err("strict mode must reject scaffold-only output");
+    assert_eq!(strict_err.mode, ExportQualityMode::Strict);
+    assert!(
+        strict_err
+            .reason
+            .contains("no validated typed IFC elements")
+            || strict_err
+                .reason
+                .contains("no exported building element has geometry"),
+        "strict error should identify missing model data: {strict_err}"
+    );
 
     Ok(())
 }

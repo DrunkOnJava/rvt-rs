@@ -35,6 +35,7 @@ const scheduleEl = $('schedule-summary');
 const exportGlbBtn = $('export-glb') as HTMLButtonElement;
 const exportIfcBtn = $('export-ifc') as HTMLButtonElement;
 const exportSvgBtn = $('export-svg') as HTMLButtonElement;
+const exportQualityEl = $('export-quality');
 
 // ---------- Three.js scene ----------
 const scene = new THREE.Scene();
@@ -126,12 +127,27 @@ interface SceneNode {
   entity_index: number | null;
   children: SceneNode[];
 }
+interface ExportDiagnostics {
+  confidence?: {
+    level?: string;
+    score?: number;
+    has_typed_elements?: boolean;
+    has_geometry?: boolean;
+    warning_count?: number;
+  };
+  exported?: {
+    building_elements?: number;
+    building_elements_with_geometry?: number;
+  };
+  warnings?: string[];
+}
 
 let model: IfcModel | null = null;
 let sceneGraph: SceneNode | null = null;
 let distinctTypes: string[] = [];
 let lastGlb: Uint8Array | null = null;
 let lastFileStem = 'model';
+let currentDiagnostics: ExportDiagnostics | null = null;
 const hiddenTypes = new Set<string>();
 
 // ---------- Load flow ----------
@@ -147,7 +163,15 @@ async function loadBytes(file: File): Promise<void> {
           type: 'summary';
           summary: { version: number; build?: string; guid?: string; class_name_count?: number };
         }
-      | { type: 'ready'; model: IfcModel; scene: SceneNode; types: string[]; glb: Uint8Array; schedule: unknown }
+      | {
+          type: 'ready';
+          model: IfcModel;
+          scene: SceneNode;
+          types: string[];
+          glb: Uint8Array;
+          schedule: unknown;
+          diagnostics: ExportDiagnostics;
+        }
       | { type: 'error'; message: string };
     if (msg.type === 'progress') {
       setStatus(msg.step);
@@ -178,11 +202,13 @@ async function loadBytes(file: File): Promise<void> {
     sceneGraph = msg.scene;
     distinctTypes = msg.types;
     lastGlb = msg.glb;
+    currentDiagnostics = msg.diagnostics;
     lastFileStem = file.name.replace(/\.(rvt|rfa|rte|rft)$/i, '');
     renderScene(msg.glb);
     renderTree();
     renderCategories();
     renderScheduleSummary(msg.schedule);
+    renderExportQuality(msg.diagnostics);
     fileMetaEl.textContent = `${file.name} · ${formatBytes(file.size)} · ${countEntities(msg.scene)} entities`;
     dropzone.classList.add('hidden');
     exportGlbBtn.disabled = false;
@@ -325,6 +351,52 @@ function renderScheduleSummary(schedule: unknown): void {
   scheduleEl.textContent = `${s.rows.length} scheduled elements`;
 }
 
+function renderExportQuality(diagnostics: ExportDiagnostics): void {
+  const level = diagnostics.confidence?.level ?? 'unknown';
+  const label = exportQualityLabel(level);
+  const score = diagnostics.confidence?.score;
+  const suffix = typeof score === 'number' ? ` · ${Math.round(score * 100)}%` : '';
+  exportQualityEl.textContent = `${label}${suffix}`;
+  exportQualityEl.className = `quality-pill ${exportQualityClass(level)}`;
+
+  const elements = diagnostics.exported?.building_elements ?? 0;
+  const geometry = diagnostics.exported?.building_elements_with_geometry ?? 0;
+  const warnings = diagnostics.confidence?.warning_count ?? diagnostics.warnings?.length ?? 0;
+  exportIfcBtn.title = `Download as IFC4 STEP · ${label} · ${elements} elements · ${geometry} with geometry · ${warnings} warnings`;
+}
+
+function exportQualityLabel(level: string): string {
+  switch (level) {
+    case 'scaffold':
+      return 'Scaffold';
+    case 'typed_no_geometry':
+      return 'Typed';
+    case 'geometry':
+      return 'Geometry';
+    case 'diagnostic_partial':
+      return 'Diagnostic';
+    case 'proxy_only':
+      return 'Proxy';
+    default:
+      return 'Unknown';
+  }
+}
+
+function exportQualityClass(level: string): string {
+  switch (level) {
+    case 'geometry':
+      return 'geometry';
+    case 'typed_no_geometry':
+      return 'typed';
+    case 'diagnostic_partial':
+    case 'proxy_only':
+      return 'diagnostic';
+    case 'scaffold':
+    default:
+      return 'scaffold';
+  }
+}
+
 function countEntities(node: SceneNode): number {
   let n = node.entity_index !== null ? 1 : 0;
   for (const c of node.children) n += countEntities(c);
@@ -395,7 +467,10 @@ exportIfcBtn.addEventListener('click', () => {
   // for the sample-family-sized models we've seen. If this ever blocks
   // the main thread on big projects, move it into worker.ts.
   void (async () => {
-    setStatus('rendering IFC STEP…');
+    const quality = currentDiagnostics
+      ? exportQualityLabel(currentDiagnostics.confidence?.level ?? 'unknown').toLowerCase()
+      : 'unknown';
+    setStatus(`rendering IFC STEP · ${quality}`);
     try {
       const { modelToIfcStep } = await import('../pkg/rvt.js');
       const text = modelToIfcStep(model as unknown as object);

@@ -12,7 +12,7 @@
  */
 
 import init, {
-  openRvtBytes,
+  openRvtBytesWithDiagnostics,
   buildSceneGraph,
   modelToGlb,
   distinctIfcTypes,
@@ -50,7 +50,11 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     send({ type: 'summary', summary: quickSummary(msg.bytes) });
 
     send({ type: 'progress', step: 'parsing container' });
-    const model = openRvtBytes(msg.bytes);
+    const exportResult = openRvtBytesWithDiagnostics(msg.bytes) as {
+      model: unknown;
+      diagnostics: unknown;
+    };
+    const model = exportResult.model;
 
     send({ type: 'progress', step: 'building scene graph' });
     const scene = buildSceneGraph(model);
@@ -63,7 +67,15 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     const schedule = buildSchedule(model);
 
     send(
-      { type: 'ready', model, scene, types, glb, schedule },
+      {
+        type: 'ready',
+        model,
+        scene,
+        types,
+        glb,
+        schedule,
+        diagnostics: exportResult.diagnostics,
+      },
       // Cast for lib.dom.d.ts variants that parameterise
       // ArrayBufferView over ArrayBufferLike: the underlying
       // ArrayBuffer is a Transferable in every runtime we target.

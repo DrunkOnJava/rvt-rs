@@ -273,6 +273,148 @@ pub struct ExportConfidenceSummary {
     pub warning_count: usize,
 }
 
+/// User-facing export quality requirement.
+///
+/// These modes do not change how bytes are decoded; they define how
+/// much recovered model data a caller requires before accepting the
+/// generated IFC. `Scaffold` is intentionally permissive and preserves
+/// the historical `rvt-ifc` behavior. Stronger modes fail loudly instead
+/// of writing an IFC that looks more complete than it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExportQualityMode {
+    Scaffold,
+    TypedNoGeometry,
+    Geometry,
+    Strict,
+}
+
+impl ExportQualityMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Scaffold => "scaffold",
+            Self::TypedNoGeometry => "typed-no-geometry",
+            Self::Geometry => "geometry",
+            Self::Strict => "strict",
+        }
+    }
+
+    pub fn parse(value: &str) -> std::result::Result<Self, ExportQualityModeParseError> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "scaffold" => Ok(Self::Scaffold),
+            "typed-no-geometry" | "typed_no_geometry" => Ok(Self::TypedNoGeometry),
+            "geometry" => Ok(Self::Geometry),
+            "strict" => Ok(Self::Strict),
+            _ => Err(ExportQualityModeParseError {
+                value: value.to_string(),
+            }),
+        }
+    }
+
+    pub fn validate(
+        self,
+        diagnostics: &ExportDiagnostics,
+    ) -> std::result::Result<(), ExportQualityValidationError> {
+        let mut failures = Vec::new();
+
+        match self {
+            Self::Scaffold => {}
+            Self::TypedNoGeometry => {
+                require_typed_elements(diagnostics, &mut failures);
+            }
+            Self::Geometry => {
+                require_typed_elements(diagnostics, &mut failures);
+                require_geometry(diagnostics, &mut failures);
+            }
+            Self::Strict => {
+                require_typed_elements(diagnostics, &mut failures);
+                require_geometry(diagnostics, &mut failures);
+                if !diagnostics.confidence.has_project_metadata {
+                    failures.push("no project metadata was recovered".to_string());
+                }
+                if diagnostics.exported.unit_assignment_count == 0 {
+                    failures.push("no Revit unit assignment was recovered".to_string());
+                }
+                if diagnostics.exported.storey_count == 0 {
+                    failures.push("no Revit level/storey data was recovered".to_string());
+                }
+                if !diagnostics.unsupported_features.is_empty() {
+                    failures.push(format!(
+                        "unsupported exporter features remain: {}",
+                        diagnostics.unsupported_features.join(", ")
+                    ));
+                }
+                if !diagnostics.warnings.is_empty() {
+                    failures.push(format!(
+                        "{} export warning(s) remain",
+                        diagnostics.warnings.len()
+                    ));
+                }
+            }
+        }
+
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(ExportQualityValidationError {
+                mode: self,
+                reason: failures.join("; "),
+                confidence_level: diagnostics.confidence.level.clone(),
+            })
+        }
+    }
+}
+
+impl std::fmt::Display for ExportQualityMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ExportQualityMode {
+    type Err = ExportQualityModeParseError;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+#[error(
+    "unknown IFC export mode `{value}`; expected scaffold, typed-no-geometry, geometry, or strict"
+)]
+pub struct ExportQualityModeParseError {
+    pub value: String,
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+#[error(
+    "IFC export mode `{mode}` cannot be satisfied: {reason} (confidence level: {confidence_level})"
+)]
+pub struct ExportQualityValidationError {
+    pub mode: ExportQualityMode,
+    pub reason: String,
+    pub confidence_level: String,
+}
+
+fn require_typed_elements(diagnostics: &ExportDiagnostics, failures: &mut Vec<String>) {
+    if !diagnostics.confidence.has_typed_elements {
+        failures.push(format!(
+            "no validated typed IFC elements were exported (building_elements={}, confidence_level={})",
+            diagnostics.exported.building_elements, diagnostics.confidence.level
+        ));
+    }
+}
+
+fn require_geometry(diagnostics: &ExportDiagnostics, failures: &mut Vec<String>) {
+    if !diagnostics.confidence.has_geometry {
+        failures.push(format!(
+            "no exported building element has geometry (building_elements_with_geometry={})",
+            diagnostics.exported.building_elements_with_geometry
+        ));
+    }
+}
+
 /// Trait every IFC exporter implements. Multiple implementations exist
 /// as we phase this up: a null exporter that returns `NotYetImplemented`
 /// for everything, a partial one that emits only project+units, and

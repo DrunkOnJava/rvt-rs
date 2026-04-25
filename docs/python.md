@@ -93,15 +93,16 @@ Every signature below is verified against
 ```python
 rvt.__version__  # str — same as the Rust crate version (Cargo.toml)
 
-rvt.rvt_to_ifc(path: str) -> str
+rvt.rvt_to_ifc(path: str, mode: str = "scaffold") -> str
 rvt.rvt_to_ifc_diagnostics(path: str) -> str
 ```
 
-`rvt_to_ifc(path)` opens the file, runs the document-level IFC4
-exporter (`ifc::RvtDocExporter`), and returns the IFC4 STEP text.
-Equivalent to `rvt.RevitFile(path).write_ifc()`. Raises `IOError`
-on open failure, `ValueError` if the file parses as CFB but the
-exporter can't build a model.
+`rvt_to_ifc(path, mode="scaffold")` opens the file, runs the
+document-level IFC4 exporter (`ifc::RvtDocExporter`), and returns the
+IFC4 STEP text. Equivalent to
+`rvt.RevitFile(path).write_ifc(mode=mode)`. Raises `IOError` on open
+failure, `ValueError` if the file parses as CFB but the exporter
+can't build a model or the requested export mode cannot be satisfied.
 
 `rvt_to_ifc_diagnostics(path)` returns the JSON diagnostics sidecar
 for the same export path. The schema matches `rvt-ifc --diagnostics`
@@ -280,13 +281,18 @@ Field kinds:
 | `bytes` | `len: int` | Raw bytes; field type not yet decoded |
 
 ```python
-write_ifc(self) -> str
+write_ifc(self, mode: str = "scaffold") -> str
 export_diagnostics_json(self) -> str
 ```
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`. This is
 document-level export: project name, description, units,
 classifications — not per-element geometry. Raises `ValueError`
 if the file can't be parsed far enough to build a model.
+
+`mode` is one of `scaffold`, `typed-no-geometry`, `geometry`, or
+`strict`. `scaffold` accepts the historical spec-valid framework
+output; stronger modes fail loudly when the recovered Revit data does
+not meet that export quality.
 
 `export_diagnostics_json()` returns the JSON diagnostics sidecar
 for the default IFC export without writing files.

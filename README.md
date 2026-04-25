@@ -217,8 +217,11 @@ cargo build --release
 # Hex-dump every decompressed stream (for Phase D work)
 ./target/release/rvt-dump my-project.rvt
 
-# IFC4 STEP export — spatial tree + elements + geometry + openings
+# IFC4 STEP export — spec-valid scaffold by default, with honest quality warnings
 ./target/release/rvt-ifc my-project.rvt -o out.ifc
+
+# Require a stronger quality gate before writing IFC
+./target/release/rvt-ifc my-project.rvt -o out.ifc --mode strict
 
 # IFC4 export with a shareable JSON readiness/support sidecar
 ./target/release/rvt-ifc my-project.rvt -o out.ifc --diagnostics out.diagnostics.json

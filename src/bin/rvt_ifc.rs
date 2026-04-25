@@ -7,12 +7,35 @@
 //! (IfcOpenShell, BlenderBIM) accept — just sparse until more of the
 //! schema is walked.
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use rvt::{
     RevitFile,
-    ifc::{DiagnosticRvtDocExporter, Exporter, PlaceholderExporter, RvtDocExporter, write_step},
+    ifc::{
+        DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, PlaceholderExporter,
+        RvtDocExporter, write_step,
+    },
 };
 use std::path::PathBuf;
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+#[value(rename_all = "kebab-case")]
+enum CliExportQualityMode {
+    Scaffold,
+    TypedNoGeometry,
+    Geometry,
+    Strict,
+}
+
+impl From<CliExportQualityMode> for ExportQualityMode {
+    fn from(value: CliExportQualityMode) -> Self {
+        match value {
+            CliExportQualityMode::Scaffold => Self::Scaffold,
+            CliExportQualityMode::TypedNoGeometry => Self::TypedNoGeometry,
+            CliExportQualityMode::Geometry => Self::Geometry,
+            CliExportQualityMode::Strict => Self::Strict,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(
@@ -30,6 +53,15 @@ struct Args {
     /// Kept as `--null` for backward compatibility with earlier versions.
     #[arg(long, alias = "null", conflicts_with = "diagnostic_proxies")]
     placeholder: bool,
+    /// Require a minimum export quality before writing IFC.
+    ///
+    /// `scaffold` preserves historical behavior and accepts a valid IFC4
+    /// framework even when real elements are missing. `typed-no-geometry`
+    /// requires validated typed IFC elements. `geometry` requires at least
+    /// one exported element with geometry. `strict` also requires recovered
+    /// project metadata, units, levels, and zero export warnings.
+    #[arg(long, value_enum, default_value = "scaffold")]
+    mode: CliExportQualityMode,
     /// Include low-confidence schema-scan candidates as
     /// IFCBUILDINGELEMENTPROXY entities with diagnostic provenance.
     ///
@@ -49,51 +81,42 @@ struct Args {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut rf = RevitFile::open(&args.input)?;
+    let quality_mode = ExportQualityMode::from(args.mode);
 
-    let (model, diagnostics) = if args.placeholder {
-        if args.diagnostics.is_some() {
-            let result = PlaceholderExporter.export_with_diagnostics(&mut rf)?;
-            (result.model, Some(result.diagnostics))
-        } else {
-            (PlaceholderExporter.export(&mut rf)?, None)
-        }
+    let result = if args.placeholder {
+        PlaceholderExporter.export_with_diagnostics(&mut rf)?
     } else if args.diagnostic_proxies {
-        if args.diagnostics.is_some() {
-            let result = DiagnosticRvtDocExporter.export_with_diagnostics(&mut rf)?;
-            (result.model, Some(result.diagnostics))
-        } else {
-            (DiagnosticRvtDocExporter.export(&mut rf)?, None)
-        }
+        DiagnosticRvtDocExporter.export_with_diagnostics(&mut rf)?
     } else {
-        if args.diagnostics.is_some() {
-            let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
-            (result.model, Some(result.diagnostics))
-        } else {
-            (RvtDocExporter.export(&mut rf)?, None)
-        }
+        RvtDocExporter.export_with_diagnostics(&mut rf)?
     };
-
-    let step = write_step(&model);
+    let model = result.model;
+    let diagnostics = result.diagnostics;
 
     let out_path = args.output.clone().unwrap_or_else(|| {
         let mut p = args.input.clone();
         p.set_extension("ifc");
         p
     });
+
+    if let Err(err) = quality_mode.validate(&diagnostics) {
+        if let Some(diagnostics_path) = &args.diagnostics {
+            write_diagnostics_sidecar(diagnostics_path, &diagnostics)?;
+        }
+        anyhow::bail!("{err}");
+    }
+
+    warn_about_export_quality(&diagnostics);
+
+    let step = write_step(&model);
     std::fs::write(&out_path, step.as_bytes())?;
     eprintln!(
         "rvt-ifc: wrote {} bytes to {}",
         step.len(),
         out_path.display()
     );
-    if let (Some(diagnostics_path), Some(diagnostics)) = (&args.diagnostics, diagnostics) {
-        let json = serde_json::to_vec_pretty(&diagnostics)?;
-        std::fs::write(diagnostics_path, &json)?;
-        eprintln!(
-            "rvt-ifc: wrote diagnostics {} bytes to {}",
-            json.len(),
-            diagnostics_path.display()
-        );
+    if let Some(diagnostics_path) = &args.diagnostics {
+        write_diagnostics_sidecar(diagnostics_path, &diagnostics)?;
     }
     if model.project_name.is_none() {
         eprintln!(
@@ -102,4 +125,27 @@ fn main() -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+fn write_diagnostics_sidecar(
+    path: &std::path::Path,
+    diagnostics: &ExportDiagnostics,
+) -> anyhow::Result<()> {
+    let json = serde_json::to_vec_pretty(diagnostics)?;
+    std::fs::write(path, &json)?;
+    eprintln!(
+        "rvt-ifc: wrote diagnostics {} bytes to {}",
+        json.len(),
+        path.display()
+    );
+    Ok(())
+}
+
+fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
+    if diagnostics.confidence.level == "scaffold" {
+        eprintln!(
+            "warning: export confidence is scaffold-only; no validated building elements were exported. \
+             Re-run with `--diagnostics <path>` for a shareable readiness report."
+        );
+    }
 }

@@ -42,10 +42,11 @@ User drops .rvt
 main.ts ── postMessage ──▶ worker.ts
                                 │
                                 ├── init wasm (pkg/rvt.js)
-                                ├── openRvtBytes()       → IfcModel JSON
-                                ├── buildSceneGraph()    → SceneNode JSON
-                                ├── modelToGlb()         → Uint8Array
-                                └── buildSchedule()      → Schedule JSON
+                                ├── openRvtBytesWithDiagnostics()
+                                │                         → IfcModel + diagnostics JSON
+                                ├── buildSceneGraph()     → SceneNode JSON
+                                ├── modelToGlb()          → Uint8Array
+                                └── buildSchedule()       → Schedule JSON
                                 │
                           postMessage back
                                 │
@@ -54,6 +55,7 @@ main.ts
   ├── Three.js scene + OrbitControls + GLTFLoader
   ├── scene tree panel
   ├── category toggles
+  ├── export-quality label
   ├── element-info panel (raycast picking)
   └── status line
 ```
