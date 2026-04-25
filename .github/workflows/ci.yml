@@ -463,6 +463,23 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  viewer-dependencies:
+    name: viewer dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: viewer/package-lock.json
+      - name: Install viewer dependencies
+        working-directory: viewer
+        run: npm ci
+      - name: Audit viewer npm dependencies
+        working-directory: viewer
+        run: npm audit --audit-level=high
+
   pii-guard:
     name: PII guard
     runs-on: ubuntu-latest
