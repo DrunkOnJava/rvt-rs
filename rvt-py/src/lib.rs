@@ -432,6 +432,17 @@ impl PyRevitFile {
         Ok(ifc::write_step(&model))
     }
 
+    /// Produce the JSON diagnostics sidecar for the default IFC export.
+    ///
+    /// The returned string matches `rvt-ifc --diagnostics` and is intended
+    /// for bug reports, support bundles, and automated readiness checks.
+    fn export_diagnostics_json(&mut self) -> PyResult<String> {
+        let result = ifc::RvtDocExporter
+            .export_with_diagnostics(&mut self.inner)
+            .map_err(to_py_val)?;
+        serde_json::to_string(&result.diagnostics).map_err(to_py_val)
+    }
+
     /// Parse Global/ElemTable header. Returns a dict with
     /// `{element_count, record_count, header_flag, decompressed_bytes}`.
     /// See `docs/elem-table-record-layout-2026-04-21.md`.
@@ -490,6 +501,17 @@ fn rvt_to_ifc(path: &str) -> PyResult<String> {
     Ok(ifc::write_step(&model))
 }
 
+/// One-shot helper: open a Revit file, run the default IFC exporter,
+/// and return the JSON diagnostics sidecar.
+#[pyfunction]
+fn rvt_to_ifc_diagnostics(path: &str) -> PyResult<String> {
+    let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
+    let result = ifc::RvtDocExporter
+        .export_with_diagnostics(&mut rf)
+        .map_err(to_py_val)?;
+    serde_json::to_string(&result.diagnostics).map_err(to_py_val)
+}
+
 /// Compiled Python submodule named `_rvt`. Sits under the
 /// pure-Python `rvt` package in `python/`, whose `__init__.py`
 /// re-exports everything here. That layout ships type stubs
@@ -499,6 +521,7 @@ fn rvt_to_ifc(path: &str) -> PyResult<String> {
 fn _rvt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRevitFile>()?;
     m.add_function(wrap_pyfunction!(rvt_to_ifc, m)?)?;
+    m.add_function(wrap_pyfunction!(rvt_to_ifc_diagnostics, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

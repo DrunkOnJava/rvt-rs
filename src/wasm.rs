@@ -51,6 +51,19 @@ pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&model).map_err(err_str)
 }
 
+/// Open an RVT / RFA byte slice and return `{ model, diagnostics }`.
+///
+/// The diagnostics payload matches `rvt-ifc --diagnostics` and is
+/// intended for viewer bug reports and export-readiness messaging.
+#[wasm_bindgen(js_name = openRvtBytesWithDiagnostics)]
+pub fn open_rvt_bytes_with_diagnostics(bytes: &[u8]) -> Result<JsValue, JsValue> {
+    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
+    let result = RvtDocExporter
+        .export_with_diagnostics(&mut rf)
+        .map_err(err_str)?;
+    serde_wasm_bindgen::to_value(&result).map_err(err_str)
+}
+
 /// Quick summary — reads only the cheap metadata (BasicFileInfo +
 /// PartAtom + stream inventory) and returns instantly even for
 /// multi-hundred-megabyte RFAs. Used by the viewer for the

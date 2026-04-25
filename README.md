@@ -220,6 +220,9 @@ cargo build --release
 # IFC4 STEP export — spatial tree + elements + geometry + openings
 ./target/release/rvt-ifc my-project.rvt -o out.ifc
 
+# IFC4 export with a shareable JSON readiness/support sidecar
+./target/release/rvt-ifc my-project.rvt -o out.ifc --diagnostics out.diagnostics.json
+
 # Diagnostic IFC export — include low-confidence proxy candidates with provenance
 ./target/release/rvt-ifc my-project.rvt -o diagnostic.ifc --diagnostic-proxies
 
