@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/export-diagnostics.schema.json",
+  "title": "rvt IFC export diagnostics JSON",
+  "description": "Stable diagnostics sidecar emitted by rvt-ifc --diagnostics and Python export diagnostics helpers.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "mode",
+    "input",
+    "decoded",
+    "exported",
+    "skipped",
+    "unsupported_features",
+    "warnings",
+    "confidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "placeholder",
+        "default",
+        "diagnostic_proxies"
+      ]
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "revit_version",
+        "build",
+        "original_path",
+        "project_name",
+        "stream_count",
+        "has_basic_file_info",
+        "has_part_atom",
+        "has_formats_latest",
+        "has_global_latest"
+      ],
+      "properties": {
+        "revit_version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "build": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stream_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "has_basic_file_info": {
+          "type": "boolean"
+        },
+        "has_part_atom": {
+          "type": "boolean"
+        },
+        "has_formats_latest": {
+          "type": "boolean"
+        },
+        "has_global_latest": {
+          "type": "boolean"
+        }
+      }
+    },
+    "decoded": {
+      "type": "object",
+      "required": [
+        "production_walker_elements",
+        "diagnostic_proxy_candidates",
+        "arcwall_records",
+        "class_counts"
+      ],
+      "properties": {
+        "production_walker_elements": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "diagnostic_proxy_candidates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "arcwall_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "class_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "exported": {
+      "type": "object",
+      "required": [
+        "total_entities",
+        "building_elements",
+        "building_elements_with_geometry",
+        "by_ifc_type",
+        "classification_count",
+        "unit_assignment_count",
+        "material_count",
+        "storey_count"
+      ],
+      "properties": {
+        "total_entities": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "building_elements": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "building_elements_with_geometry": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_ifc_type": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "classification_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unit_assignment_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "material_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "storey_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "reason",
+          "count",
+          "classes",
+          "sample_names"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "classes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "sample_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "unsupported_features": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "required": [
+        "level",
+        "score",
+        "has_project_metadata",
+        "has_typed_elements",
+        "has_geometry",
+        "has_diagnostic_proxies",
+        "warning_count"
+      ],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "scaffold",
+            "typed_no_geometry",
+            "geometry",
+            "diagnostic_partial",
+            "proxy_only"
+          ]
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "has_project_metadata": {
+          "type": "boolean"
+        },
+        "has_typed_elements": {
+          "type": "boolean"
+        },
+        "has_geometry": {
+          "type": "boolean"
+        },
+        "has_diagnostic_proxies": {
+          "type": "boolean"
+        },
+        "warning_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

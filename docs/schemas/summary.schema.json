@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/summary.schema.json",
+  "title": "rvt summary JSON",
+  "description": "Stable file summary emitted by rvt-info -f json and exposed by reader summaries.",
+  "type": "object",
+  "required": [
+    "file_size",
+    "streams",
+    "version",
+    "class_name_count",
+    "class_name_sample"
+  ],
+  "properties": {
+    "file_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "streams": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "build": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "original_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "guid": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "locale": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "partition_stream": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "partatom": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updated": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "taxonomies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "term",
+              "label"
+            ],
+            "properties": {
+              "term": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "term",
+              "scheme"
+            ],
+            "properties": {
+              "term": {
+                "type": "string"
+              },
+              "scheme": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "omniclass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw_xml": {
+          "type": "string"
+        }
+      }
+    },
+    "class_name_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "class_name_sample": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

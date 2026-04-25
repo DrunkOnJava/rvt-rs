@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/element-records.schema.json",
+  "title": "rvt decoded element records JSON",
+  "description": "Decoded ADocument field records emitted by rvt-doc --json and mirrored by Python read_adocument().",
+  "type": "object",
+  "required": [
+    "path",
+    "version",
+    "adocument_entry_offset",
+    "fields",
+    "notes"
+  ],
+  "properties": {
+    "path": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "adocument_entry_offset": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pointer",
+              "element_id",
+              "ref_container",
+              "integer",
+              "float",
+              "bool",
+              "guid",
+              "string",
+              "vector",
+              "bytes"
+            ]
+          },
+          "value": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

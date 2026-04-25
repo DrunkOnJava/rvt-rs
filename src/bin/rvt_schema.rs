@@ -36,6 +36,10 @@ struct Cli {
     /// Show the top N classes by field count.
     #[arg(long = "top")]
     top: Option<usize>,
+
+    /// Emit derived schema-quality counters instead of the full schema table.
+    #[arg(long = "diagnostics")]
+    diagnostics: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -58,6 +62,37 @@ fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let mut rf = RevitFile::open(&cli.file)?;
     let schema = rf.schema()?;
+
+    if cli.diagnostics {
+        let diagnostics = schema.diagnostics();
+        match cli.format {
+            Format::Json => {
+                println!("{}", serde_json::to_string_pretty(&diagnostics)?);
+            }
+            Format::Text => {
+                println!("Schema diagnostics");
+                println!("  classes: {}", diagnostics.class_count);
+                println!("  parsed fields: {}", diagnostics.parsed_field_count);
+                println!(
+                    "  declared fields: {}",
+                    diagnostics.declared_field_count_sum
+                );
+                println!(
+                    "  field-count mismatches: {}",
+                    diagnostics.field_count_mismatches
+                );
+                println!("  tagged classes: {}", diagnostics.tagged_class_count);
+                println!(
+                    "  parent-only classes: {}",
+                    diagnostics.parent_only_class_count
+                );
+                println!("  ancestor tags: {}", diagnostics.ancestor_tag_count);
+                println!("  skipped records: {}", diagnostics.skipped_records);
+                println!("  C++ type signatures: {}", diagnostics.cpp_type_count);
+            }
+        }
+        return Ok(());
+    }
 
     let mut classes: Vec<_> = schema.classes.iter().collect();
     if let Some(pat) = &cli.grep {

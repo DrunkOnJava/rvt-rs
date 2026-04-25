@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/schema-diagnostics.schema.json",
+  "title": "rvt schema diagnostics JSON",
+  "description": "Derived quality counters for a parsed Formats/Latest schema table.",
+  "type": "object",
+  "required": [
+    "class_count",
+    "parsed_field_count",
+    "declared_field_count_sum",
+    "field_count_mismatches",
+    "tagged_class_count",
+    "parent_only_class_count",
+    "ancestor_tag_count",
+    "skipped_records",
+    "cpp_type_count"
+  ],
+  "properties": {
+    "class_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "parsed_field_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "declared_field_count_sum": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "field_count_mismatches": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tagged_class_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "parent_only_class_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ancestor_tag_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "skipped_records": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cpp_type_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

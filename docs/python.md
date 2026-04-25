@@ -109,7 +109,9 @@ can't build a model or the requested export mode cannot be satisfied.
 
 `rvt_to_ifc_diagnostics(path)` returns the JSON diagnostics sidecar
 for the same export path. The schema matches `rvt-ifc --diagnostics`
-and is documented in [`docs/export-diagnostics.md`](export-diagnostics.md).
+and is documented in [`docs/export-diagnostics.md`](export-diagnostics.md);
+the machine-readable contract is
+[`docs/schemas/export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json).
 The terms used in those diagnostics are defined in
 [`docs/diagnostic-semantics.md`](diagnostic-semantics.md).
 
@@ -260,6 +262,11 @@ Return shape after `json.loads`:
 Typical reference-corpus schema is ~395 classes / ~13,570 fields
 — the JSON string is on the order of 1-2 MB. For counts only,
 prefer `schema_summary()`.
+
+Stable JSON schemas for summary dictionaries, schema diagnostics,
+decoded ADocument records, export diagnostics, and corpus reports are
+checked in under [`docs/schemas/`](schemas/). Use those files for
+automation contracts instead of scraping prose examples.
 
 ```python
 read_adocument(self) -> dict | None

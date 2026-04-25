@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/corpus-report.schema.json",
+  "title": "rvt corpus report JSON",
+  "description": "Corpus-wide byte-delta report emitted by rvt-corpus -f json.",
+  "type": "object",
+  "required": [
+    "samples",
+    "streams",
+    "partition_mapping"
+  ],
+  "properties": {
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "streams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "samples",
+          "raw_size_min",
+          "raw_size_max",
+          "decomp_size_min",
+          "decomp_size_max",
+          "counts",
+          "invariant_runs",
+          "aligned_len",
+          "used_decompressed"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "samples": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "raw_size_min": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "raw_size_max": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "decomp_size_min": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "decomp_size_max": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "invariant_runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "offset",
+                "length",
+                "hex_preview"
+              ],
+              "properties": {
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "length": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "hex_preview": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "aligned_len": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "used_decompressed": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "partition_mapping": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0
+      }
+    }
+  }
+}
