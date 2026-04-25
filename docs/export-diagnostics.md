@@ -8,6 +8,9 @@ WASM via `openRvtBytesWithDiagnostics(bytes)`.
 The sidecar is meant for non-technical support, bug reports, and automated
 export-readiness checks. It does not contain raw model bytes.
 
+Terminology used by this file, `rvt-inspect`, Python, and the browser viewer is
+defined in [Diagnostic Semantics](diagnostic-semantics.md).
+
 ## CLI
 
 ```bash
@@ -24,6 +27,8 @@ rvt-ifc model.rvt -o model.ifc --mode strict --diagnostics model.diagnostics.jso
 Supported quality gates are `scaffold`, `typed-no-geometry`, `geometry`, and
 `strict`. `strict` fails before writing IFC when required model data is missing;
 when `--diagnostics` is present, the sidecar is still written for triage.
+`scaffold` is an inspection/export-envelope success, not proof that Revit model
+elements were converted.
 
 Diagnostic proxy mode can also write the sidecar:
 

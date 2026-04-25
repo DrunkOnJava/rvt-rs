@@ -107,6 +107,8 @@ can't build a model or the requested export mode cannot be satisfied.
 `rvt_to_ifc_diagnostics(path)` returns the JSON diagnostics sidecar
 for the same export path. The schema matches `rvt-ifc --diagnostics`
 and is documented in [`docs/export-diagnostics.md`](export-diagnostics.md).
+The terms used in those diagnostics are defined in
+[`docs/diagnostic-semantics.md`](diagnostic-semantics.md).
 
 ### `rvt.RevitFile`
 
@@ -293,6 +295,12 @@ if the file can't be parsed far enough to build a model.
 `strict`. `scaffold` accepts the historical spec-valid framework
 output; stronger modes fail loudly when the recovered Revit data does
 not meet that export quality.
+
+`scaffold` means the export envelope succeeded. It can still be a partial
+conversion failure if `export_diagnostics_json()` reports zero validated
+building elements or zero geometry elements. Use `mode="strict"` in automation
+when an incomplete real-model export should raise `ValueError` instead of
+returning IFC text.
 
 `export_diagnostics_json()` returns the JSON diagnostics sidecar
 for the default IFC export without writing files.
