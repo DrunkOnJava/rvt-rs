@@ -30,7 +30,7 @@ conversion.
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
 | Decode typed elements from real project files | Research | Production iteration is conservative; diagnostic scans still show parent/proxy candidates, not dependable typed walls/floors/doors | Full model conversion is not ready. |
 | Typed decoder structs | Partial | `elements::all_decoders()` has 80 registered decoders | Useful as library building blocks and synthesized-fixture tests. |
-| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell | Correct writer path exists, but real-file inputs are incomplete. |
+| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; diagnostic mode can include low-confidence proxy provenance | Correct writer path exists, but real-file inputs are incomplete. |
 | Browser viewer | Partial | GitHub Pages deployment and no-network WASM import gate | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Byte-preserving patch path tests | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |

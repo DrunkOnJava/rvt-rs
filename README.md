@@ -46,7 +46,7 @@ Rust 2024 edition (MSRV 1.85). **Fourteen CLIs ship** (`rvt-analyze`, `rvt-info`
 |---|---|---|
 | Element extraction from real `.rvt` project files | not functional | Production `iter_elements` is conservative and does not return low-confidence parent-class candidates. Diagnostic scans still find only `HostObjAttr`-style candidates on `Global/Latest`; real Walls/Floors/Doors require partition-stream decoders. See `reports/element-framing/RE-01-synthesis.md`. |
 | 80 per-class decoders wired into walker | not wired | `elements::all_decoders()` is a struct registry; `iter_elements` calls the generic `decode_instance` instead. Even if the scanner found a Wall, it would not use `WallDecoder`. Tracked as DEC-01..05. |
-| IFC4 typed elements from real `.rvt` | experimental | `RvtDocExporter::export` emits framework entities and version-gated 2023 ArcWall `IFCWALL` records when evidence is strong enough. Generic `HostObjAttr` proxy emission is suppressed by default. Doors/floors/windows and geometry remain unproven on real project files. |
+| IFC4 typed elements from real `.rvt` | experimental | `RvtDocExporter::export` emits framework entities and version-gated 2023 ArcWall `IFCWALL` records when evidence is strong enough. Generic `HostObjAttr` proxy emission is suppressed by default; diagnostic export can include those candidates with provenance. Doors/floors/windows and geometry remain unproven on real project files. |
 | Community corpus parse verification | not executed | `tools/fetch-corpus.sh` is committed but never run. The 41 candidate files across 7 MIT/Apache repos have not been checked against `project_corpus_smoke`. License verification is solid; parse compatibility is unknown. Tracked as Q01-01..04. |
 | Partition-stream wire format | not reverse-engineered | 12 RE probes in `examples/probe_*` tested five hypotheses; all refuted. `Global/ContentDocuments` identified as a structured index but its id space does not match `ElemTable`'s (6/30705 overlap). Blocker on element extraction. |
 | Scalar-Container wire format on real bytes | assumption only | L5B-09 fix assumes Vector-equivalent layout for kinds 0x01/0x02/0x04/0x05/0x07/0x0b/0x0d. Round-trip tests use synthesized bytes; no real-.rvt round-trip has been exercised. Tracked as WF-01..03. |
@@ -219,6 +219,9 @@ cargo build --release
 
 # IFC4 STEP export — spatial tree + elements + geometry + openings
 ./target/release/rvt-ifc my-project.rvt -o out.ifc
+
+# Diagnostic IFC export — include low-confidence proxy candidates with provenance
+./target/release/rvt-ifc my-project.rvt -o diagnostic.ifc --diagnostic-proxies
 
 # glTF 2.0 binary export — loads in Three.js / Blender / any glTF viewer
 ./target/release/rvt-gltf my-project.rvt -o out.glb

@@ -10,7 +10,7 @@
 use clap::Parser;
 use rvt::{
     RevitFile,
-    ifc::{Exporter, PlaceholderExporter, RvtDocExporter, write_step},
+    ifc::{DiagnosticRvtDocExporter, Exporter, PlaceholderExporter, RvtDocExporter, write_step},
 };
 use std::path::PathBuf;
 
@@ -28,8 +28,15 @@ struct Args {
     /// Use the placeholder exporter (empty project body) instead of the
     /// document exporter. Mostly useful for testing the STEP writer.
     /// Kept as `--null` for backward compatibility with earlier versions.
-    #[arg(long, alias = "null")]
+    #[arg(long, alias = "null", conflicts_with = "diagnostic_proxies")]
     placeholder: bool,
+    /// Include low-confidence schema-scan candidates as
+    /// IFCBUILDINGELEMENTPROXY entities with diagnostic provenance.
+    ///
+    /// Default export suppresses these candidates because they are not
+    /// validated typed model elements.
+    #[arg(long, conflicts_with = "placeholder")]
+    diagnostic_proxies: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -38,6 +45,8 @@ fn main() -> anyhow::Result<()> {
 
     let model = if args.placeholder {
         PlaceholderExporter.export(&mut rf)?
+    } else if args.diagnostic_proxies {
+        DiagnosticRvtDocExporter.export(&mut rf)?
     } else {
         RvtDocExporter.export(&mut rf)?
     };
