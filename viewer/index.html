@@ -219,6 +219,79 @@
       .category-toggle input {
         margin: 0;
       }
+      .status-panel {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .status-row {
+        display: grid;
+        grid-template-columns: 10px 88px 1fr;
+        gap: 8px;
+        align-items: start;
+        font-size: 11px;
+        line-height: 1.35;
+        padding: 4px 0;
+        border-bottom: 1px solid #1a1f28;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        margin-top: 3px;
+        border-radius: 50%;
+        background: #6b7584;
+      }
+      .status-dot.ok {
+        background: #45b37a;
+      }
+      .status-dot.warn {
+        background: #d4a24c;
+      }
+      .status-dot.bad {
+        background: #cc5f5f;
+      }
+      .status-label {
+        color: #8b95a3;
+      }
+      .status-value {
+        color: #d7dce3;
+      }
+      .side-btn {
+        width: 100%;
+        margin: 4px 0 8px;
+        padding: 6px 10px;
+        background: #1a3a5f;
+        color: #d7dce3;
+        border: 1px solid #2a4a6f;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .side-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      #diagnostics-details {
+        margin-bottom: 12px;
+        font-size: 11px;
+        color: #8b95a3;
+      }
+      #diagnostics-details summary {
+        cursor: pointer;
+        color: #d7dce3;
+      }
+      #diagnostics-json {
+        max-height: 260px;
+        overflow: auto;
+        padding: 8px;
+        background: #0b0e13;
+        border: 1px solid #1d2430;
+        border-radius: 4px;
+        color: #d7dce3;
+        font-size: 10px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
     </style>
   </head>
   <body>
@@ -260,6 +333,13 @@
         <div id="status">idle</div>
       </main>
       <aside id="sidebar-right">
+        <h2>File status</h2>
+        <div class="status-panel" id="status-panel"></div>
+        <button class="side-btn" id="download-diagnostics" disabled>Download diagnostics</button>
+        <details id="diagnostics-details">
+          <summary>Diagnostics details</summary>
+          <pre id="diagnostics-json"></pre>
+        </details>
         <h2>Element info</h2>
         <div id="info">Click an element in the 3-D view.</div>
         <h2>Schedule</h2>

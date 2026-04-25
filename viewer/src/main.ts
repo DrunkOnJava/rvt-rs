@@ -32,6 +32,9 @@ const treeEl = $('tree');
 const categoriesEl = $('categories');
 const infoEl = $('info');
 const scheduleEl = $('schedule-summary');
+const statusPanelEl = $('status-panel');
+const diagnosticsJsonEl = $('diagnostics-json');
+const downloadDiagnosticsBtn = $('download-diagnostics') as HTMLButtonElement;
 const exportGlbBtn = $('export-glb') as HTMLButtonElement;
 const exportIfcBtn = $('export-ifc') as HTMLButtonElement;
 const exportSvgBtn = $('export-svg') as HTMLButtonElement;
@@ -128,6 +131,20 @@ interface SceneNode {
   children: SceneNode[];
 }
 interface ExportDiagnostics {
+  input?: {
+    revit_version?: number;
+    project_name?: string;
+    stream_count?: number;
+    has_basic_file_info?: boolean;
+    has_part_atom?: boolean;
+    has_formats_latest?: boolean;
+    has_global_latest?: boolean;
+  };
+  decoded?: {
+    production_walker_elements?: number;
+    diagnostic_proxy_candidates?: number;
+    arcwall_records?: number;
+  };
   confidence?: {
     level?: string;
     score?: number;
@@ -139,6 +156,7 @@ interface ExportDiagnostics {
     building_elements?: number;
     building_elements_with_geometry?: number;
   };
+  unsupported_features?: string[];
   warnings?: string[];
 }
 
@@ -153,6 +171,19 @@ const hiddenTypes = new Set<string>();
 // ---------- Load flow ----------
 async function loadBytes(file: File): Promise<void> {
   setStatus(`reading ${formatBytes(file.size)}…`);
+  model = null;
+  sceneGraph = null;
+  distinctTypes = [];
+  lastGlb = null;
+  currentDiagnostics = null;
+  exportGlbBtn.disabled = true;
+  exportIfcBtn.disabled = true;
+  exportSvgBtn.disabled = true;
+  downloadDiagnosticsBtn.disabled = true;
+  exportQualityEl.textContent = 'quality: pending';
+  exportQualityEl.className = 'quality-pill';
+  diagnosticsJsonEl.textContent = '';
+  renderLoadingStatusPanel(file.name);
   const bytes = new Uint8Array(await file.arrayBuffer());
 
   const w = resetWorker();
@@ -195,6 +226,7 @@ async function loadBytes(file: File): Promise<void> {
     }
     if (msg.type === 'error') {
       setStatus(`error: ${msg.message}`);
+      renderErrorStatusPanel(msg.message);
       dropzone.classList.remove('hidden');
       return;
     }
@@ -209,14 +241,48 @@ async function loadBytes(file: File): Promise<void> {
     renderCategories();
     renderScheduleSummary(msg.schedule);
     renderExportQuality(msg.diagnostics);
+    renderStatusPanel(msg.diagnostics);
     fileMetaEl.textContent = `${file.name} · ${formatBytes(file.size)} · ${countEntities(msg.scene)} entities`;
     dropzone.classList.add('hidden');
     exportGlbBtn.disabled = false;
     exportIfcBtn.disabled = false;
     exportSvgBtn.disabled = false;
+    downloadDiagnosticsBtn.disabled = false;
     setStatus(`loaded · ${msg.types.length} categories`);
   });
   w.postMessage({ type: 'parse', bytes }, [bytes.buffer]);
+}
+
+function renderEmptyStatusPanel(): void {
+  statusPanelEl.innerHTML = '';
+  statusPanelEl.appendChild(statusRow('File', 'warn', 'No file opened'));
+  statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('IFC', 'warn', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Warnings', 'ok', 'No export warnings'));
+  diagnosticsJsonEl.textContent = '';
+}
+
+function renderLoadingStatusPanel(filename: string): void {
+  statusPanelEl.innerHTML = '';
+  statusPanelEl.appendChild(statusRow('File', 'warn', `Reading ${filename}`));
+  statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Not parsed yet'));
+  statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Not decoded yet'));
+  statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Not decoded yet'));
+  statusPanelEl.appendChild(statusRow('IFC', 'warn', 'Not evaluated yet'));
+  statusPanelEl.appendChild(statusRow('Warnings', 'ok', 'No export warnings'));
+}
+
+function renderErrorStatusPanel(message: string): void {
+  statusPanelEl.innerHTML = '';
+  statusPanelEl.appendChild(statusRow('File', 'bad', 'Could not open file'));
+  statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Not parsed'));
+  statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Not decoded'));
+  statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Not decoded'));
+  statusPanelEl.appendChild(statusRow('IFC', 'warn', 'Not available'));
+  statusPanelEl.appendChild(statusRow('Warnings', 'bad', message));
+  diagnosticsJsonEl.textContent = '';
 }
 
 function renderScene(glb: Uint8Array): void {
@@ -365,6 +431,107 @@ function renderExportQuality(diagnostics: ExportDiagnostics): void {
   exportIfcBtn.title = `Download as IFC4 STEP · ${label} · ${elements} elements · ${geometry} with geometry · ${warnings} warnings`;
 }
 
+function renderStatusPanel(diagnostics: ExportDiagnostics): void {
+  statusPanelEl.innerHTML = '';
+  diagnosticsJsonEl.textContent = JSON.stringify(diagnostics, null, 2);
+
+  const input = diagnostics.input ?? {};
+  const decoded = diagnostics.decoded ?? {};
+  const exported = diagnostics.exported ?? {};
+  const confidence = diagnostics.confidence ?? {};
+  const warnings = diagnostics.warnings ?? [];
+  const unsupported = diagnostics.unsupported_features ?? [];
+  const validatedElements =
+    (decoded.production_walker_elements ?? 0) + (decoded.arcwall_records ?? 0);
+  const diagnosticCandidates = decoded.diagnostic_proxy_candidates ?? 0;
+  const geometryCount = exported.building_elements_with_geometry ?? 0;
+  const qualityLevel = confidence.level ?? 'unknown';
+
+  statusPanelEl.appendChild(
+    statusRow(
+      'File',
+      input.stream_count ? 'ok' : 'warn',
+      input.revit_version
+        ? `Opened Revit ${input.revit_version} · ${input.stream_count ?? 0} streams`
+        : `Opened · ${input.stream_count ?? 0} streams`,
+    ),
+  );
+  statusPanelEl.appendChild(
+    statusRow(
+      'Schema',
+      input.has_formats_latest && input.has_global_latest ? 'ok' : 'warn',
+      input.has_formats_latest && input.has_global_latest
+        ? 'Schema and model streams found'
+        : 'Required schema/model stream missing',
+    ),
+  );
+  statusPanelEl.appendChild(
+    statusRow(
+      'Elements',
+      validatedElements > 0 ? 'ok' : 'warn',
+      validatedElements > 0
+        ? `${validatedElements} validated elements decoded`
+        : diagnosticCandidates > 0
+          ? `No validated elements · ${diagnosticCandidates} diagnostic candidates`
+          : 'No validated elements decoded',
+    ),
+  );
+  statusPanelEl.appendChild(
+    statusRow(
+      'Geometry',
+      geometryCount > 0 ? 'ok' : 'warn',
+      geometryCount > 0
+        ? `${geometryCount} elements have geometry`
+        : 'No real-file element geometry decoded',
+    ),
+  );
+  statusPanelEl.appendChild(
+    statusRow(
+      'IFC',
+      qualityLevel === 'geometry' ? 'ok' : 'warn',
+      `${exportQualityLabel(qualityLevel)}${typeof confidence.score === 'number' ? ` · ${Math.round(confidence.score * 100)}%` : ''}`,
+    ),
+  );
+  statusPanelEl.appendChild(
+    statusRow(
+      'Warnings',
+      warnings.length === 0 && unsupported.length === 0 ? 'ok' : 'warn',
+      warningSummary(warnings, unsupported),
+    ),
+  );
+}
+
+type StatusKind = 'ok' | 'warn' | 'bad';
+
+function statusRow(label: string, kind: StatusKind, value: string): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'status-row';
+  const dot = document.createElement('span');
+  dot.className = `status-dot ${kind}`;
+  const labelEl = document.createElement('div');
+  labelEl.className = 'status-label';
+  labelEl.textContent = label;
+  const valueEl = document.createElement('div');
+  valueEl.className = 'status-value';
+  valueEl.textContent = value;
+  row.appendChild(dot);
+  row.appendChild(labelEl);
+  row.appendChild(valueEl);
+  return row;
+}
+
+function warningSummary(warnings: string[], unsupported: string[]): string {
+  const parts: string[] = [];
+  if (warnings.length > 0) {
+    parts.push(`${warnings.length} warning${warnings.length === 1 ? '' : 's'}`);
+  }
+  if (unsupported.length > 0) {
+    parts.push(`${unsupported.length} unsupported feature${unsupported.length === 1 ? '' : 's'}`);
+  }
+  if (parts.length === 0) return 'No export warnings';
+  return parts.join(' · ');
+}
+
 function exportQualityLabel(level: string): string {
   switch (level) {
     case 'scaffold':
@@ -499,4 +666,13 @@ exportSvgBtn.addEventListener('click', () => {
   })();
 });
 
+downloadDiagnosticsBtn.addEventListener('click', () => {
+  if (!currentDiagnostics) return;
+  const json = JSON.stringify(currentDiagnostics, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  download(`${lastFileStem}.diagnostics.json`, blob);
+  setStatus(`exported ${lastFileStem}.diagnostics.json`);
+});
+
+renderEmptyStatusPanel();
 setStatus('ready · drop a file to begin');
