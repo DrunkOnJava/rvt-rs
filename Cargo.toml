@@ -102,6 +102,10 @@ name = "rvt-info"
 path = "src/bin/rvt_info.rs"
 
 [[bin]]
+name = "rvt-inspect"
+path = "src/bin/rvt_inspect.rs"
+
+[[bin]]
 name = "rvt-schema"
 path = "src/bin/rvt_schema.rs"
 
