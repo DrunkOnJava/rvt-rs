@@ -1,0 +1,66 @@
+name: Performance Budgets
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Override per-category iteration counts"
+        required: false
+        default: ""
+  schedule:
+    # Weekly rather than every push: wall-clock budgets need a stable-ish
+    # signal, and shared GitHub runners are noisy enough that this should be
+    # a trend/regression guard, not a required merge gate.
+    - cron: "17 7 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  perf-budget:
+    name: Runtime and memory budgets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Fetch small family corpus
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
+          lfs: true
+      - name: Fetch medium project corpus
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          key: perf-budget
+      - name: Run budget harness
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+          PERF_ITERATIONS: ${{ github.event.inputs.iterations || '' }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${PERF_ITERATIONS}" ]; then
+            args+=(--iterations "${PERF_ITERATIONS}")
+          fi
+          python3 tools/perf_budget.py \
+            --enforce \
+            --require-category small \
+            --require-category medium \
+            --json-out target/perf-budgets/perf-budget.json \
+            "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-budget-json
+          path: target/perf-budgets/perf-budget.json
+          if-no-files-found: warn

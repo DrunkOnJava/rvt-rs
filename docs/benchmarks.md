@@ -18,8 +18,9 @@ schema/elem_table/walker against 913 KB and 34 MB real `.rvt` files.
 - **Wall-clock tool:** [`hyperfine`](https://github.com/sharkdp/hyperfine)
   with 1-2 warmup runs and 100+ measured runs per command. Reports mean
   ± stddev, min, max. Used for CLI-level (end-to-end) timings.
-- **Future microbench tool:** `criterion` (not yet wired up — see
-  [Benchmark suites planned](#benchmark-suites-planned)).
+- **Library microbench tool:** `criterion`, with compile coverage in
+  normal CI and runtime budget enforcement in the scheduled
+  performance workflow.
 - **Fixture size categories:**
   - **small** — under 1 MB. Reference: `racbasicsamplefamily-2024.rfa`
     at ~400 KB. Currently the only corpus measured.
@@ -39,6 +40,48 @@ Four `criterion` suites under `benches/`. Run with `cargo bench --bench
 | `basic_file_info` | UTF-16LE key-value parse on a realistic BasicFileInfo buffer. Hot path for `rvt-info` / `rvt-history`. | In-memory synthesized |
 | `schema` | Floor-time timing for `formats::parse_schema` on an empty input. Richer real-schema timings are in the `project_file` suite below. | In-memory |
 | `project_file` | Open / summarize / schema-parse / elem-table records / ADocument walker on 913 KB and 34 MB real `.rvt` project files. Skips when the corpus isn't present. | magnetar-io/revit-test-datasets (LFS) |
+
+## Runtime Budget Gate
+
+`tools/perf_budget.py` is the machine-readable runtime and memory
+budget gate. It builds `examples/perf_budget_op.rs`, runs each operation
+in a fresh process, records wall time plus peak RSS when the platform
+exposes it through `/usr/bin/time`, and writes JSON suitable for CI
+artifacts or trend ingestion.
+
+```bash
+python3 tools/perf_budget.py \
+  --enforce \
+  --require-category small \
+  --json-out target/perf-budgets/local.json
+```
+
+Budget targets live in [`tools/perf-budgets.json`](../tools/perf-budgets.json).
+The harness tracks:
+
+| Operation | What runs |
+|---|---|
+| `open` | `RevitFile::open` and stream-directory enumeration |
+| `summarize` | Strict summary path: metadata, stream inventory, and schema status |
+| `schema_parse` | `Formats/Latest` read, inflate, and `formats::parse_schema` |
+| `element_decode` | Production `walker::iter_elements` path |
+| `ifc_export` | `RvtDocExporter` plus STEP serialization |
+| `viewer_parse_render` | Native proxy for the viewer worker: export, scene graph, schedule, and glTF bytes |
+
+Fixture categories:
+
+| Category | Default source | CI status |
+|---|---|---|
+| `small` | phi-ag/rvt `racbasicsamplefamily-2024.rfa` | Required in the scheduled workflow |
+| `medium` | magnetar-io/revit-test-datasets `2024_Core_Interior.rvt` | Required in the scheduled workflow |
+| `large` | `RVT_PERF_LARGE_FILE` | Tracked in config; skipped until a redistributable >=50 MiB fixture is available |
+
+The scheduled/manual `Performance Budgets` workflow enforces small and
+medium categories weekly and uploads `target/perf-budgets/perf-budget.json`.
+It is intentionally not a push-required check: shared GitHub runners are
+noisy, so wall-clock regression gates are useful as a trend signal and
+nightly guard, while ordinary CI keeps the cheaper `cargo bench --no-run`
+compile gate on every code push.
 
 ### Multi-megabyte results (Q-07)
 
