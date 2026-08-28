@@ -34,7 +34,6 @@ pub struct Category {
     pub scheme: Option<String>,
 }
 
-
 enum State {
     Top,
     InTitle,
@@ -165,9 +164,7 @@ impl PartAtom {
                     let chunk = if let Ok(Some(ch)) = e.resolve_char_ref() {
                         ch.to_string()
                     } else if let Ok(name) = e.decode() {
-                        resolve_predefined_entity(&name)
-                            .unwrap_or("")
-                            .to_string()
+                        resolve_predefined_entity(&name).unwrap_or("").to_string()
                     } else {
                         String::new()
                     };
