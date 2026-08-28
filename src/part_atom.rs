@@ -5,6 +5,8 @@
 
 use crate::{Error, Result};
 use quick_xml::Reader;
+use quick_xml::XmlVersion;
+use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
 
@@ -44,7 +46,10 @@ impl PartAtom {
             ..Default::default()
         };
         let mut reader = Reader::from_str(&raw_xml);
-        reader.config_mut().trim_text(true);
+        // Do not enable trim_text: quick-xml ≥0.38 streams entities as
+        // separate `GeneralRef` events between `Text` fragments, and
+        // per-fragment trimming would eat spaces adjacent to `&amp;` etc.
+        // We trim the accumulated value once when flushing a field.
 
         enum State {
             Top,
@@ -57,9 +62,44 @@ impl PartAtom {
 
         let mut state = State::Top;
         let mut buf = Vec::new();
+        let mut pending = String::new();
         let mut current_taxonomy: Option<Taxonomy> = None;
         let mut last_category_term: Option<String> = None;
         let mut last_category_scheme: Option<String> = None;
+
+        // quick-xml 0.38+ no longer expands entities inside `Text`; they
+        // arrive as `Event::GeneralRef`. Accumulate both, then flush on
+        // the closing tag (matches prior `BytesText::unescape` behavior).
+        let flush_pending = |pending: &mut String,
+                             state: &State,
+                             atom: &mut PartAtom,
+                             current_taxonomy: &mut Option<Taxonomy>,
+                             last_category_term: &mut Option<String>| {
+            let text = std::mem::take(pending);
+            let text = text.trim();
+            if text.is_empty() {
+                return;
+            }
+            let text = text.to_string();
+            match state {
+                State::InTitle => atom.title = Some(text),
+                State::InId => atom.id = Some(text),
+                State::InUpdated => atom.updated = Some(text),
+                State::InTaxonomyTerm => {
+                    if let Some(t) = current_taxonomy.as_mut() {
+                        t.term = text;
+                    } else {
+                        *last_category_term = Some(text);
+                    }
+                }
+                State::InTaxonomyLabel => {
+                    if let Some(t) = current_taxonomy.as_mut() {
+                        t.label = text;
+                    }
+                }
+                State::Top => {}
+            }
+        };
 
         loop {
             match reader.read_event_into(&mut buf) {
@@ -94,7 +134,9 @@ impl PartAtom {
                             last_category_scheme = e.attributes().find_map(|a| {
                                 let a = a.ok()?;
                                 if a.key.as_ref() == b"scheme" {
-                                    Some(String::from_utf8_lossy(&a.value).to_string())
+                                    a.normalized_value(XmlVersion::Implicit1_0)
+                                        .ok()
+                                        .map(|v| v.into_owned())
                                 } else {
                                     None
                                 }
@@ -105,30 +147,27 @@ impl PartAtom {
                     }
                 }
                 Ok(Event::Text(e)) => {
-                    let text = e.unescape().unwrap_or_default().trim().to_string();
-                    if text.is_empty() {
-                        continue;
+                    if let Ok(decoded) = e.decode() {
+                        pending.push_str(&decoded);
                     }
-                    match state {
-                        State::InTitle => atom.title = Some(text),
-                        State::InId => atom.id = Some(text),
-                        State::InUpdated => atom.updated = Some(text),
-                        State::InTaxonomyTerm => {
-                            if let Some(t) = current_taxonomy.as_mut() {
-                                t.term = text;
-                            } else {
-                                last_category_term = Some(text);
-                            }
+                }
+                Ok(Event::GeneralRef(e)) => {
+                    if let Ok(Some(ch)) = e.resolve_char_ref() {
+                        pending.push(ch);
+                    } else if let Ok(name) = e.decode() {
+                        if let Some(val) = resolve_predefined_entity(&name) {
+                            pending.push_str(val);
                         }
-                        State::InTaxonomyLabel => {
-                            if let Some(t) = current_taxonomy.as_mut() {
-                                t.label = text;
-                            }
-                        }
-                        State::Top => {}
                     }
                 }
                 Ok(Event::End(e)) => {
+                    flush_pending(
+                        &mut pending,
+                        &state,
+                        &mut atom,
+                        &mut current_taxonomy,
+                        &mut last_category_term,
+                    );
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     let local = name.rsplit(':').next().unwrap_or(&name).to_string();
                     match local.as_str() {
