@@ -42,15 +42,26 @@ saved by you. The privacy posture is documented in
 ## Open A File In The Browser
 
 1. Open <https://drunkonjava.github.io/rvt-rs/>.
-2. Drop a `.rvt`, `.rfa`, `.rte`, or `.rft` file onto the page, or choose a file
-   with the file picker.
-3. Read the File status panel before exporting anything.
+2. Drop a `.rvt`, `.rfa`, `.rte`, or `.rft` file onto the page, choose a file
+   with the file picker, or open a redistributable entry from the demo gallery.
+3. Read the File status panel and export-quality label before exporting anything.
 4. Use Diagnostics details or Download diagnostics when the status panel reports
    warnings, partial decode, unsupported model layout, or scaffold-only export.
 
+### Supported MVP workflow
+
+1. Open locally (nothing uploads).
+2. Confirm decode/confidence status.
+3. Inspect whatever elements were actually decoded.
+4. Export IFC / glTF / plan with the quality label in mind.
+5. Attach diagnostics JSON to bug reports for partial exports.
+
+Typed levels/doors/windows/floors from arbitrary projects are still blocked on
+decoder work — see [status.md](status.md) and [supported-profile.md](supported-profile.md).
+
 The viewer can show a scene, categories, element info, schedule summary, export
-quality, and a supported-profile matrix. Geometry shown in the viewer is limited
-to what rvt-rs actually decoded.
+quality, a demo gallery with license/provenance, and a supported-profile matrix.
+Geometry shown in the viewer is limited to what rvt-rs actually decoded.
 
 ## Inspect A File From The Command Line
 

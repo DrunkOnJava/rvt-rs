@@ -123,5 +123,7 @@ pkg/
 viewer/pkg/
 viewer/node_modules/
 viewer/dist/
+viewer/public/demos/*
+!viewer/public/demos/.gitkeep
 
 _corpus_candidates/
