@@ -538,3 +538,34 @@ jobs:
             exit 1
           fi
           echo "PII guard: clean."
+
+  # Guards the Cloud Agent development environment config itself: shellcheck
+  # the install script and validate `.cursor/environment.json` against the
+  # published Cursor environment schema. Cheap (~20s) and keeps the env setup
+  # from silently drifting into an invalid state on any PR.
+  env-config:
+    name: env config lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      # shellcheck is preinstalled on ubuntu-latest runners.
+      - name: ShellCheck .cursor/install.sh
+        run: shellcheck .cursor/install.sh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate .cursor/environment.json against the Cursor schema
+        run: |
+          python -m pip install --upgrade jsonschema
+          curl --retry 3 --retry-delay 2 -fsSL \
+            https://cursor.com/schemas/environment.schema.json \
+            -o /tmp/environment.schema.json
+          python - <<'PY'
+          import json
+          import jsonschema
+
+          schema = json.load(open("/tmp/environment.schema.json"))
+          config = json.load(open(".cursor/environment.json"))
+          jsonschema.validate(config, schema)
+          print(".cursor/environment.json validates against the Cursor environment schema")
+          PY
