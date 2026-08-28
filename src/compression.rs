@@ -54,6 +54,82 @@ impl Default for InflateLimits {
     }
 }
 
+/// Stored bytes in a full checksum page (`PagedStreamImplReader<..., 65249>`).
+///
+/// Independently documented by ahzs645/reviter's ODA loader analysis and
+/// Discussion #112: each complete stored page is 64_896 payload bytes plus a
+/// 353-byte checksum/ECC trailer.
+pub const REVIT_STORED_PAGE_BYTES: usize = 65_249;
+
+/// Original payload bytes recovered from a full checksum page.
+pub const REVIT_PAGE_PAYLOAD_BYTES: usize = 64_896;
+
+/// Trailer length cut from each complete stored page before inflate.
+pub const REVIT_PAGE_CHECKSUM_BYTES: usize = REVIT_STORED_PAGE_BYTES - REVIT_PAGE_PAYLOAD_BYTES;
+
+/// Whether a CFB stream path uses the checksum-paged loader route.
+///
+/// `ProjectInformation`, `PartAtom`, `BasicFileInfo`, and preview streams are
+/// deliberately excluded — they are not routed through the paged gzip reader.
+pub fn is_checksum_paged_stream(path: &str) -> bool {
+    let clean = path
+        .trim_start_matches('/')
+        .trim_start_matches("Root Entry/");
+    let clean = clean.trim_start_matches('/');
+    if clean.eq_ignore_ascii_case("Formats/Latest") {
+        return true;
+    }
+    if let Some(rest) = clean
+        .strip_prefix("Partitions/")
+        .or_else(|| clean.strip_prefix("partitions/"))
+    {
+        return !rest.is_empty() && !rest.contains('/');
+    }
+    matches!(
+        clean,
+        "Global/ContentDocuments"
+            | "Global/DocumentIncrementTable"
+            | "Global/ElemTable"
+            | "Global/History"
+            | "Global/Latest"
+            | "Global/PartitionTable"
+    )
+}
+
+/// Remove each complete stored page's checksum trailer.
+///
+/// The last short page is retained in full (matching reviter's
+/// `stripRevitPageChecksums`). Call this on **stored** CFB bytes for
+/// [`is_checksum_paged_stream`] paths **before** [`inflate_at`] /
+/// [`inflate_all_chunks`]. Do **not** run this on writer identity copies —
+/// [`crate::reader::RevitFile::read_stream`] returns stored bytes unchanged.
+pub fn strip_revit_page_checksums(data: &[u8]) -> Vec<u8> {
+    let full_pages = data.len() / REVIT_STORED_PAGE_BYTES;
+    if full_pages == 0 {
+        return data.to_vec();
+    }
+    let remainder = data.len() - full_pages * REVIT_STORED_PAGE_BYTES;
+    let mut out = Vec::with_capacity(full_pages * REVIT_PAGE_PAYLOAD_BYTES + remainder);
+    for page in 0..full_pages {
+        let start = page * REVIT_STORED_PAGE_BYTES;
+        out.extend_from_slice(&data[start..start + REVIT_PAGE_PAYLOAD_BYTES]);
+    }
+    out.extend_from_slice(&data[full_pages * REVIT_STORED_PAGE_BYTES..]);
+    out
+}
+
+/// Return checksum-clean bytes ready for inflate when `stream_name` is paged.
+pub fn prepare_stream_for_inflate<'a>(
+    stream_name: &str,
+    stored: &'a [u8],
+) -> std::borrow::Cow<'a, [u8]> {
+    if is_checksum_paged_stream(stream_name) {
+        std::borrow::Cow::Owned(strip_revit_page_checksums(stored))
+    } else {
+        std::borrow::Cow::Borrowed(stored)
+    }
+}
+
 /// Returns `true` iff `data` starts with the gzip magic at the given offset.
 pub fn has_gzip_magic(data: &[u8], offset: usize) -> bool {
     offset
@@ -564,5 +640,45 @@ mod tests {
             &encoded[..10],
             &[0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff]
         );
+    }
+
+    #[test]
+    fn checksum_paged_stream_paths() {
+        assert!(is_checksum_paged_stream("Formats/Latest"));
+        assert!(is_checksum_paged_stream("/Formats/Latest"));
+        assert!(is_checksum_paged_stream("Global/Latest"));
+        assert!(is_checksum_paged_stream("Partitions/67"));
+        assert!(!is_checksum_paged_stream("BasicFileInfo"));
+        assert!(!is_checksum_paged_stream("PartAtom"));
+        assert!(!is_checksum_paged_stream("ProjectInformation"));
+        assert!(!is_checksum_paged_stream("RevitPreview4.0"));
+    }
+
+    #[test]
+    fn strip_revit_page_checksums_cuts_full_page_trailers() {
+        let mut stored = vec![0xABu8; REVIT_PAGE_PAYLOAD_BYTES];
+        stored.extend(vec![0xCDu8; REVIT_PAGE_CHECKSUM_BYTES]);
+        stored.extend(vec![0xEFu8; 100]); // short final page
+        let clean = strip_revit_page_checksums(&stored);
+        assert_eq!(clean.len(), REVIT_PAGE_PAYLOAD_BYTES + 100);
+        assert!(
+            clean
+                .iter()
+                .take(REVIT_PAGE_PAYLOAD_BYTES)
+                .all(|&b| b == 0xAB)
+        );
+        assert!(
+            clean
+                .iter()
+                .skip(REVIT_PAGE_PAYLOAD_BYTES)
+                .all(|&b| b == 0xEF)
+        );
+        assert!(!clean.contains(&0xCD));
+    }
+
+    #[test]
+    fn strip_under_one_page_is_identity() {
+        let small = vec![1u8, 2, 3, 4, 5];
+        assert_eq!(strip_revit_page_checksums(&small), small);
     }
 }
