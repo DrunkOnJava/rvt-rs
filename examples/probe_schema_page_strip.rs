@@ -1,8 +1,8 @@
+use rvt::compression;
+use rvt::formats;
 use std::env;
 use std::io::Read;
 use std::path::PathBuf;
-use rvt::compression;
-use rvt::formats;
 
 fn main() {
     let path = PathBuf::from(env::args().nth(1).expect("path"));

@@ -65,20 +65,22 @@ pub const REVIT_STORED_PAGE_BYTES: usize = 65_249;
 pub const REVIT_PAGE_PAYLOAD_BYTES: usize = 64_896;
 
 /// Trailer length cut from each complete stored page before inflate.
-pub const REVIT_PAGE_CHECKSUM_BYTES: usize =
-    REVIT_STORED_PAGE_BYTES - REVIT_PAGE_PAYLOAD_BYTES;
+pub const REVIT_PAGE_CHECKSUM_BYTES: usize = REVIT_STORED_PAGE_BYTES - REVIT_PAGE_PAYLOAD_BYTES;
 
 /// Whether a CFB stream path uses the checksum-paged loader route.
 ///
 /// `ProjectInformation`, `PartAtom`, `BasicFileInfo`, and preview streams are
 /// deliberately excluded — they are not routed through the paged gzip reader.
 pub fn is_checksum_paged_stream(path: &str) -> bool {
-    let clean = path.trim_start_matches('/').trim_start_matches("Root Entry/");
+    let clean = path
+        .trim_start_matches('/')
+        .trim_start_matches("Root Entry/");
     let clean = clean.trim_start_matches('/');
     if clean.eq_ignore_ascii_case("Formats/Latest") {
         return true;
     }
-    if let Some(rest) = clean.strip_prefix("Partitions/")
+    if let Some(rest) = clean
+        .strip_prefix("Partitions/")
         .or_else(|| clean.strip_prefix("partitions/"))
     {
         return !rest.is_empty() && !rest.contains('/');
@@ -659,8 +661,18 @@ mod tests {
         stored.extend(vec![0xEFu8; 100]); // short final page
         let clean = strip_revit_page_checksums(&stored);
         assert_eq!(clean.len(), REVIT_PAGE_PAYLOAD_BYTES + 100);
-        assert!(clean.iter().take(REVIT_PAGE_PAYLOAD_BYTES).all(|&b| b == 0xAB));
-        assert!(clean.iter().skip(REVIT_PAGE_PAYLOAD_BYTES).all(|&b| b == 0xEF));
+        assert!(
+            clean
+                .iter()
+                .take(REVIT_PAGE_PAYLOAD_BYTES)
+                .all(|&b| b == 0xAB)
+        );
+        assert!(
+            clean
+                .iter()
+                .skip(REVIT_PAGE_PAYLOAD_BYTES)
+                .all(|&b| b == 0xEF)
+        );
         assert!(!clean.contains(&0xCD));
     }
 

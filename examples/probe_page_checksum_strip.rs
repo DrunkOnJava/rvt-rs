@@ -15,9 +15,7 @@ use rvt::compression::{self, strip_revit_page_checksums};
 fn main() {
     let mut args = env::args().skip(1);
     let path = PathBuf::from(args.next().expect("usage: PATH [STREAM]"));
-    let stream = args
-        .next()
-        .unwrap_or_else(|| "Formats/Latest".to_string());
+    let stream = args.next().unwrap_or_else(|| "Formats/Latest".to_string());
 
     let mut file = cfb::open(&path).expect("open cfb");
     let mut raw = Vec::new();
