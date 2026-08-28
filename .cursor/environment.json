@@ -1,0 +1,10 @@
+{
+  "name": "rvt-rs",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "viewer-dev-server",
+      "command": "cd viewer && npm run dev"
+    }
+  ]
+}
