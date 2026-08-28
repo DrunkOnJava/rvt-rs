@@ -146,7 +146,7 @@ fn partition_name_candidates_include_known_materials_and_levels() {
             materials.iter().any(|s| s.contains("Concrete")),
             "{file}: {materials:?}"
         );
-        assert!(levels.iter().any(|s| *s == "Level 1"), "{file}: {levels:?}");
+        assert!(levels.contains(&"Level 1"), "{file}: {levels:?}");
         assert!(materials.len() >= 3, "{file}: {}", materials.len());
     }
 }

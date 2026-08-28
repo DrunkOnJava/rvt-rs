@@ -35,7 +35,7 @@ fn probe_thickness() {
         "=== Einhoven ArcWall thickness sweep — {} records ===",
         offs.len()
     );
-    let common = [4.0 / 12.0, 6.0 / 12.0, 8.0 / 12.0, 10.0 / 12.0, 12.0 / 12.0];
+    let common = [4.0 / 12.0, 6.0 / 12.0, 8.0 / 12.0, 10.0 / 12.0, 1.0];
     for &target in &common {
         let mut hits = 0usize;
         for &off in &offs {
