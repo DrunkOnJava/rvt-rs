@@ -440,7 +440,12 @@ mod tests {
 <title>0610 x 0915mm</title>
 </entry>"#;
         let atom = PartAtom::from_bytes(xml.as_bytes()).unwrap();
-        assert_eq!(atom.title.as_deref(), Some("0610 x 0915mm"), "got {:?}", atom.title);
+        assert_eq!(
+            atom.title.as_deref(),
+            Some("0610 x 0915mm"),
+            "got {:?}",
+            atom.title
+        );
     }
 
     #[test]
@@ -450,6 +455,11 @@ mod tests {
 <title>0610 &amp; 0915mm</title>
 </entry>"#;
         let atom = PartAtom::from_bytes(xml.as_bytes()).unwrap();
-        assert_eq!(atom.title.as_deref(), Some("0610 & 0915mm"), "got {:?}", atom.title);
+        assert_eq!(
+            atom.title.as_deref(),
+            Some("0610 & 0915mm"),
+            "got {:?}",
+            atom.title
+        );
     }
 }
