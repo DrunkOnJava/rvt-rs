@@ -5,6 +5,7 @@
 
 use crate::{Error, Result};
 use quick_xml::Reader;
+use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +34,55 @@ pub struct Category {
     pub scheme: Option<String>,
 }
 
+
+enum State {
+    Top,
+    InTitle,
+    InId,
+    InUpdated,
+    InTaxonomyTerm,
+    InTaxonomyLabel,
+}
+
+fn append_part_atom_text(
+    state: &State,
+    atom: &mut PartAtom,
+    current_taxonomy: &mut Option<Taxonomy>,
+    last_category_term: &mut Option<String>,
+    chunk: &str,
+) {
+    match state {
+        State::InTitle => match atom.title.as_mut() {
+            Some(existing) => existing.push_str(chunk),
+            None => atom.title = Some(chunk.to_string()),
+        },
+        State::InId => match atom.id.as_mut() {
+            Some(existing) => existing.push_str(chunk),
+            None => atom.id = Some(chunk.to_string()),
+        },
+        State::InUpdated => match atom.updated.as_mut() {
+            Some(existing) => existing.push_str(chunk),
+            None => atom.updated = Some(chunk.to_string()),
+        },
+        State::InTaxonomyTerm => {
+            if let Some(tax) = current_taxonomy.as_mut() {
+                tax.term.push_str(chunk);
+            } else {
+                match last_category_term.as_mut() {
+                    Some(existing) => existing.push_str(chunk),
+                    None => *last_category_term = Some(chunk.to_string()),
+                }
+            }
+        }
+        State::InTaxonomyLabel => {
+            if let Some(tax) = current_taxonomy.as_mut() {
+                tax.label.push_str(chunk);
+            }
+        }
+        State::Top => {}
+    }
+}
+
 impl PartAtom {
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         let raw_xml = std::str::from_utf8(data)
@@ -44,16 +94,7 @@ impl PartAtom {
             ..Default::default()
         };
         let mut reader = Reader::from_str(&raw_xml);
-        reader.config_mut().trim_text(true);
-
-        enum State {
-            Top,
-            InTitle,
-            InId,
-            InUpdated,
-            InTaxonomyTerm,
-            InTaxonomyLabel,
-        }
+        reader.config_mut().trim_text(false);
 
         let mut state = State::Top;
         let mut buf = Vec::new();
@@ -105,30 +146,88 @@ impl PartAtom {
                     }
                 }
                 Ok(Event::Text(e)) => {
-                    let text = e.unescape().unwrap_or_default().trim().to_string();
-                    if text.is_empty() {
+                    // quick-xml 0.41 emits entity refs as Event::GeneralRef and
+                    // dropped BytesText::unescape. Accumulate decoded chunks;
+                    // trim when the element ends so spaces around entities survive.
+                    let Ok(decoded) = e.decode() else { continue };
+                    if decoded.is_empty() {
                         continue;
                     }
+                    append_part_atom_text(
+                        &state,
+                        &mut atom,
+                        &mut current_taxonomy,
+                        &mut last_category_term,
+                        &decoded,
+                    );
+                }
+                Ok(Event::GeneralRef(e)) => {
+                    let chunk = if let Ok(Some(ch)) = e.resolve_char_ref() {
+                        ch.to_string()
+                    } else if let Ok(name) = e.decode() {
+                        resolve_predefined_entity(&name)
+                            .unwrap_or("")
+                            .to_string()
+                    } else {
+                        String::new()
+                    };
+                    if chunk.is_empty() {
+                        continue;
+                    }
+                    append_part_atom_text(
+                        &state,
+                        &mut atom,
+                        &mut current_taxonomy,
+                        &mut last_category_term,
+                        &chunk,
+                    );
+                }
+                Ok(Event::End(e)) => {
                     match state {
-                        State::InTitle => atom.title = Some(text),
-                        State::InId => atom.id = Some(text),
-                        State::InUpdated => atom.updated = Some(text),
+                        State::InTitle => {
+                            if let Some(v) = atom.title.as_mut() {
+                                let trimmed = v.trim().to_string();
+                                if trimmed.is_empty() {
+                                    atom.title = None;
+                                } else {
+                                    *v = trimmed;
+                                }
+                            }
+                        }
+                        State::InId => {
+                            if let Some(v) = atom.id.as_mut() {
+                                let trimmed = v.trim().to_string();
+                                if trimmed.is_empty() {
+                                    atom.id = None;
+                                } else {
+                                    *v = trimmed;
+                                }
+                            }
+                        }
+                        State::InUpdated => {
+                            if let Some(v) = atom.updated.as_mut() {
+                                let trimmed = v.trim().to_string();
+                                if trimmed.is_empty() {
+                                    atom.updated = None;
+                                } else {
+                                    *v = trimmed;
+                                }
+                            }
+                        }
                         State::InTaxonomyTerm => {
-                            if let Some(t) = current_taxonomy.as_mut() {
-                                t.term = text;
-                            } else {
-                                last_category_term = Some(text);
+                            if let Some(tax) = current_taxonomy.as_mut() {
+                                tax.term = tax.term.trim().to_string();
+                            } else if let Some(v) = last_category_term.as_mut() {
+                                *v = v.trim().to_string();
                             }
                         }
                         State::InTaxonomyLabel => {
-                            if let Some(t) = current_taxonomy.as_mut() {
-                                t.label = text;
+                            if let Some(tax) = current_taxonomy.as_mut() {
+                                tax.label = tax.label.trim().to_string();
                             }
                         }
                         State::Top => {}
                     }
-                }
-                Ok(Event::End(e)) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     let local = name.rsplit(':').next().unwrap_or(&name).to_string();
                     match local.as_str() {
