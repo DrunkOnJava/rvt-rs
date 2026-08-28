@@ -44,7 +44,6 @@ struct LoopCandidate {
     span_x: f64,
     span_y: f64,
     closed_err: f64,
-    sample: Vec<(f64, f64)>,
 }
 
 fn scan_closed_polylines(buf: &[u8], nmin: usize, nmax: usize) -> Vec<LoopCandidate> {
@@ -110,7 +109,6 @@ fn scan_closed_polylines(buf: &[u8], nmin: usize, nmax: usize) -> Vec<LoopCandid
                 span_x,
                 span_y,
                 closed_err,
-                sample: pts.iter().take(5).cloned().collect(),
             });
             break;
         }

@@ -29,7 +29,9 @@ pub fn is_display_name(s: &str) -> bool {
     if !t.chars().any(|c| c.is_alphabetic()) {
         return false;
     }
-    if t.chars().all(|c| c.is_ascii_digit() || " .-_/\\'\"".contains(c)) {
+    if t.chars()
+        .all(|c| c.is_ascii_digit() || " .-_/\\'\"".contains(c))
+    {
         return false;
     }
     true

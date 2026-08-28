@@ -102,8 +102,6 @@
 #![forbid(unsafe_code)]
 
 pub mod arc_wall_record;
-pub mod partition_name_candidates;
-pub mod rect_opening_index;
 pub mod basic_file_info;
 pub mod class_index;
 pub mod class_tag_map;
@@ -118,8 +116,10 @@ pub mod ifc;
 pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;
+pub mod partition_name_candidates;
 pub mod partitions;
 pub mod reader;
+pub mod rect_opening_index;
 pub mod redact;
 pub mod round_trip;
 pub mod streams;

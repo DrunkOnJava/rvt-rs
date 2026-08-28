@@ -24,7 +24,9 @@ impl ArcWallRectOpeningIndex {
 
     pub fn decode(buf: &[u8], offset: usize) -> Result<Self> {
         let end = offset.checked_add(OPENING_INDEX_STRIDE).ok_or_else(|| {
-            Error::Cfb(format!("ArcWallRectOpeningIndex: offset overflow at {offset}"))
+            Error::Cfb(format!(
+                "ArcWallRectOpeningIndex: offset overflow at {offset}"
+            ))
         })?;
         if end > buf.len() {
             return Err(Error::Cfb(format!(
@@ -45,7 +47,10 @@ impl ArcWallRectOpeningIndex {
             )));
         }
         let family_marker = u32::from_le_bytes([
-            buf[offset + 0x10], buf[offset + 0x11], buf[offset + 0x12], buf[offset + 0x13],
+            buf[offset + 0x10],
+            buf[offset + 0x11],
+            buf[offset + 0x12],
+            buf[offset + 0x13],
         ]);
         if family_marker != OPENING_INDEX_FAMILY_MARKER {
             return Err(Error::Cfb(format!(
@@ -54,11 +59,31 @@ impl ArcWallRectOpeningIndex {
         }
         Ok(Self {
             tag,
-            index: u32::from_le_bytes([buf[offset + 0x08], buf[offset + 0x09], buf[offset + 0x0a], buf[offset + 0x0b]]),
+            index: u32::from_le_bytes([
+                buf[offset + 0x08],
+                buf[offset + 0x09],
+                buf[offset + 0x0a],
+                buf[offset + 0x0b],
+            ]),
             family_marker,
-            related_id_a: u32::from_le_bytes([buf[offset + 0x14], buf[offset + 0x15], buf[offset + 0x16], buf[offset + 0x17]]),
-            const_0546: u32::from_le_bytes([buf[offset + 0x18], buf[offset + 0x19], buf[offset + 0x1a], buf[offset + 0x1b]]),
-            related_id_b: u32::from_le_bytes([buf[offset + 0x36], buf[offset + 0x37], buf[offset + 0x38], buf[offset + 0x39]]),
+            related_id_a: u32::from_le_bytes([
+                buf[offset + 0x14],
+                buf[offset + 0x15],
+                buf[offset + 0x16],
+                buf[offset + 0x17],
+            ]),
+            const_0546: u32::from_le_bytes([
+                buf[offset + 0x18],
+                buf[offset + 0x19],
+                buf[offset + 0x1a],
+                buf[offset + 0x1b],
+            ]),
+            related_id_b: u32::from_le_bytes([
+                buf[offset + 0x36],
+                buf[offset + 0x37],
+                buf[offset + 0x38],
+                buf[offset + 0x39],
+            ]),
         })
     }
 
@@ -78,8 +103,12 @@ impl ArcWallRectOpeningIndex {
             let next_delta = filtered.get(idx + 1).map(|n| n - off);
             let is_stride60 = next_delta == Some(OPENING_INDEX_STRIDE);
             let marker_ok = off + 0x14 <= buf.len()
-                && u32::from_le_bytes([buf[off + 0x10], buf[off + 0x11], buf[off + 0x12], buf[off + 0x13]])
-                    == OPENING_INDEX_FAMILY_MARKER;
+                && u32::from_le_bytes([
+                    buf[off + 0x10],
+                    buf[off + 0x11],
+                    buf[off + 0x12],
+                    buf[off + 0x13],
+                ]) == OPENING_INDEX_FAMILY_MARKER;
             if (is_stride60 || marker_ok) && marker_ok && Self::decode(buf, off).is_ok() {
                 out.push(off);
             }

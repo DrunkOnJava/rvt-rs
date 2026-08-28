@@ -1,5 +1,5 @@
 //! RE-15 follow-up — 60 B opening-index + ArcWall thickness sweep.
-use rvt::arc_wall_record::{ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD, SCHEMA_FAMILY_MARKER};
+use rvt::arc_wall_record::{ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD};
 use rvt::rect_opening_index::{ARC_WALL_RECT_OPENING_TAG_2024, OPENING_INDEX_FAMILY_MARKER};
 use rvt::{RevitFile, compression};
 use std::collections::BTreeMap;
@@ -10,9 +10,6 @@ fn read_f64(buf: &[u8], off: usize) -> Option<f64> {
     }
     let v = f64::from_le_bytes(buf[off..off + 8].try_into().ok()?);
     v.is_finite().then_some(v)
-}
-fn thickness_plausible(v: f64) -> bool {
-    (0.25..2.5).contains(&v)
 }
 
 fn probe_thickness() {
@@ -52,7 +49,6 @@ fn probe_thickness() {
         }
         println!("  {target:.6} ft ({:.0}\"): {hits}", target * 12.0);
     }
-    let _ = SCHEMA_FAMILY_MARKER;
 }
 
 fn probe_stride60() {

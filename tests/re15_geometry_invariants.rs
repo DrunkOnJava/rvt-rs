@@ -40,7 +40,10 @@ fn einhoven_arcwall_tag_and_filtered_hits() {
         .expect("ArcWall tag");
     assert_eq!(tag, 0x0191);
     let raw = rf.read_stream("Partitions/5").unwrap();
-    let concat: Vec<u8> = compression::inflate_all_chunks(&raw).into_iter().flatten().collect();
+    let concat: Vec<u8> = compression::inflate_all_chunks(&raw)
+        .into_iter()
+        .flatten()
+        .collect();
     let mut n = 0usize;
     for i in 0..concat.len().saturating_sub(3) {
         let v = u16::from_le_bytes([concat[i], concat[i + 1]]);
@@ -61,7 +64,11 @@ fn core2024_arcwall_tag_drifted_from_2023() {
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST).unwrap();
     let formats_d = compression::inflate_at(&formats_raw, 0).unwrap();
     let schema = formats::parse_schema(&formats_d).unwrap();
-    let arcwall = schema.classes.iter().find(|c| c.name == "ArcWall").and_then(|c| c.tag);
+    let arcwall = schema
+        .classes
+        .iter()
+        .find(|c| c.name == "ArcWall")
+        .and_then(|c| c.tag);
     let opening = schema
         .classes
         .iter()
@@ -82,7 +89,10 @@ fn core2024_opening_index_stride60_decodes() {
     let version = rf.basic_file_info().unwrap().version;
     assert_eq!(version, 2024);
     let raw = rf.read_stream("Partitions/46").unwrap();
-    let concat: Vec<u8> = compression::inflate_all_chunks(&raw).into_iter().flatten().collect();
+    let concat: Vec<u8> = compression::inflate_all_chunks(&raw)
+        .into_iter()
+        .flatten()
+        .collect();
     let offsets = ArcWallRectOpeningIndex::find_all_for_revit_version(version, &concat);
     assert!(offsets.len() >= 1000, "got {}", offsets.len());
     let mut sequential_runs = 0usize;
@@ -159,7 +169,10 @@ fn einhoven_has_no_filtered_arcwall_rect_opening_hits() {
         .expect("tag");
     assert_eq!(tag, 0x019c);
     let raw = rf.read_stream("Partitions/5").unwrap();
-    let concat: Vec<u8> = compression::inflate_all_chunks(&raw).into_iter().flatten().collect();
+    let concat: Vec<u8> = compression::inflate_all_chunks(&raw)
+        .into_iter()
+        .flatten()
+        .collect();
     let mut n = 0usize;
     for i in 0..concat.len().saturating_sub(3) {
         let v = u16::from_le_bytes([concat[i], concat[i + 1]]);
