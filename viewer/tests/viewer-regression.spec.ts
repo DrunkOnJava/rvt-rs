@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectSamplePath = resolveProjectSamplePath();
 const projectSampleTest = projectSamplePath === null ? test.skip : test;
+const stagedDemoPath = path.resolve(__dirname, '../public/demos/synthetic-mvp.rvt');
+const stagedDemoTest = fs.existsSync(stagedDemoPath) ? test : test.skip;
 
-test('loads the viewer shell with disabled export actions', async ({ page }) => {
+test('loads the viewer shell with disabled export actions and demo gallery', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.locator('#status')).toHaveText(/ready/);
@@ -18,7 +20,48 @@ test('loads the viewer shell with disabled export actions', async ({ page }) => 
   await expect(page.locator('#export-svg')).toBeDisabled();
   await expect(page.locator('#download-diagnostics')).toBeDisabled();
   await expect(page.locator('#status-panel')).toContainText('No file opened');
+  await expect(page.locator('#mvp-workflow')).toContainText('Open locally');
+  await expect(page.locator('#demo-gallery')).toBeVisible();
+  await expect(page.locator('#demo-attribution')).toContainText(/redistributable|Apache|phi-ag/i);
+  await expect(page.locator('[data-demo-id="synthetic-mvp"]')).toBeVisible();
+  await expect(page.locator('[data-demo-id="synthetic-mvp"]')).toContainText(/expected:\s*Scaffold/i);
+  await expect(page.locator('[data-demo-id="synthetic-project"]')).toContainText(/Reference download|IFC/i);
 });
+
+stagedDemoTest(
+  'MVP workflow via demo gallery: open → status/confidence → inspect → export labels',
+  async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('[data-demo-id="synthetic-mvp"]')).toBeEnabled();
+
+    await page.locator('[data-demo-id="synthetic-mvp"]').click();
+    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#dropzone')).toBeHidden();
+
+    await expect(page.locator('#export-glb')).toBeEnabled();
+    await expect(page.locator('#export-ifc')).toBeEnabled();
+    await expect(page.locator('#export-svg')).toBeEnabled();
+    await expect(page.locator('#download-diagnostics')).toBeEnabled();
+    await expect(page.locator('#export-quality')).toContainText(/Scaffold|Typed|Geometry|Diagnostic|Proxy|Unknown/);
+
+    await expect(page.locator('#status-panel')).toContainText(
+      /Partial decode|Scaffold-only|Supported profile|unsupported model layout/i,
+    );
+
+    await page.locator('#diagnostics-details summary').click();
+    await expect(page.locator('#diagnostics-json')).toContainText(/confidence|schema_version|warnings/i);
+
+    const treeNode = page.locator('.tree-node').first();
+    await expect(treeNode).toBeVisible();
+    await treeNode.click();
+    await expect(page.locator('#info')).toContainText(/ifc_type|name|guid/i);
+
+    const ifcTitle = await page.locator('#export-ifc').getAttribute('title');
+    expect(ifcTitle ?? '').toMatch(/Scaffold|Typed|Geometry|Diagnostic|Proxy|Unknown/i);
+    expect(ifcTitle ?? '').toMatch(/elements/i);
+  },
+);
 
 projectSampleTest(
   'opens a project sample and exposes geometry diagnostics, toggles, and element info',

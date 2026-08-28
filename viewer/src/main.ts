@@ -39,6 +39,8 @@ const exportGlbBtn = $('export-glb') as HTMLButtonElement;
 const exportIfcBtn = $('export-ifc') as HTMLButtonElement;
 const exportSvgBtn = $('export-svg') as HTMLButtonElement;
 const exportQualityEl = $('export-quality');
+const demoListEl = $('demo-list');
+const demoAttributionEl = $('demo-attribution');
 
 // ---------- Three.js scene ----------
 const scene = new THREE.Scene();
@@ -755,5 +757,170 @@ downloadDiagnosticsBtn.addEventListener('click', () => {
   setStatus(`exported ${lastFileStem}.diagnostics.json`);
 });
 
+// ---------- Demo gallery (VW1-22 / M6-03) ----------
+interface DemoEntry {
+  id: string;
+  name: string;
+  file: string;
+  format: string;
+  description: string;
+  loadable?: boolean;
+  available?: boolean;
+  expected_quality?: string;
+  expected_quality_note?: string;
+  license?: string;
+  provenance?: string;
+  revit_version?: number | null;
+  element_count_hint?: number;
+  thumbnail?: string;
+  tags?: string[];
+}
+
+interface DemoCatalog {
+  attribution?: string;
+  license?: string;
+  privacy_note?: string;
+  demos: DemoEntry[];
+}
+
+function demoAssetUrl(relPath: string): string {
+  const cleaned = relPath.replace(/^\.\//, '').replace(/^\//, '');
+  return new URL(cleaned, new URL('./', window.location.href)).toString();
+}
+
+async function loadDemoFile(demo: DemoEntry): Promise<void> {
+  if (!demo.loadable || !demo.available) {
+    setStatus(`demo ${demo.id} is reference-only — use download link in gallery`);
+    return;
+  }
+  setStatus(`loading demo ${demo.name}…`);
+  try {
+    const response = await fetch(demoAssetUrl(demo.file));
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} for ${demo.file}`);
+    }
+    const buffer = await response.arrayBuffer();
+    const fileName = pathBasename(demo.file);
+    const file = new File([buffer], fileName, {
+      type: 'application/octet-stream',
+    });
+    await loadBytes(file);
+  } catch (err) {
+    setStatus(`demo load failed: ${(err as Error).message ?? err}`);
+  }
+}
+
+function pathBasename(p: string): string {
+  const parts = p.split('/');
+  return parts[parts.length - 1] || p;
+}
+
+function qualityPillClass(label: string | undefined): string {
+  const normalized = (label ?? '').toLowerCase();
+  if (normalized === 'geometry') return 'geometry';
+  if (normalized === 'scaffold' || normalized === 'diagnostic') return '';
+  return 'reference';
+}
+
+function renderDemoGallery(catalog: DemoCatalog): void {
+  demoListEl.innerHTML = '';
+  const attributionBits = [
+    catalog.attribution,
+    catalog.license,
+    'Same-origin static assets only — click loads bytes in-tab.',
+  ].filter(Boolean);
+  demoAttributionEl.textContent = attributionBits.join(' ');
+
+  for (const demo of catalog.demos) {
+    const canOpen = Boolean(demo.loadable && demo.available);
+    const canDownload = Boolean(!demo.loadable && demo.available && demo.format === 'ifc');
+
+    if (canDownload) {
+      const link = document.createElement('a');
+      link.href = demoAssetUrl(demo.file);
+      link.download = pathBasename(demo.file);
+      link.className = 'demo-card';
+      link.setAttribute('data-demo-id', demo.id);
+      fillDemoCard(link, demo, false);
+      demoListEl.appendChild(link);
+      continue;
+    }
+
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'demo-card';
+    card.setAttribute('data-demo-id', demo.id);
+    if (!canOpen) {
+      card.disabled = true;
+    } else {
+      card.addEventListener('click', () => {
+        void loadDemoFile(demo);
+      });
+    }
+    fillDemoCard(card, demo, canOpen);
+    demoListEl.appendChild(card);
+  }
+}
+
+function fillDemoCard(card: HTMLElement, demo: DemoEntry, loadable: boolean): void {
+  if (demo.thumbnail) {
+    const img = document.createElement('img');
+    img.src = demoAssetUrl(demo.thumbnail);
+    img.alt = '';
+    img.width = 72;
+    img.height = 40;
+    card.appendChild(img);
+  }
+  const body = document.createElement('div');
+  const title = document.createElement('div');
+  title.className = 'demo-title';
+  title.textContent = demo.name;
+  const meta = document.createElement('div');
+  meta.className = 'demo-meta';
+  const bits = [
+    demo.format.toUpperCase(),
+    demo.revit_version ? `Revit ${demo.revit_version}` : null,
+    demo.element_count_hint ? `~${demo.element_count_hint} elements` : null,
+    demo.license ?? null,
+  ].filter(Boolean);
+  meta.textContent = bits.join(' · ');
+  if (demo.provenance) {
+    meta.textContent += `\n${demo.provenance}`;
+  }
+  if (demo.expected_quality_note) {
+    meta.textContent += `\n${demo.expected_quality_note}`;
+  }
+  if (!demo.available) {
+    meta.textContent += '\nNot bundled in this build (corpus optional).';
+  } else if (!loadable && demo.format !== 'ifc') {
+    meta.textContent += '\nUnavailable in this build.';
+  } else if (!loadable) {
+    meta.textContent += '\nReference download — not opened by the RVT parser.';
+  }
+  const quality = document.createElement('span');
+  quality.className = `demo-quality ${qualityPillClass(demo.expected_quality)}`;
+  quality.textContent = `expected: ${demo.expected_quality ?? 'Unknown'}`;
+  body.appendChild(title);
+  body.appendChild(meta);
+  body.appendChild(quality);
+  card.appendChild(body);
+}
+
+async function initDemoGallery(): Promise<void> {
+  try {
+    const response = await fetch(demoAssetUrl('demos/catalog.json'));
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const catalog = (await response.json()) as DemoCatalog;
+    renderDemoGallery(catalog);
+  } catch (err) {
+    demoAttributionEl.textContent =
+      'Demo catalog unavailable in this build. Drop a local .rvt / .rfa instead.';
+    setStatus(`demo gallery: ${(err as Error).message ?? err}`);
+  }
+}
+
 renderEmptyStatusPanel();
-setStatus('ready · drop a file to begin');
+void initDemoGallery();
+setStatus('ready · drop a file or open a demo');

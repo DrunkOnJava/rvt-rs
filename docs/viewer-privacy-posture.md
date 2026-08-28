@@ -87,7 +87,10 @@ assets needed to boot the viewer:
 - Vite-generated JavaScript chunks, including the worker script;
 - the generated `rvt_bg.wasm` WebAssembly binary;
 - optional same-origin source maps or favicon requests from the
-  browser tooling/runtime.
+  browser tooling/runtime;
+- optional same-origin `/demos/` catalog JSON, thumbnails, and
+  redistributable demo binaries (fetched only at boot for the catalog /
+  when the user clicks a gallery entry).
 
 `blob:` and `data:` URLs are local browser object URLs, not network
 requests; the viewer uses them for GLB rendering and user-initiated

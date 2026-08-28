@@ -42,7 +42,20 @@ npm install
 npm run dev
 ```
 
-Drop a Revit file onto the page. Nothing is sent anywhere.
+Drop a Revit file onto the page, or open a redistributable demo from the
+gallery (staged from `docs/viewer-demos.json` via `npm run stage:demos`).
+Nothing is sent anywhere.
+
+## Supported MVP workflow
+
+1. Open a file locally (drop / picker / demo gallery).
+2. Read File status + export quality (honest partial decode).
+3. Inspect decoded entities in the tree or viewport.
+4. Export IFC / glTF / plan only after checking the quality label.
+5. Download diagnostics for scaffold or partial exports.
+
+Reliable typed levels/doors/windows from arbitrary projects still depend on
+Rust decoder / partition-stream work outside this viewer shell.
 
 ## Architecture
 
