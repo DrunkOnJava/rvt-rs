@@ -55,10 +55,24 @@ joined to ElemTable by id.
 ## Product consequences
 
 1. Shared `partition_arc_walls` API feeds IFC + diagnostics (no IFC-only scan).
-2. IFC storeys come from distinct ArcWall base elevations (not placeholder Level 1).
+2. IFC storeys come from distinct ArcWall base elevations; when RE-15/#86
+   partition Level-like strings match confidently (`Level N`, `Roof`,
+   `Ground floor`), those names replace elevation fallback labels
+   (helper adapted from PR #117 `partition_name_candidates`).
 3. IFC height uses core Z delta only — no invented 10 ft.
-4. Thickness remains unresolved; IFC depth uses a named placeholder and a diagnostics warning until WallType width join exists.
-5. 2024 stays version-gated off the 2023 envelope.
+4. Thickness remains unresolved; RE-15/#88 (PR #117) falsified exact
+   4/6/8/10/12″ trailer widths (conf. 0.80). IFC depth uses a named
+   placeholder + diagnostics warning until WallType width join exists.
+5. Openings / 2024 `ArcWallRectOpening` 60 B index stay on PR #117 — out of scope here.
+6. 2024 ArcWall instance decode stays version-gated off the 2023 envelope.
+
+## Cross-links from PR #117 (RE-15 geometry probes)
+
+| Finding | Action on this branch |
+|---|---|
+| #86 Level/Material partition strings | Adapted `partition_name_candidates`; wired storey **names** |
+| #88 no exact inch thickness in trailer | Kept unresolved-thickness diagnostics (no decode invent) |
+| #89 openings are 60 B index, not W×H | Left to #117 — not expanded here |
 
 ## Artifacts
 

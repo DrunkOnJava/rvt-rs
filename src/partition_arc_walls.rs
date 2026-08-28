@@ -156,14 +156,37 @@ pub fn element_id_partition_index(
     map
 }
 
+/// Result of deriving storeys from ArcWall elevations, optionally
+/// labelled with partition Level-like display names (RE-15 / #86).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArcWallStoreyRecovery {
+    pub storeys: Vec<Storey>,
+    /// Storeys whose name came from a partition Level-like string.
+    pub named_from_partition: usize,
+    /// Storeys that still use the `Elevation … ft` fallback label.
+    pub elevation_fallback: usize,
+    /// Count of building-storey name candidates considered.
+    pub level_name_candidates: usize,
+}
+
 /// Derive IFC building storeys from distinct ArcWall base elevations.
 ///
-/// Real `Level` element names are not yet recovered from partitions
-/// (walker finds none on Einhoven `Global/Latest`). Elevations are
-/// still real project values (0 / 2 m / 4 m / 6 m on Einhoven), so
-/// emitting storeys from them is preferable to the placeholder
-/// `"Level 1"`. Names are elevation labels until Level decode lands.
+/// When `level_names` contains confident building-storey labels
+/// (see [`crate::partition_name_candidates::is_building_storey_name`]),
+/// names are applied by ordinal (`Level 1` → lowest elevation, `Roof`
+/// → highest) or by exact count zip. Unmatched storeys keep an
+/// elevation fallback label — never invent a `"Level 1"` placeholder
+/// for the whole model.
 pub fn storeys_from_arc_wall_base_elevations(walls: &[PartitionArcWall]) -> Vec<Storey> {
+    recover_storeys_from_arc_walls(walls, &[]).storeys
+}
+
+/// Like [`storeys_from_arc_wall_base_elevations`], but applies partition
+/// Level-like display names when the match is confident enough.
+pub fn recover_storeys_from_arc_walls(
+    walls: &[PartitionArcWall],
+    level_names: &[String],
+) -> ArcWallStoreyRecovery {
     let mut elevations: Vec<f64> = walls
         .iter()
         .filter_map(PartitionArcWall::base_elevation_feet)
@@ -172,13 +195,130 @@ pub fn storeys_from_arc_wall_base_elevations(walls: &[PartitionArcWall]) -> Vec<
     elevations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     elevations.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
 
-    elevations
-        .into_iter()
-        .map(|elevation_feet| Storey {
-            name: format!("Elevation {elevation_feet:.3} ft"),
+    let filtered: Vec<String> = level_names
+        .iter()
+        .filter(|n| crate::partition_name_candidates::is_building_storey_name(n))
+        .cloned()
+        .collect();
+
+    let mut storeys: Vec<Storey> = elevations
+        .iter()
+        .map(|&elevation_feet| Storey {
+            name: elevation_fallback_name(elevation_feet),
             elevation_feet,
         })
-        .collect()
+        .collect();
+
+    if storeys.is_empty() {
+        return ArcWallStoreyRecovery {
+            storeys,
+            named_from_partition: 0,
+            elevation_fallback: 0,
+            level_name_candidates: filtered.len(),
+        };
+    }
+
+    if filtered.len() == storeys.len() {
+        let ordered = order_building_storey_names(&filtered);
+        for (storey, name) in storeys.iter_mut().zip(ordered) {
+            storey.name = name;
+        }
+    } else {
+        apply_pattern_storey_names(&mut storeys, &filtered);
+    }
+
+    let named_from_partition = storeys
+        .iter()
+        .filter(|s| !s.name.starts_with("Elevation "))
+        .count();
+    let elevation_fallback = storeys.len() - named_from_partition;
+    ArcWallStoreyRecovery {
+        storeys,
+        named_from_partition,
+        elevation_fallback,
+        level_name_candidates: filtered.len(),
+    }
+}
+
+fn elevation_fallback_name(elevation_feet: f64) -> String {
+    format!("Elevation {elevation_feet:.3} ft")
+}
+
+fn parse_level_number(name: &str) -> Option<u32> {
+    let lower = name.trim().to_ascii_lowercase();
+    let rest = lower.strip_prefix("level ")?;
+    let digits: String = rest.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.is_empty() || digits.len() != rest.chars().filter(|c| !c.is_whitespace()).count() {
+        return None;
+    }
+    digits.parse().ok()
+}
+
+fn order_building_storey_names(names: &[String]) -> Vec<String> {
+    let mut indexed: Vec<(i32, String)> = names
+        .iter()
+        .map(|name| {
+            let lower = name.to_ascii_lowercase();
+            let rank = if lower == "basement" {
+                -2
+            } else if lower == "ground floor" || lower == "groundfloor" {
+                -1
+            } else if lower == "roof" {
+                10_000
+            } else if let Some(n) = parse_level_number(name) {
+                n as i32
+            } else if lower == "first floor" {
+                1
+            } else if lower == "second floor" {
+                2
+            } else if lower == "third floor" {
+                3
+            } else if lower == "mezzanine" {
+                50
+            } else if lower == "podium" {
+                0
+            } else {
+                100
+            };
+            (rank, name.clone())
+        })
+        .collect();
+    indexed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    indexed.into_iter().map(|(_, name)| name).collect()
+}
+
+fn apply_pattern_storey_names(storeys: &mut [Storey], names: &[String]) {
+    for name in names {
+        let lower = name.to_ascii_lowercase();
+        if lower == "roof" {
+            if let Some(last) = storeys.last_mut() {
+                if last.name.starts_with("Elevation ") {
+                    last.name = name.clone();
+                }
+            }
+            continue;
+        }
+        if lower == "ground floor"
+            || lower == "groundfloor"
+            || lower == "basement"
+            || lower == "podium"
+        {
+            if let Some(first) = storeys.first_mut() {
+                if first.name.starts_with("Elevation ") {
+                    first.name = name.clone();
+                }
+            }
+            continue;
+        }
+        if let Some(n) = parse_level_number(name) {
+            let idx = (n as usize).saturating_sub(1);
+            if let Some(storey) = storeys.get_mut(idx) {
+                if storey.name.starts_with("Elevation ") {
+                    storey.name = name.clone();
+                }
+            }
+        }
+    }
 }
 
 /// Match a wall's base elevation to a storey index (nearest within
@@ -275,5 +415,57 @@ mod tests {
         assert!((storeys[0].elevation_feet - 0.0).abs() < 1e-9);
         assert!((storeys[1].elevation_feet - 6.5617).abs() < 1e-6);
         assert_eq!(storey_index_for_elevation(&storeys, 6.5617), Some(1));
+    }
+
+    #[test]
+    fn storey_names_apply_level_and_roof_patterns() {
+        let walls: Vec<_> = [0.0, 6.5617, 13.1234, 19.685]
+            .into_iter()
+            .enumerate()
+            .map(|(i, z)| {
+                let bytes = fixture_record_bytes_with_trailer(2000 + i as u32, z);
+                PartitionArcWall {
+                    partition: "Partitions/5".into(),
+                    offset: i * STANDARD_RECORD_SINGLETON_STRIDE,
+                    record: ArcWallRecord::decode_standard(&bytes, 0).unwrap(),
+                    trailer: ArcWallRecord::decode_trailer(&bytes, 0),
+                }
+            })
+            .collect();
+        let names = vec![
+            "Level Head - Upgrade".into(),
+            "Level 1".into(),
+            "Roof".into(),
+        ];
+        let recovery = recover_storeys_from_arc_walls(&walls, &names);
+        assert_eq!(recovery.level_name_candidates, 2); // Head filtered out
+        assert_eq!(recovery.storeys[0].name, "Level 1");
+        assert!(recovery.storeys[1].name.starts_with("Elevation "));
+        assert!(recovery.storeys[2].name.starts_with("Elevation "));
+        assert_eq!(recovery.storeys[3].name, "Roof");
+        assert_eq!(recovery.named_from_partition, 2);
+        assert_eq!(recovery.elevation_fallback, 2);
+    }
+
+    #[test]
+    fn storey_names_zip_when_counts_match() {
+        let walls: Vec<_> = [0.0, 10.0]
+            .into_iter()
+            .enumerate()
+            .map(|(i, z)| {
+                let bytes = fixture_record_bytes_with_trailer(3000 + i as u32, z);
+                PartitionArcWall {
+                    partition: "Partitions/5".into(),
+                    offset: i * STANDARD_RECORD_SINGLETON_STRIDE,
+                    record: ArcWallRecord::decode_standard(&bytes, 0).unwrap(),
+                    trailer: ArcWallRecord::decode_trailer(&bytes, 0),
+                }
+            })
+            .collect();
+        let recovery =
+            recover_storeys_from_arc_walls(&walls, &["Roof".into(), "Ground floor".into()]);
+        assert_eq!(recovery.storeys[0].name, "Ground floor");
+        assert_eq!(recovery.storeys[1].name, "Roof");
+        assert_eq!(recovery.elevation_fallback, 0);
     }
 }

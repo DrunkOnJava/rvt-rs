@@ -508,6 +508,23 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
         "diagnostics should warn that ArcWall thickness is unresolved"
     );
     assert!(
+        model
+            .building_storeys
+            .iter()
+            .any(|s| s.name == "Level 1" || s.name == "Roof"),
+        "RE-15/#86: expected at least one partition Level name on storeys: {:?}",
+        model.building_storeys
+    );
+    assert!(
+        result
+            .diagnostics
+            .warnings
+            .iter()
+            .any(|w| w.contains("partition Level-like strings")
+                || w.contains("elevation fallback labels")),
+        "diagnostics should report storey name recovery status"
+    );
+    assert!(
         !result
             .diagnostics
             .unsupported_features

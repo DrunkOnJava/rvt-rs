@@ -670,8 +670,12 @@ fn export_rvt_doc(
     let mut building_storeys = Vec::new();
     if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
         if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls(rf, revit_version) {
-            building_storeys =
-                crate::partition_arc_walls::storeys_from_arc_wall_base_elevations(&scan.walls);
+            let level_names = collect_partition_building_storey_names(rf);
+            let recovery = crate::partition_arc_walls::recover_storeys_from_arc_walls(
+                &scan.walls,
+                &level_names,
+            );
+            building_storeys = recovery.storeys;
             for wall in &scan.walls {
                 let geometry = arcwall_geometry_from_partition_wall(wall);
                 let storey_index = wall.base_elevation_feet().and_then(|elev| {
@@ -719,10 +723,20 @@ fn export_rvt_doc(
 }
 
 /// Placeholder thickness used only when the ArcWall trailer has no
-/// recoverable width (RE-15: thickness is not in the singleton
-/// trailer). Callers must surface this via property-set /
-/// diagnostics — it is not a decoded value.
+/// recoverable width (RE-15 / #88: exact 4/6/8/10/12″ values were
+/// falsified in standard trailers). Callers must surface this via
+/// property-set / diagnostics — it is not a decoded value. WallType
+/// width join remains future work.
 const UNRESOLVED_ARCWALL_THICKNESS_FEET: f64 = 8.0 / 12.0;
+
+fn collect_partition_building_storey_names(rf: &mut crate::RevitFile) -> Vec<String> {
+    let Ok(records) = crate::object_graph::string_records_from_partitions(rf) else {
+        return Vec::new();
+    };
+    crate::partition_name_candidates::building_storey_name_candidates(
+        records.iter().map(|r| r.value.as_str()),
+    )
+}
 
 fn arcwall_property_set(
     wall: &crate::partition_arc_walls::PartitionArcWall,
@@ -1254,6 +1268,23 @@ pub fn build_export_diagnostics_with_limits(
         warnings.push(
             "No Revit levels were recovered; STEP output uses the fallback spatial storey.".into(),
         );
+    } else {
+        let elevation_fallback = model
+            .building_storeys
+            .iter()
+            .filter(|storey| storey.name.starts_with("Elevation "))
+            .count();
+        let named = model.building_storeys.len() - elevation_fallback;
+        if named > 0 {
+            warnings.push(format!(
+                "{named} building storey name(s) came from partition Level-like strings (RE-15/#86 via PR #117); ElementId↔Level binding is still pending."
+            ));
+        }
+        if elevation_fallback > 0 {
+            warnings.push(format!(
+                "{elevation_fallback} building storey(s) lack a confident partition Level name and keep elevation fallback labels."
+            ));
+        }
     }
     let unresolved_thickness = model
         .entities
@@ -1275,7 +1306,7 @@ pub fn build_export_diagnostics_with_limits(
         .count();
     if unresolved_thickness > 0 {
         warnings.push(format!(
-            "{unresolved_thickness} ArcWall records lack recovered thickness; IFC depth uses an unresolved placeholder pending WallType width join (RE-15)."
+            "{unresolved_thickness} ArcWall records lack recovered thickness; RE-15/#88 falsified exact inch widths in the standard trailer, so IFC depth uses an unresolved placeholder pending WallType width join."
         ));
     }
     if mode == ExportDiagnosticsMode::Default && !skipped.is_empty() {

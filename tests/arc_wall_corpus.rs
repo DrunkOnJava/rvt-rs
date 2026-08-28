@@ -210,6 +210,32 @@ fn einhoven_shared_partition_api_recovers_trailer_ids_and_storeys() {
         storeys.len()
     );
 
+    let level_names = {
+        let records =
+            rvt::object_graph::string_records_from_partitions(&mut rf).expect("partition strings");
+        rvt::partition_name_candidates::building_storey_name_candidates(
+            records.iter().map(|r| r.value.as_str()),
+        )
+    };
+    assert!(
+        level_names.iter().any(|n| n == "Level 1"),
+        "RE-15/#86: Einhoven partition strings should include Level 1, got {level_names:?}"
+    );
+    let recovery =
+        rvt::partition_arc_walls::recover_storeys_from_arc_walls(&scan.walls, &level_names);
+    assert!(
+        recovery.named_from_partition >= 1,
+        "at least one storey should receive a partition Level name"
+    );
+    assert!(
+        recovery
+            .storeys
+            .iter()
+            .any(|s| s.name == "Level 1" || s.name == "Roof"),
+        "expected Level 1 and/or Roof on named storeys: {:?}",
+        recovery.storeys
+    );
+
     let partition_index = element_id_partition_index(&scan.walls);
     let elem_records = elem_table::parse_records(&mut rf).expect("ElemTable");
     let elem_index = elem_table::index_by_element_id(&elem_records);
