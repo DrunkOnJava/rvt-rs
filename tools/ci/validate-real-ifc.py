@@ -115,10 +115,19 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
     # allowing future improvements to add more recovered element classes.
     assert_at_least(model, "IfcWall", 10)
 
+    # One IfcRelContainedInSpatialStructure per non-empty storey is correct
+    # IFC4 practice (see docs/launch/buildingsmart-forum.md). Elevation-derived
+    # ArcWall storeys may produce several; the previous exact-1 check was a
+    # single-fallback-storey baseline, not a hard contract.
+    storey_count = count(model, "IfcBuildingStorey")
     contained = model.by_type("IfcRelContainedInSpatialStructure")
-    if len(contained) != 1:
-        fail(f"IfcRelContainedInSpatialStructure count regressed: got {len(contained)}, expected 1")
-    related_count = len(contained[0].RelatedElements)
+    if len(contained) < 1 or len(contained) > storey_count:
+        fail(
+            "IfcRelContainedInSpatialStructure count regressed: "
+            f"got {len(contained)}, expected between 1 and {storey_count} "
+            f"(one per non-empty storey)"
+        )
+    related_count = sum(len(rel.RelatedElements) for rel in contained)
     building_elements = int(exported.get("building_elements", 0))
     if related_count < building_elements:
         fail(
@@ -151,7 +160,10 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
     print(f"  schema: {model.schema}")
     print(f"  entities: {len(list(model))}")
     print(f"  exported.by_ifc_type: {by_ifc_type}")
-    print(f"  spatial containment: {related_count} related element(s)")
+    print(
+        f"  spatial containment: {len(contained)} rel(s), "
+        f"{related_count} related element(s) across {storey_count} storey(s)"
+    )
     print(f"  geometry-backed elements: {with_geometry}")
     print(f"  material count: {material_count}")
     print(f"  unit assignments: {unit_count}")
