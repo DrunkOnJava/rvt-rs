@@ -97,8 +97,13 @@ cd viewer
 npm ci
 npm run typecheck
 npm run build          # static site -> viewer/dist
-npm run dev            # dev server at http://localhost:5173  (the viewer-dev-server terminal)
+npm run dev -- --host  # dev server on port 5173 (the viewer-dev-server terminal)
 ```
+
+The Cloud environment exposes port `5173` (`ports` in `.cursor/environment.json`)
+and the `viewer-dev-server` terminal runs `npm run dev -- --host`, so the viewer
+is reachable via the Cloud preview. `vite.config.ts` pins `strictPort: true`, so
+if `5173` is taken the server fails fast instead of silently moving ports.
 
 Privacy invariant (VW1-21): the compiled WASM must import no network
 primitives. Verify with:
@@ -130,3 +135,51 @@ The dev server runs in the `viewer-dev-server` terminal (or start it with
 Synthetic fixtures parse cleanly through the whole pipeline but decode as
 `scaffold-only` (no validated building elements) — that is the expected result,
 not a bug. Real element geometry requires the external corpora.
+
+### Pre-push quality gate
+
+Mirror CI's fmt / clippy / rustdoc / test jobs in one command before pushing:
+
+```bash
+tools/quality.sh            # fmt, clippy -D warnings, rustdoc -D warnings, tests
+tools/quality.sh --full     # the above plus `cargo bench --no-run`
+```
+
+Supply-chain checks (CI's `deny` and `audit` jobs) are optional locally and are
+skipped by `quality.sh` when not installed. To run them, install the tools once
+and invoke directly:
+
+```bash
+cargo install cargo-deny cargo-audit --locked
+cargo deny check
+cargo audit
+```
+
+### Running the corpus-dependent tests (optional)
+
+Most integration tests skip without an external corpus. `git-lfs` is available
+in this environment, so you can reproduce CI's corpus jobs by checking out the
+same public datasets CI uses and pointing the env vars at them:
+
+```bash
+git clone --depth 1 https://github.com/phi-ag/rvt _corpus
+git -C _corpus lfs pull
+git clone --depth 1 https://github.com/magnetar-io/revit-test-datasets _project_corpus
+git -C _project_corpus lfs pull
+
+RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk" \
+RVT_PROJECT_CORPUS_DIR="$PWD/_project_corpus/Revit" \
+  cargo test --release
+```
+
+`_corpus/` and `_project_corpus/` are git-ignored. These datasets are Autodesk-
+owned samples that this repo deliberately does not redistribute (see
+`SECURITY.md`), which is why they're fetched on demand rather than vendored.
+
+### Self-verification
+
+`.cursor/install.sh` ends with a smoke test — it generates a fixture, runs
+`rvt-inspect`, and re-runs the WASM network-import audit — so a broken build
+fails setup immediately rather than surfacing mid-session. `wasm-pack` is pinned
+to `v0.14.0` to match CI, with a fallback to the upstream installer if the
+pinned download is unavailable.

@@ -1,10 +1,11 @@
 {
   "name": "rvt-rs",
   "install": "bash .cursor/install.sh",
+  "ports": [5173],
   "terminals": [
     {
       "name": "viewer-dev-server",
-      "command": "cd viewer && npm run dev"
+      "command": "cd viewer && npm run dev -- --host"
     }
   ]
 }

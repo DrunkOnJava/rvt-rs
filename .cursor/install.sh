@@ -44,9 +44,32 @@ rustup target add wasm32-unknown-unknown
 rustc --version
 
 # --- 3. wasm-pack ----------------------------------------------------------
-log "wasm-pack"
-if ! command -v wasm-pack >/dev/null 2>&1; then
-  curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+# Pin to the same version CI uses (deploy-viewer.yml) so the WASM output
+# is byte-for-byte comparable and doesn't drift between local and CI. Fall
+# back to the upstream installer (latest) only if the pinned download fails,
+# so a GitHub hiccup never blocks setup entirely.
+WASM_PACK_VERSION="v0.14.0"
+log "wasm-pack ${WASM_PACK_VERSION}"
+if command -v wasm-pack >/dev/null 2>&1 && \
+   wasm-pack --version 2>/dev/null | grep -q "${WASM_PACK_VERSION#v}"; then
+  echo "already installed"
+else
+  arch="$(uname -m)"
+  pkg="wasm-pack-${WASM_PACK_VERSION}-${arch}-unknown-linux-musl"
+  url="https://github.com/rustwasm/wasm-pack/releases/download/${WASM_PACK_VERSION}/${pkg}.tar.gz"
+  tmp="$(mktemp -d)"
+  if curl -fsSL "$url" -o "$tmp/wasm-pack.tar.gz" && tar -xzf "$tmp/wasm-pack.tar.gz" -C "$tmp"; then
+    dest_dir="$(dirname "$(command -v cargo)")"
+    if [ -w "$dest_dir" ]; then
+      install -m 0755 "$tmp/$pkg/wasm-pack" "$dest_dir/wasm-pack"
+    else
+      sudo install -m 0755 "$tmp/$pkg/wasm-pack" "$dest_dir/wasm-pack"
+    fi
+    rm -rf "$tmp"
+  else
+    echo "pinned download failed — falling back to upstream installer"
+    curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+  fi
 fi
 wasm-pack --version
 
@@ -79,5 +102,28 @@ log "Viewer npm dependencies + type check + build"
   npm run typecheck
   npm run build
 )
+
+# --- 7. Self-verification smoke -------------------------------------------
+# Prove the freshly built artifacts actually work before this snapshot is
+# blessed. A broken build fails here (and fails the environment build) rather
+# than surfacing later inside an agent session.
+log "Smoke test (fixture -> rvt-inspect, wasm import audit)"
+SMOKE_DIR="$(mktemp -d)"
+./target/release/gen-fixture smoke \
+  --classes Wall,Level,Project --element-count 5 --year 2024 \
+  --output "$SMOKE_DIR/smoke.rvt"
+./target/release/rvt-inspect "$SMOKE_DIR/smoke.rvt" >/dev/null
+echo "  rvt-inspect: OK"
+rm -rf "$SMOKE_DIR"
+
+# VW1-21 privacy invariant: the viewer WASM must import no network primitives.
+if command -v wasm-objdump >/dev/null 2>&1; then
+  if wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm | \
+       grep -iE '"(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon)"'; then
+    echo "ERROR: VW1-21 violation — wasm imports a network primitive" >&2
+    exit 1
+  fi
+  echo "  wasm network-import audit: PASS"
+fi
 
 log "rvt-rs environment ready"
