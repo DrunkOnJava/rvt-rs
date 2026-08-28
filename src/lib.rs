@@ -120,6 +120,7 @@ pub mod partition_arc_walls;
 pub mod partition_name_candidates;
 pub mod partitions;
 pub mod reader;
+pub mod rect_opening_index;
 pub mod redact;
 pub mod round_trip;
 pub mod streams;
