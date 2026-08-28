@@ -45,7 +45,7 @@ const samplePath = resolveSamplePath();
 
 test.skip(
   samplePath === null,
-  'Set RVT_VIEWER_SAMPLE or check out phi-ag/rvt under ../_corpus to run the viewer network invariant test.',
+  'Set RVT_VIEWER_SAMPLE, run npm run stage:demos, or check out phi-ag/rvt under ../_corpus to run the viewer network invariant test.',
 );
 
 test('opens a sample without external or post-open network requests', async ({ page, baseURL }) => {
@@ -83,6 +83,7 @@ test('opens a sample without external or post-open network requests', async ({ p
 function resolveSamplePath(): string | null {
   const candidates = [
     process.env.RVT_VIEWER_SAMPLE,
+    path.resolve(__dirname, '../public/demos/synthetic-mvp.rvt'),
     path.resolve(__dirname, '../../_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa'),
   ].filter((candidate): candidate is string => Boolean(candidate));
 
@@ -109,6 +110,9 @@ function isDisallowed(record: NetworkRecord, base: URL): boolean {
 function isAllowedStaticRequest(url: URL): boolean {
   if (url.pathname === '/' || url.pathname.endsWith('/index.html')) return true;
   if (url.pathname.endsWith('/favicon.ico')) return true;
+  if (url.pathname.includes('/demos/')) {
+    return /\.(json|svg|png|jpe?g|webp|rvt|rfa|rte|rft|ifc)$/i.test(url.pathname);
+  }
   if (!url.pathname.includes('/assets/')) return false;
   return /\.(css|js|mjs|wasm|map)$/i.test(url.pathname);
 }
