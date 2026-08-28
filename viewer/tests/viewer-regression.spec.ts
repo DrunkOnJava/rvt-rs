@@ -54,12 +54,16 @@ stagedDemoTest(
 
     const treeNode = page.locator('.tree-node').first();
     await expect(treeNode).toBeVisible();
+    await expect(treeNode).toContainText(/IFCPROJECT/i);
     await treeNode.click();
-    await expect(page.locator('#info')).toContainText(/ifc_type|name|guid/i);
+    await expect(page.locator('#info')).toContainText(/ifc_type/i);
+    await expect(page.locator('#info')).toContainText(/IFCPROJECT/i);
+    await expect(page.locator('.category-toggle')).toContainText(/IFCPROJECT/i);
 
     const ifcTitle = await page.locator('#export-ifc').getAttribute('title');
     expect(ifcTitle ?? '').toMatch(/Scaffold|Typed|Geometry|Diagnostic|Proxy|Unknown/i);
     expect(ifcTitle ?? '').toMatch(/elements/i);
+    await expect(page.locator('#export-quality')).toContainText(/Scaffold/);
   },
 );
 

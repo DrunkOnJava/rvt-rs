@@ -397,14 +397,41 @@ function applyCategoryVisibility(): void {
 }
 
 function showElementInfo(idx: number): void {
-  if (!model || !model.entities) return;
-  const e = model.entities[idx];
-  if (!e) {
+  if (!model) return;
+  const e = model.entities?.[idx];
+  if (e) {
+    infoEl.innerHTML = '';
+    for (const [k, v] of Object.entries(e)) {
+      const row = document.createElement('div');
+      row.className = 'info-row';
+      const kE = document.createElement('div');
+      kE.className = 'k';
+      kE.textContent = k;
+      const vE = document.createElement('div');
+      vE.className = 'v';
+      vE.textContent = v === null || v === undefined ? '—' : JSON.stringify(v);
+      row.appendChild(kE);
+      row.appendChild(vE);
+      infoEl.appendChild(row);
+    }
+    return;
+  }
+
+  // Scaffold / partial exports may expose a scene-graph index without a
+  // populated entities[] row. Fall back to the tree node so inspect still
+  // surfaces something honest for the MVP workflow shell.
+  const node = findSceneNodeByIndex(sceneGraph, idx);
+  if (!node) {
     infoEl.textContent = 'not found';
     return;
   }
   infoEl.innerHTML = '';
-  for (const [k, v] of Object.entries(e)) {
+  for (const [k, v] of Object.entries({
+    name: node.name,
+    ifc_type: node.ifc_type,
+    entity_index: node.entity_index,
+    note: 'Partial decode — typed element fields were not recovered for this node.',
+  })) {
     const row = document.createElement('div');
     row.className = 'info-row';
     const kE = document.createElement('div');
@@ -417,6 +444,16 @@ function showElementInfo(idx: number): void {
     row.appendChild(vE);
     infoEl.appendChild(row);
   }
+}
+
+function findSceneNodeByIndex(node: SceneNode | null, idx: number): SceneNode | null {
+  if (!node) return null;
+  if (node.entity_index === idx) return node;
+  for (const child of node.children) {
+    const hit = findSceneNodeByIndex(child, idx);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 function renderScheduleSummary(schedule: unknown): void {
