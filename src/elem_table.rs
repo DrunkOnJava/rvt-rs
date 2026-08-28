@@ -266,6 +266,50 @@ pub fn parse_records(rf: &mut RevitFile) -> Result<Vec<ElemRecord>> {
     Ok(parse_records_from_bytes(&d, layout, limit))
 }
 
+/// Index ElemTable records by `id_primary` for ElementId lookups.
+///
+/// Duplicate primary ids keep the first occurrence. Used by ArcWall
+/// trailer linkage (RE-15) to confirm recovered ElementIds exist in
+/// the declared table before exposing partition refs.
+pub fn index_by_element_id(records: &[ElemRecord]) -> std::collections::BTreeMap<u32, &ElemRecord> {
+    let mut map = std::collections::BTreeMap::new();
+    for record in records {
+        map.entry(record.id_primary).or_insert(record);
+    }
+    map
+}
+
+/// One ElementId that appears in both ElemTable and a decoded
+/// partition ArcWall trailer.
+#[derive(Debug, Clone)]
+pub struct LinkedArcWallElement<'a> {
+    pub element_id: u32,
+    pub elem_record: &'a ElemRecord,
+    pub partition_ref: crate::partition_arc_walls::PartitionArcWallRef,
+}
+
+/// Join ArcWall trailer ElementIds to ElemTable rows and partition
+/// record refs. Returns only ids present in **both** maps.
+pub fn link_arcwall_element_ids<'a>(
+    elem_by_id: &std::collections::BTreeMap<u32, &'a ElemRecord>,
+    partition_by_id: &std::collections::BTreeMap<
+        u32,
+        crate::partition_arc_walls::PartitionArcWallRef,
+    >,
+) -> Vec<LinkedArcWallElement<'a>> {
+    let mut out = Vec::new();
+    for (id, partition_ref) in partition_by_id {
+        if let Some(&elem) = elem_by_id.get(id) {
+            out.push(LinkedArcWallElement {
+                element_id: *id,
+                elem_record: elem,
+                partition_ref: partition_ref.clone(),
+            });
+        }
+    }
+    out
+}
+
 /// Authoritative set of declared ElementIds from Global/ElemTable.
 ///
 /// Useful for walker coverage validation: after scanning `Global/Latest`
@@ -429,5 +473,33 @@ mod tests {
         assert_eq!(records[0].id_secondary, 1);
         assert_eq!(records[1].id_primary, 2);
         assert_eq!(records[1].id_secondary, 2);
+    }
+
+    #[test]
+    fn index_by_element_id_keeps_first_duplicate() {
+        let records = vec![
+            ElemRecord {
+                offset: 0,
+                id_primary: 7,
+                id_secondary: 7,
+                raw: vec![1],
+            },
+            ElemRecord {
+                offset: 28,
+                id_primary: 7,
+                id_secondary: 8,
+                raw: vec![2],
+            },
+            ElemRecord {
+                offset: 56,
+                id_primary: 9,
+                id_secondary: 9,
+                raw: vec![3],
+            },
+        ];
+        let index = index_by_element_id(&records);
+        assert_eq!(index.len(), 2);
+        assert_eq!(index.get(&7).map(|r| r.offset), Some(0));
+        assert_eq!(index.get(&9).map(|r| r.id_secondary), Some(9));
     }
 }

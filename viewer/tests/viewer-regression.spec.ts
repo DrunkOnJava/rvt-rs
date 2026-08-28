@@ -36,13 +36,20 @@ projectSampleTest(
     await expect(page.locator('#download-diagnostics')).toBeEnabled();
     await expect(page.locator('#export-quality')).toContainText(/Geometry|Typed|Scaffold/);
 
+    // Elevation-derived ArcWall storeys remove the old missing-level gap;
+    // status still reports honest partial decode (units / thickness / storey names).
     await expect(page.locator('#status-panel')).toContainText('Partial decode');
-    await expect(page.locator('#status-panel')).toContainText('unsupported_geometry_missing_level');
+    await expect(page.locator('#status-panel')).not.toContainText(
+      'unsupported_geometry_missing_level',
+    );
+    await expect(page.locator('#status-panel')).toContainText(/unit|thickness|storey/i);
     await page.locator('#diagnostics-details summary').click();
     await expect(page.locator('#diagnostics-json')).toContainText('"schema_version": 1');
-    await expect(page.locator('#diagnostics-json')).toContainText(
+    await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
+    await expect(page.locator('#diagnostics-json')).not.toContainText(
       '"unsupported_geometry_missing_level"',
     );
+    await expect(page.locator('#diagnostics-json')).toContainText('lack recovered thickness');
 
     const firstCategory = page.locator('.category-toggle').first();
     await expect(firstCategory).toBeVisible();

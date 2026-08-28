@@ -116,6 +116,8 @@ pub mod ifc;
 pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;
+pub mod partition_arc_walls;
+pub mod partition_name_candidates;
 pub mod partitions;
 pub mod reader;
 pub mod redact;
