@@ -431,4 +431,35 @@ mod tests {
         assert!(decoded.taxonomies.is_empty());
         assert!(decoded.categories.is_empty());
     }
+
+    #[test]
+    fn later_title_element_replaces_earlier() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom">
+<title>racbasicsamplefamily</title>
+<title>0610 x 0915mm</title>
+</entry>"#;
+        let atom = PartAtom::from_bytes(xml.as_bytes()).unwrap();
+        assert_eq!(
+            atom.title.as_deref(),
+            Some("0610 x 0915mm"),
+            "got {:?}",
+            atom.title
+        );
+    }
+
+    #[test]
+    fn title_with_entity_chunks_still_concatenates() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom">
+<title>0610 &amp; 0915mm</title>
+</entry>"#;
+        let atom = PartAtom::from_bytes(xml.as_bytes()).unwrap();
+        assert_eq!(
+            atom.title.as_deref(),
+            Some("0610 & 0915mm"),
+            "got {:?}",
+            atom.title
+        );
+    }
 }
