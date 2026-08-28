@@ -111,9 +111,23 @@ impl PartAtom {
                     };
                     let _ = prefix; // prefix unused for our subset
                     match local.as_str() {
-                        "title" => state = State::InTitle,
-                        "id" => state = State::InId,
-                        "updated" => state = State::InUpdated,
+                        // Reset on Start so a later sibling element (Atom
+                        // feeds can carry more than one <title>) replaces
+                        // rather than concatenating onto the previous value.
+                        // Within one element, Text + GeneralRef chunks still
+                        // append so entity-split titles round-trip.
+                        "title" => {
+                            atom.title = None;
+                            state = State::InTitle;
+                        }
+                        "id" => {
+                            atom.id = None;
+                            state = State::InId;
+                        }
+                        "updated" => {
+                            atom.updated = None;
+                            state = State::InUpdated;
+                        }
                         "taxonomy" => {
                             current_taxonomy = Some(Taxonomy {
                                 term: String::new(),
@@ -127,9 +141,19 @@ impl PartAtom {
                             // open. Scheme lives on the <category>
                             // parent — do NOT overwrite
                             // last_category_scheme here.
+                            if let Some(tax) = current_taxonomy.as_mut() {
+                                tax.term.clear();
+                            } else {
+                                last_category_term = None;
+                            }
                             state = State::InTaxonomyTerm;
                         }
-                        "label" => state = State::InTaxonomyLabel,
+                        "label" => {
+                            if let Some(tax) = current_taxonomy.as_mut() {
+                                tax.label.clear();
+                            }
+                            state = State::InTaxonomyLabel;
+                        }
                         "category" => {
                             last_category_scheme = e.attributes().find_map(|a| {
                                 let a = a.ok()?;
@@ -180,53 +204,67 @@ impl PartAtom {
                     );
                 }
                 Ok(Event::End(e)) => {
-                    match state {
-                        State::InTitle => {
-                            if let Some(v) = atom.title.as_mut() {
-                                let trimmed = v.trim().to_string();
-                                if trimmed.is_empty() {
-                                    atom.title = None;
-                                } else {
-                                    *v = trimmed;
-                                }
-                            }
-                        }
-                        State::InId => {
-                            if let Some(v) = atom.id.as_mut() {
-                                let trimmed = v.trim().to_string();
-                                if trimmed.is_empty() {
-                                    atom.id = None;
-                                } else {
-                                    *v = trimmed;
-                                }
-                            }
-                        }
-                        State::InUpdated => {
-                            if let Some(v) = atom.updated.as_mut() {
-                                let trimmed = v.trim().to_string();
-                                if trimmed.is_empty() {
-                                    atom.updated = None;
-                                } else {
-                                    *v = trimmed;
-                                }
-                            }
-                        }
-                        State::InTaxonomyTerm => {
-                            if let Some(tax) = current_taxonomy.as_mut() {
-                                tax.term = tax.term.trim().to_string();
-                            } else if let Some(v) = last_category_term.as_mut() {
-                                *v = v.trim().to_string();
-                            }
-                        }
-                        State::InTaxonomyLabel => {
-                            if let Some(tax) = current_taxonomy.as_mut() {
-                                tax.label = tax.label.trim().to_string();
-                            }
-                        }
-                        State::Top => {}
-                    }
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     let local = name.rsplit(':').next().unwrap_or(&name).to_string();
+                    // Only leave the current text-capture state when the
+                    // matching element ends — nested End events must not
+                    // drop us back to Top mid-title.
+                    let leaving = match (local.as_str(), &state) {
+                        ("title", State::InTitle)
+                        | ("id", State::InId)
+                        | ("updated", State::InUpdated)
+                        | ("term", State::InTaxonomyTerm)
+                        | ("label", State::InTaxonomyLabel) => true,
+                        _ => false,
+                    };
+                    if leaving {
+                        match state {
+                            State::InTitle => {
+                                if let Some(v) = atom.title.as_mut() {
+                                    let trimmed = v.trim().to_string();
+                                    if trimmed.is_empty() {
+                                        atom.title = None;
+                                    } else {
+                                        *v = trimmed;
+                                    }
+                                }
+                            }
+                            State::InId => {
+                                if let Some(v) = atom.id.as_mut() {
+                                    let trimmed = v.trim().to_string();
+                                    if trimmed.is_empty() {
+                                        atom.id = None;
+                                    } else {
+                                        *v = trimmed;
+                                    }
+                                }
+                            }
+                            State::InUpdated => {
+                                if let Some(v) = atom.updated.as_mut() {
+                                    let trimmed = v.trim().to_string();
+                                    if trimmed.is_empty() {
+                                        atom.updated = None;
+                                    } else {
+                                        *v = trimmed;
+                                    }
+                                }
+                            }
+                            State::InTaxonomyTerm => {
+                                if let Some(tax) = current_taxonomy.as_mut() {
+                                    tax.term = tax.term.trim().to_string();
+                                } else if let Some(v) = last_category_term.as_mut() {
+                                    *v = v.trim().to_string();
+                                }
+                            }
+                            State::InTaxonomyLabel => {
+                                if let Some(tax) = current_taxonomy.as_mut() {
+                                    tax.label = tax.label.trim().to_string();
+                                }
+                            }
+                            State::Top => {}
+                        }
+                        state = State::Top;
+                    }
                     match local.as_str() {
                         "taxonomy" => {
                             if let Some(t) = current_taxonomy.take() {
@@ -250,7 +288,6 @@ impl PartAtom {
                         }
                         _ => {}
                     }
-                    state = State::Top;
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => return Err(Error::PartAtom(format!("{e}"))),
@@ -371,6 +408,29 @@ mod tests {
         assert_eq!(atom.categories.len(), 2);
         assert_eq!(atom.taxonomies.len(), 1);
         assert_eq!(atom.taxonomies[0].label, "Autodesk Revit");
+    }
+
+    #[test]
+    fn later_title_element_replaces_earlier() {
+        // Autodesk PartAtom streams can carry more than one <title>; the
+        // pre-0.41 parser kept the last text. Reset-on-Start preserves that.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom">
+<title>racbasicsamplefamily</title>
+<title>0610 x 0915mm</title>
+</entry>"#;
+        let atom = PartAtom::from_bytes(xml.as_bytes()).unwrap();
+        assert_eq!(atom.title.as_deref(), Some("0610 x 0915mm"));
+    }
+
+    #[test]
+    fn title_with_entity_chunks_still_concatenates() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom">
+<title>0610 &amp; 0915mm</title>
+</entry>"#;
+        let atom = PartAtom::from_bytes(xml.as_bytes()).unwrap();
+        assert_eq!(atom.title.as_deref(), Some("0610 & 0915mm"));
     }
 
     // ---- WRT-08: PartAtom writer round-trip ----
