@@ -37,18 +37,22 @@ function resolveExisting(candidates, base = repoRoot) {
 }
 
 function findGenFixture() {
+  const binName = process.platform === 'win32' ? 'gen-fixture.exe' : 'gen-fixture';
   const candidates = [
-    path.join(repoRoot, 'target', 'release', 'gen-fixture'),
-    path.join(repoRoot, 'target', 'debug', 'gen-fixture'),
-    'gen-fixture',
+    path.join(repoRoot, 'target', 'release', binName),
+    path.join(repoRoot, 'target', 'debug', binName),
   ];
   for (const candidate of candidates) {
-    if (candidate === 'gen-fixture') {
-      const which = spawnSync('which', ['gen-fixture'], { encoding: 'utf8' });
-      if (which.status === 0) return which.stdout.trim();
-      continue;
-    }
     if (fs.existsSync(candidate)) return candidate;
+  }
+  const pathCmd = process.platform === 'win32' ? 'where' : 'which';
+  const onPath = spawnSync(pathCmd, ['gen-fixture'], {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  if (onPath.status === 0) {
+    const first = onPath.stdout.trim().split(/\r?\n/)[0];
+    if (first) return first;
   }
   return null;
 }
@@ -220,10 +224,10 @@ function main() {
     console.warn(`  warning: ${warning}`);
   }
 
-  // Synthetic MVP is required for local Playwright MVP workflow coverage.
   if (!staged.find((d) => d.id === 'synthetic-mvp')?.available) {
-    console.error('synthetic-mvp demo is required but was not staged');
-    process.exit(1);
+    console.warn(
+      'warning: synthetic-mvp demo was not staged (build gen-fixture for Playwright MVP coverage)',
+    );
   }
 }
 
