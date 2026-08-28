@@ -454,11 +454,58 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
         .count();
     assert!(
         wall_geometry_count >= 10,
-        "expected ≥10 IFCWALL entities with rough ArcWall extrusion geometry; got {wall_geometry_count}"
+        "expected ≥10 IFCWALL entities with ArcWall extrusion geometry; got {wall_geometry_count}"
     );
     assert!(
         result.diagnostics.exported.building_elements_with_geometry >= wall_geometry_count,
         "diagnostics should report the geometry-bearing wall count"
+    );
+    assert!(
+        model.building_storeys.len() >= 2,
+        "RE-15: ArcWall base elevations should populate real storeys; got {}",
+        model.building_storeys.len()
+    );
+    let walls_with_storey = model
+        .entities
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                rvt::ifc::entities::IfcEntity::BuildingElement {
+                    ifc_type,
+                    storey_index: Some(_),
+                    ..
+                } if ifc_type == "IFCWALL"
+            )
+        })
+        .count();
+    assert!(
+        walls_with_storey >= 10,
+        "expected ≥10 IFCWALL entities assigned to elevation-derived storeys; got {walls_with_storey}"
+    );
+    let walls_with_element_id = model
+        .entities
+        .iter()
+        .filter(|e| match e {
+            rvt::ifc::entities::IfcEntity::BuildingElement {
+                ifc_type,
+                property_set: Some(pset),
+                ..
+            } if ifc_type == "IFCWALL" => pset.properties.iter().any(|p| p.name == "ElementId"),
+            _ => false,
+        })
+        .count();
+    assert!(
+        walls_with_element_id >= 10,
+        "expected ≥10 IFCWALL entities with recovered ElementId property; got {walls_with_element_id}"
+    );
+    assert!(
+        result
+            .diagnostics
+            .warnings
+            .iter()
+            .any(|w| w.contains("lack recovered thickness")),
+        "diagnostics should warn that ArcWall thickness is unresolved"
     );
     assert!(
         !result

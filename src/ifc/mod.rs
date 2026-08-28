@@ -659,59 +659,45 @@ fn export_rvt_doc(
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
 
-    // RE-14.3 — record-level ArcWall decode path. The walker's
+    // RE-14.3 / RE-15 — shared partition ArcWall path. The walker's
     // generic schema-driven iter_elements() does not recognise
     // Partitions/* record framing, so ArcWall instances (tag
-    // 0x0191) are invisible to that path. We scan the partition
-    // streams directly here and emit one IFCWALL per standard
-    // ArcWall record, alongside the walker's generic output. The
-    // scanner is version-gated because the 2024 ArcWall envelope
-    // has a different tag/variant distribution.
+    // 0x0191) are invisible to that path. `partition_arc_walls`
+    // is the single scan used by IFC export + diagnostics.
     //
-    // See `reports/element-framing/RE-14.3-synthesis.md` for the
-    // wire-format evidence this is based on, and
-    // `tests/arc_wall_corpus.rs` for the real-file coverage.
-    let partition_streams: Vec<String> = rf
-        .stream_names()
-        .into_iter()
-        .filter(|s| s.starts_with("Partitions/"))
-        .collect();
+    // See `reports/element-framing/RE-14.3-synthesis.md` and
+    // `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
+    let mut building_storeys = Vec::new();
     if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
-        for partition in &partition_streams {
-            let Ok(raw) = rf.read_stream(partition) else {
-                continue;
-            };
-            let chunks = crate::compression::inflate_all_chunks(&raw);
-            let concat: Vec<u8> = chunks.into_iter().flatten().collect();
-            if concat.len() < crate::arc_wall_record::STANDARD_RECORD_MIN_SIZE {
-                continue;
-            }
-            let scan = crate::arc_wall_record::ArcWallRecord::scan_standard_for_revit_version(
-                revit_version,
-                &concat,
-            );
-            for off in scan.offsets {
-                if let Ok(rec) =
-                    crate::arc_wall_record::ArcWallRecord::decode_standard(&concat, off)
-                {
-                    let geometry = arcwall_geometry_from_record(&rec);
-                    entities.push(entities::IfcEntity::BuildingElement {
-                        ifc_type: "IFCWALL".to_string(),
-                        name: format!("ArcWall-{partition}-{off}"),
-                        type_guid: None,
-                        storey_index: None,
-                        material_index: None,
-                        property_set: None,
-                        location_feet: geometry.as_ref().map(|(location, _, _)| *location),
-                        rotation_radians: geometry.as_ref().map(|(_, rotation, _)| *rotation),
-                        extrusion: geometry.map(|(_, _, extrusion)| extrusion),
-                        host_element_index: None,
-                        material_layer_set_index: None,
-                        material_profile_set_index: None,
-                        solid_shape: None,
-                        representation_map_index: None,
-                    });
-                }
+        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls(rf, revit_version) {
+            building_storeys =
+                crate::partition_arc_walls::storeys_from_arc_wall_base_elevations(&scan.walls);
+            for wall in &scan.walls {
+                let geometry = arcwall_geometry_from_partition_wall(wall);
+                let storey_index = wall.base_elevation_feet().and_then(|elev| {
+                    crate::partition_arc_walls::storey_index_for_elevation(&building_storeys, elev)
+                });
+                let property_set = arcwall_property_set(wall);
+                let name = match wall.element_id() {
+                    Some(id) => format!("ArcWall-{id}"),
+                    None => format!("ArcWall-{}-{}", wall.partition, wall.offset),
+                };
+                entities.push(entities::IfcEntity::BuildingElement {
+                    ifc_type: "IFCWALL".to_string(),
+                    name,
+                    type_guid: None,
+                    storey_index,
+                    material_index: None,
+                    property_set,
+                    location_feet: geometry.as_ref().map(|(location, _, _)| *location),
+                    rotation_radians: geometry.as_ref().map(|(_, rotation, _)| *rotation),
+                    extrusion: geometry.map(|(_, _, extrusion)| extrusion),
+                    host_element_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: None,
+                });
             }
         }
     }
@@ -724,7 +710,7 @@ fn export_rvt_doc(
         entities,
         classifications,
         units: recovered_units.assignments,
-        building_storeys: Vec::new(),
+        building_storeys,
         materials: Vec::new(),
         material_layer_sets: Vec::new(),
         material_profile_sets: Vec::new(),
@@ -732,8 +718,71 @@ fn export_rvt_doc(
     })
 }
 
+/// Placeholder thickness used only when the ArcWall trailer has no
+/// recoverable width (RE-15: thickness is not in the singleton
+/// trailer). Callers must surface this via property-set /
+/// diagnostics — it is not a decoded value.
+const UNRESOLVED_ARCWALL_THICKNESS_FEET: f64 = 8.0 / 12.0;
+
+fn arcwall_property_set(
+    wall: &crate::partition_arc_walls::PartitionArcWall,
+) -> Option<entities::PropertySet> {
+    let mut properties = Vec::new();
+    if let Some(id) = wall.element_id() {
+        properties.push(entities::Property {
+            name: "ElementId".into(),
+            value: entities::PropertyValue::Integer(id as i64),
+        });
+    }
+    if let Some(id) = wall.type_id() {
+        properties.push(entities::Property {
+            name: "TypeId".into(),
+            value: entities::PropertyValue::Integer(id as i64),
+        });
+    }
+    if let Some(elev) = wall.base_elevation_feet() {
+        properties.push(entities::Property {
+            name: "BaseElevation".into(),
+            value: entities::PropertyValue::LengthFeet(elev),
+        });
+    }
+    if let Some(height) = wall.height_feet() {
+        properties.push(entities::Property {
+            name: "UnconnectedHeight".into(),
+            value: entities::PropertyValue::LengthFeet(height),
+        });
+    }
+    properties.push(entities::Property {
+        name: "ThicknessResolved".into(),
+        value: entities::PropertyValue::Boolean(wall.thickness_feet().is_some()),
+    });
+    properties.push(entities::Property {
+        name: "PartitionOffset".into(),
+        value: entities::PropertyValue::Integer(wall.offset as i64),
+    });
+    properties.push(entities::Property {
+        name: "PartitionStream".into(),
+        value: entities::PropertyValue::Text(wall.partition.clone()),
+    });
+    if properties.is_empty() {
+        None
+    } else {
+        Some(entities::PropertySet {
+            name: "RvtArcWall".into(),
+            properties,
+        })
+    }
+}
+
+fn arcwall_geometry_from_partition_wall(
+    wall: &crate::partition_arc_walls::PartitionArcWall,
+) -> Option<([f64; 3], f64, entities::Extrusion)> {
+    arcwall_geometry_from_record(&wall.record, wall.thickness_feet())
+}
+
 fn arcwall_geometry_from_record(
     record: &crate::arc_wall_record::ArcWallRecord,
+    thickness_feet: Option<f64>,
 ) -> Option<([f64; 3], f64, entities::Extrusion)> {
     let (sx, sy, sz) = record.start_point();
     let (ex, ey, ez) = record.end_point();
@@ -749,12 +798,9 @@ fn arcwall_geometry_from_record(
         return None;
     }
 
-    let raw_height = (ez - sz).abs();
-    let height_feet = if raw_height.is_finite() && raw_height >= 0.1 {
-        raw_height
-    } else {
-        10.0
-    };
+    // Height must come from the record Z delta — do not invent 10 ft.
+    let height_feet = record.height_feet()?;
+    let depth_feet = thickness_feet.unwrap_or(UNRESOLVED_ARCWALL_THICKNESS_FEET);
     let location_feet = [(sx + ex) / 2.0, (sy + ey) / 2.0, sz.min(ez)];
     let rotation_radians = from_decoded::wall_segment_angle_radians([sx, sy], [ex, ey]);
     Some((
@@ -762,7 +808,7 @@ fn arcwall_geometry_from_record(
         rotation_radians,
         entities::Extrusion {
             width_feet: length_feet,
-            depth_feet: 8.0 / 12.0,
+            depth_feet,
             height_feet,
             profile_override: None,
         },
@@ -1209,6 +1255,29 @@ pub fn build_export_diagnostics_with_limits(
             "No Revit levels were recovered; STEP output uses the fallback spatial storey.".into(),
         );
     }
+    let unresolved_thickness = model
+        .entities
+        .iter()
+        .filter(|entity| {
+            matches!(
+                entity,
+                entities::IfcEntity::BuildingElement {
+                    name,
+                    property_set: Some(pset),
+                    ..
+                } if name.starts_with("ArcWall-")
+                    && pset.properties.iter().any(|p| {
+                        p.name == "ThicknessResolved"
+                            && matches!(p.value, entities::PropertyValue::Boolean(false))
+                    })
+            )
+        })
+        .count();
+    if unresolved_thickness > 0 {
+        warnings.push(format!(
+            "{unresolved_thickness} ArcWall records lack recovered thickness; IFC depth uses an unresolved placeholder pending WallType width join (RE-15)."
+        ));
+    }
     if mode == ExportDiagnosticsMode::Default && !skipped.is_empty() {
         warnings.push(format!(
             "Suppressed {} low-confidence schema scan candidates from default export.",
@@ -1589,22 +1658,38 @@ mod tests {
     }
 
     #[test]
-    fn arcwall_geometry_uses_midpoint_rotation_length_and_height() {
+    fn arcwall_geometry_uses_midpoint_rotation_length_and_decoded_height() {
         let record = arcwall_record_with_coords([0.0, 0.0, 2.0, 3.0, 4.0, 14.0]);
         let (location, rotation, extrusion) =
-            arcwall_geometry_from_record(&record).expect("valid geometry");
+            arcwall_geometry_from_record(&record, Some(0.5)).expect("valid geometry");
 
         assert_eq!(location, [1.5, 2.0, 2.0]);
         assert!((rotation - 4.0f64.atan2(3.0)).abs() < 1e-9);
         assert!((extrusion.width_feet - 5.0).abs() < 1e-9);
-        assert!((extrusion.depth_feet - (8.0 / 12.0)).abs() < 1e-9);
+        assert!((extrusion.depth_feet - 0.5).abs() < 1e-9);
         assert!((extrusion.height_feet - 12.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn arcwall_geometry_rejects_missing_height_instead_of_inventing() {
+        // Identical Z → no recoverable height; must not invent 10 ft.
+        let record = arcwall_record_with_coords([0.0, 0.0, 5.0, 3.0, 4.0, 5.0]);
+        assert!(arcwall_geometry_from_record(&record, Some(0.5)).is_none());
+    }
+
+    #[test]
+    fn arcwall_geometry_uses_unresolved_thickness_placeholder_when_missing() {
+        let record = arcwall_record_with_coords([0.0, 0.0, 0.0, 4.0, 0.0, 8.0]);
+        let (_, _, extrusion) =
+            arcwall_geometry_from_record(&record, None).expect("height present");
+        assert!((extrusion.depth_feet - UNRESOLVED_ARCWALL_THICKNESS_FEET).abs() < 1e-9);
+        assert!((extrusion.height_feet - 8.0).abs() < 1e-9);
     }
 
     #[test]
     fn arcwall_geometry_rejects_degenerate_xy_segment() {
         let record = arcwall_record_with_coords([1.0, 2.0, 0.0, 1.0, 2.0, 10.0]);
-        assert!(arcwall_geometry_from_record(&record).is_none());
+        assert!(arcwall_geometry_from_record(&record, Some(0.5)).is_none());
     }
 
     fn diagnostic_building_element(
