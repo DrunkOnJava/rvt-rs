@@ -77,13 +77,13 @@ fn clean_stream_path(path: &str) -> &str {
 
 /// Whether production inflate wrappers strip checksum-page trailers.
 ///
-/// **Narrow gate** (issue #151 / Discussion #112, independent judge: *narrow*):
-/// strip on large multi-member `Partitions/*` and listed `Global/*` database
-/// streams where redistributable corpus evidence shows member-recovery
-/// benefit. **`Formats/Latest` is excluded** — naive strip regresses
-/// opportunistic `class_names` (9579→8575 on magnetar `2024_Core_Interior.rvt`)
-/// while structured SchemaTable stays flat; Formats ~48% schema recovery was
-/// **not** reproduced on redistributable samples.
+/// **Wave 2 narrowed gate** (issue #151 / Discussion #112, judge: *narrow*):
+/// enable strip for large multi-member `Partitions/*` and listed `Global/*`
+/// database streams where redistributable corpus evidence shows member-recovery
+/// benefit. **`Formats/Latest` is excluded by default** — naive strip regresses
+/// opportunistic `class_names` (e.g. 9579→8575 on Core Interior) while
+/// structured SchemaTable stays flat; Formats ~48% schema recovery was **not**
+/// reproduced on redistributable samples.
 ///
 /// `ProjectInformation`, `PartAtom`, `BasicFileInfo`, and preview streams are
 /// never gated — they are not routed through the paged gzip reader.
@@ -699,13 +699,14 @@ mod tests {
 
     #[test]
     fn checksum_paged_stream_paths() {
-        // Formats/Latest is a paged-loader *candidate* but not production-gated
-        // (class_names regression on Core Interior under naive strip).
+        // Narrowed Wave 2 gate: Partitions + Global DB streams only.
         assert!(!is_checksum_paged_stream("Formats/Latest"));
         assert!(!is_checksum_paged_stream("/Formats/Latest"));
         assert!(is_revit_paged_loader_candidate("Formats/Latest"));
         assert!(is_checksum_paged_stream("Global/Latest"));
+        assert!(is_checksum_paged_stream("Global/ElemTable"));
         assert!(is_checksum_paged_stream("Partitions/67"));
+        assert!(is_checksum_paged_stream("Partitions/46"));
         assert!(is_checksum_paged_stream("/Partitions/46"));
         assert!(!is_checksum_paged_stream("BasicFileInfo"));
         assert!(!is_checksum_paged_stream("PartAtom"));
@@ -781,10 +782,10 @@ mod tests {
 
     /// Inject 353-byte trailers into a real truncated-gzip blob so the
     /// stored layout matches Discussion #112 / issue #151, then prove
-    /// [`inflate_stream_at`] on a gated partition path recovers the payload
-    /// while bare inflate drifts or fails closed.
+    /// gated [`inflate_stream_at`] recovers the payload while bare inflate
+    /// drifts or fails closed — and Formats stays ungated by default.
     #[test]
-    fn synthetic_multipage_partition_requires_strip_before_inflate() {
+    fn synthetic_multipage_partitions_require_strip_before_inflate() {
         // High-entropy payload so the compressed form already crosses a
         // full stored page (64_896 payload bytes) without a slow grow loop.
         let mut state = 0xC0FFEE_u32;
@@ -817,30 +818,31 @@ mod tests {
             );
         }
 
-        // Experiment: gated partition inflate strips pages first.
+        // Experiment: Partitions path strips pages first.
         let recovered = inflate_stream_at("Partitions/46", &paged, 0).expect("strip+inflate");
         assert_eq!(recovered, payload);
 
-        // Formats/Latest is intentionally not production-gated: same as bare.
+        // Global DB streams are also gated.
+        assert_eq!(
+            inflate_stream_at("Global/Latest", &paged, 0).unwrap(),
+            payload
+        );
+
+        // Formats/Latest is deliberately ungated (class_names regression on
+        // redistributable corpus; Formats ~48% not reproduced).
         assert_eq!(
             inflate_stream_at("Formats/Latest", &paged, 0)
                 .err()
                 .map(|e| e.to_string()),
             inflate_at(&paged, 0).err().map(|e| e.to_string()),
-            "Formats/Latest must not strip under the narrow gate"
+            "Formats/Latest must not strip by default"
         );
-        if let (Ok(a), Ok(b)) = (
-            inflate_stream_at("Formats/Latest", &paged, 0),
-            inflate_at(&paged, 0),
-        ) {
-            assert_eq!(a, b, "Formats/Latest must not strip under the narrow gate");
-        }
 
-        // Small streams stay identity under prepare (no full page to strip).
+        // Small non-paged streams stay identity under prepare.
         let small = truncated_gzip_encode(b"tiny").unwrap();
         assert!(small.len() < REVIT_STORED_PAGE_BYTES);
         assert_eq!(
-            inflate_stream_at("Partitions/46", &small, 0).unwrap(),
+            inflate_stream_at("Partitions/1", &small, 0).unwrap(),
             b"tiny"
         );
         // Non-paged paths must not strip — same outcome as bare inflate.
