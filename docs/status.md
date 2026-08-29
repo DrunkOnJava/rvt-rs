@@ -50,7 +50,7 @@ decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 | Capability | Status | Evidence | User impact |
 |---|---|---|---|
 | Open `.rvt`, `.rfa`, `.rte`, `.rft` CFB containers | Full | `reader`, CI matrix | Files can be inspected without Revit. |
-| Decode Revit truncated-gzip streams (incl. checksum-paged strip, #151) | Full | `compression`, fuzz regressions | Internal streams can be read safely. |
+| Decode Revit truncated-gzip streams (gated checksum-page strip on Partitions/Global, #151) | Full | `compression`, `checksum_page_framing`, fuzz | Internal streams can be read safely; Formats/Latest stays ungated by default. |
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus | Developers can inspect class and field structure. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
