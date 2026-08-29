@@ -6,6 +6,11 @@
 //! corpora and Floors/Rooms remain storey-unassigned — that is
 //! intentional (fail closed), not a silent invent.
 //!
+//! RE-20 (magnetar Einhoven / Core Interior): Level ElementId recovery
+//! remains **INSUFFICIENT** — `Level` is absent from Formats schema on
+//! those files; proximity / LevelAssociationCell-shaped scans do not
+//! yield unique elev→id maps.
+//!
 //! When both sides carry ElementIds that match, [`LevelStoreyBind::storey_index_for`]
 //! returns the storey index; otherwise `None`.
 
