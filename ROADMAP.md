@@ -40,9 +40,9 @@ while the broader registry remains a library building block (see
 | Container, compression, metadata | Shipped | Maintain compatibility and bounds checks. |
 | `Formats/Latest` schema | Shipped | Keep 100 percent field classification gated in CI. |
 | ADocument/document-level walker | Partial | Expand confidence across project releases and older files. |
-| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material/Room/Floor plan-loops + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). RE-19: no Door/Window discriminator / no schema-field Wall on magnetar corpora — keep issues open without inventing types. |
-| IFC writer | Partial | Levels/Floors/Rooms/Materials from partition MVP emit honestly; ArcWall geometry on 2023; Door/Window host IFC + slab extrusion still open (blocked on RE-19). |
-| Browser viewer | Partial | File Status lists recovered storey names + material display-name samples + honest Parameters row (empty until AProperty host joins); scene tree groups under `IFCBUILDINGSTOREY` (ArcWalls by elevation; Floors/Rooms stay Unassigned until Level ElementIds exist on both sides of the bind). |
+| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material/Room/Floor plan-loops + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). RE-19: no Door/Window discriminator / no schema-field Wall. RE-20: no Level ElementId recovery on magnetar corpora (`Level` absent from Formats; Floors/Rooms stay Unassigned). |
+| IFC writer | Partial | Levels/Floors/Rooms/Materials from partition MVP emit honestly; ArcWall geometry on 2023; Door/Window host IFC + slab extrusion still open (blocked on RE-19); Floor/Room storey bind idle (RE-20). |
+| Browser viewer | Partial | File Status lists recovered storey names + material display-name samples + honest Parameters row (empty until AProperty host joins — RE-20: no AProperty carriers on magnetar Global/Latest); scene tree groups under `IFCBUILDINGSTOREY` (ArcWalls by elevation; Floors/Rooms stay Unassigned — RE-20 negative on Level ElementIds). |
 | Python/CLI surface | Partial | Stabilize JSON schemas and one-shot inspect workflow. |
 | Write path | Partial | Keep stream-level writes honest; defer semantic writes until openability can be proven. |
 

@@ -32,13 +32,18 @@ storey names, material name samples, and an honest Parameters row (empty
 until AProperty* host joins). The scene tree groups elements under
 `IFCBUILDINGSTOREY` nodes (ArcWalls by elevation; Floors/Rooms remain
 Unassigned until Level ElementIds exist on both sides — bind plumbing is
-fail-closed and corpus-idle today). RE-19 corpus research (Einhoven
-2023 / Core Interior 2024) found **no** reliable Door vs Window
-discriminator and **no** schema-field / 2024 ArcWall envelope suitable for
-fail-closed decode — so typed `Door`/`Window` and non-ArcWall `Wall` stay
-unsolved by evidence, not by omission. Floor↔ElemTable id binding and slab
-extrusion thickness remain open. Eighty-one per-class decoder structs remain
-registered; `MVP_TYPED_CLASSES` are consulted by `iter_elements`.
+fail-closed and corpus-idle today). RE-20 (same corpora) found **no**
+recoverable Level ElementId map: `Level` is absent from Formats schema;
+LevelAssociationCell / name / elevation proximity scans are
+noise-dominated — Floors/Rooms stay Unassigned by evidence, not omission.
+RE-19 found **no** reliable Door vs Window discriminator and **no**
+schema-field / 2024 ArcWall envelope suitable for fail-closed decode —
+typed `Door`/`Window` and non-ArcWall `Wall` stay unsolved. AProperty*
+carriers are not present in production `iter_elements` / Global/Latest
+candidate scans on these corpora (#35 host joins idle). Floor↔ElemTable
+id binding and slab extrusion thickness remain open. Eighty-one per-class
+decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
+`iter_elements`.
 
 ## Capability Matrix
 
@@ -50,7 +55,7 @@ registered; `MVP_TYPED_CLASSES` are consulted by `iter_elements`.
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus | Developers can inspect class and field structure. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
 | Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms/Floor plan-loops + 2024 ArcWallRectOpening (ElemTable-confirmed related ids); HostObjAttr filtered; RE-19 negative: no Door/Window discriminator / no schema-field Wall on magnetar corpora | Full model conversion is not ready. |
-| Typed decoder structs | Partial | `elements::all_decoders()` registers **80** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
+| Typed decoder structs | Partial | `elements::all_decoders()` registers **81** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
 | IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / Material display names; thickness + Door/Window host IFC still open; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, File Status shows production class counts + storey/material totals, supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Always-on patch corpus (`gen-fixture` project + MIT `empty.rfa`) covers identity, grow, shrink, multi-stream, missing-stream; optional Autodesk corpora add release-matrix + GUID/history checks; corrupt-gzip verification is unit-tested | Useful for controlled stream replacement, not semantic Revit editing. |
