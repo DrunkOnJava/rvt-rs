@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "matrix_id": "rvt-rs-support-matrix",
+  "reviewed": "2026-08-29",
+  "description": "Executable support matrix for rvt-rs. Seeded from honest current capabilities in docs/status.md, docs/supported-profile.md, and ROADMAP.md — not aspirational milestone goals. Do not claim converter-grade typed recovery.",
+  "sources": [
+    "docs/status.md",
+    "docs/supported-profile.md",
+    "ROADMAP.md"
+  ],
+  "status_vocabulary": [
+    "verified",
+    "partial",
+    "experimental",
+    "unsupported",
+    "unknown"
+  ],
+  "audit_controls": [
+    "COR-001",
+    "TEST-001",
+    "DOC-001",
+    "A3"
+  ],
+  "honesty_invariants": {
+    "never_verified_capability_ids": [
+      "typed-project-elements",
+      "typed-decoder-registry",
+      "ifc4-export-real-projects",
+      "converter-grade-rvt-ifc",
+      "typed-door-window",
+      "schema-field-wall",
+      "level-elementid-storey-bind",
+      "aparameter-host-joins",
+      "semantic-revit-editing",
+      "stream-level-writer"
+    ],
+    "max_status_by_capability_id": {
+      "typed-project-elements": "partial",
+      "typed-decoder-registry": "partial",
+      "ifc4-export-real-projects": "partial",
+      "adocument-walker": "partial",
+      "browser-viewer": "partial",
+      "python-package": "partial",
+      "inspect-cli": "partial",
+      "stream-level-writer": "partial",
+      "community-corpus-scaffold": "partial",
+      "converter-grade-rvt-ifc": "unsupported",
+      "typed-door-window": "unsupported",
+      "schema-field-wall": "unsupported",
+      "level-elementid-storey-bind": "unsupported",
+      "aparameter-host-joins": "unsupported",
+      "semantic-revit-editing": "unsupported"
+    }
+  },
+  "capabilities": [
+    {
+      "id": "cfb-container-open",
+      "area": "container",
+      "name": "Open .rvt / .rfa / .rte / .rft CFB containers",
+      "status": "verified",
+      "evidence": "reader module; CI open matrix; Q-01 corpus open path",
+      "notes": "Standard OLE/CFB Revit layout. Corrupt, encrypted, or non-CFB inputs fail closed.",
+      "user_impact": "Files can be inspected without Revit."
+    },
+    {
+      "id": "truncated-gzip-streams",
+      "area": "compression",
+      "name": "Decode Revit truncated-gzip streams",
+      "status": "verified",
+      "evidence": "compression; checksum_page_framing; fuzz targets; Finding 1 gated strip on Partitions/Global",
+      "notes": "Formats/Latest stays ungated by default. Writer path has separate audit coverage.",
+      "user_impact": "Internal streams can be read safely."
+    },
+    {
+      "id": "metadata-partatom-preview",
+      "area": "metadata",
+      "name": "Extract BasicFileInfo, PartAtom XML, preview PNG",
+      "status": "verified",
+      "evidence": "basic_file_info; part_atom; preview tests",
+      "notes": "Identity, build, GUID, title, OmniClass, and stream preview extraction.",
+      "user_impact": "Users can identify and audit files."
+    },
+    {
+      "id": "formats-latest-schema",
+      "area": "schema",
+      "name": "Parse Formats/Latest schema with field classification",
+      "status": "verified",
+      "evidence": "100% field classification over 2016-2026 family corpus; CI regression gate",
+      "notes": "Class and field structure for developers. Not per-element instance recovery.",
+      "user_impact": "Schema introspection works across the verified family band."
+    },
+    {
+      "id": "adocument-walker",
+      "area": "document",
+      "name": "Read document-level ADocument data",
+      "status": "partial",
+      "evidence": "Layer 5a walker; reliable on newer samples",
+      "notes": "Good for diagnostics. Older/project bands need more corpus proof. Not complete model extraction.",
+      "user_impact": "Document metadata aids triage; not a full model read."
+    },
+    {
+      "id": "typed-project-elements",
+      "area": "elements",
+      "name": "Decode typed elements from real project files",
+      "status": "partial",
+      "evidence": "Production iter_elements: ArcWall (2023) + partition MVP Level/Material/Room/Floor + 2024 ArcWallRectOpening (ElemTable-confirmed ids); RE-19/RE-20 negatives",
+      "notes": "Narrow fail-closed MVP only. Generic real-project typed extraction is not solved. Never mark verified without corpus-backed converter-grade evidence (COR-001).",
+      "user_impact": "Useful recovery on supported subsets; full model conversion is not ready."
+    },
+    {
+      "id": "typed-decoder-registry",
+      "area": "elements",
+      "name": "Per-class typed decoder structs",
+      "status": "partial",
+      "evidence": "elements::all_decoders() (~81); MVP_TYPED_CLASSES consulted by iter_elements",
+      "notes": "Library building blocks plus production MVP/ArcWall path. Broader registry is not production conversion.",
+      "user_impact": "Developers can compose decoders; users should not read this as full coverage."
+    },
+    {
+      "id": "schema-field-wall",
+      "area": "elements",
+      "name": "Schema-field Wall decode (non-ArcWall)",
+      "status": "unsupported",
+      "evidence": "RE-19 negative on magnetar corpora",
+      "notes": "No fail-closed schema-field Wall / 2024 ArcWall envelope suitable for production decode beyond the gated 2023 ArcWall path.",
+      "user_impact": "Arbitrary walls are not recovered as typed Walls."
+    },
+    {
+      "id": "typed-door-window",
+      "area": "elements",
+      "name": "Typed Door and Window host binding",
+      "status": "unsupported",
+      "evidence": "RE-19: no reliable Door vs Window discriminator",
+      "notes": "2024 ArcWallRectOpening index may carry ElemTable-confirmed related ids without inventing typed Door/Window success.",
+      "user_impact": "Doors and windows are not typed IFC fills/voids from real projects."
+    },
+    {
+      "id": "level-elementid-storey-bind",
+      "area": "elements",
+      "name": "Floor/Room storey bind via Level ElementIds",
+      "status": "unsupported",
+      "evidence": "RE-20: Level absent from Formats; proximity scans noise-dominated",
+      "notes": "Bind plumbing stays fail-closed / corpus-idle. Floors/Rooms remain Unassigned by evidence.",
+      "user_impact": "Scene-tree storey grouping for Floors/Rooms stays Unassigned."
+    },
+    {
+      "id": "aparameter-host-joins",
+      "area": "parameters",
+      "name": "AProperty* host parameter joins",
+      "status": "unsupported",
+      "evidence": "Production iter_elements / Global/Latest candidate scans; #35 idle on magnetar corpora",
+      "notes": "Honest empty Parameters row until carriers and host joins are proven.",
+      "user_impact": "Element parameters are not exposed as a completed feature."
+    },
+    {
+      "id": "ifc4-export-real-projects",
+      "area": "ifc",
+      "name": "IFC4 export from real Revit project files",
+      "status": "partial",
+      "evidence": "Synthetic fixtures validate; 2023 ArcWall IfcWall + partition Level/Floor/Room/Material emission; rvt-ifc --mode / --diagnostics",
+      "notes": "Correct writer path exists. Real-file typed inputs remain incomplete. Scaffold success is not typed conversion.",
+      "user_impact": "Valid IFC scaffold and narrow typed subsets; not general RVT-to-IFC."
+    },
+    {
+      "id": "converter-grade-rvt-ifc",
+      "area": "ifc",
+      "name": "Converter-grade production RVT-to-IFC",
+      "status": "unsupported",
+      "evidence": "docs/status.md; ROADMAP out-of-scope until corpus-proven typed elements + geometry",
+      "notes": "Explicit non-claim (COR-001). Do not advertise rvt-rs as a production Revit IFC converter.",
+      "user_impact": "Use Revit/API exporters or wait for MVP milestones when evidence lands."
+    },
+    {
+      "id": "browser-viewer",
+      "area": "viewer",
+      "name": "Zero-upload browser viewer",
+      "status": "partial",
+      "evidence": "GitHub Pages; WASM no-network import gate; File Status / storey grouping",
+      "notes": "Geometry and export readiness reflect decoded coverage. Synthetic fixtures are scaffold-only.",
+      "user_impact": "Useful local inspection without upload."
+    },
+    {
+      "id": "stream-level-writer",
+      "area": "writer",
+      "name": "Stream-level CFB writer / patch",
+      "status": "partial",
+      "evidence": "Always-on gen-fixture + MIT empty.rfa patch corpus; optional Autodesk matrix",
+      "notes": "Controlled stream replacement only. Not semantic Revit editing.",
+      "user_impact": "Useful for forensic/stream patches, not model authoring."
+    },
+    {
+      "id": "semantic-revit-editing",
+      "area": "writer",
+      "name": "Semantic Revit field-level editing",
+      "status": "unsupported",
+      "evidence": "ADR-002 semantic write API gate",
+      "notes": "No stable semantic write API until decoder/validation evidence is strong enough.",
+      "user_impact": "Do not expect round-trip model edits."
+    },
+    {
+      "id": "python-package",
+      "area": "bindings",
+      "name": "Python package (rvt)",
+      "status": "partial",
+      "evidence": "CI wheel builds; pytest; maturin/pyo3 bindings",
+      "notes": "Useful for metadata/schema automation. Same honesty bounds as the Rust core.",
+      "user_impact": "Scriptable inspection; not a full converter SDK."
+    },
+    {
+      "id": "inspect-cli",
+      "area": "cli",
+      "name": "User-facing rvt-inspect CLI",
+      "status": "partial",
+      "evidence": "rvt-inspect human + JSON; export readiness; diagnostics sidecar fields",
+      "notes": "Support triage without Revit internals. Reports align with this matrix.",
+      "user_impact": "Clear health / coverage / next-steps for a single file."
+    },
+    {
+      "id": "community-corpus-scaffold",
+      "area": "validation",
+      "name": "Community corpus open/schema/scaffold IFC check",
+      "status": "partial",
+      "evidence": "docs/corpus-hunt-2026-04-21.md: 222/223 real files pass open → schema → scaffold IFC",
+      "notes": "Proves container/schema/scaffold health. Does not prove typed element recovery.",
+      "user_impact": "Confidence in open/inspect on public samples; not conversion proof."
+    },
+    {
+      "id": "export-source-coverage",
+      "area": "diagnostics",
+      "name": "Measured export source-coverage fractions (A10)",
+      "status": "unknown",
+      "evidence": "docs/schemas/export-diagnostics.schema.json source_coverage stub only",
+      "notes": "A10 light: schema fields reserved; fractions stay null/unset until measured. Do not invent coverage ratios.",
+      "user_impact": "Diagnostics may omit coverage until measurement lands."
+    }
+  ]
+}
