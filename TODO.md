@@ -359,6 +359,13 @@ Acceptance criteria:
 - Nightly CI runs all tiers.
 - Failures identify file, stage, and subsystem.
 
+Status (2026-08-29): **shipped**. PR CI runs Tier 1 (`corpus-tier1`) and
+Tier 2 with a small limit (`corpus-tier2`, plus writer / IfcOpenShell
+gates). Nightly workflow `.github/workflows/corpus-nightly.yml` widens
+Tier 2, re-runs Tier 3 export validation, and runs Tier 4 family-corpus
++ `cargo bench --no-run`. glTF/SVG export validation remains a follow-up
+inside Tier 3 when fixtures allow.
+
 ### M2-04: Add corpus triage tooling
 
 Labels: `priority:P1`, `type:feature`, `area:corpus`
