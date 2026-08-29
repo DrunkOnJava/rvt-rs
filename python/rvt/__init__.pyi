@@ -47,6 +47,8 @@ Keys:
 - ``byte_range`` (dict[str, int]): ``start`` and ``end`` offsets in
   decompressed stream bytes.
 - ``fields`` (list[TypedField]): decoded schema fields.
+- ``typed`` (dict | None): Lane Five MVP projection for Level / Wall /
+  Floor / Door / Window / Room / Material; ``None`` for other classes.
 """
 
 TypedElementCounts = dict[str, Union[int, dict[str, int]]]
@@ -54,6 +56,9 @@ TypedElementCounts = dict[str, Union[int, dict[str, int]]]
 
 Keys: ``total`` (int) and ``by_class`` (dict[str, int]).
 """
+
+MVP_TYPED_CLASSES: Final[list[str]]
+"""Lane Five schema-driven MVP class names exposed for introspection."""
 
 
 class RevitFile:
@@ -205,14 +210,18 @@ class RevitFile:
     def decoded_elements(self) -> list[TypedDecodedElement]:
         """Return conservative production decoded elements.
 
-        Each entry has ``id``, ``class_name``, ``byte_range``, and
-        ``fields``. The field dictionaries use the same kind-specific
-        shape as ``read_adocument()["fields"]``.
+        Each entry has ``id``, ``class_name``, ``byte_range``,
+        ``fields``, and ``typed``. The field dictionaries use the same
+        kind-specific shape as ``read_adocument()["fields"]``.
+        ``typed`` is the Lane Five MVP projection when
+        ``class_name`` is in ``MVP_TYPED_CLASSES``, else ``None``.
         """
 
     def element_counts(self) -> TypedElementCounts:
         """Return decoded element counts as ``{"total": int,
-        "by_class": dict[str, int]}``.
+        "by_class": dict[str, int]}``. Matches ``rvt-elements
+        --counts`` and ``export_diagnostics()["decoded"]
+        ["production_walker_elements"]`` for ``total``.
         """
 
     def write_ifc(self, mode: str = "scaffold") -> str:
@@ -222,12 +231,14 @@ class RevitFile:
         ``mode`` is one of ``"scaffold"``, ``"typed-no-geometry"``,
         ``"geometry"``, or ``"strict"``. Stronger modes raise
         ``ValueError`` when the recovered model data is not complete
-        enough for that quality level.
+        enough for that quality level. On scaffold-only fixtures only
+        ``scaffold`` typically succeeds until Lane 7 geometry lands.
         """
 
     def export_diagnostics_json(self) -> str:
         """Produce the JSON diagnostics sidecar for the default IFC
-        export. The schema matches ``rvt-ifc --diagnostics``.
+        export. The schema matches ``rvt-ifc --diagnostics`` and
+        ``docs/schemas/export-diagnostics.schema.json``.
         """
 
     def export_diagnostics(self) -> dict[str, Any]:
