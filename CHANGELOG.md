@@ -13,6 +13,11 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **TransmissionData UTF-16 detect stub** — `transmission_data::TransmissionDataProbe`
+  classifies empty / UTF-16LE / opaque without inventing a field layout;
+  `RevitFile::transmission_data_probe` exposes it. Linked-model resolution
+  still unsupported. `rvt-history` clap/docs honesty: DocumentHistory is a
+  UTF-16LE `"Revit "` scan, not a full history object model.
 - **Preview PNG IEND trim** — `RevitFile::preview_png` truncates at the
   `IEND` chunk CRC when present (drops trailing OLE junk);
   `preview_png_untrimmed` keeps the forensic full tail.
