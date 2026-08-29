@@ -797,7 +797,7 @@ fn opening_index_column_bit_patterns(buf: &[u8]) {
                 println!("    +0x{off:02x}: distinct={distinct} {top:?}");
             } else if distinct == 2
                 || ranked
-                    .get(0)
+                    .first()
                     .zip(ranked.get(1))
                     .is_some_and(|((_, a), (_, b))| {
                         let total = sample as f64;
