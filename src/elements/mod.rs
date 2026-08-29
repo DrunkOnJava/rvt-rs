@@ -238,6 +238,12 @@ pub fn decode_instance_prefer_typed_with_limits(
                 // byte_range into the parent buffer coordinate space.
                 decoded.byte_range.start = decoded.byte_range.start.saturating_add(start);
                 decoded.byte_range.end = decoded.byte_range.end.saturating_add(start);
+                let decoder_name = format!("{}Decoder", schema.name);
+                decoded.provenance = crate::walker::ElementProvenance::schema_typed(
+                    "Global/Latest",
+                    start,
+                    &decoder_name,
+                );
                 Some(decoded)
             }
             Err(_) => None,

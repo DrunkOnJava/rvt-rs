@@ -317,6 +317,7 @@ mod tests {
             class: "Dimension".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let d = Dimension::from_decoded(&decoded);
         assert_eq!(d.value_feet, Some(12.5));
@@ -364,6 +365,7 @@ mod tests {
             class: "Tag".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let t = Tag::from_decoded(&decoded);
         assert_eq!(t.owner_view_id, Some(42));
@@ -405,6 +407,7 @@ mod tests {
             class: "TextNote".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let n = TextNote::from_decoded(&decoded);
         assert_eq!(n.text.as_deref(), Some("SEE STRUCT DETAIL"));
@@ -444,6 +447,7 @@ mod tests {
             class: "Dimension".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert!(Dimension::from_decoded(&empty).value_feet.is_none());
         assert!(Tag::from_decoded(&empty).tagged_element_id.is_none());

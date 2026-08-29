@@ -292,6 +292,7 @@ mod tests {
             class: "View".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let v = View::from_decoded(&decoded);
         assert_eq!(v.name.as_deref(), Some("Level 1 — Floor Plan"));
@@ -334,6 +335,7 @@ mod tests {
             class: "Schedule".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let s = Schedule::from_decoded(&decoded);
         assert_eq!(s.name.as_deref(), Some("Door Schedule"));
@@ -347,6 +349,7 @@ mod tests {
             class: "View".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert!(View::from_decoded(&empty).name.is_none());
         assert!(Sheet::from_decoded(&empty).name.is_none());

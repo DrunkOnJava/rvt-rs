@@ -402,6 +402,7 @@ mod tests {
             class: "Beam".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let b = Beam::from_decoded(&decoded);
         assert_eq!(b.start, Some(Point3::new(0.0, 0.0, 10.0)));
@@ -438,6 +439,7 @@ mod tests {
             class: "StructuralColumn".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         // Both StructuralColumn/StructuralFraming use the same typed
         // view projection functions as their architectural twins.

@@ -378,6 +378,7 @@ mod tests {
             class: "GridType".to_string(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let gt = GridType::from_decoded(&empty);
         assert!(gt.name.is_none() && gt.bubble_location.is_none());

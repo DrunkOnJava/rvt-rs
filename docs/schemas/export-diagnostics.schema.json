@@ -113,6 +113,23 @@
             "minimum": 0
           }
         },
+        "mean_element_confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Mean provenance confidence across production iter_elements (M3-07)."
+        },
+        "elements_below_min_confidence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of production elements below min_element_confidence."
+        },
+        "min_element_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Floor used for below-min count and default IFC hide (0.55)."
+        },
         "recovered_unit_identifiers": {
           "type": "array",
           "description": "Best-effort project unit identifiers selected from Revit autodesk.unit.* records and threaded into IfcUnitAssignment.",

@@ -208,6 +208,7 @@ mod tests {
                     },
                 ),
             ],
+            provenance: Default::default(),
         };
         let typed = mvp_typed_view(&decoded).expect("Level is MVP");
         assert_eq!(typed["name"], json!("L1"));
@@ -221,6 +222,7 @@ mod tests {
             class: "HostObjAttr".into(),
             byte_range: 0..0,
             fields: vec![],
+            provenance: Default::default(),
         };
         assert!(mvp_typed_view(&decoded).is_none());
     }

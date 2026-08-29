@@ -550,6 +550,7 @@ mod tests {
             class: "WallType".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let wt = WallType::from_decoded(&empty);
         assert!(wt.name.is_none() && wt.kind.is_none() && wt.width_feet.is_none());
@@ -595,6 +596,7 @@ mod tests {
                 ),
             ],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let w = Wall::from_decoded(&decoded);
         assert_eq!(w.location_start, Some(Point3::new(1.0, 2.0, 0.0)));

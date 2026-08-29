@@ -262,6 +262,7 @@ mod tests {
             class: "Space".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let z = Zone::from_decoded(&empty);
         assert!(z.name.is_none() && z.area_square_feet.is_none());
@@ -275,12 +276,14 @@ mod tests {
             class: "Area".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let s_empty = DecodedElement {
             id: None,
             class: "Space".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let _a = Zone::from_decoded(&a_empty);
         let _s = Zone::from_decoded(&s_empty);

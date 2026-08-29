@@ -191,6 +191,13 @@ fn decoded_element_to_dict<'py>(
     }
     d.set_item("parameters", params)?;
 
+    // M3-07 — decode confidence + provenance.
+    let prov_json =
+        serde_json::to_string(&element.provenance.to_json_value()).map_err(to_py_val)?;
+    let json_module = py.import("json")?;
+    let provenance = json_module.call_method1("loads", (prov_json,))?;
+    d.set_item("provenance", provenance)?;
+
     // Lane Five MVP typed projection (null when class is not in the
     // schema-driven MVP set — ArcWall stays on the partition path).
     match elements::typed_json::mvp_typed_view(element) {
