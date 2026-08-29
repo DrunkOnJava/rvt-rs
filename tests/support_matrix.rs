@@ -330,8 +330,8 @@ fn seeded_support_matrix_validates_and_respects_honesty_invariants() {
     );
     assert_eq!(
         seen.get("export-source-coverage").copied(),
-        Some("unknown"),
-        "A10 coverage fractions stay unknown until measured"
+        Some("partial"),
+        "A10 coverage fractions are partially measured (fail-closed where unknown)"
     );
 }
 

@@ -221,11 +221,10 @@ pub struct ExportDiagnostics {
     pub unsupported_features: Vec<String>,
     pub warnings: Vec<String>,
     pub confidence: ExportConfidenceSummary,
-    /// A10 light stub: reserved source-coverage fractions.
+    /// A10 source-coverage fractions measured from export/decode stats.
     ///
-    /// Always emitted with [`SourceCoverageDiagnostics::unset`] until
-    /// corpus-backed measurement lands. Fraction fields stay `None` —
-    /// never invent coverage ratios.
+    /// Fractions are set only when a trustworthy denominator exists;
+    /// otherwise they stay `None` (fail closed — never invent ratios).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_coverage: Option<SourceCoverageDiagnostics>,
     /// `Formats/Latest` page-boundary / strip-gate integrity (A2 / PARSE-001).
@@ -234,7 +233,7 @@ pub struct ExportDiagnostics {
     pub formats_latest_integrity: Option<crate::compression::FormatsLatestIntegrity>,
 }
 
-/// Reserved A10 export source-coverage block (schema additive; unset by default).
+/// A10 export source-coverage block (measured when denominators exist).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SourceCoverageDiagnostics {
     pub status: SourceCoverageStatus,
@@ -263,7 +262,7 @@ impl SourceCoverageDiagnostics {
         Self {
             status: SourceCoverageStatus::Unset,
             notes: Some(
-                "A10 stub: export source-coverage fractions are not measured yet; fields stay null."
+                "Export source-coverage fractions are unset: no trustworthy denominator was available; fields stay null."
                     .to_string(),
             ),
             decoded_element_fraction: None,
@@ -271,6 +270,107 @@ impl SourceCoverageDiagnostics {
             geometry_element_fraction: None,
         }
     }
+
+    /// Measure fractions from existing decode/export counts only.
+    ///
+    /// Definitions (fail closed when a denominator is zero or untrusted):
+    /// - `decoded_element_fraction` = `production_walker_elements /
+    ///   elem_table_element_count` when the ElemTable header
+    ///   `element_count` parses and `0 < walker <= element_count`
+    ///   (partition MVP can exceed the u16 header — leave null then).
+    /// - `exported_element_fraction` = `building_elements /
+    ///   production_walker_elements` when walker &gt; 0 (includes
+    ///   non-building production classes such as Level/Material).
+    /// - `geometry_element_fraction` = `building_elements_with_geometry /
+    ///   building_elements` when building_elements &gt; 0.
+    pub fn measure(
+        production_walker_elements: usize,
+        building_elements: usize,
+        building_elements_with_geometry: usize,
+        elem_table_element_count: Option<usize>,
+    ) -> Self {
+        let mut notes: Vec<String> = Vec::new();
+
+        let decoded_element_fraction = match elem_table_element_count {
+            None => {
+                notes.push(
+                    "decoded_element_fraction left null: Global/ElemTable element_count unavailable."
+                        .into(),
+                );
+                None
+            }
+            Some(0) => {
+                notes.push(
+                    "decoded_element_fraction left null: ElemTable header element_count is 0."
+                        .into(),
+                );
+                None
+            }
+            Some(_declared) if production_walker_elements == 0 => {
+                // Declared table present but nothing on the production path —
+                // measurable zero coverage of the declared set.
+                Some(0.0)
+            }
+            Some(declared) if production_walker_elements <= declared => {
+                Some(production_walker_elements as f32 / declared as f32)
+            }
+            Some(declared) => {
+                notes.push(format!(
+                    "decoded_element_fraction left null: production walker recovered {production_walker_elements} elements but ElemTable header element_count is only {declared} (partition recovers can exceed the u16 header; do not invent a ratio)."
+                ));
+                None
+            }
+        };
+
+        let exported_element_fraction = if production_walker_elements > 0 {
+            Some(building_elements as f32 / production_walker_elements as f32)
+        } else {
+            notes.push(
+                "exported_element_fraction left null: production_walker_elements is 0.".into(),
+            );
+            None
+        };
+
+        let geometry_element_fraction = if building_elements > 0 {
+            Some(building_elements_with_geometry as f32 / building_elements as f32)
+        } else {
+            notes.push(
+                "geometry_element_fraction left null: exported building_elements is 0.".into(),
+            );
+            None
+        };
+
+        let any_measured = decoded_element_fraction.is_some()
+            || exported_element_fraction.is_some()
+            || geometry_element_fraction.is_some();
+
+        if !any_measured {
+            return Self::unset();
+        }
+
+        notes.insert(
+            0,
+            "Measured from export diagnostics counts only (production walker, exported building elements, ElemTable header element_count when trusted). Not a converter-grade completeness claim.".into(),
+        );
+
+        Self {
+            status: SourceCoverageStatus::Measured,
+            notes: Some(notes.join(" ")),
+            decoded_element_fraction,
+            exported_element_fraction,
+            geometry_element_fraction,
+        }
+    }
+}
+
+/// Best-effort ElemTable header `element_count` for A10 decoded fraction.
+///
+/// Returns `None` when the stream is missing or fails to parse — callers
+/// must leave `decoded_element_fraction` null rather than invent a total.
+fn elem_table_declared_element_count(rf: &mut crate::RevitFile) -> Option<usize> {
+    crate::elem_table::parse_header(rf)
+        .ok()
+        .map(|header| header.element_count as usize)
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1556,12 +1656,20 @@ pub fn build_export_diagnostics_with_limits(
                 .collect(),
             unknown_unit_identifiers: recovered_units.unknown_identifiers,
         },
+        source_coverage: {
+            let coverage = SourceCoverageDiagnostics::measure(
+                production_walker_elements,
+                exported.building_elements,
+                exported.building_elements_with_geometry,
+                elem_table_declared_element_count(rf),
+            );
+            Some(coverage)
+        },
         exported,
         skipped,
         unsupported_features: unsupported_export_features(model),
         warnings,
         confidence,
-        source_coverage: Some(SourceCoverageDiagnostics::unset()),
         formats_latest_integrity,
     }
 }
@@ -2180,5 +2288,59 @@ mod tests {
             recovered.unknown_identifiers,
             vec!["autodesk.unit.symbol:degree-1.0.1"]
         );
+    }
+
+    #[test]
+    fn source_coverage_measures_export_and_geometry_fractions() {
+        let cov = SourceCoverageDiagnostics::measure(
+            /* walker */ 74,
+            /* building */ 29,
+            /* with geometry */ 24,
+            Some(1370),
+        );
+        assert_eq!(cov.status, SourceCoverageStatus::Measured);
+        assert!((cov.decoded_element_fraction.unwrap() - (74.0 / 1370.0)).abs() < 1e-6);
+        assert!((cov.exported_element_fraction.unwrap() - (29.0 / 74.0)).abs() < 1e-6);
+        assert!((cov.geometry_element_fraction.unwrap() - (24.0 / 29.0)).abs() < 1e-6);
+        assert!(
+            cov.notes
+                .as_deref()
+                .unwrap_or("")
+                .contains("Measured from export diagnostics")
+        );
+    }
+
+    #[test]
+    fn source_coverage_fail_closed_when_walker_exceeds_elem_table_header() {
+        // Core Interior-style: partition MVP recoveries exceed u16 header.
+        let cov = SourceCoverageDiagnostics::measure(3353, 82, 0, Some(1411));
+        assert_eq!(cov.status, SourceCoverageStatus::Measured);
+        assert_eq!(cov.decoded_element_fraction, None);
+        assert!((cov.exported_element_fraction.unwrap() - (82.0 / 3353.0)).abs() < 1e-6);
+        assert!((cov.geometry_element_fraction.unwrap() - 0.0).abs() < 1e-6);
+        assert!(
+            cov.notes
+                .as_deref()
+                .unwrap_or("")
+                .contains("decoded_element_fraction left null")
+        );
+    }
+
+    #[test]
+    fn source_coverage_unset_when_no_denominators() {
+        let cov = SourceCoverageDiagnostics::measure(0, 0, 0, None);
+        assert_eq!(cov.status, SourceCoverageStatus::Unset);
+        assert_eq!(cov.decoded_element_fraction, None);
+        assert_eq!(cov.exported_element_fraction, None);
+        assert_eq!(cov.geometry_element_fraction, None);
+    }
+
+    #[test]
+    fn source_coverage_zero_decoded_when_table_present_but_walker_empty() {
+        let cov = SourceCoverageDiagnostics::measure(0, 0, 0, Some(100));
+        assert_eq!(cov.status, SourceCoverageStatus::Measured);
+        assert_eq!(cov.decoded_element_fraction, Some(0.0));
+        assert_eq!(cov.exported_element_fraction, None);
+        assert_eq!(cov.geometry_element_fraction, None);
     }
 }

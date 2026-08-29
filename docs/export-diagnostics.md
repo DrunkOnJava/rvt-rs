@@ -61,7 +61,7 @@ minor release; incompatible changes must increment this number.
 | `unsupported_features` | array | Known exporter gaps that affected this output. |
 | `warnings` | array | User-facing caveats for this specific export. |
 | `confidence` | object | Coarse export-readiness level and booleans for metadata/elements/geometry. |
-| `source_coverage` | object (optional) | A10 light stub. `status` is `unset` until measured; fraction fields stay null — never invent ratios. |
+| `source_coverage` | object (optional) | A10 measured coverage from export/decode counts. `status` is `measured` when at least one fraction has a trustworthy denominator; otherwise `unset` with null fractions. Never invents ratios. |
 | `formats_latest_integrity` | object (optional) | `Formats/Latest` page-boundary integrity under the Finding 1 narrow gate (strip stays **disabled**). Multipage streams report `integrity_status: uncertain` and `diagnostic_code: RVT_FORMATS_MULTIPAGE_UNVERIFIED` without claiming completeness. |
 `skipped.reason` is stable enough for automation. Geometry-related reasons use
 the `unsupported_geometry_*` prefix and currently include
@@ -144,6 +144,20 @@ Important nested fields:
     "has_geometry": false,
     "has_diagnostic_proxies": false,
     "warning_count": 1
+  },
+  "source_coverage": {
+    "status": "unset",
+    "notes": "Export source-coverage fractions are unset: no trustworthy denominator was available; fields stay null."
   }
 }
 ```
+
+Important `source_coverage` fields:
+
+| Field | Meaning when measured |
+|---|---|
+| `decoded_element_fraction` | `production_walker_elements / ElemTable.element_count` when walker ≤ declared count |
+| `exported_element_fraction` | `building_elements / production_walker_elements` |
+| `geometry_element_fraction` | `building_elements_with_geometry / building_elements` |
+
+These are inspection ratios from counts already in the sidecar — not a claim that the file was fully converted.
