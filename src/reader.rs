@@ -285,14 +285,22 @@ impl RevitFile {
     /// `62 19 22 05` — the same header magic seen at the start of the
     /// `Contents` stream). The PNG payload begins at the first occurrence
     /// of the standard PNG magic bytes.
+    ///
+    /// When an `IEND` chunk is present, the returned buffer ends at the
+    /// trailing CRC of that chunk — trailing junk after a well-formed PNG
+    /// is trimmed. If no `IEND` is found, bytes from PNG magic through
+    /// end-of-stream are returned (fail-open for truncated previews).
     pub fn preview_png(&mut self) -> Result<Vec<u8>> {
         let bytes = self.read_stream(REVIT_PREVIEW_4_0)?;
-        const PNG_MAGIC: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-        let pos = bytes
-            .windows(8)
-            .position(|w| w == PNG_MAGIC)
-            .ok_or_else(|| Error::StreamNotFound("PNG magic inside RevitPreview4.0".into()))?;
-        Ok(bytes[pos..].to_vec())
+        extract_preview_png(&bytes)
+    }
+
+    /// Like [`Self::preview_png`], but never trims after `IEND` — returns
+    /// every byte from PNG magic through end of the OLE stream. Useful for
+    /// forensic inspection of trailing payload.
+    pub fn preview_png_untrimmed(&mut self) -> Result<Vec<u8>> {
+        let bytes = self.read_stream(REVIT_PREVIEW_4_0)?;
+        extract_preview_png_untrimmed(&bytes)
     }
 
     /// Raw bytes of the `RevitPreview4.0` stream including Revit's
@@ -495,5 +503,103 @@ impl RevitFile {
             .copied()
             .filter(|r| !names.contains(*r))
             .collect()
+    }
+}
+
+const PNG_MAGIC: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+/// PNG chunk type `IEND` (zero-length terminal chunk).
+const PNG_IEND_TYPE: [u8; 4] = [0x49, 0x45, 0x4E, 0x44];
+
+/// Locate PNG magic inside a `RevitPreview4.0` stream and return bytes from
+/// that offset through end-of-input (no IEND trim).
+fn extract_preview_png_untrimmed(stream: &[u8]) -> Result<Vec<u8>> {
+    let pos = stream
+        .windows(8)
+        .position(|w| w == PNG_MAGIC)
+        .ok_or_else(|| Error::StreamNotFound("PNG magic inside RevitPreview4.0".into()))?;
+    Ok(stream[pos..].to_vec())
+}
+
+/// Locate PNG magic and, when present, trim after the IEND chunk CRC.
+fn extract_preview_png(stream: &[u8]) -> Result<Vec<u8>> {
+    let mut png = extract_preview_png_untrimmed(stream)?;
+    if let Some(end) = png_iend_exclusive_end(&png) {
+        png.truncate(end);
+    }
+    Ok(png)
+}
+
+/// Return the exclusive end offset of a well-formed IEND chunk inside `png`,
+/// or `None` if no IEND type marker with room for its CRC is found.
+///
+/// IEND wire layout: `[u32 BE length=0][IEND][u32 CRC]` (12 bytes). We scan
+/// for the type bytes and require a 4-byte length field of zero immediately
+/// before them plus four CRC bytes after.
+fn png_iend_exclusive_end(png: &[u8]) -> Option<usize> {
+    // Need at least 4 (len) + 4 (type) + 4 (crc) = 12 bytes for a hit.
+    if png.len() < 12 {
+        return None;
+    }
+    for i in 0..=png.len().saturating_sub(8) {
+        if png[i..i + 4] != PNG_IEND_TYPE {
+            continue;
+        }
+        // Type must be preceded by a 4-byte big-endian length of zero.
+        if i < 4 {
+            continue;
+        }
+        let len_start = i - 4;
+        if png[len_start..i] != [0, 0, 0, 0] {
+            continue;
+        }
+        let crc_end = i + 4 + 4; // type + CRC
+        if crc_end > png.len() {
+            return None;
+        }
+        return Some(crc_end);
+    }
+    None
+}
+
+#[cfg(test)]
+mod preview_png_tests {
+    use super::*;
+
+    /// Minimal 1×1 transparent PNG (same bytes as `gen-fixture`).
+    const MIN_PNG: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG magic
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15,
+        0xC4, 0x89, //
+        0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, // IDAT
+        0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4,
+        // IEND
+        0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+
+    #[test]
+    fn trim_drops_bytes_after_iend() {
+        let mut stream = vec![0x62, 0x19, 0x22, 0x05, 0, 0, 0, 0];
+        stream.extend_from_slice(MIN_PNG);
+        stream.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x11]);
+        let trimmed = extract_preview_png(&stream).expect("png");
+        let untrimmed = extract_preview_png_untrimmed(&stream).expect("png");
+        assert_eq!(trimmed, MIN_PNG);
+        assert_eq!(untrimmed.len(), MIN_PNG.len() + 6);
+        assert!(untrimmed.ends_with(&[0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x11]));
+    }
+
+    #[test]
+    fn missing_iend_keeps_tail() {
+        let mut partial = MIN_PNG[..MIN_PNG.len() - 12].to_vec(); // drop IEND
+        partial.extend_from_slice(&[0xAA, 0xBB]);
+        let out = extract_preview_png(&partial).expect("png");
+        assert_eq!(out, partial);
+    }
+
+    #[test]
+    fn missing_magic_errors() {
+        let err = extract_preview_png(&[0, 1, 2, 3]).unwrap_err();
+        assert!(matches!(err, Error::StreamNotFound(_)));
     }
 }
