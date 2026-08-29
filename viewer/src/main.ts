@@ -393,9 +393,13 @@ function storeyElevationLabel(node: SceneNode): string | null {
   if (idx == null || idx < 0 || idx >= storeys.length) return null;
   const elev = storeys[idx]?.elevation_feet;
   if (typeof elev !== 'number') return null;
-  // Name-only 2024 recoveries sit at 0.0 — call that out rather than
-  // pretending every zero is a surveyed ground floor.
-  if (Math.abs(elev) < 1e-9) return 'elev unresolved/0';
+  // Name-only 2024 recoveries put every storey at 0.0. When any storey
+  // has a non-zero elevation (ArcWall trailers), treat 0.0 as surveyed
+  // ground rather than unresolved.
+  const anySurveyed = storeys.some(
+    (s) => typeof s.elevation_feet === 'number' && Math.abs(s.elevation_feet) >= 1e-9,
+  );
+  if (Math.abs(elev) < 1e-9 && !anySurveyed) return 'elev unresolved/0';
   return `elev ${elev.toFixed(3)} ft`;
 }
 
