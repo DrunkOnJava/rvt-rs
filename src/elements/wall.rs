@@ -41,6 +41,7 @@
 
 use super::level::normalise_field_name;
 use crate::formats;
+use crate::geometry::Point3;
 use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
 use crate::{Error, Result};
 
@@ -214,11 +215,24 @@ pub struct Wall {
     pub location_line: Option<LocationLine>,
     pub type_id: Option<u32>,
     pub host_id: Option<u32>,
+    /// Handle into the document location-curve table when present.
+    /// Geometry resolution is [`crate::geometry::recovery`].
+    pub location_curve_id: Option<u32>,
+    /// Explicit location-curve start when schema fields carry XYZ/XY.
+    pub location_start: Option<Point3>,
+    /// Explicit location-curve end when schema fields carry XYZ/XY.
+    pub location_end: Option<Point3>,
 }
 
 impl Wall {
     pub fn from_decoded(decoded: &DecodedElement) -> Self {
         let mut out = Self::default();
+        let mut sx = None;
+        let mut sy = None;
+        let mut sz = None;
+        let mut ex = None;
+        let mut ey = None;
+        let mut ez = None;
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("levelid" | "baselevelid", InstanceField::ElementId { id, .. }) => {
@@ -246,8 +260,49 @@ impl Wall {
                 }
                 ("typeid", InstanceField::ElementId { id, .. }) => out.type_id = Some(*id),
                 ("hostid", InstanceField::ElementId { id, .. }) => out.host_id = Some(*id),
+                (
+                    "locationcurveid" | "locationcurve" | "curvelineid" | "curveline",
+                    InstanceField::ElementId { id, .. },
+                ) => {
+                    if *id != 0 {
+                        out.location_curve_id = Some(*id);
+                    }
+                }
+                (
+                    "startx" | "locationstartx" | "curvestartx",
+                    InstanceField::Float { value, .. },
+                ) => {
+                    sx = Some(*value);
+                }
+                (
+                    "starty" | "locationstarty" | "curvestarty",
+                    InstanceField::Float { value, .. },
+                ) => {
+                    sy = Some(*value);
+                }
+                (
+                    "startz" | "locationstartz" | "curvestartz",
+                    InstanceField::Float { value, .. },
+                ) => {
+                    sz = Some(*value);
+                }
+                ("endx" | "locationendx" | "curveendx", InstanceField::Float { value, .. }) => {
+                    ex = Some(*value);
+                }
+                ("endy" | "locationendy" | "curveendy", InstanceField::Float { value, .. }) => {
+                    ey = Some(*value);
+                }
+                ("endz" | "locationendz" | "curveendz", InstanceField::Float { value, .. }) => {
+                    ez = Some(*value);
+                }
                 _ => {}
             }
+        }
+        if let (Some(x), Some(y)) = (sx, sy) {
+            out.location_start = Some(Point3::new(x, y, sz.unwrap_or(0.0)));
+        }
+        if let (Some(x), Some(y)) = (ex, ey) {
+            out.location_end = Some(Point3::new(x, y, ez.unwrap_or(0.0)));
         }
         out
     }
@@ -304,6 +359,7 @@ impl WallType {
 mod tests {
     use super::*;
     use crate::formats::{ClassEntry, FieldEntry, FieldType};
+    use crate::geometry::Point3;
 
     fn synth_wall_schema() -> ClassEntry {
         ClassEntry {
@@ -497,6 +553,53 @@ mod tests {
         };
         let wt = WallType::from_decoded(&empty);
         assert!(wt.name.is_none() && wt.kind.is_none() && wt.width_feet.is_none());
+    }
+
+    #[test]
+    fn wall_projects_location_curve_fields() {
+        let decoded = DecodedElement {
+            id: None,
+            class: "Wall".into(),
+            fields: vec![
+                (
+                    "m_start_x".into(),
+                    InstanceField::Float {
+                        value: 1.0,
+                        size: 8,
+                    },
+                ),
+                (
+                    "m_start_y".into(),
+                    InstanceField::Float {
+                        value: 2.0,
+                        size: 8,
+                    },
+                ),
+                (
+                    "m_end_x".into(),
+                    InstanceField::Float {
+                        value: 4.0,
+                        size: 8,
+                    },
+                ),
+                (
+                    "m_end_y".into(),
+                    InstanceField::Float {
+                        value: 2.0,
+                        size: 8,
+                    },
+                ),
+                (
+                    "m_location_curve_id".into(),
+                    InstanceField::ElementId { tag: 0, id: 55 },
+                ),
+            ],
+            byte_range: 0..0,
+        };
+        let w = Wall::from_decoded(&decoded);
+        assert_eq!(w.location_start, Some(Point3::new(1.0, 2.0, 0.0)));
+        assert_eq!(w.location_end, Some(Point3::new(4.0, 2.0, 0.0)));
+        assert_eq!(w.location_curve_id, Some(55));
     }
 
     #[test]
