@@ -139,6 +139,7 @@ covering (among others):
 - `fuzz_walker_entry_detect` — Layer 5a walker entry-point detector
 - `fuzz_parse_schema` — schema field-type decoder
 - `fuzz_step_writer` — IFC STEP emission (output shape stability)
+- `fuzz_public_byte_parsers` — remaining public byte parsers (gzip offsets, class_index, ArcWall, rect opening, share fragment)
 
 See the `TODO-BLINDSIDE.md` / `ROADMAP.md` trail and each SEC-NN
 task description for scope of the individual targets.
