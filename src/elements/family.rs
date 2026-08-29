@@ -218,6 +218,7 @@ mod tests {
             class: "Symbol".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let s = Symbol::from_decoded(&decoded);
         assert_eq!(s.name.as_deref(), Some("W16x26"));
@@ -273,6 +274,7 @@ mod tests {
             class: "FamilyInstance".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let fi = FamilyInstance::from_decoded(&decoded);
         assert_eq!(fi.symbol_id, Some(42));
@@ -297,6 +299,7 @@ mod tests {
             class: "FamilyInstance".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert!(Symbol::from_decoded(&empty).name.is_none());
         assert!(FamilyInstance::from_decoded(&empty).symbol_id.is_none());

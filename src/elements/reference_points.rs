@@ -405,6 +405,7 @@ mod tests {
             class: "BasePoint".to_string(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let bp = BasePoint::from_decoded(&empty);
         assert!(bp.position.is_none());

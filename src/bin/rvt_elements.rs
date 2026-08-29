@@ -33,6 +33,12 @@ struct Cli {
     /// Omit the Lane Five MVP `typed` projection on each element.
     #[arg(long)]
     no_typed: bool,
+
+    /// Hide elements whose provenance confidence is below this floor
+    /// (M3-07). Default keeps everything; pass `0.55` to match the
+    /// viewer/export low-confidence filter.
+    #[arg(long, default_value_t = 0.0)]
+    min_confidence: f32,
 }
 
 #[derive(Serialize)]
@@ -50,6 +56,8 @@ struct ElementOut {
     /// AProperty* values when this element is a value carrier; empty
     /// for host elements until host↔parameter joins recover (#35).
     parameters: Vec<serde_json::Value>,
+    /// M3-07 decode confidence + provenance.
+    provenance: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     typed: Option<serde_json::Value>,
 }
@@ -68,6 +76,7 @@ fn main() -> anyhow::Result<()> {
         PRODUCTION_ELEMENT_MIN_SCORE,
         WalkerLimits::default(),
     )?
+    .filter(|e| e.meets_confidence(cli.min_confidence))
     .collect();
 
     if cli.counts {
@@ -107,6 +116,7 @@ fn main() -> anyhow::Result<()> {
                     .iter()
                     .map(|e| e.to_json_value())
                     .collect(),
+                provenance: element.provenance.to_json_value(),
                 typed,
             }
         })

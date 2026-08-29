@@ -1409,6 +1409,7 @@ mod tests {
             class: class.to_string(),
             fields: vec![("name".to_string(), InstanceField::String(class.to_string()))],
             byte_range: 0..0,
+            provenance: Default::default(),
         }
     }
 

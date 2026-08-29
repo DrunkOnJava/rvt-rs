@@ -289,6 +289,7 @@ mod tests {
             class: "ReferencePlane".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let p = ReferencePlane::from_decoded(&empty);
         assert!(p.name.is_none());

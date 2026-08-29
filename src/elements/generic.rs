@@ -213,6 +213,7 @@ mod tests {
             class: "GenericModel".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let g = GenericModel::from_decoded(&decoded);
         assert_eq!(g.location, Some(Point3::new(5.0, 10.0, 0.0)));
@@ -253,6 +254,7 @@ mod tests {
             class: "Mass".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let m = Mass::from_decoded(&decoded);
         assert_eq!(m.location, Some(Point3::new(100.0, 200.0, 50.0)));
@@ -266,6 +268,7 @@ mod tests {
             class: "Mass".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert!(GenericModel::from_decoded(&empty).location.is_none());
         assert!(Mass::from_decoded(&empty).location.is_none());

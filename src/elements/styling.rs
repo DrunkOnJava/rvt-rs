@@ -313,6 +313,7 @@ mod tests {
             class: "Any".to_string(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let m = Material::from_decoded(&empty);
         let f = FillPattern::from_decoded(&empty);

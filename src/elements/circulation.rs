@@ -328,6 +328,7 @@ mod tests {
             class: "Stair".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let s = Stair::from_decoded(&decoded);
         assert_eq!(s.base_level_id, Some(1));
@@ -371,6 +372,7 @@ mod tests {
             class: "StairType".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let st = StairType::from_decoded(&empty);
         assert!(st.name.is_none());

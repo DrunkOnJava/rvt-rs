@@ -431,6 +431,7 @@ mod tests {
                 ),
             ],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let w = Window::from_decoded(&empty);
         assert_eq!(w.location, Some(Point3::new(1.0, 2.0, 0.0)));
@@ -445,6 +446,7 @@ mod tests {
             class: "Window".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let w = Window::from_decoded(&empty);
         assert!(w.location.is_none());

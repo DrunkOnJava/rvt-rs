@@ -470,6 +470,7 @@ mod tests {
             id,
             fields: Vec::new(),
             byte_range: 0..0,
+            provenance: Default::default(),
         }
     }
 

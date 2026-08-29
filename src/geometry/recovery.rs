@@ -644,6 +644,7 @@ mod tests {
             class: class.into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         }
     }
 
@@ -717,6 +718,7 @@ mod tests {
                 ),
             ],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let loc = recover_wall_location_curve(&decoded).ok().unwrap();
         assert_eq!(loc.source, WallLocationSource::SchemaEndpoints);
@@ -734,6 +736,7 @@ mod tests {
                 InstanceField::ElementId { tag: 0, id: 7 },
             )],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let outcome = recover_wall_location_curve(&decoded);
         assert_eq!(
@@ -778,6 +781,7 @@ mod tests {
                 ),
             ],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert!(!recover_wall_location_curve(&decoded).is_recovered());
     }
@@ -835,6 +839,7 @@ mod tests {
             class: "Floor".into(),
             fields: vec![("m_boundary".into(), InstanceField::Vector(floats))],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let loop_ = recover_floor_boundary(&decoded).ok().unwrap();
         assert_eq!(loop_.vertices_xy.len(), 4);
@@ -875,6 +880,7 @@ mod tests {
             class: "Floor".into(),
             fields: vec![("m_sketch".into(), InstanceField::Vector(floats))],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let outcome = recover_floor_boundary(&decoded);
         assert!(!outcome.is_recovered());

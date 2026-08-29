@@ -529,6 +529,12 @@ Acceptance criteria:
 
 Labels: `priority:P1`, `type:feature`, `area:elements`
 
+**Status (2026-08-29): Done** — `ElementProvenance` on every
+`DecodedElement`; production paths set stream/offset/kind/decoder/
+confidence/warnings; CLI (`rvt-elements --min-confidence`), Python
+`decoded_elements()`, viewer File Status Provenance row, and default
+IFC emission hide below `DEFAULT_MIN_ELEMENT_CONFIDENCE` (0.55).
+
 - Extend decoded elements with:
   - source stream
   - source offset

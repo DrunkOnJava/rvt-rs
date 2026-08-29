@@ -145,11 +145,24 @@ impl ArcWall {
             ));
         }
         let end = offset.saturating_add(STANDARD_RECORD_MIN_SIZE);
+        let confidence = if self.element_id.is_some() {
+            0.95
+        } else {
+            0.85
+        };
         DecodedElement {
             id: self.element_id,
             class: "ArcWall".into(),
             fields,
             byte_range: offset..end,
+            provenance: crate::walker::ElementProvenance::partition(
+                partition,
+                offset,
+                "partition_arcwall",
+                "ArcWallRecord",
+                confidence,
+                std::iter::empty::<String>(),
+            ),
         }
     }
 }

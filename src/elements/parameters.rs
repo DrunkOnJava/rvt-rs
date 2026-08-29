@@ -803,6 +803,7 @@ mod tests {
             class: "ParameterElement".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let p = ParameterElement::from_decoded(&decoded);
         assert_eq!(p.name.as_deref(), Some("Head Height"));
@@ -840,6 +841,7 @@ mod tests {
             class: "SharedParameter".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let sp = SharedParameter::from_decoded(&decoded);
         assert_eq!(sp.base.name.as_deref(), Some("Fire Rating"));
@@ -859,6 +861,7 @@ mod tests {
             class: "ParameterElement".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert!(ParameterElement::from_decoded(&empty).name.is_none());
         assert!(SharedParameter::from_decoded(&empty).guid.is_none());
@@ -878,6 +881,7 @@ mod tests {
             class: class.into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         }
     }
 
