@@ -10,7 +10,7 @@
 
 For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). Installation paths live in [`docs/install.md`](docs/install.md). For the short support boundary, read [`docs/status.md`](docs/status.md) and the supported MVP input profile in [`docs/supported-profile.md`](docs/supported-profile.md). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
 
-Rust 2024 edition (MSRV 1.85). **Sixteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.85). **Seventeen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -199,7 +199,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-**Sixteen CLIs** ship in the box:
+**Seventeen CLIs** ship in the box:
 
 ```bash
 cargo build --release
@@ -248,6 +248,9 @@ cargo build --release
 
 # Diagnostic IFC export — include low-confidence proxy candidates with provenance
 ./target/release/rvt-ifc my-project.rvt -o diagnostic.ifc --diagnostic-proxies
+
+# Compare an rvt-rs IFC export against a Revit (or other) reference IFC
+./target/release/rvt-ifc-compare out.ifc revit-reference.ifc --json /tmp/ifc-compare.json
 
 # glTF 2.0 binary export — loads in Three.js / Blender / any glTF viewer
 ./target/release/rvt-gltf my-project.rvt -o out.glb
