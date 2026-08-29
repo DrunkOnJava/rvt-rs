@@ -244,6 +244,12 @@ pub struct DecodedExportDiagnostics {
     /// Production `iter_elements` class histogram (ArcWall / Level / Floor / …).
     #[serde(default)]
     pub production_class_counts: std::collections::BTreeMap<String, usize>,
+    /// Count of AProperty* value carriers seen on the production path.
+    /// Host↔parameter joins are not recovered yet, so this is usually
+    /// 0 on real projects even when ParameterElement definitions exist
+    /// in schema (#35 honest empty).
+    #[serde(default)]
+    pub parameter_value_count: usize,
     pub recovered_unit_identifiers: Vec<String>,
     pub unknown_unit_identifiers: Vec<String>,
 }
@@ -1439,6 +1445,9 @@ pub fn build_export_diagnostics_with_limits(
             diagnostic_proxy_candidates: diagnostic_candidates.candidates.len(),
             arcwall_records,
             class_counts: candidate_class_counts,
+            parameter_value_count: parameter_value_count_from_class_counts(
+                &production_class_counts,
+            ),
             production_class_counts,
             recovered_unit_identifiers: model
                 .units
@@ -1762,6 +1771,16 @@ fn production_class_counts_from_walker(
         *counts.entry(el.class).or_insert(0) += 1;
     }
     counts
+}
+
+fn parameter_value_count_from_class_counts(
+    class_counts: &std::collections::BTreeMap<String, usize>,
+) -> usize {
+    class_counts
+        .iter()
+        .filter(|(class, _)| crate::elements::parameters::is_aproperty_class(class))
+        .map(|(_, n)| *n)
+        .sum()
 }
 
 fn export_confidence_summary(

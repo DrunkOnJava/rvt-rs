@@ -114,6 +114,7 @@ pub mod error;
 pub mod formats;
 pub mod geometry;
 pub mod ifc;
+pub mod level_bind;
 pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;

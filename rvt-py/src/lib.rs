@@ -180,6 +180,17 @@ fn decoded_element_to_dict<'py>(
     }
     d.set_item("fields", fields)?;
 
+    // #35 — AProperty* values when this row is a value carrier; empty
+    // for host elements until host↔parameter joins recover.
+    let params = PyList::empty(py);
+    for entry in elements::parameters::parameter_entries_from_decoded(element) {
+        let json_module = py.import("json")?;
+        let entry_json = serde_json::to_string(&entry.to_json_value()).map_err(to_py_val)?;
+        let entry_obj = json_module.call_method1("loads", (entry_json,))?;
+        params.append(entry_obj)?;
+    }
+    d.set_item("parameters", params)?;
+
     // Lane Five MVP typed projection (null when class is not in the
     // schema-driven MVP set — ArcWall stays on the partition path).
     match elements::typed_json::mvp_typed_view(element) {

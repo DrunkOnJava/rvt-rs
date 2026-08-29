@@ -167,6 +167,7 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(parameters::APropertyDouble3Decoder),
         Box::new(parameters::APropertyFloatDecoder),
         Box::new(parameters::APropertyFloat3Decoder),
+        Box::new(parameters::APropertyStringDecoder),
     ]
 }
 
@@ -253,10 +254,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_decoders_len_is_eighty() {
-        // Public docs (README / status / compatibility) claim 80.
+    fn all_decoders_len_is_eighty_one() {
+        // Public docs (README / status / compatibility) claim 81.
         // Keep the count and the docs in lockstep.
-        assert_eq!(all_decoders().len(), 80);
+        assert_eq!(all_decoders().len(), 81);
     }
 
     #[test]

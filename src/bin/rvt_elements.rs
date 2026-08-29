@@ -47,6 +47,9 @@ struct ElementOut {
     class_name: String,
     byte_range: ByteRange,
     fields: Vec<serde_json::Value>,
+    /// AProperty* values when this element is a value carrier; empty
+    /// for host elements until host↔parameter joins recover (#35).
+    parameters: Vec<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     typed: Option<serde_json::Value>,
 }
@@ -99,6 +102,10 @@ fn main() -> anyhow::Result<()> {
                     .fields
                     .iter()
                     .map(|(name, value)| field_json(name, value))
+                    .collect(),
+                parameters: rvt::elements::parameters::parameter_entries_from_decoded(element)
+                    .iter()
+                    .map(|e| e.to_json_value())
                     .collect(),
                 typed,
             }
