@@ -263,6 +263,33 @@ mod tests {
     }
 
     #[test]
+    fn floor_type_decoder_rejects_wrong_schema() {
+        let wrong = ClassEntry {
+            name: "Floor".into(),
+            offset: 0,
+            fields: vec![],
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        };
+        assert!(
+            FloorTypeDecoder
+                .decode(&[], &wrong, &HandleIndex::new())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn floor_decoder_tolerates_empty_bytes() {
+        let decoded = FloorDecoder
+            .decode(&[], &synth_floor_schema(), &HandleIndex::new())
+            .expect("empty input ok when schema matches");
+        assert_eq!(decoded.class, "Floor");
+    }
+
+    #[test]
     fn floor_decodes_and_detects_depressed() {
         let decoded = FloorDecoder
             .decode(

@@ -358,6 +358,44 @@ mod tests {
     }
 
     #[test]
+    fn window_decoder_rejects_wrong_schema() {
+        let wrong = ClassEntry {
+            name: "Door".into(),
+            offset: 0,
+            fields: vec![],
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        };
+        assert!(
+            WindowDecoder
+                .decode(&[], &wrong, &HandleIndex::new())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn door_and_window_tolerate_empty_bytes() {
+        // Short / empty input must not panic — decode_instance yields
+        // truncated/missing fields rather than inventing values.
+        let door_schema = synth_door_schema();
+        let door = DoorDecoder
+            .decode(&[], &door_schema, &HandleIndex::new())
+            .expect("empty bytes still return DecodedElement");
+        assert_eq!(door.class, "Door");
+        let window_schema = ClassEntry {
+            name: "Window".into(),
+            ..door_schema
+        };
+        let window = WindowDecoder
+            .decode(&[], &window_schema, &HandleIndex::new())
+            .expect("empty bytes still return DecodedElement");
+        assert_eq!(window.class, "Window");
+    }
+
+    #[test]
     fn window_collects_location_and_sill() {
         let empty = DecodedElement {
             id: None,
