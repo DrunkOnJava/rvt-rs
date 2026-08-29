@@ -10,8 +10,8 @@ diagnostics, and support triage. It is not yet a general Revit model converter.
 | File extensions | `.rvt`, `.rfa`, `.rte`, `.rft` containers that use the standard Revit OLE/CFB layout. |
 | Revit versions | Metadata/schema inspection is regression-tested against the 2016-2026 family corpus. |
 | Safe workflows | `rvt-inspect`, `rvt-info`, `rvt-schema`, previews, stream inventory, document metadata, class schema, and diagnostics sidecars. |
-| IFC output | Spec-valid IFC4 scaffold with project/spatial framework; typed real-project output is limited to narrow version-gated evidence such as the 2023 ArcWall path. |
-| Browser viewer | Zero-upload inspection, scene/status panels, and explicit export-readiness labels before download. |
+| IFC output | Spec-valid IFC4 scaffold with project/spatial framework; partition MVP Level storeys / Floor boundary slabs / Room spaces / Material names when recovered; typed wall geometry limited to the version-gated 2023 ArcWall path. |
+| Browser viewer | Zero-upload inspection, File Status (storey names + material samples), scene tree storey grouping when elevations allow, and explicit export-readiness labels before download. |
 
 ## Experimental MVP Target
 
@@ -28,7 +28,12 @@ The first real-model conversion profile is intentionally narrow:
 ## Unsupported Or Partial
 
 - Full typed element extraction from arbitrary real `.rvt` files.
-- Reliable geometry for real walls/floors/doors/windows outside the narrow
+- Schema-field Walls; typed Door vs Window host IFC (RE-19 negative — no
+  reliable discriminator / envelope on current magnetar corpora).
+- Floor/Room storey assignment via Level ElementIds (RE-20 negative — `Level`
+  absent from Formats; bind plumbing stays fail-closed / idle).
+- Compound wall-layer thicknesses and slab extrusion depth.
+- Reliable geometry for walls/floors/doors/windows outside the narrow
   research profile.
 - Semantic Revit editing through the stream writer.
 - Revit versions outside the verified corpus without a diagnostics report.

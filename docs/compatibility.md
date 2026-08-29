@@ -54,7 +54,7 @@ Notes:
 
 **81 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty_one` unit test. Production `walker::iter_elements` prefers typed decoders for `MVP_TYPED_CLASSES`, merges ArcWall partition recovers, and merges partition MVP Level/Material/Room/Floor plan-loop / 2024 opening-index rows; other registered classes still use generic `decode_instance`. Grouped by domain below.
 
-**Partial on real project files:** ArcWall, Level, Material, Room, Floor plan-loops, and 2024 ArcWallRectOpening index rows can surface from `Partitions/*` via fail-closed recovers. Schema-field Wall instances and typed Door/Window host binding from arbitrary projects remain unsolved; see [`docs/status.md`](status.md) and `reports/element-framing/RE-01-synthesis.md`.
+**Partial on real project files:** ArcWall, Level, Material, Room, Floor plan-loops, and 2024 ArcWallRectOpening index rows can surface from `Partitions/*` via fail-closed recovers. Schema-field Wall instances and typed Door/Window host binding from arbitrary projects remain unsolved (RE-19 negative on magnetar corpora). Floor/Room storey bind via Level ElementIds is idle (RE-20 negative). See [`docs/status.md`](status.md), `reports/element-framing/RE-19-door-window-wall-negative.md`, and `reports/element-framing/RE-20-level-elementid-negative.md`.
 
 Each decoder takes schema-directed instance bytes (from `walker::decode_instance`) and projects them into a typed Rust struct. Decoders are validated on synthesized schema+bytes fixtures. Community-corpus open/scaffold checks (`docs/corpus-hunt-2026-04-21.md`) do not exercise these typed projections on real project instance data.
 
