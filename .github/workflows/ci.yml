@@ -456,7 +456,7 @@ jobs:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
         run: python3 -m pytest tests/python -v
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rvt-wheel-${{ matrix.os }}
           path: dist/*.whl
