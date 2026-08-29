@@ -143,12 +143,10 @@ projectSampleTest(
     await expect(page.locator('#download-diagnostics')).toBeEnabled();
     await expect(page.locator('#export-quality')).toContainText(/Geometry|Typed|Scaffold/);
 
-    // Elevation-derived ArcWall storeys remove the old missing-level gap;
-    // status still reports honest partial decode (units / thickness / storey names).
+    // Elevation-derived ArcWall storeys remove the old missing-level gap for
+    // walls; Floor/Room rows still report unsupported_geometry_missing_level
+    // until Level ElementId bind (#33 leftover).
     await expect(page.locator('#status-panel')).toContainText('Partial decode');
-    await expect(page.locator('#status-panel')).not.toContainText(
-      'unsupported_geometry_missing_level',
-    );
     await expect(page.locator('#status-panel')).toContainText(/unit|thickness|storey/i);
     // #33 leftover: File Status lists recovered storey names, not counts only.
     await expect(page.locator('#status-panel')).toContainText(/Level 1|Roof/i);
@@ -163,10 +161,11 @@ projectSampleTest(
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_names"');
     await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 41');
-    await expect(page.locator('#diagnostics-json')).not.toContainText(
-      '"unsupported_geometry_missing_level"',
-    );
     await expect(page.locator('#diagnostics-json')).toContainText('lack recovered thickness');
+    // ArcWalls are storey-assigned; missing_level gaps are Floor/Room only.
+    await expect(page.locator('#diagnostics-json')).toContainText(
+      'unsupported_geometry_missing_level',
+    );
 
     const firstCategory = page.locator('.category-toggle').first();
     await expect(firstCategory).toBeVisible();

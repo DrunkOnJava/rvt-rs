@@ -585,8 +585,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   const confidence = diagnostics.confidence ?? {};
   const warnings = diagnostics.warnings ?? [];
   const unsupported = diagnostics.unsupported_features ?? [];
-  const validatedElements =
-    (decoded.production_walker_elements ?? 0) + (decoded.arcwall_records ?? 0);
+  const validatedElements = decoded.production_walker_elements ?? 0;
   const diagnosticCandidates = decoded.diagnostic_proxy_candidates ?? 0;
   const geometryCount = exported.building_elements_with_geometry ?? 0;
   const qualityLevel = confidence.level ?? 'unknown';
