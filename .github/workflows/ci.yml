@@ -114,9 +114,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: ${{ matrix.rust }}
+      # The platform test matrix owns the shared release caches. Compatible
+      # fan-out jobs restore them without racing to save partial targets.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: ci-release
       - name: Build
         run: cargo build --release --all-targets
       - name: Unit tests
@@ -166,7 +169,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: false
+          shared-key: ci-release
       - name: Build + run synthetic-project integration test
         run: cargo test --release --test ifc_synthetic_project
       - name: Assert entity counts in committed fixture
@@ -210,8 +214,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: corpus-tier1
+          save-if: false
+          shared-key: ci-release
       - name: Tier-one open / schema / known-count inventory
         env:
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
@@ -241,8 +245,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: corpus-tier2
+          save-if: false
+          shared-key: ci-release
       - name: Tier-two open / schema health
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
@@ -284,8 +288,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: writer-patch-corpus
+          save-if: false
+          shared-key: ci-release
       - name: Run stream patch corpus tests
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
@@ -323,8 +327,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: ifcopenshell-real-project
+          save-if: false
+          shared-key: ci-release
       - name: Install IfcOpenShell (prebuilt wheel)
         run: |
           python -m pip install --upgrade pip
@@ -473,8 +477,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: bench-build
+          save-if: false
+          shared-key: ci-release
       # `--no-run` compiles the benches but doesn't execute them.
       # This catches API drift (renamed public items, changed
       # function signatures, missing traits on types used in
@@ -505,6 +509,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: ci-docs-rs
       # Mirror the [package.metadata.docs.rs] settings from Cargo.toml
       # (`all-features = true`) — if these drift, update both.
       - run: cargo +nightly doc --no-deps --all-features
@@ -542,8 +547,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: python-wheel-${{ matrix.os }}
+          save-if: false
+          shared-key: ci-release
       # Build the abi3 wheel. SEC-12/13: wheel sources live in the
       # `rvt-py/` workspace member crate; maturin follows the
       # `manifest-path` in pyproject.toml. `--release` produces an
