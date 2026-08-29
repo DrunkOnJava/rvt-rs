@@ -95,7 +95,13 @@ fn main() {
                 }
             }
             // Every aligned u32 in the record after the marker
-            let marker = if stride == 28 { 4 } else if stride == 40 { 8 } else { 0 };
+            let marker = if stride == 28 {
+                4
+            } else if stride == 40 {
+                8
+            } else {
+                0
+            };
             let body = &raw[marker..];
             for (i, chunk) in body.chunks_exact(4).enumerate() {
                 let v = u32::from_le_bytes(chunk.try_into().unwrap());
