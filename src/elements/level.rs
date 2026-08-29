@@ -236,6 +236,7 @@ mod tests {
                 },
             )],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let level = Level::from_decoded(&decoded);
         assert_eq!(level.elevation_feet, Some(10.0));
@@ -257,6 +258,7 @@ mod tests {
             class: "Level".to_string(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let level = Level::from_decoded(&decoded);
         assert!(level.name.is_none());

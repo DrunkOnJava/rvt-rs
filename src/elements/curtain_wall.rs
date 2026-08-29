@@ -306,6 +306,7 @@ mod tests {
             class: "CurtainMullion".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let m = CurtainMullion::from_decoded(&decoded);
         assert_eq!(m.host_id, Some(42));
@@ -337,6 +338,7 @@ mod tests {
             class: "CurtainPanel".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let p = CurtainPanel::from_decoded(&decoded);
         assert_eq!(p.u_index, Some(2));
@@ -350,6 +352,7 @@ mod tests {
             class: "CurtainWall".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert!(CurtainWall::from_decoded(&empty).base_level_id.is_none());
         assert!(CurtainGrid::from_decoded(&empty).u_line_count.is_none());

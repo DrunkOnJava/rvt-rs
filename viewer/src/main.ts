@@ -154,6 +154,9 @@ interface ExportDiagnostics {
     arcwall_records?: number;
     production_class_counts?: Record<string, number>;
     parameter_value_count?: number;
+    mean_element_confidence?: number | null;
+    elements_below_min_confidence?: number;
+    min_element_confidence?: number;
   };
   confidence?: {
     level?: string;
@@ -697,6 +700,20 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   statusPanelEl.appendChild(
     statusRow('Decode', decodeConfidenceKind(confidence), decodeConfidenceSummary(confidence)),
   );
+  const meanConf = decoded.mean_element_confidence;
+  const belowMin = decoded.elements_below_min_confidence ?? 0;
+  const minConf = decoded.min_element_confidence ?? 0.55;
+  if (typeof meanConf === 'number' || belowMin > 0 || validatedElements > 0) {
+    const meanPct =
+      typeof meanConf === 'number' ? `${Math.round(meanConf * 100)}% mean` : 'mean n/a';
+    statusPanelEl.appendChild(
+      statusRow(
+        'Provenance',
+        belowMin > 0 ? 'warn' : 'ok',
+        `${meanPct} · hide < ${Math.round(minConf * 100)}% · ${belowMin} below floor (M3-07)`,
+      ),
+    );
+  }
   statusPanelEl.appendChild(
     statusRow(
       'Export',

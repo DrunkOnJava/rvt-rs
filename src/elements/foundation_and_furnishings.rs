@@ -314,6 +314,7 @@ mod tests {
             class: "Furniture".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let f = Furnishing::from_decoded(&decoded);
         assert_eq!(f.location, Some(Point3::new(1.0, 2.0, 0.0)));

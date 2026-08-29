@@ -254,6 +254,7 @@ mod tests {
             class: "CeilingType".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let ct = CeilingType::from_decoded(&empty);
         assert!(ct.name.is_none() && ct.thickness_feet.is_none());

@@ -347,6 +347,7 @@ mod tests {
             class: "FloorType".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let ft = FloorType::from_decoded(&empty);
         assert!(ft.name.is_none() && ft.thickness_feet.is_none());

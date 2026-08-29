@@ -252,8 +252,22 @@ pub struct DecodedExportDiagnostics {
     /// in schema (#35 honest empty).
     #[serde(default)]
     pub parameter_value_count: usize,
+    /// Mean provenance confidence across production `iter_elements` (M3-07).
+    #[serde(default)]
+    pub mean_element_confidence: Option<f32>,
+    /// Elements whose provenance confidence is below
+    /// [`crate::walker::DEFAULT_MIN_ELEMENT_CONFIDENCE`].
+    #[serde(default)]
+    pub elements_below_min_confidence: usize,
+    /// Floor used for the below-min count / default export hide.
+    #[serde(default = "default_min_element_confidence_serde")]
+    pub min_element_confidence: f32,
     pub recovered_unit_identifiers: Vec<String>,
     pub unknown_unit_identifiers: Vec<String>,
+}
+
+fn default_min_element_confidence_serde() -> f32 {
+    crate::walker::DEFAULT_MIN_ELEMENT_CONFIDENCE
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1040,8 +1054,11 @@ fn append_production_walker_elements(
         crate::walker::PRODUCTION_ELEMENT_MIN_SCORE,
         walker_limits,
     ) {
+        // M3-07: hide low-confidence rows from default IFC emission.
+        let filtered = decoded_iter
+            .filter(|e| e.meets_confidence(crate::walker::DEFAULT_MIN_ELEMENT_CONFIDENCE));
         let append = export_content::append_typed_production_elements(
-            decoded_iter,
+            filtered,
             entities,
             building_storeys,
             policy,
@@ -1284,13 +1301,22 @@ pub fn build_export_diagnostics_with_limits(
     let diagnostic_proxy_elements = count_diagnostic_proxy_elements(model);
     let arcwall_records = count_arcwall_records(model);
     let candidate_class_counts = diagnostic_candidate_class_counts(&diagnostic_candidates);
-    let production_class_counts = production_class_counts_from_walker(rf, walker_limits);
+    let walker_stats = production_walker_stats(rf, walker_limits);
+    let production_class_counts = walker_stats.class_counts.clone();
     // Match Python `decoded_elements()` / `element_counts()["total"]`:
     // count every production `iter_elements` hit (Levels/Materials
     // included), not only IFC BuildingElement rows.
     let production_walker_elements: usize = production_class_counts.values().copied().sum();
 
     let mut skipped = Vec::new();
+    if walker_stats.elements_below_min_confidence > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "below_min_element_confidence".into(),
+            count: walker_stats.elements_below_min_confidence,
+            classes: std::collections::BTreeMap::new(),
+            sample_names: Vec::new(),
+        });
+    }
     if mode == ExportDiagnosticsMode::Default && !diagnostic_candidates.candidates.is_empty() {
         skipped.push(SkippedExportItem {
             reason: "low_confidence_schema_scan_candidate".into(),
@@ -1451,6 +1477,9 @@ pub fn build_export_diagnostics_with_limits(
                 &production_class_counts,
             ),
             production_class_counts,
+            mean_element_confidence: walker_stats.mean_element_confidence,
+            elements_below_min_confidence: walker_stats.elements_below_min_confidence,
+            min_element_confidence: crate::walker::DEFAULT_MIN_ELEMENT_CONFIDENCE,
             recovered_unit_identifiers: model
                 .units
                 .iter()
@@ -1757,22 +1786,40 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
     features
 }
 
-fn production_class_counts_from_walker(
+#[derive(Debug, Default)]
+struct ProductionWalkerStats {
+    class_counts: std::collections::BTreeMap<String, usize>,
+    mean_element_confidence: Option<f32>,
+    elements_below_min_confidence: usize,
+}
+
+fn production_walker_stats(
     rf: &mut crate::RevitFile,
     walker_limits: crate::walker::WalkerLimits,
-) -> std::collections::BTreeMap<String, usize> {
-    let mut counts = std::collections::BTreeMap::new();
+) -> ProductionWalkerStats {
+    let mut stats = ProductionWalkerStats::default();
     let Ok(iter) = crate::walker::iter_elements_with_limits(
         rf,
         crate::walker::PRODUCTION_ELEMENT_MIN_SCORE,
         walker_limits,
     ) else {
-        return counts;
+        return stats;
     };
+    let mut sum = 0.0_f32;
+    let mut n = 0usize;
+    let min_c = crate::walker::DEFAULT_MIN_ELEMENT_CONFIDENCE;
     for el in iter {
-        *counts.entry(el.class).or_insert(0) += 1;
+        *stats.class_counts.entry(el.class.clone()).or_insert(0) += 1;
+        sum += el.provenance.confidence;
+        n += 1;
+        if !el.meets_confidence(min_c) {
+            stats.elements_below_min_confidence += 1;
+        }
     }
-    counts
+    if n > 0 {
+        stats.mean_element_confidence = Some(sum / n as f32);
+    }
+    stats
 }
 
 fn parameter_value_count_from_class_counts(

@@ -42,7 +42,7 @@
     },
     "decodedElement": {
       "type": "object",
-      "required": ["id", "class_name", "byte_range", "fields", "parameters"],
+      "required": ["id", "class_name", "byte_range", "fields", "parameters", "provenance"],
       "properties": {
         "id": {
           "type": ["integer", "null"],
@@ -59,10 +59,39 @@
           "type": "array",
           "items": { "type": "object", "additionalProperties": true }
         },
+        "provenance": { "$ref": "#/$defs/provenance" },
         "typed": {
           "description": "Lane Five MVP typed projection, or null/omitted for non-MVP classes.",
           "type": ["object", "null"],
           "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "source_stream",
+        "source_offset",
+        "record_kind",
+        "decoder",
+        "confidence",
+        "missing_required_fields",
+        "warnings"
+      ],
+      "properties": {
+        "source_stream": { "type": ["string", "null"] },
+        "source_offset": { "type": ["integer", "null"], "minimum": 0 },
+        "record_kind": { "type": ["string", "null"] },
+        "decoder": { "type": ["string", "null"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "missing_required_fields": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       },
       "additionalProperties": false

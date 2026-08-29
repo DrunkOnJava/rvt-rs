@@ -301,6 +301,7 @@ mod tests {
             class: "Phase".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let p = Phase::from_decoded(&decoded);
         assert_eq!(p.name.as_deref(), Some("New Construction"));
@@ -359,6 +360,7 @@ mod tests {
             class: "Workset".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let w = Workset::from_decoded(&decoded);
         assert_eq!(w.unique_id.as_deref(), Some("abc-123-def-456"));
@@ -372,6 +374,7 @@ mod tests {
             class: "Phase".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert!(Phase::from_decoded(&empty).name.is_none());
         assert!(DesignOption::from_decoded(&empty).name.is_none());
@@ -451,6 +454,7 @@ mod tests {
             class: "Revision".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let r = Revision::from_decoded(&decoded);
         assert_eq!(r.sequence_number, Some(3));

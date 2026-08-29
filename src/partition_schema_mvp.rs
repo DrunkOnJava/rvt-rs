@@ -29,7 +29,7 @@ use crate::partition_name_candidates::{
     NameBucket, building_storey_name_candidates, classify_name, collect_name_candidates,
 };
 use crate::rect_opening_index::ArcWallRectOpeningIndex;
-use crate::walker::{DecodedElement, InstanceField, WalkerLimits};
+use crate::walker::{DecodedElement, ElementProvenance, InstanceField, WalkerLimits};
 use crate::{Result, RevitFile};
 use std::collections::BTreeSet;
 
@@ -149,11 +149,24 @@ fn level_decoded(name: &str, elevation: Option<f64>, index: usize) -> DecodedEle
             },
         ));
     }
+    let confidence = if elevation.is_some() { 0.75 } else { 0.55 };
     DecodedElement {
         id: None,
         class: "Level".into(),
         fields,
         byte_range: index..index,
+        provenance: ElementProvenance::partition(
+            "partition",
+            index,
+            "partition_schema_mvp",
+            "partition_schema_mvp::level",
+            confidence,
+            if elevation.is_none() {
+                Some("elevation_unknown")
+            } else {
+                None
+            },
+        ),
     }
 }
 
@@ -162,17 +175,28 @@ fn materials_from_names(name_set: &BTreeSet<(NameBucket, String)>) -> Vec<Decode
         .iter()
         .filter(|(b, n)| *b == NameBucket::MaterialLike && is_strict_material_name(n))
         .enumerate()
-        .map(|(i, (_, name))| DecodedElement {
-            id: None,
-            class: "Material".into(),
-            fields: vec![
-                ("m_name".into(), InstanceField::String(name.clone())),
-                (
-                    "m_source".into(),
-                    InstanceField::String("partition_schema_mvp".into()),
-                ),
-            ],
-            byte_range: i..i,
+        .map(|(i, (_, name))| {
+            DecodedElement {
+                id: None,
+                class: "Material".into(),
+                fields: vec![
+                    ("m_name".into(), InstanceField::String(name.clone())),
+                    (
+                        "m_source".into(),
+                        InstanceField::String("partition_schema_mvp".into()),
+                    ),
+                ],
+                byte_range: i..i,
+                provenance: Default::default(),
+            }
+            .with_provenance(ElementProvenance::partition(
+                "partition",
+                i,
+                "partition_schema_mvp",
+                "partition_schema_mvp::material_name",
+                0.6,
+                None::<String>,
+            ))
         })
         .collect()
 }
@@ -182,17 +206,28 @@ fn rooms_from_names(name_set: &BTreeSet<(NameBucket, String)>) -> Vec<DecodedEle
         .iter()
         .filter(|(b, n)| *b == NameBucket::SpaceLike && is_strict_room_name(n))
         .enumerate()
-        .map(|(i, (_, name))| DecodedElement {
-            id: None,
-            class: "Room".into(),
-            fields: vec![
-                ("m_name".into(), InstanceField::String(name.clone())),
-                (
-                    "m_source".into(),
-                    InstanceField::String("partition_schema_mvp".into()),
-                ),
-            ],
-            byte_range: i..i,
+        .map(|(i, (_, name))| {
+            DecodedElement {
+                id: None,
+                class: "Room".into(),
+                fields: vec![
+                    ("m_name".into(), InstanceField::String(name.clone())),
+                    (
+                        "m_source".into(),
+                        InstanceField::String("partition_schema_mvp".into()),
+                    ),
+                ],
+                byte_range: i..i,
+                provenance: Default::default(),
+            }
+            .with_provenance(ElementProvenance::partition(
+                "partition",
+                i,
+                "partition_schema_mvp",
+                "partition_schema_mvp::room_name",
+                0.6,
+                None::<String>,
+            ))
         })
         .collect()
 }
@@ -371,6 +406,14 @@ fn floor_decoded(
             ),
         ],
         byte_range: offset..offset.saturating_add(vertices_xy.len().saturating_mul(16)),
+        provenance: ElementProvenance::partition(
+            stream,
+            offset,
+            "partition_schema_mvp",
+            "partition_schema_mvp::floor_plan_loop",
+            0.65,
+            Some("elem_table_unbound"),
+        ),
     }
 }
 
@@ -624,6 +667,18 @@ fn rect_openings_from_partitions(
                 ],
                 byte_range: off..off
                     .saturating_add(crate::rect_opening_index::OPENING_INDEX_STRIDE),
+                provenance: ElementProvenance::partition(
+                    &stream,
+                    off,
+                    "partition_rect_opening_index",
+                    "partition_schema_mvp::arcwall_rect_opening",
+                    if host_confirmed { 0.7 } else { 0.55 },
+                    if host_confirmed {
+                        None
+                    } else {
+                        Some("related_id_a_unvalidated")
+                    },
+                ),
             });
         }
         // Openings concentrate in one large partition; stop once we

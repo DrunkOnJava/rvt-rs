@@ -452,6 +452,111 @@ pub fn encode_instance(decoded: &DecodedElement, schema: &formats::ClassEntry) -
     out
 }
 
+/// Why a [`DecodedElement`] exists and how strongly we trust it (M3-07).
+///
+/// Surfaced on CLI / Python / viewer JSON so callers can explain an
+/// element and hide low-confidence rows by default.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ElementProvenance {
+    /// Stream path inside the OLE container (e.g. `Global/Latest`,
+    /// `partition:/BasicFileInfo`-adjacent partition name).
+    pub source_stream: Option<std::string::String>,
+    /// Absolute byte offset of the record in that stream (often
+    /// matches [`DecodedElement::byte_range`].start).
+    pub source_offset: Option<usize>,
+    /// Record family: `schema_instance`, `partition_arcwall`,
+    /// `partition_schema_mvp`, etc.
+    pub record_kind: Option<std::string::String>,
+    /// Decoder identity (`LevelDecoder`, `generic_decode_instance`,
+    /// `ArcWallRecord`, `partition_schema_mvp::floor_plan_loop`, …).
+    pub decoder: Option<std::string::String>,
+    /// Trust score in `[0.0, 1.0]`. Unspecified constructors default
+    /// to `1.0` so legacy test fixtures stay visible until they set
+    /// an honest score.
+    pub confidence: f32,
+    /// Schema / MVP fields that were required but absent.
+    pub missing_required_fields: Vec<std::string::String>,
+    /// Non-fatal decode notes.
+    pub warnings: Vec<std::string::String>,
+}
+
+impl Default for ElementProvenance {
+    fn default() -> Self {
+        Self {
+            source_stream: None,
+            source_offset: None,
+            record_kind: None,
+            decoder: None,
+            confidence: 1.0,
+            missing_required_fields: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+}
+
+impl ElementProvenance {
+    /// Schema-directed generic instance walk (no typed MVP validation).
+    pub fn schema_generic(stream: &str, offset: usize, class: &str) -> Self {
+        Self {
+            source_stream: Some(stream.into()),
+            source_offset: Some(offset),
+            record_kind: Some("schema_instance".into()),
+            decoder: Some(format!("generic_decode_instance:{class}")),
+            confidence: 0.55,
+            missing_required_fields: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Registered typed MVP decoder success.
+    pub fn schema_typed(stream: &str, offset: usize, decoder_name: &str) -> Self {
+        Self {
+            source_stream: Some(stream.into()),
+            source_offset: Some(offset),
+            record_kind: Some("schema_instance".into()),
+            decoder: Some(decoder_name.into()),
+            confidence: 0.9,
+            missing_required_fields: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Partition MVP / ArcWall recoveries with an explicit score.
+    pub fn partition(
+        stream: &str,
+        offset: usize,
+        kind: &str,
+        decoder: &str,
+        confidence: f32,
+        warnings: impl IntoIterator<Item = impl Into<std::string::String>>,
+    ) -> Self {
+        Self {
+            source_stream: Some(stream.into()),
+            source_offset: Some(offset),
+            record_kind: Some(kind.into()),
+            decoder: Some(decoder.into()),
+            confidence: confidence.clamp(0.0, 1.0),
+            missing_required_fields: Vec::new(),
+            warnings: warnings.into_iter().map(Into::into).collect(),
+        }
+    }
+
+    pub fn to_json_value(&self) -> serde_json::Value {
+        serde_json::json!({
+            "source_stream": self.source_stream,
+            "source_offset": self.source_offset,
+            "record_kind": self.record_kind,
+            "decoder": self.decoder,
+            "confidence": self.confidence,
+            "missing_required_fields": self.missing_required_fields,
+            "warnings": self.warnings,
+        })
+    }
+}
+
+/// Default floor for “hide low-confidence” UI / export filters (M3-07).
+pub const DEFAULT_MIN_ELEMENT_CONFIDENCE: f32 = 0.55;
+
 /// Result of decoding a single element's instance bytes.
 ///
 /// Every per-class decoder returns one of these so the walker can
@@ -471,6 +576,21 @@ pub struct DecodedElement {
     /// instance data occupies. For building a HandleIndex and for
     /// debugging byte-level decoding issues.
     pub byte_range: std::ops::Range<usize>,
+    /// Decode confidence and provenance (M3-07).
+    pub provenance: ElementProvenance,
+}
+
+impl DecodedElement {
+    /// Attach provenance, preserving other fields.
+    pub fn with_provenance(mut self, provenance: ElementProvenance) -> Self {
+        self.provenance = provenance;
+        self
+    }
+
+    /// True when provenance confidence meets `min_confidence`.
+    pub fn meets_confidence(&self, min_confidence: f32) -> bool {
+        self.provenance.confidence + f32::EPSILON >= min_confidence
+    }
 }
 
 /// Read a single `InstanceField` value starting at `bytes[cursor]`
@@ -809,6 +929,7 @@ pub fn decode_instance_with_limits(
         class: class.name.clone(),
         fields,
         byte_range: start..cursor,
+        provenance: ElementProvenance::schema_generic("schema", start, &class.name),
     }
 }
 
@@ -3261,6 +3382,35 @@ mod tests {
     }
 
     #[test]
+    fn element_provenance_defaults_and_filters() {
+        let p = ElementProvenance::default();
+        assert!((p.confidence - 1.0).abs() < f32::EPSILON);
+        let typed = ElementProvenance::schema_typed("Global/Latest", 42, "LevelDecoder");
+        assert!((typed.confidence - 0.9).abs() < f32::EPSILON);
+        assert_eq!(typed.source_offset, Some(42));
+        let low = ElementProvenance::partition(
+            "partition",
+            0,
+            "partition_schema_mvp",
+            "level",
+            0.4,
+            Some("elevation_unknown"),
+        );
+        let el = DecodedElement {
+            id: None,
+            class: "Level".into(),
+            fields: vec![],
+            byte_range: 0..0,
+            provenance: low,
+        };
+        assert!(!el.meets_confidence(DEFAULT_MIN_ELEMENT_CONFIDENCE));
+        assert!(el.meets_confidence(0.4));
+        let json = el.provenance.to_json_value();
+        assert_eq!(json["decoder"], "level");
+        assert_eq!(json["warnings"][0], "elevation_unknown");
+    }
+
+    #[test]
     fn walker_limits_default_matches_legacy_hardcoded() {
         assert_eq!(WalkerLimits::default().max_scan_bytes, 128 * 1024 * 1024);
         assert_eq!(WalkerLimits::default().max_candidates, 100_000);
@@ -3725,6 +3875,7 @@ mod tests {
                 ),
             ],
             byte_range: 0..12,
+            provenance: Default::default(),
         };
         let bytes = encode_instance(&decoded, &schema);
         assert_eq!(bytes.len(), 12);
@@ -3766,6 +3917,7 @@ mod tests {
                 },
             )],
             byte_range: 0..4,
+            provenance: Default::default(),
         };
         let bytes = encode_instance(&decoded, &schema);
         assert_eq!(bytes.len(), 4);
@@ -4059,6 +4211,7 @@ mod tests {
                 },
             )],
             byte_range: 0..4,
+            provenance: Default::default(),
         };
         let enc = MyEncoder;
         let bytes = enc.encode(&decoded, &schema);

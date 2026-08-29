@@ -330,6 +330,7 @@ mod tests {
             class: "ElectricalEquipment".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let m = MepInstance::from_decoded(&decoded);
         assert_eq!(m.name.as_deref(), Some("Main Panel A"));
@@ -358,6 +359,7 @@ mod tests {
             class: "Duct".into(),
             fields,
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let m = MepInstance::from_decoded(&decoded);
         assert!(m.is_mechanical());
@@ -372,6 +374,7 @@ mod tests {
             class: "Pipe".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         let m = MepInstance::from_decoded(&empty);
         assert!(m.name.is_none());

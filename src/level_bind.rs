@@ -82,6 +82,7 @@ mod tests {
             class: "Level".into(),
             fields: vec![("m_name".into(), InstanceField::String(name.into()))],
             byte_range: 0..0,
+            provenance: Default::default(),
         }
     }
 
@@ -97,6 +98,7 @@ mod tests {
                 },
             )],
             byte_range: 0..0,
+            provenance: Default::default(),
         }
     }
 
@@ -115,6 +117,7 @@ mod tests {
                 ),
             ],
             byte_range: 0..0,
+            provenance: Default::default(),
         }
     }
 
@@ -150,6 +153,7 @@ mod tests {
             class: "Floor".into(),
             fields: vec![],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         assert_eq!(bind.storey_index_for(&floor), None);
     }
@@ -164,6 +168,7 @@ mod tests {
                 InstanceField::ElementId { tag: 0, id: 42 },
             )],
             byte_range: 0..0,
+            provenance: Default::default(),
         };
         // Wall uses base_level_id on the typed Wall view; this helper
         // is Floor/Room-only for the #33 leftover path.
