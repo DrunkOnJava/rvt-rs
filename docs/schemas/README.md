@@ -16,6 +16,11 @@ in the producing payload.
 | [`export-diagnostics.schema.json`](export-diagnostics.schema.json) | `rvt-ifc --diagnostics`, Python `export_diagnostics_json()` |
 | [`corpus-report.schema.json`](corpus-report.schema.json) | `rvt-corpus -f json` |
 | [`support-matrix.schema.json`](support-matrix.schema.json) | Checked-in [`docs/support-matrix.json`](../support-matrix.json) (audit A3) |
+| [`es-observation.schema.json`](es-observation.schema.json) | ES remap research observations (H-ES5; not a production decode claim) |
+| [`es-capability.schema.json`](es-capability.schema.json) | Research capability promotion stub (report §15.16) |
+
+Research mirrors also live under [`research/es-remap/`](../../research/es-remap/).
+See [`docs/research/unified-research-report.md`](../research/unified-research-report.md).
 
 The integration test `tests/json_schema_contracts.rs` validates these schemas
 against real CLI payloads when the redistributable sample corpus is available.
@@ -26,3 +31,7 @@ element-counts contracts so Cloud / no-Autodesk environments stay green.
 `support-matrix.schema.json` and enforces honesty ceilings (COR-001 /
 TEST-001 / DOC-001): converter-grade RVT-to-IFC and generic typed recovery
 must not be marked `verified`.
+
+`es-observation` / `es-capability` schemas are research contracts. They are
+validated structurally in unit tests via serde round-trips of Phase 1 types;
+they are **not** wired to production CLI success claims.
