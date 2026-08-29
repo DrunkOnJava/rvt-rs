@@ -40,6 +40,9 @@ pub struct TypedProductionAppend {
     pub materials: Vec<MaterialInfo>,
     /// Production class histogram (Level / Floor / Material / …).
     pub production_class_counts: BTreeMap<String, usize>,
+    /// Floors/Rooms assigned to a storey via Level ElementId bind.
+    /// Stays 0 on current corpora (partition Levels lack ElementIds).
+    pub level_elementid_binds: usize,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -110,6 +113,7 @@ pub fn append_typed_production_elements(
 ) -> TypedProductionAppend {
     let mut out = TypedProductionAppend::default();
     let mut pending_hosts: Vec<(usize, u32)> = Vec::new();
+    let mut level_bind = crate::level_bind::LevelStoreyBind::new();
 
     for decoded in decoded_iter {
         *out.production_class_counts
@@ -122,6 +126,9 @@ pub fn append_typed_production_elements(
 
         if decoded.class == "Level" {
             if let Some(storey) = storey_from_level(&decoded) {
+                let storey_index = building_storeys.len();
+                // Fail-closed: only record when the Level carries an ElementId.
+                level_bind.record_level(decoded.id, storey_index);
                 building_storeys.push(storey);
             }
             continue;
@@ -215,11 +222,19 @@ pub fn append_typed_production_elements(
             pending_hosts.push((entity_index, host_id));
         }
 
+        // Floor/Room → storey via Level ElementId only when both sides
+        // carry ids that match. Partition MVP Levels are id-less today,
+        // so this stays None (honest Unassigned) on available corpora.
+        let storey_index = level_bind.storey_index_for(&decoded);
+        if storey_index.is_some() {
+            out.level_elementid_binds += 1;
+        }
+
         entities.push(entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
             type_guid,
-            storey_index: None,
+            storey_index,
             material_index: None,
             property_set,
             location_feet,

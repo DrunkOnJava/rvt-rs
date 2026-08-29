@@ -28,14 +28,16 @@ recovers, and additionally merges fail-closed partition MVP recovers for
 provenance (still not typed `Door`/`Window`). IFC export maps recovered
 Levels → storeys, Floors → boundary-annotated slabs, Rooms → spaces, and
 Material display names → `IfcMaterial`. Viewer File Status lists recovered
-storey names and material name samples; the scene tree groups elements under
+storey names, material name samples, and an honest Parameters row (empty
+until AProperty* host joins). The scene tree groups elements under
 `IFCBUILDINGSTOREY` nodes (ArcWalls by elevation; Floors/Rooms remain
-Unassigned until Level ElementId bind). RE-19 corpus research (Einhoven
+Unassigned until Level ElementIds exist on both sides — bind plumbing is
+fail-closed and corpus-idle today). RE-19 corpus research (Einhoven
 2023 / Core Interior 2024) found **no** reliable Door vs Window
 discriminator and **no** schema-field / 2024 ArcWall envelope suitable for
 fail-closed decode — so typed `Door`/`Window` and non-ArcWall `Wall` stay
 unsolved by evidence, not by omission. Floor↔ElemTable id binding and slab
-extrusion thickness remain open. Eighty per-class decoder structs remain
+extrusion thickness remain open. Eighty-one per-class decoder structs remain
 registered; `MVP_TYPED_CLASSES` are consulted by `iter_elements`.
 
 ## Capability Matrix

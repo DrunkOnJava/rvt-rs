@@ -90,6 +90,7 @@ simple_decoder!(APropertyDouble1Decoder, "APropertyDouble1");
 simple_decoder!(APropertyDouble3Decoder, "APropertyDouble3");
 simple_decoder!(APropertyFloatDecoder, "APropertyFloat");
 simple_decoder!(APropertyFloat3Decoder, "APropertyFloat3");
+simple_decoder!(APropertyStringDecoder, "APropertyString");
 
 /// Underlying wire-level storage kind of a parameter's value.
 ///
@@ -329,6 +330,9 @@ pub enum ParameterValue {
     /// Same role as Double3 but narrower precision — reserved for
     /// graphical-only data (material diffuse colour, UI accent).
     Float3([f32; 3]),
+    /// `APropertyString.m_value` — UTF-16 string (Mark, comments,
+    /// free-form text parameters).
+    String(String),
     /// `AProperty` or an unrecognised subclass. `class_name` is the
     /// raw schema class name; `raw_bytes` is the instance body
     /// before field-level decode. Round-trips through the walker
@@ -399,6 +403,11 @@ impl ParameterValue {
                     }
                 }
             }
+            "APropertyString" => {
+                if let Some(InstanceField::String(s)) = find_value(&["value"]) {
+                    return ParameterValue::String(s.clone());
+                }
+            }
             _ => {}
         }
         // Fallback — AProperty (base class) or unknown subclass.
@@ -431,9 +440,143 @@ impl ParameterValue {
             | ParameterValue::Double3(_)
             | ParameterValue::Float(_)
             | ParameterValue::Float3(_) => StorageType::Double,
+            ParameterValue::String(_) => StorageType::String,
             ParameterValue::Other { .. } => StorageType::Other,
         }
     }
+
+    /// Stable JSON object for CLI / Python / viewer surfaces.
+    pub fn to_json_value(&self) -> serde_json::Value {
+        match self {
+            ParameterValue::Boolean(v) => serde_json::json!({
+                "kind": "boolean",
+                "value": v,
+            }),
+            ParameterValue::Integer(v) => serde_json::json!({
+                "kind": "integer",
+                "value": v,
+            }),
+            ParameterValue::Enum(v) => serde_json::json!({
+                "kind": "enum",
+                "value": v,
+            }),
+            ParameterValue::Double(v) => serde_json::json!({
+                "kind": "double",
+                "value": v,
+            }),
+            ParameterValue::Double3(v) => serde_json::json!({
+                "kind": "double3",
+                "value": v,
+            }),
+            ParameterValue::Float(v) => serde_json::json!({
+                "kind": "float",
+                "value": v,
+            }),
+            ParameterValue::Float3(v) => serde_json::json!({
+                "kind": "float3",
+                "value": v,
+            }),
+            ParameterValue::String(v) => serde_json::json!({
+                "kind": "string",
+                "value": v,
+            }),
+            ParameterValue::Other {
+                class_name,
+                raw_bytes,
+            } => serde_json::json!({
+                "kind": "other",
+                "class_name": class_name,
+                "raw_len": raw_bytes.len(),
+            }),
+        }
+    }
+}
+
+/// One parameter value recovered from an AProperty* decoded element.
+///
+/// Host-element ↔ AProperty joins are not yet recovered on the
+/// production partition path, so [`parameter_entries_from_decoded`]
+/// returns a non-empty list only when `decoded` itself is an
+/// AProperty* carrier. Other classes return `[]` (honest empty).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParameterEntry {
+    /// Parameter display name when known; AProperty carriers rarely
+    /// embed the definition name on the value instance alone.
+    pub name: Option<String>,
+    pub value: ParameterValue,
+    pub source_class: String,
+}
+
+impl ParameterEntry {
+    pub fn to_json_value(&self) -> serde_json::Value {
+        let mut obj = serde_json::Map::new();
+        match &self.name {
+            Some(n) => {
+                obj.insert("name".into(), serde_json::Value::String(n.clone()));
+            }
+            None => {
+                obj.insert("name".into(), serde_json::Value::Null);
+            }
+        }
+        obj.insert(
+            "source_class".into(),
+            serde_json::Value::String(self.source_class.clone()),
+        );
+        if let serde_json::Value::Object(map) = self.value.to_json_value() {
+            for (k, v) in map {
+                obj.insert(k, v);
+            }
+        }
+        serde_json::Value::Object(obj)
+    }
+}
+
+/// True when `class_name` is a known AProperty* value carrier.
+pub fn is_aproperty_class(class_name: &str) -> bool {
+    matches!(
+        class_name,
+        "AProperty"
+            | "APropertyBoolean"
+            | "APropertyInteger"
+            | "APropertyEnum"
+            | "APropertyDouble1"
+            | "APropertyDouble3"
+            | "APropertyFloat"
+            | "APropertyFloat3"
+            | "APropertyString"
+    )
+}
+
+/// Parameter entries carried by this decoded element.
+///
+/// - AProperty* → one entry with the typed value (name usually unknown)
+/// - anything else → empty (host↔value join not recovered yet)
+pub fn parameter_entries_from_decoded(decoded: &DecodedElement) -> Vec<ParameterEntry> {
+    if !is_aproperty_class(&decoded.class) {
+        return Vec::new();
+    }
+    let value = ParameterValue::from_decoded(decoded);
+    if matches!(
+        &value,
+        ParameterValue::Other { raw_bytes, .. } if raw_bytes.is_empty()
+    ) && decoded.class == "AProperty"
+    {
+        return Vec::new();
+    }
+    let name = decoded.fields.iter().find_map(|(n, f)| {
+        let norm = normalise_field_name(n);
+        if matches!(norm.as_str(), "name" | "sname" | "parametername") {
+            if let InstanceField::String(s) = f {
+                return Some(s.clone());
+            }
+        }
+        None
+    });
+    vec![ParameterEntry {
+        name,
+        value,
+        source_class: decoded.class.clone(),
+    }]
 }
 
 fn vector_to_f64_3(components: &[InstanceField]) -> Option<[f64; 3]> {
@@ -872,6 +1015,56 @@ mod tests {
             }
             other => panic!("expected Float3, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn aproperty_string_decodes_to_parameter_value() {
+        let d = mk_decoded(
+            "APropertyString",
+            vec![("m_value".into(), InstanceField::String("Mark-A".into()))],
+        );
+        assert_eq!(
+            ParameterValue::from_decoded(&d),
+            ParameterValue::String("Mark-A".into())
+        );
+        assert_eq!(
+            ParameterValue::String("Mark-A".into()).storage_type(),
+            StorageType::String
+        );
+    }
+
+    #[test]
+    fn parameter_entries_from_aproperty_are_non_empty() {
+        let d = mk_decoded(
+            "APropertyInteger",
+            vec![(
+                "m_value".into(),
+                InstanceField::Integer {
+                    value: 7,
+                    signed: true,
+                    size: 4,
+                },
+            )],
+        );
+        let entries = parameter_entries_from_decoded(&d);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].source_class, "APropertyInteger");
+        assert_eq!(entries[0].value, ParameterValue::Integer(7));
+        let json = entries[0].to_json_value();
+        assert_eq!(json["kind"], "integer");
+        assert_eq!(json["value"], 7);
+    }
+
+    #[test]
+    fn parameter_entries_from_host_element_are_honestly_empty() {
+        let d = mk_decoded(
+            "Floor",
+            vec![(
+                "m_level_id".into(),
+                InstanceField::ElementId { tag: 0, id: 42 },
+            )],
+        );
+        assert!(parameter_entries_from_decoded(&d).is_empty());
     }
 
     #[test]

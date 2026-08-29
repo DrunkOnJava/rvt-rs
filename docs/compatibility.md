@@ -52,7 +52,7 @@ Notes:
 
 ## 3. Element class decode coverage
 
-**80 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty` unit test. Production `walker::iter_elements` prefers typed decoders for `MVP_TYPED_CLASSES`, merges ArcWall partition recovers, and merges partition MVP Level/Material/Room/Floor plan-loop / 2024 opening-index rows; other registered classes still use generic `decode_instance`. Grouped by domain below.
+**81 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty_one` unit test. Production `walker::iter_elements` prefers typed decoders for `MVP_TYPED_CLASSES`, merges ArcWall partition recovers, and merges partition MVP Level/Material/Room/Floor plan-loop / 2024 opening-index rows; other registered classes still use generic `decode_instance`. Grouped by domain below.
 
 **Partial on real project files:** ArcWall, Level, Material, Room, Floor plan-loops, and 2024 ArcWallRectOpening index rows can surface from `Partitions/*` via fail-closed recovers. Schema-field Wall instances and typed Door/Window host binding from arbitrary projects remain unsolved; see [`docs/status.md`](status.md) and `reports/element-framing/RE-01-synthesis.md`.
 
@@ -118,12 +118,12 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - `Dimension`, `Tag`, `TextNote`, `Annotation` ([`annotations.rs`](../src/elements/annotations.rs))
 - Dimensions include linear / angular / radial / arc-length subtypes via the `DimensionKind` discriminator projected from the schema; tag orientation and horizontal alignment enums are exposed on `TagOrientation` and `HorizontalAlignment`.
 
-### Parameters and value carriers (10)
+### Parameters and value carriers (11)
 
 - `ParameterElement`, `SharedParameter` ([`parameters.rs`](../src/elements/parameters.rs))
 - Both expose the `StorageType` enum (`None`, `Integer`, `Double`, `String`, `ElementId`, `Other`) so callers can route parameter values into property-set emission (see §4 IFC-31).
-- `AProperty`, `APropertyBoolean`, `APropertyInteger`, `APropertyEnum`, `APropertyDouble1`, `APropertyDouble3`, `APropertyFloat`, `APropertyFloat3` ([`parameters.rs`](../src/elements/parameters.rs))
-- These value-carrier decoders are building blocks for parameter extraction. Real-file parameter recovery still depends on the object-graph and partition-record linkage described in [`docs/status.md`](status.md).
+- `AProperty`, `APropertyBoolean`, `APropertyInteger`, `APropertyEnum`, `APropertyDouble1`, `APropertyDouble3`, `APropertyFloat`, `APropertyFloat3`, `APropertyString` ([`parameters.rs`](../src/elements/parameters.rs))
+- These value-carrier decoders are building blocks for parameter extraction. Real-file parameter recovery still depends on the object-graph and partition-record linkage described in [`docs/status.md`](status.md). CLI / Python / viewer expose a `parameters` array that is honestly empty for host elements until host↔AProperty joins recover (#35).
 
 ### MEP — mechanical / electrical / plumbing (11)
 
@@ -133,7 +133,7 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - Generic MEP: `SpecialtyEquipment` ([`mep.rs`](../src/elements/mep.rs))
 - All MEP instances project onto a shared `MepInstance` typed view with an optional `MepSystemClassification` (Supply / Return / Exhaust / …) so IFC distribution-system emission (IFC-10, future) can key off it without re-reading the schema.
 
-Group sum: 7 + 14 + 7 + 6 + 6 + 4 + 7 + 4 + 4 + 10 + 11 = **80**, matching `all_decoders().len()`.
+Group sum: 7 + 14 + 7 + 6 + 6 + 4 + 7 + 4 + 4 + 11 + 11 = **81**, matching `all_decoders().len()`.
 
 ## 4. IFC4 export coverage
 

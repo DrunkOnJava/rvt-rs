@@ -438,6 +438,12 @@ fn print_human_report(report: &InspectReport) {
             println!("  Materials: {}", mat_sample.join(", "));
         }
     }
+    let param_values = report.export_diagnostics.decoded.parameter_value_count;
+    if param_values > 0 {
+        println!("  Parameter values (AProperty*): {param_values}");
+    } else {
+        println!("  Parameter values: none recovered (AProperty* host joins pending — #35)");
+    }
 
     println!("\nIFC export readiness");
     println!(
