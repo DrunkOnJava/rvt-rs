@@ -233,7 +233,9 @@ impl Wall {
                 ("topoffset", InstanceField::Float { value, .. }) => {
                     out.top_offset_feet = Some(*value);
                 }
-                ("unconnectedheight", InstanceField::Float { value, .. }) => {
+                // gen-fixture Walls carry `m_height`; real files use
+                // `m_unconnected_height` when top is unbound.
+                ("unconnectedheight" | "height", InstanceField::Float { value, .. }) => {
                     out.unconnected_height_feet = Some(*value);
                 }
                 ("structuralusage", InstanceField::Integer { value, .. }) => {
@@ -397,6 +399,35 @@ mod tests {
                 .decode(&[], &wrong, &HandleIndex::new())
                 .is_err()
         );
+    }
+
+    #[test]
+    fn wall_type_decoder_rejects_wrong_schema() {
+        let wrong = ClassEntry {
+            name: "Wall".into(),
+            offset: 0,
+            fields: vec![],
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        };
+        assert!(
+            WallTypeDecoder
+                .decode(&[], &wrong, &HandleIndex::new())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn wall_decoder_tolerates_empty_bytes() {
+        let decoded = WallDecoder
+            .decode(&[], &synth_wall_schema(), &HandleIndex::new())
+            .expect("empty input must not fail closed on schema match");
+        assert_eq!(decoded.class, "Wall");
+        let w = Wall::from_decoded(&decoded);
+        assert!(w.base_level_id.is_none());
     }
 
     #[test]

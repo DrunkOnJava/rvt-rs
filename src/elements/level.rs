@@ -79,7 +79,10 @@ impl Level {
             let normalised = normalise_field_name(field_name);
             match (normalised.as_str(), value) {
                 ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
-                ("elevation", InstanceField::Float { value, .. }) => {
+                // `m_height` appears on gen-fixture Levels; real files
+                // use `m_elevation`. Accept both so scaffold fixtures
+                // project a typed elevation without inventing fields.
+                ("elevation" | "height", InstanceField::Float { value, .. }) => {
                     out.elevation_feet = Some(*value);
                 }
                 ("leveltypeid", InstanceField::ElementId { id, .. }) => {
@@ -217,6 +220,33 @@ mod tests {
         assert_eq!(level.elevation_feet, Some(10.0));
         assert_eq!(level.level_type_id, Some(42));
         assert_eq!(level.is_building_story, Some(true));
+    }
+
+    #[test]
+    fn level_projects_m_height_as_elevation() {
+        // gen-fixture Levels use m_height rather than m_elevation.
+        let decoded = DecodedElement {
+            id: None,
+            class: "Level".into(),
+            fields: vec![(
+                "m_height".into(),
+                InstanceField::Float {
+                    value: 10.0,
+                    size: 8,
+                },
+            )],
+            byte_range: 0..0,
+        };
+        let level = Level::from_decoded(&decoded);
+        assert_eq!(level.elevation_feet, Some(10.0));
+    }
+
+    #[test]
+    fn level_decoder_tolerates_empty_bytes() {
+        let decoded = LevelDecoder
+            .decode(&[], &synth_level_schema(), &HandleIndex::new())
+            .expect("empty ok");
+        assert_eq!(decoded.class, "Level");
     }
 
     #[test]

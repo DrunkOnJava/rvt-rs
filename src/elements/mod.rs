@@ -24,8 +24,16 @@
 //! elevation, is_building_story, … }`). Callers who want typed
 //! Wall / Floor / Door values use these; callers who want a
 //! uniform untyped dump use `decode_instance` directly.
+//!
+//! # Lane Five MVP set
+//!
+//! Schema-driven typed decoders with wrong-schema rejection:
+//! Level, Wall, Floor, Door, Window, Room, Material.
+//! ArcWall uses a separate partition-byte path
+//! ([`arc_wall`]) because its wire format is not schema-field based.
 
 pub mod annotations;
+pub mod arc_wall;
 pub mod category;
 pub mod ceiling;
 pub mod circulation;
@@ -49,7 +57,18 @@ pub mod styling;
 pub mod wall;
 pub mod zones;
 
-use crate::walker::ElementDecoder;
+use crate::formats;
+use crate::walker::{DecodedElement, ElementDecoder, HandleIndex};
+use crate::Result;
+
+/// Schema-driven MVP class names for Lane Five (M3-05).
+///
+/// ArcWall is intentionally omitted — use [`arc_wall`] for partition
+/// records. `WallType` / `FloorType` remain available via
+/// [`all_decoders`] but are not required for the MVP acceptance set.
+pub const MVP_TYPED_CLASSES: &[&str] = &[
+    "Level", "Wall", "Floor", "Door", "Window", "Room", "Material",
+];
 
 /// Every registered [`ElementDecoder`] in insertion order.
 ///
@@ -146,6 +165,38 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
     ]
 }
 
+/// Look up a registered [`ElementDecoder`] by Revit class name.
+///
+/// Returns `None` when the class has no typed decoder in
+/// [`all_decoders`]. ArcWall is never returned here — use
+/// [`arc_wall::decode_candidate`] instead.
+pub fn decoder_for_class(name: &str) -> Option<Box<dyn ElementDecoder>> {
+    all_decoders()
+        .into_iter()
+        .find(|d| d.class_name() == name)
+}
+
+/// Decode instance bytes through the registered typed decoder for
+/// `schema.name`, enforcing wrong-schema rejection.
+///
+/// Prefer this over calling [`crate::walker::decode_instance`] when
+/// the caller intends a typed MVP class: a mismatched schema name
+/// fails closed instead of silently producing a mis-labeled
+/// [`DecodedElement`].
+pub fn decode_typed(
+    bytes: &[u8],
+    schema: &formats::ClassEntry,
+    index: &HandleIndex,
+) -> Result<DecodedElement> {
+    let decoder = decoder_for_class(&schema.name).ok_or_else(|| {
+        crate::Error::BasicFileInfo(format!(
+            "no typed decoder registered for class {}",
+            schema.name
+        ))
+    })?;
+    decoder.decode(bytes, schema, index)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,6 +206,20 @@ mod tests {
         let decoders = all_decoders();
         let names: Vec<&str> = decoders.iter().map(|d| d.class_name()).collect();
         assert!(names.contains(&"Level"));
+    }
+
+    #[test]
+    fn all_decoders_includes_mvp_set() {
+        let names: std::collections::BTreeSet<&str> = all_decoders()
+            .iter()
+            .map(|d| d.class_name())
+            .collect();
+        for class in MVP_TYPED_CLASSES {
+            assert!(
+                names.contains(class),
+                "MVP class {class} missing from all_decoders()"
+            );
+        }
     }
 
     #[test]
@@ -176,5 +241,31 @@ mod tests {
                 d.class_name()
             );
         }
+    }
+
+    #[test]
+    fn decoder_for_class_roundtrip() {
+        assert_eq!(
+            decoder_for_class("Wall").map(|d| d.class_name()),
+            Some("Wall")
+        );
+        assert!(decoder_for_class("ArcWall").is_none());
+        assert!(decoder_for_class("NoSuchClass").is_none());
+    }
+
+    #[test]
+    fn decode_typed_rejects_unregistered_class() {
+        let schema = formats::ClassEntry {
+            name: "NoSuchClass".into(),
+            offset: 0,
+            fields: vec![],
+            tag: None,
+            parent: None,
+            declared_field_count: None,
+            was_parent_only: false,
+            ancestor_tag: None,
+        };
+        let err = decode_typed(&[], &schema, &HandleIndex::new()).unwrap_err();
+        assert!(err.to_string().contains("no typed decoder"));
     }
 }
