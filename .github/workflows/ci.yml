@@ -64,16 +64,28 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
+    # Corpus LFS clones dominate wall-clock. Keep Autodesk sample coverage
+    # on ubuntu-stable (primary) + windows-stable (CFB path-separator
+    # regression). macOS and MSRV run lib/bins/doc only — same unit surface,
+    # no redundant multi-hundred-MB LFS fetch.
     name: cargo test / ${{ matrix.os }} / ${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable]
         include:
           - os: ubuntu-latest
+            rust: stable
+            with_corpus: true
+          - os: windows-latest
+            rust: stable
+            with_corpus: true
+          - os: macos-latest
+            rust: stable
+            with_corpus: false
+          - os: ubuntu-latest
             rust: "1.85"  # MSRV (Rust 2024 edition minimum)
+            with_corpus: false
     steps:
       # Windows' git default `core.autocrlf=true` mangles binary files
       # that aren't explicitly marked `binary` in `.gitattributes`.
@@ -89,6 +101,7 @@ jobs:
       # phi-ag/rvt. rvt-rs intentionally does not redistribute these
       # files (see SECURITY.md §Scope); they're pulled at build time.
       - name: Fetch phi-ag/rvt sample corpus
+        if: matrix.with_corpus
         uses: actions/checkout@v4
         with:
           repository: phi-ag/rvt
@@ -109,20 +122,23 @@ jobs:
       # any expected corpus file is missing (guarantees non-vacuous
       # coverage).
       - name: Coverage gate — 100% field-type classification
+        if: matrix.with_corpus
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_REQUIRE_CORPUS: "1"
         run: cargo test --release --test field_type_coverage -- --nocapture
       # Broader integration suite (round-trips, part-atom parsing,
-      # history extraction, stream inventory, etc.) runs against the
-      # corpus on all three OSes. Previously failed on Windows due to
-      # a path-separator bug (CFB stream names came back with `\`
-      # instead of `/` on Windows; fixed in reader::stream_names).
+      # history extraction, stream inventory, etc.). Kept on Windows
+      # as well as Ubuntu because CFB stream names historically came
+      # back with `\` instead of `/` on Windows (fixed in
+      # reader::stream_names).
       - name: Integration tests (corpus-dependent)
+        if: matrix.with_corpus
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
         run: cargo test --release --test samples
       - name: IFC export integration tests
+        if: matrix.with_corpus
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
         run: cargo test --release --test ifc_roundtrip
@@ -475,7 +491,11 @@ jobs:
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      # Always-on pytest (tier1 synthetics) does not need the Autodesk
+      # LFS corpus. Fetch it only on Linux so macOS/Windows wheel jobs
+      # stay fast; corpus-dependent tests skip cleanly without it.
       - name: Fetch phi-ag/rvt sample corpus
+        if: runner.os == 'Linux'
         uses: actions/checkout@v4
         with:
           repository: phi-ag/rvt

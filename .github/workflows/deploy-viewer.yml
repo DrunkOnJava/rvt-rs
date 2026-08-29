@@ -42,13 +42,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
 
-      - name: Checkout public RVT sample corpus
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
-        with:
-          repository: phi-ag/rvt
-          path: _corpus
-          lfs: true
-
+      # Tier-1 + synthetic demos stage from in-repo corpus/tier1/ and
+      # gen-fixture — no Autodesk LFS needed for Playwright MVP coverage.
+      # Magnetar project sample powers the optional real-project viewer
+      # regression (RVT_VIEWER_SAMPLE / projectSampleTest).
       - name: Checkout public project corpus
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
