@@ -257,6 +257,9 @@ fn endpoints_from_fields(decoded: &DecodedElement) -> Option<Curve> {
 pub enum FloorBoundarySource {
     /// Vector / float sequence on schema-driven Floor fields.
     SchemaSketch,
+    /// Closed plan polyline recovered from partition bytes (RE-15-07),
+    /// after ArcWall-centerline exclusion.
+    PartitionPlanLoop,
 }
 
 /// Recovered floor/slab plan boundary (feet).
@@ -377,10 +380,18 @@ pub fn recover_floor_boundary(decoded: &DecodedElement) -> RecoveryOutcome<Floor
     }
 
     let closed = is_closed_loop(&vertices_xy);
+    let source = if decoded.fields.iter().any(|(n, v)| {
+        normalise_field_name(n) == "source"
+            && matches!(v, InstanceField::String(s) if s == "partition_plan_loop")
+    }) {
+        FloorBoundarySource::PartitionPlanLoop
+    } else {
+        FloorBoundarySource::SchemaSketch
+    };
     RecoveryOutcome::Recovered(FloorBoundaryLoop {
         vertices_xy: unique,
         closed,
-        source: FloorBoundarySource::SchemaSketch,
+        source,
     })
 }
 

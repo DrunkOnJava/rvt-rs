@@ -12,12 +12,14 @@ uploading private models to a third-party service.
 
 The project is not there yet. It is currently a strong Revit inspection and
 reverse-engineering toolkit with a partial IFC/viewer path. **Generic
-real-project typed element extraction remains mostly unsolved**, with one
-narrow exception: production `walker::iter_elements` now prefers typed MVP
-decoders on `Global/Latest` and merges version-gated **ArcWall** partition
-recovers (Revit 2023 standard) as `DecodedElement`s — fail-closed when typed
-decode rejects. Schema-driven Wall / Floor / Door / Window / Level recovery
-from arbitrary partition streams is still open. Eighty per-class decoder
+real-project typed element extraction remains mostly unsolved**, with
+narrow exceptions: production `walker::iter_elements` prefers typed MVP
+decoders on `Global/Latest`, merges version-gated **ArcWall** partition
+recovers (Revit 2023 standard), and merges fail-closed partition MVP
+recovers for **Level** / **Material** / **Room** / **Floor** plan-loops
+plus 2024 **ArcWallRectOpening** index rows — never inventing typed
+`Door`/`Window` success. Schema-field Wall instances and Door/Window host
+binding from arbitrary partitions remain open. Eighty per-class decoder
 structs exist in `elements::all_decoders()`; MVP classes are consulted by
 `iter_elements`, while the broader registry remains a library building block
 (see [`docs/status.md`](docs/status.md) and
@@ -30,7 +32,7 @@ structs exist in `elements::all_decoders()`; MVP classes are consulted by
 | Container, compression, metadata | Shipped | Maintain compatibility and bounds checks. |
 | `Formats/Latest` schema | Shipped | Keep 100 percent field classification gated in CI. |
 | ADocument/document-level walker | Partial | Expand confidence across project releases and older files. |
-| Typed project elements | **Partial** | MVP typed path + ArcWall partition merge in `iter_elements` (fail closed). Schema-driven Wall/Floor/Door/Window/Level from arbitrary partitions still open. |
+| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material/Room/Floor plan-loops + 2024 opening index in `iter_elements` (fail closed). Schema-field Wall and typed Door/Window host binding still open. |
 | IFC writer | Partial | Keep synthetic validation green while adding real-file diagnostics. |
 | Browser viewer | Partial | Show confidence and unsupported-file guidance clearly. |
 | Python/CLI surface | Partial | Stabilize JSON schemas and one-shot inspect workflow. |
@@ -59,7 +61,7 @@ real project files, not only synthesized fixtures.
 - Known-count fixtures for levels, walls, floors, doors, and windows.
 - Generic partition record scanner.
 - `ElemTable` id to partition-record offset linkage.
-- Typed MVP decoders + ArcWall partition merge wired into `iter_elements` without false positives (schema-driven partition Wall/Floor/Door/Window/Level still open).
+- Typed MVP decoders + ArcWall + partition Level/Material/Room/Floor plan-loop / 2024 opening-index merge wired into `iter_elements` without false positives (schema-field Wall and typed Door/Window host binding still open).
 - Decode confidence and provenance attached to every element.
 
 ### 0.4.0: IFC Geometry Beta
