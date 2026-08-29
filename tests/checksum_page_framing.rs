@@ -74,12 +74,11 @@ fn compressible_payload(min_gzip_len: usize) -> (Vec<u8>, Vec<u8>) {
 }
 
 fn assert_bare_does_not_round_trip(paged: &[u8], payload: &[u8]) {
-    match inflate_at(paged, 0) {
-        Ok(naive) => assert_ne!(
+    if let Ok(naive) = inflate_at(paged, 0) {
+        assert_ne!(
             naive, payload,
             "without stripping, a successful inflate must not match the original payload"
-        ),
-        Err(_) => {}
+        );
     }
 }
 
@@ -164,8 +163,7 @@ fn multi_page_bare_inflate_does_not_round_trip_gated_does() {
     let (payload, gzip) = compressible_payload(REVIT_PAGE_PAYLOAD_BYTES + 2_000);
     let paged = inject_page_checksums(&gzip);
     assert!(
-        paged.len() >= REVIT_STORED_PAGE_BYTES * 2
-            || paged.len() > REVIT_STORED_PAGE_BYTES,
+        paged.len() >= REVIT_STORED_PAGE_BYTES * 2 || paged.len() > REVIT_STORED_PAGE_BYTES,
         "fixture must cross at least one stored-page boundary (got {})",
         paged.len()
     );
@@ -199,7 +197,12 @@ fn truncated_mid_page_keeps_available_bytes_no_panic() {
 
     let clean = strip_revit_page_checksums(&stored);
     assert_eq!(clean.len(), REVIT_PAGE_PAYLOAD_BYTES + 40);
-    assert!(clean.iter().take(REVIT_PAGE_PAYLOAD_BYTES).all(|&b| b == 0xAB));
+    assert!(
+        clean
+            .iter()
+            .take(REVIT_PAGE_PAYLOAD_BYTES)
+            .all(|&b| b == 0xAB)
+    );
     assert!(
         clean
             .iter()
