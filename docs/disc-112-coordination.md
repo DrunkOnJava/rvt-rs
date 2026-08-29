@@ -38,14 +38,24 @@ Formats/Latest production strip remains **disabled**. Findings
 [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156)
 stay **open** for evidence-only research (triage hygiene only in #166).
 
+**P1 progress (2026-08-29, continued):**
+
+| Item | Status |
+|------|--------|
+| Viewer deploy / material_count baselines | Done — [#169](https://github.com/DrunkOnJava/rvt-rs/pull/169) |
+| Remaining Actions SHA pins | Done — [#170](https://github.com/DrunkOnJava/rvt-rs/pull/170) |
+| Export `source_coverage` measured fractions | In flight — [#171](https://github.com/DrunkOnJava/rvt-rs/pull/171) (fail-closed; no invented %) |
+| Evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) | Partial negative on magnetar 2023/2024: trailing-word-as-owner **falsified**; issue stays open for 2014/2026 samples |
+| Evidence-only [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) | Blocked on unpublished ElementHeader marker/offsets; issue stays open |
+| Evidence-only [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) | Still open — 2024 ArcWall envelope not landed (RE-13 / RE-19) |
+| Re-baseline [#81](https://github.com/DrunkOnJava/rvt-rs/issues/81)–[#96](https://github.com/DrunkOnJava/rvt-rs/issues/96) | Done earlier this day (housekeeping) |
+| crates.io / docs.rs / GitHub Releases | Human decision — docs readiness only |
+
 **P1 next (honest order):**
 
-1. Viewer deploy / browser-regression baseline drift (material_count) + residual CI chores
-2. Confirm remaining Actions tag pins outside `publish.yml`
-3. Export `source_coverage` real fractions (stub from #167 — no invented %)
-4. Evidence-only research on [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) / [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) / [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) — do **not** invent Door/Window/Level ElementId successes (RE-19 / RE-20 negatives stand)
-5. Re-baseline issues [#81](https://github.com/DrunkOnJava/rvt-rs/issues/81)–[#96](https://github.com/DrunkOnJava/rvt-rs/issues/96)
-6. crates.io / docs.rs / GitHub Releases publish decisions (human)
+1. Finish / merge `source_coverage` [#171](https://github.com/DrunkOnJava/rvt-rs/pull/171)
+2. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive
+3. crates.io / docs.rs / GitHub Releases publish decisions (human)
 
 Hard walls unchanged: Door/Window discriminator, schema-field Wall, Level ElementIds on magnetar, AProperty host joins.
 

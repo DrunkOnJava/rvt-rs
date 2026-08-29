@@ -228,10 +228,10 @@
       "id": "export-source-coverage",
       "area": "diagnostics",
       "name": "Measured export source-coverage fractions (A10)",
-      "status": "unknown",
-      "evidence": "docs/schemas/export-diagnostics.schema.json source_coverage stub only",
-      "notes": "A10 light: schema fields reserved; fractions stay null/unset until measured. Do not invent coverage ratios.",
-      "user_impact": "Diagnostics may omit coverage until measurement lands."
+      "status": "partial",
+      "evidence": "src/ifc/mod.rs SourceCoverageDiagnostics::measure; docs/export-diagnostics.md",
+      "notes": "A10: exported/geometry fractions measured from diagnostics counts; decoded_element_fraction uses ElemTable header element_count only when walker ≤ declared (fail closed when partition recovers exceed the u16 header). Not converter-grade completeness.",
+      "user_impact": "Diagnostics sidecar reports honest measured fractions when denominators exist; otherwise unset/null."
     }
   ]
 }

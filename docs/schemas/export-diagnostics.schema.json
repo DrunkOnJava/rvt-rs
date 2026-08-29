@@ -303,7 +303,7 @@
       }
     },
     "source_coverage": {
-      "description": "A10 light stub for measured export source-coverage. Absent or status=unset means fractions are not measured — never invent ratios.",
+      "description": "A10 measured export source-coverage. status=measured when at least one fraction has a trustworthy denominator; status=unset when none can be computed. Fractions stay null when unknown — never invent ratios.",
       "type": [
         "object",
         "null"
@@ -330,7 +330,7 @@
           ],
           "minimum": 0,
           "maximum": 1,
-          "description": "Reserved. Must stay null until corpus-backed measurement lands."
+          "description": "production_walker_elements / ElemTable header element_count when 0 < walker <= element_count; null when the header is missing, zero, or exceeded by partition recovers."
         },
         "exported_element_fraction": {
           "type": [
@@ -339,7 +339,7 @@
           ],
           "minimum": 0,
           "maximum": 1,
-          "description": "Reserved. Must stay null until corpus-backed measurement lands."
+          "description": "building_elements / production_walker_elements when walker > 0; null otherwise. Includes non-building production classes (Level/Material) in the denominator."
         },
         "geometry_element_fraction": {
           "type": [
@@ -348,7 +348,7 @@
           ],
           "minimum": 0,
           "maximum": 1,
-          "description": "Reserved. Must stay null until corpus-backed measurement lands."
+          "description": "building_elements_with_geometry / building_elements when building_elements > 0; null otherwise."
         }
       }
     },
