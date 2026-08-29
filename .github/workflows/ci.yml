@@ -60,7 +60,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
@@ -97,7 +97,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Build
         run: cargo build --release --all-targets
       - name: Unit tests
@@ -140,7 +140,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Build + run synthetic-project integration test
         run: cargo test --release --test ifc_synthetic_project
       - name: Assert entity counts in committed fixture
@@ -192,7 +192,7 @@ jobs:
           path: _project_corpus
           lfs: true
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: writer-patch-corpus
       - name: Run stream patch corpus tests
@@ -228,7 +228,7 @@ jobs:
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: ifcopenshell-real-project
       - name: Install IfcOpenShell (prebuilt wheel)
@@ -348,7 +348,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - run: cargo doc --no-deps --lib
 
   # Q-09: benchmark-build regression gate.
@@ -371,7 +371,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: bench-build
       # `--no-run` compiles the benches but doesn't execute them.
@@ -399,7 +399,7 @@ jobs:
       # docs.rs builds with nightly — any `#[cfg_attr(docsrs, ...)]`
       # attributes + `#![feature(...)]` gates must be available.
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       # Mirror the [package.metadata.docs.rs] settings from Cargo.toml
       # (`all-features = true`) — if these drift, update both.
       - run: cargo +nightly doc --no-deps --all-features
@@ -429,7 +429,7 @@ jobs:
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: python-wheel-${{ matrix.os }}
       # Build the abi3 wheel. SEC-12/13: wheel sources live in the
