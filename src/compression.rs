@@ -130,6 +130,28 @@ pub fn prepare_stream_for_inflate<'a>(
     }
 }
 
+/// Inflate a named stored stream, stripping page checksums when required.
+///
+/// Prefer this over bare [`inflate_at`] whenever the CFB stream path is known:
+/// checksum-paged streams silently drift after the first full page if the
+/// 353-byte trailers are left in place (Discussion #112 / issue #151).
+pub fn inflate_stream_at(stream_name: &str, stored: &[u8], offset: usize) -> Result<Vec<u8>> {
+    let prepared = prepare_stream_for_inflate(stream_name, stored);
+    inflate_at(prepared.as_ref(), offset)
+}
+
+/// Auto-offset inflate for a named stored stream (page-stripped when required).
+pub fn inflate_stream_auto(stream_name: &str, stored: &[u8]) -> Result<(usize, Vec<u8>)> {
+    let prepared = prepare_stream_for_inflate(stream_name, stored);
+    inflate_at_auto(prepared.as_ref())
+}
+
+/// Inflate every gzip member in a named stored stream (page-stripped when required).
+pub fn inflate_all_chunks_for_stream(stream_name: &str, stored: &[u8]) -> Vec<Vec<u8>> {
+    let prepared = prepare_stream_for_inflate(stream_name, stored);
+    inflate_all_chunks(prepared.as_ref())
+}
+
 /// Returns `true` iff `data` starts with the gzip magic at the given offset.
 pub fn has_gzip_magic(data: &[u8], offset: usize) -> bool {
     offset
@@ -680,5 +702,118 @@ mod tests {
     fn strip_under_one_page_is_identity() {
         let small = vec![1u8, 2, 3, 4, 5];
         assert_eq!(strip_revit_page_checksums(&small), small);
+    }
+
+    #[test]
+    fn strip_exact_page_boundary_drops_only_trailer() {
+        let mut stored = vec![0x11u8; REVIT_PAGE_PAYLOAD_BYTES];
+        stored.extend(vec![0x22u8; REVIT_PAGE_CHECKSUM_BYTES]);
+        assert_eq!(stored.len(), REVIT_STORED_PAGE_BYTES);
+        let clean = strip_revit_page_checksums(&stored);
+        assert_eq!(clean, vec![0x11u8; REVIT_PAGE_PAYLOAD_BYTES]);
+    }
+
+    #[test]
+    fn strip_empty_is_empty() {
+        assert!(strip_revit_page_checksums(&[]).is_empty());
+    }
+
+    #[test]
+    fn strip_two_full_pages_plus_partial() {
+        let mut stored = Vec::new();
+        for page in 0..2 {
+            stored.extend(vec![page as u8; REVIT_PAGE_PAYLOAD_BYTES]);
+            stored.extend(vec![0xFFu8; REVIT_PAGE_CHECKSUM_BYTES]);
+        }
+        stored.extend(vec![0x33u8; 50]);
+        let clean = strip_revit_page_checksums(&stored);
+        assert_eq!(clean.len(), REVIT_PAGE_PAYLOAD_BYTES * 2 + 50);
+        assert!(clean[..REVIT_PAGE_PAYLOAD_BYTES].iter().all(|&b| b == 0));
+        assert!(
+            clean[REVIT_PAGE_PAYLOAD_BYTES..REVIT_PAGE_PAYLOAD_BYTES * 2]
+                .iter()
+                .all(|&b| b == 1)
+        );
+        assert!(
+            clean[REVIT_PAGE_PAYLOAD_BYTES * 2..]
+                .iter()
+                .all(|&b| b == 0x33)
+        );
+        assert!(!clean.contains(&0xFF));
+    }
+
+    /// Inject 353-byte trailers into a real truncated-gzip blob so the
+    /// stored layout matches Discussion #112 / issue #151, then prove
+    /// [`inflate_stream_at`] recovers the payload while bare inflate drifts
+    /// or fails closed.
+    #[test]
+    fn synthetic_multipage_formats_requires_strip_before_inflate() {
+        // High-entropy payload so the compressed form already crosses a
+        // full stored page (64_896 payload bytes) without a slow grow loop.
+        let mut state = 0xC0FFEE_u32;
+        let payload: Vec<u8> = (0..180_000)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 16) as u8
+            })
+            .collect();
+        let gzip = truncated_gzip_encode(&payload).unwrap();
+        assert!(
+            gzip.len() > REVIT_PAGE_PAYLOAD_BYTES,
+            "compressed fixture too small: {}",
+            gzip.len()
+        );
+        let paged = inject_page_checksums(&gzip);
+        assert!(
+            paged.len() >= REVIT_STORED_PAGE_BYTES,
+            "fixture must cross a page boundary"
+        );
+        assert_ne!(paged, gzip);
+
+        // Control: naive inflate on paged bytes must not round-trip.
+        // Mid-page trailers may either corrupt the stream (Err) or
+        // silently yield a wrong prefix (Ok) — both falsify recovery.
+        if let Ok(naive) = inflate_at(&paged, 0) {
+            assert_ne!(
+                naive, payload,
+                "paged bytes without strip must not decode to the original payload"
+            );
+        }
+
+        // Experiment: named-stream inflate strips pages first.
+        let recovered = inflate_stream_at("Formats/Latest", &paged, 0).expect("strip+inflate");
+        assert_eq!(recovered, payload);
+
+        // Small non-paged streams stay identity under prepare.
+        let small = truncated_gzip_encode(b"tiny").unwrap();
+        assert!(small.len() < REVIT_STORED_PAGE_BYTES);
+        assert_eq!(
+            inflate_stream_at("Formats/Latest", &small, 0).unwrap(),
+            b"tiny"
+        );
+        // Non-paged paths must not strip — same outcome as bare inflate.
+        assert_eq!(
+            inflate_stream_at("BasicFileInfo", &paged, 0)
+                .err()
+                .map(|e| e.to_string()),
+            inflate_at(&paged, 0).err().map(|e| e.to_string()),
+            "non-paged paths must not strip"
+        );
+    }
+
+    fn inject_page_checksums(payload: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(
+            payload.len() + (payload.len() / REVIT_PAGE_PAYLOAD_BYTES) * REVIT_PAGE_CHECKSUM_BYTES,
+        );
+        let mut offset = 0;
+        while offset < payload.len() {
+            let end = (offset + REVIT_PAGE_PAYLOAD_BYTES).min(payload.len());
+            out.extend_from_slice(&payload[offset..end]);
+            if end - offset == REVIT_PAGE_PAYLOAD_BYTES {
+                out.extend(std::iter::repeat_n(0x5A, REVIT_PAGE_CHECKSUM_BYTES));
+            }
+            offset = end;
+        }
+        out
     }
 }

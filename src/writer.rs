@@ -492,7 +492,7 @@ pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Resu
     let mut rf = RevitFile::open(dst)?;
     let raw = rf.read_stream(name)?;
     match framing {
-        StreamFraming::RawGzipFromZero => crate::compression::inflate_at(&raw, 0),
+        StreamFraming::RawGzipFromZero => crate::compression::inflate_stream_at(name, &raw, 0),
         StreamFraming::CustomPrefix8 => {
             // 8-byte custom prefix — gzip starts at offset 8.
             if raw.len() < 8 {
@@ -501,7 +501,7 @@ pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Resu
                     raw.len()
                 )));
             }
-            crate::compression::inflate_at(&raw, 8)
+            crate::compression::inflate_stream_at(name, &raw, 8)
         }
         StreamFraming::Verbatim => Ok(raw),
     }

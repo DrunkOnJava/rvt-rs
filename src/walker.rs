@@ -1216,7 +1216,7 @@ fn read_adocument_internal(
     limits: WalkerLimits,
 ) -> Result<(Option<ADocumentInstance>, Option<DetectionResult>)> {
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
-    let formats_d = compression::inflate_at(&formats_raw, 0)?;
+    let formats_d = compression::inflate_stream_at(streams::FORMATS_LATEST, &formats_raw, 0)?;
     let schema = formats::parse_schema(&formats_d)?;
     let adoc = schema
         .classes
@@ -1225,7 +1225,7 @@ fn read_adocument_internal(
         .ok_or_else(|| Error::BasicFileInfo("ADocument not in schema".into()))?;
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
-    let (_, d) = compression::inflate_at_auto(&raw)?;
+    let (_, d) = compression::inflate_stream_auto(streams::GLOBAL_LATEST, &raw)?;
     let detection = detect_adocument_start_with_limits(&d, Some(adoc), limits);
     let Some(entry) = detection.offset else {
         return Ok((None, Some(detection)));
@@ -1428,11 +1428,11 @@ pub fn iter_elements_with_limits(
     limits: WalkerLimits,
 ) -> Result<impl Iterator<Item = DecodedElement>> {
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
-    let formats_d = compression::inflate_at(&formats_raw, 0)?;
+    let formats_d = compression::inflate_stream_at(streams::FORMATS_LATEST, &formats_raw, 0)?;
     let schema = formats::parse_schema(&formats_d)?;
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
-    let (_, d) = compression::inflate_at_auto(&raw)?;
+    let (_, d) = compression::inflate_stream_auto(streams::GLOBAL_LATEST, &raw)?;
 
     let class_by_name: std::collections::HashMap<&str, &formats::ClassEntry> = schema
         .classes

@@ -66,4 +66,14 @@ fail under bare inflate — see
 and the Wave 2 framing contract
 [`docs/re/wave1-checksum-paged-framing-contract-2026-08-29.md`](../../docs/re/wave1-checksum-paged-framing-contract-2026-08-29.md).
 Formats length-only regression still holds; do not treat Formats ~48% schema
-loss as reproduced on this corpus. Still **no default production wiring**.
+loss as reproduced on this corpus.
+
+## Superseded by 2026-08-29 reproduction (+ path-gated production wiring)
+
+See [`DISC-112-finding1-reproduction-2026-08-29.md`](DISC-112-finding1-reproduction-2026-08-29.md).
+Independent reproduction **confirmed** the page layout. PR #160 landed
+**path-gated** `inflate_stream_*` wiring (not a universal strip inside bare
+`inflate_at`), matching the judge **narrow** / scoped-contract verdict. The
+2026-08-28 note that strip was a Formats regression was based on inflate-length /
+`class_names` heuristics; the gzip ISIZE trailer oracle shows the shorter
+stripped output is the correct decode.

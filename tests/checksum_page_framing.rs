@@ -6,9 +6,9 @@
 //! 1. Injecting 353-byte trailers every 64_896 payload bytes makes bare
 //!    [`inflate_at`] fail to round-trip (silent drift / wrong payload).
 //! 2. [`strip_revit_page_checksums`] before inflate restores the payload.
-//! 3. Current production-style callers (`inflate_at` on stored bytes) do
-//!    **not** strip — Wave 2 must wire [`prepare_stream_for_inflate`] (or
-//!    equivalent) at named-stream entry points.
+//! 3. Path gating via [`prepare_stream_for_inflate`] (strip only on checksum-
+//!    paged stream names). Production call sites use `inflate_stream_*`
+//!    wrappers; bare [`inflate_at`] stays a raw codec.
 //!
 //! Credit: page dimensions reported by @STE1200; constants match
 //! ahzs645/reviter `stripRevitPageChecksums`.

@@ -1,7 +1,9 @@
 # DISC-112 / #151 — Wave 1 Worker C decompression investigation (2026-08-29)
 
 Credit: [@STE1200](https://github.com/STE1200) (Discussion #112).  
-Scope: reproduce / narrow / refute checksum-paged decompression; **no production inflate wiring**.
+Scope: reproduce / narrow / refute checksum-paged decompression (Wave 1 probe/docs).
+Judge: **narrow** (accept scoped path-gated contract). Production path-gated
+`inflate_stream_*` wiring landed separately in PR #160 — not in this Wave 1 diff.
 
 ## Reported vs independently reproduced
 
@@ -14,7 +16,9 @@ Scope: reproduce / narrow / refute checksum-paged decompression; **no production
 | ~190 KB threshold | Yes | **Narrowed** — effect tracks full-page count / multi-member desync, not a single size cliff |
 | 209/209 gzip trailer oracle | Yes (two reporter files) | **Not re-run** (fixtures/methodology not shared in-repo) |
 
-**This is not a “fixed” claim.** `main` still calls bare `inflate_at` / `inflate_all_chunks` at production sites. Strip helpers exist but are opt-in / probe-facing.
+**Wave 1 posture:** this report does not ship production wiring. Subsequent PR #160
+landed **path-gated** `inflate_stream_*` helpers at named-stream call sites (aligned
+with the framing contract). Bare `inflate_at` remains strip-free.
 
 ## Strongest independent evidence
 
@@ -51,7 +55,7 @@ Structured schema metrics do **not** show a 48% loss under control. Inflate-leng
 
 ## Prior maintainer note (2026-08-28) — updated interpretation
 
-The 2026-08-28 probe correctly observed Formats length regression under naive strip and deferred default enablement. Wave 1 adds the **partition chunk oracle**, which independently confirms Steffen/reviter on redistributable data. Default wiring remains a Wave 2 change under the framing contract.
+The 2026-08-28 probe correctly observed Formats length regression under naive strip and deferred default enablement. Wave 1 adds the **partition chunk oracle**, which independently confirms Steffen/reviter on redistributable data. Default path-gated wiring subsequently landed in #160 under this framing contract.
 
 ## Artifacts
 

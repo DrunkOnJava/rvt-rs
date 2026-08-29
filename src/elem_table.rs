@@ -157,7 +157,8 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
 /// + invariants; full record decode is in `parse_records`.
 pub fn parse_header(rf: &mut RevitFile) -> Result<ElemTableHeader> {
     let raw = rf.read_stream(GLOBAL_ELEM_TABLE)?;
-    let d = compression::inflate_at(&raw, 8).or_else(|_| compression::inflate_at(&raw, 0))?;
+    let d = compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 8)
+        .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))?;
     parse_header_bytes(&d)
 }
 
@@ -259,7 +260,8 @@ pub fn parse_records_from_bytes(
 /// each file variant, so works on both family and project files.
 pub fn parse_records(rf: &mut RevitFile) -> Result<Vec<ElemRecord>> {
     let raw = rf.read_stream(GLOBAL_ELEM_TABLE)?;
-    let d = compression::inflate_at(&raw, 8).or_else(|_| compression::inflate_at(&raw, 0))?;
+    let d = compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 8)
+        .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))?;
     let header = parse_header_bytes(&d)?;
     let layout = detect_layout(&d);
     let limit = header.record_count as usize;
@@ -346,7 +348,8 @@ pub fn declared_element_ids(rf: &mut RevitFile) -> Result<Vec<u32>> {
 /// wrapper is kept for backward-compat with pre-corpus-probe callers.
 pub fn parse_records_rough(rf: &mut RevitFile, max_records: usize) -> Result<Vec<ElemRecordRough>> {
     let raw = rf.read_stream(GLOBAL_ELEM_TABLE)?;
-    let d = compression::inflate_at(&raw, 8).or_else(|_| compression::inflate_at(&raw, 0))?;
+    let d = compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 8)
+        .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))?;
     let layout = detect_layout(&d);
     let mut records = Vec::new();
     let mut i = layout.start;

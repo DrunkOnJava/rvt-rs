@@ -305,7 +305,8 @@ impl RevitFile {
     pub fn class_names(&mut self) -> Result<BTreeSet<String>> {
         let bytes = self.read_stream(FORMATS_LATEST)?;
         // Formats/Latest has GZIP magic at offset 0 (no custom header).
-        let decompressed = compression::inflate_at(&bytes, 0)?;
+        // Page checksums are stripped inside `inflate_stream_at`.
+        let decompressed = compression::inflate_stream_at(FORMATS_LATEST, &bytes, 0)?;
         class_index::extract_class_names(&decompressed)
     }
 
@@ -314,7 +315,7 @@ impl RevitFile {
     /// version of `class_names()`.
     pub fn schema(&mut self) -> Result<crate::formats::SchemaTable> {
         let bytes = self.read_stream(FORMATS_LATEST)?;
-        let decompressed = compression::inflate_at(&bytes, 0)?;
+        let decompressed = compression::inflate_stream_at(FORMATS_LATEST, &bytes, 0)?;
         crate::formats::parse_schema(&decompressed)
     }
 

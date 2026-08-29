@@ -4,7 +4,8 @@ Date: 2026-08-29
 Issue: [#151](https://github.com/DrunkOnJava/rvt-rs/issues/151)  
 Discussion: [#112](https://github.com/DrunkOnJava/rvt-rs/discussions/112)  
 Credit: reported finding @STE1200 (Steffen / team)  
-Wave: Worker C investigation (probe / docs only — **no production inflate wiring**)
+Wave: Worker C investigation (probe / docs / contract). Judge: **narrow** (accept scoped path-gated contract).
+Status note: PR #160 later landed path-gated `inflate_stream_*` call-site wiring on `main` — not a universal strip inside bare `inflate_at`.
 
 ## Status of claims
 
@@ -19,30 +20,33 @@ Wave: Worker C investigation (probe / docs only — **no production inflate wiri
 
 **Verdict for Wave 2:** treat checksum-page stripping as a **real container-layer requirement** for paged database streams, gated by path. Do **not** claim a Formats/Latest “48% schema loss” fix until a Formats-specific content oracle diverges on a redistributable file.
 
-## Entry-point map (`main` as of Wave 1)
+## Entry-point map
 
 `RevitFile::read_stream` returns **stored** CFB bytes (must stay identity-accurate for writer copies).
 
-Helpers already on `main` (commit `b826514`):
+Helpers (since `b826514`, extended in #160):
 
 - `REVIT_STORED_PAGE_BYTES` / `REVIT_PAGE_PAYLOAD_BYTES` / `REVIT_PAGE_CHECKSUM_BYTES`
 - `is_checksum_paged_stream`, `strip_revit_page_checksums`, `prepare_stream_for_inflate`
+- `inflate_stream_at` / `inflate_stream_auto` / `inflate_all_chunks_for_stream` (path-gated strip, then inflate)
 
-**Production callers still use bare inflate** (do not call `prepare_stream_for_inflate`):
+**Wave 1 snapshot (pre-#160):** production callers used bare `inflate_at` / `inflate_all_chunks`.
 
-| Call site | Stream(s) | API used today | Framing assumption |
+**Post-#160 on `main` (narrow / path-gated):** named-stream call sites use `inflate_stream_*`. Bare `inflate_at` remains a raw codec (no silent strip).
+
+| Call site | Stream(s) | API after #160 | Framing assumption |
 |---|---|---|---|
-| `reader::schema` / `schema_table` | `Formats/Latest` | `inflate_at(_, 0)` | gzip @ 0, no page strip |
-| `walker` | Formats + Global/Latest | `inflate_at` / `inflate_at_auto` | same |
-| `ifc` | Formats + Global/Latest | `inflate_at` / `inflate_at_auto` | same |
-| `object_graph` | Global/Latest, Partitions | `inflate_at_auto` / `inflate_all_chunks` | prefix auto; no strip |
-| `partition_*` / `elem_table` | Partitions, ElemTable | `inflate_all_chunks` / `inflate_at` | multi-member; no strip |
-| `writer::decompress_stream` | patched streams | `inflate_at` @ 0 or 8 | no strip |
-| bins (`rvt-analyze`, `rvt-corpus`, …) | various | bare inflate | no strip |
+| `reader::schema` / `schema_table` | `Formats/Latest` | `inflate_stream_at` | gzip @ 0, strip if paged |
+| `walker` | Formats + Global/Latest | `inflate_stream_at` / auto | same |
+| `ifc` | Formats + Global/Latest | `inflate_stream_at` / auto | same |
+| `object_graph` | Global/Latest, Partitions | `inflate_all_chunks_for_stream` | multi-member; strip if paged |
+| `partition_*` / `elem_table` | Partitions, ElemTable | `inflate_all_chunks_for_stream` / `inflate_stream_at` | same |
+| `writer::decompress_stream` | patched streams | `inflate_stream_at` | strip if paged path |
+| bins (`rvt-analyze`, `rvt-corpus`, …) | various | mix of stream-aware + bare | prefer stream-aware |
 
 Path gate (matches reviter): `Formats/Latest`, listed `Global/*` database streams, `Partitions/<id>`. **Exclude** `BasicFileInfo`, `PartAtom`, `ProjectInformation`, previews.
 
-## Framing contract (Wave 2 implementation target)
+## Framing contract (Wave 2 target — landed path-gated on `main` via #160)
 
 ### Layer order
 
@@ -68,7 +72,7 @@ CFB stored bytes
 
 ### Acceptance tests for Wave 2
 
-- [ ] Synthetic inject→strip→round-trip (see `tests/checksum_page_framing.rs`) stays green.
+- [x] Synthetic inject→strip→round-trip (see `tests/checksum_page_framing.rs` + compression unit tests) stays green.
 - [ ] On `2024_Core_Interior.rvt` `Partitions/46` (redistributable corpus): stripped path recovers **all** members that fail under control (Wave 1: control ~925 ok via `inflate_all_chunks`, stripped **935**; fail→0 under magic-scan oracle).
 - [ ] `Formats/Latest` structured class/field counts do not regress vs control on Core Interior + Einhoven.
 - [ ] Writer patch round-trip still passes for Formats/Global streams.
