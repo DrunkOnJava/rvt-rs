@@ -21,7 +21,7 @@ Install and local build paths are documented in
   and `blob:`, which is needed for the local GLB object URL. No
   analytics, no error reporting, no CDN font loads.
 - **Browser-tested invariant.** CI runs
-  `viewer/tests/no-network.spec.ts`: it opens the built viewer,
+  `viewer/tests/no-network.spec.ts` (runtime traffic) and `viewer/tests/wasm-no-network-imports.spec.ts` (wasm-objdump import audit): it opens the built viewer,
   loads a public sample RFA, and fails with request URL plus initiator
   if any external or post-open network request occurs. See
   [`docs/viewer-privacy-posture.md`](../docs/viewer-privacy-posture.md).

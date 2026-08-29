@@ -83,7 +83,7 @@ number of times (e.g. walker scans all possible entry offsets).
 
 **Mitigations:**
 
-- **`WalkerLimits` (pending API-11).** Caps max_scan_bytes +
+- **`WalkerLimits` (API-11).** Caps max_scan_bytes +
   max_trial_offsets on the brute-force ADocument entry-point
   detector.
 - **`find_chunks` bounded.** The gzip-magic scanner over raw bytes

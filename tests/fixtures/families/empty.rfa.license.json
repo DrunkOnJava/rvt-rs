@@ -1,0 +1,14 @@
+{
+  "source_url": "https://github.com/DynamoDS/RevitTestFramework/blob/a0355b86448b5c0064ef834172361bc119371487/src/Tests/Samples/empty.rfa",
+  "source_repo": "DynamoDS/RevitTestFramework",
+  "source_path": "src/Tests/Samples/empty.rfa",
+  "source_commit": "a0355b86448b5c0064ef834172361bc119371487",
+  "license": "MIT",
+  "copyright": "Copyright 2014 Autodesk",
+  "sha256": "5f194a9a70a2ec1490bbdc61da03f63884da97e073917b6f096c1a198d8afd90",
+  "bytes": 389120,
+  "revit_release": "2022",
+  "file_type": ".rfa",
+  "redistribution": "public",
+  "notes": "Deliberately-minimal MIT-licensed family fixture from RevitTestFramework. Used by always-on stream-patch corpus tests (grow/shrink/multi/missing). Attribution: see LICENSE.RevitTestFramework.txt."
+}

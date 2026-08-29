@@ -123,6 +123,11 @@ yarn-error.log*
 !corpus/**
 !corpus/**/*.rvt
 !docs/**/*.rvt.md
+# Redistributable, license-documented fixtures committed under tests/
+!tests/fixtures/families/
+!tests/fixtures/families/**
+!tests/fixtures/families/**/*.rfa
+!tests/fixtures/families/**/*.license.json
 
 # wasm-pack output (built in CI, not committed)
 pkg/
