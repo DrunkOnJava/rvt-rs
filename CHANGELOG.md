@@ -13,6 +13,9 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Preview PNG IEND trim** — `RevitFile::preview_png` truncates at the
+  `IEND` chunk CRC when present (drops trailing OLE junk);
+  `preview_png_untrimmed` keeps the forensic full tail.
 - **Phase 1 research contracts (H-ES5 prep)** — `DocumentIdentity` /
   `ScopedElementRef` / `SourceSpan`, named `EvidenceTier` + evidence /
   edge ledgers, `EsReferenceOccurrence` + fixture transition types,
