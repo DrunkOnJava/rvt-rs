@@ -6,467 +6,71 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
-### Added — 2026-04-21: walker → IFC scaffolding, container decode, byte-identical CFB roundtrip, corpus hunt
+Post-`0.1.2` work toward an **inspection-focused `0.2.0` alpha** (see
+[`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md)). rvt-rs remains a
+Revit inspection / reverse-engineering toolkit with experimental export —
+**not** a production Revit→IFC converter for arbitrary projects.
 
-Shipped four subsystems. Honest status per-subsystem:
+### Added
 
-- **Walker → IFC scaffolding (L5B-11) — does not decode real elements
-  on project files.** `walker::iter_elements(rf)` is wired, and
-  `ifc::RvtDocExporter::export` routes its output into
-  `BuildingElement` entities. On `Revit_IFC5_Einhoven.rvt` (Revit
-  2023 project file) the pipeline emits 9 `IFCBUILDINGELEMENTPROXY`
-  entities, all for the `HostObjAttr` class — the 3-field parent
-  class that matches permissively at nearly any offset. On
-  `2024_Core_Interior.rvt` the pipeline emits **zero** element
-  entities. No Wall, Floor, Door, Window, Stair, Column, Beam, Roof,
-  or Ceiling decode succeeds. The scanner finds 1 of 405 schema
-  classes. Root cause (per
-  `reports/element-framing/RE-01-synthesis.md`): real element
-  instance data lives in `Partitions/*` streams with a wire envelope
-  that has not been reverse-engineered. Global/Latest holds only
-  document-level metadata (ADocument, Levels, Grids, etc.). The
-  current walker scans the wrong stream. **Treat all walker→IFC
-  output on project files as placeholder scaffolding, not
-  functional element decode.**
+- **Finding 1 / checksum-page framing (#151, Discussion #112)** —
+  gated strip of trailing page checksums before inflate on
+  `Partitions/*` and `Global/*` streams; Formats/Latest stays ungated
+  by default (#162). Wave 1 stream-evidence harness + Wave 2 narrowed
+  paged decompress, writer audit, and evidence matrix under
+  `docs/recon/` and `docs/re/`.
+- **Decode confidence + provenance (M3-07 / #150)** — every
+  `DecodedElement` carries confidence/provenance; CLI, Python, and
+  viewer expose it; default IFC emission hides low-confidence rows
+  (threshold documented with the export modes).
+- **Production typed / partition MVP path** — `walker::iter_elements`
+  prefers fail-closed typed MVP decoders on `Global/Latest`, merges
+  version-gated 2023 ArcWall partition recovers, and merges partition
+  MVP recovers for Level / Material / Room / Floor plan-loops plus
+  2024 ArcWallRectOpening index rows (ElemTable-confirmed related ids;
+  never invents typed Door/Window). IFC maps recovered Levels →
+  storeys, Floors → boundary-annotated slabs, Rooms → spaces, Material
+  display names → `IfcMaterial`.
+- **Viewer confidence UI** — File Status shows export readiness /
+  confidence, recovered storey names and material samples, honest
+  Parameters row (empty until AProperty host joins); scene tree groups
+  under `IFCBUILDINGSTOREY` when elevation evidence allows.
+- **Corpus + intake** — redistributable project corpus lanes, community
+  corpus open→schema→scaffold validation executed
+  (`docs/corpus-hunt-2026-04-21.md`: 222/223), corpus intake checklist
+  (`docs/corpus-intake.md`), and CI corpus matrix trimming.
+- **Inspect / compare tooling** — `rvt-inspect` user-facing status;
+  `rvt-ifc-compare` for export QA (M5-05); IFC export `--mode` gates
+  (scaffold / typed / geometry / strict) with diagnostics sidecar.
+- **Supporting research docs** — RE-19 (no Door/Window discriminator /
+  no schema-field Wall on magnetar corpora) and RE-20 (no recoverable
+  Level ElementId map; Floors/Rooms stay Unassigned by evidence).
+- **Earlier post-0.1.2 foundations still in tree** — ElemTable layout
+  detection + `rvt-elem-table` CLI; walker public APIs; scalar-base
+  Container decode (synthetic-verified); sector-preserving CFB
+  identity roundtrip; always-on stream patch corpus; Python decoded
+  API / `rvt-elements`; generic partition scanner.
 
-  Public walker API added (all functional; semantics above): `pub fn
-  scan_candidates`, `pub fn find_self_id_field`, `pub fn
-  build_handle_index`, `pub fn iter_elements`, `pub fn
-  iter_elements_with_options`. Integration test
-  `tests/walker_to_ifc_integration.rs` and the IfcOpenShell CI gate
-  only assert a non-negative count — they pass with the current
-  scaffolding behaviour.
+### Changed
 
-- **Scalar-base Container decode (L5B-09)** — verified on synthetic
-  tests only, unverified on real .rvt bytes.
-  `walker::read_field_by_type` and `walker::write_field_by_type` now
-  delegate scalar-base Container kinds (0x01, 0x02, 0x04, 0x05,
-  0x07, 0x0b, 0x0d) to the Vector wire layout
-  (`[u32 count][count × element]`). The round-trip test
-  (`container_scalar_round_trips_byte_identical`) uses synthesized
-  bytes; an instance round-trip sourced from a real .rvt is tracked
-  as WF-01..03 and has not been done. The "286 Container
-  occurrences" figure refers to *schema-side* field counts, not
-  decoded instance bytes.
+- **Honesty sync** — README, `docs/status.md`, compatibility, and
+  supported-profile language emphasize inspection + narrow MVP
+  recovers; generic converter claims removed.
+- **ADR-004** — desktop distribution wrappers deferred.
 
-- **Byte-identical CFB roundtrip (WRT-10) — verified.**
-  `write_with_patches` takes a sector-preserving path for both empty
-  and non-empty patch sets. Empty patches: atomic
-  `std::fs::copy + rename` (zero delta across all 11 family
-  releases + both project files). Non-empty identity patches (same
-  bytes in, same bytes out via `cfb::open_rw`): zero delta. Tests
-  pinning this: `tests/cfb_roundtrip_delta.rs`. Grow / shrink /
-  multi-stream patch cases are not yet tested (CFB-01..03).
+### Fixed
 
-- **Real-world corpus hunt (Q-01) — license-verified, parse-unverified.**
-  7 MIT/Apache-licensed repos with 17 .rvt + 24 .rfa files
-  identified via Sourcegraph (DynamoDS/DynamoRevit,
-  DynamoDS/RevitTestFramework, DynamoDS/DynamoWorkshops,
-  DynamoDS/RefineryToolkits, DynamoDS/RefineryPrimer,
-  chuongmep/OpenMEP, theseus-rs/file-type). Rejected
-  erfajo/OrchidForDynamo (CC BY-ND) and CSHS-CWRA/RavenHydroFramework
-  (extension-collision false positive — RAVEN hydrology text
-  config). Clone script `tools/fetch-corpus.sh` is committed but
-  **never executed** — none of the 41 candidate files has been run
-  through `project_corpus_smoke`. License claim is solid; parse
-  compatibility is unknown. Tasks Q01-01..04 track the outstanding
-  execution.
-
-Test suite: 716 lib tests (+11 new) + patched-build + walker-to-IFC
-integration. cargo fmt + clippy -D warnings clean across all targets.
-
-Reverse-engineering reports from the session:
-`reports/element-framing/RE-01-synthesis.md` (partitions are where
-elements live), `RE-09-synthesis.md` (chunk-header hypothesis
-refuted), `RE-17-synthesis.md` (ContentDocuments is a separate
-index, different id space from ElemTable). 12 RE probes under
-`examples/probe_*`.
-
-### Fixed — 2026-04-21: libFuzzer-caught panics in parsing paths
-
-Nightly Fuzz workflow was failing on a phantom `actions/upload-artifact`
-SHA pin; fixing that unblocked the matrix, which then surfaced three
-real panics in the parser that had been shipping since earlier commits:
-
-- **`compression::gzip_header_len`** panicked with "range start index
-  10 out of range for slice of length 4" on adversarial gzip headers
-  where the FNAME (0x08) or FCOMMENT (0x10) flag was set but the
-  buffer didn't contain the full 10-byte base header. `data[pos..]`
-  in the FNAME/FCOMMENT branches was slicing past the buffer end.
-  Fixed with `data.get(pos..)?` — returns `None` on out-of-bounds
-  instead of panicking. Regression test pins the minimised 4-byte
-  input `[0x1f, 0x8b, 0x08, 0xb9]`.
-
-- **`basic_file_info::extract_path`** panicked with "start byte index
-  N is not a char boundary" when the UTF-16LE-decoded
-  `BasicFileInfo` text contained multi-byte UTF-8 content (BOM markers,
-  Arabic, CJK) immediately before a `":\\"` literal. The fallback
-  branch used `saturating_sub(1)` to back up one byte from the `':'`
-  position, which could land inside a multi-byte character. Fixed
-  with `text.get(s..)?` — returns `None` on a non-boundary index.
-  Regression test pins a UTF-16LE input with BOM + `:\\` at a bad
-  byte offset.
-
-- **`fuzz_step_writer` harness** panicked in its own
-  `ElementTag::Other(String).truncate(32)` path for the same reason —
-  byte-32 can land inside a multi-byte char. Fixed by reusing the
-  file's existing `truncate_string` helper (which walks char
-  boundaries). Pure fuzz-harness fix, not a rvt-core bug.
-
-Also: CI plumbing repair — the nightly Fuzz workflow pinned
-`actions/upload-artifact@834a144...` which doesn't exist as a v4 SHA.
-Repointed to the real v4.6.2 SHA (`ea165f8d...`), added the new
-`fuzz_elem_table` target to the matrix (9 → 10 targets). All 10
-targets now pass the full 5-minute libFuzzer budget on mutation-heavy
-corpora — zero crashes across ~50 M test cases.
-
-Fuzz regression count: 45 → 47. No behaviour change on valid inputs.
-
-### Added — 2026-04-21: ElemTable project-file record layout
-
-First cross-variant support for `Global/ElemTable`. The pre-probe
-parser assumed family-file 12 B implicit records and returned
-zero-to-two records on real `.rvt` project files. After hex-dump
-reverse engineering ([`docs/elem-table-record-layout-2026-04-21.md`](docs/elem-table-record-layout-2026-04-21.md)):
-
-- **`elem_table::detect_layout(&[u8]) -> ElemTableLayout`** — finds the
-  first two FF markers in the stream and takes their stride. Falls
-  back to Implicit 12 B from `0x30` when no markers are present
-  (family files).
-- **`elem_table::parse_records(&mut RevitFile) -> Vec<ElemRecord>`** —
-  returns every declared record on all three observed variants.
-  Before/after on the 3-file corpus:
-
-  | Variant | Before | After |
-  | --- | --- | --- |
-  | Family 2024 (`.rfa`) | 45 | 1975 |
-  | Project 2023 (`.rvt`, 913 KB) | 2 | 2614 |
-  | Project 2024 (`.rvt`, 34 MB) | 2 | 26,425 |
-
-- **`elem_table::declared_element_ids`** — sorted deduped ID set for
-  walker coverage validation.
-- **`parse_records_from_bytes`** — public for fuzz targets and
-  synthetic-input unit tests.
-- **`rvt-elem-table` CLI** — 14th shipped binary; dumps header +
-  records for any `.rvt`/`.rfa` with JSON and raw-hex modes.
-- **Python bindings**: `RevitFile.elem_table_header()`,
-  `elem_table_records()`, `declared_element_ids()` with full type
-  stubs in `__init__.pyi`.
-- **Criterion bench `project_file`** (Q-07) — 913 KB / 34 MB timings
-  against real corpus. `summarize_strict` ≈ 8 ms on the 34 MB file.
-- **Fuzz target `fuzz_elem_table`** + 7 regression tests locking the
-  3 observed layouts and edge cases (all-zeros, single marker,
-  consecutive markers, markers at stream end).
-- **Full-pipeline smoke test** (`tests/project_corpus_smoke.rs`) —
-  corpus-driven sweep asserting open/summarize/schema/elem-table/
-  walker/IFC all succeed on every `.rvt` under `RVT_PROJECT_CORPUS_DIR`.
-
-Known gap: per-record payload (16/28 B) does NOT encode a byte
-offset into `Global/Latest` (confirmed across 29,039 records — see
-[`docs/global-latest-framing-probe-2026-04-21.md`](docs/global-latest-framing-probe-2026-04-21.md)).
-Walker → IFC element emission still needs a schema-directed scan of
-`Global/Latest` itself.
+- libFuzzer-caught panics in `compression::gzip_header_len`,
+  `basic_file_info::extract_path`, and fuzz harness string truncation
+  (nightly fuzz matrix unblocked after upload-artifact pin repair).
+- Finding 1 strip gate narrowed to exclude Formats/Latest (#162).
 
 ### Security
 
-- **vite bumped 5.4 → 8.0.9** — resolves Dependabot advisories
-  [GHSA-4w7w-66w2-5vf9](https://github.com/advisories/GHSA-4w7w-66w2-5vf9)
-  (CVE-2026-39365, path traversal in optimized-deps `.map` handling)
-  and [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99)
-  (transitive esbuild permissive dev-server CORS). Both are dev-server
-  issues — they don't ship in the production viewer bundle — but the
-  viewer's GitHub Pages build uses `vite build` in CI so keeping the
-  toolchain current is the sane default. `npm run typecheck` and
-  `npm run build` both clean under the new version; TypeScript is
-  unchanged.
-
-- **pyo3 bumped 0.22 → 0.24** — resolves Dependabot advisory
-  [GHSA-pph8-gcv7-4qj5](https://github.com/advisories/GHSA-pph8-gcv7-4qj5)
-  (`PyString::from_object` buffer-overread on non-nul-terminated `&str`).
-  Fix patched upstream in pyo3 0.24.1; we now track the 0.24 line.
-  Migration: replaced deprecated `PyBytes::new_bound`/`PyDict::new_bound`/
-  `PyList::empty_bound` with the renamed `PyBytes::new`/`PyDict::new`/
-  `PyList::empty` APIs in `src/python.rs`, and extended the
-  `InstanceField` match in `read_adocument` to cover the six variants
-  (`Integer`, `Float`, `Bool`, `Guid`, `String`, `Vector`) that had been
-  missed on the original bindings — those paths now round-trip through
-  Python. All 265 lib tests still pass under `--features python`.
-
-### Fixed — audit P0 credibility + correctness repair
-
-External audit (local `AUDIT-2026-04-19.md`) flagged a cluster of
-overclaiming and correctness bugs. All 16 P0 items are closed:
-
-- **README + PyPI + Cargo.toml descriptions rewritten** — removed
-  "complete, open documentation", "strict superset", "full-fidelity
-  path to IFC that the openBIM movement has been waiting for".
-  Replaced with narrower, audit-honest wording. New "What works
-  today" table distinguishes done vs pending per layer.
-- **CITATION.cff** bumped to 0.1.2 (was stale at 0.1.0).
-- **CLI count fixed** everywhere — Cargo defines 9; README said 7–8.
-- **Walker-version contradiction resolved** — walker reliably reads
-  all 13 ADocument fields on Revit 2024–2026; 2016–2023 entry-point
-  detection still needs work. Fixed in `src/walker.rs`,
-  `docs/python.md`, CHANGELOG [0.1.2] section, recon report §Q6.5-F.
-- **IFC module docs rephrased** to "document-level scaffold…
-  geometry and per-element entities pending walker expansion."
-- **CONTRIBUTING.md updated** from v0.1.1 state to v0.1.2 reality;
-  §Where help is most wanted now points at Layer 5b per-element
-  decoder tasks + cross-references TODO-BLINDSIDE.md.
-- **`NullExporter` → `PlaceholderExporter`** rename — old name
-  implied `NotYetImplemented` return but impl returned empty model.
-  `--null` CLI flag aliased to `--placeholder` for back-compat.
-- **`BasicFileInfo::extract_build`** no longer only matches literal
-  `_1515(x64)`; scans `YYYYMMDD_HHMM(x64)` shape so `_1635(x64)`
-  and other HHMM values survive the path.
-- **`partitions::stream_name()`** deleted — was a public-API
-  footgun returning `GLOBAL_LATEST` as a dummy; nothing used it.
-- **`find_chunks` off-by-one** fixed — `saturating_sub(3)` as
-  exclusive upper bound missed magic at offset `len-3`. Added
-  regression test + tiny-input safety test.
-- **`writer::write_with_patches`** now validates every patch's
-  `stream_name` against the actual stream set *before* writing —
-  typos return `Error::StreamNotFound` instead of silent no-op.
-- **`writer::write_with_patches`** now atomic via sibling temp
-  file + rename, with RAII `TempGuard` cleanup on panic/error.
-- **STEP output deterministic** via `StepOptions { timestamp }`.
-  `write_step_with_options(model, opts)` with fixed timestamp
-  produces byte-identical output — fixes the CHANGELOG claim that
-  was silently broken by `SystemTime::now()`.
-- **STEP Unicode escaping** now ISO-10303-21-correct: non-ASCII
-  BMP → `\X2\HHHH\X0\`, supplementary plane → `\X4\HHHHHHHH\X0\`,
-  backslash doubled, control chars as `\X\HH`. Previously replaced
-  all non-ASCII with `_`, silently mangling accented project names
-  and CJK text.
-
-### Added — Phase 1 security hardening
-
-Closes the audit's DoS + supply-chain findings:
-
-- **`compression::InflateLimits { max_output_bytes }`** with 256 MiB
-  default. `inflate_at_with_limits(data, offset, limits)` uses a
-  chunked-read loop that rejects output over budget with new
-  `Error::DecompressLimitExceeded`. Legacy `inflate_at` wraps the
-  limited variant. Regression test: 1 KB→1 MB zero-bomb rejected
-  by 64 KiB cap.
-- **`compression::inflate_all_chunks_with_limits`** with per-chunk
-  + aggregate budget (default 1 GiB). Legacy
-  `inflate_all_chunks` delegates to it.
-- **`reader::OpenLimits { max_file_bytes, max_stream_bytes,
-  inflate_limits }`** with 2 GiB / 256 MiB / 256 MiB defaults.
-  `RevitFile::open_with_limits` stats file before reading;
-  rejects oversize before allocation.
-- **`reader::RevitFile::read_stream_with_limit`** — per-call byte
-  cap enforced against CFB directory size + checked chunked read.
-- **Python bindings** expose all three caps:
-  `rvt.RevitFile(path, max_file_bytes=..., max_stream_bytes=...,
-  max_inflate_bytes=...)`.
-- **`deny.toml`** — license allowlist (Apache-2 / MIT / BSD and
-  compatible permissive only; no GPL), advisory deny, crates.io-only
-  source, wildcard deny.
-- **CI: `cargo deny check` + `cargo audit`** jobs added, both
-  SHA-pinned to their actions.
-- **`THREAT_MODEL.md`** — documents T1 RCE / T2 memory DoS / T3
-  algorithmic DoS / T4 PII / T5 supply-chain threats + specific
-  mitigations + residual-risk notes + out-of-scope list.
-- **`CLEANROOM.md`** — formal accepted/forbidden source policy,
-  contributor declaration, suspicious-contribution handling.
-- **`src/lib.rs` DMCA claim softened** — removed absolute
-  "17 U.S.C. § 1201(f)" legal-advice framing; points to
-  `CLEANROOM.md` for enforcement detail.
-
-### Added — Phase 2 API discipline foundation (strict vs lossy)
-
-- **`parse_mode::ParseMode { Strict, BestEffort }`** — default
-  `BestEffort` preserves legacy behaviour.
-- **`parse_mode::Warning`** — structured `{ code, message, offset }`.
-- **`parse_mode::Diagnostics`** — `warnings` + `skipped_records` +
-  `failed_streams` + `partial_fields` + `confidence`. `Display`
-  impl gives informative dump.
-- **`parse_mode::Decoded<T>`** — wraps best-effort results with
-  diagnostics + `complete` flag. `map()` for composition,
-  `is_clean()` for "would strict accept this?" check.
-- Strict/lossy concrete method pairs on RevitFile + walker land in
-  subsequent commits using these types.
-
-### Added — Phase 4 Layer 5b walker scaffold
-
-Unblocks every per-class decoder task:
-
-- **`walker::InstanceField`** extended with real value-type
-  variants: `Bool(bool)`, `Integer { value, signed, size }`,
-  `Float { value, size }`, `Guid([u8; 16])`, `String(String)`,
-  `Vector(Vec<InstanceField>)`. Previously collapsed to raw
-  `Bytes` because ADocument's schema didn't exercise them.
-- **`walker::HandleIndex`** — ElementId → byte-offset BTreeMap
-  for resolving cross-references in per-class decoders.
-- **`walker::ElementDecoder` trait** — `class_name()` + `decode()`
-  contract. Adding a new Revit class decoder is drop-in.
-- **`walker::DecodedElement`** — uniform output struct
-  `{ id, class, fields, byte_range }`.
-- **`walker::read_field_by_type`** — per-FieldType dispatch core
-  that consumes bytes and emits the right InstanceField variant.
-  Panic-safe on short input.
-- **`walker::decode_instance`** — generic per-class fallback;
-  walks any class's declared fields in schema order.
-- `rvt-doc` CLI emits the new variants as typed JSON ("integer",
-  "float", "bool", "guid", "string", "vector", "bytes").
-
-### Added — Phase 5 geometry type primitives
-
-Format-agnostic geometry types serving as walker output + IFC
-exporter input:
-
-- **Base**: `Point3`, `Vector3`, `Transform3` (with `IDENTITY`).
-- **Curves** (7 variants): `Line`, `Arc`, `Circle`, `Ellipse`,
-  `HermiteSpline`, `NurbsCurve`, `CylindricalHelix` +
-  `CurveLoop { curves, closed }`.
-- **Faces** (6 variants): `Planar`, `Cylindrical`, `Conical`,
-  `Revolved`, `Ruled`, `HermitePatch`, `NurbsSurface`.
-- **Solids** (8 variants): `Extrusion`, `Blend`, `Revolve`,
-  `Sweep`, `SweptBlend`, `Boolean` (Union/Difference/Intersection),
-  `Void` (explicit door/window-in-wall variant), `Mesh(Mesh)`.
-- **Supporting types**: `Mesh { vertices, triangles, normals }`,
-  `PointCloud { points }`, `BoundingBox` with `empty()` +
-  `expand_point()`.
-
-All serde-serializable. Module docstring documents coordinate
-conventions (right-handed, project-unit distances, radians,
-never implicit conversion).
-
-### Changed — CI efficiency
-
-- `concurrency: cancel-in-progress: true` (already in place
-  pre-audit; documented explicitly).
-- Top-level `permissions: contents: read` — least-privilege
-  workflow scope (audit SEC-30).
-- `paths-ignore` keeps docs-only commits off the Windows wheel
-  matrix.
-
-### Added — Phase 4 Layer 5b per-class decoders (35 new decoders)
-
-Following the scaffold + Level reference example, added typed
-decoders + `{Class}::from_decoded(&DecodedElement)` projections for:
-
-- **Reference points**: `BasePoint`, `SurveyPoint`, `ProjectPosition`
-  (with `to_transform()` composing the world↔project transform).
-- **Datums**: `Grid` + `GridType` (line / arc curve kind, bubble
-  locations), `ReferencePlane` (bubble/free endpoints + normal).
-- **Walls**: `Wall` + `WallType` with `StructuralUsage`,
-  `LocationLine`, `WallKind`, `WallFunction::to_ifc_predefined()`
-  mapping to `IfcWallTypeEnum`.
-- **Horizontal envelope**: `Floor` + `FloorType`, `Roof` + `RoofType`
-  (footprint vs extrusion, rafter-cut enum), `Ceiling` + `CeilingType`
-  with `drop_inches()` helper.
-- **Openings**: `Door` + `Window` with shared `OpeningCommon`
-  collector; flip-hand/facing XOR logic for `is_flipped`; sill-height
-  convenience.
-- **Structural**: `Column` + `StructuralColumn`, `Beam` +
-  `StructuralFraming`; `length_feet()` + `is_horizontal(eps)` on
-  beams.
-- **Circulation**: `Stair` + `StairType` with `was_adjusted()`
-  (desired vs actual riser count), `Railing` + `RailingType`
-  (free-standing detection).
-- **Spatial zoning**: `Room`, `Area`, `Space` share `Zone` view;
-  `label()` → "number: name" formatting.
-- **Foundations + furnishings**: `StructuralFoundation`,
-  `Furniture`, `FurnitureSystem`, `Casework`, `Rebar` with
-  `total_length_feet()` for quantity takeoff.
-- **Project-org**: `Phase`, `DesignOption`, `Workset` with
-  `is_modifiable()` (open && editable).
-
-All 35 decoders registered in `all_decoders()` (45 total). Each
-decoder normalises field names through `normalise_field_name()` so
-camelCase / snake_case / m_-prefixed variants across Revit
-2016–2026 all collapse to a single match pattern. `from_decoded()`
-never returns `Err` — missing fields land as `None` so versions
-that drop a field still decode cleanly.
-
-### Added — IFC4 STEP per-element entities (IFC-02..IFC-15)
-
-The STEP writer grew real `IFCWALL` / `IFCSLAB` / `IFCROOF` /
-`IFCCOVERING` / `IFCDOOR` / `IFCWINDOW` / `IFCCOLUMN` / `IFCBEAM` /
-`IFCSTAIR` / `IFCRAILING` / `IFCFURNITURE` / `IFCFOOTING` /
-`IFCREINFORCINGBAR` / `IFCSPACE` / `IFCBUILDINGELEMENTPROXY`
-emission, each with its own `IFCLOCALPLACEMENT` and a single
-`IFCRELCONTAINEDINSPATIALSTRUCTURE` bundling them under the
-storey. Door + Window use the 10-field constructor form (extra
-OverallHeight / OverallWidth slots); everything else uses the
-minimal 8-field form. Empty-entities path is schema-safe (skips
-the containment rel when there are zero elements).
-
-### Added — IFC bridge: `build_ifc_model` one-call pipeline
-
-`src/ifc/from_decoded.rs` — feed in `&[ElementInput]` plus
-`BuilderOptions { storeys, classifications, units, project_name,
-description }` and get back an `IfcModel` that `write_step()`
-renders as valid IFC4. `storeys_from_levels(&[Level])` helper
-derives `Storey { name, elevation_feet }` from decoded Levels
-(filters out `is_building_story == false`). Unknown classes fall
-back to `IFCBUILDINGELEMENTPROXY` rather than being silently
-dropped. `entity_type_histogram(&model)` for end-to-end smoke
-tests.
-
-### Added — IFC4 real Level → IfcBuildingStorey (IFC-36)
-
-`IfcModel.building_storeys: Vec<Storey>` — when populated, the
-STEP writer emits one `IFCBUILDINGSTOREY` per Level (with the
-Revit level's name + elevation converted ft → m at the
-0.3048 boundary) instead of the hardcoded "Level 1". All storeys
-bundle into a single `IFCRELAGGREGATES` bound to the building.
-Empty-storeys fallback preserves the IFC4 invariant that a
-building must have ≥1 storey.
-
-### Added — End-to-end integration test + sample .ifc fixture
-
-`tests/ifc_synthetic_project.rs` exercises the full pipeline
-(decoded elements → `build_ifc_model` → `write_step`) against a
-10-element fake building (4 walls + slab + door + 2 windows +
-stair + unknown-class proxy + 3 storeys). Validates structural
-IFC4 conformance, element counts, name/GUID round-trip, and ft→m
-elevation conversion. `tests/fixtures/synthetic-project.ifc` is
-the committed output — 60 lines of valid IFC4 STEP that opens
-cleanly in BlenderBIM / IfcOpenShell. Regenerate via
-`DUMP_IFC=1 cargo test synthetic_project`.
-
-Second test pins byte-stable STEP output under fixed timestamps
-(no wall-clock leakage) so CI diffs stay tractable.
-
-### Known pending (tracked in TODO-BLINDSIDE.md)
-
-Phase 1 remaining: SEC-11..13 (workspace split) + SEC-14..25
-(fuzz infrastructure). Both are structural changes deferred to a
-dedicated session.
-
-Phase 4 remaining — per-class decoders not yet shipped:
-- L5B-20 Symbol, L5B-21 FamilyInstance (generic containers)
-- L5B-34 CurtainWall + grids/mullions/panels
-- L5B-36 Electrical* / L5B-37 Mech/Plumb/Specialty FamilyInstance subtypes
-- L5B-38 GenericModel, L5B-39 Mass
-- L5B-41 View + subtypes, L5B-42 Schedule, L5B-43 Sheet
-- L5B-44..48 Dimension / Tag / TextNote / Annotation / Revision
-- L5B-53..56 Parameter decoding + value extraction
-
-Phase 5 (geometry) — 14 pending: wall/floor/roof/door/window/
-stair/column/beam geometry assembly from location curves, layer
-stacks, profiles. Needed to emit `IfcShapeRepresentation` per
-element (currently every element is geometry-free).
-
-Phase 6 (IFC richness) — IFC-16..20 (shape representations),
-IFC-21..22 (type instancing), IFC-23..25 (placement hierarchies),
-IFC-27..30 (materials), IFC-31..34 (property sets), IFC-35
-(per-level containment), IFC-37..38 (opening voids).
-
-Phase 7 (write) + Phase 11 (viewer) — see TODO-BLINDSIDE.md.
-
-Phase 6 (real IFC emission): IFC-02..44 — depends on Phase 4 + 5.
-
-Phase 7 (write support): WRT-01..14.
-
-Phase 11 (web viewer): VW1-01..24 — separate WASM + Three.js
-workstream.
-
-Public ROADMAP.md + RELEASE.md land in the next commit cluster.
+- Viewer toolchain bumps (vite major line) for Dependabot advisories on
+  optimized-deps / transitive esbuild CORS (dev-server class; production
+  Pages build still uses `vite build`).
+- pyo3 line bumps for advisory GHSA-pph8-gcv7-4qj5 (bindings crate).
 
 ## [0.1.2] — 2026-04-19
 

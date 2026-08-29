@@ -51,8 +51,9 @@ Interested in Rust-reviewer feedback on: the `InflateLimits` / `OpenLimits` surf
 Issues, PRs, and "here's how the Rust version of X handles this" comments all welcome.
 
 - **Repo:** https://github.com/DrunkOnJava/rvt-rs
-- **Crate:** https://crates.io/crates/rvt
-- **Docs:** https://docs.rs/rvt
+- **Crate:** not on crates.io yet (install from source; see `docs/install.md`)
+- **PyPI:** https://pypi.org/project/rvt/ (`rvt==0.1.2`)
+- **Docs:** repo README + `docs/` (docs.rs populates only after crates.io publish)
 - **License:** Apache-2.0
 - **Not affiliated with Autodesk.** "Autodesk" and "Revit" are trademarks of Autodesk, Inc.; use here is nominative.
 

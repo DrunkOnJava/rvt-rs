@@ -59,11 +59,11 @@ Allowed exceptions:
 | Action pattern | Rationale | Review trigger |
 |---|---|---|
 | `dtolnay/rust-toolchain@stable` / `@nightly` / `@master` | This action is a toolchain selector; the value is the requested Rust channel, not a release tag for project logic. | Re-review if replacing the action or pinning a fixed Rust toolchain. |
-| `actions/checkout@v4` for external corpus checkout | Used where checkout action features are stable and the source repository is explicitly named in the step. Prefer the pinned SHA for repo checkout steps. | Re-review before adding a new external checkout. |
-| `actions/setup-python@v5` | GitHub-owned setup action used to provision a requested Python version in CI/release workflows. | Re-review on major-version bump. |
-| `PyO3/maturin-action@v1` | Release/build action for Python wheels; major tag tracks the supported PyO3/maturin interface. | Re-review on major-version bump or publish workflow change. |
-| `actions/upload-artifact@v4` / `actions/download-artifact@v4` | GitHub-owned artifact plumbing in CI/release workflows. | Re-review on major-version bump. |
-| `pypa/gh-action-pypi-publish@release/v1` | PyPI Trusted Publisher action; upstream documents this release branch for OIDC publishing. | Re-review before changing PyPI publishing mode. |
+| `actions/checkout@…` (SHA + `# vN` comment) | Prefer SHA pins with Dependabot-friendly version comments (publish.yml and most CI jobs). Floating `@v4` remains allowed only for explicitly named external corpus checkouts. | Re-review before adding a new external checkout. |
+| `actions/setup-python@…` (SHA + `# vN`) | GitHub-owned setup action; pin to SHA in publish.yml. | Re-review on major-version bump. |
+| `PyO3/maturin-action@…` (SHA + `# vN.N.N`) | Release/build action for Python wheels; publish.yml pins a release commit. | Re-review on major-version bump or publish workflow change. |
+| `actions/upload-artifact@…` / `actions/download-artifact@…` (SHA + `# vN`) | GitHub-owned artifact plumbing; publish.yml pins SHAs. | Re-review on major-version bump. |
+| `pypa/gh-action-pypi-publish@…` (SHA + `# vN.N.N`) | PyPI Trusted Publisher action; publish.yml pins a release commit (Dependabot may still propose `release/v1` branch updates — prefer SHA). | Re-review before changing PyPI publishing mode. |
 
 New third-party actions should not use an exception by default. Pin them to a
 SHA and include the source tag in a comment.

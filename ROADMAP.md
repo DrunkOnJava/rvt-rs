@@ -48,17 +48,20 @@ while the broader registry remains a library building block (see
 
 ## Milestones
 
-### 0.2.0: Audit-Clean Alpha
+### 0.2.0: Audit-Clean Alpha (inspection-focused)
 
 Purpose: make the repository easy to trust and easy to contribute to before
-deep decoder work accelerates.
+deep decoder work accelerates. Positioning detail:
+[`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md) — **inspection
+alpha with experimental export**, not converter-grade.
 
 - One-command local quality gate.
 - Explicit cargo-audit/cargo-deny expectations.
 - README, roadmap, compatibility, and status docs aligned.
 - GitHub issue forms for decoder work and corpus submissions.
 - Contribution map for non-maintainers.
-- Release artifact verification documented.
+- Release artifact verification documented (honest crates.io / docs.rs /
+  PyPI status).
 
 ### 0.3.0: Real-Project Wall/Floor MVP
 

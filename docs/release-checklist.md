@@ -103,7 +103,11 @@ TestPyPI runs.
 
 ## Post-Publish Verification
 
-Verify crates.io from a clean shell:
+Verify crates.io from a clean shell **only if `cargo publish` succeeded
+for this tag**. As of `v0.1.2` the crate name `rvt` was **not** on
+crates.io (API: crate does not exist; docs.rs 404). If publish was
+skipped or rejected, record `crates.io: NOT PUBLISHED` in the release
+notes and do not claim docs.rs:
 
 ```bash
 rm -rf /tmp/rvt-crates-smoke
@@ -112,7 +116,8 @@ cargo install rvt --version "$VERSION" --locked --root /tmp/rvt-crates-smoke
 /tmp/rvt-crates-smoke/bin/rvt-info "$SAMPLE"
 ```
 
-Verify PyPI on every supported OS family. On each machine:
+Verify PyPI on every supported OS family. On each machine (`0.1.2` is
+known-good on PyPI):
 
 ```bash
 python -m venv /tmp/rvt-pypi-smoke
@@ -134,9 +139,11 @@ PY
 deactivate
 ```
 
-Verify docs.rs in a browser:
+Verify docs.rs **only after crates.io publish** (otherwise expect 404):
 
 ```bash
+curl -sI "https://docs.rs/rvt/${VERSION}/rvt/" | head -n 1
+# Expect HTTP 200. Do not announce docs.rs on 404.
 python -m webbrowser "https://docs.rs/rvt/${VERSION}/rvt/"
 ```
 
@@ -154,14 +161,15 @@ Paste a short evidence block into the release notes:
 
 ```text
 Release verification:
-- cargo install rvt --version VERSION --locked: PASS
+- cargo install rvt --version VERSION --locked: PASS | NOT PUBLISHED
 - Python wheel install/import: PASS on Linux/macOS/Windows
 - CLI sample smoke: PASS on SAMPLE_NAME
 - Viewer sample load: PASS
-- docs.rs page: PASS
+- docs.rs page: PASS | N/A (crate not on crates.io)
 - Publish workflow run: URL
 ```
 
-If any line is not `PASS`, do not announce the release. Open a hotfix
-issue, link the failing workflow/log, and decide whether to yank the
-artifact or publish a corrected patch release.
+If any required line is not `PASS` (or an honest `NOT PUBLISHED` /
+`N/A` where crates.io was intentionally skipped), do not announce the
+release. Open a hotfix issue, link the failing workflow/log, and decide
+whether to yank the artifact or publish a corrected patch release.

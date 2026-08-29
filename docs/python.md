@@ -21,12 +21,14 @@ For all installation paths, including release smoke tests, see
 ### From PyPI
 
 ```bash
-pip install rvt
+pip install "rvt==0.1.2"
 ```
 
-Wheels target Python ≥ 3.8 via pyo3's `abi3-py38` feature, so one
-wheel per OS/architecture covers every supported Python minor. The
-PyPI release workflow (issue #89) publishes wheels on tag.
+**PyPI `rvt` 0.1.2 is published.** Wheels target Python ≥ 3.8 via
+pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
+every supported Python minor. The publish workflow uploads wheels on
+tag. The matching Rust crate is **not** on crates.io yet (docs.rs
+404) — see [`install.md`](install.md).
 
 ### From source
 
