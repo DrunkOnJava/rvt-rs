@@ -35,11 +35,11 @@ pub mod recovery;
 
 pub use recovery::{
     FloorBoundaryLoop, FloorBoundarySource, GeometryDiagnostic, LevelElevation,
-    OpeningHostRelationship, OpeningKind, RecoveryOutcome, WallLocationCurve,
-    WallLocationSource, recover_door_host, recover_floor_boundary,
-    recover_floor_boundary_from_floor, recover_level_elevation, recover_level_elevations,
-    recover_wall_location_curve, recover_wall_location_curve_from_arc_wall,
-    recover_wall_location_curve_from_wall, recover_window_host,
+    OpeningHostRelationship, OpeningKind, RecoveryOutcome, WallLocationCurve, WallLocationSource,
+    recover_door_host, recover_floor_boundary, recover_floor_boundary_from_floor,
+    recover_level_elevation, recover_level_elevations, recover_wall_location_curve,
+    recover_wall_location_curve_from_arc_wall, recover_wall_location_curve_from_wall,
+    recover_window_host,
 };
 
 /// 3D point in project coordinates.

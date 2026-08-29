@@ -429,11 +429,7 @@ fn points_from_nested_vectors(items: &[InstanceField]) -> Option<Vec<(f64, f64)>
             _ => return None,
         }
     }
-    if out.len() >= 3 {
-        Some(out)
-    } else {
-        None
-    }
+    if out.len() >= 3 { Some(out) } else { None }
 }
 
 fn points_from_flat_floats(items: &[InstanceField]) -> Option<Vec<(f64, f64)>> {
@@ -469,7 +465,7 @@ fn points_from_flat_floats(items: &[InstanceField]) -> Option<Vec<(f64, f64)>> {
 }
 
 fn unique_plan_vertices(pts: &[(f64, f64)]) -> Vec<(f64, f64)> {
-    let mut out = Vec::new();
+    let mut out: Vec<(f64, f64)> = Vec::new();
     for &(x, y) in pts {
         let dup = out
             .iter()
@@ -562,18 +558,18 @@ fn recover_opening_host(
     symbol_id: Option<u32>,
 ) -> RecoveryOutcome<OpeningHostRelationship> {
     match host_id {
-        Some(id) if id != 0 => RecoveryOutcome::Recovered(OpeningHostRelationship {
-            opening_kind: kind,
-            host_element_id: id,
-            level_id,
-            symbol_id,
-        }),
         Some(0) => RecoveryOutcome::Absent {
             diagnostic: GeometryDiagnostic::new(
                 "opening_host_unset",
                 format!("{kind:?} host_id is 0 (unhosted / unset)"),
             ),
         },
+        Some(id) => RecoveryOutcome::Recovered(OpeningHostRelationship {
+            opening_kind: kind,
+            host_element_id: id,
+            level_id,
+            symbol_id,
+        }),
         None => RecoveryOutcome::Absent {
             diagnostic: GeometryDiagnostic::new(
                 "opening_host_missing",
@@ -932,9 +928,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            recover_level_elevation(&level)
-                .diagnostic()
-                .map(|d| d.code),
+            recover_level_elevation(&level).diagnostic().map(|d| d.code),
             Some("level_elevation_missing")
         );
     }
@@ -960,10 +954,7 @@ mod tests {
         let out = recover_level_elevations(&levels);
         assert!(out[0].is_recovered());
         assert!(!out[1].is_recovered());
-        assert_eq!(
-            out[2].as_recovered().map(|e| e.elevation_feet),
-            Some(12.0)
-        );
+        assert_eq!(out[2].as_recovered().map(|e| e.elevation_feet), Some(12.0));
     }
 
     #[test]

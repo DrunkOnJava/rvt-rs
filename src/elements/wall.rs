@@ -268,13 +268,22 @@ impl Wall {
                         out.location_curve_id = Some(*id);
                     }
                 }
-                ("startx" | "locationstartx" | "curvestartx", InstanceField::Float { value, .. }) => {
+                (
+                    "startx" | "locationstartx" | "curvestartx",
+                    InstanceField::Float { value, .. },
+                ) => {
                     sx = Some(*value);
                 }
-                ("starty" | "locationstarty" | "curvestarty", InstanceField::Float { value, .. }) => {
+                (
+                    "starty" | "locationstarty" | "curvestarty",
+                    InstanceField::Float { value, .. },
+                ) => {
                     sy = Some(*value);
                 }
-                ("startz" | "locationstartz" | "curvestartz", InstanceField::Float { value, .. }) => {
+                (
+                    "startz" | "locationstartz" | "curvestartz",
+                    InstanceField::Float { value, .. },
+                ) => {
                     sz = Some(*value);
                 }
                 ("endx" | "locationendx" | "curveendx", InstanceField::Float { value, .. }) => {

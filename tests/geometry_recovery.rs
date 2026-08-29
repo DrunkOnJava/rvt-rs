@@ -188,10 +188,7 @@ fn tier1_geometry_recovery_is_honest() {
                         outcome.is_recovered(),
                         "{name}: Level m_height must recover as elevation"
                     );
-                    assert_eq!(
-                        outcome.as_recovered().map(|e| e.elevation_feet),
-                        Some(10.0)
-                    );
+                    assert_eq!(outcome.as_recovered().map(|e| e.elevation_feet), Some(10.0));
                     level_elevations_recovered += 1;
                 }
                 "Door" => {
