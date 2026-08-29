@@ -123,14 +123,17 @@ function resetWorker(): Worker_ {
 
 // ---------- Model / scene-graph state ----------
 interface IfcModel {
-  project?: { name?: string; description?: string };
-  storeys?: Array<{ name: string; elevation?: number }>;
+  project_name?: string;
+  description?: string;
+  building_storeys?: Array<{ name: string; elevation_feet?: number }>;
+  materials?: Array<{ name: string; color_packed?: number; transparency?: number }>;
   entities?: Array<{ name: string; ifc_type: string; guid?: string }>;
 }
 interface SceneNode {
   name: string;
   ifc_type: string;
   entity_index: number | null;
+  storey_index?: number | null;
   children: SceneNode[];
 }
 interface ExportDiagnostics {
@@ -166,6 +169,8 @@ interface ExportDiagnostics {
     storey_count?: number;
     material_count?: number;
     unit_assignment_count?: number;
+    storey_names?: string[];
+    material_names_sample?: string[];
   };
   unsupported_features?: string[];
   warnings?: string[];
@@ -370,13 +375,55 @@ function renderTree(): void {
   treeEl.innerHTML = '';
   treeEl.appendChild(buildTreeNode(sceneGraph));
 }
+
+function storeyNodeLabel(node: SceneNode): string {
+  const kidCount = node.children.length;
+  const elev = storeyElevationLabel(node);
+  const bits = [node.name, node.ifc_type];
+  if (elev) bits.push(elev);
+  bits.push(kidCount === 1 ? '1 element' : `${kidCount} elements`);
+  return bits.join(' · ');
+}
+
+function storeyElevationLabel(node: SceneNode): string | null {
+  if (node.ifc_type !== 'IFCBUILDINGSTOREY') return null;
+  if (node.name === 'Unassigned') return 'no Level ElementId bind';
+  const storeys = model?.building_storeys ?? [];
+  const idx = node.storey_index;
+  if (idx == null || idx < 0 || idx >= storeys.length) return null;
+  const elev = storeys[idx]?.elevation_feet;
+  if (typeof elev !== 'number') return null;
+  // Name-only 2024 recoveries put every storey at 0.0. When any storey
+  // has a non-zero elevation (ArcWall trailers), treat 0.0 as surveyed
+  // ground rather than unresolved.
+  const anySurveyed = storeys.some(
+    (s) => typeof s.elevation_feet === 'number' && Math.abs(s.elevation_feet) >= 1e-9,
+  );
+  if (Math.abs(elev) < 1e-9 && !anySurveyed) return 'elev unresolved/0';
+  return `elev ${elev.toFixed(3)} ft`;
+}
+
 function buildTreeNode(node: SceneNode): HTMLElement {
   const wrap = document.createElement('div');
   const row = document.createElement('div');
   row.className = 'tree-node';
+  if (node.ifc_type === 'IFCBUILDINGSTOREY') {
+    row.classList.add('tree-storey');
+    if (node.name === 'Unassigned') row.classList.add('tree-storey-unassigned');
+    if (node.children.length === 0) row.classList.add('tree-storey-empty');
+  } else if (node.ifc_type === 'IFCPROJECT') {
+    row.classList.add('tree-project');
+  }
   row.setAttribute('role', 'treeitem');
   row.tabIndex = 0;
-  row.textContent = `${node.name} · ${node.ifc_type}`;
+  row.textContent =
+    node.ifc_type === 'IFCBUILDINGSTOREY'
+      ? storeyNodeLabel(node)
+      : node.ifc_type === 'IFCPROJECT'
+        ? `${node.name} · IFCPROJECT · ${node.children.length} storey${
+            node.children.length === 1 ? '' : 's'
+          }`
+        : `${node.name} · ${node.ifc_type}`;
   const activate = (ev: Event) => {
     ev.stopPropagation();
     document
@@ -538,8 +585,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   const confidence = diagnostics.confidence ?? {};
   const warnings = diagnostics.warnings ?? [];
   const unsupported = diagnostics.unsupported_features ?? [];
-  const validatedElements =
-    (decoded.production_walker_elements ?? 0) + (decoded.arcwall_records ?? 0);
+  const validatedElements = decoded.production_walker_elements ?? 0;
   const diagnosticCandidates = decoded.diagnostic_proxy_candidates ?? 0;
   const geometryCount = exported.building_elements_with_geometry ?? 0;
   const qualityLevel = confidence.level ?? 'unknown';
@@ -596,12 +642,34 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   }
   const storeyCount = exported.storey_count ?? 0;
   const materialCount = exported.material_count ?? 0;
+  const storeyNames =
+    exported.storey_names ??
+    (model?.building_storeys ?? []).map((s) => s.name).filter(Boolean);
+  const materialSample =
+    exported.material_names_sample ??
+    (model?.materials ?? []).map((m) => m.name).filter(Boolean).slice(0, 12);
   if (storeyCount > 0 || materialCount > 0) {
+    const storeySummary =
+      storeyNames.length > 0
+        ? `${storeyCount} storeys: ${storeyNames.join(', ')}`
+        : `${storeyCount} storeys`;
+    statusPanelEl.appendChild(
+      statusRow('Spatial', storeyCount > 0 ? 'ok' : 'warn', storeySummary),
+    );
+  }
+  if (materialCount > 0) {
+    const named =
+      materialSample.length > 0
+        ? materialSample.join(', ') +
+          (materialCount > materialSample.length
+            ? ` · +${materialCount - materialSample.length} more`
+            : '')
+        : `${materialCount} display names`;
     statusPanelEl.appendChild(
       statusRow(
-        'Spatial',
-        storeyCount > 0 ? 'ok' : 'warn',
-        `${storeyCount} storeys · ${materialCount} materials`,
+        'Materials',
+        'ok',
+        `${materialCount} · ${named} (names only; no compound layers)`,
       ),
     );
   }

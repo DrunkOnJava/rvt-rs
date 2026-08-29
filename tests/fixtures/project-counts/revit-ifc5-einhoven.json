@@ -67,8 +67,15 @@
       "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed MEP manifest is available yet."
     },
     "materials": {
-      "status": "unknown",
-      "reason": "No paired Revit IFC export, Revit schedule, or contributor-signed material manifest is available yet."
+      "status": "decoder_baseline",
+      "expected": 41,
+      "source": "rvt-rs partition Material-like display names → IfcMaterial on Einhoven 2023 (no compound layers / colors)",
+      "decoder_metric": "diagnostics.exported.material_count",
+      "decoder_expected": 41,
+      "decoder_tolerance": 5,
+      "tracking_issue": 34,
+      "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
+      "notes": "Display-name Materials only; compound assemblies and color recovery remain open."
     },
     "units": {
       "status": "decoder_baseline",
