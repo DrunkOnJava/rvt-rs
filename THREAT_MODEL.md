@@ -120,11 +120,11 @@ dependency that the parser pulls in automatically.
 
 **Mitigations:**
 
-- **`cargo-deny check` on every push (pending SEC-27).**
-  License allowlist (no GPL/proprietary), advisory deny, source
-  allowlist (crates.io only, no arbitrary git).
-- **`cargo-audit` on every push (pending SEC-28).** Fails CI on
-  known RustSec advisories.
+- **`cargo-deny check` on every push.** Enforced in CI (`deny`
+  job). License allowlist (no GPL/proprietary), advisory deny,
+  source allowlist (crates.io only, no arbitrary git).
+- **`cargo-audit` on every push.** Enforced in CI (`audit` job).
+  Fails CI on known RustSec advisories.
 - **`actions/*` SHA-pinned (partial; pending SEC-29).** Common
   GitHub Actions pinned by commit hash to prevent
   tag-retargeting attacks.

@@ -293,4 +293,6 @@ sources** (NDA'd SDKs, decompiled binaries beyond what the public
 documents, etc.). This project operates strictly from public
 on-disk byte observations.
 
-Questions: open an issue or email <151978260+DrunkOnJava@users.noreply.github.com>.
+Questions: open a GitHub issue. Security reports go through
+[`SECURITY.md`](SECURITY.md) (private vulnerability reporting) — do
+not use `users.noreply.github.com` addresses.
