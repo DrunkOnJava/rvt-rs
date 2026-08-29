@@ -334,6 +334,35 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
             .all(|e| e.class == "ArcWallRectOpening"),
         "opening index must not be relabeled as Door/Window"
     );
+    // RE-19: production path must not invent typed Door/Window / Wall from
+    // opening-index or schema-field paths on this corpus (negative result).
+    let decoded: Vec<_> =
+        walker::iter_elements_with_limits(&mut rf, walker::PRODUCTION_ELEMENT_MIN_SCORE, limits)
+            .expect("iter_elements")
+            .collect();
+    assert_eq!(
+        decoded.iter().filter(|e| e.class == "Door").count(),
+        0,
+        "RE-19: must not invent typed Door on 2024 Core Interior"
+    );
+    assert_eq!(
+        decoded.iter().filter(|e| e.class == "Window").count(),
+        0,
+        "RE-19: must not invent typed Window on 2024 Core Interior"
+    );
+    assert_eq!(
+        decoded.iter().filter(|e| e.class == "Wall").count(),
+        0,
+        "RE-19: must not invent schema-field Wall on 2024 Core Interior"
+    );
+    assert!(
+        decoded
+            .iter()
+            .filter(|e| e.class == "ArcWallRectOpening")
+            .count()
+            >= 50,
+        "RE-19: openings must remain class ArcWallRectOpening in production iter_elements"
+    );
     let mut elem_confirmed = 0usize;
     for opening in &mvp.rect_openings {
         let a_ok = opening.fields.iter().any(|(n, v)| {
