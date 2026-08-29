@@ -706,12 +706,6 @@ fn _rvt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rvt_to_ifc, m)?)?;
     m.add_function(wrap_pyfunction!(rvt_to_ifc_diagnostics, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    m.add(
-        "MVP_TYPED_CLASSES",
-        elements::MVP_TYPED_CLASSES
-            .iter()
-            .copied()
-            .collect::<Vec<_>>(),
-    )?;
+    m.add("MVP_TYPED_CLASSES", elements::MVP_TYPED_CLASSES.to_vec())?;
     Ok(())
 }
