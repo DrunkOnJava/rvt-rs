@@ -1275,12 +1275,12 @@ pub fn build_export_diagnostics_with_limits(
     let exported = exported_model_diagnostics(model);
     let diagnostic_proxy_elements = count_diagnostic_proxy_elements(model);
     let arcwall_records = count_arcwall_records(model);
-    let production_walker_elements = exported
-        .building_elements
-        .saturating_sub(arcwall_records)
-        .saturating_sub(diagnostic_proxy_elements);
     let candidate_class_counts = diagnostic_candidate_class_counts(&diagnostic_candidates);
     let production_class_counts = production_class_counts_from_walker(rf, walker_limits);
+    // Match Python `decoded_elements()` / `element_counts()["total"]`:
+    // count every production `iter_elements` hit (Levels/Materials
+    // included), not only IFC BuildingElement rows.
+    let production_walker_elements: usize = production_class_counts.values().copied().sum();
 
     let mut skipped = Vec::new();
     if mode == ExportDiagnosticsMode::Default && !diagnostic_candidates.candidates.is_empty() {
