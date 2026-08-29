@@ -31,7 +31,7 @@ exclude = [
 # unconditionally — no feature-gated escape hatch. The wheel on
 # PyPI still ships as a single `rvt` distribution; it's built via
 # `maturin build --manifest-path rvt-py/Cargo.toml`.
-members = [".", "rvt-py"]
+members = [".", "rvt-py", "tools/stream_evidence"]
 
 [features]
 # Heap-profiling mode (Q-08). When enabled, binaries built from
@@ -94,6 +94,9 @@ criterion = { version = "0.7", features = ["html_reports"] }
 # synthetic fixtures under corpus/tier1/.
 sha2 = "0.10"
 hex = "0.4"
+# Discussion #112 / #151 stream-evidence harness (library used by
+# `examples/stream_evidence.rs` probes).
+stream-evidence = { path = "tools/stream_evidence" }
 
 # Seven shipped binaries. All depend on the `rvt` library crate.
 
