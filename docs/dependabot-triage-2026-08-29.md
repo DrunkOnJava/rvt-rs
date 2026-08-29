@@ -8,7 +8,7 @@ Write path: GitHub MCP as repo owner. `gh` CLI is read-only in the Cloud Agent e
 
 | PR | Title | Risk | Action | Reason |
 |----|-------|------|--------|--------|
-| #111 | vite 8.0.9 → 8.1.5 | Low; **security** | Closed (superseded) | Dependabot branch conflicted with main. Equivalent bump landed on this branch (vite `^8.1.5` / lock 8.1.5); `npm audit` reports 0 vulnerabilities. |
+| #111 | vite 8.0.9 → 8.1.5 | Low; **security** | **Closed** (superseded) | Dependabot branch conflicted. Main lockfile already resolved vite **8.2.2** (newer than 8.1.5); package.json range raised to `^8.2.2` on this triage branch. `npm audit` clean. |
 | #109 | typescript 5.9.3 → 7.0.2 | **High** (major) | Left open | TS 5→7 needs a dedicated migration; do not land as Dependabot-only. |
 | #108 | three + @types/three 0.169 → 0.185 | **High** | Left open | Large three.js jump; viewer 3D API risk; branch conflicts. |
 | #104 | @playwright/test 1.59.1 → 1.61.1 | Low | **Merged** | Dev-dep minor; squash-merged. |
@@ -27,11 +27,11 @@ Write path: GitHub MCP as repo owner. `gh` CLI is read-only in the Cloud Agent e
 ## Counts
 
 - Merged: 6 (#104, #69, #6, #4, #3, #2)
-- Closed: 4 (#111 superseded by this PR's vite bump, #102, #76, #72)
+- Closed: 4 (#111 superseded, #102, #76, #72)
 - Left open: 5 (#109, #108, #74, #71, #70)
 
 ## Follow-ups
 
-1. Land vite 8.1.5 via this triage PR (security — clears vite 8.0.x `npm audit` highs).
+1. Raise viewer `vite` package.json range to `^8.2.2` (this PR) so the declared range matches the secure lockfile resolution.
 2. Schedule dedicated migrations for: TypeScript 7, three.js 0.185, cfb 0.14, thiserror 2, criterion 0.7.
-3. Optionally `@dependabot recreate` on left-open Rust/npm majors after migrations land.
+3. Optionally `@dependabot recreate` on left-open majors after migrations land.
