@@ -138,3 +138,4 @@ viewer/public/demos/*
 !viewer/public/demos/.gitkeep
 
 _corpus_candidates/
+_project_corpus/
