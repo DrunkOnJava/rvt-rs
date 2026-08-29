@@ -6,24 +6,21 @@
 //!
 //! - `IfcProject` with name + description from PartAtom / BasicFileInfo
 //! - `IfcSite` → `IfcBuilding` → `IfcBuildingStorey` spatial hierarchy
-//!   (placeholder names today; real names from `Level` elements
-//!   pending Layer 5b)
+//!   (placeholder names today; real names from `Level` elements when
+//!   Lane Six elevation recovery succeeds)
 //! - `IfcClassification` + `IfcClassificationReference` for any
 //!   OmniClass codes found in PartAtom
 //! - Required framework entities (`IfcPerson`, `IfcOrganization`,
 //!   `IfcApplication`, `IfcOwnerHistory`, `IfcSIUnit`×4,
 //!   `IfcUnitAssignment`, `IfcGeometricRepresentationContext`)
 //!
-//! **Per-element entities now land as geometry-free IFC4 elements.**
-//! When `IfcModel.entities` contains `BuildingElement { ifc_type, name,
-//! type_guid }` values (populated by Layer 5b decoders: Wall, Floor,
-//! Roof, Ceiling, Door, Window, Column, Beam), the writer emits each
-//! as an `IFC<TYPE>` constructor with its own `IFCLOCALPLACEMENT`, and
-//! bundles them via `IFCRELCONTAINEDINSPATIALSTRUCTURE` linked to the
-//! storey. This means BlenderBIM / IfcOpenShell now see a real element
-//! list — they can count walls, list rooms, and enumerate the spatial
-//! tree. Geometry (`IfcShapeRepresentation`), materials, and property
-//! sets still land in Phase 5 + 6 per `TODO-BLINDSIDE.md`.
+//! **Per-element entities now land as geometry-free IFC4 elements by
+//! default**, with Lane Six curves / loops / hosts / elevations
+//! attached when [`ExportQualityMode::Geometry`] or
+//! [`ExportQualityMode::Strict`] content policy requests them and
+//! recovery succeeds. `typed-no-geometry` strips geometry claims.
+//! Misleading `HostObjAttr` proxies are never emitted on the
+//! production path — use [`DiagnosticRvtDocExporter`] for research.
 //!
 //! # Eventual implementation plan
 //!
@@ -69,6 +66,7 @@
 //! |---|---|
 //! | [`category_map`] | Revit class → IFC4 type mapping (IFC-01) |
 //! | [`entities`] | IFC4 entity taxonomy (walls, floors, doors, …) |
+//! | [`export_content`] | Lane Seven quality-mode content policy |
 //! | [`from_decoded`] | Bridge: decoded Revit elements → IfcModel |
 //! | [`step_writer`] | IfcModel → ISO-10303-21 STEP text |
 //!
@@ -107,6 +105,7 @@ pub mod camera;
 pub mod category_map;
 pub mod clipping;
 pub mod entities;
+pub mod export_content;
 pub mod from_decoded;
 pub mod gltf;
 pub mod measure;
@@ -116,6 +115,7 @@ pub mod share;
 pub mod sheet;
 pub mod step_writer;
 
+pub use export_content::{ExportContentPolicy, is_misleading_proxy_class};
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model, entity_type_histogram};
 pub use step_writer::write_step;
 
@@ -504,7 +504,21 @@ impl RvtDocExporter {
         rf: &mut crate::RevitFile,
         limits: crate::walker::WalkerLimits,
     ) -> Result<IfcModel> {
-        export_rvt_doc(rf, RvtDocExportMode::Default, limits)
+        self.export_with_mode_and_limits(rf, ExportQualityMode::Scaffold, limits)
+    }
+
+    /// Export using a quality mode's *content* policy.
+    ///
+    /// Validation ([`ExportQualityMode::validate`]) is left to the
+    /// caller (CLI / Python) so diagnostics can still be written when
+    /// a stronger mode rejects the result.
+    pub fn export_with_mode_and_limits(
+        &self,
+        rf: &mut crate::RevitFile,
+        quality_mode: ExportQualityMode,
+        limits: crate::walker::WalkerLimits,
+    ) -> Result<IfcModel> {
+        export_rvt_doc(rf, RvtDocExportMode::Default, quality_mode, limits)
     }
 
     pub fn export_with_diagnostics(&self, rf: &mut crate::RevitFile) -> Result<ExportResult> {
@@ -516,7 +530,16 @@ impl RvtDocExporter {
         rf: &mut crate::RevitFile,
         limits: crate::walker::WalkerLimits,
     ) -> Result<ExportResult> {
-        let model = self.export_with_limits(rf, limits)?;
+        self.export_with_diagnostics_mode_and_limits(rf, ExportQualityMode::Scaffold, limits)
+    }
+
+    pub fn export_with_diagnostics_mode_and_limits(
+        &self,
+        rf: &mut crate::RevitFile,
+        quality_mode: ExportQualityMode,
+        limits: crate::walker::WalkerLimits,
+    ) -> Result<ExportResult> {
+        let model = self.export_with_mode_and_limits(rf, quality_mode, limits)?;
         let diagnostics = build_export_diagnostics_with_limits(
             rf,
             &model,
@@ -548,7 +571,14 @@ impl DiagnosticRvtDocExporter {
         rf: &mut crate::RevitFile,
         limits: crate::walker::WalkerLimits,
     ) -> Result<IfcModel> {
-        export_rvt_doc(rf, RvtDocExportMode::DiagnosticProxies, limits)
+        // Diagnostic export keeps recovered geometry when present; it
+        // does not apply typed-only / mapped-only filters.
+        export_rvt_doc(
+            rf,
+            RvtDocExportMode::DiagnosticProxies,
+            ExportQualityMode::Scaffold,
+            limits,
+        )
     }
 
     pub fn export_with_diagnostics(&self, rf: &mut crate::RevitFile) -> Result<ExportResult> {
@@ -580,8 +610,10 @@ enum RvtDocExportMode {
 fn export_rvt_doc(
     rf: &mut crate::RevitFile,
     mode: RvtDocExportMode,
+    quality_mode: ExportQualityMode,
     walker_limits: crate::walker::WalkerLimits,
 ) -> Result<IfcModel> {
+    let policy = export_content::ExportContentPolicy::for_quality_mode(quality_mode);
     // Identity from PartAtom if present; fall back to
     // BasicFileInfo's original path.
     let part = rf.part_atom().ok();
@@ -645,16 +677,19 @@ fn export_rvt_doc(
         long_name: part.as_ref().and_then(|p| p.title.clone()),
     }];
 
-    // L5B-11.7 — pull every walker-recoverable element out of
-    // Global/Latest and emit one `BuildingElement` entity per
-    // hit. Unknown classes route to IFCBUILDINGELEMENTPROXY via
-    // `category_map::lookup`. Walker failure (stream missing,
-    // schema unparseable, inflate error) falls through with no
-    // element entities — we never regress the metadata-only
-    // output. The order — `Project` first, then elements — is
-    // load-bearing for `step_writer`, which walks `entities`
-    // in order and assumes index 0 is the project.
-    append_production_walker_elements(rf, &mut entities, walker_limits);
+    // L5B-11.7 / Lane Seven — production walker elements honour the
+    // quality-mode content policy: HostObjAttr never emits, Levels
+    // become storeys, and geometry/host recovery attaches only when
+    // the mode asks for it. Walker failure falls through with no
+    // element entities — we never regress the metadata-only baseline.
+    let mut building_storeys = Vec::new();
+    append_production_walker_elements(
+        rf,
+        &mut entities,
+        &mut building_storeys,
+        policy,
+        walker_limits,
+    );
     if mode == RvtDocExportMode::DiagnosticProxies {
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
@@ -667,7 +702,6 @@ fn export_rvt_doc(
     //
     // See `reports/element-framing/RE-14.3-synthesis.md` and
     // `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
-    let mut building_storeys = Vec::new();
     if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
         if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
             rf,
@@ -679,9 +713,15 @@ fn export_rvt_doc(
                 &scan.walls,
                 &level_names,
             );
-            building_storeys = recovery.storeys;
+            if building_storeys.is_empty() {
+                building_storeys = recovery.storeys;
+            }
             for wall in &scan.walls {
-                let geometry = arcwall_geometry_from_partition_wall(wall);
+                let geometry = if policy.include_geometry {
+                    arcwall_geometry_from_partition_wall(wall)
+                } else {
+                    None
+                };
                 let storey_index = wall.base_elevation_feet().and_then(|elev| {
                     crate::partition_arc_walls::storey_index_for_elevation(&building_storeys, elev)
                 });
@@ -710,6 +750,10 @@ fn export_rvt_doc(
         }
     }
 
+    if !policy.include_geometry {
+        export_content::strip_building_element_geometry(&mut entities);
+    }
+
     let recovered_units = recover_project_units(rf);
 
     Ok(IfcModel {
@@ -731,7 +775,7 @@ fn export_rvt_doc(
 /// falsified in standard trailers). Callers must surface this via
 /// property-set / diagnostics — it is not a decoded value. WallType
 /// width join remains future work.
-const UNRESOLVED_ARCWALL_THICKNESS_FEET: f64 = 8.0 / 12.0;
+pub(crate) const UNRESOLVED_ARCWALL_THICKNESS_FEET: f64 = 8.0 / 12.0;
 
 fn collect_partition_building_storey_names(rf: &mut crate::RevitFile) -> Vec<String> {
     let Ok(records) = crate::object_graph::string_records_from_partitions(rf) else {
@@ -949,6 +993,8 @@ fn ifc_mapping_label(emission: &entities::IfcUnitEmission) -> String {
 fn append_production_walker_elements(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
+    building_storeys: &mut Vec<Storey>,
+    policy: export_content::ExportContentPolicy,
     walker_limits: crate::walker::WalkerLimits,
 ) {
     if let Ok(decoded_iter) = crate::walker::iter_elements_with_limits(
@@ -956,33 +1002,12 @@ fn append_production_walker_elements(
         crate::walker::PRODUCTION_ELEMENT_MIN_SCORE,
         walker_limits,
     ) {
-        for decoded in decoded_iter {
-            let mapping = category_map::lookup(&decoded.class);
-            let ifc_type = mapping
-                .map(|m| m.ifc_type.to_string())
-                .unwrap_or_else(|| "IFCBUILDINGELEMENTPROXY".to_string());
-            let name = match decoded.id {
-                Some(id) => format!("{}-{}", decoded.class, id),
-                None => format!("{}-unnamed", decoded.class),
-            };
-            let type_guid = decoded.id.map(|id| id.to_string());
-            entities.push(entities::IfcEntity::BuildingElement {
-                ifc_type,
-                name,
-                type_guid,
-                storey_index: None,
-                material_index: None,
-                property_set: None,
-                location_feet: None,
-                rotation_radians: None,
-                extrusion: None,
-                host_element_index: None,
-                material_layer_set_index: None,
-                material_profile_set_index: None,
-                solid_shape: None,
-                representation_map_index: None,
-            });
-        }
+        let _ = export_content::append_typed_production_elements(
+            decoded_iter,
+            entities,
+            building_storeys,
+            policy,
+        );
     }
 }
 
