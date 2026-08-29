@@ -48,10 +48,7 @@ fn main() -> rvt::Result<()> {
         storeys.storeys.len()
     );
     for s in &storeys.storeys {
-        println!(
-            "  storey name={:?} elev={:.4}",
-            s.name, s.elevation_feet
-        );
+        println!("  storey name={:?} elev={:.4}", s.name, s.elevation_feet);
     }
 
     let mvp = recover_partition_schema_mvp(&mut rf, bfi.version, limits)?;
@@ -74,10 +71,7 @@ fn main() -> rvt::Result<()> {
         .collect();
     println!("levelish_string_records={}", level_strings.len());
     for s in level_strings.iter().take(20) {
-        println!(
-            "  offset={} tag={:#x} value={:?}",
-            s.offset, s.tag, s.value
-        );
+        println!("  offset={} tag={:#x} value={:?}", s.offset, s.tag, s.value);
     }
 
     // Concatenate all partitions (same as string extractor joins one
@@ -116,9 +110,7 @@ fn main() -> rvt::Result<()> {
                         && elem_ids.contains(&cand)
                         && !wall_ids.contains(&cand)
                     {
-                        *h1_votes
-                            .entry((s.value.clone(), cand))
-                            .or_insert(0) += 1;
+                        *h1_votes.entry((s.value.clone(), cand)).or_insert(0) += 1;
                         *h1_name_to_ids
                             .entry(s.value.clone())
                             .or_default()
@@ -195,8 +187,8 @@ fn main() -> rvt::Result<()> {
         let mut votes: Vec<_> = ids.iter().collect();
         votes.sort_by(|a, b| b.1.cmp(a.1));
         let top = votes.first().map(|(id, n)| (**id, **n));
-        let uniqueish = votes.len() == 1
-            || votes.get(1).map(|(_, n)| **n).unwrap_or(0) * 3 < *votes[0].1;
+        let uniqueish =
+            votes.len() == 1 || votes.get(1).map(|(_, n)| **n).unwrap_or(0) * 3 < *votes[0].1;
         if uniqueish && top.map(|(_, n)| n >= 3).unwrap_or(false) {
             h2_singletons += 1;
         }
@@ -237,8 +229,7 @@ fn main() -> rvt::Result<()> {
     println!("tagged Level/Datum-related classes:");
     for c in &schema.classes {
         if let Some(t) = c.tag {
-            if c.name.contains("Level") || c.name.contains("Datum") || c.name == "HostObjAttr"
-            {
+            if c.name.contains("Level") || c.name.contains("Datum") || c.name == "HostObjAttr" {
                 println!("  {} tag={t:#06x} fields={}", c.name, c.fields.len());
             }
         }
@@ -262,7 +253,9 @@ fn main() -> rvt::Result<()> {
             .find(|(n, _)| n == "m_source_offset")
             .and_then(|(_, v)| match v {
                 rvt::walker::InstanceField::Integer {
-                    value, signed: false, ..
+                    value,
+                    signed: false,
+                    ..
                 } => Some(*value as usize),
                 _ => None,
             });
@@ -281,7 +274,10 @@ fn main() -> rvt::Result<()> {
         let mut j = lo;
         while j + 4 <= hi {
             let cand = u32::from_le_bytes(concat[j..j + 4].try_into().unwrap());
-            if cand != 0 && cand != u32::MAX && elem_ids.contains(&cand) && !wall_ids.contains(&cand)
+            if cand != 0
+                && cand != u32::MAX
+                && elem_ids.contains(&cand)
+                && !wall_ids.contains(&cand)
             {
                 *h5_ids.entry(cand).or_insert(0) += 1;
             }
