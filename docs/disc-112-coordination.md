@@ -20,6 +20,28 @@ Mirror into the discussion thread when a maintainer account can post.
 | [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
 | [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | RE: Reproduce sketch-to-solid geometry reconstruction pipeline |
 
+## Finding 1 progress (2026-08-29)
+
+Credit: [@STE1200](https://github.com/STE1200) and team —
+[Discussion #112](https://github.com/DrunkOnJava/rvt-rs/discussions/112).
+Canonical issue: [#151](https://github.com/DrunkOnJava/rvt-rs/issues/151).
+
+Status keys: **reported** (Steffen) · **independently reproduced** (maintainers
+on redistributable corpus) · **merged** (on `main`).
+
+| Item | Status |
+|------|--------|
+| Paging layout **65,249 = 64,896 + 353** | **Independently reproduced** |
+| Gated strip-before-inflate on `Partitions/*` and `Global/*` | **Merged** — [#160](https://github.com/DrunkOnJava/rvt-rs/pull/160), narrowed by [#162](https://github.com/DrunkOnJava/rvt-rs/pull/162) / [#161](https://github.com/DrunkOnJava/rvt-rs/pull/161) / [#163](https://github.com/DrunkOnJava/rvt-rs/pull/163) |
+| `Formats/Latest` strip | **Excluded** from the production gate (`class_names` regression **9579→8575** on Core Interior). Reported Formats ~**48%** schema loss was **not reproduced** on the redistributable corpus (structured class/field counts hold) |
+| Writer / `read_stream` | Stay **stored-byte accurate**; **no paged encoder** yet |
+| Stream-evidence harness | **Merged** on `main` — [#158](https://github.com/DrunkOnJava/rvt-rs/pull/158) |
+| Evidence matrix | [`docs/recon/wave2-checksum-page-evidence-matrix-2026-08-29.md`](recon/wave2-checksum-page-evidence-matrix-2026-08-29.md) (+ Cloud Agent artifacts). Strongest oracle: `Partitions/46` chunks **925→935** |
+| Findings [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | Still **open** / awaiting independent reproduction — no Finding 2–6 implementation in this update |
+
+Optional decompression PR from Steffen remains welcome for review against the
+**narrow** gate (Partitions/Global only; Formats/Latest excluded).
+
 ## Optional decompression PR
 
 Steffen’s optional container-layer PR remains welcome. Maintainers will not
