@@ -4,8 +4,9 @@
 //! one Revit class. Adding a new class is a three-file change:
 //!
 //! 1. Add `mod my_class;` here.
-//! 2. Register it in [`all_decoders`] so the walker dispatch table
-//!    picks it up.
+//! 2. Register it in [`all_decoders`] (the per-class decoder registry;
+//!    production `iter_elements` still uses generic `decode_instance`
+//!    until DEC-01..05 land).
 //! 3. Implement `ElementDecoder` in `src/elements/my_class.rs` —
 //!    see `level.rs` as the reference example.
 //!
@@ -54,6 +55,7 @@ pub mod reference_points;
 pub mod roof;
 pub mod structural;
 pub mod styling;
+pub mod typed_json;
 pub mod wall;
 pub mod zones;
 
@@ -198,6 +200,13 @@ pub fn decode_typed(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn all_decoders_len_is_eighty() {
+        // Public docs (README / status / compatibility) claim 80.
+        // Keep the count and the docs in lockstep.
+        assert_eq!(all_decoders().len(), 80);
+    }
 
     #[test]
     fn all_decoders_includes_level() {

@@ -203,11 +203,9 @@ Labels: `priority:P0`, `type:docs`, `area:docs`
   - `CHANGELOG.md`
 - Resolve contradictions around:
   - viewer URL/path and shipped status
-  - 72 vs 80 decoder count
-  - "walker dispatch table" vs registry not reached on real project
-    data
-  - corpus hunt "not executed" vs documented 222/223 real-file pass
-    rate
+  - ~~72 vs 80 decoder count~~ → **80** (`all_decoders().len()`, unit-tested)
+  - ~~"walker dispatch table" vs registry not reached~~ → docs say registry / not wired
+  - ~~corpus hunt "not executed" vs 222/223~~ → README/status cite scaffold pass; typed extraction still unsolved
   - real IFC export scope
   - Python build layout and module name
 

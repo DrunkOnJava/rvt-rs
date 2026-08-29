@@ -264,9 +264,10 @@ Typical reference-corpus schema is ~395 classes / ~13,570 fields
 prefer `schema_summary()`.
 
 Stable JSON schemas for summary dictionaries, schema diagnostics,
-decoded ADocument records, export diagnostics, and corpus reports are
-checked in under [`docs/schemas/`](schemas/). Use those files for
-automation contracts instead of scraping prose examples.
+decoded ADocument records, production decoded elements, element
+counts, export diagnostics, and corpus reports are checked in under
+[`docs/schemas/`](schemas/). Use those files for automation contracts
+instead of scraping prose examples.
 
 ```python
 read_adocument(self) -> dict | None
@@ -303,6 +304,29 @@ Field kinds:
 | `bytes` | `len: int` | Raw bytes; field type not yet decoded |
 
 ```python
+decoded_elements(self) -> list[dict]
+element_counts(self) -> dict
+export_diagnostics(self) -> dict
+```
+
+`decoded_elements()` returns production-walker elements. Each entry
+has `id`, `class_name`, `byte_range`, `fields`, and `typed`. `typed`
+is the Lane Five MVP projection for
+`Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` / `Material`
+(also listed as `rvt.MVP_TYPED_CLASSES`), or `None` for other classes.
+JSON contract: [`decoded-elements.schema.json`](schemas/decoded-elements.schema.json).
+CLI mirror: `rvt-elements file.rvt`.
+
+`element_counts()` returns `{"total": int, "by_class": {class: count}}`.
+`total` matches
+`export_diagnostics()["decoded"]["production_walker_elements"]`.
+JSON contract: [`element-counts.schema.json`](schemas/element-counts.schema.json).
+CLI mirror: `rvt-elements file.rvt --counts`.
+
+`export_diagnostics()` / `export_diagnostics_json()` return the IFC
+export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
+
+```python
 write_ifc(self, mode: str = "scaffold") -> str
 export_diagnostics_json(self) -> str
 ```
@@ -320,7 +344,8 @@ not meet that export quality.
 conversion failure if `export_diagnostics_json()` reports zero validated
 building elements or zero geometry elements. Use `mode="strict"` in automation
 when an incomplete real-model export should raise `ValueError` instead of
-returning IFC text.
+returning IFC text. On synthetic / scaffold-only fixtures, only `scaffold`
+typically succeeds until Lane 7 geometry recovery lands.
 
 `export_diagnostics_json()` returns the JSON diagnostics sidecar
 for the default IFC export without writing files.
@@ -411,10 +436,13 @@ issue or drop to the Rust CLIs (`rvt-info`, `rvt-analyze`,
 
 Not in Python today:
 
-- **Per-element decoders.** The walker reads `ADocument`; the 54
-  Layer-5b element decoders (`Wall`, `Floor`, `Door`, etc. — see
-  `compatibility.md` §3) aren't yet exposed to Python. `rvt-doc`
-  and the Rust `elements::all_decoders()` API cover this.
+- **Per-element decoders.** The walker reads `ADocument`; the 80
+  Layer-5b element decoder structs in `elements::all_decoders()`
+  (`Wall`, `Floor`, `Door`, etc. — see `compatibility.md` §3) aren't
+  yet exposed to Python. Even in Rust they are a synthesized-fixture
+  registry, not wired into `iter_elements` on real project files.
+  `rvt-doc` and the Rust `elements::all_decoders()` API cover the
+  registry surface.
 - **Per-element IFC export.** The `write_ifc()` method uses
   `RvtDocExporter` — document-level only (project, units,
   classifications). The Rust crate's per-element mappings

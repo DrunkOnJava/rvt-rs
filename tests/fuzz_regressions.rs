@@ -1,7 +1,7 @@
 //! Q-04 — Corpus-bound fuzz crashes promoted to regression tests.
 //!
-//! The nightly `cargo-fuzz` workflow runs libFuzzer against nine
-//! targets. Any crash libFuzzer discovers is a specific byte sequence
+//! The nightly `cargo-fuzz` workflow runs libFuzzer against the
+//! targets listed in `fuzz/Cargo.toml`. Any crash libFuzzer discovers is a specific byte sequence
 //! that triggered a panic / hang / OOM. Those inputs get minimised by
 //! libFuzzer and should be preserved as regression tests so a future
 //! commit can't undo the fix.
@@ -681,5 +681,143 @@ fn object_graph_extractors_handle_adversarial_bytes() {
     assert_no_panic("object_graph_extract_string_records", &bytes, |d| {
         let _ = rvt::object_graph::extract_string_records(d);
         let _ = rvt::object_graph::DocumentHistory::from_decompressed(d);
+    });
+}
+
+// ---- remaining public byte parsers (M8-01 / Lane Ten) ----
+
+#[test]
+fn find_gzip_offsets_handles_adversarial_inputs() {
+    assert_no_panic("find_gzip_empty", &[], |d| {
+        let _ = rvt::compression::find_gzip_offsets(d);
+        let _ = rvt::compression::inflate_all_chunks(d);
+    });
+    assert_no_panic("find_gzip_partial", &[0x1f], |d| {
+        let _ = rvt::compression::find_gzip_offsets(d);
+        let _ = rvt::compression::inflate_all_chunks(d);
+    });
+    let many: Vec<u8> = std::iter::repeat_n([0x1f_u8, 0x8b], 64).flatten().collect();
+    assert_no_panic("find_gzip_many_magics", &many, |d| {
+        let _ = rvt::compression::find_gzip_offsets(d);
+        let _ = rvt::compression::inflate_all_chunks(d);
+    });
+}
+
+#[test]
+fn class_index_extract_handles_adversarial_inputs() {
+    assert_no_panic("class_index_empty", &[], |d| {
+        let _ = rvt::class_index::extract_class_names(d);
+    });
+    assert_no_panic("class_index_noise", &[0xffu8; 4096], |d| {
+        let _ = rvt::class_index::extract_class_names(d);
+    });
+    let ascii = b"AAAAWallTypeBBBBFloorTypeCCCC";
+    assert_no_panic("class_index_ascii", ascii, |d| {
+        let _ = rvt::class_index::extract_class_names(d);
+    });
+}
+
+#[test]
+fn arc_wall_scan_handles_adversarial_inputs() {
+    assert_no_panic("arc_wall_find_empty", &[], |d| {
+        let _ = rvt::arc_wall_record::ArcWallRecord::find_all(d);
+        let _ = rvt::arc_wall_record::ArcWallRecord::scan_standard_for_revit_version(2023, d);
+        let _ = rvt::arc_wall_record::ArcWallRecord::decode_trailer(d, 0);
+    });
+    assert_no_panic("arc_wall_find_ff", &[0xffu8; 1024], |d| {
+        let limits = rvt::walker::WalkerLimits {
+            max_candidates: 8,
+            max_scan_bytes: 512,
+            ..rvt::walker::WalkerLimits::default()
+        };
+        let _ = rvt::arc_wall_record::ArcWallRecord::find_all_with_limits(d, limits);
+        let _ = rvt::arc_wall_record::ArcWallRecord::scan_standard_for_revit_version_with_limits(
+            2023, d, limits,
+        );
+    });
+}
+
+#[test]
+fn rect_opening_index_handles_adversarial_inputs() {
+    assert_no_panic("rect_opening_empty", &[], |d| {
+        let _ = rvt::rect_opening_index::ArcWallRectOpeningIndex::decode(d, 0);
+        let _ =
+            rvt::rect_opening_index::ArcWallRectOpeningIndex::find_all_for_revit_version(2024, d);
+    });
+    assert_no_panic("rect_opening_ff", &[0xffu8; 256], |d| {
+        let _ =
+            rvt::rect_opening_index::ArcWallRectOpeningIndex::find_all_for_revit_version(2024, d);
+        let _ = rvt::rect_opening_index::ArcWallRectOpeningIndex::decode(d, usize::MAX);
+    });
+}
+
+#[test]
+fn share_decode_from_fragment_handles_adversarial_inputs() {
+    assert_no_panic("share_empty", &[], |_d| {
+        let _ = rvt::ifc::share::decode_from_fragment("");
+        let _ = rvt::ifc::share::decode_from_fragment("#v=");
+        let _ = rvt::ifc::share::decode_from_fragment("!!!not-base64!!!");
+        let _ = rvt::ifc::share::decode_from_fragment(&"A".repeat(10_000));
+    });
+}
+
+#[test]
+fn step_writer_handles_adversarial_model_strings() {
+    use rvt::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
+    use rvt::ifc::step_writer::{StepOptions, write_step_with_options};
+    use rvt::ifc::{IfcModel, MaterialInfo, Storey};
+
+    assert_no_panic("step_writer_empty_model", &[], |_d| {
+        let model = IfcModel::default();
+        let out = write_step_with_options(&model, &StepOptions { timestamp: Some(0) });
+        assert!(out.starts_with("ISO-10303-21;"));
+        assert!(out.ends_with("END-ISO-10303-21;\n"));
+    });
+
+    let nasty = "O'Brien \u{1F600} \\\n\t wall";
+    assert_no_panic("step_writer_nasty_strings", nasty.as_bytes(), |d| {
+        let name = String::from_utf8_lossy(d).into_owned();
+        let model = IfcModel {
+            project_name: Some(name.clone()),
+            description: Some(name.clone()),
+            entities: vec![IfcEntity::BuildingElement {
+                ifc_type: "IfcWall".into(),
+                name: name.clone(),
+                type_guid: Some(name.clone()),
+                storey_index: Some(0),
+                material_index: Some(0),
+                property_set: Some(PropertySet {
+                    name: name.clone(),
+                    properties: vec![Property {
+                        name: name.clone(),
+                        value: PropertyValue::Text(name.clone()),
+                    }],
+                }),
+                location_feet: Some([0.0, 0.0, 0.0]),
+                rotation_radians: Some(1.0),
+                extrusion: None,
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
+                representation_map_index: None,
+            }],
+            classifications: Vec::new(),
+            units: Vec::new(),
+            building_storeys: vec![Storey {
+                name: name.clone(),
+                elevation_feet: 0.0,
+            }],
+            materials: vec![MaterialInfo {
+                name,
+                color_packed: Some(0x00ff00ff),
+                transparency: Some(0.25),
+            }],
+            material_layer_sets: Vec::new(),
+            material_profile_sets: Vec::new(),
+            representation_maps: Vec::new(),
+        };
+        let out = write_step_with_options(&model, &StepOptions { timestamp: Some(0) });
+        assert!(out.contains("IFCPROJECT"));
     });
 }
