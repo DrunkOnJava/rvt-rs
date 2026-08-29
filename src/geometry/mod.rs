@@ -1,8 +1,14 @@
-//! Geometry primitives for Revit element extraction.
+//! Geometry primitives and Lane Six recovery helpers.
 //!
-//! These types are the **output** of the per-element walker
-//! (Phase 4 Layer 5b) and the **input** of the IFC exporter's
-//! geometry mapper (Phase 6). They are intentionally format-agnostic:
+//! Primitive types ([`Point3`], [`Curve`], [`Solid`], …) are the
+//! **output** of the per-element walker (Phase 4 Layer 5b) and the
+//! **input** of the IFC exporter's geometry mapper (Phase 6).
+//! [`recovery`] turns typed Wall / Floor / Door / Window / Level
+//! views (and ArcWall partition records) into location curves,
+//! boundary loops, host relationships, and elevations — fail-closed
+//! when data is absent.
+//!
+//! Primitives are intentionally format-agnostic:
 //!
 //! - No Revit-specific type IDs or wire-level detail. Coordinates are
 //!   just `f64` triples; curves describe themselves parametrically.
@@ -24,6 +30,17 @@
 //! - Angles are radians unless noted.
 
 use serde::{Deserialize, Serialize};
+
+pub mod recovery;
+
+pub use recovery::{
+    FloorBoundaryLoop, FloorBoundarySource, GeometryDiagnostic, LevelElevation,
+    OpeningHostRelationship, OpeningKind, RecoveryOutcome, WallLocationCurve, WallLocationSource,
+    recover_door_host, recover_floor_boundary, recover_floor_boundary_from_floor,
+    recover_level_elevation, recover_level_elevations, recover_wall_location_curve,
+    recover_wall_location_curve_from_arc_wall, recover_wall_location_curve_from_wall,
+    recover_window_host,
+};
 
 /// 3D point in project coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
