@@ -56,6 +56,7 @@
 //! singleton trailer (177 B) documented in
 //! `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
 
+use crate::walker::{WalkerLimitHit, WalkerLimits};
 use crate::{Error, Result};
 
 /// ArcWall tag on Revit 2023. On 2024 the tag drifted to `0x019c`
@@ -148,6 +149,17 @@ impl ArcWallScanStatus {
     }
 }
 
+/// Result of a bounded ArcWall byte scan ([`ArcWallRecord::find_all_with_limits`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArcWallFindResult {
+    /// Byte offsets of candidate standard ArcWall records.
+    pub offsets: Vec<usize>,
+    /// Number of input bytes actually inspected (may be capped).
+    pub scanned_bytes: usize,
+    /// Present when a [`WalkerLimits`] cap stopped or truncated the scan.
+    pub limit_hit: Option<WalkerLimitHit>,
+}
+
 /// Result of a version-scoped ArcWall scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArcWallScanReport {
@@ -155,6 +167,10 @@ pub struct ArcWallScanReport {
     pub status: ArcWallScanStatus,
     /// Byte offsets where [`ArcWallRecord::decode_standard`] succeeds.
     pub offsets: Vec<usize>,
+    /// Number of input bytes actually inspected (may be capped).
+    pub scanned_bytes: usize,
+    /// Present when a [`WalkerLimits`] cap stopped or truncated the scan.
+    pub limit_hit: Option<WalkerLimitHit>,
 }
 
 /// A standard (non-compound) ArcWall record decoded from raw partition bytes.
@@ -320,11 +336,30 @@ impl ArcWallRecord {
     /// (the filter pattern is strict enough that overlap is vanishingly
     /// unlikely).
     pub fn find_all(buf: &[u8]) -> Vec<usize> {
+        Self::find_all_with_limits(buf, WalkerLimits::default()).offsets
+    }
+
+    /// Bounded variant of [`Self::find_all`] for production scanning.
+    ///
+    /// Caps the scanned byte window at [`WalkerLimits::max_scan_bytes`]
+    /// and stops after [`WalkerLimits::max_candidates`] hits so a
+    /// hostile partition stream cannot force unbounded candidate
+    /// materialisation.
+    pub fn find_all_with_limits(buf: &[u8], limits: WalkerLimits) -> ArcWallFindResult {
         let mut out = Vec::new();
-        if buf.len() < STANDARD_RECORD_MIN_SIZE {
-            return out;
+        let mut limit_hit = None;
+        let scan_len = buf.len().min(limits.max_scan_bytes);
+        if buf.len() > limits.max_scan_bytes {
+            limit_hit = Some(WalkerLimitHit::MaxScanBytes);
         }
-        for i in 0..=(buf.len() - STANDARD_RECORD_MIN_SIZE) {
+        if scan_len < STANDARD_RECORD_MIN_SIZE {
+            return ArcWallFindResult {
+                offsets: out,
+                scanned_bytes: scan_len,
+                limit_hit,
+            };
+        }
+        for i in 0..=(scan_len - STANDARD_RECORD_MIN_SIZE) {
             let tag = u16::from_le_bytes([buf[i], buf[i + 1]]);
             if tag != ARC_WALL_TAG {
                 continue;
@@ -337,8 +372,16 @@ impl ArcWallRecord {
                 continue;
             }
             out.push(i);
+            if out.len() >= limits.max_candidates {
+                limit_hit.get_or_insert(WalkerLimitHit::MaxCandidates);
+                break;
+            }
         }
-        out
+        ArcWallFindResult {
+            offsets: out,
+            scanned_bytes: scan_len,
+            limit_hit,
+        }
     }
 
     /// Version-gated scanner for production use.
@@ -348,13 +391,36 @@ impl ArcWallRecord {
     /// This prevents false-positive IFC walls on releases whose ArcWall
     /// record envelope has not been proven compatible.
     pub fn scan_standard_for_revit_version(revit_version: u32, buf: &[u8]) -> ArcWallScanReport {
+        Self::scan_standard_for_revit_version_with_limits(
+            revit_version,
+            buf,
+            WalkerLimits::default(),
+        )
+    }
+
+    /// Same as [`Self::scan_standard_for_revit_version`], with explicit
+    /// [`WalkerLimits`] applied to the underlying byte scan.
+    pub fn scan_standard_for_revit_version_with_limits(
+        revit_version: u32,
+        buf: &[u8],
+        limits: WalkerLimits,
+    ) -> ArcWallScanReport {
         let status = Self::standard_decoder_status(revit_version);
-        let offsets = if status.is_supported() {
-            Self::find_all(buf)
-        } else {
-            Vec::new()
-        };
-        ArcWallScanReport { status, offsets }
+        if !status.is_supported() {
+            return ArcWallScanReport {
+                status,
+                offsets: Vec::new(),
+                scanned_bytes: 0,
+                limit_hit: None,
+            };
+        }
+        let found = Self::find_all_with_limits(buf, limits);
+        ArcWallScanReport {
+            status,
+            offsets: found.offsets,
+            scanned_bytes: found.scanned_bytes,
+            limit_hit: found.limit_hit,
+        }
     }
 
     /// Convenience: returns the first 3 coordinates as a 3-tuple.
@@ -632,5 +698,40 @@ mod tests {
             .copy_from_slice(&0x2u32.to_le_bytes());
         let trailer = ArcWallRecord::decode_trailer(&buf, 0).unwrap();
         assert_eq!(trailer.element_id, None);
+    }
+
+    #[test]
+    fn find_all_with_limits_honors_max_candidates() {
+        let mut buf = vec![0u8; 500];
+        for off in [0usize, 200] {
+            buf[off] = (ARC_WALL_TAG & 0xff) as u8;
+            buf[off + 1] = (ARC_WALL_TAG >> 8) as u8;
+            buf[off + 0x10] = (ARC_WALL_VARIANT_STANDARD & 0xff) as u8;
+            buf[off + 0x11] = (ARC_WALL_VARIANT_STANDARD >> 8) as u8;
+        }
+        let limits = WalkerLimits {
+            max_candidates: 1,
+            ..WalkerLimits::default()
+        };
+        let found = ArcWallRecord::find_all_with_limits(&buf, limits);
+        assert_eq!(found.offsets.len(), 1);
+        assert_eq!(found.limit_hit, Some(WalkerLimitHit::MaxCandidates));
+    }
+
+    #[test]
+    fn find_all_with_limits_honors_max_scan_bytes() {
+        let mut buf = vec![0u8; 400];
+        buf[300] = (ARC_WALL_TAG & 0xff) as u8;
+        buf[301] = (ARC_WALL_TAG >> 8) as u8;
+        buf[300 + 0x10] = (ARC_WALL_VARIANT_STANDARD & 0xff) as u8;
+        buf[300 + 0x11] = (ARC_WALL_VARIANT_STANDARD >> 8) as u8;
+        let limits = WalkerLimits {
+            max_scan_bytes: 200,
+            ..WalkerLimits::default()
+        };
+        let found = ArcWallRecord::find_all_with_limits(&buf, limits);
+        assert!(found.offsets.is_empty());
+        assert_eq!(found.limit_hit, Some(WalkerLimitHit::MaxScanBytes));
+        assert_eq!(found.scanned_bytes, 200);
     }
 }
