@@ -50,3 +50,22 @@ control `inflate_all_chunks` **925** ok → strip **935** ok (+814 893 bytes).
 ## Follow-ons
 
 #152–#156 deferred. Paged writer encoder coordinated with Worker D.
+
+## Production gate (post-merge narrow hotfix)
+
+Independent judge verdict for Finding 1 was **narrow**. Merged PR #160 gated
+strip on `Formats/Latest` as well as `Partitions/*` / `Global/*`. Re-measured
+on magnetar `2024_Core_Interior.rvt` (`c805df44…`):
+
+| Path | Control vs strip |
+|---|---|
+| `Formats/Latest` | SchemaTable 395/1114 flat; **`class_names` 9579→8575** (regression) |
+| `Partitions/46` | chunks 925→935, +814 893 bytes (benefit) |
+
+Production `is_checksum_paged_stream` therefore **excludes** `Formats/Latest`
+(research helper `is_revit_paged_loader_candidate` still lists it). Strip remains
+on `Partitions/*` and listed `Global/*`. `read_stream` stays stored-byte accurate.
+Writer verify uses bare `inflate_at` (strip-clean encoder output).
+No Formats ~48% schema-recovery claim.
+
+Credit: [@STE1200](https://github.com/STE1200).

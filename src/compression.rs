@@ -707,6 +707,7 @@ mod tests {
         assert!(is_checksum_paged_stream("Global/ElemTable"));
         assert!(is_checksum_paged_stream("Partitions/67"));
         assert!(is_checksum_paged_stream("Partitions/46"));
+        assert!(is_checksum_paged_stream("/Partitions/46"));
         assert!(!is_checksum_paged_stream("BasicFileInfo"));
         assert!(!is_checksum_paged_stream("PartAtom"));
         assert!(!is_checksum_paged_stream("ProjectInformation"));
