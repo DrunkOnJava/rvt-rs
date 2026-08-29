@@ -310,6 +310,19 @@ pub fn link_arcwall_element_ids<'a>(
     out
 }
 
+/// Join generic partition-scanner ElementIds to ElemTable rows.
+///
+/// Thin wrapper around
+/// [`crate::partition_scanner::link_elem_table_to_partitions`] so
+/// ElemTable callers share one import path with the ArcWall-specific
+/// linker above.
+pub fn link_partition_element_ids<'a>(
+    elem_by_id: &std::collections::BTreeMap<u32, &'a ElemRecord>,
+    partition_by_id: &std::collections::BTreeMap<u32, crate::partition_scanner::PartitionRecordRef>,
+) -> Vec<crate::partition_scanner::LinkedPartitionElement<'a>> {
+    crate::partition_scanner::link_elem_table_to_partitions(elem_by_id, partition_by_id)
+}
+
 /// Authoritative set of declared ElementIds from Global/ElemTable.
 ///
 /// Useful for walker coverage validation: after scanning `Global/Latest`
