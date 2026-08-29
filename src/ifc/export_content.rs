@@ -18,17 +18,29 @@
 use super::category_map;
 use super::entities::{self, Extrusion, Property, PropertySet, PropertyValue};
 use super::from_decoded::{wall_segment_angle_radians, wall_segment_length_feet};
-use super::{ExportQualityMode, Storey, UNRESOLVED_ARCWALL_THICKNESS_FEET};
+use super::{ExportQualityMode, MaterialInfo, Storey, UNRESOLVED_ARCWALL_THICKNESS_FEET};
 use crate::elements::floor::Floor;
 use crate::elements::level::Level;
 use crate::elements::openings::{Door, Window};
+use crate::elements::styling::Material;
 use crate::elements::wall::Wall;
 use crate::geometry::{
     recover_door_host, recover_floor_boundary, recover_level_elevation,
     recover_wall_location_curve_from_wall, recover_window_host,
 };
-use crate::walker::DecodedElement;
-use std::collections::HashMap;
+use crate::walker::{DecodedElement, InstanceField};
+use std::collections::{BTreeMap, HashMap};
+
+/// Result of folding production walker hits into an IFC draft.
+#[derive(Debug, Default)]
+pub struct TypedProductionAppend {
+    /// Revit element id → index in `entities` (for host linking).
+    pub id_to_entity: HashMap<u32, usize>,
+    /// Named materials recovered from partition / typed Material rows.
+    pub materials: Vec<MaterialInfo>,
+    /// Production class histogram (Level / Floor / Material / …).
+    pub production_class_counts: BTreeMap<String, usize>,
+}
 
 /// What a quality mode allows the document exporter to emit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,19 +101,21 @@ pub fn strip_building_element_geometry(entities: &mut [entities::IfcEntity]) {
     }
 }
 
-/// Accumulate production walker hits into IFC entities + storeys.
-///
-/// Returns a map of Revit element id → index in `entities` for host linking.
+/// Accumulate production walker hits into IFC entities + storeys + materials.
 pub fn append_typed_production_elements(
     decoded_iter: impl Iterator<Item = DecodedElement>,
     entities: &mut Vec<entities::IfcEntity>,
     building_storeys: &mut Vec<Storey>,
     policy: ExportContentPolicy,
-) -> HashMap<u32, usize> {
-    let mut id_to_entity: HashMap<u32, usize> = HashMap::new();
+) -> TypedProductionAppend {
+    let mut out = TypedProductionAppend::default();
     let mut pending_hosts: Vec<(usize, u32)> = Vec::new();
 
     for decoded in decoded_iter {
+        *out.production_class_counts
+            .entry(decoded.class.clone())
+            .or_insert(0) += 1;
+
         if is_misleading_proxy_class(&decoded.class) {
             continue;
         }
@@ -109,6 +123,14 @@ pub fn append_typed_production_elements(
         if decoded.class == "Level" {
             if let Some(storey) = storey_from_level(&decoded) {
                 building_storeys.push(storey);
+            }
+            continue;
+        }
+
+        // Materials are IfcMaterial rows, never building-element proxies.
+        if decoded.class == "Material" {
+            if let Some(info) = material_info_from_decoded(&decoded) {
+                out.materials.push(info);
             }
             continue;
         }
@@ -121,13 +143,24 @@ pub fn append_typed_production_elements(
             continue;
         }
 
+        // Opening-index rows are not typed Door/Window. Keep them in
+        // `iter_elements` / production_class_counts for File Status, but
+        // do not flood IFC with thousands of hostless IFCOPENINGELEMENT
+        // stubs — emit only once host Wall ElementIds join (still open).
+        if decoded.class == "ArcWallRectOpening" {
+            continue;
+        }
+
         let mapping = category_map::lookup(&decoded.class);
         if mapping.is_none() && policy.require_mapped_ifc_type {
             continue;
         }
-        let ifc_type = mapping
-            .map(|m| m.ifc_type.to_string())
-            .unwrap_or_else(|| "IFCBUILDINGELEMENTPROXY".to_string());
+        // Scaffold must not invent PROXY rows for unmapped partition
+        // MVP classes (e.g. stray research tags).
+        let Some(mapping) = mapping else {
+            continue;
+        };
+        let ifc_type = mapping.ifc_type.to_string();
 
         let name = match decoded.id {
             Some(id) => format!("{}-{}", decoded.class, id),
@@ -176,7 +209,7 @@ pub fn append_typed_production_elements(
 
         let entity_index = entities.len();
         if let Some(id) = decoded.id {
-            id_to_entity.insert(id, entity_index);
+            out.id_to_entity.insert(id, entity_index);
         }
         if let Some(host_id) = pending_host_id {
             pending_hosts.push((entity_index, host_id));
@@ -202,7 +235,7 @@ pub fn append_typed_production_elements(
 
     if policy.include_geometry {
         for (entity_index, host_id) in pending_hosts {
-            if let Some(&host_index) = id_to_entity.get(&host_id) {
+            if let Some(&host_index) = out.id_to_entity.get(&host_id) {
                 if let Some(entities::IfcEntity::BuildingElement {
                     host_element_index, ..
                 }) = entities.get_mut(entity_index)
@@ -213,23 +246,113 @@ pub fn append_typed_production_elements(
         }
     }
 
-    id_to_entity
+    out
 }
 
 fn storey_from_level(decoded: &DecodedElement) -> Option<Storey> {
     let level = Level::from_decoded(decoded);
-    let elev = recover_level_elevation(&level).ok()?;
-    let name = elev
+    // Drafting / non-building levels stay out of the spatial tree.
+    if level.is_building_story == Some(false) {
+        return None;
+    }
+    let name = level
         .name
-        .or(level.name)
-        .unwrap_or_else(|| match decoded.id {
-            Some(id) => format!("Level-{id}"),
-            None => "Level".into(),
-        });
+        .clone()
+        .or_else(|| decoded.id.map(|id| format!("Level-{id}")))?;
+    // Prefer recovered elevation; name-only partition Levels (2024
+    // without ArcWall trailers) still form storeys at 0.0 — callers
+    // must treat that as elevation-unresolved, not surveyed height.
+    let elevation_feet = recover_level_elevation(&level)
+        .ok()
+        .map(|e| e.elevation_feet)
+        .or(level.elevation_feet)
+        .unwrap_or(0.0);
     Some(Storey {
         name,
-        elevation_feet: elev.elevation_feet,
+        elevation_feet,
     })
+}
+
+fn material_info_from_decoded(decoded: &DecodedElement) -> Option<MaterialInfo> {
+    let material = Material::from_decoded(decoded);
+    let name = material.name?;
+    if name.trim().is_empty() {
+        return None;
+    }
+    Some(MaterialInfo {
+        name,
+        color_packed: material.color,
+        transparency: material.transparency,
+    })
+}
+
+#[allow(dead_code)] // retained for when opening→host IFC emission lands
+fn opening_index_property_set(decoded: &DecodedElement) -> PropertySet {
+    let mut properties = vec![
+        Property {
+            name: "OpeningKindResolved".into(),
+            value: PropertyValue::Boolean(false),
+        },
+        Property {
+            name: "DoorWindowDiscriminated".into(),
+            value: PropertyValue::Boolean(false),
+        },
+        Property {
+            name: "Source".into(),
+            value: PropertyValue::Text("partition_rect_opening_index".into()),
+        },
+    ];
+    for (name, value) in &decoded.fields {
+        match (name.as_str(), value) {
+            ("m_related_id_a", InstanceField::ElementId { id, .. }) => {
+                properties.push(Property {
+                    name: "RelatedIdA".into(),
+                    value: PropertyValue::Integer(i64::from(*id)),
+                });
+            }
+            ("m_related_id_b", InstanceField::ElementId { id, .. }) => {
+                properties.push(Property {
+                    name: "RelatedIdB".into(),
+                    value: PropertyValue::Integer(i64::from(*id)),
+                });
+            }
+            ("m_host_id", InstanceField::ElementId { id, .. }) => {
+                properties.push(Property {
+                    name: "HostIdCandidate".into(),
+                    value: PropertyValue::Integer(i64::from(*id)),
+                });
+            }
+            ("m_related_id_a_in_elem_table", InstanceField::Bool(b)) => {
+                properties.push(Property {
+                    name: "RelatedIdAInElemTable".into(),
+                    value: PropertyValue::Boolean(*b),
+                });
+            }
+            ("m_related_id_b_in_elem_table", InstanceField::Bool(b)) => {
+                properties.push(Property {
+                    name: "RelatedIdBInElemTable".into(),
+                    value: PropertyValue::Boolean(*b),
+                });
+            }
+            ("m_host_elem_table_confirmed", InstanceField::Bool(b)) => {
+                properties.push(Property {
+                    name: "HostElemTableConfirmed".into(),
+                    value: PropertyValue::Boolean(*b),
+                });
+            }
+            ("m_index", InstanceField::Integer { value, .. }) => {
+                properties.push(Property {
+                    name: "Index".into(),
+                    value: PropertyValue::Integer(*value),
+                });
+            }
+            _ => {}
+        }
+    }
+    PropertySet {
+        name: "RvtArcWallRectOpening".into(),
+        properties,
+    }
 }
 
 struct RecoveredWallGeom {
@@ -372,6 +495,59 @@ mod tests {
             .collect();
         assert_eq!(names, vec!["Wall-2"]);
         assert!(!names.iter().any(|n| n.starts_with("HostObjAttr-")));
+    }
+
+    #[test]
+    fn material_becomes_material_info_not_proxy() {
+        let mut entities = vec![entities::IfcEntity::Project {
+            name: Some("t".into()),
+            description: None,
+            long_name: None,
+        }];
+        let mut storeys = Vec::new();
+        let mut mat = decoded("Material", None);
+        mat.fields
+            .push(("m_name".into(), InstanceField::String("Concrete".into())));
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Scaffold);
+        let append = append_typed_production_elements(
+            [mat].into_iter(),
+            &mut entities,
+            &mut storeys,
+            policy,
+        );
+        assert!(
+            entities
+                .iter()
+                .filter(|e| matches!(e, entities::IfcEntity::BuildingElement { .. }))
+                .count()
+                == 0
+        );
+        assert_eq!(append.materials.len(), 1);
+        assert_eq!(append.materials[0].name, "Concrete");
+    }
+
+    #[test]
+    fn scaffold_skips_unmapped_without_proxy() {
+        let mut entities = vec![entities::IfcEntity::Project {
+            name: Some("t".into()),
+            description: None,
+            long_name: None,
+        }];
+        let mut storeys = Vec::new();
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Scaffold);
+        append_typed_production_elements(
+            [decoded("DefinitelyNotMapped", Some(9))].into_iter(),
+            &mut entities,
+            &mut storeys,
+            policy,
+        );
+        assert_eq!(
+            entities
+                .iter()
+                .filter(|e| matches!(e, entities::IfcEntity::BuildingElement { .. }))
+                .count(),
+            0
+        );
     }
 
     #[test]

@@ -24,9 +24,12 @@ Production `walker::iter_elements` prefers typed MVP decoders on
 recovers, and additionally merges fail-closed partition MVP recovers for
 `Level` (elevation + name), `Material` / `Room` (display-name candidates),
 `Floor` (ArcWall-excluded plan loops), and — on Revit 2024 —
-`ArcWallRectOpening` index rows with related-id provenance. Semantic
-`Door` / `Window` classes and schema-field `Wall` instances from arbitrary
-partitions remain unsolved. Eighty per-class decoder structs remain
+`ArcWallRectOpening` index rows with ElemTable-confirmed related-id
+provenance (still not typed `Door`/`Window`). IFC export maps recovered
+Levels → storeys, Floors → boundary-annotated slabs, Rooms → spaces, and
+Material display names → `IfcMaterial`. Semantic `Door` / `Window`
+classes, schema-field `Wall` instances, Floor↔ElemTable id binding, and
+slab extrusion thickness remain unsolved. Eighty per-class decoder structs remain
 registered; `MVP_TYPED_CLASSES` are consulted by `iter_elements`.
 
 ## Capability Matrix
@@ -38,10 +41,10 @@ registered; `MVP_TYPED_CLASSES` are consulted by `iter_elements`.
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus | Developers can inspect class and field structure. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
-| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms/Floor plan-loops + 2024 ArcWallRectOpening index; HostObjAttr filtered; Door/Window typed classes and schema-field Wall still unsolved | Full model conversion is not ready. |
+| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms/Floor plan-loops + 2024 ArcWallRectOpening (ElemTable-confirmed related ids); HostObjAttr filtered; Door/Window typed classes and schema-field Wall still unsolved | Full model conversion is not ready. |
 | Typed decoder structs | Partial | `elements::all_decoders()` registers **80** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
-| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; 2023 Einhoven ArcWall records emit `IfcWall` swept solids with recovered ElementId / base elevation / Z-delta height and elevation-derived storeys (partition Level-like names applied when confident; thickness still unresolved — RE-15/#88 falsified trailer inch widths); diagnostic mode can include low-confidence proxy provenance; `rvt-ifc --diagnostics` emits a JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict output | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
-| Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, plain-language decode/export confidence panel, and supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
+| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / Material display names; thickness + Door/Window host IFC still open; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
+| Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, File Status shows production class counts + storey/material totals, supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Always-on patch corpus (`gen-fixture` project + MIT `empty.rfa`) covers identity, grow, shrink, multi-stream, missing-stream; optional Autodesk corpora add release-matrix + GUID/history checks; corrupt-gzip verification is unit-tested | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |
 | User-facing inspect CLI | Partial | `rvt-inspect` reports file health, decoded coverage, IFC export readiness, warnings, next steps, and stable JSON | Useful for support triage without Revit internals. |
