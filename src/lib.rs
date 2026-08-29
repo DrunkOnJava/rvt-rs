@@ -52,6 +52,7 @@
 //! - [`object_graph`] — document history, string-record extraction
 //! - [`elem_table`] — `Global/ElemTable` parser
 //! - [`partitions`] — `Partitions/NN` header + chunk splitter
+//! - [`partition_scanner`] — version-gated generic partition record candidates
 //! - [`compression`] — truncated-gzip decode
 //! - [`class_index`] — fast class-name inventory
 //! - [`corpus`] — cross-version delta analysis
@@ -118,6 +119,7 @@ pub mod parse_mode;
 pub mod part_atom;
 pub mod partition_arc_walls;
 pub mod partition_name_candidates;
+pub mod partition_scanner;
 pub mod partitions;
 pub mod reader;
 pub mod rect_opening_index;
