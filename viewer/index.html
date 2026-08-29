@@ -419,15 +419,136 @@
         color: #d7dce3;
         font-weight: 600;
       }
+      /* --- Accessibility / responsiveness (M6-05 / #46) --- */
+      .skip-link {
+        position: absolute;
+        left: 8px;
+        top: -48px;
+        z-index: 100;
+        padding: 8px 12px;
+        background: #1a3a5f;
+        color: #fff;
+        border: 1px solid #6bb7ff;
+        border-radius: 4px;
+        font-size: 12px;
+        text-decoration: none;
+      }
+      .skip-link:focus {
+        top: 8px;
+      }
+      :focus-visible {
+        outline: 2px solid #6bb7ff;
+        outline-offset: 2px;
+      }
+      button:focus:not(:focus-visible),
+      a:focus:not(:focus-visible),
+      .tree-node:focus:not(:focus-visible),
+      .demo-card:focus:not(:focus-visible),
+      select:focus:not(:focus-visible) {
+        outline: none;
+      }
+      .tree-node {
+        border-radius: 2px;
+      }
+      .tree-node:focus-visible {
+        background: #1a3a5f;
+        color: #fff;
+      }
+      #status[role='status'] {
+        max-width: min(520px, calc(100% - 24px));
+        overflow-wrap: anywhere;
+      }
+      .info-row .v,
+      .status-value,
+      #diagnostics-json {
+        overflow-wrap: anywhere;
+      }
+      /* Improve muted text contrast toward WCAG AA on #0f141b panels */
+      header .meta,
+      #status,
+      .status-label,
+      .support-row .k,
+      .gallery-attribution,
+      .mvp-workflow,
+      #dropzone .hint,
+      #demo-gallery h2,
+      #sidebar-left h2,
+      #sidebar-right h2 {
+        color: #a8b0bc;
+      }
+      @media (max-width: 960px) {
+        body {
+          overflow: auto;
+        }
+        #app {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto auto minmax(42vh, 52vh) auto;
+          height: auto;
+          min-height: 100vh;
+        }
+        header {
+          flex-wrap: wrap;
+          row-gap: 8px;
+          padding: 8px 12px;
+          min-height: 44px;
+          height: auto;
+        }
+        header .export-btn,
+        header .mode-select,
+        header .quality-pill {
+          font-size: 12px;
+        }
+        #sidebar-left {
+          order: 3;
+          border-right: none;
+          border-top: 1px solid #1d2430;
+          max-height: 36vh;
+        }
+        #viewport {
+          order: 2;
+          min-height: 42vh;
+        }
+        #sidebar-right {
+          order: 4;
+          border-left: none;
+          border-top: 1px solid #1d2430;
+        }
+        #demo-gallery {
+          width: min(100%, 560px);
+        }
+      }
+      @media (max-width: 560px) {
+        header h1 {
+          font-size: 13px;
+        }
+        header .meta {
+          width: 100%;
+        }
+        #dropzone .big {
+          font-size: 22px;
+        }
+        .support-row,
+        .status-row,
+        .info-row {
+          grid-template-columns: 1fr;
+          gap: 2px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #dropzone {
+          transition: none;
+        }
+      }
     </style>
   </head>
   <body>
+    <a class="skip-link" href="#viewport">Skip to viewport</a>
     <div id="app">
-      <header>
+      <header role="banner">
         <h1>rvt-rs · viewer</h1>
         <span class="meta" id="file-meta">drop a .rvt / .rfa / .rte / .rft file anywhere · partial decode</span>
         <span style="flex: 1"></span>
-        <span class="quality-pill" id="export-quality">quality: pending</span>
+        <span class="quality-pill" id="export-quality" aria-live="polite">quality: pending</span>
         <label class="meta" for="export-mode" title="IFC export quality bar (Lane Seven). Stronger bars reject scaffold-only files.">
           IFC bar
         </label>
@@ -437,24 +558,24 @@
           <option value="geometry">geometry</option>
           <option value="strict">strict</option>
         </select>
-        <button class="export-btn" id="export-glb" disabled title="Download 3D model as glTF 2.0 binary">
+        <button class="export-btn" id="export-glb" disabled title="Download 3D model as glTF 2.0 binary" aria-label="Export glTF">
           Export glTF
         </button>
-        <button class="export-btn" id="export-ifc" disabled title="Download as IFC4 STEP · quality label reflects decoded coverage">
+        <button class="export-btn" id="export-ifc" disabled title="Download as IFC4 STEP · quality label reflects decoded coverage" aria-label="Export IFC">
           Export IFC
         </button>
-        <button class="export-btn" id="export-svg" disabled title="Download 2D plan view as SVG">
+        <button class="export-btn" id="export-svg" disabled title="Download 2D plan view as SVG" aria-label="Export plan SVG">
           Export plan
         </button>
       </header>
-      <aside id="sidebar-left">
-        <h2>Scene tree</h2>
-        <div id="tree"></div>
-        <h2>Categories</h2>
-        <div id="categories"></div>
+      <aside id="sidebar-left" aria-label="Scene tree and categories">
+        <h2 id="scene-tree-heading">Scene tree</h2>
+        <div id="tree" role="tree" aria-labelledby="scene-tree-heading"></div>
+        <h2 id="categories-heading">Categories</h2>
+        <div id="categories" role="group" aria-labelledby="categories-heading"></div>
       </aside>
-      <main id="viewport">
-        <div id="dropzone">
+      <main id="viewport" tabindex="-1" aria-label="3D viewport">
+        <div id="dropzone" role="region" aria-label="Open a Revit file">
           <div class="big">Drop a Revit file here</div>
           <div class="hint">
             Client-side only — every byte is parsed in this tab. No upload, no account, no
@@ -468,23 +589,23 @@
               >status</a
             >.
           </div>
-          <button id="pick-file">Choose file…</button>
-          <input id="file-input" type="file" accept=".rvt,.rfa,.rte,.rft" hidden />
+          <button id="pick-file" type="button" aria-controls="file-input">Choose file…</button>
+          <input id="file-input" type="file" accept=".rvt,.rfa,.rte,.rft" hidden aria-label="Revit file picker" />
           <section id="demo-gallery" aria-label="Redistributable demo gallery">
             <h2>Demo gallery</h2>
             <div class="gallery-attribution" id="demo-attribution">Loading redistributable demos…</div>
-            <div id="demo-list"></div>
+            <div id="demo-list" role="list"></div>
           </section>
         </div>
-        <div id="status">idle</div>
+        <div id="status" role="status" aria-live="polite">idle</div>
       </main>
-      <aside id="sidebar-right">
+      <aside id="sidebar-right" aria-label="File status and element details">
         <h2>File status</h2>
-        <div class="status-panel" id="status-panel"></div>
-        <button class="side-btn" id="download-diagnostics" disabled>Download diagnostics</button>
+        <div class="status-panel" id="status-panel" aria-live="polite"></div>
+        <button class="side-btn" id="download-diagnostics" disabled type="button" aria-label="Download diagnostics JSON">Download diagnostics</button>
         <details id="diagnostics-details">
           <summary>Diagnostics details</summary>
-          <pre id="diagnostics-json"></pre>
+          <pre id="diagnostics-json" aria-label="Diagnostics JSON"></pre>
         </details>
         <h2>Supported MVP workflow</h2>
         <div class="mvp-workflow" id="mvp-workflow">
@@ -529,9 +650,9 @@
           </a>
         </div>
         <h2>Element info</h2>
-        <div id="info">Click an element in the 3-D view or scene tree.</div>
+        <div id="info">Select an element in the 3-D view or scene tree (Enter / Space on a tree row).</div>
         <h2>Schedule</h2>
-        <div id="schedule-summary"></div>
+        <div id="schedule-summary" aria-live="polite"></div>
       </aside>
     </div>
     <script type="module" src="/src/main.ts"></script>
