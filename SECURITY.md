@@ -11,10 +11,13 @@ minor versions will be supported.
 If you believe you've found a security issue — including anything
 that would let an attacker cause rvt-rs to crash, mis-decode, or
 leak data when fed a hostile input file — please **do not open a
-public GitHub issue**. Instead, email:
+public GitHub issue**.
 
-**151978260+DrunkOnJava@users.noreply.github.com** with the subject line
-`[SECURITY] rvt-rs: <one-line summary>`.
+**Primary channel:** [GitHub private vulnerability reporting](https://github.com/DrunkOnJava/rvt-rs/security/advisories/new)
+(Security → Advisories → Report a vulnerability). Private vulnerability
+reporting is enabled on this repository. Use it for coordinated
+disclosure; do not rely on `users.noreply.github.com` addresses — they
+are not a usable inbox.
 
 Include, if possible:
 
@@ -42,9 +45,10 @@ In scope:
 - **Information disclosure via output.** If rvt-rs's default
   output (without `--redact`) leaks more than the input file
   itself contains, that's a bug.
-- **Memory safety.** The library has `#![deny(unsafe_code)]` on
-  its target (no `unsafe` in our code today; any `unsafe` that
-  slips in must have a safety argument).
+- **Memory safety.** The core library crate has
+  `#![forbid(unsafe_code)]` (no `unsafe` in our parser code today;
+  any `unsafe` that slips in must have a safety argument). Python
+  bindings live in the separate `rvt-py` crate.
 - **Denial of service via resource exhaustion** (file-size-
   linear CPU/memory only). A file ten times the size should not
   cause a hundred-times-larger allocation.
