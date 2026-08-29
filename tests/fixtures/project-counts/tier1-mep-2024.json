@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "id": "tier1-mep-2024",
+  "tier": 1,
+  "project_file": "mep-2024/mep-2024.rvt",
+  "reference_ifc_file": null,
+  "source": {
+    "repo": "drunkonjava/rvt-rs",
+    "path": "corpus/tier1/mep-2024",
+    "license": "Apache-2.0",
+    "revit_release": 2024,
+    "rvt_sha256": "2c0516739b4eda099cfb18031f65e0c39f3cf52cf200b1a4a0451f4d25618604",
+    "rvt_bytes": 20480,
+    "notes": "Synthetic gen-fixture oracle; Duct instances map to the mep category."
+  },
+  "counts": {
+    "levels": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Level round-robin)",
+      "fixture_metric": "class_instances.Level"
+    },
+    "walls": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Wall round-robin)",
+      "fixture_metric": "class_instances.Wall"
+    },
+    "floors": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Floor not in --classes)"
+    },
+    "roofs": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Roof not in --classes)"
+    },
+    "doors": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Door round-robin)",
+      "fixture_metric": "class_instances.Door"
+    },
+    "windows": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Window round-robin)",
+      "fixture_metric": "class_instances.Window"
+    },
+    "rooms_spaces": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (no Space/Room class)"
+    },
+    "columns": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Column not in --classes)"
+    },
+    "beams": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Beam not in --classes)"
+    },
+    "mep": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Duct round-robin)",
+      "fixture_metric": "class_instances.Duct"
+    },
+    "materials": {
+      "status": "unknown",
+      "reason": "Synthetic fixtures do not emit material tables."
+    },
+    "units": {
+      "status": "decoder_baseline",
+      "expected": 1,
+      "source": "IFC scaffold always emits one IFCUNITASSIGNMENT",
+      "decoder_metric": "step.IFCUNITASSIGNMENT",
+      "decoder_expected": 1,
+      "decoder_tolerance": 0,
+      "tracking_issue": 0
+    }
+  }
+}

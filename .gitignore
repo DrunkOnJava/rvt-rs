@@ -116,6 +116,12 @@ yarn-error.log*
 *.rfa
 *.rte
 *.rft
+# Lane Three: redistributable synthetic fixtures under corpus/ are
+# intentionally committed (Apache-2.0 gen-fixture output + license
+# sidecars). Negate the blanket *.rvt ignore for that tree only.
+!corpus/
+!corpus/**
+!corpus/**/*.rvt
 !docs/**/*.rvt.md
 # Redistributable, license-documented fixtures committed under tests/
 !tests/fixtures/families/
