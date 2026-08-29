@@ -80,7 +80,7 @@ jobs:
       # release managers to copy-paste bullets into CHANGELOG.md.
       - name: Upload CHANGELOG-UNRELEASED artifact
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: changelog-unreleased
           path: CHANGELOG-UNRELEASED.md
@@ -101,7 +101,7 @@ jobs:
 
       - name: Upload release notes artifact
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: RELEASE_NOTES.md
