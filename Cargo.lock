@@ -759,6 +759,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "sha2",
+ "stream-evidence",
  "thiserror",
  "wasm-bindgen",
 ]
@@ -865,6 +866,20 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+
+[[package]]
+name = "stream-evidence"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "flate2",
+ "hex",
+ "rvt",
+ "serde",
+ "serde_json",
+ "sha2",
+]
 
 [[package]]
 name = "strsim"
