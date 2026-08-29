@@ -72,6 +72,11 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Security
 
+- **CI Actions SHA pins** — remaining floating third-party tags
+  (`actions/checkout@v4`, `setup-python@v5/@v6`, `upload-artifact@v7`,
+  `maturin-action@v1`, `dtolnay/rust-toolchain@{stable,nightly,master}`)
+  pinned to full commit SHAs with version comments across workflows
+  (supply-chain follow-up to publish.yml pins).
 - Viewer toolchain bumps (vite major line) for Dependabot advisories on
   optimized-deps / transitive esbuild CORS (dev-server class; production
   Pages build still uses `vite build`).
