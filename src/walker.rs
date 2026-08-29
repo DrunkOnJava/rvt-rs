@@ -1262,6 +1262,22 @@ pub fn read_adocument_lossy_with_limits(
 /// as production elements. Use [`iter_elements_with_options`] with
 /// [`DIAGNOSTIC_ELEMENT_MIN_SCORE`] for reverse-engineering probes
 /// that need the broad candidate set.
+///
+/// # Typed MVP + partition merge (M3-05 / M3-06)
+///
+/// For each `Global/Latest` candidate whose class is in
+/// [`crate::elements::MVP_TYPED_CLASSES`], production iteration
+/// prefers the registered typed decoder and **skips** the hit when
+/// that decoder rejects (fail closed — no fake typed success via
+/// generic fallback). Other classes keep generic
+/// [`decode_instance`].
+///
+/// When the file's Revit year is in the ArcWall-supported set,
+/// validated partition ArcWall records are merged in as
+/// `DecodedElement` values with `class == "ArcWall"` (via
+/// [`crate::elements::arc_wall`]). Schema-driven Wall/Floor/Door
+/// records still require Global/Latest schema-field hits; partition
+/// envelope decode for those classes remains unsolved.
 pub fn iter_elements(rf: &mut RevitFile) -> Result<impl Iterator<Item = DecodedElement>> {
     iter_elements_with_limits(rf, PRODUCTION_ELEMENT_MIN_SCORE, WalkerLimits::default())
 }
@@ -1309,7 +1325,13 @@ pub fn iter_elements_with_limits(
         let Some(cls) = class_by_name.get(cand.class_name.as_str()).copied() else {
             continue;
         };
-        let mut decoded = decode_instance_with_limits(&d, cand.offset, cls, limits);
+        // Typed MVP preference: reject → skip (fail closed). Generic
+        // path for non-MVP classes.
+        let Some(mut decoded) = crate::elements::decode_instance_prefer_typed_with_limits(
+            &d, cand.offset, cls, limits,
+        ) else {
+            continue;
+        };
 
         // Extract the self-id without holding a borrow of
         // `decoded` when we later assign `decoded.id`. The
@@ -1319,7 +1341,8 @@ pub fn iter_elements_with_limits(
             .and_then(|(_, field)| match field {
                 InstanceField::ElementId { id, .. } if *id != 0 => Some(*id),
                 _ => None,
-            });
+            })
+            .or(decoded.id.filter(|id| *id != 0));
 
         if let Some(id) = self_id {
             // First-seen wins — scan_candidates iterates in score-
@@ -1332,6 +1355,27 @@ pub fn iter_elements_with_limits(
         }
 
         out.push(decoded);
+    }
+
+    // Partition ArcWall merge (version-gated). Fail closed: only
+    // records that pass the standard envelope decoder are emitted.
+    if let Ok(bfi) = rf.basic_file_info() {
+        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
+            rf,
+            bfi.version,
+            limits,
+        ) {
+            for wall in scan.walls {
+                let typed = crate::elements::arc_wall::from_partition_arc_wall(&wall);
+                let decoded = typed.to_decoded_element(&wall.partition, wall.offset);
+                if let Some(id) = decoded.id {
+                    if !seen_ids.insert(id) {
+                        continue;
+                    }
+                }
+                out.push(decoded);
+            }
+        }
     }
 
     Ok(out.into_iter())
