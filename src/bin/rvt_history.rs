@@ -6,11 +6,11 @@
 //!
 //! # Honesty
 //!
-//! [`DocumentHistory`](rvt::object_graph::DocumentHistory) is a **UTF-16LE
-//! "Revit " string scan** of `Global/Latest`, not a full Autodesk document
-//! history object model. Entries may be incomplete on unusual files; missing
-//! markers yield an error rather than invented versions. Linked-model /
-//! `TransmissionData` tables are out of scope for this CLI.
+//! `DocumentHistory` (`rvt::object_graph`) is a **UTF-16LE "Revit " string
+//! scan** of `Global/Latest`, not a full Autodesk document history object
+//! model. Entries may be incomplete on unusual files; missing markers yield
+//! an error rather than invented versions. Linked-model / `TransmissionData`
+//! tables are out of scope for this CLI.
 
 use clap::Parser;
 use rvt::{
