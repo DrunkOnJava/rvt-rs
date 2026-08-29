@@ -682,18 +682,27 @@ pub fn analyze_file(
         })
         .collect();
 
-    // If default matched everything paged, keep it; if filter empty and
-    // Formats/Latest missing, still report paged streams (already handled).
     let selected = if selected.is_empty() {
-        // Fall back: first non-empty stream for smoke tests on tiny fixtures.
-        list_cfb_streams(path)?
-            .into_iter()
-            .filter(|(_, b)| !b.is_empty())
-            .take(1)
-            .collect()
+        if stream_filter.is_none() && !all_paged {
+            // Fall back: first non-empty stream for smoke tests on tiny fixtures.
+            list_cfb_streams(path)?
+                .into_iter()
+                .filter(|(_, b)| !b.is_empty())
+                .take(1)
+                .collect()
+        } else if let Some(filter) = stream_filter {
+            let requested = filter.join(", ");
+            anyhow::bail!("no stream matched the requested filter: {requested}");
+        } else {
+            anyhow::bail!("no suspected checksum-paged non-empty streams found");
+        }
     } else {
         selected
     };
+
+    if selected.is_empty() {
+        anyhow::bail!("no non-empty streams found in {}", path.display());
+    }
 
     let streams: Vec<StreamEvidence> = selected
         .iter()

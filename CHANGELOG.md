@@ -64,6 +64,11 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   `basic_file_info::extract_path`, and fuzz harness string truncation
   (nightly fuzz matrix unblocked after upload-artifact pin repair).
 - Finding 1 strip gate narrowed to exclude Formats/Latest (#162).
+- **CI / Deploy viewer baselines** — re-pin project-count
+  `material_count` expectations after Finding 1 recoveries (Core
+  Interior 102, Einhoven 42); `cargo-deny` path-dep version pins for
+  `stream-evidence`; stream-evidence fails closed on explicit stream
+  filter / `--all-paged` misses instead of silent first-stream fallback.
 
 ### Security
 

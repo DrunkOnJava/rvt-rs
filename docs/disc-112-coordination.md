@@ -20,6 +20,37 @@ Mirror into the discussion thread when a maintainer account can post.
 | [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
 | [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | RE: Reproduce sketch-to-solid geometry reconstruction pipeline |
 
+## Audit P0 complete / P1 next (2026-08-29)
+
+Credit: [@STE1200](https://github.com/STE1200) —
+[Discussion #112](https://github.com/DrunkOnJava/rvt-rs/discussions/112).
+
+**P0 (merged to `main`):**
+
+| Control | PR |
+|---------|----|
+| SEC-001 / GOV-002 security hygiene | [#166](https://github.com/DrunkOnJava/rvt-rs/pull/166) |
+| PARSE-001 Formats/Latest multipage integrity diagnostics | [#168](https://github.com/DrunkOnJava/rvt-rs/pull/168) |
+| Support-matrix scaffold (honesty ceilings) | [#167](https://github.com/DrunkOnJava/rvt-rs/pull/167) |
+| Changelog / 0.2.0 plan / install honesty / publish SHA pins (partial) | [#165](https://github.com/DrunkOnJava/rvt-rs/pull/165) |
+
+Formats/Latest production strip remains **disabled**. Findings
+[#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156)
+stay **open** for evidence-only research (triage hygiene only in #166).
+
+**P1 next (honest order):**
+
+1. Viewer deploy / browser-regression baseline drift (material_count) + residual CI chores
+2. Confirm remaining Actions tag pins outside `publish.yml`
+3. Export `source_coverage` real fractions (stub from #167 — no invented %)
+4. Evidence-only research on [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) / [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) / [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) — do **not** invent Door/Window/Level ElementId successes (RE-19 / RE-20 negatives stand)
+5. Re-baseline issues [#81](https://github.com/DrunkOnJava/rvt-rs/issues/81)–[#96](https://github.com/DrunkOnJava/rvt-rs/issues/96)
+6. crates.io / docs.rs / GitHub Releases publish decisions (human)
+
+Hard walls unchanged: Door/Window discriminator, schema-field Wall, Level ElementIds on magnetar, AProperty host joins.
+
+---
+
 ## Finding 1 progress (2026-08-29)
 
 Credit: [@STE1200](https://github.com/STE1200) and team —
