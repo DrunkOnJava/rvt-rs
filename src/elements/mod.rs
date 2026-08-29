@@ -57,9 +57,9 @@ pub mod styling;
 pub mod wall;
 pub mod zones;
 
+use crate::Result;
 use crate::formats;
 use crate::walker::{DecodedElement, ElementDecoder, HandleIndex};
-use crate::Result;
 
 /// Schema-driven MVP class names for Lane Five (M3-05).
 ///
@@ -171,9 +171,7 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
 /// [`all_decoders`]. ArcWall is never returned here — use
 /// [`arc_wall::decode_candidate`] instead.
 pub fn decoder_for_class(name: &str) -> Option<Box<dyn ElementDecoder>> {
-    all_decoders()
-        .into_iter()
-        .find(|d| d.class_name() == name)
+    all_decoders().into_iter().find(|d| d.class_name() == name)
 }
 
 /// Decode instance bytes through the registered typed decoder for
@@ -210,10 +208,8 @@ mod tests {
 
     #[test]
     fn all_decoders_includes_mvp_set() {
-        let names: std::collections::BTreeSet<&str> = all_decoders()
-            .iter()
-            .map(|d| d.class_name())
-            .collect();
+        let names: std::collections::BTreeSet<&str> =
+            all_decoders().iter().map(|d| d.class_name()).collect();
         for class in MVP_TYPED_CLASSES {
             assert!(
                 names.contains(class),

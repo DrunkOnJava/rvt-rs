@@ -18,13 +18,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rvt::elements::{
-    self, floor::Floor, level::Level, openings::Door, openings::Window, styling::Material,
-    wall::Wall, zones::Room, MVP_TYPED_CLASSES,
+    self, MVP_TYPED_CLASSES, floor::Floor, level::Level, openings::Door, openings::Window,
+    styling::Material, wall::Wall, zones::Room,
 };
 use rvt::formats::ClassEntry;
 use rvt::partition_scanner::{self, ScanOptions};
-use rvt::walker::{ElementDecoder, HandleIndex};
-use rvt::{compression, streams, RevitFile};
+use rvt::walker::HandleIndex;
+use rvt::{RevitFile, compression, streams};
 
 fn tier1_dir() -> PathBuf {
     std::env::var("RVT_CORPUS_TIER1_DIR")
@@ -95,7 +95,10 @@ fn collect_instances(decomp: &[u8], classes: &[String]) -> Vec<InstanceRef> {
         }
         let payload = decomp[cursor + 8..cursor + 8 + payload_len].to_vec();
         cursor += 8 + payload_len;
-        out.push(InstanceRef { class_name, payload });
+        out.push(InstanceRef {
+            class_name,
+            payload,
+        });
     }
     out
 }
@@ -294,7 +297,10 @@ fn tier1_typed_decode_matches_inventory_and_rejects_mismatches() {
             "{name}: tier1 must not produce ArcWall-standard candidates, got {arcwall_hits}"
         );
 
-        eprintln!("typed-decoders tier1 ok · {name} · year={year} · instances={}", instances.len());
+        eprintln!(
+            "typed-decoders tier1 ok · {name} · year={year} · instances={}",
+            instances.len()
+        );
     }
 }
 

@@ -130,7 +130,11 @@ mod tests {
         0x40, 0x8f, 0xf2, 0xa3, 0xfc, 0x28, 0x3f, 0x1a, 0x40, 0x03,
     ];
 
-    fn candidate(class_name: Option<&str>, class_tag: u16, offset: usize) -> PartitionRecordCandidate {
+    fn candidate(
+        class_name: Option<&str>,
+        class_tag: u16,
+        offset: usize,
+    ) -> PartitionRecordCandidate {
         PartitionRecordCandidate {
             stream: "Partitions/5".into(),
             chunk_index: None,
@@ -164,10 +168,7 @@ mod tests {
     #[test]
     fn rejects_wrong_schema_name() {
         let err = decode_at(RECORD_4_HEX, 0, Some("Wall")).unwrap_err();
-        assert!(
-            err.to_string().contains("wrong schema"),
-            "err={err}"
-        );
+        assert!(err.to_string().contains("wrong schema"), "err={err}");
     }
 
     #[test]
