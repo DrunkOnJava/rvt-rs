@@ -79,12 +79,14 @@ rvt-rs v0.1.2 ships:
   through 2026. That's the dictionary — what classes exist, what
   fields each class has, and how each field's bytes encode. No
   field falls through to `FieldType::Unknown`.
-- 72 typed per-class decoders: walls, floors, roofs, ceilings,
-  doors, windows, columns, beams, stairs, railings, rooms,
-  furniture, **11 MEP classes** (ducts, pipes, fixtures,
-  equipment), annotations, parameters, styling, project
-  organization, drafting, curtain walls, levels, grids,
-  reference planes.
+- 80 typed per-class decoder structs in `elements::all_decoders()`:
+  walls, floors, roofs, ceilings, doors, windows, columns, beams,
+  stairs, railings, rooms, furniture, **11 MEP classes** (ducts,
+  pipes, fixtures, equipment), annotations, parameters, styling,
+  project organization, drafting, curtain walls, levels, grids,
+  reference planes. These pass synthesized-fixture unit tests; they
+  are **not** wired into `iter_elements` on real `.rvt` project
+  files — generic real-project typed extraction is unsolved.
 - Schema-directed `ADocument` walker across all 11 releases — the
   document-level instance data that contains project-wide pointers
   (Element IDs, handles, ref containers, raw bytes fields).
