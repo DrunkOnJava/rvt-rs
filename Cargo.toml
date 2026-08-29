@@ -138,6 +138,10 @@ name = "rvt-ifc"
 path = "src/bin/rvt_ifc.rs"
 
 [[bin]]
+name = "rvt-ifc-compare"
+path = "src/bin/rvt_ifc_compare.rs"
+
+[[bin]]
 name = "gen-fixture"
 path = "src/bin/gen_fixture.rs"
 

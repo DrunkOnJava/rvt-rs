@@ -761,6 +761,10 @@ Acceptance criteria:
 
 Labels: `priority:P2`, `type:feature`, `area:ifc`, `area:corpus`
 
+Status (2026-08-29): **shipped**. `rvt-ifc-compare` CLI +
+`rvt::ifc::compare` library; known divergences documented in
+`docs/ifc-compare.md` (#41).
+
 - Build `rvt-ifc-compare` or add `rvt-ifc --compare`.
 - Compare rvt-rs output against a reference IFC:
   - entity counts

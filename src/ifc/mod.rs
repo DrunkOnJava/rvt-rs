@@ -65,6 +65,7 @@
 //! | Module | What it does |
 //! |---|---|
 //! | [`category_map`] | Revit class → IFC4 type mapping (IFC-01) |
+//! | [`compare`] | IFC4 STEP file comparison summaries (M5-05) |
 //! | [`entities`] | IFC4 entity taxonomy (walls, floors, doors, …) |
 //! | [`export_content`] | Lane Seven quality-mode content policy |
 //! | [`from_decoded`] | Bridge: decoded Revit elements → IfcModel |
@@ -104,6 +105,7 @@ pub mod annotation;
 pub mod camera;
 pub mod category_map;
 pub mod clipping;
+pub mod compare;
 pub mod entities;
 pub mod export_content;
 pub mod from_decoded;

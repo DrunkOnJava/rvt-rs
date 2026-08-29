@@ -42,7 +42,7 @@ Rust (`cargo build --release`), Python (`maturin develop`), and the viewer
 ### Rust: build, test, run the CLIs
 
 ```bash
-cargo build --release                 # 16 CLI binaries land in target/release/
+cargo build --release                 # 17 CLI binaries land in target/release/
 cargo test --release --lib --bins     # ~755 unit tests
 cargo test --release --doc            # doc tests
 cargo fmt --all -- --check            # matches CI
@@ -62,6 +62,8 @@ it to exercise the CLIs:
 ./target/release/rvt-info    /tmp/rvt-demo/demo.rvt
 ./target/release/rvt-ifc     /tmp/rvt-demo/demo.rvt -o /tmp/rvt-demo/demo.ifc \
   --diagnostics /tmp/rvt-demo/demo.diagnostics.json
+./target/release/rvt-ifc-compare /tmp/rvt-demo/demo.ifc \
+  tests/fixtures/synthetic-project.ifc --json /tmp/rvt-demo/compare.json
 ```
 
 Tests tagged corpus-dependent (`samples`, `ifc_roundtrip`,
