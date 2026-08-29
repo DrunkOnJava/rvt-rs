@@ -440,12 +440,8 @@ fn print_human_report(report: &InspectReport) {
 fn walker_limits_from_cli(cli: &Cli) -> WalkerLimits {
     let defaults = WalkerLimits::default();
     WalkerLimits {
-        max_scan_bytes: cli
-            .max_walker_scan_bytes
-            .unwrap_or(defaults.max_scan_bytes),
-        max_candidates: cli
-            .max_walker_candidates
-            .unwrap_or(defaults.max_candidates),
+        max_scan_bytes: cli.max_walker_scan_bytes.unwrap_or(defaults.max_scan_bytes),
+        max_candidates: cli.max_walker_candidates.unwrap_or(defaults.max_candidates),
         max_trial_offsets: cli
             .max_walker_trial_offsets
             .unwrap_or(defaults.max_trial_offsets),

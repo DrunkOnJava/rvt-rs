@@ -684,7 +684,6 @@ fn object_graph_extractors_handle_adversarial_bytes() {
     });
 }
 
-
 // ---- remaining public byte parsers (M8-01 / Lane Ten) ----
 
 #[test]
@@ -742,10 +741,12 @@ fn arc_wall_scan_handles_adversarial_inputs() {
 fn rect_opening_index_handles_adversarial_inputs() {
     assert_no_panic("rect_opening_empty", &[], |d| {
         let _ = rvt::rect_opening_index::ArcWallRectOpeningIndex::decode(d, 0);
-        let _ = rvt::rect_opening_index::ArcWallRectOpeningIndex::find_all_for_revit_version(2024, d);
+        let _ =
+            rvt::rect_opening_index::ArcWallRectOpeningIndex::find_all_for_revit_version(2024, d);
     });
     assert_no_panic("rect_opening_ff", &[0xffu8; 256], |d| {
-        let _ = rvt::rect_opening_index::ArcWallRectOpeningIndex::find_all_for_revit_version(2024, d);
+        let _ =
+            rvt::rect_opening_index::ArcWallRectOpeningIndex::find_all_for_revit_version(2024, d);
         let _ = rvt::rect_opening_index::ArcWallRectOpeningIndex::decode(d, usize::MAX);
     });
 }
