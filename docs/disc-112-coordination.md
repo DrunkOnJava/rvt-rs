@@ -54,7 +54,7 @@ claim ES remapping works. ES refs stay outside #152 parent scoring.
 | Viewer deploy / material_count baselines | Done — [#169](https://github.com/DrunkOnJava/rvt-rs/pull/169) |
 | Remaining Actions SHA pins | Done — [#170](https://github.com/DrunkOnJava/rvt-rs/pull/170) |
 | Export `source_coverage` measured fractions | Done — [#171](https://github.com/DrunkOnJava/rvt-rs/pull/171) (fail-closed; no invented %) |
-| Phase 1 identity / evidence / ES occurrence contracts | In flight — [#172](https://github.com/DrunkOnJava/rvt-rs/pull/172) |
+| Phase 1 identity / evidence / ES occurrence contracts | Done — [#172](https://github.com/DrunkOnJava/rvt-rs/pull/172) |
 | Evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) | Partial negative on magnetar 2023/2024: trailing-word-as-owner **falsified**; issue stays open for 2014/2026 samples ([#173](https://github.com/DrunkOnJava/rvt-rs/pull/173)) |
 | Evidence-only [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) | Blocked on unpublished ElementHeader marker/offsets; issue stays open |
 | Evidence-only [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) | Still open — 2024 ArcWall envelope not landed (RE-13 / RE-19) |
@@ -63,20 +63,9 @@ claim ES remapping works. ES refs stay outside #152 parent scoring.
 
 **P1 next (honest order):**
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-1. Merge Phase 1 contracts [#172](https://github.com/DrunkOnJava/rvt-rs/pull/172)
-2. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive — do **not** invent Door/Window/Level ElementId successes (RE-19 / RE-20 negatives stand)
-3. Phase 2 ES oracle fixture families — **blocked on Revit API**
-4. crates.io / docs.rs / GitHub Releases publish decisions (human)
-=======
-1. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive
+1. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive — do **not** invent Door/Window/Level ElementId successes (RE-19 / RE-20 negatives stand). RE-152 magnetar trailing-owner negative: `reports/element-framing/RE-152-elemtable-ownership-negative.md`
+2. Phase 2 ES oracle fixture families — **blocked on Revit API**
 3. crates.io / docs.rs / GitHub Releases publish decisions (human)
->>>>>>> 85649d1 (docs(RE-152): magnetar negative on ElemTable trailing-owner claim)
-=======
-1. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive (RE-152 magnetar trailing-owner negative: `reports/element-framing/RE-152-elemtable-ownership-negative.md`)
-2. crates.io / docs.rs / GitHub Releases publish decisions (human)
->>>>>>> 75283bd (docs: fix DISC-112 P1 next numbering after #171)
 
 Hard walls unchanged: Door/Window discriminator, schema-field Wall, Level
 ElementIds on magnetar, AProperty host joins.
