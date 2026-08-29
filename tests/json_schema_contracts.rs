@@ -183,6 +183,7 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         "export-diagnostics.schema.json",
         "corpus-report.schema.json",
         "element-counts.schema.json",
+        "support-matrix.schema.json",
     ] {
         let schema = load_schema(name);
         assert_eq!(

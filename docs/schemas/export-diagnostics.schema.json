@@ -302,6 +302,56 @@
         }
       }
     },
+    "source_coverage": {
+      "description": "A10 light stub for measured export source-coverage. Absent or status=unset means fractions are not measured — never invent ratios.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "unset",
+            "unknown",
+            "measured"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        },
+        "decoded_element_fraction": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Reserved. Must stay null until corpus-backed measurement lands."
+        },
+        "exported_element_fraction": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Reserved. Must stay null until corpus-backed measurement lands."
+        },
+        "geometry_element_fraction": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Reserved. Must stay null until corpus-backed measurement lands."
+        }
+      }
+    },
     "formats_latest_integrity": {
       "description": "Formats/Latest page-boundary integrity under the Finding 1 narrow gate (strip stays disabled). Additive A2/PARSE-001 field.",
       "type": [

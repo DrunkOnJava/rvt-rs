@@ -61,8 +61,8 @@ minor release; incompatible changes must increment this number.
 | `unsupported_features` | array | Known exporter gaps that affected this output. |
 | `warnings` | array | User-facing caveats for this specific export. |
 | `confidence` | object | Coarse export-readiness level and booleans for metadata/elements/geometry. |
+| `source_coverage` | object (optional) | A10 light stub. `status` is `unset` until measured; fraction fields stay null — never invent ratios. |
 | `formats_latest_integrity` | object (optional) | `Formats/Latest` page-boundary integrity under the Finding 1 narrow gate (strip stays **disabled**). Multipage streams report `integrity_status: uncertain` and `diagnostic_code: RVT_FORMATS_MULTIPAGE_UNVERIFIED` without claiming completeness. |
-
 `skipped.reason` is stable enough for automation. Geometry-related reasons use
 the `unsupported_geometry_*` prefix and currently include
 `unsupported_geometry_curve`, `unsupported_geometry_profile`,

@@ -167,6 +167,14 @@ interface ExportDiagnostics {
     has_diagnostic_proxies?: boolean;
     warning_count?: number;
   };
+  /** A10 stub — fractions stay null/unset until measured. */
+  source_coverage?: {
+    status?: 'unset' | 'unknown' | 'measured';
+    notes?: string;
+    decoded_element_fraction?: number | null;
+    exported_element_fraction?: number | null;
+    geometry_element_fraction?: number | null;
+  };
   exported?: {
     building_elements?: number;
     building_elements_with_geometry?: number;
