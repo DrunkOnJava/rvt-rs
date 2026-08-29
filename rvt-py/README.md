@@ -1,8 +1,13 @@
 # rvt-py
 
-Python bindings for the [`rvt`](https://crates.io/crates/rvt) crate,
-via [`pyo3`](https://github.com/PyO3/pyo3) and
+Python bindings for the [`rvt`](https://github.com/DrunkOnJava/rvt-rs)
+Rust library (Cargo package name `rvt`), via
+[`pyo3`](https://github.com/PyO3/pyo3) and
 [`maturin`](https://github.com/PyO3/maturin).
+
+**Note:** PyPI ships `rvt==0.1.2`. The Rust crate is **not** on
+crates.io yet (so docs.rs/rvt is 404) — see
+[`docs/install.md`](../docs/install.md).
 
 ## Users
 
@@ -10,14 +15,14 @@ You don't install this crate directly. The PyPI wheel is named
 `rvt`, not `rvt-py`:
 
 ```bash
-pip install rvt
+pip install "rvt==0.1.2"
 ```
 
 Python usage docs: [`docs/python.md`](../docs/python.md).
 
 ## Why it's a separate crate
 
-The core [`rvt`](https://crates.io/crates/rvt) library is
+The core [`rvt`](https://github.com/DrunkOnJava/rvt-rs) library is
 unconditionally `#![forbid(unsafe_code)]` — Revit files come from
 untrusted sources, and every `unsafe` block is a potential parser
 vulnerability. pyo3's macros unavoidably expand into `unsafe impl`

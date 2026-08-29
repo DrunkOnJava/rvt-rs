@@ -8,7 +8,10 @@ description = "Apache-2 clean-room toolkit for inspecting Autodesk Revit files (
 authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]
 repository = "https://github.com/DrunkOnJava/rvt-rs"
 homepage = "https://github.com/DrunkOnJava/rvt-rs"
-documentation = "https://docs.rs/rvt"
+# docs.rs populates only after a successful crates.io publish. The crate
+# name `rvt` is not on crates.io as of 0.1.2 (docs.rs 404); point Cargo
+# metadata at the repo until publication lands. See docs/install.md.
+documentation = "https://github.com/DrunkOnJava/rvt-rs#readme"
 readme = "README.md"
 keywords = ["revit", "bim", "autodesk", "ifc", "rfa"]
 categories = ["parser-implementations", "compression", "command-line-utilities"]
