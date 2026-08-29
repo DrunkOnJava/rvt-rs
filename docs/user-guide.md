@@ -39,6 +39,10 @@ Downloads such as IFC, glTF, SVG, and diagnostics are created in the browser and
 saved by you. The privacy posture is documented in
 [viewer-privacy-posture.md](viewer-privacy-posture.md).
 
+There is no native desktop app (Tauri/Electron). The supported product path is
+the hosted or self-hosted static viewer; see
+[ADR-004](decisions/ADR-004-desktop-distribution.md).
+
 ## Open A File In The Browser
 
 1. Open <https://drunkonjava.github.io/rvt-rs/>.

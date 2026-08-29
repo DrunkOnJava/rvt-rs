@@ -864,6 +864,10 @@ Acceptance criteria:
 
 Labels: `priority:P3`, `type:research`, `area:viewer`
 
+Status (2026-08-29): **shipped** as research decision
+`docs/decisions/ADR-004-desktop-distribution.md` (#47).
+Desktop wrappers deferred; browser/static viewer is the product path.
+
 - Evaluate whether a Tauri/Electron wrapper is worth maintaining for
   non-technical users.
 - Compare:
