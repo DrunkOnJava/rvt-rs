@@ -239,7 +239,11 @@ pub struct DecodedExportDiagnostics {
     pub production_walker_elements: usize,
     pub diagnostic_proxy_candidates: usize,
     pub arcwall_records: usize,
+    /// Diagnostic (low-confidence) candidate class histogram.
     pub class_counts: std::collections::BTreeMap<String, usize>,
+    /// Production `iter_elements` class histogram (ArcWall / Level / Floor / …).
+    #[serde(default)]
+    pub production_class_counts: std::collections::BTreeMap<String, usize>,
     pub recovered_unit_identifiers: Vec<String>,
     pub unknown_unit_identifiers: Vec<String>,
 }
@@ -683,10 +687,12 @@ fn export_rvt_doc(
     // the mode asks for it. Walker failure falls through with no
     // element entities — we never regress the metadata-only baseline.
     let mut building_storeys = Vec::new();
+    let mut materials = Vec::new();
     append_production_walker_elements(
         rf,
         &mut entities,
         &mut building_storeys,
+        &mut materials,
         policy,
         walker_limits,
     );
@@ -778,7 +784,7 @@ fn export_rvt_doc(
         classifications,
         units: recovered_units.assignments,
         building_storeys,
-        materials: Vec::new(),
+        materials,
         material_layer_sets: Vec::new(),
         material_profile_sets: Vec::new(),
         representation_maps: Vec::new(),
@@ -1009,6 +1015,7 @@ fn append_production_walker_elements(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
     building_storeys: &mut Vec<Storey>,
+    materials: &mut Vec<MaterialInfo>,
     policy: export_content::ExportContentPolicy,
     walker_limits: crate::walker::WalkerLimits,
 ) {
@@ -1017,12 +1024,13 @@ fn append_production_walker_elements(
         crate::walker::PRODUCTION_ELEMENT_MIN_SCORE,
         walker_limits,
     ) {
-        let _ = export_content::append_typed_production_elements(
+        let append = export_content::append_typed_production_elements(
             decoded_iter,
             entities,
             building_storeys,
             policy,
         );
+        materials.extend(append.materials);
     }
 }
 
@@ -1264,6 +1272,7 @@ pub fn build_export_diagnostics_with_limits(
         .saturating_sub(arcwall_records)
         .saturating_sub(diagnostic_proxy_elements);
     let candidate_class_counts = diagnostic_candidate_class_counts(&diagnostic_candidates);
+    let production_class_counts = production_class_counts_from_walker(rf, walker_limits);
 
     let mut skipped = Vec::new();
     if mode == ExportDiagnosticsMode::Default && !diagnostic_candidates.candidates.is_empty() {
@@ -1422,6 +1431,7 @@ pub fn build_export_diagnostics_with_limits(
             diagnostic_proxy_candidates: diagnostic_candidates.candidates.len(),
             arcwall_records,
             class_counts: candidate_class_counts,
+            production_class_counts,
             recovered_unit_identifiers: model
                 .units
                 .iter()
@@ -1517,6 +1527,8 @@ fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
     let mut unresolved_host = GeometryGapBucket::new("unsupported_geometry_unresolved_host");
     let mut missing_level = GeometryGapBucket::new("unsupported_geometry_missing_level");
     let mut missing_dimensions = GeometryGapBucket::new("unsupported_geometry_missing_dimensions");
+    let mut floor_boundary_only = GeometryGapBucket::new("floor_boundary_annotation_only");
+    let mut opening_index_only = GeometryGapBucket::new("opening_index_without_host_geometry");
 
     for entity in &model.entities {
         let entities::IfcEntity::BuildingElement {
@@ -1528,6 +1540,7 @@ fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
             host_element_index,
             solid_shape,
             representation_map_index,
+            property_set,
             ..
         } = entity
         else {
@@ -1536,6 +1549,23 @@ fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
 
         let has_body_shape =
             extrusion.is_some() || solid_shape.is_some() || representation_map_index.is_some();
+        let floor_annotation = property_set
+            .as_ref()
+            .is_some_and(|p| p.name == "RvtFloorGeometry");
+        let opening_annotation = property_set
+            .as_ref()
+            .is_some_and(|p| p.name == "RvtArcWallRectOpening");
+
+        // Honest partial recovers: do not dump them into the hard
+        // "unsupported_geometry_*" buckets used for walls missing curves.
+        if floor_annotation && !has_body_shape {
+            floor_boundary_only.add(ifc_type, name);
+            continue;
+        }
+        if opening_annotation {
+            opening_index_only.add(ifc_type, name);
+            continue;
+        }
 
         if storey_index.is_none() {
             missing_level.add(ifc_type, name);
@@ -1560,6 +1590,8 @@ fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
         unresolved_host,
         missing_level,
         missing_dimensions,
+        floor_boundary_only,
+        opening_index_only,
     ]
     .into_iter()
     .filter_map(GeometryGapBucket::into_item)
@@ -1659,11 +1691,57 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
     if exported.building_elements_with_geometry == 0 {
         features.push("real_file_element_geometry".into());
     }
+    // Compound assemblies (layer widths) remain open even when display
+    // Material names are recovered into IfcMaterial.
+    features.push("revit_compound_assemblies_and_walltype_widths".into());
     if model.materials.is_empty() {
-        features.push("revit_materials_and_compound_assemblies".into());
+        features.push("revit_material_display_names".into());
     }
-    features.push("partition_decoders_for_doors_windows_floors_and_mvp_classes".into());
+    let slab_count = exported.by_ifc_type.get("IFCSLAB").copied().unwrap_or(0);
+    if slab_count == 0 {
+        features.push("floor_plan_loop_slab_export".into());
+    } else {
+        // Plan-loop slabs export without resolved thickness / extrusion.
+        features.push("floor_slab_extrusion_thickness".into());
+    }
+    let has_typed_door = exported.by_ifc_type.get("IFCDOOR").copied().unwrap_or(0) > 0;
+    let has_typed_window = exported.by_ifc_type.get("IFCWINDOW").copied().unwrap_or(0) > 0;
+    if !has_typed_door || !has_typed_window {
+        features.push("typed_door_window_discrimination_and_host_binding".into());
+    }
+    // Opening-index rows may be present in production_class_counts without
+    // IFC emission until host Wall ElementIds join.
+    features.push("opening_index_to_ifc_openingelement_host_join".into());
+    let has_schema_wall = exported.by_ifc_type.get("IFCWALL").copied().unwrap_or(0) > 0
+        && model.entities.iter().any(|e| {
+            matches!(
+                e,
+                entities::IfcEntity::BuildingElement { name, .. }
+                    if name.starts_with("Wall-")
+            )
+        });
+    if !has_schema_wall {
+        features.push("schema_field_wall_instances".into());
+    }
     features
+}
+
+fn production_class_counts_from_walker(
+    rf: &mut crate::RevitFile,
+    walker_limits: crate::walker::WalkerLimits,
+) -> std::collections::BTreeMap<String, usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    let Ok(iter) = crate::walker::iter_elements_with_limits(
+        rf,
+        crate::walker::PRODUCTION_ELEMENT_MIN_SCORE,
+        walker_limits,
+    ) else {
+        return counts;
+    };
+    for el in iter {
+        *counts.entry(el.class).or_insert(0) += 1;
+    }
+    counts
 }
 
 fn export_confidence_summary(

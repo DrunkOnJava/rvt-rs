@@ -149,6 +149,7 @@ interface ExportDiagnostics {
     production_walker_elements?: number;
     diagnostic_proxy_candidates?: number;
     arcwall_records?: number;
+    production_class_counts?: Record<string, number>;
   };
   confidence?: {
     level?: string;
@@ -163,6 +164,7 @@ interface ExportDiagnostics {
     building_elements?: number;
     building_elements_with_geometry?: number;
     storey_count?: number;
+    material_count?: number;
     unit_assignment_count?: number;
   };
   unsupported_features?: string[];
@@ -580,6 +582,29 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
           : 'No validated elements decoded',
     ),
   );
+  const prodClasses = decoded.production_class_counts ?? {};
+  const classBits = ['Level', 'Floor', 'Room', 'Material', 'ArcWall', 'ArcWallRectOpening', 'Wall', 'Door', 'Window']
+    .map((name) => {
+      const n = prodClasses[name];
+      return typeof n === 'number' && n > 0 ? `${name} ${n}` : null;
+    })
+    .filter(Boolean);
+  if (classBits.length > 0) {
+    statusPanelEl.appendChild(
+      statusRow('Typed MVP', 'ok', classBits.join(' · ')),
+    );
+  }
+  const storeyCount = exported.storey_count ?? 0;
+  const materialCount = exported.material_count ?? 0;
+  if (storeyCount > 0 || materialCount > 0) {
+    statusPanelEl.appendChild(
+      statusRow(
+        'Spatial',
+        storeyCount > 0 ? 'ok' : 'warn',
+        `${storeyCount} storeys · ${materialCount} materials`,
+      ),
+    );
+  }
   statusPanelEl.appendChild(
     statusRow(
       'Geometry',
