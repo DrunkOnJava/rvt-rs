@@ -27,9 +27,12 @@ recovers, and additionally merges fail-closed partition MVP recovers for
 `ArcWallRectOpening` index rows with ElemTable-confirmed related-id
 provenance (still not typed `Door`/`Window`). IFC export maps recovered
 Levels → storeys, Floors → boundary-annotated slabs, Rooms → spaces, and
-Material display names → `IfcMaterial`. Semantic `Door` / `Window`
-classes, schema-field `Wall` instances, Floor↔ElemTable id binding, and
-slab extrusion thickness remain unsolved. Eighty per-class decoder structs remain
+Material display names → `IfcMaterial`. RE-19 corpus research (Einhoven
+2023 / Core Interior 2024) found **no** reliable Door vs Window
+discriminator and **no** schema-field / 2024 ArcWall envelope suitable for
+fail-closed decode — so typed `Door`/`Window` and non-ArcWall `Wall` stay
+unsolved by evidence, not by omission. Floor↔ElemTable id binding and slab
+extrusion thickness remain open. Eighty per-class decoder structs remain
 registered; `MVP_TYPED_CLASSES` are consulted by `iter_elements`.
 
 ## Capability Matrix
@@ -41,7 +44,7 @@ registered; `MVP_TYPED_CLASSES` are consulted by `iter_elements`.
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus | Developers can inspect class and field structure. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
-| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms/Floor plan-loops + 2024 ArcWallRectOpening (ElemTable-confirmed related ids); HostObjAttr filtered; Door/Window typed classes and schema-field Wall still unsolved | Full model conversion is not ready. |
+| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms/Floor plan-loops + 2024 ArcWallRectOpening (ElemTable-confirmed related ids); HostObjAttr filtered; RE-19 negative: no Door/Window discriminator / no schema-field Wall on magnetar corpora | Full model conversion is not ready. |
 | Typed decoder structs | Partial | `elements::all_decoders()` registers **80** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
 | IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / Material display names; thickness + Door/Window host IFC still open; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, File Status shows production class counts + storey/material totals, supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
