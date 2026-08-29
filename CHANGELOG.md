@@ -19,6 +19,11 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   by default (#162). Wave 1 stream-evidence harness + Wave 2 narrowed
   paged decompress, writer audit, and evidence matrix under
   `docs/recon/` and `docs/re/`.
+- **A10 source_coverage fractions** — export diagnostics measure
+  `exported_element_fraction` / `geometry_element_fraction` (and
+  `decoded_element_fraction` when ElemTable header `element_count` is
+  a trusted denominator). Fail closed with `status: unset` / nulls when
+  unknown — never invents percentages.
 - **Decode confidence + provenance (M3-07 / #150)** — every
   `DecodedElement` carries confidence/provenance; CLI, Python, and
   viewer expose it; default IFC emission hides low-confidence rows

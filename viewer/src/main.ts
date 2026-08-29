@@ -167,7 +167,7 @@ interface ExportDiagnostics {
     has_diagnostic_proxies?: boolean;
     warning_count?: number;
   };
-  /** A10 stub — fractions stay null/unset until measured. */
+  /** A10 — measured when denominators exist; fractions stay null when unknown. */
   source_coverage?: {
     status?: 'unset' | 'unknown' | 'measured';
     notes?: string;
