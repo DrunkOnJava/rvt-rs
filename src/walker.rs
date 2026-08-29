@@ -1275,9 +1275,11 @@ pub fn read_adocument_lossy_with_limits(
 /// When the file's Revit year is in the ArcWall-supported set,
 /// validated partition ArcWall records are merged in as
 /// `DecodedElement` values with `class == "ArcWall"` (via
-/// [`crate::elements::arc_wall`]). Schema-driven Wall/Floor/Door
-/// records still require Global/Latest schema-field hits; partition
-/// envelope decode for those classes remains unsolved.
+/// [`crate::elements::arc_wall`]). Additional fail-closed partition
+/// MVP recovers ([`crate::partition_schema_mvp`]) may emit `Level`,
+/// `Material`, `Room`, `Floor` (plan-loop), and — on Revit 2024 —
+/// `ArcWallRectOpening` rows. Semantic `Door` / `Window` classes are
+/// **not** invented from opening-index bytes.
 pub fn iter_elements(rf: &mut RevitFile) -> Result<impl Iterator<Item = DecodedElement>> {
     iter_elements_with_limits(rf, PRODUCTION_ELEMENT_MIN_SCORE, WalkerLimits::default())
 }
@@ -1368,6 +1370,22 @@ pub fn iter_elements_with_limits(
             for wall in scan.walls {
                 let typed = crate::elements::arc_wall::from_partition_arc_wall(&wall);
                 let decoded = typed.to_decoded_element(&wall.partition, wall.offset);
+                if let Some(id) = decoded.id {
+                    if !seen_ids.insert(id) {
+                        continue;
+                    }
+                }
+                out.push(decoded);
+            }
+        }
+
+        // Partition schema MVP: Level / Material / Room / Floor plan
+        // loops / 2024 ArcWallRectOpening index. Fail closed — no
+        // invented Door/Window typed success.
+        if let Ok(mvp) =
+            crate::partition_schema_mvp::recover_partition_schema_mvp(rf, bfi.version, limits)
+        {
+            for decoded in mvp.into_elements() {
                 if let Some(id) = decoded.id {
                     if !seen_ids.insert(id) {
                         continue;
