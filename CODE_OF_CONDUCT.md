@@ -54,24 +54,18 @@ community in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may
-be reported to the maintainer responsible for enforcement. There are two
-ways to report:
+be reported to the maintainer responsible for enforcement via GitHub's
+[private vulnerability reporting](https://github.com/DrunkOnJava/rvt-rs/security/advisories/new)
+channel (Security → Advisories → Report a vulnerability). That channel
+is primarily for security issues, but it is the private way to reach
+the maintainer and is accepted for Code of Conduct reports as well.
+Mark the advisory title with `[CoC]` so it is triaged correctly.
 
-1. **Email.** Send a message to
-   <151978260+DrunkOnJava@users.noreply.github.com> with the subject line
-   `[CoC] rvt-rs: <one-line summary>`. Include (a) what happened, (b) where
-   it happened (issue URL, PR URL, discussion link, or other context),
-   (c) who was involved, and (d) any relevant screenshots or log excerpts.
-   You do not need to include your real name — a GitHub handle is fine.
-
-2. **Private GitHub report.** For sensitive reports, or if you would
-   rather not use email, open a private report through GitHub's
-   private vulnerability reporting channel at
-   <https://github.com/DrunkOnJava/rvt-rs/security/advisories/new>. This
-   channel is primarily for security issues, but it is the most private
-   way to reach the maintainer and is accepted for Code of Conduct
-   reports as well. Mark the advisory title with `[CoC]` so it is
-   triaged correctly.
+Include (a) what happened, (b) where it happened (issue URL, PR URL,
+discussion link, or other context), (c) who was involved, and (d) any
+relevant screenshots or log excerpts. You do not need to include your
+real name — a GitHub handle is fine. Do not use
+`users.noreply.github.com` addresses; they are not a usable inbox.
 
 All complaints will be reviewed and investigated promptly and fairly.
 The maintainer is obligated to respect the privacy and security of the

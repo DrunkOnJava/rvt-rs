@@ -67,10 +67,15 @@ decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 
 The near-term project is tracked in GitHub milestones:
 
-- `0.2.0: audit-clean alpha` - quality script, honest docs, issue forms, supply-chain checks.
+- `0.2.0: audit-clean alpha` — **scope complete** (0 open / 19 closed). Quality
+  script, honest docs, issue forms, and supply-chain checks landed on `main`.
+  Crate version remains `0.1.x` (latest tag `v0.1.2`); **0.2.0 release hold**
+  until a version bump / tag is cut (audit GOV-002).
 - `0.3.0: real-project wall/floor MVP` - corpus-backed partition scanning and typed element recovery.
 - `0.4.0: IFC geometry beta` - trustworthy IFC export modes, diagnostics, and validation.
-- `0.5.0: viewer beta` - user-facing viewer guidance, demo gallery, and browser regression tests.
+- `0.5.0: viewer beta` — **tracked issues complete** (0 open / 6 closed). Viewer
+  guidance, demo gallery, and browser regression work is on `main`; **0.5.0
+  release hold** until a viewer-beta release is cut (audit GOV-002).
 - `1.0.0: first-class utility` - documented non-technical workflow with clear support boundaries.
 
 The detailed task backlog lives in [`TODO.md`](../TODO.md) and the matching
