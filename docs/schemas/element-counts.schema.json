@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/element-counts.schema.json",
+  "title": "rvt production element counts JSON",
+  "description": "Class-count summary emitted by rvt-elements --counts and mirrored by Python RevitFile.element_counts(). total matches export_diagnostics.decoded.production_walker_elements.",
+  "type": "object",
+  "required": ["total", "by_class"],
+  "properties": {
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "by_class": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  },
+  "additionalProperties": false
+}

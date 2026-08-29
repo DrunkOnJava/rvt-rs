@@ -52,9 +52,11 @@ Notes:
 
 ## 3. Element class decode coverage
 
-**80 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` — the walker dispatch table built at runtime. Grouped by domain below.
+**80 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty` unit test. This is a **library registry**, not a live walker dispatch table: `walker::iter_elements` calls generic `decode_instance` and does not consult `all_decoders()`. Grouped by domain below.
 
-Each decoder takes schema-directed instance bytes (from `walker::decode_instance`) and projects them into a typed Rust struct. Decoders are validated on synthesized schema+bytes fixtures; real-file corpus validation is tracked as Q-01 in the recon report.
+**Unsolved on real project files:** registering these decoders does not mean typed Walls/Floors/Doors/Levels are recovered from arbitrary `.rvt` projects. Instance bytes for those classes live in `Partitions/*` streams whose wire envelope is not yet reverse-engineered; see [`docs/status.md`](status.md) and `reports/element-framing/RE-01-synthesis.md`.
+
+Each decoder takes schema-directed instance bytes (from `walker::decode_instance`) and projects them into a typed Rust struct. Decoders are validated on synthesized schema+bytes fixtures. Community-corpus open/scaffold checks (`docs/corpus-hunt-2026-04-21.md`) do not exercise these typed projections on real project instance data.
 
 ### Structural (7)
 
@@ -66,7 +68,7 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - `Rebar` ([`foundation_and_furnishings.rs`](../src/elements/foundation_and_furnishings.rs))
 - `ReferencePlane` ([`reference_planes.rs`](../src/elements/reference_planes.rs))
 
-### Architectural — host + opening (13)
+### Architectural — host + opening (14)
 
 - `Wall`, `WallType` ([`wall.rs`](../src/elements/wall.rs))
 - `Floor`, `FloorType` ([`floor.rs`](../src/elements/floor.rs))
@@ -106,7 +108,7 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - `Phase`, `DesignOption`, `Workset`, `Revision` ([`project_organization.rs`](../src/elements/project_organization.rs))
 - `Symbol` ([`family.rs`](../src/elements/family.rs))
 
-### Drafting + views (5)
+### Drafting + views (4)
 
 - `View`, `Sheet`, `Schedule`, `ScheduleView` ([`drafting.rs`](../src/elements/drafting.rs))
 - (ReferencePlane is counted under Structural above because its primary consumer is layout, not drafting views.)
@@ -131,7 +133,7 @@ Each decoder takes schema-directed instance bytes (from `walker::decode_instance
 - Generic MEP: `SpecialtyEquipment` ([`mep.rs`](../src/elements/mep.rs))
 - All MEP instances project onto a shared `MepInstance` typed view with an optional `MepSystemClassification` (Supply / Return / Exhaust / …) so IFC distribution-system emission (IFC-10, future) can key off it without re-reading the schema.
 
-Group sum: 7 + 13 + 7 + 6 + 6 + 4 + 7 + 5 + 4 + 10 + 11 = **80**, matching `all_decoders().len()`.
+Group sum: 7 + 14 + 7 + 6 + 6 + 4 + 7 + 4 + 4 + 10 + 11 = **80**, matching `all_decoders().len()`.
 
 ## 4. IFC4 export coverage
 
@@ -194,6 +196,7 @@ Notes:
 
 ## 5. Known limitations
 
+- **Real-project typed element extraction is unsolved.** The 80 registered decoders and the IFC category map do not mean arbitrary `.rvt` projects yield typed Walls/Floors/Doors/Levels. Default IFC export from real projects is scaffold / diagnostics, plus a narrow version-gated ArcWall research path documented in [`docs/status.md`](status.md).
 - **No semantic write path for Revit files**. Stream-level patching ([`writer::write_with_patches`](../src/writer.rs)) can replace the bytes of a named stream, re-compress with truncated gzip, and re-embed into a byte-preserving sibling file (13/13 streams identical on the 2024 sample round-trip). Field-level semantic writes (edit a specific Wall's unconnected height and round-trip back to a Revit-openable `.rvt`) are not implemented.
 - **No format versions before Revit 2016**. Earlier Revit releases used a different compression + schema framing that this library has not been probed against. No claim is made about 2015-or-earlier.
 - **No IFC2X3 or IFC4.3 export**. The STEP writer targets IFC4 only. The category map is structured to make a future IFC2X3 / IFC4.3 swap a table replacement, but it has not been swapped.
