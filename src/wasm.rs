@@ -24,7 +24,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::RevitFile;
 use crate::ifc::{
-    IfcModel, RvtDocExporter,
+    ExportQualityMode, IfcModel, RvtDocExporter,
     camera::CameraState,
     clipping::{SectionBox, ViewMode},
     gltf::model_to_glb,
@@ -96,6 +96,47 @@ pub fn open_rvt_bytes_with_diagnostics_and_limits(
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let result = RvtDocExporter
         .export_with_diagnostics_and_limits(&mut rf, walker_limits_from_js(limits)?)
+        .map_err(err_str)?;
+    serde_wasm_bindgen::to_value(&result).map_err(err_str)
+}
+
+/// Open an RVT / RFA byte slice with an IFC export quality mode and
+/// return `{ model, diagnostics }`.
+///
+/// `mode` is one of `scaffold`, `typed-no-geometry`, `geometry`, or
+/// `strict` (Lane Seven). Stronger modes fail closed when the decoded
+/// coverage cannot satisfy the requested bar — the viewer uses this to
+/// surface honest confidence rather than over-claiming geometry.
+#[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsMode)]
+pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<JsValue, JsValue> {
+    let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
+    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
+    let result = RvtDocExporter
+        .export_with_diagnostics_mode_and_limits(
+            &mut rf,
+            quality_mode,
+            crate::walker::WalkerLimits::default(),
+        )
+        .map_err(err_str)?;
+    serde_wasm_bindgen::to_value(&result).map_err(err_str)
+}
+
+/// Open an RVT / RFA byte slice with an IFC export quality mode and
+/// explicit walker scan limits.
+#[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsModeAndLimits)]
+pub fn open_rvt_bytes_with_diagnostics_mode_and_limits(
+    bytes: &[u8],
+    mode: &str,
+    limits: JsValue,
+) -> Result<JsValue, JsValue> {
+    let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
+    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
+    let result = RvtDocExporter
+        .export_with_diagnostics_mode_and_limits(
+            &mut rf,
+            quality_mode,
+            walker_limits_from_js(limits)?,
+        )
         .map_err(err_str)?;
     serde_wasm_bindgen::to_value(&result).map_err(err_str)
 }

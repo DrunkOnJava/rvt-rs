@@ -39,6 +39,7 @@ const exportGlbBtn = $('export-glb') as HTMLButtonElement;
 const exportIfcBtn = $('export-ifc') as HTMLButtonElement;
 const exportSvgBtn = $('export-svg') as HTMLButtonElement;
 const exportQualityEl = $('export-quality');
+const exportModeEl = $('export-mode') as HTMLSelectElement;
 const demoListEl = $('demo-list');
 const demoAttributionEl = $('demo-attribution');
 
@@ -133,6 +134,8 @@ interface SceneNode {
   children: SceneNode[];
 }
 interface ExportDiagnostics {
+  schema_version?: number;
+  mode?: string;
   input?: {
     revit_version?: number;
     project_name?: string;
@@ -150,13 +153,17 @@ interface ExportDiagnostics {
   confidence?: {
     level?: string;
     score?: number;
+    has_project_metadata?: boolean;
     has_typed_elements?: boolean;
     has_geometry?: boolean;
+    has_diagnostic_proxies?: boolean;
     warning_count?: number;
   };
   exported?: {
     building_elements?: number;
     building_elements_with_geometry?: number;
+    storey_count?: number;
+    unit_assignment_count?: number;
   };
   unsupported_features?: string[];
   warnings?: string[];
@@ -169,6 +176,10 @@ let lastGlb: Uint8Array | null = null;
 let lastFileStem = 'model';
 let currentDiagnostics: ExportDiagnostics | null = null;
 const hiddenTypes = new Set<string>();
+
+function selectedExportMode(): string {
+  return exportModeEl.value || 'scaffold';
+}
 
 // ---------- Load flow ----------
 async function loadBytes(file: File): Promise<void> {
@@ -187,6 +198,7 @@ async function loadBytes(file: File): Promise<void> {
   diagnosticsJsonEl.textContent = '';
   renderLoadingStatusPanel(file.name);
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const qualityMode = selectedExportMode();
 
   const w = resetWorker();
   w.addEventListener('message', (ev: MessageEvent<unknown>) => {
@@ -250,9 +262,9 @@ async function loadBytes(file: File): Promise<void> {
     exportIfcBtn.disabled = false;
     exportSvgBtn.disabled = false;
     downloadDiagnosticsBtn.disabled = false;
-    setStatus(`loaded · ${msg.types.length} categories`);
+    setStatus(`loaded · ${msg.types.length} categories · IFC bar ${qualityMode}`);
   });
-  w.postMessage({ type: 'parse', bytes }, [bytes.buffer]);
+  w.postMessage({ type: 'parse', bytes, mode: qualityMode }, [bytes.buffer]);
 }
 
 function renderEmptyStatusPanel(): void {
@@ -262,7 +274,9 @@ function renderEmptyStatusPanel(): void {
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Waiting for file'));
   statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Waiting for file'));
   statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Waiting for file'));
-  statusPanelEl.appendChild(statusRow('IFC', 'warn', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Decode', 'warn', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Export', 'warn', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('IFC bar', 'warn', `Selected · ${selectedExportMode()}`));
   statusPanelEl.appendChild(statusRow('Warnings', 'ok', 'No export warnings'));
   diagnosticsJsonEl.textContent = '';
 }
@@ -274,7 +288,9 @@ function renderLoadingStatusPanel(filename: string): void {
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Not parsed yet'));
   statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Not decoded yet'));
   statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Not decoded yet'));
-  statusPanelEl.appendChild(statusRow('IFC', 'warn', 'Not evaluated yet'));
+  statusPanelEl.appendChild(statusRow('Decode', 'warn', 'Not evaluated yet'));
+  statusPanelEl.appendChild(statusRow('Export', 'warn', 'Not evaluated yet'));
+  statusPanelEl.appendChild(statusRow('IFC bar', 'warn', `Selected · ${selectedExportMode()}`));
   statusPanelEl.appendChild(statusRow('Warnings', 'ok', 'No export warnings'));
 }
 
@@ -291,7 +307,9 @@ function renderErrorStatusPanel(message: string): void {
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Not parsed'));
   statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Not decoded'));
   statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Not decoded'));
-  statusPanelEl.appendChild(statusRow('IFC', 'warn', 'Not available'));
+  statusPanelEl.appendChild(statusRow('Decode', 'bad', 'Decode confidence unavailable'));
+  statusPanelEl.appendChild(statusRow('Export', 'bad', 'Export confidence unavailable'));
+  statusPanelEl.appendChild(statusRow('IFC bar', 'warn', `Selected · ${selectedExportMode()}`));
   statusPanelEl.appendChild(statusRow('Warnings', 'bad', message));
   diagnosticsJsonEl.textContent = '';
 }
@@ -476,7 +494,9 @@ function renderExportQuality(diagnostics: ExportDiagnostics): void {
   const elements = diagnostics.exported?.building_elements ?? 0;
   const geometry = diagnostics.exported?.building_elements_with_geometry ?? 0;
   const warnings = diagnostics.confidence?.warning_count ?? diagnostics.warnings?.length ?? 0;
-  exportIfcBtn.title = `Download as IFC4 STEP · ${label} · ${elements} elements · ${geometry} with geometry · ${warnings} warnings`;
+  const bar = selectedExportMode();
+  const barCheck = validateExportBar(bar, diagnostics);
+  exportIfcBtn.title = `Download as IFC4 STEP · ${label} · bar ${bar}${barCheck.ok ? '' : ' (will warn)'} · ${elements} elements · ${geometry} with geometry · ${warnings} warnings`;
 }
 
 function renderStatusPanel(diagnostics: ExportDiagnostics): void {
@@ -494,6 +514,11 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   const diagnosticCandidates = decoded.diagnostic_proxy_candidates ?? 0;
   const geometryCount = exported.building_elements_with_geometry ?? 0;
   const qualityLevel = confidence.level ?? 'unknown';
+  const scorePct =
+    typeof confidence.score === 'number' ? Math.round(confidence.score * 100) : null;
+  const exportModeLabel = diagnosticsModeLabel(diagnostics.mode);
+  const bar = selectedExportMode();
+  const barCheck = validateExportBar(bar, diagnostics);
 
   statusPanelEl.appendChild(
     statusRow(
@@ -538,10 +563,30 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
     ),
   );
   statusPanelEl.appendChild(
+    statusRow('Decode', decodeConfidenceKind(confidence), decodeConfidenceSummary(confidence)),
+  );
+  statusPanelEl.appendChild(
     statusRow(
-      'IFC',
+      'Export',
       qualityLevel === 'geometry' ? 'ok' : 'warn',
-      `${exportQualityLabel(qualityLevel)}${typeof confidence.score === 'number' ? ` · ${Math.round(confidence.score * 100)}%` : ''}`,
+      [
+        exportQualityLabel(qualityLevel),
+        scorePct !== null ? `${scorePct}%` : null,
+        `sidecar ${exportModeLabel}`,
+        confidence.has_typed_elements ? 'typed' : 'scaffold/typed unset',
+        confidence.has_geometry ? 'geometry' : 'no geometry',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    ),
+  );
+  statusPanelEl.appendChild(
+    statusRow(
+      'IFC bar',
+      barCheck.ok ? (bar === 'scaffold' ? 'warn' : 'ok') : 'warn',
+      barCheck.ok
+        ? `Selected ${bar} · diagnostics satisfy this bar`
+        : `Selected ${bar} · ${barCheck.reason}`,
     ),
   );
   statusPanelEl.appendChild(
@@ -652,6 +697,79 @@ function warningSummary(warnings: string[], unsupported: string[]): string {
   return 'No export warnings';
 }
 
+function diagnosticsModeLabel(mode: string | undefined): string {
+  switch (mode) {
+    case 'default':
+      return 'default';
+    case 'diagnostic_proxies':
+      return 'diagnostic proxies';
+    case 'placeholder':
+      return 'placeholder';
+    default:
+      return mode ?? 'unknown';
+  }
+}
+
+function decodeConfidenceKind(
+  confidence: NonNullable<ExportDiagnostics['confidence']>,
+): StatusKind {
+  if (confidence.has_typed_elements && confidence.has_geometry) return 'ok';
+  if (confidence.has_typed_elements || confidence.has_project_metadata) return 'warn';
+  return 'warn';
+}
+
+function decodeConfidenceSummary(
+  confidence: NonNullable<ExportDiagnostics['confidence']>,
+): string {
+  const scorePct =
+    typeof confidence.score === 'number' ? Math.round(confidence.score * 100) : null;
+  const bits = [
+    scorePct !== null ? `${scorePct}% coverage` : null,
+    confidence.has_project_metadata ? 'project metadata' : 'no project metadata',
+    confidence.has_typed_elements ? 'typed elements' : 'no typed elements',
+    confidence.has_geometry ? 'geometry recovered' : 'no element geometry',
+    confidence.has_diagnostic_proxies ? 'diagnostic proxies present' : null,
+  ].filter(Boolean);
+  if (!confidence.has_typed_elements && scorePct !== null && scorePct <= 30) {
+    bits.push('scaffold ~25% expected for synthetics');
+  }
+  return bits.join(' · ');
+}
+
+/** Mirror ExportQualityMode::validate for UI messaging (Lane Seven). */
+function validateExportBar(
+  mode: string,
+  diagnostics: ExportDiagnostics,
+): { ok: boolean; reason: string } {
+  const confidence = diagnostics.confidence ?? {};
+  const exported = diagnostics.exported ?? {};
+  const warnings = diagnostics.warnings ?? [];
+  const unsupported = diagnostics.unsupported_features ?? [];
+  const failures: string[] = [];
+
+  const needsTyped = mode === 'typed-no-geometry' || mode === 'geometry' || mode === 'strict';
+  const needsGeometry = mode === 'geometry' || mode === 'strict';
+
+  if (needsTyped && !confidence.has_typed_elements) {
+    failures.push('no validated typed IFC elements');
+  }
+  if (needsGeometry && !confidence.has_geometry) {
+    failures.push('no recovered element geometry');
+  }
+  if (mode === 'strict') {
+    if (!confidence.has_project_metadata) failures.push('no project metadata');
+    if ((exported.unit_assignment_count ?? 0) === 0) failures.push('no unit assignment');
+    if ((exported.storey_count ?? 0) === 0) failures.push('no storeys');
+    if (unsupported.length > 0) failures.push('unsupported features remain');
+    if (warnings.length > 0) failures.push(`${warnings.length} warning(s) remain`);
+  }
+
+  if (failures.length === 0) {
+    return { ok: true, reason: '' };
+  }
+  return { ok: false, reason: failures.join('; ') };
+}
+
 function exportQualityLabel(level: string): string {
   switch (level) {
     case 'scaffold':
@@ -757,7 +875,16 @@ exportIfcBtn.addEventListener('click', () => {
     const quality = currentDiagnostics
       ? exportQualityLabel(currentDiagnostics.confidence?.level ?? 'unknown').toLowerCase()
       : 'unknown';
-    setStatus(`rendering IFC STEP · ${quality}`);
+    const bar = selectedExportMode();
+    if (currentDiagnostics) {
+      const check = validateExportBar(bar, currentDiagnostics);
+      if (!check.ok) {
+        setStatus(
+          `IFC bar ${bar} not satisfied (${check.reason}) — exporting scaffold STEP anyway; download diagnostics for triage`,
+        );
+      }
+    }
+    setStatus(`rendering IFC STEP · ${quality} · bar ${bar}`);
     try {
       const { modelToIfcStep } = await import('../pkg/rvt.js');
       const text = modelToIfcStep(model as unknown as object);
@@ -768,6 +895,22 @@ exportIfcBtn.addEventListener('click', () => {
       setStatus(`IFC export failed: ${(err as Error).message ?? err}`);
     }
   })();
+});
+
+exportModeEl.addEventListener('change', () => {
+  if (currentDiagnostics) {
+    renderExportQuality(currentDiagnostics);
+    renderStatusPanel(currentDiagnostics);
+    const check = validateExportBar(selectedExportMode(), currentDiagnostics);
+    setStatus(
+      check.ok
+        ? `IFC bar ${selectedExportMode()} · diagnostics satisfy this bar`
+        : `IFC bar ${selectedExportMode()} · ${check.reason}`,
+    );
+  } else {
+    renderEmptyStatusPanel();
+    setStatus(`IFC bar ${selectedExportMode()} · open a file to evaluate`);
+  }
 });
 
 exportSvgBtn.addEventListener('click', () => {
