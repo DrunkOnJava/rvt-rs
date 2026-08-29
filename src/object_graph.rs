@@ -43,7 +43,7 @@ impl DocumentHistory {
         // `.rvt` project files observed in the wild sometimes have no
         // prefix and the magic sits at offset 0. `inflate_at_auto` picks
         // whichever the file actually has.
-        let (_, decompressed) = compression::inflate_at_auto(&bytes)?;
+        let (_, decompressed) = compression::inflate_stream_auto(GLOBAL_LATEST, &bytes)?;
         Self::from_decompressed(&decompressed)
     }
 
@@ -180,7 +180,7 @@ pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
 /// Pull all string records from a Revit file's `Global/Latest` stream.
 pub fn string_records_from_file(rf: &mut crate::RevitFile) -> Result<Vec<StringRecord>> {
     let bytes = rf.read_stream(GLOBAL_LATEST)?;
-    let (_, decomp) = compression::inflate_at_auto(&bytes)?;
+    let (_, decomp) = compression::inflate_stream_auto(GLOBAL_LATEST, &bytes)?;
     Ok(extract_string_records(&decomp))
 }
 
@@ -198,7 +198,7 @@ pub fn string_records_from_partitions(rf: &mut crate::RevitFile) -> Result<Vec<S
     // Concatenate all gzip chunks with an FF-sentinel separator so the
     // extractor sees clear boundaries between them (in case record scans
     // cross chunks accidentally).
-    let chunks = compression::inflate_all_chunks(&bytes);
+    let chunks = compression::inflate_all_chunks_for_stream(&partition_name, &bytes);
     let sep = [0xFFu8; 16];
     let mut joined = Vec::new();
     for (i, c) in chunks.iter().enumerate() {

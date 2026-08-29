@@ -4,9 +4,10 @@
 //! control (raw) vs experimental (page-stripped) inflate outcomes,
 //! gzip-trailer probes, parser summaries, and file provenance.
 //!
-//! **Does not change production inflate.** Experimental page stripping
-//! lives in this crate so probes can A/B compare without relying on
-//! production `prepare_stream_for_inflate` wiring.
+//! Production inflate paths now call `rvt::compression::prepare_stream_for_inflate`
+//! / `inflate_stream_*` (issue #151). This harness still keeps an independent
+//! experimental strip so control vs experimental A/B remains meaningful even
+//! after production wiring lands.
 //!
 //! Credit: finding reported by [@STE1200](https://github.com/STE1200)
 //! (Steffen) in Discussion #112.

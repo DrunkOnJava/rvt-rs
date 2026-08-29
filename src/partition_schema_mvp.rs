@@ -306,7 +306,7 @@ fn floors_from_partition_plan_loops(
         let Ok(raw) = rf.read_stream(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks(&raw);
+        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
         let concat: Vec<u8> = chunks.into_iter().flatten().collect();
         scanned = scanned.saturating_add(concat.len() as u64);
         if scanned > limits.max_scan_bytes as u64 && floors.is_empty() {
@@ -579,7 +579,7 @@ fn rect_openings_from_partitions(
         let Ok(raw) = rf.read_stream(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks(&raw);
+        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
         let concat: Vec<u8> = chunks.into_iter().flatten().collect();
         let offsets = ArcWallRectOpeningIndex::find_all_for_revit_version(revit_version, &concat);
         for off in offsets {

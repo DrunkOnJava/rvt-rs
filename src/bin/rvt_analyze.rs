@@ -261,7 +261,7 @@ fn build_identity(
     let format_version_counter = rf
         .read_stream(streams::GLOBAL_PARTITION_TABLE)
         .ok()
-        .and_then(|b| compression::inflate_at_auto(&b).ok())
+        .and_then(|b| compression::inflate_stream_auto(streams::GLOBAL_PARTITION_TABLE, &b).ok())
         .map(|(_, d)| d)
         .filter(|d| d.len() >= 2)
         .map(|d| u16::from_le_bytes([d[0], d[1]]));
@@ -288,7 +288,7 @@ fn build_anchors(rf: &mut RevitFile) -> anyhow::Result<FormatAnchors> {
     let raw = rf.read_stream(streams::GLOBAL_PARTITION_TABLE).ok();
     let decomp = raw
         .as_ref()
-        .and_then(|b| compression::inflate_at_auto(b).ok())
+        .and_then(|b| compression::inflate_stream_auto(streams::GLOBAL_PARTITION_TABLE, b).ok())
         .map(|(_, d)| d);
     let partition_table_bytes = decomp.as_ref().map(|d| d.len()).unwrap_or(0);
     let guid = decomp.as_ref().and_then(|d| {
@@ -358,7 +358,7 @@ fn build_anchors(rf: &mut RevitFile) -> anyhow::Result<FormatAnchors> {
 
 fn build_schema(rf: &mut RevitFile) -> anyhow::Result<SchemaSummary> {
     let raw = rf.read_stream(streams::FORMATS_LATEST)?;
-    let decomp = compression::inflate_at(&raw, 0)?;
+    let decomp = compression::inflate_stream_at(streams::FORMATS_LATEST, &raw, 0)?;
     let scan_limit = (64 * 1024).min(decomp.len());
     let data = &decomp[..scan_limit];
 
@@ -399,7 +399,7 @@ fn build_schema(rf: &mut RevitFile) -> anyhow::Result<SchemaSummary> {
 
 fn build_link(rf: &mut RevitFile, tagged: &[TaggedClass]) -> anyhow::Result<LinkSummary> {
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
-    let (_, global) = compression::inflate_at_auto(&raw)?;
+    let (_, global) = compression::inflate_stream_auto(streams::GLOBAL_LATEST, &raw)?;
     let total_positions = global.len().saturating_sub(1).max(1);
 
     let mut hits: HashMap<u16, u32> = HashMap::new();
