@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed: 2026-04-28
+Last reviewed: 2026-08-29
 
 This page is the public source of truth for what rvt-rs can do today. It is
 intentionally blunt so users can decide quickly whether the tool fits their
@@ -17,11 +17,14 @@ metadata, reading the embedded schema, auditing stream contents, running a
 zero-upload browser viewer, and producing valid IFC/glTF/SVG outputs from the
 parts of the model that are actually decoded.
 
-rvt-rs is not yet a production RVT-to-IFC converter for real architectural
-projects. The current blocker is typed element recovery from real `.rvt`
-project partition streams: walls, floors, doors, windows, and levels are not
-recovered reliably enough from arbitrary project files to claim complete model
-conversion.
+**Generic real-project typed model extraction is not solved yet.** rvt-rs is
+not a production RVT-to-IFC converter for arbitrary architectural projects.
+Walls, floors, doors, windows, and levels are not recovered as typed elements
+from arbitrary `.rvt` project files. Eighty per-class decoder structs exist and
+pass synthesized-fixture unit tests; they are not reached by
+`walker::iter_elements` on real project streams. A narrow, version-gated 2023
+ArcWall research path can emit `IfcWall` when corpus evidence is strong enough
+— that exception does not constitute general typed conversion.
 
 ## Capability Matrix
 
@@ -32,13 +35,14 @@ conversion.
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus | Developers can inspect class and field structure. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
-| Decode typed elements from real project files | Research | Production iteration is conservative; diagnostic scans still show parent/proxy candidates, not dependable typed walls/floors/doors | Full model conversion is not ready. |
-| Typed decoder structs | Partial | `elements::all_decoders()` has 80 registered decoders | Useful as library building blocks and synthesized-fixture tests. |
-| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; 2023 Einhoven ArcWall records emit `IfcWall` swept solids with recovered ElementId / base elevation / Z-delta height and elevation-derived storeys (partition Level-like names applied when confident; thickness still unresolved — RE-15/#88 falsified trailer inch widths); diagnostic mode can include low-confidence proxy provenance; `rvt-ifc --diagnostics` emits a JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict output | Correct writer path exists, but real-file inputs are incomplete. |
+| Decode typed elements from real project files | **Unsolved** | Production iteration is conservative; diagnostic scans still show parent/proxy candidates, not dependable typed walls/floors/doors | Full model conversion is not ready. |
+| Typed decoder structs | Partial (registry only) | `elements::all_decoders()` registers **80** decoders; unit test pins `all_decoders().len() == 80`; not consulted by `iter_elements` | Useful as library building blocks and synthesized-fixture tests. |
+| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; 2023 Einhoven ArcWall records emit `IfcWall` swept solids with recovered ElementId / base elevation / Z-delta height and elevation-derived storeys (partition Level-like names applied when confident; thickness still unresolved — RE-15/#88 falsified trailer inch widths); diagnostic mode can include low-confidence proxy provenance; `rvt-ifc --diagnostics` emits a JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict output | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, plain-language decode/export confidence panel, and supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Always-on patch corpus (`gen-fixture` project + MIT `empty.rfa`) covers identity, grow, shrink, multi-stream, missing-stream; optional Autodesk corpora add release-matrix + GUID/history checks; corrupt-gzip verification is unit-tested | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |
 | User-facing inspect CLI | Partial | `rvt-inspect` reports file health, decoded coverage, IFC export readiness, warnings, next steps, and stable JSON | Useful for support triage without Revit internals. |
+| Community corpus open/scaffold check | Partial (executed) | `docs/corpus-hunt-2026-04-21.md`: 222/223 real files pass open → schema → scaffold IFC | Proves container/schema health on public samples; does **not** prove typed element recovery. |
 
 ## Roadmap Position
 
