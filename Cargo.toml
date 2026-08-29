@@ -59,7 +59,7 @@ wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
 [dependencies]
 # Microsoft Compound File Binary (OLE) container — reads the outer
 # wrapper Revit uses for every on-disk file.
-cfb = "0.11"
+cfb = "0.14"
 # DEFLATE / raw inflate — for the truncated-gzip streams Revit ships.
 flate2 = "1.0"
 # UTF-16LE decoder — robust enough to recover from Revit's malformed
