@@ -56,8 +56,12 @@ saved by you. The privacy posture is documented in
 4. Export IFC / glTF / plan with the quality label in mind.
 5. Attach diagnostics JSON to bug reports for partial exports.
 
-Typed levels/doors/windows/floors from arbitrary projects are still blocked on
-decoder work — see [status.md](status.md) and [supported-profile.md](supported-profile.md).
+Partition MVP recovers Level / Material / Room / Floor plan-loop names on
+supported project files, and 2023 ArcWall geometry on the research path.
+Still blocked (RE-19 / RE-20 negative on magnetar corpora): schema-field Walls,
+typed Door/Window host binding, Level ElementId storey assignment for
+Floors/Rooms, and compound-layer / slab-thickness geometry — see
+[status.md](status.md) and [supported-profile.md](supported-profile.md).
 
 The viewer can show a scene, categories, element info, schedule summary, export
 quality, a demo gallery with license/provenance, and a supported-profile matrix.
