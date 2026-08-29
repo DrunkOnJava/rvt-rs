@@ -4,6 +4,7 @@ use clap::Parser;
 use rvt::{
     RevitFile,
     ifc::{ExportDiagnostics, RvtDocExporter},
+    walker::WalkerLimits,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -29,6 +30,21 @@ struct Cli {
     /// so support output is safe to share.
     #[arg(long)]
     no_redact: bool,
+    /// Maximum decompressed Global/Latest / Partitions bytes scanned.
+    #[arg(long)]
+    max_walker_scan_bytes: Option<usize>,
+    /// Maximum schema-scan / ArcWall candidates retained.
+    #[arg(long)]
+    max_walker_candidates: Option<usize>,
+    /// Maximum trial decodes attempted by the walker.
+    #[arg(long)]
+    max_walker_trial_offsets: Option<usize>,
+    /// Maximum bytes inspected while decoding one walker candidate.
+    #[arg(long)]
+    max_walker_record_decode_bytes: Option<usize>,
+    /// Maximum records accepted in walker reference containers.
+    #[arg(long)]
+    max_walker_container_records: Option<usize>,
 }
 
 #[derive(Debug, Serialize)]
@@ -118,7 +134,7 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: &Cli) -> anyhow::Result<()> {
-    let report = build_report(&cli.file, !cli.no_redact)?;
+    let report = build_report(&cli.file, !cli.no_redact, walker_limits_from_cli(cli))?;
     if cli.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -127,7 +143,11 @@ fn run(cli: &Cli) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn build_report(path: &std::path::Path, redact: bool) -> anyhow::Result<InspectReport> {
+fn build_report(
+    path: &std::path::Path,
+    redact: bool,
+    walker_limits: WalkerLimits,
+) -> anyhow::Result<InspectReport> {
     let file_size_bytes = std::fs::metadata(path)?.len();
     let mut rf = RevitFile::open(path)?;
     let mut summary = rf.summarize_lossy()?.value;
@@ -135,7 +155,8 @@ fn build_report(path: &std::path::Path, redact: bool) -> anyhow::Result<InspectR
         redact_summary(&mut summary);
     }
     let schema_parsed = rf.schema().is_ok();
-    let export_result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+    let export_result =
+        RvtDocExporter.export_with_diagnostics_and_limits(&mut rf, walker_limits)?;
     let diagnostics = export_result.diagnostics;
     let warnings = diagnostics.warnings.clone();
     let input_path = display_path(path, redact);
@@ -413,5 +434,26 @@ fn print_human_report(report: &InspectReport) {
     println!("\nNext steps");
     for step in &report.next_steps {
         println!("  - {step}");
+    }
+}
+
+fn walker_limits_from_cli(cli: &Cli) -> WalkerLimits {
+    let defaults = WalkerLimits::default();
+    WalkerLimits {
+        max_scan_bytes: cli
+            .max_walker_scan_bytes
+            .unwrap_or(defaults.max_scan_bytes),
+        max_candidates: cli
+            .max_walker_candidates
+            .unwrap_or(defaults.max_candidates),
+        max_trial_offsets: cli
+            .max_walker_trial_offsets
+            .unwrap_or(defaults.max_trial_offsets),
+        max_per_record_decode_bytes: cli
+            .max_walker_record_decode_bytes
+            .unwrap_or(defaults.max_per_record_decode_bytes),
+        max_container_records: cli
+            .max_walker_container_records
+            .unwrap_or(defaults.max_container_records),
     }
 }

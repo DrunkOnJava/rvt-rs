@@ -669,7 +669,11 @@ fn export_rvt_doc(
     // `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
     let mut building_storeys = Vec::new();
     if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
-        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls(rf, revit_version) {
+        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
+            rf,
+            revit_version,
+            walker_limits,
+        ) {
             let level_names = collect_partition_building_storey_names(rf);
             let recovery = crate::partition_arc_walls::recover_storeys_from_arc_walls(
                 &scan.walls,
@@ -1240,6 +1244,19 @@ pub fn build_export_diagnostics_with_limits(
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
+    // Surface ArcWall partition-scan limit hits so crafted large
+    // Partitions/* streams are visible in the diagnostics sidecar.
+    if let Some(version) = bfi.as_ref().map(|b| b.version) {
+        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
+            rf,
+            version,
+            walker_limits,
+        ) {
+            if let Some(hit) = scan.limit_hit {
+                warnings.push(format!("{}: {}", hit.code(), hit.message()));
+            }
+        }
+    }
     if exported.building_elements == 0 {
         warnings.push("No building elements were exported; output is scaffold-only.".into());
     }
