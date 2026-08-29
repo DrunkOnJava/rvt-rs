@@ -55,6 +55,7 @@ pub mod reference_points;
 pub mod roof;
 pub mod structural;
 pub mod styling;
+pub mod typed_json;
 pub mod wall;
 pub mod zones;
 

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/decoded-elements.schema.json",
+  "title": "rvt production decoded elements JSON",
+  "description": "Array of production-walker decoded elements emitted by rvt-elements (default) and mirrored by Python RevitFile.decoded_elements(). The optional typed object is the Lane Five MVP projection (Level/Wall/Floor/Door/Window/Room/Material).",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/decodedElement"
+  },
+  "$defs": {
+    "byteRange": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "field": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "pointer",
+            "element_id",
+            "ref_container",
+            "integer",
+            "float",
+            "bool",
+            "guid",
+            "string",
+            "vector",
+            "bytes"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "decodedElement": {
+      "type": "object",
+      "required": ["id", "class_name", "byte_range", "fields"],
+      "properties": {
+        "id": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "class_name": { "type": "string", "minLength": 1 },
+        "byte_range": { "$ref": "#/$defs/byteRange" },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "typed": {
+          "description": "Lane Five MVP typed projection, or null/omitted for non-MVP classes.",
+          "type": ["object", "null"],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
