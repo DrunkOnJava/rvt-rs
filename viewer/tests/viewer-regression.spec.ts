@@ -150,9 +150,19 @@ projectSampleTest(
       'unsupported_geometry_missing_level',
     );
     await expect(page.locator('#status-panel')).toContainText(/unit|thickness|storey/i);
+    // #33 leftover: File Status lists recovered storey names, not counts only.
+    await expect(page.locator('#status-panel')).toContainText(/Level 1|Roof/i);
+    await expect(page.locator('#status-panel')).toContainText(/Materials/i);
+    // Scene tree groups under IFCBUILDINGSTOREY nodes from recovered levels.
+    await expect(page.locator('.tree-node.tree-storey').first()).toBeVisible();
+    await expect(page.locator('.tree-node.tree-storey').first()).toContainText(
+      /IFCBUILDINGSTOREY/,
+    );
     await page.locator('#diagnostics-details summary').click();
     await expect(page.locator('#diagnostics-json')).toContainText('"schema_version": 1');
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
+    await expect(page.locator('#diagnostics-json')).toContainText('"storey_names"');
+    await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 41');
     await expect(page.locator('#diagnostics-json')).not.toContainText(
       '"unsupported_geometry_missing_level"',
     );

@@ -418,6 +418,26 @@ fn print_human_report(report: &InspectReport) {
         report.export_diagnostics.exported.storey_count,
         report.export_diagnostics.exported.material_count
     );
+    let storey_names = &report.export_diagnostics.exported.storey_names;
+    if !storey_names.is_empty() {
+        println!("  Storeys: {}", storey_names.join(", "));
+    }
+    let mat_sample = &report.export_diagnostics.exported.material_names_sample;
+    if !mat_sample.is_empty() {
+        let extra = report
+            .export_diagnostics
+            .exported
+            .material_count
+            .saturating_sub(mat_sample.len());
+        if extra > 0 {
+            println!(
+                "  Materials (sample): {} · +{extra} more",
+                mat_sample.join(", ")
+            );
+        } else {
+            println!("  Materials: {}", mat_sample.join(", "));
+        }
+    }
 
     println!("\nIFC export readiness");
     println!(

@@ -176,6 +176,20 @@
         "storey_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "storey_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Recovered IfcBuildingStorey display names in elevation/name order."
+        },
+        "material_names_sample": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Capped sample of recovered IfcMaterial display names for File Status."
         }
       }
     },

@@ -27,7 +27,10 @@ recovers, and additionally merges fail-closed partition MVP recovers for
 `ArcWallRectOpening` index rows with ElemTable-confirmed related-id
 provenance (still not typed `Door`/`Window`). IFC export maps recovered
 Levels → storeys, Floors → boundary-annotated slabs, Rooms → spaces, and
-Material display names → `IfcMaterial`. RE-19 corpus research (Einhoven
+Material display names → `IfcMaterial`. Viewer File Status lists recovered
+storey names and material name samples; the scene tree groups elements under
+`IFCBUILDINGSTOREY` nodes (ArcWalls by elevation; Floors/Rooms remain
+Unassigned until Level ElementId bind). RE-19 corpus research (Einhoven
 2023 / Core Interior 2024) found **no** reliable Door vs Window
 discriminator and **no** schema-field / 2024 ArcWall envelope suitable for
 fail-closed decode — so typed `Door`/`Window` and non-ArcWall `Wall` stay

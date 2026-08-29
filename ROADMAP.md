@@ -42,7 +42,7 @@ while the broader registry remains a library building block (see
 | ADocument/document-level walker | Partial | Expand confidence across project releases and older files. |
 | Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material/Room/Floor plan-loops + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). RE-19: no Door/Window discriminator / no schema-field Wall on magnetar corpora — keep issues open without inventing types. |
 | IFC writer | Partial | Levels/Floors/Rooms/Materials from partition MVP emit honestly; ArcWall geometry on 2023; Door/Window host IFC + slab extrusion still open (blocked on RE-19). |
-| Browser viewer | Partial | File Status surfaces production class counts + storey/material totals. |
+| Browser viewer | Partial | File Status lists recovered storey names + material display-name samples; scene tree groups under `IFCBUILDINGSTOREY` (ArcWalls by elevation; Floors/Rooms stay Unassigned until Level ElementId bind). |
 | Python/CLI surface | Partial | Stabilize JSON schemas and one-shot inspect workflow. |
 | Write path | Partial | Keep stream-level writes honest; defer semantic writes until openability can be proven. |
 

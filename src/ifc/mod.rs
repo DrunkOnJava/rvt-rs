@@ -258,6 +258,14 @@ pub struct ExportedModelDiagnostics {
     pub unit_assignment_count: usize,
     pub material_count: usize,
     pub storey_count: usize,
+    /// Recovered building-storey display names (same order as
+    /// [`IfcModel::building_storeys`]). Empty when no levels recovered.
+    #[serde(default)]
+    pub storey_names: Vec<String>,
+    /// Sample of recovered material display names (capped) for File
+    /// Status / inspect — not a full inventory when counts are large.
+    #[serde(default)]
+    pub material_names_sample: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1473,6 +1481,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         }
     }
 
+    const MATERIAL_NAME_SAMPLE_CAP: usize = 12;
     ExportedModelDiagnostics {
         total_entities: model.entities.len(),
         building_elements,
@@ -1482,6 +1491,17 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         unit_assignment_count: model.units.len(),
         material_count: model.materials.len(),
         storey_count: model.building_storeys.len(),
+        storey_names: model
+            .building_storeys
+            .iter()
+            .map(|s| s.name.clone())
+            .collect(),
+        material_names_sample: model
+            .materials
+            .iter()
+            .take(MATERIAL_NAME_SAMPLE_CAP)
+            .map(|m| m.name.clone())
+            .collect(),
     }
 }
 
@@ -1803,6 +1823,40 @@ fn export_confidence_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exported_diagnostics_include_storey_and_material_name_samples() {
+        let model = IfcModel {
+            building_storeys: vec![
+                Storey {
+                    name: "Level 1".into(),
+                    elevation_feet: 0.0,
+                },
+                Storey {
+                    name: "Roof".into(),
+                    elevation_feet: 10.0,
+                },
+            ],
+            materials: vec![
+                MaterialInfo {
+                    name: "Concrete".into(),
+                    color_packed: None,
+                    transparency: None,
+                },
+                MaterialInfo {
+                    name: "Glass".into(),
+                    color_packed: None,
+                    transparency: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let exported = exported_model_diagnostics(&model);
+        assert_eq!(exported.storey_count, 2);
+        assert_eq!(exported.storey_names, vec!["Level 1", "Roof"]);
+        assert_eq!(exported.material_count, 2);
+        assert_eq!(exported.material_names_sample, vec!["Concrete", "Glass"]);
+    }
 
     #[test]
     fn placeholder_exporter_default_model_has_no_name() {
