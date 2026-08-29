@@ -52,7 +52,7 @@ Notes:
 
 ## 3. Element class decode coverage
 
-**80 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty` unit test. This is a **library registry**, not a live walker dispatch table: `walker::iter_elements` calls generic `decode_instance` and does not consult `all_decoders()`. Grouped by domain below.
+**80 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty` unit test. Production `walker::iter_elements` prefers typed decoders for `MVP_TYPED_CLASSES` and merges ArcWall partition recovers; other registered classes still use generic `decode_instance`. Grouped by domain below.
 
 **Unsolved on real project files:** registering these decoders does not mean typed Walls/Floors/Doors/Levels are recovered from arbitrary `.rvt` projects. Instance bytes for those classes live in `Partitions/*` streams whose wire envelope is not yet reverse-engineered; see [`docs/status.md`](status.md) and `reports/element-framing/RE-01-synthesis.md`.
 
