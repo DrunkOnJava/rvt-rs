@@ -12,7 +12,7 @@
 
 use rvt::streams::{BASIC_FILE_INFO, GLOBAL_LATEST, PART_ATOM};
 use rvt::writer::{
-    StreamFraming, StreamPatch, guid_preserved, history_entries_preserved, write_with_patches,
+    guid_preserved, history_entries_preserved, write_with_patches, StreamFraming, StreamPatch,
 };
 use rvt::{Error, Result, RevitFile};
 use std::fs;
