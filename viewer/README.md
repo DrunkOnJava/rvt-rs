@@ -49,11 +49,14 @@ Nothing is sent anywhere.
 ## Supported MVP workflow
 
 1. Open a file locally (drop / picker / demo gallery).
-2. Read File status + export quality (honest partial decode).
+2. Read File status: Decode confidence, Export confidence, and IFC bar.
 3. Inspect decoded entities in the tree or viewport.
 4. Export IFC / glTF / plan only after checking the quality label.
 5. Download diagnostics for scaffold or partial exports.
 
+Tier1 redistributable demos (`architectural-2024`, `structural-2023`,
+`mep-2024`) are staged from `corpus/tier1/` via `npm run stage:demos`.
+They open cleanly but report scaffold ~25% confidence — that is expected.
 Reliable typed levels/doors/windows from arbitrary projects still depend on
 Rust decoder / partition-stream work outside this viewer shell.
 
@@ -66,7 +69,7 @@ User drops .rvt
 main.ts ── postMessage ──▶ worker.ts
                                 │
                                 ├── init wasm (pkg/rvt.js)
-                                ├── openRvtBytesWithDiagnostics()
+                                ├── openRvtBytesWithDiagnosticsMode()
                                 │                         → IfcModel + diagnostics JSON
                                 ├── buildSceneGraph()     → SceneNode JSON
                                 ├── modelToGlb()          → Uint8Array
@@ -79,7 +82,8 @@ main.ts
   ├── Three.js scene + OrbitControls + GLTFLoader
   ├── scene tree panel
   ├── category toggles
-  ├── export-quality label
+  ├── export-quality label + IFC bar selector
+  ├── File status (decode / export confidence)
   ├── element-info panel (raycast picking)
   └── status line
 ```

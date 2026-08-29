@@ -4,8 +4,9 @@
  *
  * Reads docs/viewer-demos.json, copies/generates available binaries,
  * writes catalog.json + SVG thumbnails. Safe to run without the LFS
- * corpus — loadable RFAs are skipped with a warning; the synthetic
- * MVP fixture is generated when gen-fixture is on PATH / in target/.
+ * corpus — loadable RFAs are skipped with a warning; tier1 fixtures
+ * copy from corpus/tier1/; the synthetic MVP fixture is generated when
+ * gen-fixture is on PATH / in target/.
  *
  * Privacy: only redistributable files are staged. Nothing is uploaded.
  */
@@ -21,6 +22,9 @@ const repoRoot = path.resolve(viewerRoot, '..');
 const catalogSrc = path.join(repoRoot, 'docs', 'viewer-demos.json');
 const publicDemos = path.join(viewerRoot, 'public', 'demos');
 const thumbDir = path.join(publicDemos, 'thumbnails');
+
+/** Known in-repo tier1 fixtures (Lane Three / M6-03). */
+const TIER1_IDS = new Set(['architectural-2024', 'structural-2023', 'mep-2024']);
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -127,6 +131,37 @@ function stageSyntheticMvp(destRel) {
   return { ok: true, size: fs.statSync(dest).size, note: `generated via ${bin}` };
 }
 
+function stageTier1(demo, destAbs) {
+  const candidates = [
+    ...(demo.source_candidates ?? []),
+    demo.provenance,
+    path.join('corpus', 'tier1', demo.id, `${demo.id}.rvt`),
+  ].filter(Boolean);
+  const src = resolveExisting(candidates);
+  if (!src) {
+    return { ok: false, note: `tier1 source missing for ${demo.id}` };
+  }
+  const size = copyFile(src, destAbs);
+  // Also stage license sidecar when present (attribution / VW1-22).
+  const licenseSrc = src.replace(/\.rvt$/i, '.license.json');
+  if (fs.existsSync(licenseSrc)) {
+    const licenseDest = destAbs.replace(/\.rvt$/i, '.license.json');
+    copyFile(licenseSrc, licenseDest);
+  }
+  return {
+    ok: true,
+    size,
+    note: `copied from ${path.relative(repoRoot, src)}`,
+  };
+}
+
+function thumbAccent(demo) {
+  if (demo.format === 'ifc') return '#2e684b';
+  if (TIER1_IDS.has(demo.id)) return '#2a4a6f';
+  if (demo.id === 'synthetic-mvp') return '#3c5f86';
+  return '#1a3a5f';
+}
+
 function main() {
   if (!fs.existsSync(catalogSrc)) {
     console.error(`missing catalog: ${catalogSrc}`);
@@ -148,7 +183,13 @@ function main() {
     let sizeBytes = demo.size_bytes ?? null;
     let stageNote = 'not staged';
 
-    if (demo.id === 'synthetic-mvp') {
+    if (TIER1_IDS.has(demo.id)) {
+      const result = stageTier1(demo, destAbs);
+      available = result.ok;
+      sizeBytes = result.size ?? sizeBytes;
+      stageNote = result.note;
+      if (!result.ok) warnings.push(`${demo.id}: ${result.note}`);
+    } else if (demo.id === 'synthetic-mvp') {
       const result = stageSyntheticMvp(destRel);
       available = result.ok;
       sizeBytes = result.size ?? sizeBytes;
@@ -170,7 +211,6 @@ function main() {
       const candidates = [
         ...(demo.source_candidates ?? []),
         path.join('_corpus', 'examples', 'Autodesk', path.basename(demo.file).replace(/_/g, '')),
-        // Common phi-ag spelling variants
         `_corpus/examples/Autodesk/racbasicsamplefamily-${demo.revit_version}.rfa`,
         `../_corpus/examples/Autodesk/racbasicsamplefamily-${demo.revit_version}.rfa`,
       ];
@@ -189,9 +229,7 @@ function main() {
     if (thumbRel) {
       const thumbAbs = path.join(viewerRoot, 'public', thumbRel);
       if (!fs.existsSync(thumbAbs)) {
-        const accent =
-          demo.format === 'ifc' ? '#2e684b' : demo.id === 'synthetic-mvp' ? '#3c5f86' : '#1a3a5f';
-        writeThumbnail(thumbAbs, demo.name, accent);
+        writeThumbnail(thumbAbs, demo.name, thumbAccent(demo));
       }
     }
 
@@ -224,9 +262,12 @@ function main() {
     console.warn(`  warning: ${warning}`);
   }
 
-  if (!staged.find((d) => d.id === 'synthetic-mvp')?.available) {
+  const hasLoadableRvt = staged.some(
+    (d) => d.available && d.loadable && d.format === 'rvt',
+  );
+  if (!hasLoadableRvt) {
     console.warn(
-      'warning: synthetic-mvp demo was not staged (build gen-fixture for Playwright MVP coverage)',
+      'warning: no loadable .rvt demo was staged (need corpus/tier1 or gen-fixture for Playwright coverage)',
     );
   }
 }

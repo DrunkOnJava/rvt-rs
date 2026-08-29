@@ -4,15 +4,15 @@
  * when a family file has tens of thousands of instances.
  *
  * Protocol:
- *   main → worker: { type: 'parse', bytes: Uint8Array }
+ *   main → worker: { type: 'parse', bytes: Uint8Array, mode?: string }
  *   worker → main: { type: 'progress', step: string }
  *   worker → main: { type: 'summary', summary }   (VW1-20 partial)
- *   worker → main: { type: 'ready', model, scene, glb, types }
+ *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics }
  *   worker → main: { type: 'error', message: string }
  */
 
 import init, {
-  openRvtBytesWithDiagnostics,
+  openRvtBytesWithDiagnosticsMode,
   buildSceneGraph,
   modelToGlb,
   distinctIfcTypes,
@@ -20,7 +20,7 @@ import init, {
   quickSummary,
 } from '../pkg/rvt.js';
 
-type ParseMsg = { type: 'parse'; bytes: Uint8Array };
+type ParseMsg = { type: 'parse'; bytes: Uint8Array; mode?: string };
 
 // DedicatedWorkerGlobalScope.postMessage has a slightly shifty
 // TS signature across lib.dom.d.ts versions — strictly-typed
@@ -49,8 +49,9 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     send({ type: 'progress', step: 'reading file metadata' });
     send({ type: 'summary', summary: quickSummary(msg.bytes) });
 
-    send({ type: 'progress', step: 'parsing container' });
-    const exportResult = openRvtBytesWithDiagnostics(msg.bytes) as {
+    const qualityMode = (msg.mode ?? 'scaffold').trim() || 'scaffold';
+    send({ type: 'progress', step: `parsing container · IFC bar ${qualityMode}` });
+    const exportResult = openRvtBytesWithDiagnosticsMode(msg.bytes, qualityMode) as {
       model: unknown;
       diagnostics: unknown;
     };
