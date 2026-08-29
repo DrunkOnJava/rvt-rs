@@ -61,6 +61,9 @@ simple_decoder!(RoomDecoder, "Room");
 simple_decoder!(AreaDecoder, "Area");
 simple_decoder!(SpaceDecoder, "Space");
 
+/// Typed Room view — alias of [`Zone`] (Room/Area/Space share shape).
+pub type Room = Zone;
+
 /// Shared typed view for Room/Area/Space — same shape, same code path.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Zone {
@@ -212,6 +215,28 @@ mod tests {
         assert_eq!(z.level_id, Some(7));
         assert_eq!(z.area_square_feet, Some(150.5));
         assert_eq!(z.label().as_deref(), Some("101: Kitchen"));
+    }
+
+    #[test]
+    fn room_type_alias_matches_zone() {
+        let decoded = RoomDecoder
+            .decode(
+                &synth_room_bytes(),
+                &synth_room_schema(),
+                &HandleIndex::new(),
+            )
+            .unwrap();
+        let room: Room = Room::from_decoded(&decoded);
+        assert_eq!(room.name.as_deref(), Some("Kitchen"));
+    }
+
+    #[test]
+    fn room_decoder_tolerates_empty_bytes() {
+        let decoded = RoomDecoder
+            .decode(&[], &synth_room_schema(), &HandleIndex::new())
+            .expect("empty ok");
+        assert_eq!(decoded.class, "Room");
+        assert!(Zone::from_decoded(&decoded).name.is_none());
     }
 
     #[test]
