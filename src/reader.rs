@@ -305,7 +305,8 @@ impl RevitFile {
     pub fn class_names(&mut self) -> Result<BTreeSet<String>> {
         let bytes = self.read_stream(FORMATS_LATEST)?;
         // Formats/Latest has GZIP magic at offset 0 (no custom header).
-        // Page checksums are stripped inside `inflate_stream_at`.
+        // Narrow gate: Formats/Latest is not page-stripped (see
+        // `is_checksum_paged_stream`); `inflate_stream_at` stays identity here.
         let decompressed = compression::inflate_stream_at(FORMATS_LATEST, &bytes, 0)?;
         class_index::extract_class_names(&decompressed)
     }
