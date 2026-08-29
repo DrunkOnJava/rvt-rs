@@ -42,7 +42,7 @@
     },
     "decodedElement": {
       "type": "object",
-      "required": ["id", "class_name", "byte_range", "fields"],
+      "required": ["id", "class_name", "byte_range", "fields", "parameters"],
       "properties": {
         "id": {
           "type": ["integer", "null"],
@@ -53,6 +53,11 @@
         "fields": {
           "type": "array",
           "items": { "$ref": "#/$defs/field" }
+        },
+        "parameters": {
+          "description": "AProperty* value carriers for this row; empty for host elements until host↔parameter joins recover (#35).",
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
         },
         "typed": {
           "description": "Lane Five MVP typed projection, or null/omitted for non-MVP classes.",

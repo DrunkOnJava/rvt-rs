@@ -153,6 +153,7 @@ interface ExportDiagnostics {
     diagnostic_proxy_candidates?: number;
     arcwall_records?: number;
     production_class_counts?: Record<string, number>;
+    parameter_value_count?: number;
   };
   confidence?: {
     level?: string;
@@ -657,26 +658,37 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
       statusRow('Spatial', storeyCount > 0 ? 'ok' : 'warn', storeySummary),
     );
   }
-  if (materialCount > 0) {
-    const named =
-      materialSample.length > 0
-        ? materialSample.join(', ') +
-          (materialCount > materialSample.length
-            ? ` · +${materialCount - materialSample.length} more`
-            : '')
-        : `${materialCount} display names`;
+    if (materialCount > 0) {
+      const named =
+        materialSample.length > 0
+          ? materialSample.join(', ') +
+            (materialCount > materialSample.length
+              ? ` · +${materialCount - materialSample.length} more`
+              : '')
+          : `${materialCount} display names`;
+      statusPanelEl.appendChild(
+        statusRow(
+          'Materials',
+          'ok',
+          `${materialCount} · ${named} (names only; no compound layers)`,
+        ),
+      );
+    }
+    const parameterValueCount =
+      diagnostics?.decoded?.parameter_value_count ?? 0;
     statusPanelEl.appendChild(
       statusRow(
-        'Materials',
-        'ok',
-        `${materialCount} · ${named} (names only; no compound layers)`,
+        'Parameters',
+        parameterValueCount > 0 ? 'ok' : 'warn',
+        parameterValueCount > 0
+          ? `${parameterValueCount} AProperty* value(s) recovered`
+          : 'none recovered (AProperty* host joins pending)',
       ),
     );
-  }
-  statusPanelEl.appendChild(
-    statusRow(
-      'Geometry',
-      geometryCount > 0 ? 'ok' : 'warn',
+    statusPanelEl.appendChild(
+      statusRow(
+        'Geometry',
+        geometryCount > 0 ? 'ok' : 'warn',
       geometryCount > 0
         ? `${geometryCount} elements have geometry`
         : 'No real-file element geometry decoded',
