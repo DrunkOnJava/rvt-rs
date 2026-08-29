@@ -74,12 +74,11 @@ fn compressible_payload(min_gzip_len: usize) -> (Vec<u8>, Vec<u8>) {
 }
 
 fn assert_bare_does_not_round_trip(paged: &[u8], payload: &[u8]) {
-    match inflate_at(paged, 0) {
-        Ok(naive) => assert_ne!(
+    if let Ok(naive) = inflate_at(paged, 0) {
+        assert_ne!(
             naive, payload,
             "without stripping, a successful inflate must not match the original payload"
-        ),
-        Err(_) => {}
+        );
     }
 }
 
