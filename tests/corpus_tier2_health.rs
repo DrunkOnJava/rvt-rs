@@ -15,11 +15,7 @@ use std::path::PathBuf;
 
 fn project_dir() -> Option<PathBuf> {
     let dir = std::env::var_os("RVT_PROJECT_CORPUS_DIR").map(PathBuf::from)?;
-    if dir.is_dir() {
-        Some(dir)
-    } else {
-        None
-    }
+    if dir.is_dir() { Some(dir) } else { None }
 }
 
 fn discover_rvts(dir: &PathBuf) -> Vec<PathBuf> {

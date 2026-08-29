@@ -54,11 +54,7 @@ fn manifest_tier(manifest: &Value) -> u64 {
         return t;
     }
     let id = manifest.get("id").and_then(Value::as_str).unwrap_or("");
-    if id.starts_with("tier1-") {
-        1
-    } else {
-        2
-    }
+    if id.starts_with("tier1-") { 1 } else { 2 }
 }
 
 fn corpus_dir_for_manifest(manifest: &Value) -> PathBuf {
@@ -373,11 +369,9 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
             if let Some(metric) = opt_str_field(count, "fixture_metric") {
                 let expected = int_field(count, "expected", &format!("{id}.{category}"));
                 let tolerance = int_field(count, "tolerance", &format!("{id}.{category}"));
-                let class_name = metric
-                    .strip_prefix("class_instances.")
-                    .unwrap_or_else(|| {
-                        panic!("{id}.{category}: unsupported fixture_metric {metric}")
-                    });
+                let class_name = metric.strip_prefix("class_instances.").unwrap_or_else(|| {
+                    panic!("{id}.{category}: unsupported fixture_metric {metric}")
+                });
                 let inventory = class_inventory.as_ref().unwrap_or_else(|| {
                     panic!(
                         "{id}.{category}: fixture_metric requires a sibling *.fixture.json recipe"

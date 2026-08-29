@@ -162,7 +162,11 @@ fn tier1_corpus_is_present_and_licensed() {
 fn tier1_fixtures_open_and_match_known_counts() {
     let root = tier1_dir();
     let dirs = discover_fixture_dirs(&root);
-    assert!(!dirs.is_empty(), "no tier1 fixtures under {}", root.display());
+    assert!(
+        !dirs.is_empty(),
+        "no tier1 fixtures under {}",
+        root.display()
+    );
 
     for dir in &dirs {
         let name = dir.file_name().unwrap().to_string_lossy().to_string();
@@ -171,7 +175,8 @@ fn tier1_fixtures_open_and_match_known_counts() {
         let year = recipe
             .get("year")
             .and_then(Value::as_u64)
-            .unwrap_or_else(|| panic!("{name}.fixture.json missing year")) as u32;
+            .unwrap_or_else(|| panic!("{name}.fixture.json missing year"))
+            as u32;
         let element_count = recipe
             .get("element_count")
             .and_then(Value::as_u64)
