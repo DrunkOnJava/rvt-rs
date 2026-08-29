@@ -4,6 +4,9 @@
 //! a plausible f64 (LevelAssociationCell-shaped: levelId + offset).
 //! Clusters candidate level ids by ArcWall base elevation.
 //!
+//! Magnetar Einhoven: **INSUFFICIENT** (see also the broader multi-
+//! hypothesis probe `probe_level_elementid_recovery` and RE-20).
+//!
 //! Usage:
 //!   cargo run --release --example probe_level_elementid_bind -- \
 //!     _project_corpus/Revit/Revit_IFC5_Einhoven.rvt
