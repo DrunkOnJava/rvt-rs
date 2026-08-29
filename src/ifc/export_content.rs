@@ -113,6 +113,14 @@ pub fn append_typed_production_elements(
             continue;
         }
 
+        // ArcWall IFC emission stays on the partition path in
+        // `ifc::mod` (storey index from recovered elevations). The
+        // walker still yields ArcWall `DecodedElement`s for API
+        // consumers; skipping here avoids duplicate IFCWALL rows.
+        if decoded.class == "ArcWall" {
+            continue;
+        }
+
         let mapping = category_map::lookup(&decoded.class);
         if mapping.is_none() && policy.require_mapped_ifc_type {
             continue;
@@ -135,7 +143,7 @@ pub fn append_typed_production_elements(
 
         if policy.include_geometry {
             match decoded.class.as_str() {
-                "Wall" => {
+                "Wall" | "ArcWall" => {
                     if let Some(geom) = wall_geometry_from_decoded(&decoded) {
                         location_feet = Some(geom.location_feet);
                         rotation_radians = Some(geom.rotation_radians);

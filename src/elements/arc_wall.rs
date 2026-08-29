@@ -24,6 +24,7 @@ use crate::arc_wall_record::{
     ARC_WALL_TAG, ArcWallRecord, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
 };
 use crate::partition_scanner::PartitionRecordCandidate;
+use crate::walker::{DecodedElement, InstanceField};
 use crate::{Error, Result};
 
 /// Typed view of a standard ArcWall recovered from partition bytes.
@@ -68,6 +69,94 @@ impl ArcWall {
     pub fn end_point(&self) -> (f64, f64, f64) {
         self.record.end_point()
     }
+
+    /// Project into a [`DecodedElement`] for production `iter_elements`.
+    ///
+    /// Only recovered fields are populated — never invents thickness,
+    /// host, or sketch data. `byte_range` is the partition absolute
+    /// offset of the validated standard envelope.
+    pub fn to_decoded_element(&self, partition: &str, offset: usize) -> DecodedElement {
+        let (sx, sy, sz) = self.start_point();
+        let (ex, ey, ez) = self.end_point();
+        let mut fields = vec![
+            (
+                "m_start_x".into(),
+                InstanceField::Float { value: sx, size: 8 },
+            ),
+            (
+                "m_start_y".into(),
+                InstanceField::Float { value: sy, size: 8 },
+            ),
+            (
+                "m_start_z".into(),
+                InstanceField::Float { value: sz, size: 8 },
+            ),
+            (
+                "m_end_x".into(),
+                InstanceField::Float { value: ex, size: 8 },
+            ),
+            (
+                "m_end_y".into(),
+                InstanceField::Float { value: ey, size: 8 },
+            ),
+            (
+                "m_end_z".into(),
+                InstanceField::Float { value: ez, size: 8 },
+            ),
+            (
+                "m_source_stream".into(),
+                InstanceField::String(partition.to_string()),
+            ),
+            (
+                "m_source_offset".into(),
+                InstanceField::Integer {
+                    value: offset as i64,
+                    signed: false,
+                    size: 8,
+                },
+            ),
+        ];
+        if let Some(id) = self.element_id {
+            fields.push(("m_id".into(), InstanceField::ElementId { tag: 0, id }));
+        }
+        if let Some(id) = self.type_id {
+            fields.push(("m_type_id".into(), InstanceField::ElementId { tag: 0, id }));
+        }
+        if let Some(elev) = self.base_elevation_feet {
+            fields.push((
+                "m_base_elevation".into(),
+                InstanceField::Float {
+                    value: elev,
+                    size: 8,
+                },
+            ));
+            fields.push((
+                "m_base_offset".into(),
+                InstanceField::Float {
+                    value: elev,
+                    size: 8,
+                },
+            ));
+        }
+        if let Some(h) = self.height_feet {
+            fields.push((
+                "m_unconnected_height".into(),
+                InstanceField::Float { value: h, size: 8 },
+            ));
+        }
+        let end = offset.saturating_add(STANDARD_RECORD_MIN_SIZE);
+        DecodedElement {
+            id: self.element_id,
+            class: "ArcWall".into(),
+            fields,
+            byte_range: offset..end,
+        }
+    }
+}
+
+/// Build a typed [`ArcWall`] from a shared partition scan hit.
+pub fn from_partition_arc_wall(wall: &crate::partition_arc_walls::PartitionArcWall) -> ArcWall {
+    ArcWall::from_parts(wall.record, wall.trailer)
 }
 
 /// Reject a class name that is present but not ArcWall.
@@ -163,6 +252,19 @@ mod tests {
         assert!(wall.height_feet.is_some());
         let (sx, _, _) = wall.start_point();
         assert!(sx > 0.0);
+    }
+
+    #[test]
+    fn to_decoded_element_carries_endpoints_and_ids() {
+        let wall = decode_at(RECORD_4_HEX, 0, Some("ArcWall")).expect("decode");
+        let decoded = wall.to_decoded_element("Partitions/5", 0x100);
+        assert_eq!(decoded.class, "ArcWall");
+        assert_eq!(decoded.byte_range.start, 0x100);
+        assert!(decoded.fields.iter().any(|(n, _)| n == "m_start_x"));
+        assert!(decoded.fields.iter().any(|(n, _)| n == "m_end_x"));
+        if let Some(id) = wall.element_id {
+            assert_eq!(decoded.id, Some(id));
+        }
     }
 
     #[test]

@@ -52,6 +52,11 @@ pub const MAPPINGS: &[Mapping] = &[
         predefined_type: Some("STANDARD"),
     },
     Mapping {
+        revit_class: "ArcWall",
+        ifc_type: "IFCWALL",
+        predefined_type: Some("STANDARD"),
+    },
+    Mapping {
         revit_class: "CurtainWall",
         ifc_type: "IFCCURTAINWALL",
         predefined_type: None,
