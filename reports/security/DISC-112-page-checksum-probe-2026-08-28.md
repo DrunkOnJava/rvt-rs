@@ -56,3 +56,14 @@ enable strip on the default inflate path.
   oracles (as the reporter did) before flipping the default.
 - Keep `strip_revit_page_checksums` available for experimental probes and a
   future opt-in decode mode.
+
+## Addendum 2026-08-29 (Wave 1 Worker C)
+
+Partition **chunk-ok** oracles on redistributable `2024_Core_Interior.rvt`
+(`Partitions/46`, `/53`, `/61`) independently show strip recovering members that
+fail under bare inflate — see
+[`DISC-112-wave1-worker-c-2026-08-29.md`](DISC-112-wave1-worker-c-2026-08-29.md)
+and the Wave 2 framing contract
+[`docs/re/wave1-checksum-paged-framing-contract-2026-08-29.md`](../../docs/re/wave1-checksum-paged-framing-contract-2026-08-29.md).
+Formats length-only regression still holds; do not treat Formats ~48% schema
+loss as reproduced on this corpus. Still **no default production wiring**.
