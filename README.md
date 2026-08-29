@@ -10,7 +10,7 @@
 
 For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). Installation paths live in [`docs/install.md`](docs/install.md). For the short support boundary, read [`docs/status.md`](docs/status.md) and the supported MVP input profile in [`docs/supported-profile.md`](docs/supported-profile.md). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
 
-Rust 2024 edition (MSRV 1.85). **Fifteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.85). **Sixteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -108,7 +108,7 @@ The supported end-to-end shell (issue M11-02) is intentionally honest about part
 4. Export IFC / glTF / plan only after checking the export-quality label.
 5. Download diagnostics when the export is scaffold-only or partial.
 
-What still depends on decoder / partition-stream work: reliable levels, doors, windows, floors, and typed geometry from arbitrary real `.rvt` projects. Until that lands, treat IFC export as a scaffold-plus-diagnostics workflow except on the narrow version-gated research paths documented in [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md).
+What still depends on decoder / partition-stream work: schema-field Walls, typed Door/Window host IFC, Floor↔ElemTable id binding, Level ElementId storey assignment for Floors/Rooms, compound wall layers, and slab extrusion thickness. Partition MVP already recovers Level / Material / Room / Floor plan-loop names (and 2023 ArcWall geometry on the research path). **RE-19 / RE-20 (2026-08-29) closed negative** on magnetar corpora — no Door vs Window discriminator, no schema-field/2024 Wall envelope, and no recoverable Level ElementId map — so stop re-probing those ids until new corpus or signals appear. Treat IFC export as scaffold-plus-diagnostics except on the narrow version-gated paths in [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md).
 
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 
@@ -199,7 +199,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-**Fifteen CLIs** ship in the box:
+**Sixteen CLIs** ship in the box:
 
 ```bash
 cargo build --release
@@ -257,6 +257,9 @@ cargo build --release
 
 # Global/ElemTable dump — declared element-ids + record layout (family 12B / project 28B/40B)
 ./target/release/rvt-elem-table my-project.rvt --limit 20
+
+# Production decoded elements / class counts (JSON; mirrors Python element_counts)
+./target/release/rvt-elements my-project.rvt --counts
 
 # Stream-level write path — patch named OLE streams via JSON manifest
 ./target/release/rvt-write my-project.rvt --patches patches.json -o patched.rvt

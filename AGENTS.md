@@ -42,7 +42,7 @@ Rust (`cargo build --release`), Python (`maturin develop`), and the viewer
 ### Rust: build, test, run the CLIs
 
 ```bash
-cargo build --release                 # 14 CLI binaries land in target/release/
+cargo build --release                 # 16 CLI binaries land in target/release/
 cargo test --release --lib --bins     # ~755 unit tests
 cargo test --release --doc            # doc tests
 cargo fmt --all -- --check            # matches CI
@@ -136,9 +136,18 @@ Synthetic fixtures parse cleanly through the whole pipeline but decode as
 `scaffold-only` (no validated building elements) — that is the expected result,
 not a bug. Real element geometry requires the external corpora.
 
-### Pre-push quality gate
+### Local quality gates
 
-Mirror CI's fmt / clippy / rustdoc / test jobs in one command before pushing:
+Day-to-day contributor gate (fmt / clippy / rustdoc / tests; optional flags for
+viewer, corpus, ifcopenshell, deny, audit):
+
+```bash
+tools/check-local.sh                # required gates only
+tools/check-local.sh --viewer       # + viewer typecheck/build
+tools/check-local.sh --all-optional # every optional gate
+```
+
+Pre-push mirror of CI (same required gates, plus optional supply-chain / bench):
 
 ```bash
 tools/quality.sh            # fmt, clippy -D warnings, rustdoc -D warnings, tests
@@ -146,8 +155,9 @@ tools/quality.sh --full     # the above plus `cargo bench --no-run`
 ```
 
 Supply-chain checks (CI's `deny` and `audit` jobs) are optional locally and are
-skipped by `quality.sh` when not installed. To run them, install the tools once
-and invoke directly:
+skipped by `quality.sh` when not installed. With `check-local.sh`, pass
+`--deny` / `--audit` (those flags fail clearly if the tools are missing). To
+install the tools once and invoke directly:
 
 ```bash
 cargo install cargo-deny cargo-audit --locked
