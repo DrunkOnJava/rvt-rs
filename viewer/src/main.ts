@@ -372,15 +372,42 @@ function buildTreeNode(node: SceneNode): HTMLElement {
   const wrap = document.createElement('div');
   const row = document.createElement('div');
   row.className = 'tree-node';
+  row.setAttribute('role', 'treeitem');
+  row.tabIndex = 0;
   row.textContent = `${node.name} · ${node.ifc_type}`;
-  row.addEventListener('click', (ev) => {
+  const activate = (ev: Event) => {
     ev.stopPropagation();
+    document
+      .querySelectorAll('.tree-node.selected')
+      .forEach((el) => el.classList.remove('selected'));
+    row.classList.add('selected');
     if (node.entity_index !== null) showElementInfo(node.entity_index);
+  };
+  row.addEventListener('click', activate);
+  row.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      activate(ev);
+      return;
+    }
+    if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+    ev.preventDefault();
+    const items = Array.from(
+      treeEl.querySelectorAll<HTMLElement>('.tree-node[role="treeitem"]'),
+    );
+    const idx = items.indexOf(row);
+    if (idx < 0) return;
+    const next =
+      ev.key === 'ArrowDown'
+        ? items[Math.min(items.length - 1, idx + 1)]
+        : items[Math.max(0, idx - 1)];
+    next?.focus();
   });
   wrap.appendChild(row);
   if (node.children.length > 0) {
     const ch = document.createElement('div');
     ch.className = 'tree-children';
+    ch.setAttribute('role', 'group');
     for (const c of node.children) ch.appendChild(buildTreeNode(c));
     wrap.appendChild(ch);
   }
@@ -821,6 +848,20 @@ fileInput.addEventListener('change', () => {
   if (f) void loadBytes(f);
 });
 
+// Keyboard: Escape clears tree selection / returns focus toward file open.
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape') return;
+  const selected = treeEl.querySelector('.tree-node.selected');
+  if (selected) {
+    selected.classList.remove('selected');
+    infoEl.textContent =
+      'Select an element in the 3-D view or scene tree (Enter / Space on a tree row).';
+  }
+  if (!dropzone.classList.contains('hidden')) {
+    pickBtn.focus();
+  }
+});
+
 ['dragenter', 'dragover'].forEach((type) =>
   document.body.addEventListener(type, (ev) => {
     ev.preventDefault();
@@ -1007,7 +1048,7 @@ function renderDemoGallery(catalog: DemoCatalog): void {
   const attributionBits = [
     catalog.attribution,
     catalog.license,
-    'Same-origin static assets only — click loads bytes in-tab.',
+    'Same-origin static assets only — Activate loads bytes in-tab.',
   ].filter(Boolean);
   demoAttributionEl.textContent = attributionBits.join(' ');
 
@@ -1020,7 +1061,9 @@ function renderDemoGallery(catalog: DemoCatalog): void {
       link.href = demoAssetUrl(demo.file);
       link.download = pathBasename(demo.file);
       link.className = 'demo-card';
+      link.setAttribute('role', 'listitem');
       link.setAttribute('data-demo-id', demo.id);
+      link.setAttribute('aria-label', `Download reference ${demo.name}`);
       fillDemoCard(link, demo, false);
       demoListEl.appendChild(link);
       continue;
@@ -1029,7 +1072,12 @@ function renderDemoGallery(catalog: DemoCatalog): void {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'demo-card';
+    card.setAttribute('role', 'listitem');
     card.setAttribute('data-demo-id', demo.id);
+    card.setAttribute(
+      'aria-label',
+      canOpen ? `Open demo ${demo.name}` : `Demo unavailable: ${demo.name}`,
+    );
     if (!canOpen) {
       card.disabled = true;
     } else {
