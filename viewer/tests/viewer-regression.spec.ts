@@ -41,6 +41,39 @@ test('loads the viewer shell with disabled export actions and demo gallery', asy
   await expect(page.getByLabel('Supported Revit file profile')).toContainText(/scaffold ~25%/i);
 });
 
+test('accessibility shell: landmarks, skip link, keyboard tree activation', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#status')).toHaveText(/ready/);
+
+  await expect(page.getByRole('link', { name: /Skip to viewport/i })).toBeAttached();
+  await expect(page.getByRole('banner')).toBeVisible();
+  await expect(page.getByRole('main', { name: /3D viewport/i })).toBeVisible();
+  await expect(page.getByLabel('Scene tree and categories')).toBeVisible();
+  await expect(page.getByLabel('File status and element details')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Choose file/i })).toBeVisible();
+  await expect(page.getByLabel('Export glTF')).toBeDisabled();
+  await expect(page.getByLabel('Export IFC')).toBeDisabled();
+  await expect(page.getByLabel('Export plan SVG')).toBeDisabled();
+
+  // Tab order reaches the file picker and export controls.
+  await page.keyboard.press('Tab');
+  await expect(page.locator(':focus')).toBeVisible();
+
+  const demo = page.locator('[data-demo-id="architectural-2024"]');
+  if (await demo.isEnabled()) {
+    await demo.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#status')).toHaveText(/loaded/);
+    const treeNode = page.locator('.tree-node[role="treeitem"]').first();
+    await expect(treeNode).toBeVisible();
+    await treeNode.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#info')).toContainText(/ifc_type|IFCPROJECT/i);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.tree-node.selected')).toHaveCount(0);
+  }
+});
+
 stagedDemoTest(
   'MVP workflow via demo gallery: open → status/confidence → inspect → export labels',
   async ({ page }) => {
