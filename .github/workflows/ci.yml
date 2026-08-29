@@ -63,6 +63,8 @@ jobs:
           toolchain: stable
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
@@ -113,6 +115,8 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build
         run: cargo build --release --all-targets
       - name: Unit tests
@@ -161,6 +165,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build + run synthetic-project integration test
         run: cargo test --release --test ifc_synthetic_project
       - name: Assert entity counts in committed fixture
@@ -204,6 +210,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           key: corpus-tier1
       - name: Tier-one open / schema / known-count inventory
         env:
@@ -234,6 +241,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           key: corpus-tier2
       - name: Tier-two open / schema health
         env:
@@ -276,6 +284,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           key: writer-patch-corpus
       - name: Run stream patch corpus tests
         env:
@@ -314,6 +323,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           key: ifcopenshell-real-project
       - name: Install IfcOpenShell (prebuilt wheel)
         run: |
@@ -435,6 +445,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo doc --no-deps --lib
 
   # Q-09: benchmark-build regression gate.
@@ -461,6 +473,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           key: bench-build
       # `--no-run` compiles the benches but doesn't execute them.
       # This catches API drift (renamed public items, changed
@@ -490,6 +503,8 @@ jobs:
         with:
           toolchain: nightly
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # Mirror the [package.metadata.docs.rs] settings from Cargo.toml
       # (`all-features = true`) — if these drift, update both.
       - run: cargo +nightly doc --no-deps --all-features
@@ -527,6 +542,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           key: python-wheel-${{ matrix.os }}
       # Build the abi3 wheel. SEC-12/13: wheel sources live in the
       # `rvt-py/` workspace member crate; maturin follows the
@@ -598,14 +614,29 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
-          cache: npm
-          cache-dependency-path: viewer/package-lock.json
+          package-manager-cache: false
+      - name: Locate npm cache
+        id: npm-cache-dir
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('viewer/package-lock.json') }}
+          restore-keys: node-cache-${{ runner.os }}-x64-npm-
       - name: Install viewer dependencies
         working-directory: viewer
         run: npm ci
       - name: Audit viewer npm dependencies
         working-directory: viewer
         run: npm audit --audit-level=high
+      - name: Save npm cache
+        if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
   pii-guard:
     name: PII guard
