@@ -6,7 +6,7 @@
 //! corpora and Floors/Rooms remain storey-unassigned — that is
 //! intentional (fail closed), not a silent invent.
 //!
-//! When both sides carry ElementIds that match, [`storey_index_for`]
+//! When both sides carry ElementIds that match, [`LevelStoreyBind::storey_index_for`]
 //! returns the storey index; otherwise `None`.
 
 use crate::elements::floor::Floor;
