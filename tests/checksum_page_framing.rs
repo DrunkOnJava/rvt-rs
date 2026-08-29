@@ -97,12 +97,11 @@ fn synthetic_multipage_bare_inflate_does_not_round_trip() {
     // Control: production-style bare inflate on checksum-paged stored bytes.
     // flate2 may Err (hard fail) or Ok with drifted bytes (silent corruption).
     // Either outcome falsifies a correct decode without strip.
-    match inflate_at(&paged, 0) {
-        Ok(naive) => assert_ne!(
+    if let Ok(naive) = inflate_at(&paged, 0) {
+        assert_ne!(
             naive, payload,
             "without stripping, a successful inflate must not match the original payload"
-        ),
-        Err(_) => {}
+        );
     }
 
     // Experiment: strip then inflate recovers the payload exactly.
