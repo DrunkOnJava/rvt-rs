@@ -41,7 +41,7 @@ use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyDict, PyList};
 
-use rvt::{RevitFile as RustRevitFile, elem_table, ifc, walker};
+use rvt::{RevitFile as RustRevitFile, elem_table, elements, ifc, walker};
 
 fn to_py_io<E: std::fmt::Display>(e: E) -> PyErr {
     PyIOError::new_err(e.to_string())
@@ -179,6 +179,18 @@ fn decoded_element_to_dict<'py>(
         fields.append(fd)?;
     }
     d.set_item("fields", fields)?;
+
+    // Lane Five MVP typed projection (null when class is not in the
+    // schema-driven MVP set — ArcWall stays on the partition path).
+    match elements::typed_json::mvp_typed_view(element) {
+        Some(typed) => {
+            let json_module = py.import("json")?;
+            let typed_json = serde_json::to_string(&typed).map_err(to_py_val)?;
+            let typed_obj = json_module.call_method1("loads", (typed_json,))?;
+            d.set_item("typed", typed_obj)?;
+        }
+        None => d.set_item("typed", py.None())?,
+    }
     Ok(d)
 }
 
@@ -528,9 +540,11 @@ impl PyRevitFile {
 
     /// Conservative production decoded elements as Python dicts.
     ///
-    /// Each element has `id`, `class_name`, `byte_range`, and
-    /// `fields`. The fields use the same `name` / `kind` shape as
-    /// `read_adocument()`.
+    /// Each element has `id`, `class_name`, `byte_range`, `fields`,
+    /// and `typed`. The fields use the same `name` / `kind` shape as
+    /// `read_adocument()`. `typed` is a Lane Five MVP projection
+    /// (`Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` /
+    /// `Material`) or `None` for other classes.
     fn decoded_elements<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let elements: Vec<_> = walker::iter_elements_with_limits(
             &mut self.inner,
@@ -575,7 +589,18 @@ impl PyRevitFile {
     /// Produce an IFC4 STEP string for this Revit file via
     /// `ifc::RvtDocExporter`. Document-level export — project name,
     /// description, units, classifications. Raises `ValueError` if
-    /// the file can't be parsed far enough to produce a model.
+    /// the file can't be parsed far enough to produce a model, or if
+    /// `mode` quality gates are not met.
+    ///
+    /// Modes (forward-compatible with Lane 7 geometry work):
+    /// - `scaffold` — always accept a spec-valid envelope (default)
+    /// - `typed-no-geometry` — require validated typed elements
+    /// - `geometry` — require typed elements + geometry
+    /// - `strict` — geometry + metadata/units/storeys + no warnings
+    ///
+    /// On synthetic / scaffold-only fixtures, only `scaffold`
+    /// typically succeeds; stronger modes raise `ValueError` until
+    /// real typed/geometry recovery is available.
     #[pyo3(signature = (mode = "scaffold"))]
     fn write_ifc(&mut self, mode: &str) -> PyResult<String> {
         let mode = parse_export_quality_mode(mode)?;
@@ -681,5 +706,12 @@ fn _rvt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rvt_to_ifc, m)?)?;
     m.add_function(wrap_pyfunction!(rvt_to_ifc_diagnostics, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add(
+        "MVP_TYPED_CLASSES",
+        elements::MVP_TYPED_CLASSES
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+    )?;
     Ok(())
 }

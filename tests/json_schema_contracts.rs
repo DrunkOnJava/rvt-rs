@@ -182,6 +182,7 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         "element-records.schema.json",
         "export-diagnostics.schema.json",
         "corpus-report.schema.json",
+        "element-counts.schema.json",
     ] {
         let schema = load_schema(name);
         assert_eq!(
@@ -192,6 +193,43 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         assert!(schema["title"].is_string(), "{name} should declare a title");
         assert_eq!(schema["type"], "object", "{name} should describe an object");
     }
+
+    let decoded = load_schema("decoded-elements.schema.json");
+    assert_eq!(
+        decoded["$schema"],
+        "https://json-schema.org/draft/2020-12/schema"
+    );
+    assert!(decoded["$id"].is_string());
+    assert!(decoded["title"].is_string());
+    assert_eq!(decoded["type"], "array");
+}
+
+#[test]
+fn tier1_elements_cli_validates_decoded_and_counts_schemas() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("corpus")
+        .join("tier1")
+        .join("architectural-2024")
+        .join("architectural-2024.rvt");
+    if !fixture.exists() {
+        eprintln!(
+            "skipping tier1 elements schema test: missing {}",
+            fixture.display()
+        );
+        return;
+    }
+
+    let elements = command_json(env!("CARGO_BIN_EXE_rvt-elements"), &[fixture.as_os_str()]);
+    validate(&load_schema("decoded-elements.schema.json"), &elements)
+        .expect("decoded-elements schema validation");
+
+    let counts = command_json(
+        env!("CARGO_BIN_EXE_rvt-elements"),
+        &[fixture.as_os_str(), std::ffi::OsStr::new("--counts")],
+    );
+    validate(&load_schema("element-counts.schema.json"), &counts)
+        .expect("element-counts schema validation");
+    assert!(counts["total"].as_u64().is_some());
 }
 
 #[test]
