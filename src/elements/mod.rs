@@ -4,9 +4,8 @@
 //! one Revit class. Adding a new class is a three-file change:
 //!
 //! 1. Add `mod my_class;` here.
-//! 2. Register it in [`all_decoders`] (the per-class decoder registry;
-//!    production `iter_elements` still uses generic `decode_instance`
-//!    until DEC-01..05 land).
+//! 2. Register it in [`all_decoders`] (consulted by production
+//!    [`crate::walker::iter_elements`] for [`MVP_TYPED_CLASSES`]).
 //! 3. Implement `ElementDecoder` in `src/elements/my_class.rs` —
 //!    see `level.rs` as the reference example.
 //!
@@ -32,6 +31,10 @@
 //! Level, Wall, Floor, Door, Window, Room, Material.
 //! ArcWall uses a separate partition-byte path
 //! ([`arc_wall`]) because its wire format is not schema-field based.
+//! Production [`crate::walker::iter_elements`] prefers the typed
+//! registry for MVP classes on `Global/Latest` and merges
+//! version-gated ArcWall partition recovers — fail-closed when
+//! typed decode rejects.
 
 pub mod annotations;
 pub mod arc_wall;
@@ -195,6 +198,54 @@ pub fn decode_typed(
         ))
     })?;
     decoder.decode(bytes, schema, index)
+}
+
+/// Prefer a typed MVP decoder for `class_name`, else generic
+/// [`crate::walker::decode_instance_with_limits`].
+///
+/// When `class_name` is in [`MVP_TYPED_CLASSES`] and the registered
+/// decoder rejects (wrong schema / empty), returns `None` — callers
+/// must not invent a typed success via the generic fallback.
+/// Non-MVP classes always use the generic decoder.
+pub fn decode_instance_prefer_typed(
+    bytes: &[u8],
+    start: usize,
+    schema: &formats::ClassEntry,
+) -> Option<DecodedElement> {
+    decode_instance_prefer_typed_with_limits(
+        bytes,
+        start,
+        schema,
+        crate::walker::WalkerLimits::default(),
+    )
+}
+
+/// Same as [`decode_instance_prefer_typed`] with explicit walker caps
+/// on the generic (non-MVP) path.
+pub fn decode_instance_prefer_typed_with_limits(
+    bytes: &[u8],
+    start: usize,
+    schema: &formats::ClassEntry,
+    limits: crate::walker::WalkerLimits,
+) -> Option<DecodedElement> {
+    use typed_json::is_mvp_typed_class;
+    if is_mvp_typed_class(&schema.name) {
+        let slice = bytes.get(start..)?;
+        match decode_typed(slice, schema, &HandleIndex::new()) {
+            Ok(mut decoded) => {
+                // Typed decoders walk from offset 0 of `slice`; remap
+                // byte_range into the parent buffer coordinate space.
+                decoded.byte_range.start = decoded.byte_range.start.saturating_add(start);
+                decoded.byte_range.end = decoded.byte_range.end.saturating_add(start);
+                Some(decoded)
+            }
+            Err(_) => None,
+        }
+    } else {
+        Some(crate::walker::decode_instance_with_limits(
+            bytes, start, schema, limits,
+        ))
+    }
 }
 
 #[cfg(test)]

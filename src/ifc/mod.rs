@@ -694,11 +694,12 @@ fn export_rvt_doc(
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
 
-    // RE-14.3 / RE-15 — shared partition ArcWall path. The walker's
-    // generic schema-driven iter_elements() does not recognise
-    // Partitions/* record framing, so ArcWall instances (tag
-    // 0x0191) are invisible to that path. `partition_arc_walls`
-    // is the single scan used by IFC export + diagnostics.
+    // RE-14.3 / RE-15 — shared partition ArcWall path. Production
+    // `iter_elements` also merges validated ArcWalls as
+    // `DecodedElement`s for API consumers; IFC emission of those
+    // walls remains here so storey indices from recovered elevations
+    // stay attached. Dedup against walker-emitted ElementIds is
+    // defensive (walker→IFC currently skips ArcWall class).
     //
     // See `reports/element-framing/RE-14.3-synthesis.md` and
     // `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
@@ -716,7 +717,21 @@ fn export_rvt_doc(
             if building_storeys.is_empty() {
                 building_storeys = recovery.storeys;
             }
+            let existing_ids: std::collections::HashSet<u32> = entities
+                .iter()
+                .filter_map(|e| match e {
+                    entities::IfcEntity::BuildingElement { type_guid, .. } => {
+                        type_guid.as_ref().and_then(|g| g.parse().ok())
+                    }
+                    _ => None,
+                })
+                .collect();
             for wall in &scan.walls {
+                if let Some(id) = wall.element_id() {
+                    if existing_ids.contains(&id) {
+                        continue;
+                    }
+                }
                 let geometry = if policy.include_geometry {
                     arcwall_geometry_from_partition_wall(wall)
                 } else {
@@ -733,7 +748,7 @@ fn export_rvt_doc(
                 entities.push(entities::IfcEntity::BuildingElement {
                     ifc_type: "IFCWALL".to_string(),
                     name,
-                    type_guid: None,
+                    type_guid: wall.element_id().map(|id| id.to_string()),
                     storey_index,
                     material_index: None,
                     property_set,
