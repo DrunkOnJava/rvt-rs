@@ -184,6 +184,8 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         "corpus-report.schema.json",
         "element-counts.schema.json",
         "support-matrix.schema.json",
+        "es-observation.schema.json",
+        "es-capability.schema.json",
     ] {
         let schema = load_schema(name);
         assert_eq!(

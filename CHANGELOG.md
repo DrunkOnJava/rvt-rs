@@ -13,6 +13,13 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Phase 1 research contracts (H-ES5 prep)** — `DocumentIdentity` /
+  `ScopedElementRef` / `SourceSpan`, named `EvidenceTier` + evidence /
+  edge ledgers, `EsReferenceOccurrence` + fixture transition types,
+  `docs/research/unified-research-report.md`, `research/es-remap/`
+  scaffold, and `es-observation` / `es-capability` JSON schemas.
+  **Does not** claim ES ElementId remapping works; Phase 2 fixture
+  generation remains blocked on a Revit-hosted API oracle.
 - **Finding 1 / checksum-page framing (#151, Discussion #112)** —
   gated strip of trailing page checksums before inflate on
   `Partitions/*` and `Global/*` streams; Formats/Latest stays ungated

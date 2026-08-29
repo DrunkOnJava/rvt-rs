@@ -56,6 +56,9 @@
 //! - [`compression`] — truncated-gzip decode
 //! - [`class_index`] — fast class-name inventory
 //! - [`corpus`] — cross-version delta analysis
+//! - [`identity`] — document-scoped ElementId / UniqueId contracts (Phase 1)
+//! - [`evidence`] — evidence tiers + research edge ledgers (Phase 1)
+//! - [`es_refs`] — ES reference occurrence locator contracts (Phase 1; no decoder)
 //! - [`writer`] — byte-preserving OLE round-trip
 //! - [`redact`] — shared PII scrubbers for all CLIs
 //! - [`ifc`] — IFC export scaffold
@@ -111,8 +114,11 @@ pub mod corpus;
 pub mod elem_table;
 pub mod elements;
 pub mod error;
+pub mod es_refs;
+pub mod evidence;
 pub mod formats;
 pub mod geometry;
+pub mod identity;
 pub mod ifc;
 pub mod level_bind;
 pub mod object_graph;

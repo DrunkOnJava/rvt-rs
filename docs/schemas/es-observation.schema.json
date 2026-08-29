@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/es-observation.schema.json",
+  "title": "ES remap research observation",
+  "description": "Versioned observation record for ES ElementId remapping research (H-ES5). Observations are research artifacts — they do not prove production decode success or converter-grade IFC.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "observation_id",
+    "fixture_id",
+    "kind",
+    "evidence_tier",
+    "document_key"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "observation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fixture_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "transition_id": {
+      "type": ["string", "null"]
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "scalar",
+        "copy",
+        "remap_candidate",
+        "null_baseline",
+        "noop_baseline",
+        "localization_attempt"
+      ]
+    },
+    "evidence_tier": {
+      "type": "string",
+      "enum": ["E0", "E1", "E2", "E3", "E4", "E5"]
+    },
+    "document_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "before_element_id": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "after_element_id": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "unique_id": {
+      "type": ["string", "null"]
+    },
+    "path": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["field", "index", "map_key", "opaque"]
+          },
+          "name": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 },
+          "key": { "type": "string" },
+          "label": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "span": {
+      "type": ["object", "null"],
+      "required": ["stream", "start", "end"],
+      "properties": {
+        "stream": { "type": "string" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "oracle_agrees": {
+      "type": ["boolean", "null"],
+      "description": "Null until a Revit API oracle is available."
+    },
+    "non_claims": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    }
+  },
+  "additionalProperties": true
+}

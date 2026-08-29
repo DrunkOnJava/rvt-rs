@@ -1,0 +1,77 @@
+# ES-remap fixture law (Phase 1 sketch)
+
+schema_version: 1
+program: es-elementid-remap
+hypothesis: H-ES5
+governing_report: docs/research/unified-research-report.md
+
+# Fixture law
+law:
+  discovery_source: owned_synthetics
+  production_corpora: regression_only
+  mutations_per_transition: 1
+  unsupported_versions: fail_closed
+  formats_latest_strip: disabled
+  default_ifc_emits_es: false
+  es_refs_score_elemtable_ownership: false
+
+# Phase A seed — no bytes generated on Cloud (no Revit API)
+fixtures:
+  - id: S_All
+    family: PhaseA
+    status: planned
+    revit_year: 2024
+    notes:
+      - Minimal owned project seed for oracle capture
+      - Bytes not present in-repo until Revit-hosted generation
+
+  - id: ES-remap-00
+    family: ES-remap-00
+    status: contract_only
+    revit_year: 2024
+    notes:
+      - Manifest + schema contracts only
+      - No ElementId remap claim
+
+# Transition sketches (one mutation each) — blocked on oracle
+transitions:
+  - id: t-noop-S_All
+    before: S_All
+    after: S_All
+    mutation: no_op
+    tier: E0
+
+  - id: t-identity-S_All
+    before: S_All
+    after: S_All-identity
+    mutation: identity_save
+    tier: E0
+    status: planned
+
+# Phase 2 families (Revit required)
+phase2_families:
+  - N1
+  - N2
+  - N3
+  - N4
+  - R1
+  - R2
+  - C1
+  - C2
+  - C3a
+  - C4a
+
+oracle:
+  required: true
+  kind: revit_api
+  cloud_available: false
+
+capability_stub:
+  capability_id: es.elementid_remap
+  status: research
+  evidence_tier: E0
+  claims: []
+  non_claims:
+    - ES ElementId remapping is not implemented
+    - No production corpus discovery oracle
+    - No converter-grade IFC from ES edges
