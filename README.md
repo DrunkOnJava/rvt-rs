@@ -94,7 +94,21 @@ install/smoke-test paths.
 
 Drop a `.rvt` / `.rfa` / `.rte` / `.rft` at <https://drunkonjava.github.io/rvt-rs/> — nothing leaves the tab. The viewer compiles the core library to WebAssembly (`wasm-pack build --target web --features wasm`), runs the parse in a dedicated worker, and renders 3D via Three.js. One-click buttons export the model as **glTF 2.0 binary**, **IFC4 STEP**, or **plan-view SVG**. URL state (camera pose + category filters) is shareable via the hash fragment.
 
+The landing dropzone also includes a **demo gallery** staged from [`docs/viewer-demos.json`](docs/viewer-demos.json) (license/provenance + expected quality labels). Demo bytes are same-origin static assets only.
+
 Privacy posture is CI-enforced: the deploy workflow (`.github/workflows/deploy-viewer.yml`) runs `wasm-objdump -j Import` on every build and fails if the compiled `.wasm` imports `fetch`, `XMLHttpRequest`, or `WebSocket`. See [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md).
+
+### Supported MVP workflow
+
+The supported end-to-end shell (issue M11-02) is intentionally honest about partial decode:
+
+1. Open a supported Revit file locally (drop, file picker, or a redistributable gallery demo).
+2. Read the File status / confidence panel before trusting geometry.
+3. Inspect decoded entities in the scene tree or by picking in the 3-D view.
+4. Export IFC / glTF / plan only after checking the export-quality label.
+5. Download diagnostics when the export is scaffold-only or partial.
+
+What still depends on decoder / partition-stream work: reliable levels, doors, windows, floors, and typed geometry from arbitrary real `.rvt` projects. Until that lands, treat IFC export as a scaffold-plus-diagnostics workflow except on the narrow version-gated research paths documented in [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md).
 
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 

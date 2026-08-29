@@ -91,6 +91,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+# Native extension produced by `maturin develop` (editable install)
+# lands in python/rvt/ — it's a build artifact, never committed.
+*.so
 .venv/
 venv/
 env/
@@ -120,5 +123,7 @@ pkg/
 viewer/pkg/
 viewer/node_modules/
 viewer/dist/
+viewer/public/demos/*
+!viewer/public/demos/.gitkeep
 
 _corpus_candidates/

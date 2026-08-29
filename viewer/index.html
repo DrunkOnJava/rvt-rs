@@ -149,7 +149,7 @@
         text-align: center;
         line-height: 1.5;
       }
-      #dropzone button {
+      #pick-file {
         margin-top: 20px;
         padding: 8px 18px;
         background: #1a3a5f;
@@ -159,7 +159,7 @@
         font-size: 13px;
         cursor: pointer;
       }
-      #dropzone button:hover {
+      #pick-file:hover {
         background: #264f7a;
       }
       #dropzone.hidden {
@@ -319,19 +319,111 @@
       .support-link:hover {
         text-decoration: underline;
       }
+      #demo-gallery {
+        width: min(720px, 92%);
+        margin-top: 28px;
+        text-align: left;
+      }
+      #demo-gallery h2 {
+        margin: 0 0 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #6b7584;
+      }
+      #demo-gallery .gallery-attribution {
+        font-size: 11px;
+        color: #8b95a3;
+        line-height: 1.45;
+        margin-bottom: 10px;
+      }
+      #demo-list {
+        display: grid;
+        gap: 8px;
+        max-height: min(42vh, 360px);
+        overflow-y: auto;
+      }
+      .demo-card {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        gap: 10px;
+        align-items: start;
+        padding: 8px;
+        border: 1px solid #1d2430;
+        background: rgba(15, 20, 27, 0.92);
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        width: 100%;
+        font: inherit;
+      }
+      .demo-card:hover:not(:disabled) {
+        border-color: #2a4a6f;
+        background: rgba(26, 58, 95, 0.35);
+      }
+      .demo-card:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .demo-card img {
+        width: 72px;
+        height: 40px;
+        object-fit: cover;
+        background: #11161d;
+        border: 1px solid #1d2430;
+      }
+      .demo-card .demo-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #d7dce3;
+      }
+      .demo-card .demo-meta {
+        font-size: 10px;
+        color: #8b95a3;
+        margin-top: 2px;
+        line-height: 1.4;
+        white-space: pre-line;
+      }
+      .demo-card .demo-quality {
+        display: inline-block;
+        margin-top: 4px;
+        padding: 1px 6px;
+        border: 1px solid #6a4f22;
+        color: #ffd28a;
+        font-size: 10px;
+      }
+      .demo-card .demo-quality.geometry {
+        border-color: #2e684b;
+        color: #94e3b6;
+      }
+      .demo-card .demo-quality.reference {
+        border-color: #3c5f86;
+        color: #9fd0ff;
+      }
+      .mvp-workflow {
+        margin: 10px 0 14px;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #8b95a3;
+      }
+      .mvp-workflow strong {
+        color: #d7dce3;
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
     <div id="app">
       <header>
         <h1>rvt-rs · viewer</h1>
-        <span class="meta" id="file-meta">drop a .rvt / .rfa / .rte / .rft file anywhere</span>
+        <span class="meta" id="file-meta">drop a .rvt / .rfa / .rte / .rft file anywhere · partial decode</span>
         <span style="flex: 1"></span>
         <span class="quality-pill" id="export-quality">quality: pending</span>
         <button class="export-btn" id="export-glb" disabled title="Download 3D model as glTF 2.0 binary">
           Export glTF
         </button>
-        <button class="export-btn" id="export-ifc" disabled title="Download as IFC4 STEP">
+        <button class="export-btn" id="export-ifc" disabled title="Download as IFC4 STEP · quality label reflects decoded coverage">
           Export IFC
         </button>
         <button class="export-btn" id="export-svg" disabled title="Download 2D plan view as SVG">
@@ -348,14 +440,24 @@
         <div id="dropzone">
           <div class="big">Drop a Revit file here</div>
           <div class="hint">
-            Nothing leaves this tab — every byte is parsed in the browser. No upload, no
-            account, no telemetry. See
+            Client-side only — every byte is parsed in this tab. No upload, no account, no
+            telemetry. Decode coverage is partial: expect scaffold/status/diagnostics unless
+            the file matches the narrow supported profile. See
             <a style="color:#6bb7ff" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/viewer-privacy-posture.md"
-              >the privacy posture doc</a
+              >privacy</a
+            >
+            and
+            <a style="color:#6bb7ff" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md"
+              >status</a
             >.
           </div>
           <button id="pick-file">Choose file…</button>
           <input id="file-input" type="file" accept=".rvt,.rfa,.rte,.rft" hidden />
+          <section id="demo-gallery" aria-label="Redistributable demo gallery">
+            <h2>Demo gallery</h2>
+            <div class="gallery-attribution" id="demo-attribution">Loading redistributable demos…</div>
+            <div id="demo-list"></div>
+          </section>
         </div>
         <div id="status">idle</div>
       </main>
@@ -367,6 +469,13 @@
           <summary>Diagnostics details</summary>
           <pre id="diagnostics-json"></pre>
         </details>
+        <h2>Supported MVP workflow</h2>
+        <div class="mvp-workflow" id="mvp-workflow">
+          <strong>Open locally</strong> → read File status / confidence → inspect decoded
+          elements → export IFC / glTF / plan only after checking the quality label → download
+          diagnostics for partial exports. Typed levels/doors/windows from arbitrary projects
+          still depend on decoder work; see the profile matrix.
+        </div>
         <h2>Supported profile</h2>
         <div class="support-matrix" aria-label="Supported Revit file profile">
           <div class="support-row">
@@ -375,7 +484,7 @@
           </div>
           <div class="support-row">
             <span class="k">IFC now</span>
-            <span class="v">Valid scaffold output; typed real-project evidence is narrow and version-gated.</span>
+            <span class="v">Valid scaffold output; typed real-project evidence is narrow and version-gated (partial decode).</span>
           </div>
           <div class="support-row">
             <span class="k">MVP target</span>
@@ -383,7 +492,7 @@
           </div>
           <div class="support-row">
             <span class="k">Not ready</span>
-            <span class="v">Arbitrary real-model geometry, MEP/structure-heavy projects, and semantic Revit editing.</span>
+            <span class="v">Arbitrary real-model geometry, reliable levels/doors/windows outside the research path, MEP/structure-heavy projects, and semantic Revit editing.</span>
           </div>
           <a class="support-link" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/supported-profile.md">
             Profile details
@@ -391,12 +500,15 @@
           <a class="support-link" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/user-guide.md">
             User guide
           </a>
+          <a class="support-link" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md">
+            Project status
+          </a>
           <a class="support-link" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/diagnostic-semantics.md">
             Diagnostic terms
           </a>
         </div>
         <h2>Element info</h2>
-        <div id="info">Click an element in the 3-D view.</div>
+        <div id="info">Click an element in the 3-D view or scene tree.</div>
         <h2>Schedule</h2>
         <div id="schedule-summary"></div>
       </aside>

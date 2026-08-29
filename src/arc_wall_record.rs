@@ -52,8 +52,9 @@
 //! ```
 //!
 //! Total fixed size: 115 B. Records pack at 292 or 568 B stride in the
-//! partition stream; the remaining bytes after the fixed core are
-//! padding or inter-record content (not yet decoded).
+//! partition stream; the remaining bytes after the fixed core are the
+//! singleton trailer (177 B) documented in
+//! `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
 
 use crate::{Error, Result};
 
@@ -72,11 +73,53 @@ pub const SCHEMA_FAMILY_MARKER: u32 = 0x0008_8004;
 /// Record terminator byte found at +0x72 of every standard record.
 pub const RECORD_TRAILER: u8 = 0x03;
 
-/// Minimum bytes required to decode a standard ArcWall record.
+/// Minimum bytes required to decode a standard ArcWall record core.
 pub const STANDARD_RECORD_MIN_SIZE: usize = 0x73;
+
+/// Singleton stride observed on Einhoven Partitions/5 (core + 177 B
+/// trailer). Paired records use a 568 B stride; the trailer fields
+/// decoded below still live in the first 177 B after the core.
+pub const STANDARD_RECORD_SINGLETON_STRIDE: usize = 292;
+
+/// First byte past the fixed core (`+0x73`).
+pub const STANDARD_TRAILER_START: usize = 0x73;
+
+/// Absolute record offset of the validated ElementId u32 (RE-15).
+pub const TRAILER_ELEMENT_ID_OFFSET: usize = 0x10e;
+
+/// Absolute record offset of the ElementId duplicate / echo u32.
+pub const TRAILER_ELEMENT_ID_DUP_OFFSET: usize = 0x11c;
+
+/// Absolute record offset of the shared type-symbol u32 candidate.
+pub const TRAILER_TYPE_ID_OFFSET: usize = 0xfe;
+
+/// Absolute record offset of the base-elevation f64 (matches start Z).
+pub const TRAILER_BASE_ELEVATION_OFFSET: usize = 0xf6;
+
+/// End of the last trailer field we decode (`+0x11c` + 4).
+pub const STANDARD_TRAILER_DECODE_END: usize = TRAILER_ELEMENT_ID_DUP_OFFSET + 4;
 
 /// Revit releases covered by this 2023 standard-variant decoder.
 pub const ARC_WALL_STANDARD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023];
+
+/// Optional fields recovered from the 177 B singleton trailer
+/// (RE-15). Only confidently validated slots are exposed — thickness
+/// and Level ElementId are **not** present as stable trailer fields
+/// on the Einhoven 2023 corpus.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ArcWallTrailer {
+    /// ElementId at `+0x10e`, accepted only when it equals the echo
+    /// at `+0x11c` and is not a null/max sentinel. 23/24 Einhoven
+    /// standard walls validate; all 23 hit `Global/ElemTable`.
+    pub element_id: Option<u32>,
+    /// Shared u32 at `+0xfe`. Constant `0x217a` across all 24 Einhoven
+    /// standard walls and present in ElemTable — interpreted as a
+    /// WallType / symbol handle candidate (not yet joined to width).
+    pub type_id: Option<u32>,
+    /// f64 at `+0xf6`. Matches the core start-point Z on every
+    /// observed record — the wall's base elevation in feet.
+    pub base_elevation_feet: Option<f64>,
+}
 
 /// Status for a version-scoped standard ArcWall scan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -332,6 +375,76 @@ impl ArcWallRecord {
     pub fn coords_match(&self) -> bool {
         self.coords == self.coords_dup
     }
+
+    /// Unconnected wall height from the core Z delta when both Z
+    /// values are finite and the absolute delta is at least 0.1 ft.
+    ///
+    /// On Einhoven every standard wall carries a 2 m (≈6.562 ft) Z
+    /// rise; there is no separate height f64 in the singleton trailer.
+    pub fn height_feet(&self) -> Option<f64> {
+        let (_, _, sz) = self.start_point();
+        let (_, _, ez) = self.end_point();
+        if !sz.is_finite() || !ez.is_finite() {
+            return None;
+        }
+        let height = (ez - sz).abs();
+        (height >= 0.1).then_some(height)
+    }
+
+    /// Decode optional singleton-trailer fields starting at the same
+    /// record offset used by [`Self::decode_standard`].
+    ///
+    /// Returns `None` when the buffer does not cover
+    /// [`STANDARD_TRAILER_DECODE_END`]. Partial validation is allowed:
+    /// individual fields may still be `None` inside a present trailer.
+    pub fn decode_trailer(buf: &[u8], offset: usize) -> Option<ArcWallTrailer> {
+        let end = offset.checked_add(STANDARD_TRAILER_DECODE_END)?;
+        if end > buf.len() {
+            return None;
+        }
+
+        let element_id_raw = u32::from_le_bytes([
+            buf[offset + TRAILER_ELEMENT_ID_OFFSET],
+            buf[offset + TRAILER_ELEMENT_ID_OFFSET + 1],
+            buf[offset + TRAILER_ELEMENT_ID_OFFSET + 2],
+            buf[offset + TRAILER_ELEMENT_ID_OFFSET + 3],
+        ]);
+        let element_id_dup = u32::from_le_bytes([
+            buf[offset + TRAILER_ELEMENT_ID_DUP_OFFSET],
+            buf[offset + TRAILER_ELEMENT_ID_DUP_OFFSET + 1],
+            buf[offset + TRAILER_ELEMENT_ID_DUP_OFFSET + 2],
+            buf[offset + TRAILER_ELEMENT_ID_DUP_OFFSET + 3],
+        ]);
+        let element_id =
+            (element_id_raw == element_id_dup && element_id_raw != 0 && element_id_raw != u32::MAX)
+                .then_some(element_id_raw);
+
+        let type_id_raw = u32::from_le_bytes([
+            buf[offset + TRAILER_TYPE_ID_OFFSET],
+            buf[offset + TRAILER_TYPE_ID_OFFSET + 1],
+            buf[offset + TRAILER_TYPE_ID_OFFSET + 2],
+            buf[offset + TRAILER_TYPE_ID_OFFSET + 3],
+        ]);
+        let type_id = (type_id_raw != 0 && type_id_raw != u32::MAX).then_some(type_id_raw);
+
+        let base_elevation = f64::from_le_bytes([
+            buf[offset + TRAILER_BASE_ELEVATION_OFFSET],
+            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 1],
+            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 2],
+            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 3],
+            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 4],
+            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 5],
+            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 6],
+            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 7],
+        ]);
+        let base_elevation_feet = base_elevation.is_finite().then_some(base_elevation);
+
+        Some(ArcWallTrailer {
+            element_id,
+            type_id,
+            base_elevation_feet,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -482,5 +595,42 @@ mod tests {
         let buf = vec![0xff_u8; 10_000];
         let found = ArcWallRecord::find_all(&buf);
         assert!(found.is_empty());
+    }
+
+    #[test]
+    fn height_feet_from_z_delta() {
+        let rec = ArcWallRecord::decode_standard(RECORD_4_HEX, 0).unwrap();
+        let height = rec.height_feet().expect("record 4 has Z delta");
+        assert!((height - 6.5617).abs() < 1e-3);
+    }
+
+    #[test]
+    fn decode_trailer_requires_singleton_span() {
+        assert!(ArcWallRecord::decode_trailer(RECORD_4_HEX, 0).is_none());
+    }
+
+    #[test]
+    fn decode_trailer_validates_element_id_echo() {
+        let mut buf = vec![0u8; STANDARD_RECORD_SINGLETON_STRIDE];
+        buf[..RECORD_4_HEX.len()].copy_from_slice(RECORD_4_HEX);
+        buf[TRAILER_TYPE_ID_OFFSET..TRAILER_TYPE_ID_OFFSET + 4]
+            .copy_from_slice(&0x217au32.to_le_bytes());
+        buf[TRAILER_BASE_ELEVATION_OFFSET..TRAILER_BASE_ELEVATION_OFFSET + 8]
+            .copy_from_slice(&0.0f64.to_le_bytes());
+        buf[TRAILER_ELEMENT_ID_OFFSET..TRAILER_ELEMENT_ID_OFFSET + 4]
+            .copy_from_slice(&0x1c79u32.to_le_bytes());
+        buf[TRAILER_ELEMENT_ID_DUP_OFFSET..TRAILER_ELEMENT_ID_DUP_OFFSET + 4]
+            .copy_from_slice(&0x1c79u32.to_le_bytes());
+
+        let trailer = ArcWallRecord::decode_trailer(&buf, 0).expect("trailer span present");
+        assert_eq!(trailer.element_id, Some(0x1c79));
+        assert_eq!(trailer.type_id, Some(0x217a));
+        assert_eq!(trailer.base_elevation_feet, Some(0.0));
+
+        // Mismatched echo → ElementId rejected.
+        buf[TRAILER_ELEMENT_ID_DUP_OFFSET..TRAILER_ELEMENT_ID_DUP_OFFSET + 4]
+            .copy_from_slice(&0x2u32.to_le_bytes());
+        let trailer = ArcWallRecord::decode_trailer(&buf, 0).unwrap();
+        assert_eq!(trailer.element_id, None);
     }
 }

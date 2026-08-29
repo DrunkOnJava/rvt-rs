@@ -1,0 +1,2 @@
+# Staged by `npm run stage:demos` from docs/viewer-demos.json.
+# Binary demos (*.rvt / *.rfa) are gitignored; catalog + thumbnails are generated at build time.

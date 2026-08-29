@@ -70,7 +70,8 @@ That real-project gate cross-checks:
   IfcOpenShell object graph, currently including the Einhoven
   `IfcWall` population.
 - `IfcRelContainedInSpatialStructure` coverage for exported building
-  elements.
+  elements (one relation per non-empty storey; related-element total
+  must cover diagnostics `building_elements`).
 - Unit assignment presence.
 - Remaining geometry/material limitations stay explicit in diagnostics;
   when a real-project export has geometry, the validator requires matching

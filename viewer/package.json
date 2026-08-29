@@ -6,7 +6,10 @@
   "description": "In-browser Revit viewer powered by rvt-rs compiled to WebAssembly. Zero upload — every byte stays in the tab.",
   "license": "Apache-2.0",
   "scripts": {
+    "stage:demos": "node scripts/stage-demos.mjs",
+    "predev": "npm run stage:demos",
     "dev": "vite",
+    "prebuild": "npm run stage:demos",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:browser": "playwright test --config playwright.config.ts",
