@@ -309,6 +309,16 @@ impl RevitFile {
         self.read_stream(REVIT_PREVIEW_4_0)
     }
 
+    /// Detect-only probe of `TransmissionData` (UTF-16LE vs opaque vs empty).
+    ///
+    /// Does **not** decode linked-model tables or Autodesk transmission
+    /// field layouts — see [`crate::transmission_data`].
+    pub fn transmission_data_probe(
+        &mut self,
+    ) -> Result<crate::transmission_data::TransmissionDataProbe> {
+        crate::transmission_data::probe_transmission_data(self)
+    }
+
     /// Decompress `Formats/Latest` and extract the class/schema inventory.
     pub fn class_names(&mut self) -> Result<BTreeSet<String>> {
         let bytes = self.read_stream(FORMATS_LATEST)?;
