@@ -67,18 +67,33 @@ pub const REVIT_PAGE_PAYLOAD_BYTES: usize = 64_896;
 /// Trailer length cut from each complete stored page before inflate.
 pub const REVIT_PAGE_CHECKSUM_BYTES: usize = REVIT_STORED_PAGE_BYTES - REVIT_PAGE_PAYLOAD_BYTES;
 
-/// Whether a CFB stream path uses the checksum-paged loader route.
-///
-/// `ProjectInformation`, `PartAtom`, `BasicFileInfo`, and preview streams are
-/// deliberately excluded — they are not routed through the paged gzip reader.
-pub fn is_checksum_paged_stream(path: &str) -> bool {
+/// Normalize a CFB stream path for gate comparisons.
+fn clean_stream_path(path: &str) -> &str {
     let clean = path
         .trim_start_matches('/')
         .trim_start_matches("Root Entry/");
-    let clean = clean.trim_start_matches('/');
-    if clean.eq_ignore_ascii_case("Formats/Latest") {
-        return true;
-    }
+    clean.trim_start_matches('/')
+}
+
+/// Whether production inflate wrappers strip checksum-page trailers.
+///
+/// **Wave 2 narrowed gate** (issue #151 / Discussion #112, judge: *narrow*):
+/// enable strip for large multi-member `Partitions/*` and listed `Global/*`
+/// database streams where redistributable corpus evidence shows member-recovery
+/// benefit. **`Formats/Latest` is excluded by default** — naive strip regresses
+/// opportunistic `class_names` (e.g. 9579→8575 on Core Interior) while
+/// structured SchemaTable stays flat; Formats ~48% schema recovery was **not**
+/// reproduced on redistributable samples.
+///
+/// `ProjectInformation`, `PartAtom`, `BasicFileInfo`, and preview streams are
+/// never gated — they are not routed through the paged gzip reader.
+///
+/// Raw [`inflate_at`] / [`inflate_all_chunks`] never strip; only
+/// [`prepare_stream_for_inflate`] / [`inflate_stream_at`] /
+/// [`inflate_stream_auto`] / [`inflate_all_chunks_for_stream`] consult this gate.
+pub fn is_checksum_paged_stream(path: &str) -> bool {
+    let clean = clean_stream_path(path);
+    // Formats/Latest intentionally omitted — see module docs above.
     if let Some(rest) = clean
         .strip_prefix("Partitions/")
         .or_else(|| clean.strip_prefix("partitions/"))
@@ -94,6 +109,18 @@ pub fn is_checksum_paged_stream(path: &str) -> bool {
             | "Global/Latest"
             | "Global/PartitionTable"
     )
+}
+
+/// Broader candidate set aligned with reviter's paged loader (includes
+/// `Formats/Latest`) for probes and research — **not** the production strip gate.
+///
+/// Prefer [`is_checksum_paged_stream`] at decode call sites.
+pub fn is_revit_paged_loader_candidate(path: &str) -> bool {
+    let clean = clean_stream_path(path);
+    if clean.eq_ignore_ascii_case("Formats/Latest") {
+        return true;
+    }
+    is_checksum_paged_stream(path)
 }
 
 /// Remove each complete stored page's checksum trailer.
@@ -118,7 +145,10 @@ pub fn strip_revit_page_checksums(data: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Return checksum-clean bytes ready for inflate when `stream_name` is paged.
+/// Return checksum-clean bytes ready for inflate when `stream_name` is gated.
+///
+/// Does **not** mutate writer identity copies: [`crate::reader::RevitFile::read_stream`]
+/// still returns stored CFB bytes unchanged. Decode-path only.
 pub fn prepare_stream_for_inflate<'a>(
     stream_name: &str,
     stored: &'a [u8],
@@ -130,23 +160,26 @@ pub fn prepare_stream_for_inflate<'a>(
     }
 }
 
-/// Inflate a named stored stream, stripping page checksums when required.
+/// Inflate a named stored stream, stripping page checksums when
+/// [`is_checksum_paged_stream`] says so.
 ///
-/// Prefer this over bare [`inflate_at`] whenever the CFB stream path is known:
-/// checksum-paged streams silently drift after the first full page if the
-/// 353-byte trailers are left in place (Discussion #112 / issue #151).
+/// Prefer this over bare [`inflate_at`] whenever the CFB stream path is known.
+/// Raw [`inflate_at`] remains a path-agnostic codec and **never** strips — so
+/// Formats/Latest, tiny streams, and already-clean buffers stay untouched.
 pub fn inflate_stream_at(stream_name: &str, stored: &[u8], offset: usize) -> Result<Vec<u8>> {
     let prepared = prepare_stream_for_inflate(stream_name, stored);
     inflate_at(prepared.as_ref(), offset)
 }
 
-/// Auto-offset inflate for a named stored stream (page-stripped when required).
+/// Auto-offset inflate for a named stored stream (page-stripped when gated).
 pub fn inflate_stream_auto(stream_name: &str, stored: &[u8]) -> Result<(usize, Vec<u8>)> {
     let prepared = prepare_stream_for_inflate(stream_name, stored);
     inflate_at_auto(prepared.as_ref())
 }
 
-/// Inflate every gzip member in a named stored stream (page-stripped when required).
+/// Inflate every gzip member in a named stored stream (page-stripped when gated).
+///
+/// Primary production entry for multi-member `Partitions/*` recovery (#151).
 pub fn inflate_all_chunks_for_stream(stream_name: &str, stored: &[u8]) -> Vec<Vec<u8>> {
     let prepared = prepare_stream_for_inflate(stream_name, stored);
     inflate_all_chunks(prepared.as_ref())
@@ -666,10 +699,14 @@ mod tests {
 
     #[test]
     fn checksum_paged_stream_paths() {
-        assert!(is_checksum_paged_stream("Formats/Latest"));
-        assert!(is_checksum_paged_stream("/Formats/Latest"));
+        // Narrowed Wave 2 gate: Partitions + Global DB streams only.
+        assert!(!is_checksum_paged_stream("Formats/Latest"));
+        assert!(!is_checksum_paged_stream("/Formats/Latest"));
+        assert!(is_revit_paged_loader_candidate("Formats/Latest"));
         assert!(is_checksum_paged_stream("Global/Latest"));
+        assert!(is_checksum_paged_stream("Global/ElemTable"));
         assert!(is_checksum_paged_stream("Partitions/67"));
+        assert!(is_checksum_paged_stream("Partitions/46"));
         assert!(!is_checksum_paged_stream("BasicFileInfo"));
         assert!(!is_checksum_paged_stream("PartAtom"));
         assert!(!is_checksum_paged_stream("ProjectInformation"));
@@ -744,10 +781,10 @@ mod tests {
 
     /// Inject 353-byte trailers into a real truncated-gzip blob so the
     /// stored layout matches Discussion #112 / issue #151, then prove
-    /// [`inflate_stream_at`] recovers the payload while bare inflate drifts
-    /// or fails closed.
+    /// gated [`inflate_stream_at`] recovers the payload while bare inflate
+    /// drifts or fails closed — and Formats stays ungated by default.
     #[test]
-    fn synthetic_multipage_formats_requires_strip_before_inflate() {
+    fn synthetic_multipage_partitions_require_strip_before_inflate() {
         // High-entropy payload so the compressed form already crosses a
         // full stored page (64_896 payload bytes) without a slow grow loop.
         let mut state = 0xC0FFEE_u32;
@@ -780,15 +817,31 @@ mod tests {
             );
         }
 
-        // Experiment: named-stream inflate strips pages first.
-        let recovered = inflate_stream_at("Formats/Latest", &paged, 0).expect("strip+inflate");
+        // Experiment: Partitions path strips pages first.
+        let recovered = inflate_stream_at("Partitions/46", &paged, 0).expect("strip+inflate");
         assert_eq!(recovered, payload);
+
+        // Global DB streams are also gated.
+        assert_eq!(
+            inflate_stream_at("Global/Latest", &paged, 0).unwrap(),
+            payload
+        );
+
+        // Formats/Latest is deliberately ungated (class_names regression on
+        // redistributable corpus; Formats ~48% not reproduced).
+        assert_eq!(
+            inflate_stream_at("Formats/Latest", &paged, 0)
+                .err()
+                .map(|e| e.to_string()),
+            inflate_at(&paged, 0).err().map(|e| e.to_string()),
+            "Formats/Latest must not strip by default"
+        );
 
         // Small non-paged streams stay identity under prepare.
         let small = truncated_gzip_encode(b"tiny").unwrap();
         assert!(small.len() < REVIT_STORED_PAGE_BYTES);
         assert_eq!(
-            inflate_stream_at("Formats/Latest", &small, 0).unwrap(),
+            inflate_stream_at("Partitions/1", &small, 0).unwrap(),
             b"tiny"
         );
         // Non-paged paths must not strip — same outcome as bare inflate.

@@ -488,11 +488,22 @@ impl StreamVerificationReport {
 /// Returns `Ok(decompressed_bytes)` or an error message if any
 /// step failed. Used internally by [`verify_patches_applied`]; pub
 /// so corpus audits can call it too.
+///
+/// # Checksum-page policy (Finding 1 / #151)
+///
+/// The writer re-encodes patches with `truncated_gzip_encode` /
+/// `truncated_gzip_encode_with_prefix8` — **strip-clean** truncated-gzip,
+/// not Revit's stored checksum-paged layout. Verification therefore uses
+/// bare [`crate::compression::inflate_at`], not
+/// [`crate::compression::inflate_stream_at`]: blindly stripping every
+/// 65_249-byte boundary would corrupt writer-produced streams that happen
+/// to be ≥ one stored page. Identity copies (`read_stream` / empty-patch)
+/// remain stored-byte accurate; a paged encoder is still out of scope.
 pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Result<Vec<u8>> {
     let mut rf = RevitFile::open(dst)?;
     let raw = rf.read_stream(name)?;
     match framing {
-        StreamFraming::RawGzipFromZero => crate::compression::inflate_stream_at(name, &raw, 0),
+        StreamFraming::RawGzipFromZero => crate::compression::inflate_at(&raw, 0),
         StreamFraming::CustomPrefix8 => {
             // 8-byte custom prefix — gzip starts at offset 8.
             if raw.len() < 8 {
@@ -501,7 +512,7 @@ pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Resu
                     raw.len()
                 )));
             }
-            crate::compression::inflate_stream_at(name, &raw, 8)
+            crate::compression::inflate_at(&raw, 8)
         }
         StreamFraming::Verbatim => Ok(raw),
     }
@@ -690,6 +701,78 @@ mod tests {
         assert_eq!(report.streams[0].expected_len, new_payload.len());
         assert_eq!(report.streams[0].actual_len, new_payload.len());
         assert!(report.streams[0].decompress_error.is_none());
+        std::fs::remove_file(&src).ok();
+        std::fs::remove_file(&dst).ok();
+    }
+
+    /// Empty-patch round-trip must remain byte-identical (stored-accurate
+    /// identity copy). Finding 1 strip must not touch `read_stream` /
+    /// empty-patch paths.
+    #[test]
+    fn empty_patch_round_trip_is_byte_identical_stored_accurate() {
+        let src = temp_path("empty_patch_src.rvt");
+        let dst = temp_path("empty_patch_dst.rvt");
+        build_tiny_cfb(&src, b"identity-payload-bytes").unwrap();
+        write_with_patches(&src, &dst, &[]).unwrap();
+        let a = std::fs::read(&src).unwrap();
+        let b = std::fs::read(&dst).unwrap();
+        assert_eq!(a, b, "empty-patch must copy stored CFB bytes unchanged");
+        std::fs::remove_file(&src).ok();
+        std::fs::remove_file(&dst).ok();
+    }
+
+    /// Writer emits strip-clean truncated-gzip. A patch whose encoded size
+    /// crosses one stored page (≥ 65_249 bytes) must still verify under
+    /// bare inflate — `inflate_stream_at` would false-strip and break WRT-13.
+    #[test]
+    fn large_formats_patch_round_trips_without_false_page_strip() {
+        use crate::compression::{
+            REVIT_STORED_PAGE_BYTES, strip_revit_page_checksums, truncated_gzip_encode,
+        };
+
+        let src = temp_path("large_patch_src.rvt");
+        let dst = temp_path("large_patch_dst.rvt");
+        build_tiny_cfb(&src, b"seed").unwrap();
+
+        // High-entropy payload → compressed form exceeds one stored page.
+        let mut state = 0xA5A5_u32;
+        let payload: Vec<u8> = (0..200_000)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 16) as u8
+            })
+            .collect();
+        let encoded = truncated_gzip_encode(&payload).unwrap();
+        assert!(
+            encoded.len() >= REVIT_STORED_PAGE_BYTES,
+            "encoded fixture must be ≥ one stored page (got {})",
+            encoded.len()
+        );
+        // Sanity: naive strip on writer output would mutilate the bitstream.
+        assert_ne!(
+            strip_revit_page_checksums(&encoded),
+            encoded,
+            "strip on strip-clean writer output must change bytes at page boundaries"
+        );
+
+        let patches = vec![StreamPatch {
+            stream_name: "Formats/Latest".into(),
+            new_decompressed: payload.clone(),
+            framing: StreamFraming::RawGzipFromZero,
+        }];
+        write_with_patches(&src, &dst, &patches).unwrap();
+        let report = verify_patches_applied(&dst, &patches).unwrap();
+        assert!(
+            report.all_matched(),
+            "large writer patch must verify without page-strip: {:?}",
+            report.streams
+        );
+
+        // Stored bytes on disk are the encoder output (no 353-byte trailers).
+        let mut rf = RevitFile::open(&dst).unwrap();
+        let stored = rf.read_stream("Formats/Latest").unwrap();
+        assert_eq!(stored, encoded);
+
         std::fs::remove_file(&src).ok();
         std::fs::remove_file(&dst).ok();
     }
