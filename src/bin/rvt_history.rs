@@ -3,6 +3,14 @@
 //! Phase D v0: the first tangible result of schema-driven object-graph
 //! parsing. Reads `Global/Latest` and returns every Revit release that has
 //! ever opened and saved this file, in chronological order.
+//!
+//! # Honesty
+//!
+//! [`DocumentHistory`](rvt::object_graph::DocumentHistory) is a **UTF-16LE
+//! "Revit " string scan** of `Global/Latest`, not a full Autodesk document
+//! history object model. Entries may be incomplete on unusual files; missing
+//! markers yield an error rather than invented versions. Linked-model /
+//! `TransmissionData` tables are out of scope for this CLI.
 
 use clap::Parser;
 use rvt::{
@@ -16,7 +24,7 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-history",
     version,
-    about = "Dump document upgrade history from a Revit file"
+    about = "Dump document upgrade history from a Revit file (UTF-16LE 'Revit ' scan of Global/Latest — not a full DocumentHistory object model)"
 )]
 struct Cli {
     file: PathBuf,
