@@ -186,7 +186,7 @@ Extending the entry-point detector to every release is task
 [L5B-11](../TODO-BLINDSIDE.md) *(not yet implemented)*.
 
 Per-element typed views live under [`src/elements/`](../src/elements/) —
-54 decoders (Level, Wall, Floor, Roof, Door, Window, Column, Beam,
+80 decoders (Level, Wall, Floor, Roof, Door, Window, Column, Beam,
 Stair, Railing, Room, Furniture, Rebar, Phase, DesignOption, Workset,
 and more). Each takes the generic `DecodedElement` produced by the
 walker and projects it into a typed struct. Sample call:
