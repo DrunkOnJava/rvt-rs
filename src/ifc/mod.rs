@@ -1128,7 +1128,11 @@ fn collect_diagnostic_walker_proxy_candidates(
             return collection;
         }
     };
-    let formats_d = match crate::compression::inflate_at(&formats_raw, 0) {
+    let formats_d = match crate::compression::inflate_stream_at(
+        crate::streams::FORMATS_LATEST,
+        &formats_raw,
+        0,
+    ) {
         Ok(bytes) => bytes,
         Err(err) => {
             collection
@@ -1155,15 +1159,16 @@ fn collect_diagnostic_walker_proxy_candidates(
             return collection;
         }
     };
-    let (_, latest) = match crate::compression::inflate_at_auto(&raw) {
-        Ok(inflated) => inflated,
-        Err(err) => {
-            collection
-                .warnings
-                .push(format!("Unable to inflate Global/Latest: {err}"));
-            return collection;
-        }
-    };
+    let (_, latest) =
+        match crate::compression::inflate_stream_auto(crate::streams::GLOBAL_LATEST, &raw) {
+            Ok(inflated) => inflated,
+            Err(err) => {
+                collection
+                    .warnings
+                    .push(format!("Unable to inflate Global/Latest: {err}"));
+                return collection;
+            }
+        };
 
     let class_by_name: std::collections::HashMap<&str, &crate::formats::ClassEntry> = schema
         .classes
