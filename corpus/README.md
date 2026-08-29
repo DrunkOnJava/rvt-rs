@@ -7,6 +7,9 @@ and as stable inputs for later lanes (partition scanner, typed decoders).
 Real project corpora (for example `magnetar-io/revit-test-datasets`) stay
 external and are pointed at with `RVT_PROJECT_CORPUS_DIR`.
 
+Intake lanes (public / authorized private / local probes) and the “do not
+solicit unsure files” rule: [`docs/corpus-intake.md`](../docs/corpus-intake.md).
+
 ## Layout
 
 ```text
