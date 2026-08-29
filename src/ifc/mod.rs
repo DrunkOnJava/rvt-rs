@@ -221,6 +221,10 @@ pub struct ExportDiagnostics {
     pub unsupported_features: Vec<String>,
     pub warnings: Vec<String>,
     pub confidence: ExportConfidenceSummary,
+    /// `Formats/Latest` page-boundary / strip-gate integrity (A2 / PARSE-001).
+    /// `None` when the stream is absent from the container.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formats_latest_integrity: Option<crate::compression::FormatsLatestIntegrity>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1438,6 +1442,20 @@ pub fn build_export_diagnostics_with_limits(
         warnings.push("Placeholder export mode omits decoded elements by design.".into());
     }
 
+    let formats_latest_integrity = match rf.read_stream(crate::streams::FORMATS_LATEST) {
+        Ok(stored) => {
+            let diag = crate::compression::diagnose_formats_latest_integrity(&stored);
+            if diag.integrity_status == crate::compression::FormatsIntegrityStatus::Uncertain {
+                warnings.push(format!(
+                    "Formats/Latest multipage integrity uncertain (checksum-page strip disabled; {}).",
+                    crate::compression::RVT_FORMATS_MULTIPAGE_UNVERIFIED
+                ));
+            }
+            Some(diag)
+        }
+        Err(_) => None,
+    };
+
     let has_project_metadata = model.project_name.is_some()
         || bfi.is_some()
         || part.as_ref().and_then(|p| p.title.as_ref()).is_some();
@@ -1497,6 +1515,7 @@ pub fn build_export_diagnostics_with_limits(
         unsupported_features: unsupported_export_features(model),
         warnings,
         confidence,
+        formats_latest_integrity,
     }
 }
 

@@ -301,6 +301,62 @@
           "minimum": 0
         }
       }
+    },
+    "formats_latest_integrity": {
+      "description": "Formats/Latest page-boundary integrity under the Finding 1 narrow gate (strip stays disabled). Additive A2/PARSE-001 field.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "stream",
+        "stored_bytes",
+        "page_boundary_detected",
+        "checksum_tail_stripping",
+        "integrity_status"
+      ],
+      "properties": {
+        "stream": {
+          "type": "string",
+          "const": "Formats/Latest"
+        },
+        "stored_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inflated_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "page_boundary_detected": {
+          "type": "boolean"
+        },
+        "checksum_tail_stripping": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "enabled"
+          ]
+        },
+        "integrity_status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "uncertain",
+            "incomplete"
+          ]
+        },
+        "diagnostic_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "RVT_FORMATS_MULTIPAGE_UNVERIFIED when multipage completeness is unverified."
+        }
+      }
     }
   }
 }
