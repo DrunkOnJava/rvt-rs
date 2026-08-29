@@ -96,6 +96,14 @@ RVT_PROJECT_CORPUS_DIR=path/to/corpus cargo test --test project_corpus_smoke -- 
 RVT_PROJECT_CORPUS_DIR=path/to/corpus cargo test --test project_count_fixtures -- --nocapture
 ```
 
-The test suite skips gracefully when corpus paths are absent. CI should use
-explicit corpus jobs once redistributable fixtures are committed or available
-through a stable download path.
+The test suite skips gracefully when corpus paths are absent for Tier two.
+Tier one always runs against the in-repo tree at [`corpus/tier1/`](../corpus/tier1/).
+
+## CI health tiers
+
+| Tier | Job | Corpus | Skip behaviour |
+|------|-----|--------|----------------|
+| 1 | `corpus-tier1` | in-repo `corpus/tier1/` synthetic fixtures | never skips |
+| 2 | `corpus-tier2` | `RVT_PROJECT_CORPUS_DIR` (CI clones magnetar MIT datasets) | local skip when unset |
+
+See [`corpus/README.md`](../corpus/README.md) for fixture layout and known counts.

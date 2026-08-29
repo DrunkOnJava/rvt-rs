@@ -170,6 +170,62 @@ jobs:
           expect IFCRELFILLSELEMENT 1
           expect IFCEXTRUDEDAREASOLID 7
 
+
+  corpus-tier1:
+    # M2-03 Tier 1: always-on redistributable synthetic corpus under
+    # corpus/tier1/. No external Autodesk samples; license sidecars +
+    # known-count manifests are asserted in-repo.
+    name: Corpus health (tier 1 — synthetic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: corpus-tier1
+      - name: Tier-one open / schema / known-count inventory
+        env:
+          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
+        run: cargo test --release --test corpus_tier1_health -- --nocapture
+      - name: Tier-one known-count manifests
+        env:
+          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
+        run: cargo test --release --test project_count_fixtures -- --nocapture
+
+  corpus-tier2:
+    # M2-03 Tier 2: optional external project corpus. Clones the MIT
+    # magnetar-io/revit-test-datasets tree (not Autodesk-owned samples)
+    # and runs lightweight health + known-count checks. Local runs skip
+    # when RVT_PROJECT_CORPUS_DIR is unset.
+    name: Corpus health (tier 2 — external)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Fetch project corpus (magnetar MIT)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: corpus-tier2
+      - name: Tier-two open / schema health
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+          RVT_CORPUS_TIER2_LIMIT: "8"
+        run: cargo test --release --test corpus_tier2_health -- --nocapture
+      - name: Tier-two project corpus smoke
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: cargo test --release --test project_corpus_smoke -- --nocapture
+      - name: Tier-two known-count manifests
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
+        run: cargo test --release --test project_count_fixtures -- --nocapture
+
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project
     # fixtures. Keeps grow/shrink/multi-stream/missing-stream cases

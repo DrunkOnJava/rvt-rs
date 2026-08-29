@@ -1,0 +1,12 @@
+{
+  "source_url": "https://github.com/drunkonjava/rvt-rs/tree/main/corpus/tier1/architectural-2024",
+  "source_repo": "drunkonjava/rvt-rs",
+  "source_path": "corpus/tier1/architectural-2024/architectural-2024.rvt",
+  "license": "Apache-2.0",
+  "sha256": "3f50ce849ff022eb1c28ebfd91fb450d4a36af72fd19105d93caffb861e9560b",
+  "bytes": 20480,
+  "revit_release": "2024",
+  "file_type": ".rvt",
+  "redistribution": "public",
+  "notes": "Synthetic CFB from rvt-rs gen-fixture (seed 42). Not Autodesk-authored; will not open in Revit. Known counts: 5 levels, 5 walls, 5 floors, 5 doors, 5 windows."
+}

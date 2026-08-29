@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "generator": "gen-fixture",
+  "name": "structural-2023",
+  "seed": 7,
+  "year": 2023,
+  "classes": ["Level", "Wall", "Floor", "Column", "Beam"],
+  "element_count": 20,
+  "expected_counts": {
+    "levels": 4,
+    "walls": 4,
+    "floors": 4,
+    "doors": 0,
+    "windows": 0,
+    "columns": 4,
+    "beams": 4
+  },
+  "notes": "Structural-focused synthetic fixture for Revit 2023 partition naming."
+}

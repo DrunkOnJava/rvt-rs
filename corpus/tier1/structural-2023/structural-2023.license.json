@@ -1,0 +1,12 @@
+{
+  "source_url": "https://github.com/drunkonjava/rvt-rs/tree/main/corpus/tier1/structural-2023",
+  "source_repo": "drunkonjava/rvt-rs",
+  "source_path": "corpus/tier1/structural-2023/structural-2023.rvt",
+  "license": "Apache-2.0",
+  "sha256": "ce2e5038e02a4e81fd033d339827482cd3ce5f6bebf6cd1e03a8f8023d2dc7f5",
+  "bytes": 20480,
+  "revit_release": "2023",
+  "file_type": ".rvt",
+  "redistribution": "public",
+  "notes": "Synthetic CFB from rvt-rs gen-fixture (seed 7). Not Autodesk-authored. Known counts: 4 levels, 4 walls, 4 floors, 0 doors, 0 windows, 4 columns, 4 beams."
+}
