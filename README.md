@@ -199,7 +199,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-**Fifteen CLIs** ship in the box:
+**Sixteen CLIs** ship in the box:
 
 ```bash
 cargo build --release
@@ -257,6 +257,9 @@ cargo build --release
 
 # Global/ElemTable dump — declared element-ids + record layout (family 12B / project 28B/40B)
 ./target/release/rvt-elem-table my-project.rvt --limit 20
+
+# Production decoded elements / class counts (JSON; mirrors Python element_counts)
+./target/release/rvt-elements my-project.rvt --counts
 
 # Stream-level write path — patch named OLE streams via JSON manifest
 ./target/release/rvt-write my-project.rvt --patches patches.json -o patched.rvt
