@@ -494,16 +494,17 @@ fn score_candidate(
         && envelope.variant_marker == Some(ARC_WALL_VARIANT_STANDARD)
         && envelope.fixed_header_0 == Some(SCHEMA_FAMILY_MARKER);
 
-    if is_2023_arcwall && offset + STANDARD_RECORD_MIN_SIZE <= buf.len() {
-        if ArcWallRecord::decode_standard(buf, offset).is_ok() {
-            confidence = 0.85;
-            consumed_end = offset + STANDARD_RECORD_MIN_SIZE;
-            if let Some(trailer) = ArcWallRecord::decode_trailer(buf, offset) {
-                if let Some(id) = trailer.element_id {
-                    element_id = Some(id);
-                    confidence = 0.95;
-                    consumed_end = offset + crate::arc_wall_record::STANDARD_TRAILER_DECODE_END;
-                }
+    if is_2023_arcwall
+        && offset + STANDARD_RECORD_MIN_SIZE <= buf.len()
+        && ArcWallRecord::decode_standard(buf, offset).is_ok()
+    {
+        confidence = 0.85;
+        consumed_end = offset + STANDARD_RECORD_MIN_SIZE;
+        if let Some(trailer) = ArcWallRecord::decode_trailer(buf, offset) {
+            if let Some(id) = trailer.element_id {
+                element_id = Some(id);
+                confidence = 0.95;
+                consumed_end = offset + crate::arc_wall_record::STANDARD_TRAILER_DECODE_END;
             }
         }
     }
