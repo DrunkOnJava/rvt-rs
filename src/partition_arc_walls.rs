@@ -135,7 +135,7 @@ pub fn scan_partition_arc_walls_with_limits(
         let Ok(raw) = rf.read_stream(&partition) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks(&raw);
+        let chunks = compression::inflate_all_chunks_for_stream(&partition, &raw);
         let concat: Vec<u8> = chunks.into_iter().flatten().collect();
         if concat.len() < STANDARD_RECORD_MIN_SIZE {
             continue;

@@ -309,10 +309,9 @@ fn doctor_file(path: &Path) -> DoctorFileReport {
         }
     }
 
-    match rf
-        .read_stream(FORMATS_LATEST)
-        .and_then(|bytes| rvt::compression::inflate_at(&bytes, 0).map(|_| ()))
-    {
+    match rf.read_stream(FORMATS_LATEST).and_then(|bytes| {
+        rvt::compression::inflate_stream_at(FORMATS_LATEST, &bytes, 0).map(|_| ())
+    }) {
         Ok(()) => {}
         Err(err) => {
             return doctor_failure(display_path, "corrupt_gzip", revit_version, err.to_string());

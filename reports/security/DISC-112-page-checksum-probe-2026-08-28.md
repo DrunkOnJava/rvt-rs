@@ -56,3 +56,8 @@ enable strip on the default inflate path.
   oracles (as the reporter did) before flipping the default.
 - Keep `strip_revit_page_checksums` available for experimental probes and a
   future opt-in decode mode.
+
+
+## Superseded by 2026-08-29 reproduction
+
+See [`DISC-112-finding1-reproduction-2026-08-29.md`](DISC-112-finding1-reproduction-2026-08-29.md). Independent reproduction **confirmed** the page layout; production inflate now strips trailers. The 2026-08-28 note that strip was a Formats regression was based on inflate-length / class_name heuristics; the gzip ISIZE trailer oracle shows the shorter stripped output is the correct decode.

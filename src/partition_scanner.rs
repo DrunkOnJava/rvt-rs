@@ -304,7 +304,7 @@ pub fn scan_partitions(
         let Ok(raw) = rf.read_stream(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks(&raw);
+        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
         let mut chunk_ends = Vec::with_capacity(chunks.len());
         let mut concat = Vec::new();
         for chunk in &chunks {
@@ -423,8 +423,8 @@ pub fn linkage_coverage(
 /// Load schema tag → class-name map from `Formats/Latest`.
 pub fn load_schema_tag_map(rf: &mut RevitFile) -> Result<BTreeMap<u16, String>> {
     let raw = rf.read_stream(FORMATS_LATEST)?;
-    let decompressed = compression::inflate_at(&raw, 0)
-        .or_else(|_| compression::inflate_at_auto(&raw).map(|(_, d)| d))?;
+    let decompressed = compression::inflate_stream_at(FORMATS_LATEST, &raw, 0)
+        .or_else(|_| compression::inflate_stream_auto(FORMATS_LATEST, &raw).map(|(_, d)| d))?;
     let schema = formats::parse_schema(&decompressed)?;
     Ok(tag_map_from_schema(&schema))
 }
