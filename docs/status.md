@@ -7,8 +7,13 @@ intentionally blunt so users can decide quickly whether the tool fits their
 workflow.
 
 The current support boundary is tracked in the
-[supported MVP input profile](supported-profile.md). Keep that page, this
-status summary, the README, and the viewer support matrix aligned.
+[supported MVP input profile](supported-profile.md). The machine-readable
+[executable support matrix](support-matrix.json) (schema:
+[`support-matrix.schema.json`](schemas/support-matrix.schema.json)) is the
+checked-in capability ceiling for audit controls COR-001 / TEST-001 /
+DOC-001 — statuses there must stay honest and must not claim
+converter-grade typed recovery. Keep that matrix, this page, the README,
+and the viewer support matrix aligned.
 
 ## User-Facing Summary
 

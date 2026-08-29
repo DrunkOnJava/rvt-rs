@@ -472,6 +472,9 @@ fn print_human_report(report: &InspectReport) {
     for step in &report.next_steps {
         println!("  - {step}");
     }
+    println!(
+        "\nCapability ceiling: docs/support-matrix.json (honest statuses; not converter-grade)."
+    );
 }
 
 fn walker_limits_from_cli(cli: &Cli) -> WalkerLimits {

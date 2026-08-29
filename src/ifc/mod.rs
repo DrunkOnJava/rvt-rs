@@ -221,6 +221,52 @@ pub struct ExportDiagnostics {
     pub unsupported_features: Vec<String>,
     pub warnings: Vec<String>,
     pub confidence: ExportConfidenceSummary,
+    /// A10 light stub: reserved source-coverage fractions.
+    ///
+    /// Always emitted with [`SourceCoverageDiagnostics::unset`] until
+    /// corpus-backed measurement lands. Fraction fields stay `None` —
+    /// never invent coverage ratios.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_coverage: Option<SourceCoverageDiagnostics>,
+}
+
+/// Reserved A10 export source-coverage block (schema additive; unset by default).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SourceCoverageDiagnostics {
+    pub status: SourceCoverageStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decoded_element_fraction: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exported_element_fraction: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geometry_element_fraction: Option<f32>,
+}
+
+/// Measurement state for [`SourceCoverageDiagnostics`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceCoverageStatus {
+    Unset,
+    Unknown,
+    Measured,
+}
+
+impl SourceCoverageDiagnostics {
+    /// Honest unset stub — no invented fractions.
+    pub fn unset() -> Self {
+        Self {
+            status: SourceCoverageStatus::Unset,
+            notes: Some(
+                "A10 stub: export source-coverage fractions are not measured yet; fields stay null."
+                    .to_string(),
+            ),
+            decoded_element_fraction: None,
+            exported_element_fraction: None,
+            geometry_element_fraction: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1497,6 +1543,7 @@ pub fn build_export_diagnostics_with_limits(
         unsupported_features: unsupported_export_features(model),
         warnings,
         confidence,
+        source_coverage: Some(SourceCoverageDiagnostics::unset()),
     }
 }
 
