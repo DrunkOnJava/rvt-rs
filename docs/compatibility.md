@@ -52,9 +52,9 @@ Notes:
 
 ## 3. Element class decode coverage
 
-**80 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty` unit test. Production `walker::iter_elements` prefers typed decoders for `MVP_TYPED_CLASSES` and merges ArcWall partition recovers; other registered classes still use generic `decode_instance`. Grouped by domain below.
+**80 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty` unit test. Production `walker::iter_elements` prefers typed decoders for `MVP_TYPED_CLASSES`, merges ArcWall partition recovers, and merges partition MVP Level/Material/Room/Floor plan-loop / 2024 opening-index rows; other registered classes still use generic `decode_instance`. Grouped by domain below.
 
-**Unsolved on real project files:** registering these decoders does not mean typed Walls/Floors/Doors/Levels are recovered from arbitrary `.rvt` projects. Instance bytes for those classes live in `Partitions/*` streams whose wire envelope is not yet reverse-engineered; see [`docs/status.md`](status.md) and `reports/element-framing/RE-01-synthesis.md`.
+**Partial on real project files:** ArcWall, Level, Material, Room, Floor plan-loops, and 2024 ArcWallRectOpening index rows can surface from `Partitions/*` via fail-closed recovers. Schema-field Wall instances and typed Door/Window host binding from arbitrary projects remain unsolved; see [`docs/status.md`](status.md) and `reports/element-framing/RE-01-synthesis.md`.
 
 Each decoder takes schema-directed instance bytes (from `walker::decode_instance`) and projects them into a typed Rust struct. Decoders are validated on synthesized schema+bytes fixtures. Community-corpus open/scaffold checks (`docs/corpus-hunt-2026-04-21.md`) do not exercise these typed projections on real project instance data.
 

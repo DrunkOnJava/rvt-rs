@@ -19,14 +19,15 @@ parts of the model that are actually decoded.
 
 **Generic real-project typed model extraction is not solved yet.** rvt-rs is
 not a production RVT-to-IFC converter for arbitrary architectural projects.
-Schema-driven Walls, floors, doors, windows, and levels are not recovered as
-typed elements from arbitrary `.rvt` partition streams. Production
-`walker::iter_elements` now prefers typed MVP decoders on `Global/Latest`
-(fail closed on reject) and merges version-gated 2023 ArcWall partition
-recovers as `DecodedElement`s; IFC can emit those as `IfcWall` when evidence
-is strong enough. That narrow path does not constitute general typed
-conversion. Eighty per-class decoder structs remain registered;
-`MVP_TYPED_CLASSES` are consulted by `iter_elements`.
+Production `walker::iter_elements` prefers typed MVP decoders on
+`Global/Latest` (fail closed), merges version-gated 2023 ArcWall partition
+recovers, and additionally merges fail-closed partition MVP recovers for
+`Level` (elevation + name), `Material` / `Room` (display-name candidates),
+`Floor` (ArcWall-excluded plan loops), and — on Revit 2024 —
+`ArcWallRectOpening` index rows with related-id provenance. Semantic
+`Door` / `Window` classes and schema-field `Wall` instances from arbitrary
+partitions remain unsolved. Eighty per-class decoder structs remain
+registered; `MVP_TYPED_CLASSES` are consulted by `iter_elements`.
 
 ## Capability Matrix
 
@@ -37,7 +38,7 @@ conversion. Eighty per-class decoder structs remain registered;
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus | Developers can inspect class and field structure. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
-| Decode typed elements from real project files | **Partial** | Production `iter_elements` merges validated ArcWall partition records (2023) and prefers typed MVP decoders on Global/Latest; schema-driven Wall/Floor/Door/Window/Level from partitions still unsolved; HostObjAttr filtered | Full model conversion is not ready. |
+| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms/Floor plan-loops + 2024 ArcWallRectOpening index; HostObjAttr filtered; Door/Window typed classes and schema-field Wall still unsolved | Full model conversion is not ready. |
 | Typed decoder structs | Partial | `elements::all_decoders()` registers **80** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
 | IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; 2023 Einhoven ArcWall records emit `IfcWall` swept solids with recovered ElementId / base elevation / Z-delta height and elevation-derived storeys (partition Level-like names applied when confident; thickness still unresolved — RE-15/#88 falsified trailer inch widths); diagnostic mode can include low-confidence proxy provenance; `rvt-ifc --diagnostics` emits a JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict output | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, plain-language decode/export confidence panel, and supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
