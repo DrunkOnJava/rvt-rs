@@ -1,12 +1,14 @@
 name: Reverse-engineering finding
-description: Document a reproducible observation about the RVT on-disk format.
+description: Document a reproducible clean-room observation about the RVT on-disk format.
 title: "RE: "
 labels: ["re-finding", "type:research", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form for observations that may or may not become decoder work. If you already know the target decoder, the Decoder work form is usually better.
+        Use this form for byte-level format observations that may or may not become decoder work. If you already know the target decoder, the Decoder work form is usually better.
+
+        Keep claims evidence-backed: public file bytes, public symbols, reproducible probes. Do not invent offsets, markers, or IDs that are not in your evidence. For corpus files you are unsure you can share, do not attach them — see [`docs/corpus-intake.md`](../../docs/corpus-intake.md).
   - type: textarea
     id: observation
     attributes:
@@ -18,7 +20,7 @@ body:
     id: evidence
     attributes:
       label: Evidence
-      description: Raw bytes, offsets, diffs across releases, command output, or fixture paths.
+      description: Raw bytes, offsets, diffs across releases, command output, or redistributable fixture paths. Omit private paths.
       render: text
     validations:
       required: true
@@ -43,6 +45,12 @@ body:
       description: What observation would prove this wrong?
     validations:
       required: true
+  - type: input
+    id: related
+    attributes:
+      label: Related discussion or credit (optional)
+      description: Discussion URL, prior issue, or GitHub handle to credit (e.g. STE1200 / Discussion #112).
+      placeholder: "https://github.com/DrunkOnJava/rvt-rs/discussions/112"
   - type: checkboxes
     id: clean_room
     attributes:

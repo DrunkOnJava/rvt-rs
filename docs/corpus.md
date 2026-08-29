@@ -4,6 +4,10 @@ rvt-rs needs redistributable Revit files to prove support across real-world
 projects. This guide defines what can be accepted and how corpus health is
 checked.
 
+For the three intake lanes (public redistributable / authorized private /
+local probes), license sidecars, and “do not solicit unsure files,” see
+[`docs/corpus-intake.md`](corpus-intake.md).
+
 ## Acceptance Rules
 
 A corpus file can be committed or referenced publicly only when all of these are
