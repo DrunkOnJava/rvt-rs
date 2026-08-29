@@ -436,10 +436,13 @@ issue or drop to the Rust CLIs (`rvt-info`, `rvt-analyze`,
 
 Not in Python today:
 
-- **Per-element decoders.** The walker reads `ADocument`; the 54
-  Layer-5b element decoders (`Wall`, `Floor`, `Door`, etc. — see
-  `compatibility.md` §3) aren't yet exposed to Python. `rvt-doc`
-  and the Rust `elements::all_decoders()` API cover this.
+- **Per-element decoders.** The walker reads `ADocument`; the 80
+  Layer-5b element decoder structs in `elements::all_decoders()`
+  (`Wall`, `Floor`, `Door`, etc. — see `compatibility.md` §3) aren't
+  yet exposed to Python. Even in Rust they are a synthesized-fixture
+  registry, not wired into `iter_elements` on real project files.
+  `rvt-doc` and the Rust `elements::all_decoders()` API cover the
+  registry surface.
 - **Per-element IFC export.** The `write_ifc()` method uses
   `RvtDocExporter` — document-level only (project, units,
   classifications). The Rust crate's per-element mappings

@@ -106,7 +106,7 @@ Three checks make the posture verifiable post-facto:
    section for `fetch`, `XMLHttpRequest`, `WebSocket`,
    `EventSource`, or `sendBeacon`.
 3. Playwright browser test
-   (`viewer/tests/no-network.spec.ts`) — load the built viewer,
+   (`viewer/tests/no-network.spec.ts` + `viewer/tests/wasm-no-network-imports.spec.ts`) — load the built viewer,
    open the public sample RFA, allow only same-origin static
    boot assets, then assert zero HTTP/WebSocket requests after the
    model is loaded.

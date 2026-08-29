@@ -4,16 +4,35 @@ Thanks for your interest. This project is small and evolving
 quickly, so contribution guidelines are intentionally light — but
 a few practices keep the repo healthy.
 
-Before opening a pull request, run:
+Before opening a pull request, run the local gate:
+
+```bash
+tools/check-local.sh
+```
+
+That script always runs fmt, clippy (`-D warnings`), rustdoc (`-D warnings`),
+and the workspace test suite. Opt into heavier checks without requiring network
+by default:
+
+```bash
+tools/check-local.sh --viewer          # viewer typecheck + build
+tools/check-local.sh --corpus          # corpus-backed tests (dirs must exist)
+tools/check-local.sh --ifcopenshell    # require the ifcopenshell Python module
+tools/check-local.sh --deny --audit    # require cargo-deny / cargo-audit
+tools/check-local.sh --all-optional    # enable every optional gate
+```
+
+For the fuller pre-push path (including optional supply-chain tools when
+installed, plus `--full` bench compile), use:
 
 ```bash
 tools/quality.sh
 ```
 
-The script runs fmt, clippy, rustdoc, tests, and any installed supply-chain
-tools. `cargo-audit` and `cargo-deny` are optional locally but enforced in CI;
-set `RVT_REQUIRE_AUDIT=1` or `RVT_REQUIRE_DENY=1` when you want missing tools to
-fail locally too.
+`cargo-audit` and `cargo-deny` are optional locally but enforced in CI; with
+`tools/quality.sh`, set `RVT_REQUIRE_AUDIT=1` or `RVT_REQUIRE_DENY=1` when you
+want missing tools to fail. With `tools/check-local.sh`, pass `--audit` /
+`--deny` to make those tools required for that run.
 
 Supply-chain rules for Rust crates, viewer npm dependencies, advisory ignores,
 and GitHub Actions pinning are documented in
