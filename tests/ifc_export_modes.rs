@@ -80,12 +80,11 @@ fn export_quality_mode_parse_accepts_aliases() {
 #[test]
 fn tier1_scaffold_export_has_no_hostobjattr_proxies() -> Result<()> {
     let mut rf = open_tier1()?;
-    let result =
-        RvtDocExporter.export_with_diagnostics_mode_and_limits(
-            &mut rf,
-            ExportQualityMode::Scaffold,
-            Default::default(),
-        )?;
+    let result = RvtDocExporter.export_with_diagnostics_mode_and_limits(
+        &mut rf,
+        ExportQualityMode::Scaffold,
+        Default::default(),
+    )?;
 
     assert_eq!(result.diagnostics.mode, ExportDiagnosticsMode::Default);
     assert!(
@@ -107,12 +106,11 @@ fn tier1_scaffold_export_has_no_hostobjattr_proxies() -> Result<()> {
 #[test]
 fn tier1_stronger_modes_fail_closed() -> Result<()> {
     let mut rf = open_tier1()?;
-    let result =
-        RvtDocExporter.export_with_diagnostics_mode_and_limits(
-            &mut rf,
-            ExportQualityMode::Scaffold,
-            Default::default(),
-        )?;
+    let result = RvtDocExporter.export_with_diagnostics_mode_and_limits(
+        &mut rf,
+        ExportQualityMode::Scaffold,
+        Default::default(),
+    )?;
 
     for mode in [
         ExportQualityMode::TypedNoGeometry,
@@ -130,12 +128,11 @@ fn tier1_stronger_modes_fail_closed() -> Result<()> {
 #[test]
 fn tier1_typed_no_geometry_mode_strips_geometry_claims() -> Result<()> {
     let mut rf = open_tier1()?;
-    let result =
-        RvtDocExporter.export_with_diagnostics_mode_and_limits(
-            &mut rf,
-            ExportQualityMode::TypedNoGeometry,
-            Default::default(),
-        )?;
+    let result = RvtDocExporter.export_with_diagnostics_mode_and_limits(
+        &mut rf,
+        ExportQualityMode::TypedNoGeometry,
+        Default::default(),
+    )?;
 
     for entity in &result.model.entities {
         if let IfcEntity::BuildingElement {
@@ -267,8 +264,8 @@ fn exporter_trait_default_matches_scaffold_content() -> Result<()> {
 
 #[test]
 fn load_export_diagnostics_schema_file_exists() {
-    let schema = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("docs/schemas/export-diagnostics.schema.json");
+    let schema =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/schemas/export-diagnostics.schema.json");
     assert!(schema.exists(), "schema missing at {}", schema.display());
     let text = std::fs::read_to_string(&schema).expect("read schema");
     let json: Value = serde_json::from_str(&text).expect("schema JSON");

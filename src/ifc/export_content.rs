@@ -410,12 +410,7 @@ mod tests {
             },
         ));
         let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
-        append_typed_production_elements(
-            [level].into_iter(),
-            &mut entities,
-            &mut storeys,
-            policy,
-        );
+        append_typed_production_elements([level].into_iter(), &mut entities, &mut storeys, policy);
         assert!(
             storeys
                 .iter()

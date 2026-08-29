@@ -518,12 +518,7 @@ impl RvtDocExporter {
         quality_mode: ExportQualityMode,
         limits: crate::walker::WalkerLimits,
     ) -> Result<IfcModel> {
-        export_rvt_doc(
-            rf,
-            RvtDocExportMode::Default,
-            quality_mode,
-            limits,
-        )
+        export_rvt_doc(rf, RvtDocExportMode::Default, quality_mode, limits)
     }
 
     pub fn export_with_diagnostics(&self, rf: &mut crate::RevitFile) -> Result<ExportResult> {
