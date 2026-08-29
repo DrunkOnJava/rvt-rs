@@ -126,11 +126,11 @@
       "source_ifc_type": "IFCMATERIAL",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.material_count",
-      "decoder_expected": 92,
+      "decoder_expected": 102,
       "decoder_tolerance": 5,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "Partition display-name Materials recover into IfcMaterial; compound assemblies / WallType widths remain open. Paired IFC expects only 1."
+      "notes": "Partition display-name Materials recover into IfcMaterial; compound assemblies / WallType widths remain open. Paired IFC expects only 1. Decoder baseline 102 after Finding 1 gated Partitions/Global strip (was 92±5)."
     },
     "units": {
       "status": "known",

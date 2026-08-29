@@ -98,8 +98,9 @@ criterion = { version = "0.7", features = ["html_reports"] }
 sha2 = "0.10"
 hex = "0.4"
 # Discussion #112 / #151 stream-evidence harness (library used by
-# `examples/stream_evidence.rs` probes).
-stream-evidence = { path = "tools/stream_evidence" }
+# `examples/stream_evidence.rs` probes). Version pin satisfies cargo-deny
+# `wildcards = "deny"` (path-only deps are treated as `*`).
+stream-evidence = { path = "tools/stream_evidence", version = "=0.1.0" }
 
 # Seven shipped binaries. All depend on the `rvt` library crate.
 

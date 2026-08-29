@@ -68,14 +68,14 @@
     },
     "materials": {
       "status": "decoder_baseline",
-      "expected": 41,
+      "expected": 42,
       "source": "rvt-rs partition Material-like display names → IfcMaterial on Einhoven 2023 (no compound layers / colors)",
       "decoder_metric": "diagnostics.exported.material_count",
-      "decoder_expected": 41,
+      "decoder_expected": 42,
       "decoder_tolerance": 5,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "Display-name Materials only; compound assemblies and color recovery remain open."
+      "notes": "Display-name Materials only; compound assemblies and color recovery remain open. Baseline 42 after Finding 1 / partition Material recovery (was 41)."
     },
     "units": {
       "status": "decoder_baseline",

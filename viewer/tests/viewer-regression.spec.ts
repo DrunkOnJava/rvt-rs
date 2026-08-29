@@ -160,7 +160,9 @@ projectSampleTest(
     await expect(page.locator('#diagnostics-json')).toContainText('"schema_version": 1');
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_names"');
-    await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 41');
+    // Post Finding 1 / partition Material recovery: einhoven emits 42 materials
+    // (was 41). Keep in sync with tests/fixtures/project-counts/revit-ifc5-einhoven.json.
+    await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 42');
     await expect(page.locator('#diagnostics-json')).toContainText('lack recovered thickness');
     // ArcWalls are storey-assigned; missing_level gaps are Floor/Room only.
     await expect(page.locator('#diagnostics-json')).toContainText(
