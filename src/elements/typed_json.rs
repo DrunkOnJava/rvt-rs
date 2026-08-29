@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 
 /// `true` when `class_name` is in the Lane Five schema-driven MVP set.
 pub fn is_mvp_typed_class(class_name: &str) -> bool {
-    MVP_TYPED_CLASSES.iter().any(|c| *c == class_name)
+    MVP_TYPED_CLASSES.contains(&class_name)
 }
 
 /// Project a decoded element into its MVP typed JSON view, if any.
