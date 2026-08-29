@@ -11,6 +11,7 @@ use crate::arc_wall_record::{
 };
 use crate::compression;
 use crate::ifc::Storey;
+use crate::walker::{WalkerLimitHit, WalkerLimits};
 use crate::{Result, RevitFile};
 use std::collections::BTreeMap;
 
@@ -83,6 +84,10 @@ impl PartitionArcWall {
 pub struct PartitionArcWallScan {
     pub status: ArcWallScanStatus,
     pub walls: Vec<PartitionArcWall>,
+    /// Bytes inspected across all partition buffers (after inflate).
+    pub scanned_bytes: usize,
+    /// Present when a [`WalkerLimits`] cap stopped or truncated the scan.
+    pub limit_hit: Option<WalkerLimitHit>,
 }
 
 /// Scan every `Partitions/*` stream for version-gated standard
@@ -92,11 +97,24 @@ pub fn scan_partition_arc_walls(
     rf: &mut RevitFile,
     revit_version: u32,
 ) -> Result<PartitionArcWallScan> {
+    scan_partition_arc_walls_with_limits(rf, revit_version, WalkerLimits::default())
+}
+
+/// Same as [`scan_partition_arc_walls`], applying explicit
+/// [`WalkerLimits`] to every partition buffer scan so crafted large
+/// streams cannot force unbounded candidate materialisation.
+pub fn scan_partition_arc_walls_with_limits(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    limits: WalkerLimits,
+) -> Result<PartitionArcWallScan> {
     let status = ArcWallRecord::standard_decoder_status(revit_version);
     if !status.is_supported() {
         return Ok(PartitionArcWallScan {
             status,
             walls: Vec::new(),
+            scanned_bytes: 0,
+            limit_hit: None,
         });
     }
 
@@ -107,7 +125,13 @@ pub fn scan_partition_arc_walls(
         .collect();
 
     let mut walls = Vec::new();
+    let mut scanned_bytes = 0usize;
+    let mut limit_hit = None;
     for partition in partition_streams {
+        if walls.len() >= limits.max_candidates {
+            limit_hit.get_or_insert(WalkerLimitHit::MaxCandidates);
+            break;
+        }
         let Ok(raw) = rf.read_stream(&partition) else {
             continue;
         };
@@ -116,7 +140,20 @@ pub fn scan_partition_arc_walls(
         if concat.len() < STANDARD_RECORD_MIN_SIZE {
             continue;
         }
-        let report = ArcWallRecord::scan_standard_for_revit_version(revit_version, &concat);
+        let remaining = limits.max_candidates.saturating_sub(walls.len());
+        let partition_limits = WalkerLimits {
+            max_candidates: remaining,
+            ..limits
+        };
+        let report = ArcWallRecord::scan_standard_for_revit_version_with_limits(
+            revit_version,
+            &concat,
+            partition_limits,
+        );
+        scanned_bytes = scanned_bytes.saturating_add(report.scanned_bytes);
+        if let Some(hit) = report.limit_hit {
+            limit_hit.get_or_insert(hit);
+        }
         for off in report.offsets {
             let Ok(record) = ArcWallRecord::decode_standard(&concat, off) else {
                 continue;
@@ -128,10 +165,25 @@ pub fn scan_partition_arc_walls(
                 record,
                 trailer,
             });
+            if walls.len() >= limits.max_candidates {
+                limit_hit.get_or_insert(WalkerLimitHit::MaxCandidates);
+                break;
+            }
+        }
+        if matches!(
+            limit_hit,
+            Some(WalkerLimitHit::MaxCandidates | WalkerLimitHit::MaxScanBytes)
+        ) {
+            break;
         }
     }
 
-    Ok(PartitionArcWallScan { status, walls })
+    Ok(PartitionArcWallScan {
+        status,
+        walls,
+        scanned_bytes,
+        limit_hit,
+    })
 }
 
 /// Convenience wrapper: read BasicFileInfo version, then scan.

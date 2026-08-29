@@ -84,3 +84,11 @@ path = "fuzz_targets/fuzz_elem_table.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_public_byte_parsers"
+path = "fuzz_targets/fuzz_public_byte_parsers.rs"
+test = false
+doc = false
+bench = false
+
