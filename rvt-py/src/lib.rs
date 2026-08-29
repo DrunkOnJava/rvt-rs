@@ -67,7 +67,7 @@ fn write_ifc_with_quality_mode_and_limits(
     walker_limits: walker::WalkerLimits,
 ) -> PyResult<String> {
     let result = ifc::RvtDocExporter
-        .export_with_diagnostics_and_limits(rf, walker_limits)
+        .export_with_diagnostics_mode_and_limits(rf, mode, walker_limits)
         .map_err(to_py_val)?;
     mode.validate(&result.diagnostics).map_err(to_py_val)?;
     Ok(ifc::write_step(&result.model))

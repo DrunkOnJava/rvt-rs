@@ -105,7 +105,11 @@ fn main() -> anyhow::Result<()> {
     } else if args.diagnostic_proxies {
         DiagnosticRvtDocExporter.export_with_diagnostics_and_limits(&mut rf, walker_limits)?
     } else {
-        RvtDocExporter.export_with_diagnostics_and_limits(&mut rf, walker_limits)?
+        RvtDocExporter.export_with_diagnostics_mode_and_limits(
+            &mut rf,
+            quality_mode,
+            walker_limits,
+        )?
     };
     let model = result.model;
     let diagnostics = result.diagnostics;
