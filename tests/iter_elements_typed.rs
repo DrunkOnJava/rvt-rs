@@ -334,6 +334,34 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
             .all(|e| e.class == "ArcWallRectOpening"),
         "opening index must not be relabeled as Door/Window"
     );
+    let mut elem_confirmed = 0usize;
+    for opening in &mvp.rect_openings {
+        let a_ok = opening.fields.iter().any(|(n, v)| {
+            matches!(
+                (n.as_str(), v),
+                (
+                    "m_related_id_a_in_elem_table",
+                    rvt::walker::InstanceField::Bool(true)
+                )
+            )
+        });
+        let b_ok = opening.fields.iter().any(|(n, v)| {
+            matches!(
+                (n.as_str(), v),
+                (
+                    "m_related_id_b_in_elem_table",
+                    rvt::walker::InstanceField::Bool(true)
+                )
+            )
+        });
+        if a_ok && b_ok {
+            elem_confirmed += 1;
+        }
+    }
+    assert!(
+        elem_confirmed >= 50,
+        "expected ≥50 openings with both related ids in ElemTable, got {elem_confirmed}"
+    );
     // Materials / rooms may still surface from strings even when ArcWall
     // standard decode is version-gated off.
     assert!(
@@ -343,8 +371,9 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
     );
 
     eprintln!(
-        "2024 Core Interior MVP ok · openings={} · materials={} · levels={} · floors={} · rooms={}",
+        "2024 Core Interior MVP ok · openings={} · elem_confirmed={} · materials={} · levels={} · floors={} · rooms={}",
         mvp.rect_openings.len(),
+        elem_confirmed,
         mvp.materials.len(),
         mvp.levels.len(),
         mvp.floors.len(),

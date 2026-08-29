@@ -407,6 +407,17 @@ fn print_human_report(report: &InspectReport) {
         "  Elements with geometry: {}",
         report.decoded.geometry_elements
     );
+    let prod = &report.export_diagnostics.decoded.production_class_counts;
+    if !prod.is_empty() {
+        let mut parts: Vec<String> = prod.iter().map(|(k, v)| format!("{k}:{v}")).collect();
+        parts.sort();
+        println!("  Production classes: {}", parts.join(" · "));
+    }
+    println!(
+        "  IFC storeys: {} · materials: {}",
+        report.export_diagnostics.exported.storey_count,
+        report.export_diagnostics.exported.material_count
+    );
 
     println!("\nIFC export readiness");
     println!(

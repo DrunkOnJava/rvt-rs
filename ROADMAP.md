@@ -17,9 +17,13 @@ narrow exceptions: production `walker::iter_elements` prefers typed MVP
 decoders on `Global/Latest`, merges version-gated **ArcWall** partition
 recovers (Revit 2023 standard), and merges fail-closed partition MVP
 recovers for **Level** / **Material** / **Room** / **Floor** plan-loops
-plus 2024 **ArcWallRectOpening** index rows — never inventing typed
-`Door`/`Window` success. Schema-field Wall instances and Door/Window host
-binding from arbitrary partitions remain open. Eighty per-class decoder
+plus 2024 **ArcWallRectOpening** index rows (ElemTable-confirmed related
+ids; never inventing typed `Door`/`Window` success). IFC export wires
+partition **Level** → storeys, **Floor** → boundary-annotated `IFCSLAB`,
+**Room** → `IFCSPACE`, and **Material** display names → `IfcMaterial`.
+Schema-field Wall instances, Door/Window discrimination + host IFC
+relationships, Floor↔ElemTable id binding, and slab extrusion thickness
+remain open. Eighty per-class decoder
 structs exist in `elements::all_decoders()`; MVP classes are consulted by
 `iter_elements`, while the broader registry remains a library building block
 (see [`docs/status.md`](docs/status.md) and
@@ -32,9 +36,9 @@ structs exist in `elements::all_decoders()`; MVP classes are consulted by
 | Container, compression, metadata | Shipped | Maintain compatibility and bounds checks. |
 | `Formats/Latest` schema | Shipped | Keep 100 percent field classification gated in CI. |
 | ADocument/document-level walker | Partial | Expand confidence across project releases and older files. |
-| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material/Room/Floor plan-loops + 2024 opening index in `iter_elements` (fail closed). Schema-field Wall and typed Door/Window host binding still open. |
-| IFC writer | Partial | Keep synthetic validation green while adding real-file diagnostics. |
-| Browser viewer | Partial | Show confidence and unsupported-file guidance clearly. |
+| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material/Room/Floor plan-loops + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). Schema-field Wall and typed Door/Window host binding still open. |
+| IFC writer | Partial | Levels/Floors/Rooms/Materials from partition MVP emit honestly; ArcWall geometry on 2023; Door/Window + slab extrusion still open. |
+| Browser viewer | Partial | File Status surfaces production class counts + storey/material totals. |
 | Python/CLI surface | Partial | Stabilize JSON schemas and one-shot inspect workflow. |
 | Write path | Partial | Keep stream-level writes honest; defer semantic writes until openability can be proven. |
 
@@ -61,7 +65,7 @@ real project files, not only synthesized fixtures.
 - Known-count fixtures for levels, walls, floors, doors, and windows.
 - Generic partition record scanner.
 - `ElemTable` id to partition-record offset linkage.
-- Typed MVP decoders + ArcWall + partition Level/Material/Room/Floor plan-loop / 2024 opening-index merge wired into `iter_elements` without false positives (schema-field Wall and typed Door/Window host binding still open).
+- Typed MVP decoders + ArcWall + partition Level/Material/Room/Floor plan-loop / 2024 opening-index (ElemTable-confirmed) merge wired into `iter_elements` without false positives; IFC Level/Floor/Room/Material emission (schema-field Wall and typed Door/Window host binding still open).
 - Decode confidence and provenance attached to every element.
 
 ### 0.4.0: IFC Geometry Beta

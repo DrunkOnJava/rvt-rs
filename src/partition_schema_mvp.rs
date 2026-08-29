@@ -4,7 +4,10 @@
 //! for Level, Material, Room, Floor plan loops, and (on Revit 2024)
 //! ArcWallRectOpening index rows. Semantic `Door` / `Window` classes
 //! are **not** invented from opening-index rows — those surface as
-//! `ArcWallRectOpening` with related-id provenance only.
+//! `ArcWallRectOpening` with related-id provenance only. Related ids
+//! are cross-checked against `Global/ElemTable` when present; a hit
+//! confirms the id is declared, not that it is a host Wall or a
+//! Door/Window family instance.
 //!
 //! # Version guard
 //!
@@ -359,6 +362,13 @@ fn floor_decoded(
                 "m_source".into(),
                 InstanceField::String("partition_plan_loop".into()),
             ),
+            (
+                // Plan-loop recoveries are not yet joined to Floor
+                // ElementIds (AnalyticalModelSlab / ElemTable bind
+                // remains open — nearby u32 hits are ambiguous).
+                "m_elem_table_bound".into(),
+                InstanceField::Bool(false),
+            ),
         ],
         byte_range: offset..offset.saturating_add(vertices_xy.len().saturating_mul(16)),
     }
@@ -513,6 +523,13 @@ fn rect_openings_from_partitions(
     let mut out = Vec::new();
     let opening_cap = limits.max_candidates.min(5_000);
 
+    // Confirm related ids against ElemTable when available — never invent
+    // Door/Window classes from the index alone.
+    let elem_ids: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => BTreeSet::new(),
+    };
+
     // Largest partition first — 2024 Core Interior openings live in
     // the ~98 MiB Partitions/46 stream.
     for stream in partition_streams_largest_first(rf) {
@@ -529,6 +546,12 @@ fn rect_openings_from_partitions(
             let Ok(rec) = ArcWallRectOpeningIndex::decode(&concat, off) else {
                 continue;
             };
+            let a_in = elem_ids.contains(&rec.related_id_a);
+            let b_in = elem_ids.contains(&rec.related_id_b);
+            // related_id_a is the historical host *candidate* (RE-15);
+            // ElemTable confirmation only proves the id is declared —
+            // not that it is a Wall host or a Door/Window instance.
+            let host_confirmed = a_in;
             out.push(DecodedElement {
                 id: None,
                 class: "ArcWallRectOpening".into(),
@@ -556,13 +579,31 @@ fn rect_openings_from_partitions(
                         },
                     ),
                     (
+                        "m_related_id_a_in_elem_table".into(),
+                        InstanceField::Bool(a_in),
+                    ),
+                    (
+                        "m_related_id_b_in_elem_table".into(),
+                        InstanceField::Bool(b_in),
+                    ),
+                    (
                         "m_host_id".into(),
-                        // related_id_a is the best host candidate observed
-                        // in RE-15 — callers must treat as unvalidated.
                         InstanceField::ElementId {
                             tag: 0,
                             id: rec.related_id_a,
                         },
+                    ),
+                    (
+                        "m_host_elem_table_confirmed".into(),
+                        InstanceField::Bool(host_confirmed),
+                    ),
+                    (
+                        "m_host_provenance".into(),
+                        InstanceField::String(if host_confirmed {
+                            "related_id_a_in_elem_table".into()
+                        } else {
+                            "related_id_a_unvalidated".into()
+                        }),
                     ),
                     (
                         "m_source_stream".into(),
