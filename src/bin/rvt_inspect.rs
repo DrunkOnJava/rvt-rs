@@ -384,6 +384,23 @@ fn print_human_report(report: &InspectReport) {
     if let Some(original_path) = &report.file.original_path {
         println!("  Original path: {original_path}");
     }
+    if let Some(fmt) = &report.export_diagnostics.formats_latest_integrity {
+        println!("  Formats integrity: {}", fmt.summary_line());
+        let status = match fmt.integrity_status {
+            rvt::compression::FormatsIntegrityStatus::Ok => "ok",
+            rvt::compression::FormatsIntegrityStatus::Uncertain => "uncertain",
+            rvt::compression::FormatsIntegrityStatus::Incomplete => "incomplete",
+        };
+        let strip = match fmt.checksum_tail_stripping {
+            rvt::compression::ChecksumTailStripping::Disabled => "disabled",
+            rvt::compression::ChecksumTailStripping::Enabled => "enabled",
+        };
+        if let Some(code) = &fmt.diagnostic_code {
+            println!("    status={status} · strip={strip} · code={code}");
+        } else {
+            println!("    status={status} · strip={strip}");
+        }
+    }
 
     println!("\nFailure mode");
     println!(

@@ -178,6 +178,15 @@ interface ExportDiagnostics {
   };
   unsupported_features?: string[];
   warnings?: string[];
+  formats_latest_integrity?: {
+    stream?: string;
+    stored_bytes?: number;
+    inflated_bytes?: number | null;
+    page_boundary_detected?: boolean;
+    checksum_tail_stripping?: string;
+    integrity_status?: string;
+    diagnostic_code?: string | null;
+  };
 }
 
 let model: IfcModel | null = null;
@@ -621,6 +630,26 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
         : 'Required schema/model stream missing',
     ),
   );
+  const formatsIntegrity = diagnostics.formats_latest_integrity;
+  if (formatsIntegrity) {
+    const status = formatsIntegrity.integrity_status ?? 'unknown';
+    const kind =
+      status === 'ok' ? 'ok' : status === 'uncertain' || status === 'incomplete' ? 'warn' : 'warn';
+    const code = formatsIntegrity.diagnostic_code
+      ? ` · ${formatsIntegrity.diagnostic_code}`
+      : '';
+    const pages = formatsIntegrity.page_boundary_detected
+      ? 'multipage boundary detected'
+      : 'single-page';
+    const strip = formatsIntegrity.checksum_tail_stripping ?? 'disabled';
+    statusPanelEl.appendChild(
+      statusRow(
+        'Formats integrity',
+        kind,
+        `${status} · ${pages} · strip ${strip}${code}`,
+      ),
+    );
+  }
   statusPanelEl.appendChild(
     statusRow(
       'Elements',
