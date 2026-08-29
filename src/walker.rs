@@ -1327,9 +1327,9 @@ pub fn iter_elements_with_limits(
         };
         // Typed MVP preference: reject → skip (fail closed). Generic
         // path for non-MVP classes.
-        let Some(mut decoded) = crate::elements::decode_instance_prefer_typed_with_limits(
-            &d, cand.offset, cls, limits,
-        ) else {
+        let Some(mut decoded) =
+            crate::elements::decode_instance_prefer_typed_with_limits(&d, cand.offset, cls, limits)
+        else {
             continue;
         };
 
