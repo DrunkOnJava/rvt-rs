@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "generator": "gen-fixture",
+  "name": "mep-2024",
+  "seed": 99,
+  "year": 2024,
+  "classes": ["Level", "Wall", "Door", "Window", "Duct"],
+  "element_count": 20,
+  "expected_counts": {
+    "levels": 4,
+    "walls": 4,
+    "floors": 0,
+    "doors": 4,
+    "windows": 4,
+    "mep": 4
+  },
+  "notes": "MEP-leaning synthetic fixture; Duct stands in for MEP category density."
+}

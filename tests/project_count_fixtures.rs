@@ -3,13 +3,20 @@
 //! The manifests under `tests/fixtures/project-counts/` separate
 //! authoritative counts, explicit unknowns, and current decoder baselines so
 //! corpus gaps cannot be skipped accidentally.
+//!
+//! Tier-one (`tier: 1` / `tier1-*`) manifests resolve against the in-repo
+//! `corpus/tier1/` tree (override with `RVT_CORPUS_TIER1_DIR`) and may use
+//! `fixture_metric: "class_instances.<Class>"` for synthetic gen-fixture
+//! inventories. Tier-two manifests resolve against `RVT_PROJECT_CORPUS_DIR`.
 
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use rvt::RevitFile;
+use rvt::compression;
 use rvt::ifc::{RvtDocExporter, write_step};
+use rvt::streams;
 
 const REQUIRED_CATEGORIES: &[&str] = &[
     "levels",
@@ -26,14 +33,100 @@ const REQUIRED_CATEGORIES: &[&str] = &[
     "units",
 ];
 
-fn project_dir() -> PathBuf {
+fn tier2_project_dir() -> PathBuf {
     std::env::var("RVT_PROJECT_CORPUS_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/private/tmp/rvt-corpus-probe/magnetar/Revit"))
 }
 
+fn tier1_project_dir() -> PathBuf {
+    std::env::var("RVT_CORPUS_TIER1_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/tier1"))
+}
+
 fn fixture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project-counts")
+}
+
+fn manifest_tier(manifest: &Value) -> u64 {
+    if let Some(t) = manifest.get("tier").and_then(Value::as_u64) {
+        return t;
+    }
+    let id = manifest.get("id").and_then(Value::as_str).unwrap_or("");
+    if id.starts_with("tier1-") {
+        1
+    } else {
+        2
+    }
+}
+
+fn corpus_dir_for_manifest(manifest: &Value) -> PathBuf {
+    if manifest_tier(manifest) == 1 {
+        tier1_project_dir()
+    } else {
+        tier2_project_dir()
+    }
+}
+
+/// Payload size matching `gen_fixture::synthesize_fields`.
+fn synth_payload_size(class_name: &str) -> usize {
+    let base = 1 + 4 + 16;
+    let extra = match class_name {
+        "Wall" | "Level" | "Column" | "Beam" | "Slab" => 8,
+        "Project" => 8,
+        _ => 0,
+    };
+    base + extra
+}
+
+fn count_class_instances_from_fixture(
+    rf: &mut RevitFile,
+    classes: &[String],
+) -> Result<BTreeMap<String, usize>, Box<dyn std::error::Error>> {
+    let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
+    let decomp = compression::inflate_at(&raw, 8)?;
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for c in classes {
+        counts.insert(c.clone(), 0);
+    }
+    if decomp.len() < 0x20 {
+        return Ok(counts);
+    }
+    let mut cursor = 0x20usize;
+    let end = decomp.len().saturating_sub(64);
+    while cursor + 8 <= end {
+        let class_tag =
+            u32::from_le_bytes(decomp[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
+        if class_tag >= classes.len() {
+            break;
+        }
+        let class_name = &classes[class_tag];
+        let payload = synth_payload_size(class_name);
+        if cursor + 8 + payload > decomp.len() {
+            break;
+        }
+        cursor += 8 + payload;
+        *counts.entry(class_name.clone()).or_insert(0) += 1;
+    }
+    Ok(counts)
+}
+
+fn load_fixture_classes(project_path: &Path) -> Option<Vec<String>> {
+    let stem = project_path.file_stem()?.to_str()?;
+    let recipe = project_path.parent()?.join(format!("{stem}.fixture.json"));
+    if !recipe.exists() {
+        return None;
+    }
+    let text = std::fs::read_to_string(recipe).ok()?;
+    let value: Value = serde_json::from_str(&text).ok()?;
+    let classes = value.get("classes")?.as_array()?;
+    Some(
+        classes
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect(),
+    )
 }
 
 fn manifest_paths() -> Vec<PathBuf> {
@@ -195,19 +288,22 @@ fn project_count_manifests_are_complete_and_explicit() {
 
 #[test]
 fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::error::Error>> {
-    let corpus_dir = project_dir();
-    if !corpus_dir.exists() {
-        eprintln!(
-            "skipping project-count fixture checks: corpus dir missing at {}",
-            corpus_dir.display()
-        );
-        return Ok(());
-    }
-
     let mut exercised = 0usize;
+    let mut skipped_missing_corpus = 0usize;
+
     for path in manifest_paths() {
         let manifest = read_json(&path);
         let id = str_field(&manifest, "id", &path.display().to_string()).to_string();
+        let corpus_dir = corpus_dir_for_manifest(&manifest);
+        if !corpus_dir.exists() {
+            skipped_missing_corpus += 1;
+            eprintln!(
+                "skipping project-count manifest {id}: corpus dir missing at {}",
+                corpus_dir.display()
+            );
+            continue;
+        }
+
         let project_file = str_field(&manifest, "project_file", &id);
         let project_path = corpus_dir.join(project_file);
         if !project_path.exists() {
@@ -234,6 +330,12 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
         };
 
         let mut rf = RevitFile::open(&project_path)?;
+        let fixture_classes = load_fixture_classes(&project_path);
+        let class_inventory = match fixture_classes.as_ref() {
+            Some(classes) => Some(count_class_instances_from_fixture(&mut rf, classes)?),
+            None => None,
+        };
+
         let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
         let step = write_step(&result.model);
         let unsupported: BTreeSet<&str> = result
@@ -268,6 +370,28 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
                 );
             }
 
+            if let Some(metric) = opt_str_field(count, "fixture_metric") {
+                let expected = int_field(count, "expected", &format!("{id}.{category}"));
+                let tolerance = int_field(count, "tolerance", &format!("{id}.{category}"));
+                let class_name = metric
+                    .strip_prefix("class_instances.")
+                    .unwrap_or_else(|| {
+                        panic!("{id}.{category}: unsupported fixture_metric {metric}")
+                    });
+                let inventory = class_inventory.as_ref().unwrap_or_else(|| {
+                    panic!(
+                        "{id}.{category}: fixture_metric requires a sibling *.fixture.json recipe"
+                    )
+                });
+                let actual = inventory.get(class_name).copied().unwrap_or(0);
+                assert_with_tolerance(
+                    &format!("{id}.{category} fixture {metric}"),
+                    actual,
+                    expected,
+                    tolerance,
+                );
+            }
+
             if let Some(metric) = opt_str_field(count, "decoder_metric") {
                 let expected = int_field(count, "decoder_expected", &format!("{id}.{category}"));
                 let tolerance = int_field(count, "decoder_tolerance", &format!("{id}.{category}"));
@@ -290,10 +414,17 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
         }
     }
 
-    assert!(
-        exercised > 0,
-        "project corpus dir {} existed but no project-count manifests matched available files",
-        corpus_dir.display()
-    );
+    // Tier-one manifests are always in-repo; failing to exercise any of them
+    // means the corpus checkout is broken.
+    let tier1_dir = tier1_project_dir();
+    if tier1_dir.exists() {
+        assert!(
+            exercised > 0,
+            "tier1 corpus at {} exists but no project-count manifests matched",
+            tier1_dir.display()
+        );
+    } else if skipped_missing_corpus > 0 {
+        eprintln!("no corpus directories available; skipped {skipped_missing_corpus} manifest(s)");
+    }
     Ok(())
 }

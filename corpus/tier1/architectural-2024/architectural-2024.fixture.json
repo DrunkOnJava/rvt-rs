@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "generator": "gen-fixture",
+  "name": "architectural-2024",
+  "seed": 42,
+  "year": 2024,
+  "classes": ["Level", "Wall", "Floor", "Door", "Window"],
+  "element_count": 25,
+  "expected_counts": {
+    "levels": 5,
+    "walls": 5,
+    "floors": 5,
+    "doors": 5,
+    "windows": 5
+  },
+  "notes": "Round-robin class assignment: element_count / len(classes) per class."
+}

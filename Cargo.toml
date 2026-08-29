@@ -90,6 +90,10 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 # browsable. Version pinned to the 0.5 line (MSRV-compatible with
 # our 1.85 floor).
 criterion = { version = "0.5", features = ["html_reports"] }
+# Tier-one corpus health: verify license-sidecar SHA256 of committed
+# synthetic fixtures under corpus/tier1/.
+sha2 = "0.10"
+hex = "0.4"
 
 # Seven shipped binaries. All depend on the `rvt` library crate.
 

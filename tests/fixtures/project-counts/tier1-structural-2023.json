@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "id": "tier1-structural-2023",
+  "tier": 1,
+  "project_file": "structural-2023/structural-2023.rvt",
+  "reference_ifc_file": null,
+  "source": {
+    "repo": "drunkonjava/rvt-rs",
+    "path": "corpus/tier1/structural-2023",
+    "license": "Apache-2.0",
+    "revit_release": 2023,
+    "rvt_sha256": "ce2e5038e02a4e81fd033d339827482cd3ce5f6bebf6cd1e03a8f8023d2dc7f5",
+    "rvt_bytes": 20480,
+    "notes": "Synthetic gen-fixture oracle for Revit 2023 structural density."
+  },
+  "counts": {
+    "levels": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Level round-robin)",
+      "fixture_metric": "class_instances.Level"
+    },
+    "walls": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Wall round-robin)",
+      "fixture_metric": "class_instances.Wall"
+    },
+    "floors": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Floor round-robin)",
+      "fixture_metric": "class_instances.Floor"
+    },
+    "roofs": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Roof not in --classes)"
+    },
+    "doors": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Door not in --classes)"
+    },
+    "windows": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Window not in --classes)"
+    },
+    "rooms_spaces": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (no Space/Room class)"
+    },
+    "columns": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Column round-robin)",
+      "fixture_metric": "class_instances.Column"
+    },
+    "beams": {
+      "status": "known",
+      "expected": 4,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (Beam round-robin)",
+      "fixture_metric": "class_instances.Beam"
+    },
+    "mep": {
+      "status": "known",
+      "expected": 0,
+      "tolerance": 0,
+      "source": "gen-fixture recipe (no MEP class)"
+    },
+    "materials": {
+      "status": "unknown",
+      "reason": "Synthetic fixtures do not emit material tables."
+    },
+    "units": {
+      "status": "decoder_baseline",
+      "expected": 1,
+      "source": "IFC scaffold always emits one IFCUNITASSIGNMENT",
+      "decoder_metric": "step.IFCUNITASSIGNMENT",
+      "decoder_expected": 1,
+      "decoder_tolerance": 0,
+      "tracking_issue": 0
+    }
+  }
+}
