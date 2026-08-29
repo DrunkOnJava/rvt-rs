@@ -185,6 +185,108 @@ pub fn inflate_all_chunks_for_stream(stream_name: &str, stored: &[u8]) -> Vec<Ve
     inflate_all_chunks(prepared.as_ref())
 }
 
+/// Whether production inflate strips checksum-page trailers for a stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChecksumTailStripping {
+    /// Finding 1 **narrow** gate: Formats/Latest never strips by default.
+    Disabled,
+    Enabled,
+}
+
+/// Coarse integrity verdict for `Formats/Latest` after production inflate.
+///
+/// Multipage streams stay [`FormatsIntegrityStatus::Uncertain`] while strip
+/// remains disabled — do **not** treat inflate success as completeness proof
+/// (Discussion #112 / #151 residual).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FormatsIntegrityStatus {
+    /// Stored length is under one full checksum page and inflate succeeded.
+    Ok,
+    /// At least one full page boundary is present; completeness unverified.
+    Uncertain,
+    /// Stream missing or production inflate failed.
+    Incomplete,
+}
+
+/// Stable diagnostic code for Formats multipage integrity (A2 / PARSE-001).
+pub const RVT_FORMATS_MULTIPAGE_UNVERIFIED: &str = "RVT_FORMATS_MULTIPAGE_UNVERIFIED";
+
+/// Machine-readable `Formats/Latest` integrity sidecar for inspect / export /
+/// viewer File Status.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct FormatsLatestIntegrity {
+    pub stream: String,
+    pub stored_bytes: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inflated_bytes: Option<usize>,
+    pub page_boundary_detected: bool,
+    pub checksum_tail_stripping: ChecksumTailStripping,
+    pub integrity_status: FormatsIntegrityStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diagnostic_code: Option<String>,
+}
+
+impl FormatsLatestIntegrity {
+    /// Short user-facing summary for CLI / File Status rows.
+    pub fn summary_line(&self) -> String {
+        match self.integrity_status {
+            FormatsIntegrityStatus::Ok => format!(
+                "Formats/Latest · {} stored · inflate ok · single-page",
+                self.stored_bytes
+            ),
+            FormatsIntegrityStatus::Uncertain => format!(
+                "Formats/Latest · {} stored · multipage integrity uncertain (strip disabled)",
+                self.stored_bytes
+            ),
+            FormatsIntegrityStatus::Incomplete => format!(
+                "Formats/Latest · {} stored · inflate incomplete",
+                self.stored_bytes
+            ),
+        }
+    }
+}
+
+/// Diagnose `Formats/Latest` stored bytes without enabling strip.
+///
+/// Reuses [`inflate_stream_at`] / page-size helpers. Respects the narrow
+/// Finding 1 gate: [`FormatsLatestIntegrity::checksum_tail_stripping`] is
+/// always [`ChecksumTailStripping::Disabled`].
+pub fn diagnose_formats_latest_integrity(stored: &[u8]) -> FormatsLatestIntegrity {
+    debug_assert!(
+        !is_checksum_paged_stream(crate::streams::FORMATS_LATEST),
+        "Formats/Latest must stay ungated (Finding 1 narrow)"
+    );
+    let stored_bytes = stored.len();
+    let page_boundary_detected = stored_bytes >= REVIT_STORED_PAGE_BYTES;
+    let inflate = inflate_stream_at(crate::streams::FORMATS_LATEST, stored, 0);
+    let inflated_bytes = inflate.as_ref().ok().map(|b| b.len());
+
+    // Multipage: completeness is unverified while strip stays disabled — even
+    // when bare inflate returns Ok (silent drift risk; #151 residual).
+    let (integrity_status, diagnostic_code) = if page_boundary_detected {
+        (
+            FormatsIntegrityStatus::Uncertain,
+            Some(RVT_FORMATS_MULTIPAGE_UNVERIFIED.to_string()),
+        )
+    } else if inflate.is_ok() {
+        (FormatsIntegrityStatus::Ok, None)
+    } else {
+        (FormatsIntegrityStatus::Incomplete, None)
+    };
+
+    FormatsLatestIntegrity {
+        stream: crate::streams::FORMATS_LATEST.to_string(),
+        stored_bytes,
+        inflated_bytes,
+        page_boundary_detected,
+        checksum_tail_stripping: ChecksumTailStripping::Disabled,
+        integrity_status,
+        diagnostic_code,
+    }
+}
+
 /// Returns `true` iff `data` starts with the gzip magic at the given offset.
 pub fn has_gzip_magic(data: &[u8], offset: usize) -> bool {
     offset
@@ -869,5 +971,76 @@ mod tests {
             offset = end;
         }
         out
+    }
+
+    #[test]
+    fn formats_integrity_single_page_ok_without_claiming_multipage() {
+        let gzip = truncated_gzip_encode(b"formats-single-page").unwrap();
+        assert!(gzip.len() < REVIT_STORED_PAGE_BYTES);
+        let diag = diagnose_formats_latest_integrity(&gzip);
+        assert_eq!(diag.stream, "Formats/Latest");
+        assert_eq!(diag.stored_bytes, gzip.len());
+        assert_eq!(diag.inflated_bytes, Some(b"formats-single-page".len()));
+        assert!(!diag.page_boundary_detected);
+        assert_eq!(
+            diag.checksum_tail_stripping,
+            ChecksumTailStripping::Disabled
+        );
+        assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Ok);
+        assert!(diag.diagnostic_code.is_none());
+        assert!(!is_checksum_paged_stream("Formats/Latest"));
+    }
+
+    #[test]
+    fn formats_integrity_multipage_uncertain_without_enabling_strip() {
+        // Synthetic multipage detection only — does **not** claim completeness.
+        let mut state = 0xC0FFEE_u32;
+        let payload: Vec<u8> = (0..180_000)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 16) as u8
+            })
+            .collect();
+        let gzip = truncated_gzip_encode(&payload).unwrap();
+        let paged = inject_page_checksums(&gzip);
+        assert!(
+            paged.len() >= REVIT_STORED_PAGE_BYTES,
+            "fixture must cross a page boundary"
+        );
+
+        let diag = diagnose_formats_latest_integrity(&paged);
+        assert_eq!(diag.stream, "Formats/Latest");
+        assert_eq!(diag.stored_bytes, paged.len());
+        assert!(diag.page_boundary_detected);
+        assert_eq!(
+            diag.checksum_tail_stripping,
+            ChecksumTailStripping::Disabled
+        );
+        assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Uncertain);
+        assert_eq!(
+            diag.diagnostic_code.as_deref(),
+            Some(RVT_FORMATS_MULTIPAGE_UNVERIFIED)
+        );
+        // Gate must remain off — diagnose must not flip production strip.
+        assert!(!is_checksum_paged_stream("Formats/Latest"));
+        let prepared = prepare_stream_for_inflate("Formats/Latest", &paged);
+        assert_eq!(
+            prepared.as_ref(),
+            paged.as_slice(),
+            "diagnose must not enable Formats strip"
+        );
+    }
+
+    #[test]
+    fn formats_integrity_garbage_under_one_page_is_incomplete() {
+        let garbage = vec![0u8; 64];
+        let diag = diagnose_formats_latest_integrity(&garbage);
+        assert!(!diag.page_boundary_detected);
+        assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Incomplete);
+        assert!(diag.inflated_bytes.is_none());
+        assert_eq!(
+            diag.checksum_tail_stripping,
+            ChecksumTailStripping::Disabled
+        );
     }
 }

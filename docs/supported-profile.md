@@ -9,7 +9,7 @@ diagnostics, and support triage. It is not yet a general Revit model converter.
 |---|---|
 | File extensions | `.rvt`, `.rfa`, `.rte`, `.rft` containers that use the standard Revit OLE/CFB layout. |
 | Revit versions | Metadata/schema inspection is regression-tested against the 2016-2026 family corpus. |
-| Safe workflows | `rvt-inspect`, `rvt-info`, `rvt-schema`, previews, stream inventory, document metadata, class schema, and diagnostics sidecars. |
+| Safe workflows | `rvt-inspect`, `rvt-info`, `rvt-schema`, previews, stream inventory, document metadata, class schema, and diagnostics sidecars (`Formats/Latest` multipage integrity uncertain while strip stays disabled). |
 | IFC output | Spec-valid IFC4 scaffold with project/spatial framework; partition MVP Level storeys / Floor boundary slabs / Room spaces / Material names when recovered; typed wall geometry limited to the version-gated 2023 ArcWall path. |
 | Browser viewer | Zero-upload inspection, File Status (storey names + material samples), scene tree storey grouping when elevations allow, and explicit export-readiness labels before download. |
 
