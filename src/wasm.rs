@@ -108,10 +108,7 @@ pub fn open_rvt_bytes_with_diagnostics_and_limits(
 /// coverage cannot satisfy the requested bar — the viewer uses this to
 /// surface honest confidence rather than over-claiming geometry.
 #[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsMode)]
-pub fn open_rvt_bytes_with_diagnostics_mode(
-    bytes: &[u8],
-    mode: &str,
-) -> Result<JsValue, JsValue> {
+pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<JsValue, JsValue> {
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let result = RvtDocExporter
