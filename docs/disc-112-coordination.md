@@ -63,10 +63,15 @@ claim ES remapping works. ES refs stay outside #152 parent scoring.
 
 **P1 next (honest order):**
 
+<<<<<<< HEAD
 1. Merge Phase 1 contracts [#172](https://github.com/DrunkOnJava/rvt-rs/pull/172)
 2. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive — do **not** invent Door/Window/Level ElementId successes (RE-19 / RE-20 negatives stand)
 3. Phase 2 ES oracle fixture families — **blocked on Revit API**
 4. crates.io / docs.rs / GitHub Releases publish decisions (human)
+=======
+1. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive
+3. crates.io / docs.rs / GitHub Releases publish decisions (human)
+>>>>>>> 85649d1 (docs(RE-152): magnetar negative on ElemTable trailing-owner claim)
 
 Hard walls unchanged: Door/Window discriminator, schema-field Wall, Level
 ElementIds on magnetar, AProperty host joins.
