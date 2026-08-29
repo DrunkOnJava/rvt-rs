@@ -15,6 +15,14 @@ DOC-001 — statuses there must stay honest and must not claim
 converter-grade typed recovery. Keep that matrix, this page, the README,
 and the viewer support matrix aligned.
 
+**Research program pointer:** the governing
+[unified research report](research/unified-research-report.md) (rev 1.1)
+sequences Phase 0 product readiness → Phase 1 identity/evidence contracts →
+Phase 2 ES ElementId remapping oracle (H-ES5). Phase 2 fixture generation
+requires a Revit-hosted API oracle and is **not** available on Cloud VMs.
+ES remapping is **not** a shipped capability; default IFC omits ES edges.
+Coordination mirror: [Discussion #112 notes](disc-112-coordination.md).
+
 ## User-Facing Summary
 
 rvt-rs is useful today for inspecting Revit files without Revit, extracting

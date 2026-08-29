@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/es-capability.schema.json",
+  "title": "ES / research capability promotion record",
+  "description": "Capability schema stub matching unified research report §15.16. Status may become verified only with E4+ evidence and a support-matrix update in the same change set.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "capability_id",
+    "status",
+    "evidence_tier",
+    "oracle",
+    "claims",
+    "non_claims"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "capability_id": {
+      "type": "string",
+      "minLength": 1,
+      "examples": ["es.elementid_remap"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["unsupported", "research", "partial", "verified"]
+    },
+    "evidence_tier": {
+      "type": "string",
+      "enum": ["E0", "E1", "E2", "E3", "E4", "E5"]
+    },
+    "fixture_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "oracle": {
+      "type": "object",
+      "required": ["required", "kind"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "kind": {
+          "type": "string",
+          "enum": ["revit_api", "none", "other"]
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "non_claims": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "support_matrix_row": {
+      "type": ["string", "null"]
+    }
+  },
+  "additionalProperties": true
+}

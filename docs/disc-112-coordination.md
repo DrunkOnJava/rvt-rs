@@ -33,10 +33,19 @@ Credit: [@STE1200](https://github.com/STE1200) —
 | PARSE-001 Formats/Latest multipage integrity diagnostics | [#168](https://github.com/DrunkOnJava/rvt-rs/pull/168) |
 | Support-matrix scaffold (honesty ceilings) | [#167](https://github.com/DrunkOnJava/rvt-rs/pull/167) |
 | Changelog / 0.2.0 plan / install honesty / publish SHA pins (partial) | [#165](https://github.com/DrunkOnJava/rvt-rs/pull/165) |
+| Remaining third-party Actions SHA pins | [#170](https://github.com/DrunkOnJava/rvt-rs/pull/170) |
+| CI/deploy material baseline unblock | [#169](https://github.com/DrunkOnJava/rvt-rs/pull/169) |
 
 Formats/Latest production strip remains **disabled**. Findings
 [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156)
 stay **open** for evidence-only research (triage hygiene only in #166).
+
+**Governing research program:** see
+[`docs/research/unified-research-report.md`](research/unified-research-report.md)
+(rev 1.1). **Immediate research sprint:** ES ElementId remapping oracle (H-ES5)
+with owned synthetics — **Phase 1 contracts** ship without Revit; **Phase 2
+fixture generation is blocked on a Revit-hosted oracle**. This does **not**
+claim ES remapping works. ES refs stay outside #152 parent scoring.
 
 **P1 progress (2026-08-29, continued):**
 
@@ -44,8 +53,9 @@ stay **open** for evidence-only research (triage hygiene only in #166).
 |------|--------|
 | Viewer deploy / material_count baselines | Done — [#169](https://github.com/DrunkOnJava/rvt-rs/pull/169) |
 | Remaining Actions SHA pins | Done — [#170](https://github.com/DrunkOnJava/rvt-rs/pull/170) |
-| Export `source_coverage` measured fractions | In flight — [#171](https://github.com/DrunkOnJava/rvt-rs/pull/171) (fail-closed; no invented %) |
-| Evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) | Partial negative on magnetar 2023/2024: trailing-word-as-owner **falsified**; issue stays open for 2014/2026 samples |
+| Export `source_coverage` measured fractions | Done — [#171](https://github.com/DrunkOnJava/rvt-rs/pull/171) (fail-closed; no invented %) |
+| Phase 1 identity / evidence / ES occurrence contracts | In flight — [#172](https://github.com/DrunkOnJava/rvt-rs/pull/172) |
+| Evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) | Partial negative on magnetar 2023/2024: trailing-word-as-owner **falsified**; issue stays open for 2014/2026 samples ([#173](https://github.com/DrunkOnJava/rvt-rs/pull/173)) |
 | Evidence-only [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) | Blocked on unpublished ElementHeader marker/offsets; issue stays open |
 | Evidence-only [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) | Still open — 2024 ArcWall envelope not landed (RE-13 / RE-19) |
 | Re-baseline [#81](https://github.com/DrunkOnJava/rvt-rs/issues/81)–[#96](https://github.com/DrunkOnJava/rvt-rs/issues/96) | Done earlier this day (housekeeping) |
@@ -53,11 +63,13 @@ stay **open** for evidence-only research (triage hygiene only in #166).
 
 **P1 next (honest order):**
 
-1. Finish / merge `source_coverage` [#171](https://github.com/DrunkOnJava/rvt-rs/pull/171)
-2. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive
-3. crates.io / docs.rs / GitHub Releases publish decisions (human)
+1. Merge Phase 1 contracts [#172](https://github.com/DrunkOnJava/rvt-rs/pull/172)
+2. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive — do **not** invent Door/Window/Level ElementId successes (RE-19 / RE-20 negatives stand)
+3. Phase 2 ES oracle fixture families — **blocked on Revit API**
+4. crates.io / docs.rs / GitHub Releases publish decisions (human)
 
-Hard walls unchanged: Door/Window discriminator, schema-field Wall, Level ElementIds on magnetar, AProperty host joins.
+Hard walls unchanged: Door/Window discriminator, schema-field Wall, Level
+ElementIds on magnetar, AProperty host joins.
 
 ---
 
