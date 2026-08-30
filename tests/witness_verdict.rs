@@ -71,7 +71,14 @@ fn committed_observations_rehash_and_name_registered_inputs() {
             }
             let obs = read_json(&path);
             let ctx = path.display().to_string();
-            assert_eq!(obs["schema_version"], "1.0.0", "{ctx}: schema_version");
+            // OctetProof 1.1.0 added the `relations` field class; a 1.0.0
+            // observation stays valid, so both envelope versions are
+            // accepted (spec §16.1, §20).
+            let schema_version = obs["schema_version"].as_str().unwrap_or_default();
+            assert!(
+                ["1.0.0", "1.1.0"].contains(&schema_version),
+                "{ctx}: schema_version {schema_version}"
+            );
             let wid = obs["witness_id"].as_str().unwrap();
             assert!(
                 witnesses.contains(wid),
@@ -101,6 +108,38 @@ fn committed_observations_rehash_and_name_registered_inputs() {
                 obs["observation"]["entity_counts"].is_object(),
                 "{ctx}: entity_counts payload"
             );
+            if schema_version == "1.1.0" {
+                let relations = &obs["observation"]["relations"];
+                assert!(relations.is_object(), "{ctx}: relations payload");
+                for (relation, pairs) in relations.as_object().unwrap() {
+                    let pairs = pairs
+                        .as_array()
+                        .unwrap_or_else(|| panic!("{ctx}: relations.{relation} must be an array"));
+                    let mut previous: Option<Vec<&str>> = None;
+                    for pair in pairs {
+                        let pair: Vec<&str> = pair
+                            .as_array()
+                            .unwrap_or_else(|| {
+                                panic!("{ctx}: relations.{relation} entries must be arrays")
+                            })
+                            .iter()
+                            .map(|tag| {
+                                tag.as_str().unwrap_or_else(|| {
+                                    panic!("{ctx}: relations.{relation} tags must be strings")
+                                })
+                            })
+                            .collect();
+                        assert_eq!(pair.len(), 2, "{ctx}: relations.{relation} pair arity");
+                        if let Some(previous) = &previous {
+                            assert!(
+                                previous.as_slice() <= pair.as_slice(),
+                                "{ctx}: relations.{relation} must be canonically sorted"
+                            );
+                        }
+                        previous = Some(pair);
+                    }
+                }
+            }
             seen += 1;
         }
         assert!(seen >= 2, "{}: fewer than two observations", dir.display());

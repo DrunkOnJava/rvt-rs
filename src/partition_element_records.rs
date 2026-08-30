@@ -26,12 +26,20 @@
 //! +0x4c  u32  0xffffffff on every observed record of this shape
 //! +0x50  8B   bbox marker 46 01 ff ff ff ff ab 05
 //! +0x58  48B  bounding box: min x/y/z, max x/y/z, feet, f64 LE
+//! +0x88  u32  reference-list length n
+//! +0x8c  n*8  n u64 reference slots
 //! ```
 //!
 //! The two fields at `+0x32` and `+0x42` are what separates the
 //! records Revit's own exporter emits as building elements from the
 //! rest — see [`PartitionElementRecord::is_exported_instance`] and
 //! `reports/element-framing/RE-21-partition-element-record-instance-rule.md`.
+//!
+//! The counted reference list that follows the bounding box is what
+//! binds a door or window to its host wall — see
+//! [`decode_reference_list`],
+//! [`PartitionElementRecord::preceding_reference`] and
+//! `reports/element-framing/RE-23-door-window-host-binding.md`.
 //!
 //! 24880 records of this shape were found on that file; 23470 of
 //! them (94.3 %) carry the bbox marker at exactly `+0x50`, which is
@@ -57,6 +65,16 @@
 //!   values on the corpus and they partition the records into placed
 //!   instances and type/symbol envelopes. The numbers are recorded,
 //!   not decoded.
+//! - The `+0x88` list is named a *reference list* because its slots
+//!   hold ElementIds and because the slot before the record's own id
+//!   is, on every door and window record of the recorded edge, the
+//!   host wall Revit's own exporter voids. What the other slots mean
+//!   is recorded, not claimed: the leading slot is `3` on every
+//!   observed record, and the remaining slots are family / type /
+//!   level ids in ascending order. The list length is `u32`-counted,
+//!   not sentinel-terminated, and the count is bounded by
+//!   [`REFERENCE_LIST_MAX_ENTRIES`] so a garbage word cannot make the
+//!   decoder walk off.
 //! - Category membership alone is **not** an instance claim: a
 //!   family symbol carries the same category as its instances.
 
@@ -109,6 +127,14 @@ pub const BBOX_MARKER_OFFSET: usize = 0x50;
 pub const BBOX_OFFSET: usize = 0x58;
 /// Minimum bytes a complete record header occupies.
 pub const RECORD_MIN_LEN: usize = BBOX_OFFSET + 48;
+/// Offset of the counted reference list, immediately after the box.
+pub const REFERENCE_LIST_OFFSET: usize = RECORD_MIN_LEN;
+/// Largest reference-list length the decoder will accept.
+///
+/// The longest list observed on `2024_Core_Interior.rvt` is 101 slots
+/// (an `OST_Walls` record); the bound is an order of magnitude above
+/// that so an unrelated `u32` cannot make the scan read megabytes.
+pub const REFERENCE_LIST_MAX_ENTRIES: usize = 1024;
 
 /// Fixed marker that precedes the bounding box.
 pub const BBOX_MARKER: [u8; 8] = [0x46, 0x01, 0xff, 0xff, 0xff, 0xff, 0xab, 0x05];
@@ -132,6 +158,18 @@ pub struct PartitionElementRecord {
     pub placement_kind: u32,
     /// Model bounding box in feet: `[min_x, min_y, min_z, max_x, max_y, max_z]`.
     pub bbox_feet: [f64; 6],
+    /// Reference slot immediately before this record's own ElementId
+    /// in the counted list at `+0x88` (#222, RE-23).
+    ///
+    /// `None` when the list does not decode, does not name the
+    /// record's own id, names it in the first slot, or when the slot
+    /// before it holds a value outside the `u32` ElementId range.
+    ///
+    /// On a door or window record this is the host wall; on other
+    /// categories it is only what the byte says. Nothing here checks
+    /// that the value is a wall — the caller does
+    /// (`partition_schema_mvp::opening_instances_from_records`).
+    pub preceding_reference: Option<u32>,
 }
 
 impl PartitionElementRecord {
@@ -252,6 +290,45 @@ fn read_f64(buf: &[u8], off: usize) -> Option<f64> {
     read_u64(buf, off).map(f64::from_bits)
 }
 
+/// Decode the counted reference list whose `u32` length prefix sits
+/// at `at` (#222, RE-23).
+///
+/// Returns `None` when the length word is zero, exceeds
+/// [`REFERENCE_LIST_MAX_ENTRIES`], or would run past the end of
+/// `buf`. The slots are returned verbatim as `u64`; a slot outside
+/// the `u32` ElementId range is kept rather than dropped, so callers
+/// see the list exactly as framed.
+pub fn decode_reference_list(buf: &[u8], at: usize) -> Option<Vec<u64>> {
+    let count = buf
+        .get(at..at + 4)
+        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))? as usize;
+    if count == 0 || count > REFERENCE_LIST_MAX_ENTRIES {
+        return None;
+    }
+    let start = at.checked_add(4)?;
+    let end = start.checked_add(count.checked_mul(8)?)?;
+    if end > buf.len() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count);
+    for index in 0..count {
+        out.push(read_u64(buf, start + index * 8)?);
+    }
+    Some(out)
+}
+
+/// The slot immediately before `element_id`'s last occurrence in
+/// `entries`, when that slot is a `u32`-range ElementId.
+fn slot_before(entries: &[u64], element_id: u32) -> Option<u32> {
+    let target = u64::from(element_id);
+    let index = entries.iter().rposition(|value| *value == target)?;
+    let previous = *entries.get(index.checked_sub(1)?)?;
+    if previous == 0 || previous > u64::from(u32::MAX) {
+        return None;
+    }
+    Some(previous as u32)
+}
+
 /// Decode one record at `offset`, fail-closed.
 ///
 /// `declared_ids` is the `Global/ElemTable` id set; a record whose
@@ -300,6 +377,10 @@ pub fn decode_at(
     let container = read_u64(buf, offset + CONTAINER_OFFSET)?;
     let placement_kind =
         read_u64(buf, offset + PLACEMENT_KIND_OFFSET).map(|v| (v & 0xffff_ffff) as u32)?;
+    let preceding_reference = offset
+        .checked_add(REFERENCE_LIST_OFFSET)
+        .and_then(|at| decode_reference_list(buf, at))
+        .and_then(|entries| slot_before(&entries, element_id));
     Some(PartitionElementRecord {
         stream: stream.to_string(),
         offset,
@@ -309,6 +390,7 @@ pub fn decode_at(
         container,
         placement_kind,
         bbox_feet,
+        preceding_reference,
     })
 }
 
@@ -421,6 +503,17 @@ mod tests {
         ids.iter().copied().collect()
     }
 
+    /// Append the counted reference list a real record carries after
+    /// its bounding box.
+    fn with_reference_list(mut buf: Vec<u8>, entries: &[u64]) -> Vec<u8> {
+        buf.truncate(REFERENCE_LIST_OFFSET);
+        buf.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+        for entry in entries {
+            buf.extend_from_slice(&entry.to_le_bytes());
+        }
+        buf
+    }
+
     #[test]
     fn decodes_a_well_formed_column_record() {
         let bbox = [135.5, 79.0, 0.0, 137.5, 81.0, 30.333];
@@ -526,5 +619,99 @@ mod tests {
     fn unsupported_release_yields_nothing() {
         assert!(!supports_revit_version(2023));
         assert!(supports_revit_version(2024));
+    }
+
+    #[test]
+    fn reference_list_decodes_its_counted_slots() {
+        let buf = with_reference_list(
+            synth_record(25947, OST_DOORS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[3, 20274, 23756, 24301, 25488, 25947],
+        );
+        let entries = decode_reference_list(&buf, REFERENCE_LIST_OFFSET).expect("decodes");
+        assert_eq!(entries, vec![3, 20274, 23756, 24301, 25488, 25947]);
+    }
+
+    #[test]
+    fn reference_list_rejects_a_length_that_runs_past_the_buffer() {
+        let mut buf = with_reference_list(
+            synth_record(25947, OST_DOORS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[3, 25488, 25947],
+        );
+        buf[REFERENCE_LIST_OFFSET..REFERENCE_LIST_OFFSET + 4].copy_from_slice(&64u32.to_le_bytes());
+        assert!(decode_reference_list(&buf, REFERENCE_LIST_OFFSET).is_none());
+    }
+
+    #[test]
+    fn reference_list_rejects_an_unbounded_length() {
+        let mut buf = with_reference_list(
+            synth_record(25947, OST_DOORS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[3, 25488, 25947],
+        );
+        buf[REFERENCE_LIST_OFFSET..REFERENCE_LIST_OFFSET + 4]
+            .copy_from_slice(&(REFERENCE_LIST_MAX_ENTRIES as u32 + 1).to_le_bytes());
+        assert!(decode_reference_list(&buf, REFERENCE_LIST_OFFSET).is_none());
+    }
+
+    #[test]
+    fn preceding_reference_is_the_slot_before_the_records_own_id() {
+        // ElementId 25947 (`OST_Doors`) framed with the six-slot list
+        // Partitions/46 carries for it: the slot before its own id is
+        // 25488, the wall Revit's export voids for this door.
+        let buf = with_reference_list(
+            synth_record(25947, OST_DOORS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[3, 20274, 23756, 24301, 25488, 25947],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[25947])).expect("decodes");
+        assert_eq!(record.preceding_reference, Some(25_488));
+    }
+
+    #[test]
+    fn preceding_reference_ignores_slots_after_the_records_own_id() {
+        // 81 of the 273 door/window records on the recorded edge carry
+        // a trailing type-symbol slot after their own id, so "the last
+        // two slots are (host, self)" is not the rule.
+        let buf = with_reference_list(
+            synth_record(20810, OST_DOORS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[3, 17333, 20308, 20798, 20810, 132_750],
+        );
+        let record = decode_at("Partitions/59", &buf, 0, &declared(&[20810])).expect("decodes");
+        assert_eq!(record.preceding_reference, Some(20_798));
+    }
+
+    #[test]
+    fn preceding_reference_is_absent_without_a_self_slot() {
+        let buf = with_reference_list(
+            synth_record(22805, OST_COLUMNS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[3, 1435, 17337],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[22805])).expect("decodes");
+        assert_eq!(record.preceding_reference, None);
+    }
+
+    #[test]
+    fn preceding_reference_is_absent_when_the_record_leads_its_list() {
+        let buf = with_reference_list(
+            synth_record(22805, OST_COLUMNS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[22805, 1435],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[22805])).expect("decodes");
+        assert_eq!(record.preceding_reference, None);
+    }
+
+    #[test]
+    fn preceding_reference_rejects_a_slot_outside_the_element_id_range() {
+        let buf = with_reference_list(
+            synth_record(22805, OST_COLUMNS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[3, u64::from(u32::MAX) + 1, 22805],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[22805])).expect("decodes");
+        assert_eq!(record.preceding_reference, None);
+    }
+
+    #[test]
+    fn a_record_without_a_reference_list_still_decodes() {
+        let buf = synth_record(22805, OST_COLUMNS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]);
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[22805])).expect("decodes");
+        assert_eq!(record.preceding_reference, None);
     }
 }

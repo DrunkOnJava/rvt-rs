@@ -8,8 +8,10 @@
 //!
 //! `--observation` additionally writes an OctetProof observation
 //! (docs/octetproof-spec-draft.md §6.2): entity counts for every manifest
-//! `source_ifc_type`, canonicalized (sorted keys, no whitespace, UTF-8) and
-//! hashed so a replay can prove the witness saw the same thing.
+//! `source_ifc_type` plus, for every manifest `relations` category, the
+//! relation's `[host Tag, filling Tag]` pair set, canonicalized (sorted keys,
+//! no whitespace, UTF-8) and hashed so a replay can prove the witness saw the
+//! same thing.
 //!
 //! The manifest's `reference_ifc_file` is resolved under <corpus_dir>, its
 //! SHA-256 is checked against `source.reference_ifc_sha256` (a golden artifact
@@ -30,7 +32,7 @@ use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use ifc_lite_core::EntityScanner;
+use ifc_lite_core::{decode_ifc_string, parse_entity, EntityScanner, Token};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -92,6 +94,89 @@ fn count_by_exact_type(bytes: &[u8]) -> BTreeMap<String, usize> {
         *counts.entry(type_name.trim().to_uppercase()).or_insert(0) += n;
     }
     counts
+}
+
+/// Attribute index of `Tag` on every `IfcElement` subtype in IFC4.
+///
+/// `IfcElement` adds exactly one attribute to `IfcProduct`'s seven, so the
+/// index is the same for `IfcWall`, `IfcDoor`, `IfcWindow` and every other
+/// element type.
+const IFC_ELEMENT_TAG_INDEX: usize = 7;
+
+/// Decode a `Token::String` payload: undouble STEP apostrophes, then run the
+/// crate's `\X…\` decoder.
+fn token_string(raw: &[u8]) -> String {
+    let text = String::from_utf8_lossy(raw).replace("''", "'");
+    decode_ifc_string(&text).into_owned()
+}
+
+/// `IfcRelFillsElement` host/filling `Tag` pairs, canonically sorted.
+///
+/// The chain is Revit's own: `IfcRelVoidsElement` binds an opening to the
+/// element it voids, `IfcRelFillsElement` binds that opening to the element
+/// that fills it, so the pair `[host Tag, filling Tag]` is the door/window to
+/// host-wall relation as an IFC reader sees it (OctetProof 1.1.0 §7.2, field
+/// class *relation pair sets*).
+///
+/// An unset `Tag`, or an opening with no `IfcRelVoidsElement`, contributes an
+/// empty string rather than dropping the pair: a missing half must surface as
+/// a disagreement, never as a silent omission. Duplicates are kept, so the
+/// value is a sorted multiset.
+///
+/// This is the third lineage's own read of the same relation: the scan is
+/// `EntityScanner` + `parse_entity`, sharing no code with IfcOpenShell or
+/// with the rvt-rs source witness's line splitter.
+fn fills_element_pairs(bytes: &[u8]) -> Vec<Vec<String>> {
+    let mut tags: BTreeMap<u32, String> = BTreeMap::new();
+    let mut voided_by: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut fills: Vec<(Option<u32>, Option<u32>)> = Vec::new();
+
+    let mut scanner = EntityScanner::new(bytes);
+    while let Some((id, type_name, start, end)) = scanner.next_entity() {
+        let upper = type_name.trim().to_uppercase();
+        let is_voids = upper == "IFCRELVOIDSELEMENT";
+        let is_fills = upper == "IFCRELFILLSELEMENT";
+        if !is_voids && !is_fills && !upper.starts_with("IFC") {
+            continue;
+        }
+        let Ok((_, _, args)) = parse_entity(&bytes[start..end]) else {
+            continue;
+        };
+        let entity_ref = |index: usize| match args.get(index) {
+            Some(Token::EntityRef(reference)) => Some(*reference),
+            _ => None,
+        };
+        if is_voids {
+            // (GlobalId, OwnerHistory, Name, Description,
+            //  RelatingBuildingElement, RelatedOpeningElement)
+            if let (Some(host), Some(opening)) = (entity_ref(4), entity_ref(5)) {
+                voided_by.insert(opening, host);
+            }
+            continue;
+        }
+        if is_fills {
+            // (GlobalId, OwnerHistory, Name, Description,
+            //  RelatingOpeningElement, RelatedBuildingElement)
+            fills.push((entity_ref(4), entity_ref(5)));
+            continue;
+        }
+        if let Some(Token::String(raw)) = args.get(IFC_ELEMENT_TAG_INDEX) {
+            tags.insert(id, token_string(raw));
+        }
+    }
+
+    let tag_of = |id: Option<u32>| -> String {
+        id.and_then(|id| tags.get(&id).cloned()).unwrap_or_default()
+    };
+    let mut pairs: Vec<Vec<String>> = fills
+        .into_iter()
+        .map(|(opening, filling)| {
+            let host = opening.and_then(|id| voided_by.get(&id).copied());
+            vec![tag_of(host), tag_of(filling)]
+        })
+        .collect();
+    pairs.sort();
+    pairs
 }
 
 struct Args {
@@ -229,6 +314,48 @@ fn run() -> Result<i32, String> {
         );
     }
 
+    let empty_relations = Map::new();
+    let relation_categories = manifest
+        .get("relations")
+        .and_then(Value::as_object)
+        .unwrap_or(&empty_relations);
+    let mut relations = Map::new();
+    let mut relation_records = Vec::new();
+    for (category, spec) in relation_categories {
+        let relation_type = spec
+            .get("relation_ifc_type")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("{category}: relations entry needs relation_ifc_type"))?;
+        if relation_type != "IFCRELFILLSELEMENT" {
+            return Err(format!(
+                "{category}: no reader for relation type {relation_type}"
+            ));
+        }
+        let pairs = fills_element_pairs(&bytes);
+        let expected = spec
+            .get("expected_pairs")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        let actual = pairs.len() as i64;
+        let ok = actual == expected;
+        if !ok {
+            drift += 1;
+        }
+        println!(
+            "{category:<16} {relation_type:<22} {expected:>8} {actual:>8} {:>4}  {}",
+            0,
+            if ok { "ok" } else { "DRIFT" }
+        );
+        relation_records.push(json!({
+            "category": category,
+            "relation_ifc_type": relation_type,
+            "expected_pairs": expected,
+            "ifc_lite_pairs": actual,
+            "agree": ok,
+        }));
+        relations.insert(relation_type.to_string(), json!(pairs));
+    }
+
     if let Some(path) = args.json.as_ref() {
         let record = json!({
             "schema_version": 1,
@@ -238,6 +365,7 @@ fn run() -> Result<i32, String> {
             "ifc_schema": schema,
             "witness": format!("{WITNESS_ID} {WITNESS_VERSION}"),
             "categories": records,
+            "relations": relation_records,
             "agree": drift == 0,
         });
         write_json(path, &record)?;
@@ -246,10 +374,11 @@ fn run() -> Result<i32, String> {
     if let Some(path) = args.observation.as_ref() {
         let payload = json!({
             "entity_counts": Value::Object(entity_counts),
+            "relations": Value::Object(relations),
             "ifc_schema": schema,
         });
         let observation = json!({
-            "schema_version": "1.0.0",
+            "schema_version": "1.1.0",
             "witness_id": WITNESS_ID,
             "witness_version": WITNESS_VERSION,
             "artifact_id": manifest.get("id").cloned().unwrap_or(Value::Null),
@@ -257,7 +386,7 @@ fn run() -> Result<i32, String> {
             "input_file": reference_name,
             "input_hash_sha256": actual_sha,
             "deterministic": true,
-            "semantic_surface_covered": ["entity_counts"],
+            "semantic_surface_covered": ["entity_counts", "relations"],
             "observation": payload,
             "observation_hash_sha256": canonical_hash(&payload),
             "unsupported_entities": [],
@@ -273,7 +402,9 @@ fn run() -> Result<i32, String> {
         );
         return Ok(1);
     }
-    println!("cross-witness: IFClite agrees with the manifest for every source_ifc_type");
+    println!(
+        "cross-witness: IFClite agrees with the manifest for every source_ifc_type and relation"
+    );
     Ok(0)
 }
 
