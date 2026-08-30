@@ -36,7 +36,8 @@ gated in CI, and published as JSON Schemas
 ([`witness-observation`](schemas/witness-observation.schema.json),
 [`witness-verdict`](schemas/witness-verdict.schema.json)); see the "OctetProof
 alignment" section of `docs/verification-protocol.md`. The umbrella repository
-still waits for the second (RVT → DWG) edge.
+is [DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof); the
+second (RVT → DWG) edge is still pending a Revit export session.
 
 **Research program pointer:** the governing
 [unified research report](research/unified-research-report.md) (rev 1.1)
