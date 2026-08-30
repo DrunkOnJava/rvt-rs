@@ -139,3 +139,6 @@ viewer/public/demos/*
 
 _corpus_candidates/
 _project_corpus/
+
+# Revit-hosted oracle runner output (owned synthetic fixtures + observations)
+tools/oracle/out/
