@@ -497,6 +497,26 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Changed
 
+- **`PredefinedType` now follows the authoring witness (#220).** #217 made
+  every entity carry its full IFC4 attribute list, which exposed four
+  `category_map` rows disagreeing with what Revit's own exporter writes on the
+  same project. The rule adopted is the issue's: where a recorded edge shows
+  the witness's choice, take it — agreement with the export is what the
+  OctetProof verdicts score, and a value the witness demonstrably wrote is not
+  an invention. `IfcWall` emits `.NOTDEFINED.` instead of `.STANDARD.` (Revit
+  writes it on all 360 walls, including the ones whose body is the plain
+  `SweptSolid` that `.STANDARD.` describes); `IfcSpace` emits `.SPACE.`
+  instead of `.INTERNAL.` (116 of 116); and `IfcDoor` / `IfcWindow` emit
+  `.DOOR.` / `.WINDOW.` where they previously emitted `$` (132 of 132, 6 of
+  6). Per-type agreement against the export is now exact for every type rvt-rs
+  writes a value for. `Area`, `Space` and `GenericModel` keep `$`: no edge
+  records what the witness does with them. No new observation surface class
+  was added — the values are attribute-level and the observation payload
+  counts entity type names, so neither observation hash moved. Instead
+  `tools/ci/ifc_schema_arity.py` gained a `--witness-agreement` mode, run on
+  the recorded artifact in CI, that asserts every written value against the
+  witness's, and `IfcDoor` / `IfcWindow` joined the set of types whose
+  `PredefinedType` may not be null.
 - **OctetProof spec 1.1.0 → 1.1.1 — worked examples regenerated, coverage
   row implemented (#224, #229).** Patch-level and non-semantic per §16.1: no
   schema, diff-function, canonicalizer or status-vocabulary change. §6.2 and
@@ -630,6 +650,37 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Fixed
 
+- **Every emitted element was placed twice (#232).** The writer put the
+  element's own `IfcAxis2Placement3D` in *both* the `IfcLocalPlacement`'s
+  `RelativePlacement` and the `IfcExtrudedAreaSolid`'s `Position`. IFC4 has a
+  consumer compose `ObjectPlacement × Position`, so the element translation
+  was applied twice — on the 2024 Core Interior export that put the first
+  column at (48, 220, 159.17) ft where Revit's own export puts it at
+  (23.88, 110, 81.58) ft, with world-coordinate errors up to 185 ft across
+  834 elements. Viewers that ignore `Position` drew the file correctly, which
+  is why it survived every release: two tools could disagree about the same
+  bytes with neither of them misreading. The solid's `Position` is now the
+  project-level identity placement, and the placement carries the translation
+  once — the split Revit's own exporter uses on its `IfcWall` bodies. Measured
+  with IfcOpenShell's geometry iterator under `USE_WORLD_COORDS`, matched by
+  `Tag` against Revit's export: all 80 slabs now agree to 0.0000 ft on every
+  vertex (79 of 80 centroids inside 1e-3 ft), against a 185.33 ft worst-case
+  before. The residuals that remain on columns, walls, doors and windows are
+  geometry *recovery* fidelity — envelope-vs-panel bodies, base elevations —
+  not placement composition, and are tracked on their own issues.
+  `tools/ci/ifc_schema_arity.py` now gates the class two ways on every export:
+  no swept solid may use the very `IfcAxis2Placement3D` instance its product's
+  placement already uses, and five pinned elements — two in each committed
+  fixture, a column and a slab of the recorded artifact — must land on a
+  pinned coordinate when `ObjectPlacement × Position × profile-point` is
+  composed for real. Entity counts, relations and storeys are unchanged; both
+  OctetProof observations replay byte-for-byte and neither verdict moved.
+  Regenerating `tests/fixtures/synthetic-project.ifc` for this also lands a
+  change it should have carried since #222: the fixture was last dumped at
+  `f4b88df` (#217), before `08f7858` gave `IfcOpeningElement` the `Tag` of the
+  element that fills it, so its one opening still wrote `$` there. A fixture
+  is only regenerated behind `DUMP_IFC=1`, which is how it drifted a commit
+  behind the writer without any test noticing.
 - **Host recovery for doors and windows sat in a dead branch (#222).**
   `ifc::export_content` consulted `recover_door_host` /
   `recover_window_host` only in the `else` arm of the element-record

@@ -119,6 +119,24 @@ Neither case resolves a Level *ElementId*: `LevelBindResolved` on an element's
 property set stays `false`, and elements bound by elevation additionally carry
 `StoreyBindSource = record_base_elevation` so the two joins are never confused.
 
+## Geometry placement
+
+`exported.building_elements_with_geometry` counts elements that carry a body.
+Where that body sits is fixed by one rule: **the element translation is carried
+exactly once**, by the element's own `IfcLocalPlacement`. The swept solid's
+`Position` is the project-level identity placement, and the profile is authored
+in the element-local frame.
+
+That matters to anyone comparing a diagnostics count against what a viewer
+draws. Until #232 the writer put the element's own `IfcAxis2Placement3D` in
+both slots, so a consumer that composes `ObjectPlacement × Position` — which
+IFC4 requires — placed every element at twice its translation, while viewers
+that ignore `Position` drew it correctly. Two tools could therefore disagree
+about the same file with neither of them wrong about what it read. A geometry
+count that looks right is not evidence that the geometry is where it belongs;
+compose the two and check, as `tools/ci/ifc_schema_arity.py` now does on every
+export.
+
 ## Example
 
 ```json
