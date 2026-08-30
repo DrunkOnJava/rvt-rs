@@ -8,6 +8,9 @@
 //! `corpus/tier1/` tree (override with `RVT_CORPUS_TIER1_DIR`) and may use
 //! `fixture_metric: "class_instances.<Class>"` for synthetic gen-fixture
 //! inventories. Tier-two manifests resolve against `RVT_PROJECT_CORPUS_DIR`.
+//! Setting that variable is an explicit request: a missing directory or zero
+//! matching tier-two manifests then fails loudly instead of skipping, so a
+//! mistyped corpus path cannot silently drop tier-two coverage.
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -37,6 +40,10 @@ fn tier2_project_dir() -> PathBuf {
     std::env::var("RVT_PROJECT_CORPUS_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/private/tmp/rvt-corpus-probe/magnetar/Revit"))
+}
+
+fn tier2_corpus_dir_is_explicit() -> bool {
+    std::env::var_os("RVT_PROJECT_CORPUS_DIR").is_some()
 }
 
 fn tier1_project_dir() -> PathBuf {
@@ -286,12 +293,21 @@ fn project_count_manifests_are_complete_and_explicit() {
 fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::error::Error>> {
     let mut exercised = 0usize;
     let mut skipped_missing_corpus = 0usize;
+    let explicit_tier2 = tier2_corpus_dir_is_explicit();
+    let mut tier2_exercised = 0usize;
 
     for path in manifest_paths() {
         let manifest = read_json(&path);
         let id = str_field(&manifest, "id", &path.display().to_string()).to_string();
+        let tier = manifest_tier(&manifest);
         let corpus_dir = corpus_dir_for_manifest(&manifest);
         if !corpus_dir.exists() {
+            if tier == 2 && explicit_tier2 {
+                panic!(
+                    "RVT_PROJECT_CORPUS_DIR is set to {} but that directory does not exist (manifest {id}); fix the path or unset the variable to skip tier-two checks",
+                    corpus_dir.display()
+                );
+            }
             skipped_missing_corpus += 1;
             eprintln!(
                 "skipping project-count manifest {id}: corpus dir missing at {}",
@@ -310,6 +326,9 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
             continue;
         }
         exercised += 1;
+        if tier == 2 {
+            tier2_exercised += 1;
+        }
 
         let reference_ifc = match manifest.get("reference_ifc_file") {
             Some(Value::String(name)) => {
@@ -419,6 +438,13 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
         );
     } else if skipped_missing_corpus > 0 {
         eprintln!("no corpus directories available; skipped {skipped_missing_corpus} manifest(s)");
+    }
+    if explicit_tier2 {
+        assert!(
+            tier2_exercised > 0,
+            "RVT_PROJECT_CORPUS_DIR is set to {} but no tier-two project-count manifest matched a project file there; fix the path or unset the variable to skip tier-two checks",
+            tier2_project_dir().display()
+        );
     }
     Ok(())
 }
