@@ -36,6 +36,7 @@ use crate::arc_wall_record::{
     STANDARD_RECORD_MIN_SIZE,
 };
 use crate::compression;
+use crate::control::{Stage, WalkerControl};
 use crate::elem_table::{self, ElemRecord};
 use crate::formats::{self, SchemaTable};
 use crate::streams::FORMATS_LATEST;
@@ -284,6 +285,17 @@ pub fn scan_partitions(
     revit_version: u32,
     options: &ScanOptions,
 ) -> Result<PartitionScan> {
+    scan_partitions_with_control(rf, revit_version, options, &WalkerControl::default())
+}
+
+/// Same as [`scan_partitions`], checking the [`WalkerControl`] cancellation
+/// token before every partition stream and reporting per-stream progress.
+pub fn scan_partitions_with_control(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    options: &ScanOptions,
+    control: &WalkerControl,
+) -> Result<PartitionScan> {
     let status = scanner_status(revit_version);
     if !status.is_supported() {
         return Ok(PartitionScan {
@@ -300,7 +312,10 @@ pub fn scan_partitions(
         .collect();
 
     let mut candidates = Vec::new();
-    for stream in partition_streams {
+    let stream_count = partition_streams.len() as u64;
+    for (index, stream) in partition_streams.into_iter().enumerate() {
+        control.check()?;
+        control.report(Stage::PartitionScan, index as u64, Some(stream_count));
         let Ok(raw) = rf.read_stream(&stream) else {
             continue;
         };
@@ -328,6 +343,8 @@ pub fn scan_partitions(
         }
     }
 
+    control.check()?;
+    control.report(Stage::PartitionScan, stream_count, Some(stream_count));
     Ok(PartitionScan { status, candidates })
 }
 

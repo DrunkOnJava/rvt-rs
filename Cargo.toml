@@ -102,6 +102,8 @@ stream-evidence = { path = "tools/stream_evidence" }
 # browsable. Version pinned to the 0.5 line (MSRV-compatible with
 # our 1.85 floor).
 criterion = { version = "0.7", features = ["html_reports"] }
+# Property-based never-panic / round-trip suites in tests/proptest_parsers.rs.
+proptest = "1"
 # Tier-one corpus health: verify license-sidecar SHA256 of committed
 # synthetic fixtures under corpus/tier1/.
 sha2 = "0.10"

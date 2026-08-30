@@ -23,6 +23,7 @@
 //! | `Container { kind: 0x0e, .. }` | 2-column — `[u32 count][count × 6-byte [u16 id][u32 mask]][u32 count2][count2 × 6-byte records]` |
 //! | Other `FieldType` variants | not observed in current ADocument fixtures; retained as raw bytes until a validated wire shape is available |
 
+use crate::control::{PROGRESS_BYTE_INTERVAL, Stage, WalkerControl};
 use crate::{Error, Result, RevitFile, compression, formats, streams};
 
 /// One field's value as read by the walker.
@@ -1427,9 +1428,27 @@ pub fn iter_elements_with_limits(
     min_score: i64,
     limits: WalkerLimits,
 ) -> Result<impl Iterator<Item = DecodedElement>> {
+    iter_elements_with_control(rf, min_score, limits, &WalkerControl::default())
+}
+
+/// Same as [`iter_elements_with_limits`] with cooperative cancellation and
+/// progress reporting through [`WalkerControl`]. Stages reported, in
+/// order: [`Stage::SchemaParse`], [`Stage::CandidateScan`] (per 1 MiB of
+/// `Global/Latest`), [`Stage::ElementDecode`] (per 256 candidates), and
+/// [`Stage::PartitionScan`] (start/end of the partition merges). Cancelling
+/// returns [`Error::Cancelled`]; nothing partial is yielded.
+pub fn iter_elements_with_control(
+    rf: &mut RevitFile,
+    min_score: i64,
+    limits: WalkerLimits,
+    control: &WalkerControl,
+) -> Result<impl Iterator<Item = DecodedElement> + use<>> {
+    control.check()?;
+    control.report(Stage::SchemaParse, 0, None);
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
     let formats_d = compression::inflate_stream_at(streams::FORMATS_LATEST, &formats_raw, 0)?;
     let schema = formats::parse_schema(&formats_d)?;
+    control.report(Stage::SchemaParse, 1, Some(1));
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
     let (_, d) = compression::inflate_stream_auto(streams::GLOBAL_LATEST, &raw)?;
@@ -1440,11 +1459,17 @@ pub fn iter_elements_with_limits(
         .map(|c| (c.name.as_str(), c))
         .collect();
 
-    let candidates = scan_candidates_with_limits(&schema, &d, min_score, limits).candidates;
+    let candidates =
+        scan_candidates_with_control(&schema, &d, min_score, limits, control)?.candidates;
+    let candidate_total = candidates.len() as u64;
     let mut out = Vec::with_capacity(candidates.len());
     let mut seen_ids = std::collections::HashSet::<u32>::new();
 
-    for cand in candidates {
+    for (index, cand) in candidates.into_iter().enumerate() {
+        if index % 256 == 0 {
+            control.check()?;
+            control.report(Stage::ElementDecode, index as u64, Some(candidate_total));
+        }
         let Some(cls) = class_by_name.get(cand.class_name.as_str()).copied() else {
             continue;
         };
@@ -1479,6 +1504,10 @@ pub fn iter_elements_with_limits(
 
         out.push(decoded);
     }
+
+    control.check()?;
+    control.report(Stage::ElementDecode, candidate_total, Some(candidate_total));
+    control.report(Stage::PartitionScan, 0, None);
 
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.
@@ -1517,6 +1546,8 @@ pub fn iter_elements_with_limits(
         }
     }
 
+    control.check()?;
+    control.report(Stage::PartitionScan, 1, Some(1));
     Ok(out.into_iter())
 }
 
@@ -1748,6 +1779,22 @@ pub fn scan_candidates_with_limits(
     min_score: i64,
     limits: WalkerLimits,
 ) -> ScanCandidatesResult {
+    scan_candidates_with_control(schema, bytes, min_score, limits, &WalkerControl::default())
+        .expect("a scan without a cancellation token cannot be cancelled")
+}
+
+/// Same as [`scan_candidates_with_limits`] with cooperative cancellation
+/// and progress reporting through [`WalkerControl`]. The token is checked
+/// at the start of every [`PROGRESS_BYTE_INTERVAL`] of input and once
+/// after the loop, so a token flipped from inside the progress callback
+/// is honoured before the result is returned.
+pub fn scan_candidates_with_control(
+    schema: &formats::SchemaTable,
+    bytes: &[u8],
+    min_score: i64,
+    limits: WalkerLimits,
+    control: &WalkerControl,
+) -> Result<ScanCandidatesResult> {
     // Index the schema by class tag. Classes without an explicit
     // tag (parent-only entries) are skipped — they won't appear as
     // instance headers anyway.
@@ -1764,12 +1811,12 @@ pub fn scan_candidates_with_limits(
     let mut trial_offsets_evaluated = 0usize;
     let mut limit_hit = scan_limit_hit;
     if bytes.len() < 4 {
-        return ScanCandidatesResult {
+        return Ok(ScanCandidatesResult {
             candidates: out,
             scanned_bytes: bytes.len(),
             trial_offsets_evaluated,
             limit_hit,
-        };
+        });
     }
 
     // 2-byte-aligned scan — class tags are u16 on the wire and are
@@ -1778,6 +1825,10 @@ pub fn scan_candidates_with_limits(
     let end = bytes.len().saturating_sub(2);
     let mut i = 0usize;
     while i + 2 <= end {
+        if i & (PROGRESS_BYTE_INTERVAL - 1) == 0 {
+            control.check()?;
+            control.report(Stage::CandidateScan, i as u64, Some(bytes.len() as u64));
+        }
         let tag = u16::from_le_bytes([bytes[i], bytes[i + 1]]);
         if let Some(classes) = tag_to_class.get(&tag) {
             // Instance data starts AFTER the tag. Give trial_walk
@@ -1827,13 +1878,19 @@ pub fn scan_candidates_with_limits(
     // surface first. Stable sort keeps within-score order == scan
     // order, which is also byte-ascending — useful for downstream
     // deduplication.
+    control.check()?;
+    control.report(
+        Stage::CandidateScan,
+        bytes.len() as u64,
+        Some(bytes.len() as u64),
+    );
     out.sort_by_key(|c| std::cmp::Reverse(c.score));
-    ScanCandidatesResult {
+    Ok(ScanCandidatesResult {
         candidates: out,
         scanned_bytes: bytes.len(),
         trial_offsets_evaluated,
         limit_hit,
-    }
+    })
 }
 
 /// Minimum candidate score used by production element iteration.
