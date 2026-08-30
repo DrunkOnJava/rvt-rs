@@ -229,20 +229,28 @@ pub fn append_typed_production_elements(
                             property_set = Some(geom);
                         }
                     }
-                    "Door" => {
-                        let door = Door::from_decoded(&decoded);
-                        if let Some(host) = recover_door_host(&door).ok() {
-                            pending_host_id = Some(host.host_element_id);
-                        }
-                    }
-                    "Window" => {
-                        let window = Window::from_decoded(&decoded);
-                        if let Some(host) = recover_window_host(&window).ok() {
-                            pending_host_id = Some(host.host_element_id);
-                        }
-                    }
                     _ => {}
                 }
+            }
+            // Host-wall binding is independent of which geometry
+            // carrier produced the body. Before #222 this lived in the
+            // `else` arm above, so a door recovered from a partition
+            // element record — which always has a record bbox body —
+            // never reached it and could not be voided into its wall.
+            match decoded.class.as_str() {
+                "Door" => {
+                    let door = Door::from_decoded(&decoded);
+                    if let Some(host) = recover_door_host(&door).ok() {
+                        pending_host_id = Some(host.host_element_id);
+                    }
+                }
+                "Window" => {
+                    let window = Window::from_decoded(&decoded);
+                    if let Some(host) = recover_window_host(&window).ok() {
+                        pending_host_id = Some(host.host_element_id);
+                    }
+                }
+                _ => {}
             }
         }
 

@@ -64,6 +64,13 @@
       "reason": "decoder_baseline",
       "tracking_issue": 212,
       "unsupported_feature": null
+    },
+    {
+      "category": "opening_fills",
+      "field": "relations.IFCRELFILLSELEMENT",
+      "reason": "decoder_baseline",
+      "tracking_issue": 222,
+      "unsupported_feature": null
     }
   ],
   "independence": {
@@ -106,7 +113,7 @@
     "entity_counts.IFCUNITASSIGNMENT"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "94d723919686963121c05c7475c3ea126e9f8d97fa4b9136c6e5656421c8b40a",
+  "verdict_hash_sha256": "6cf6ccd20f59e79b554c64175c00c07ec9ca89668bd42cc417f9b1377f7ad728",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

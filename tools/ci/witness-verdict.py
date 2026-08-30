@@ -7,10 +7,14 @@ Usage: witness-verdict.py <manifest.json> <observations_dir> --out verdict.json
 
 Every `observations/*.json` is an observation in the §6.2 shape. The claimed
 semantic surface is the set of manifest categories carrying `source_ifc_type`
-with status `known`; categories whose status is `known_gap` or `unsupported`
-are excluded first-class (§7.1 rule 3) and listed in the verdict with their
-tracking issue, never diffed. Entity counts compare with the manifest's
-per-category `tolerance` (exact by default, §7.2).
+with status `known`, plus the manifest's `relations` categories carrying
+`relation_ifc_type` with status `known`; categories whose status is
+`known_gap`, `unsupported` or `decoder_baseline` are excluded first-class
+(§7.1 rule 3) and listed in the verdict with their tracking issue, never
+diffed. Entity counts compare with the manifest's per-category `tolerance`
+(exact by default, §7.2). Relation pair sets compare as exact sorted
+multisets — the field class has no tolerance concept, so a diff reports the
+pairs each side holds alone (§7.2, OctetProof 1.1.0).
 
 Fail-closed (§5.4, §10.5): fewer than two observations → INSUFFICIENT_WITNESSES;
 any diff inside the surface → DISAGREE; an observation whose
@@ -174,6 +178,51 @@ def main() -> int:
                         "witness_b": b, "value_b": values[b],
                         "tolerance_applied": tolerance,
                     })
+    # `relations` — the 1.1.0 field class (§7.2). A relation is a sorted
+    # multiset of `[host_tag, filling_tag]` pairs; agreement is exact set
+    # equality with no tolerance, so a diff names the pairs each side holds
+    # alone rather than a scalar delta.
+    for category, spec in manifest.get("relations", {}).items():
+        relation_type = spec.get("relation_ifc_type")
+        if not relation_type:
+            continue
+        status = spec.get("status")
+        if status != "known":
+            verdict["excluded"].append({
+                "field": f"relations.{relation_type}",
+                "category": category,
+                "reason": status,
+                "tracking_issue": spec.get("tracking_issue"),
+                "unsupported_feature": spec.get("unsupported_feature"),
+            })
+            continue
+        verdict["semantic_surface"].append(f"relations.{relation_type}")
+        for wid, obs in observations.items():
+            if "relations" not in (obs.get("semantic_surface_covered") or []):
+                verdict["status"] = "MANIFEST_ERROR"
+                verdict.setdefault("manifest_errors", []).append(f"{wid} does not declare relations")
+        if verdict["status"] != "PASS":
+            continue
+        values = {
+            wid: [tuple(pair) for pair in obs.get("observation", {}).get("relations", {}).get(relation_type, [])]
+            for wid, obs in observations.items()
+        }
+        wids = sorted(values)
+        for i, a in enumerate(wids):
+            for b in wids[i + 1:]:
+                if sorted(values[a]) == sorted(values[b]):
+                    continue
+                only_a = sorted(set(values[a]) - set(values[b]))
+                only_b = sorted(set(values[b]) - set(values[a]))
+                verdict["diffs"].append({
+                    "field": f"relations.{relation_type}",
+                    "witness_a": a, "value_a": len(values[a]),
+                    "witness_b": b, "value_b": len(values[b]),
+                    "tolerance_applied": False,
+                    "only_in_a": [list(pair) for pair in only_a],
+                    "only_in_b": [list(pair) for pair in only_b],
+                })
+
     if verdict["diffs"] and verdict["status"] == "PASS":
         verdict["status"] = "DISAGREE"
 
@@ -200,6 +249,9 @@ def main() -> int:
     print(f"  surface: {len(verdict['semantic_surface'])} fields, excluded: {len(verdict['excluded'])}, diffs: {len(verdict['diffs'])}")
     for d in verdict["diffs"]:
         print(f"  DISAGREE {d['field']}: {d['witness_a']}={d['value_a']} vs {d['witness_b']}={d['value_b']}")
+        if "only_in_a" in d:
+            print(f"    only in {d['witness_a']}: {len(d['only_in_a'])} → {d['only_in_a'][:5]}")
+            print(f"    only in {d['witness_b']}: {len(d['only_in_b'])} → {d['only_in_b'][:5]}")
     for wid, r in verdict.get("replay", {}).items():
         print(f"  replay {wid}: {r}")
     return 0 if verdict["status"] == "PASS" else 1
