@@ -95,14 +95,25 @@ fn run() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Infer layout from first record for a friendly summary.
+    // Infer layout from first record for a friendly summary. The FF marker
+    // is not always at the record's first byte — on the 40 B project variant
+    // one zero u32 precedes it — so locate it rather than sniffing byte 0.
     let first = &records[0];
-    let layout_label = match first.raw.first() {
-        Some(b) if *b == 0xFF && first.raw.get(7) == Some(&0xFF) => {
-            "Explicit (40 B stride, 8-byte FF marker)"
+    let raw = first.raw.as_slice();
+    let marker_at = (0..raw.len().saturating_sub(3)).find(|&i| raw[i..i + 4] == [0xFF; 4]);
+    let layout_label = match marker_at {
+        Some(off) => {
+            let marker_len = if raw.len() >= off + 8 && raw[off..off + 8] == [0xFF; 8] {
+                8
+            } else {
+                4
+            };
+            format!(
+                "Explicit ({} B stride, {marker_len}-byte FF marker at record +{off})",
+                raw.len()
+            )
         }
-        Some(b) if *b == 0xFF => "Explicit (28 B stride, 4-byte FF marker)",
-        _ => "Implicit (12 B stride, no marker)",
+        None => format!("Implicit ({} B stride, no marker)", raw.len()),
     };
     println!(
         "  layout: {layout_label}  first record offset: 0x{:x}",
