@@ -172,6 +172,10 @@ path = "src/bin/rvt_elem_table.rs"
 name = "rvt-elements"
 path = "src/bin/rvt_elements.rs"
 
+[[bin]]
+name = "rvt-capabilities"
+path = "src/bin/rvt_capabilities.rs"
+
 # Criterion benchmark suite (Q-05). Run with `cargo bench` or
 # `cargo bench --bench compression`. See `docs/benchmarks.md`.
 [[bench]]

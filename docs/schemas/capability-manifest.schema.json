@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/capability-manifest.schema.json",
+  "title": "rvt-rs capability manifest (doctor / CLI snapshot)",
+  "description": "Honest capability snapshot aligning support-matrix ceilings with research stubs. verified requires E4+ evidence and a support-matrix update in the same change set. Experimental relation-domain rows are architecture only — not production topology claims.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "experimental",
+    "capabilities",
+    "relation_domains",
+    "honesty"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "manifest_id": { "type": "string", "minLength": 1 },
+    "experimental": { "type": "boolean" },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "capability_id",
+          "status",
+          "evidence_tier",
+          "claims",
+          "non_claims"
+        ],
+        "properties": {
+          "capability_id": { "type": "string", "minLength": 1 },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unsupported",
+              "research",
+              "experimental",
+              "partial",
+              "verified"
+            ]
+          },
+          "evidence_tier": {
+            "type": "string",
+            "enum": ["E0", "E1", "E2", "E3", "E4", "E5"]
+          },
+          "claims": { "type": "array", "items": { "type": "string" } },
+          "non_claims": { "type": "array", "items": { "type": "string" } },
+          "support_matrix_row": { "type": ["string", "null"] },
+          "notes": { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "relation_domains": {
+      "type": "object",
+      "required": ["domains", "experimental", "notes"],
+      "properties": {
+        "domains": { "type": "array" },
+        "experimental": { "type": "boolean" },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "honesty": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": true
+}
