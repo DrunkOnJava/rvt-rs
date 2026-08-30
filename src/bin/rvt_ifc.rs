@@ -77,6 +77,18 @@ struct Args {
     /// an export confidence summary.
     #[arg(long, value_name = "PATH")]
     diagnostics: Option<PathBuf>,
+    /// Witness mode: write an OctetProof observation of this input.
+    ///
+    /// The observation (docs/octetproof-spec-draft.md §6.2) records the
+    /// SHA-256 of the input bytes, the exported entity counts by IFC type,
+    /// and a canonical hash of that payload so an independent replay can
+    /// prove this witness saw the same thing. Compared against other
+    /// witnesses by tools/ci/witness-verdict.py.
+    #[arg(long, value_name = "PATH")]
+    observation: Option<PathBuf>,
+    /// Golden-artifact id to stamp into the observation (registry id).
+    #[arg(long, value_name = "ID", requires = "observation")]
+    artifact_id: Option<String>,
     /// Maximum decompressed Global/Latest bytes scanned by the walker.
     #[arg(long)]
     max_walker_scan_bytes: Option<usize>,
@@ -139,6 +151,15 @@ fn main() -> anyhow::Result<()> {
     if let Some(diagnostics_path) = &args.diagnostics {
         write_diagnostics_sidecar(diagnostics_path, &diagnostics)?;
     }
+    if let Some(observation_path) = &args.observation {
+        write_observation(
+            observation_path,
+            &args.input,
+            args.artifact_id.as_deref(),
+            &diagnostics,
+            &step,
+        )?;
+    }
     if model.project_name.is_none() {
         eprintln!(
             "note: no project name extracted; output IFC uses \"Untitled\". \
@@ -177,6 +198,68 @@ fn write_diagnostics_sidecar(
     std::fs::write(path, &json)?;
     eprintln!(
         "rvt-ifc: wrote diagnostics {} bytes to {}",
+        json.len(),
+        path.display()
+    );
+    Ok(())
+}
+
+/// OctetProof observation (§6.2): canonical JSON is serde_json's default
+/// output — keys sorted (no `preserve_order`), no whitespace — which is
+/// byte-identical to the Python witnesses' `sort_keys` + compact separators,
+/// so the payload hash is comparable across languages.
+fn write_observation(
+    path: &std::path::Path,
+    input: &std::path::Path,
+    artifact_id: Option<&str>,
+    diagnostics: &ExportDiagnostics,
+    step: &str,
+) -> anyhow::Result<()> {
+    use sha2::{Digest, Sha256};
+    let bytes = std::fs::read(input)?;
+    let input_hash = format!("{:x}", Sha256::digest(&bytes));
+    // entity_counts is what an IFC reader would see in the STEP this run
+    // wrote — every `#n=IFCTYPE(` constructor, not just the building-element
+    // histogram in the diagnostics (which omits units, contexts, rels).
+    let mut entity_counts = std::collections::BTreeMap::<String, usize>::new();
+    for line in step.lines() {
+        let ifc_type = line
+            .strip_prefix('#')
+            .and_then(|rest| rest.split_once('='))
+            .and_then(|(_, after_eq)| after_eq.trim_start().split_once('('))
+            .map(|(ifc_type, _)| ifc_type);
+        if let Some(ifc_type) = ifc_type {
+            *entity_counts.entry(ifc_type.to_string()).or_default() += 1;
+        }
+    }
+    let payload = serde_json::json!({
+        "entity_counts": entity_counts,
+        "exported_building_elements": diagnostics.exported.by_ifc_type,
+        "storey_count": diagnostics.exported.storey_count,
+        "material_count": diagnostics.exported.material_count,
+        "building_elements_with_geometry": diagnostics.exported.building_elements_with_geometry,
+    });
+    let canonical = serde_json::to_string(&payload)?;
+    let observation = serde_json::json!({
+        "schema_version": "1.0.0",
+        "witness_id": "rvt-rs",
+        "witness_version": env!("CARGO_PKG_VERSION"),
+        "artifact_id": artifact_id,
+        "input_role": "source",
+        "input_file": input.file_name().and_then(|n| n.to_str()),
+        "input_hash_sha256": input_hash,
+        "deterministic": true,
+        "semantic_surface_covered": ["entity_counts"],
+        "observation": payload,
+        "observation_hash_sha256": format!("{:x}", Sha256::digest(canonical.as_bytes())),
+        "unsupported_entities": diagnostics.unsupported_features,
+        "warnings": diagnostics.warnings,
+    });
+    let mut json = serde_json::to_vec_pretty(&observation)?;
+    json.push(b'\n');
+    std::fs::write(path, &json)?;
+    eprintln!(
+        "rvt-ifc: wrote observation ({} bytes) to {}",
         json.len(),
         path.display()
     );

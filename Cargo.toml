@@ -75,6 +75,10 @@ quick-xml = { version = "0.41", features = ["serialize"] }
 # Serialisation for JSON output + test fixtures.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Witness mode (docs/verification-protocol.md): `rvt-ifc --observation`
+# records the SHA-256 of the input it observed so a replay can prove the
+# same bytes were read. Also used by tests/corpus_health for sidecars.
+sha2 = "0.10"
 # CLI argument parsing for every shipped binary.
 clap = { version = "4", features = ["derive"] }
 # Error ergonomics.
@@ -104,9 +108,9 @@ stream-evidence = { path = "tools/stream_evidence" }
 criterion = { version = "0.7", features = ["html_reports"] }
 # Property-based never-panic / round-trip suites in tests/proptest_parsers.rs.
 proptest = "1"
-# Tier-one corpus health: verify license-sidecar SHA256 of committed
-# synthetic fixtures under corpus/tier1/.
-sha2 = "0.10"
+# Tier-one corpus health: hex-encode license-sidecar SHA256 checks of
+# committed synthetic fixtures under corpus/tier1/ (`sha2` itself is a
+# regular dependency — `rvt-ifc --observation` hashes its input).
 hex = "0.4"
 # Shipped binaries. All depend on the `rvt` library crate; tests/binary_inventory.rs
 # pins this list against the README's CLI sentence so the two cannot drift.

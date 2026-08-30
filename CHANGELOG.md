@@ -13,6 +13,21 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- OctetProof witness mode and verdict gate (docs/octetproof-spec-draft.md,
+  docs/verification-protocol.md): `rvt-ifc --observation PATH --artifact-id ID`
+  emits a canonical, hashed observation of what the decoder wrote (STEP
+  constructor histogram, input SHA-256); `tools/ci/witness-ifcopenshell.py
+  --observation` does the same for IfcOpenShell reading the Revit-authored
+  reference IFC; `tools/ci/witness-verdict.py` compares them fail-closed
+  (`PASS` / `DISAGREE` / `INSUFFICIENT_WITNESSES` /
+  `INSUFFICIENT_INDEPENDENT_WITNESSES` / `REJECTED_INPUT` / `MANIFEST_ERROR` /
+  `REPLAY_DRIFT`), enforcing the §9.3 independence set from
+  `research/witness-registry.json` (`lineage`). First committed artifact:
+  `research/witness/magnetar-2024-core-interior/` (two observations + a
+  `PASS` verdict on eight categories, four excluded as tracked decoder
+  gaps); replayed byte-for-byte in the `ifcopenshell-validate` CI job and
+  pinned by `tests/witness_verdict.rs`. `sha2` moves from dev- to regular
+  dependency for the input hash.
 - **Cooperative cancellation + progress** — `rvt::control::{CancelToken,
   WalkerControl, Stage, ProgressEvent}` and additive `*_with_control` entry
   points beside the existing `*_with_limits` ones

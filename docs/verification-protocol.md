@@ -138,6 +138,26 @@ byte) is deliberately **not** created yet. It earns its existence the day
 the second edge is recorded and gated. Until then this document, the
 registry, and the gates live here.
 
+## OctetProof alignment
+
+The protocol above is the in-repo instance of the OctetProof draft
+(`docs/octetproof-spec-draft.md`, received 2026-08-30, reviewer notes in its
+Appendix A). What exists here today, per layer:
+
+| OctetProof layer | rvt-rs today |
+|---|---|
+| 1 Protocol | this document + the draft spec |
+| 2 Golden corpus | `research/witness/<artifact>/observations/*.json` + `verdict.json`; artifact hashes in the registry and the project-count manifests (the bytes themselves stay in the magnetar dataset, fetched by hash) |
+| 3 Witness registry | `research/witness-registry.json` (`lineage`, `checked`) |
+| 4 CI gate | `tools/ci/witness-verdict.py` in the `ifcopenshell-validate` job: fail-closed statuses `PASS` / `DISAGREE` / `INSUFFICIENT_WITNESSES` / `INSUFFICIENT_INDEPENDENT_WITNESSES` / `REJECTED_INPUT` / `MANIFEST_ERROR` / `REPLAY_DRIFT`; observations and verdict published as a build artifact |
+| 5 Decoder witness mode | `rvt-ifc --observation PATH --artifact-id ID` (source witness); `tools/ci/witness-ifcopenshell.py --observation` (bridge witness) |
+
+Observation payloads are hashed after canonicalization (sorted keys, no
+whitespace, UTF-8); `tests/witness_verdict.rs` recomputes those hashes from
+the committed files and asserts the committed verdict is `PASS`, so a
+decoder change that alters what rvt-rs emits on the golden artifact fails
+the build twice — once in replay and once in the verdict.
+
 ## Non-claims
 
 - Recording an edge does not make a capability verified; the agreement must

@@ -444,9 +444,41 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
+          mkdir -p /tmp/witness/observations
           python tools/ci/witness-ifcopenshell.py \
             tests/fixtures/project-counts/2024-core-interior.json \
-            "${RVT_PROJECT_CORPUS_DIR}"
+            "${RVT_PROJECT_CORPUS_DIR}" \
+            --observation /tmp/witness/observations/ifcopenshell.json
+      # OctetProof verdict (docs/octetproof-spec-draft.md §6–§10): the source
+      # witness (rvt-rs reading the .rvt) and the bridge witness (IfcOpenShell
+      # reading Revit's .ifc) each emit a canonical observation; the verdict
+      # must PASS on the claimed surface with the §9.3 independence set, and
+      # the fresh observations must replay byte-for-byte against the
+      # committed ones under research/witness/. Fail-closed.
+      - name: OctetProof verdict — source witness vs bridge witness, replayed
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          ./target/release/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" \
+            -o /tmp/witness/core-interior.rvt-rs.ifc \
+            --observation /tmp/witness/observations/rvt-rs.json \
+            --artifact-id magnetar-2024-core-interior
+          python tools/ci/witness-verdict.py \
+            tests/fixtures/project-counts/2024-core-interior.json \
+            /tmp/witness/observations \
+            --out /tmp/witness/verdict.json \
+            --registry research/witness-registry.json \
+            --compare-committed research/witness/magnetar-2024-core-interior/observations
+      # §10.6: publish observations + verdict for human review of any
+      # disagreement without re-running the gate.
+      - name: Publish witness observations and verdict
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: octetproof-core-interior
+          path: /tmp/witness/
+          retention-days: 90
+          if-no-files-found: ignore
 
   doc:
     name: cargo doc

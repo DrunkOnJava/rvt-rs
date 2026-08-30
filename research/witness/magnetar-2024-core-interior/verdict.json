@@ -1,0 +1,77 @@
+{
+  "artifact_id": "magnetar-2024-core-interior",
+  "diffs": [],
+  "excluded": [
+    {
+      "category": "floors",
+      "field": "entity_counts.IFCSHADINGDEVICE",
+      "reason": "known_gap",
+      "tracking_issue": 31,
+      "unsupported_feature": "floor_slab_extrusion_thickness"
+    },
+    {
+      "category": "rooms_spaces",
+      "field": "entity_counts.IFCSPACE",
+      "reason": "known_gap",
+      "tracking_issue": 33,
+      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+    },
+    {
+      "category": "materials",
+      "field": "entity_counts.IFCMATERIAL",
+      "reason": "known_gap",
+      "tracking_issue": 34,
+      "unsupported_feature": "revit_compound_assemblies_and_walltype_widths"
+    },
+    {
+      "category": "property_sets",
+      "field": "entity_counts.IFCPROPERTYSET",
+      "reason": "known_gap",
+      "tracking_issue": 35,
+      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+    }
+  ],
+  "independence": {
+    "commercial_dropped": [],
+    "lineages": [
+      "ifcopenshell",
+      "rvt-rs"
+    ],
+    "roles": [
+      "bridge",
+      "source"
+    ],
+    "satisfied": true,
+    "strong_copyleft": []
+  },
+  "inputs": {
+    "ifcopenshell": {
+      "input_hash_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
+      "role": "bridge",
+      "witness_version": "0.8.5"
+    },
+    "rvt-rs": {
+      "input_hash_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
+      "role": "source",
+      "witness_version": "0.1.2"
+    }
+  },
+  "insufficient_witnesses": false,
+  "schema_version": "1.0.0",
+  "semantic_surface": [
+    "entity_counts.IFCWALL",
+    "entity_counts.IFCROOF",
+    "entity_counts.IFCDOOR",
+    "entity_counts.IFCWINDOW",
+    "entity_counts.IFCCOLUMN",
+    "entity_counts.IFCBEAM",
+    "entity_counts.IFCFLOWTERMINAL",
+    "entity_counts.IFCUNITASSIGNMENT"
+  ],
+  "status": "PASS",
+  "verdict_hash_sha256": "3df3ba73bb3f86fd3fab63c4a4db5fb7074fa18036056f01bba45d0c0b43f53a",
+  "witnesses_compared": [
+    "ifcopenshell",
+    "rvt-rs"
+  ]
+}
