@@ -196,7 +196,7 @@ Notes:
 
 ## 5. Known limitations
 
-- **Real-project typed element extraction is unsolved.** The 80 registered decoders and the IFC category map do not mean arbitrary `.rvt` projects yield typed Walls/Floors/Doors/Levels. Default IFC export from real projects is scaffold / diagnostics, plus a narrow version-gated ArcWall research path documented in [`docs/status.md`](status.md).
+- **Real-project typed element extraction is unsolved.** The 81 registered decoders and the IFC category map do not mean arbitrary `.rvt` projects yield typed Walls/Floors/Doors/Levels. Default IFC export from real projects is scaffold / diagnostics, plus a narrow version-gated ArcWall research path documented in [`docs/status.md`](status.md).
 - **No semantic write path for Revit files**. Stream-level patching ([`writer::write_with_patches`](../src/writer.rs)) can replace the bytes of a named stream, re-compress with truncated gzip, and re-embed into a byte-preserving sibling file (13/13 streams identical on the 2024 sample round-trip). Field-level semantic writes (edit a specific Wall's unconnected height and round-trip back to a Revit-openable `.rvt`) are not implemented.
 - **No format versions before Revit 2016**. Earlier Revit releases used a different compression + schema framing that this library has not been probed against. No claim is made about 2015-or-earlier.
 - **No IFC2X3 or IFC4.3 export**. The STEP writer targets IFC4 only. The category map is structured to make a future IFC2X3 / IFC4.3 swap a table replacement, but it has not been swapped.
