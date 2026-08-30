@@ -17,10 +17,21 @@
 //! +0x0c  u32  0x0000059f on every observed record of this shape
 //! +0x10  u16  0
 //! +0x12  i64  BuiltInCategory id, negative (OST_Columns = -2000100)
-//! +0x1a  54B  0xff sentinel padding + three unattributed words
+//! +0x1a  24B  0xff sentinel padding (three u64 slots, never set here)
+//! +0x32  u64  container ElementId, 0xffff_ffff_ffff_ffff = none
+//! +0x3a  u64  0xff sentinel (never set on observed records)
+//! +0x42  u32  placement kind: 0xffffef7f placed / 0xffff8000 symbol
+//! +0x46  u32  unattributed (0x0928 / 0x0929 / 0x1929 / 0x09a8 / …)
+//! +0x4a  u16  unattributed (0x0766 / 0x0e55 / 0x0788 / 0x04d6)
+//! +0x4c  u32  0xffffffff on every observed record of this shape
 //! +0x50  8B   bbox marker 46 01 ff ff ff ff ab 05
 //! +0x58  48B  bounding box: min x/y/z, max x/y/z, feet, f64 LE
 //! ```
+//!
+//! The two fields at `+0x32` and `+0x42` are what separates the
+//! records Revit's own exporter emits as building elements from the
+//! rest — see [`PartitionElementRecord::is_exported_instance`] and
+//! `reports/element-framing/RE-21-partition-element-record-instance-rule.md`.
 //!
 //! 24880 records of this shape were found on that file; 23470 of
 //! them (94.3 %) carry the bbox marker at exactly `+0x50`, which is
@@ -34,13 +45,20 @@
 //!
 //! - The `BuiltInCategory` ids are Autodesk's published API
 //!   constants; nothing here is derived from Revit binaries.
-//! - Only the fields above are claimed. The 54 sentinel bytes, the
-//!   flags word and `0x059f` are recorded, not interpreted.
+//! - Only the fields above are claimed. The sentinel runs, the flags
+//!   word, `0x059f`, `+0x46` and `+0x4a` are recorded, not interpreted.
+//! - `+0x32` is named `container` because every non-sentinel value
+//!   observed is an ElementId declared in `Global/ElemTable`, is
+//!   lower than every member id that names it, owns a contiguous
+//!   ElementId block spanning several categories at once, and has no
+//!   element record of its own. What kind of container Revit calls it
+//!   is not claimed.
+//! - `+0x42` is named `placement_kind` because it takes exactly two
+//!   values on the corpus and they partition the records into placed
+//!   instances and type/symbol envelopes. The numbers are recorded,
+//!   not decoded.
 //! - Category membership alone is **not** an instance claim: a
-//!   family symbol carries the same category as its instances. The
-//!   family-local bbox test in [`is_family_local_bbox`] separates
-//!   them, and co-located superseded generations are collapsed by
-//!   the caller (see [`crate::partition_schema_mvp`]).
+//!   family symbol carries the same category as its instances.
 
 use crate::{Result, RevitFile, compression};
 use serde::{Deserialize, Serialize};
@@ -51,6 +69,12 @@ pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
 
 /// Autodesk `BuiltInCategory.OST_Columns` — architectural columns.
 pub const OST_COLUMNS: i64 = -2_000_100;
+/// Autodesk `BuiltInCategory.OST_Walls`.
+pub const OST_WALLS: i64 = -2_000_011;
+/// Autodesk `BuiltInCategory.OST_Doors`.
+pub const OST_DOORS: i64 = -2_000_023;
+/// Autodesk `BuiltInCategory.OST_Windows`.
+pub const OST_WINDOWS: i64 = -2_000_014;
 
 /// Lower bound of the Revit `BuiltInCategory` id band.
 pub const BUILTIN_CATEGORY_MIN: i64 = -2_100_000;
@@ -59,6 +83,16 @@ pub const BUILTIN_CATEGORY_MAX: i64 = -1_990_000;
 
 /// Offset of the `BuiltInCategory` id from the record start.
 pub const CATEGORY_OFFSET: usize = 0x12;
+/// Offset of the container ElementId reference from the record start.
+pub const CONTAINER_OFFSET: usize = 0x32;
+/// Sentinel value of the container reference meaning "no container".
+pub const CONTAINER_NONE: u64 = u64::MAX;
+/// Offset of the placement-kind word from the record start.
+pub const PLACEMENT_KIND_OFFSET: usize = 0x42;
+/// Placement-kind value carried by a placed element instance.
+pub const PLACEMENT_KIND_INSTANCE: u32 = 0xffff_ef7f;
+/// Placement-kind value carried by a family/type symbol envelope.
+pub const PLACEMENT_KIND_SYMBOL: u32 = 0xffff_8000;
 /// Offset of the bounding-box marker from the record start.
 pub const BBOX_MARKER_OFFSET: usize = 0x50;
 /// Offset of the six bounding-box doubles from the record start.
@@ -82,6 +116,10 @@ pub struct PartitionElementRecord {
     pub flags: u32,
     /// Revit `BuiltInCategory` id (negative).
     pub builtin_category: i64,
+    /// Raw container reference at `+0x32`; [`CONTAINER_NONE`] when unset.
+    pub container: u64,
+    /// Raw placement-kind word at `+0x42`.
+    pub placement_kind: u32,
     /// Model bounding box in feet: `[min_x, min_y, min_z, max_x, max_y, max_z]`.
     pub bbox_feet: [f64; 6],
 }
@@ -115,8 +153,61 @@ impl PartitionElementRecord {
 
     /// True when the bbox is expressed in family-local coordinates
     /// (centred on the plan origin) rather than project coordinates.
+    ///
+    /// Retained as a diagnostic. It is a *proxy* for
+    /// [`Self::is_type_symbol`] and a strictly weaker one: on
+    /// `2024_Core_Interior.rvt` it agrees on all 17 `OST_Columns`
+    /// symbols but misses the 15 `OST_Doors`, 2 `OST_Windows` and 1
+    /// `OST_Walls` symbol whose envelope is centred on only one axis.
     pub fn is_family_local(&self) -> bool {
         is_family_local_bbox(&self.bbox_feet)
+    }
+
+    /// The container ElementId this record belongs to, if any.
+    ///
+    /// `None` when `+0x32` carries [`CONTAINER_NONE`], and also when
+    /// it carries a value outside the `u32` ElementId range — an
+    /// unrecognised encoding is not turned into an id.
+    pub fn container_element_id(&self) -> Option<u32> {
+        if self.container == CONTAINER_NONE || self.container > u64::from(u32::MAX) {
+            return None;
+        }
+        Some(self.container as u32)
+    }
+
+    /// True when `+0x32` is set, i.e. the record is a member of a
+    /// container element rather than a standalone element.
+    pub fn is_container_member(&self) -> bool {
+        self.container != CONTAINER_NONE
+    }
+
+    /// True when `+0x42` marks a placed element instance.
+    pub fn is_placed_instance(&self) -> bool {
+        self.placement_kind == PLACEMENT_KIND_INSTANCE
+    }
+
+    /// True when `+0x42` marks a family/type symbol envelope.
+    pub fn is_type_symbol(&self) -> bool {
+        self.placement_kind == PLACEMENT_KIND_SYMBOL
+    }
+
+    /// The instance rule (#211): a record is a standalone placed
+    /// instance — the thing Revit's own exporter emits as a building
+    /// element — when it carries no container reference **and** its
+    /// placement kind is [`PLACEMENT_KIND_INSTANCE`].
+    ///
+    /// Measured on `2024_Core_Interior.rvt` against the ElementId set
+    /// Revit's full IFC export tags: `OST_Walls` 360/360, `OST_Doors`
+    /// 132/132, `OST_Windows` 6/6, `OST_Columns` 256/256 — exact id
+    /// sets, no false positives, no misses. It is a *test*, not a
+    /// heuristic: it replaces the family-local bbox proxy and the
+    /// highest-id-per-footprint collapse that #204 used for columns.
+    ///
+    /// It is **not** exact for `OST_Floors` (99 selected against 80
+    /// exported, and one exported slab has no record at all) — slabs
+    /// keep their own open issue (#212).
+    pub fn is_exported_instance(&self) -> bool {
+        !self.is_container_member() && self.is_placed_instance()
     }
 }
 
@@ -190,12 +281,17 @@ pub fn decode_at(
         }
     }
     let flags = read_u64(buf, offset + 0x08).map(|v| (v & 0xffff_ffff) as u32)?;
+    let container = read_u64(buf, offset + CONTAINER_OFFSET)?;
+    let placement_kind =
+        read_u64(buf, offset + PLACEMENT_KIND_OFFSET).map(|v| (v & 0xffff_ffff) as u32)?;
     Some(PartitionElementRecord {
         stream: stream.to_string(),
         offset,
         element_id,
         flags,
         builtin_category,
+        container,
+        placement_kind,
         bbox_feet,
     })
 }
@@ -295,6 +391,8 @@ mod tests {
         buf[12..16].copy_from_slice(&0x059fu32.to_le_bytes());
         buf[16..18].copy_from_slice(&0u16.to_le_bytes());
         buf[CATEGORY_OFFSET..CATEGORY_OFFSET + 8].copy_from_slice(&(category as u64).to_le_bytes());
+        buf[PLACEMENT_KIND_OFFSET..PLACEMENT_KIND_OFFSET + 4]
+            .copy_from_slice(&PLACEMENT_KIND_INSTANCE.to_le_bytes());
         buf[BBOX_MARKER_OFFSET..BBOX_MARKER_OFFSET + 8].copy_from_slice(&BBOX_MARKER);
         for (index, value) in bbox.iter().enumerate() {
             let at = BBOX_OFFSET + index * 8;
@@ -345,6 +443,55 @@ mod tests {
         let buf = synth_record(5755, OST_COLUMNS, [-1.0, -1.0, 0.0, 1.0, 1.0, 9.0]);
         let record = decode_at("Partitions/46", &buf, 0, &declared(&[5755])).expect("decodes");
         assert!(record.is_family_local());
+    }
+
+    #[test]
+    fn placed_standalone_record_is_an_exported_instance() {
+        let buf = synth_record(22805, OST_COLUMNS, [135.5, 79.0, 0.0, 137.5, 81.0, 30.3]);
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[22805])).expect("decodes");
+        assert_eq!(record.container, CONTAINER_NONE);
+        assert_eq!(record.placement_kind, PLACEMENT_KIND_INSTANCE);
+        assert!(record.container_element_id().is_none());
+        assert!(!record.is_container_member());
+        assert!(record.is_placed_instance());
+        assert!(!record.is_type_symbol());
+        assert!(record.is_exported_instance());
+    }
+
+    #[test]
+    fn container_member_is_not_an_exported_instance() {
+        let mut buf = synth_record(16347, OST_COLUMNS, [23.0, 109.0, 76.0, 25.0, 111.0, 91.0]);
+        buf[CONTAINER_OFFSET..CONTAINER_OFFSET + 8].copy_from_slice(&16_229u64.to_le_bytes());
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[16347])).expect("decodes");
+        assert_eq!(record.container_element_id(), Some(16_229));
+        assert!(record.is_container_member());
+        assert!(record.is_placed_instance());
+        assert!(!record.is_exported_instance());
+    }
+
+    #[test]
+    fn type_symbol_is_not_an_exported_instance() {
+        // A door symbol envelope: centred on X only, so the
+        // family-local bbox proxy misses it and `+0x42` does not.
+        let mut buf = synth_record(17331, OST_DOORS, [-1.749, -0.332, 0.0, 1.749, 3.251, 8.249]);
+        buf[PLACEMENT_KIND_OFFSET..PLACEMENT_KIND_OFFSET + 4]
+            .copy_from_slice(&PLACEMENT_KIND_SYMBOL.to_le_bytes());
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[17331])).expect("decodes");
+        assert!(!record.is_family_local(), "proxy misses this symbol");
+        assert!(record.is_type_symbol());
+        assert!(!record.is_placed_instance());
+        assert!(!record.is_exported_instance());
+    }
+
+    #[test]
+    fn out_of_range_container_reference_is_not_an_element_id() {
+        let mut buf = synth_record(22805, OST_COLUMNS, [1.0, 2.0, 0.0, 3.0, 4.0, 5.0]);
+        buf[CONTAINER_OFFSET..CONTAINER_OFFSET + 8]
+            .copy_from_slice(&0x0001_0000_0000u64.to_le_bytes());
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[22805])).expect("decodes");
+        assert!(record.is_container_member());
+        assert_eq!(record.container_element_id(), None);
+        assert!(!record.is_exported_instance());
     }
 
     #[test]

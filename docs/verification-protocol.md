@@ -84,26 +84,31 @@ sync with the project-count manifests that already carry the artifact hashes.
 | Edge | Authoring witness | Artifacts | Agreement gates | Status |
 |---|---|---|---|---|
 | RVT → IFC (element fixture) | Autodesk Revit 2024 (magnetar dataset export) | `2024_Core_Interior.rvt` (c805df44…) → `2024_Core_Interior.ifc` (d07c7462…) | `tests/project_count_fixtures.rs` (rvt-rs decode vs manifest counts derived from the export); `tools/ci/witness-ifcopenshell.py` and `tools/ci/witness-ifc-lite` (two unrelated IFC parsers vs the same counts); `tools/ci/witness-verdict.py` (three-lineage verdict) | recorded, gated (tier-2 CI) |
-| RVT → IFC (full project) | Autodesk Revit 24.0.20.20 via ODA SDAI 23.12 | `2024_Core_Interior.rvt` (c805df44…) → `IFC Exports/2024_Core_Interior_slim.ifc` (bfdf36ff…, 19879 entities) | the same four gates, wired to `tests/fixtures/project-counts/2024-core-interior-slim.json` | recorded, gated (tier-2 CI) |
+| RVT → IFC (full project) | Autodesk Revit 24.0.20.20 via ODA SDAI 23.12 | `2024_Core_Interior.rvt` (c805df44…) → `IFC Exports/2024_Core_Interior_slim.ifc` (bfdf36ff…, 19879 entities) | the same four gates, wired to `tests/fixtures/project-counts/2024-core-interior-slim.json`; claimed surface covers `IFCWALL` / `IFCDOOR` / `IFCWINDOW` / `IFCCOLUMN` at tolerance 0 since RE-21 | recorded, gated (tier-2 CI) |
 | RVT → IFC (rvt-rs writer) | rvt-rs | rvt-rs output from Einhoven / synthetics | IfcOpenShell validation in `ci.yml` | recorded — validates the **writer**, not the decoder |
 | RVT → DWG | Autodesk Revit (pending) | none — no Revit-exported DWG exists in any public corpus | dwg-rs parse vs rvt-rs geometry recovery | **not recorded** |
 
 Honesty note on the two IFC edges: the paired Core Interior IFC is an
 element-export fixture (20 KB), not a full project schedule, so most
 category expectations there are zero — a real edge, and a weak one. The
-full-project export is the strong half of the same edge and it is
-unflattering: it carries 360 `IfcWall`, 132 `IfcDoor`, 256 `IfcColumn`,
-116 `IfcSpace`, 80 `IfcSlab` and 15 `IfcBuildingStorey`, against which
-rvt-rs recovers 0 / 0 / 256 / 18 / 64 / 12 (2026-08-30; columns were 0
-before #204). Eight of its thirteen categories are therefore `known_gap`
-or `decoder_baseline` with a tracking issue (#30, #31, #32, #33, #34,
-#35, #204), and the verdict's claimed surface is five fields wide —
-`IFCCOLUMN` joined `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL` and
-`IFCUNITASSIGNMENT` when the count became exact at tolerance 0. It is the
-first field in that surface with a non-zero expectation: the other four
-are agreements about absence. The excluded list is still the point: it is
-the measured distance between this decoder and Revit's own exporter on a
-real project, recorded rather than rounded off.
+full-project export is the strong half of the same edge and it remains
+the place where the distance to Revit is measured: it carries 360
+`IfcWall`, 132 `IfcDoor`, 6 `IfcWindow`, 256 `IfcColumn`, 116
+`IfcSpace`, 80 `IfcSlab` and 15 `IfcBuildingStorey`, against which
+rvt-rs recovers 360 / 132 / 6 / 256 / 18 / 64 / 11 (2026-08-30; walls,
+doors and windows were 0 before #211, columns 0 before #204). Five of
+its thirteen categories are still `known_gap` or `decoder_baseline` with
+a tracking issue (#31, #33, #34, #35, and levels under #33), and the
+verdict's claimed surface is eight fields wide — `IFCWALL`, `IFCDOOR`
+and `IFCWINDOW` joined `IFCCOLUMN`, `IFCROOF`, `IFCBEAM`,
+`IFCFLOWTERMINAL` and `IFCUNITASSIGNMENT` when their **ElementId sets**,
+not merely their counts, matched the export at tolerance 0 (RE-21). Four
+of the eight are agreements about presence now; the other four are
+agreements about absence. The excluded list is still the point: floors
+(79 of 80 recoverable, wrong identity key — #212), spaces, materials and
+property sets remain the measured distance between this decoder and
+Revit's own exporter on a real project, recorded rather than rounded
+off.
 
 ## The second edge: RVT → DWG
 
