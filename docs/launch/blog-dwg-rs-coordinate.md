@@ -79,7 +79,7 @@ rvt-rs v0.1.2 ships:
   through 2026. That's the dictionary — what classes exist, what
   fields each class has, and how each field's bytes encode. No
   field falls through to `FieldType::Unknown`.
-- 80 typed per-class decoder structs in `elements::all_decoders()`:
+- 81 typed per-class decoder structs in `elements::all_decoders()`:
   walls, floors, roofs, ceilings, doors, windows, columns, beams,
   stairs, railings, rooms, furniture, **11 MEP classes** (ducts,
   pipes, fixtures, equipment), annotations, parameters, styling,
