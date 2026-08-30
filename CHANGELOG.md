@@ -13,6 +13,38 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Column instance recovery — 256 of 256 `IFCCOLUMN` on the Core Interior
+  full-project export (#204).** `src/partition_element_records.rs` decodes the
+  Revit 2024 partition *element-record header*, a fixed 88-byte prologue whose
+  first field is the record's own `ElementId` (`u64`), whose sixth is the
+  element's Revit `BuiltInCategory` (`i64`, negative, at `+0x12`), and which is
+  followed at `+0x50` by a fixed marker and at `+0x58` by the element's model
+  bounding box as six `f64` feet. 24880 records of this shape exist on
+  `2024_Core_Interior.rvt`; every `ElementId` they carry is declared in
+  `Global/ElemTable`, and the decoder requires that join, so a stray byte match
+  cannot become an element. `partition_schema_mvp::columns_from_partition_category_records`
+  keeps the `OST_Columns` (`-2000100`) records, drops those whose bounding box
+  is centred on the plan origin (family-local type envelopes, not placed
+  instances), and collapses co-located footprint groups to their highest
+  `ElementId` — Revit allocates ids monotonically, so the newest of a
+  superseded pair is the live element. The result is exactly the 256 columns
+  Revit's own exporter emits: no false positives, no misses, gated at
+  tolerance 0. Emitted as `IfcColumn` with a project placement and a
+  bounding-box `IfcExtrudedAreaSolid` (an envelope, not a recovered family
+  profile) plus an `RvtColumnGeometry` property set that says so.
+  `building_elements_with_geometry` on that file goes 0 → 256.
+- **`columns` is now a scored, cross-witness-agreed category.**
+  `tests/fixtures/project-counts/2024-core-interior-slim.json` moves `columns`
+  from `known_gap` (decoder 0) to `known` at 256/256, tolerance 0, so the
+  OctetProof verdict for `magnetar-2024-core-interior-slim` compares
+  `entity_counts.IFCCOLUMN` across all three lineages instead of excluding it —
+  the claimed surface widens from four fields to five, and `IFCCOLUMN` is the
+  first field in it with a non-zero expectation (the other four are agreements
+  about absence). Both committed verdicts still `PASS`; both `rvt-rs.json`
+  observations were regenerated, so their `observation_hash_sha256` changed. A
+  new `column-instance-recovery` row in `docs/support-matrix.json` records the
+  capability as `verified` with its scope stated: one `BuiltInCategory`, one
+  release band, one recorded edge, envelope geometry, Level binding still open.
 - **Third independent IFC witness — IFClite** (`tools/ci/witness-ifc-lite`):
   a small Rust binary over the crates.io crate `ifc-lite-core`, pinned at
   `=7.1.1` (`LTplus-AG/ifc-lite`, MPL-2.0 — verified against crates.io and the
@@ -202,6 +234,16 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Fixed
 
+- **Geometry-coverage diagnostics no longer read "solved" from a partial
+  export.** `unsupported_features` used to carry `real_file_element_geometry`
+  only while *no* exported element had a body, so an export where one category
+  gained geometry silently dropped the gap for every other category. It now
+  reports `real_file_element_geometry` when nothing has a body and the new
+  `partial_element_geometry` when some do and some do not — on Core Interior,
+  256 `IFCCOLUMN` with bodies against 82 slabs/spaces without. The slim
+  manifest's `rooms_spaces` gap points at the new code accordingly. Documented
+  in `docs/export-diagnostics.md`; both `rvt-rs` observations record the new
+  code in `unsupported_entities`.
 - **`Global/ElemTable` record origin on the 40-byte project variant (#206)** —
   `elem_table::parse_records` walked 26,424 of the 26,425 declared records on
   `2024_Core_Interior.rvt`. `detect_layout` took the first `0xFF` run as

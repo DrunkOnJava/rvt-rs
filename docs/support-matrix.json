@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "matrix_id": "rvt-rs-support-matrix",
-  "reviewed": "2026-08-29",
+  "reviewed": "2026-08-30",
   "description": "Executable support matrix for rvt-rs. Seeded from honest current capabilities in docs/status.md, docs/supported-profile.md, and ROADMAP.md — not aspirational milestone goals. Do not claim converter-grade typed recovery.",
   "sources": [
     "docs/status.md",
@@ -115,6 +115,15 @@
       "evidence": "elements::all_decoders() (~81); MVP_TYPED_CLASSES consulted by iter_elements",
       "notes": "Library building blocks plus production MVP/ArcWall path. Broader registry is not production conversion.",
       "user_impact": "Developers can compose decoders; users should not read this as full coverage."
+    },
+    {
+      "id": "column-instance-recovery",
+      "area": "elements",
+      "name": "Column instance recovery from Revit 2024 partition element records",
+      "status": "verified",
+      "evidence": "partition_element_records + partition_schema_mvp::columns_from_partition_category_records; tests/project_count_fixtures.rs (256/256, tolerance 0) and the magnetar-2024-core-interior-slim OctetProof verdict, where entity_counts.IFCCOLUMN is inside the claimed surface and rvt-rs, IfcOpenShell and IFClite agree exactly",
+      "notes": "Scope is exactly one BuiltInCategory (OST_Columns), one release band (Revit 2024) and one recorded edge. Bodies are the record's own bounding box, not a recovered family profile, and base/top Level ElementIds stay unbound (#86). The 392 OST_Columns records reduce to 256 by two steps: dropping family-local (origin-centred) envelopes, then collapsing each co-located footprint pair to its highest ElementId — a heuristic justified only by Revit's monotonic id allocation and by the resulting Tag set matching Revit's export exactly; #216 tracks replacing it with a direct test. This is not evidence for any other category or release.",
+      "user_impact": "Architectural columns come out of a Revit 2024 project as placed IFCCOLUMN with position and an envelope solid."
     },
     {
       "id": "schema-field-wall",

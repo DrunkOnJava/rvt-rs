@@ -94,12 +94,16 @@ category expectations there are zero — a real edge, and a weak one. The
 full-project export is the strong half of the same edge and it is
 unflattering: it carries 360 `IfcWall`, 132 `IfcDoor`, 256 `IfcColumn`,
 116 `IfcSpace`, 80 `IfcSlab` and 15 `IfcBuildingStorey`, against which
-rvt-rs recovers 0 / 0 / 0 / 18 / 64 / 12. Nine of its thirteen categories
-are therefore `known_gap` or `decoder_baseline` with a tracking issue
-(#30, #31, #32, #33, #34, #35, #204), and the verdict's claimed surface is
-four fields wide. The excluded list is the point: it is the measured
-distance between this decoder and Revit's own exporter on a real project,
-recorded rather than rounded off.
+rvt-rs recovers 0 / 0 / 256 / 18 / 64 / 12 (2026-08-30; columns were 0
+before #204). Eight of its thirteen categories are therefore `known_gap`
+or `decoder_baseline` with a tracking issue (#30, #31, #32, #33, #34,
+#35, #204), and the verdict's claimed surface is five fields wide —
+`IFCCOLUMN` joined `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL` and
+`IFCUNITASSIGNMENT` when the count became exact at tolerance 0. It is the
+first field in that surface with a non-zero expectation: the other four
+are agreements about absence. The excluded list is still the point: it is
+the measured distance between this decoder and Revit's own exporter on a
+real project, recorded rather than rounded off.
 
 ## The second edge: RVT → DWG
 

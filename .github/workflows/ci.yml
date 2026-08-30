@@ -536,10 +536,11 @@ jobs:
       # Second recorded edge on the same source .rvt: the full project export
       # (IFC Exports/2024_Core_Interior_slim.ifc, 19879 entities) instead of
       # the 20 KB element fixture. Same three witnesses, same verdict shape;
-      # the surface is deliberately four fields wide because the full export
-      # exposes 360 walls / 132 doors / 256 columns / 116 spaces that rvt-rs
+      # the surface is deliberately narrow — five fields since #204 — because
+      # the full export exposes 360 walls / 132 doors / 116 spaces that rvt-rs
       # cannot claim yet, and those are excluded first-class with their
-      # tracking issues.
+      # tracking issues. Columns joined the claimed surface when the count
+      # became exact (256/256, tolerance 0).
       - name: OctetProof verdict — full-project export (slim), three witnesses
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
