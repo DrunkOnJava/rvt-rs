@@ -306,7 +306,11 @@ fn parse_level_number(name: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-fn order_building_storey_names(names: &[String]) -> Vec<String> {
+/// Sort recovered Level display names into building order —
+/// basement, ground, numbered levels, mezzanine, roof — so a name
+/// list can be zipped against an ascending elevation list when (and
+/// only when) the two are the same length.
+pub fn order_building_storey_names(names: &[String]) -> Vec<String> {
     let mut indexed: Vec<(i32, String)> = names
         .iter()
         .map(|name| {

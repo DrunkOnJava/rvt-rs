@@ -33,6 +33,20 @@ pub enum IfcEntity {
         ifc_type: String,
         name: String,
         type_guid: Option<String>,
+        /// IFC4 `PredefinedType` enum token for this element, without
+        /// the STEP dots (`"COLUMN"`, `"FLOOR"`, `"STANDARD"`). Comes
+        /// from [`super::category_map::Mapping::predefined_type`] —
+        /// the Revit class decides it, so two elements that share an
+        /// entity type can still differ (`IfcMember` is `BRACE` for
+        /// `Brace` and `PURLIN` for `Purlin`).
+        ///
+        /// `None` writes `$` into the slot. The slot itself is always
+        /// written when the entity declares the attribute: an IFC4
+        /// instance must carry every attribute its type declares, so
+        /// omitting an unknown optional makes the record
+        /// non-conformant rather than merely incomplete (#214).
+        #[serde(default)]
+        predefined_type: Option<String>,
         /// Index into `IfcModel.building_storeys` — which storey
         /// contains this element. `None` means the writer should
         /// default it to the first storey (common when the element's

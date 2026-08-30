@@ -160,6 +160,12 @@ if [[ "$run_ifcopenshell" -eq 1 ]]; then
         echo "       Install with: python3 -m pip install 'ifcopenshell>=0.8.0,<0.9.0'" >&2
         exit 1
     fi
+    # #214: same gate CI runs — every instance in the committed
+    # fixtures must write exactly the attributes its IFC4 entity type
+    # declares, and mapped PredefinedType values must survive.
+    run python3 tools/ci/ifc_schema_arity.py \
+        tests/fixtures/synthetic-project.ifc \
+        tests/fixtures/synthetic-structural.ifc
 fi
 
 if [[ "$run_deny" -eq 1 ]]; then
