@@ -20,6 +20,17 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   unsupported); `rvt-capabilities` CLI; evidence ledger JSON round-trip
   helpers; `docs/schemas/capability-manifest.schema.json`. Architecture
   only — not wired to production IFC/topology claims.
+- **TransmissionData opportunistic extracts** — UTF-16LE probe now harvests
+  UUID / path-like / XML node-name triage tokens when present; empty extract
+  list explicitly means unknown, not “no links”. Still no linked-model
+  resolution or schema rewrite.
+- **Compound `0x0821` framing harness** — `compound_framing` marker
+  tokenizer + stamp classification + adversarial f64 collision seed;
+  docs under `reports/element-framing/RE-compound-0821-harness.md`. Does
+  **not** decode compound openings.
+- **IFC `Pset_` validation stub** — `ifc::pset_validate` allow-list /
+  reserved-unknown classifier + `docs/ifc/pset-mapping-examples.yaml`
+  (ES omitted by default).
 - **TransmissionData UTF-16 detect stub** — `transmission_data::TransmissionDataProbe`
   classifies empty / UTF-16LE / opaque without inventing a field layout;
   `RevitFile::transmission_data_probe` exposes it. Linked-model resolution
