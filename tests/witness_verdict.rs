@@ -3,7 +3,7 @@
 //! canonical payload hash recomputes, every input hash is a registered
 //! artifact, and the verdict is `PASS` on the claimed surface with the
 //! independence set satisfied (docs/verification-protocol.md,
-//! docs/octetproof-spec-draft.md §6, §9.3).
+//! docs/octetproof-spec.md §6, §9.3).
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};

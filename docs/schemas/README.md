@@ -19,6 +19,9 @@ in the producing payload.
 | [`capability-manifest.schema.json`](capability-manifest.schema.json) | `rvt-capabilities` honest snapshot (`capability::CapabilityManifest`) |
 | [`es-observation.schema.json`](es-observation.schema.json) | ES remap research observations (H-ES5; not a production decode claim) |
 | [`es-capability.schema.json`](es-capability.schema.json) | Research capability promotion stub (report §15.16) |
+| [`witness-registry.schema.json`](witness-registry.schema.json) | Checked-in [`research/witness-registry.json`](../../research/witness-registry.json) (`tests/witness_registry.rs`) |
+| [`witness-observation.schema.json`](witness-observation.schema.json) | `rvt-ifc --observation`, `tools/ci/witness-ifcopenshell.py --observation` (OctetProof §6.2) |
+| [`witness-verdict.schema.json`](witness-verdict.schema.json) | `tools/ci/witness-verdict.py` (OctetProof §6.3) |
 
 Research mirrors also live under [`research/es-remap/`](../../research/es-remap/).
 See [`docs/research/unified-research-report.md`](../research/unified-research-report.md).

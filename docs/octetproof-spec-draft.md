@@ -1,5 +1,7 @@
 # Technical Specification: OctetProof — A License-Free Verification Protocol for Undocumented Binary Formats
 
+> **Superseded.** This is the received draft, kept verbatim for the record. The citable specification is [`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.0, 2026-08-30); its Section 19 lists every correction applied to the text below.
+
 **Version:** 1.0.0 (draft for review)
 **Date:** 2026-08-30
 **Status:** Proposed specification — received from the project owner on 2026-08-30 and committed verbatim for review; reviewer notes from the rvt-rs side are appended at the end
