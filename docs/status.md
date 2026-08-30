@@ -96,7 +96,27 @@ wall location curve; base/top Level ElementId binding and door/window
 host-wall binding still open), and Material display names →
 `IfcMaterial`.
 **Storey elevations on Revit 2024 come from the element-record bounding
-boxes, not from names** (#213): STOREY_PARAGRAPH_PLACEHOLDER
+boxes, not from names** (#213): the 256 recovered columns stand on
+exactly 11 distinct base elevations — 0, 31, 46, 61, 76, 91, 106, 121,
+136, 151, 166 ft — and all 11 equal an `IfcBuildingStorey.Elevation` in
+Revit's own export of the same file, with no false positives; the
+export's other four storeys (−40, −20, 15, 185.5 ft) carry no column
+record and are not claimed. Only `IfcColumn` records *supply*
+elevations, and that restriction is measured rather than assumed: over
+the #211 instance sets, door records also land 11 for 11 on storey
+elevations, wall records land 12 (they add −40 ft) at the cost of one
+elevation that is not a storey, and **window records land 0 of 6** —
+a window sits at its sill height above its level, so its base is never
+a storey elevation. Every record-bodied element still *binds* to the
+column-derived set by exact match, so on Core Interior
+`IfcRelContainedInSpatialStructure` is 11 and 743 of 836 building
+elements land in a specific storey (all 256 columns, all 132 doors, 355
+of 360 walls; the 5 walls at −40 / 56.4167 ft and all 6 windows stay
+unbound rather than being placed by proximity). The storey *names* are
+not recovered with the elevations: 12 Level-like name strings against
+11 measured elevations is not a pairing, so each storey is labelled
+`Elevation N ft` and the names stay in
+`diagnostics.decoded.production_class_counts`.
 Viewer File Status lists
 recovered storey names, material name samples, and an honest Parameters
 row (empty until AProperty* host joins). The scene tree groups elements

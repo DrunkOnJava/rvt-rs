@@ -167,7 +167,36 @@ remaining 20 false positives are the Arch Topping / Structural Slab identity
 problem #212 describes, which needs a slab-appropriate identity key, not a
 looser tolerance. Floors are not moved.
 
-## 8. Reproduction
+## 8. Storey elevations: which categories may supply them
+
+The #213 storey recovery derives elevations from element-record base `z`.
+Adding three more categories to the record set widens that evidence base, so
+the restriction was measured rather than assumed, against the fifteen
+`IfcBuildingStorey.Elevation` values in the reference export:
+
+| category | distinct base elevations | equal to a storey elevation | not a storey elevation |
+|---|---:|---:|---|
+| `OST_Columns` | 11 | 11 | — |
+| `OST_Doors` | 11 | 11 | — |
+| `OST_Walls` | 13 | 12 (adds −40 ft) | 56.4167 |
+| `OST_Windows` | 6 | 0 | 80.73, 95.73, 110.73, 125.73, 140.73, 155.73 |
+
+A window sits at its sill height above the level that hosts it, so its record
+base is never a storey elevation; a wall may start mid-storey. Only
+`IFCCOLUMN` therefore *supplies* elevations
+(`ifc::STOREY_ELEVATION_SOURCE_TYPES`), which keeps #213's measured
+"no false positives" claim exactly as recorded. Every record-bodied element
+still *binds* to that set by exact match, so `IfcRelContainedInSpatialStructure`
+stays 11 while storey-bound elements go 256 → **743 of 836**: all 256 columns,
+all 132 doors, 355 of 360 walls. The 5 walls at −40 / 56.4167 ft and all 6
+windows stay unbound rather than being placed by proximity.
+
+Recovering the export's −40 ft storey is possible from wall records, at the
+cost of one elevation that is not a storey. That trade is left open rather
+than taken; the other three unrecovered storeys (−20, 15, 185.5 ft) carry no
+record of any of the four categories.
+
+## 9. Reproduction
 
 ```bash
 cargo build --profile ci --example probe_element_record_instance_rule

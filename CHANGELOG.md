@@ -77,6 +77,23 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   freshly emitted real-project IFC, into `tools/check-local.sh --ifcopenshell`,
   and into `tools/ci/validate-real-ifc.py`. IfcOpenShell's `open()` accepts a
   short record, so a count-only check never saw this class of defect.
+- **Storey elevations stay column-derived, and the restriction is now
+  measured (#211 + #213).** Wall, door and window records carry base
+  elevations too, so the #213 derivation would have widened its evidence base
+  silently. Measured against the fifteen `IfcBuildingStorey.Elevation` values
+  in Revit's export: `OST_Columns` 11 distinct bases, 11 of them storeys, 0
+  not; `OST_Doors` 11 / 11 / 0; `OST_Walls` 13 / 12 (it adds −40 ft) / 1
+  (56.4167 ft); `OST_Windows` 6 / **0** / 6 — a window sits at its sill height
+  above the level that hosts it, so its record base is never a storey
+  elevation. Only `IFCCOLUMN` therefore supplies elevations
+  (`STOREY_ELEVATION_SOURCE_TYPES`), which keeps #213's "no false positives"
+  claim exactly as recorded, while every record-bodied element still *binds*
+  to that set by exact match: `IfcRelContainedInSpatialStructure` stays 11 and
+  storey-bound elements go 256 → **743 of 836** (all 256 columns, all 132
+  doors, 355 of 360 walls). The 5 walls at −40 / 56.4167 ft and all 6 windows
+  stay unbound rather than being placed by proximity. Recovering the export's
+  −40 ft storey from wall records costs one false elevation, so it is left
+  open rather than taken.
 - **Column instance recovery — 256 of 256 `IFCCOLUMN` on the Core Interior
   full-project export (#204).** `src/partition_element_records.rs` decodes the
   Revit 2024 partition *element-record header*, a fixed 88-byte prologue whose

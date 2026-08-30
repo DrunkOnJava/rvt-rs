@@ -95,7 +95,7 @@ full-project export is the strong half of the same edge and it remains
 the place where the distance to Revit is measured: it carries 360
 `IfcWall`, 132 `IfcDoor`, 6 `IfcWindow`, 256 `IfcColumn`, 116
 `IfcSpace`, 80 `IfcSlab` and 15 `IfcBuildingStorey`, against which
-rvt-rs recovers 360 / 132 / 6 / 256 / 18 / 64 / 12 (2026-08-30; walls,
+rvt-rs recovers 360 / 132 / 6 / 256 / 18 / 64 / 11 (2026-08-30; walls,
 doors and windows were 0 before #211, columns 0 before #204). Five of
 its thirteen categories are still `known_gap` or `decoder_baseline` with
 a tracking issue (#31, #33, #34, #35, and levels under #33), and the
