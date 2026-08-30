@@ -499,14 +499,21 @@ impl StepWriter {
     /// ID in an `IfcShapeRepresentation` + `IfcProductDefinitionShape`
     /// chain.
     ///
-    /// `element_axis` / `z_axis` are the enclosing element's
-    /// IFCAXIS2PLACEMENT3D / IFCDIRECTION IDs — reused as the
-    /// placement for extruded variants (matches the existing
-    /// `IfcExtrudedAreaSolid` path).
+    /// `solid_position` is the `IFCAXIS2PLACEMENT3D` that goes into
+    /// the swept solid's `Position` slot, and `z_axis` the
+    /// `IFCDIRECTION` used as the extrusion direction.
+    ///
+    /// `Position` is the profile's frame **inside** the object's own
+    /// coordinate system, not a second copy of the object placement:
+    /// a conforming consumer composes `ObjectPlacement × Position`, so
+    /// passing the element's own axis here applies the element
+    /// translation twice (#232). Callers that author their profiles in
+    /// the element-local frame — every rvt-rs path does — pass the
+    /// project-level identity placement.
     fn emit_solid_shape(
         &mut self,
         shape: &SolidShape,
-        element_axis: usize,
+        solid_position: usize,
         z_axis: usize,
     ) -> (usize, &'static str) {
         match shape {
@@ -528,7 +535,7 @@ impl StepWriter {
                 self.emit_entity(
                     solid_id,
                     format!(
-                        "IFCEXTRUDEDAREASOLID(#{profile_id},#{element_axis},#{z_axis},{depth:.6})"
+                        "IFCEXTRUDEDAREASOLID(#{profile_id},#{solid_position},#{z_axis},{depth:.6})"
                     ),
                 );
                 (solid_id, "SweptSolid")
@@ -591,7 +598,7 @@ impl StepWriter {
                 self.emit_entity(
                     solid_id,
                     format!(
-                        "IFCREVOLVEDAREASOLID(#{profile_id},#{element_axis},#{axis1_id},{angle_radians:.6})"
+                        "IFCREVOLVEDAREASOLID(#{profile_id},#{solid_position},#{axis1_id},{angle_radians:.6})"
                     ),
                 );
                 (solid_id, "SweptSolid")
@@ -604,8 +611,8 @@ impl StepWriter {
                 // Recursively emit operands, then wrap in
                 // IFCBOOLEANRESULT(op, first, second). Nested
                 // booleans compose naturally.
-                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, element_axis, z_axis);
-                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, element_axis, z_axis);
+                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, solid_position, z_axis);
+                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, solid_position, z_axis);
                 let solid_id = self.id();
                 self.emit_entity(
                     solid_id,
@@ -741,7 +748,7 @@ impl StepWriter {
                 self.emit_entity(
                     solid_id,
                     format!(
-                        "IFCFIXEDREFERENCESWEPTAREASOLID(#{profile_id},#{element_axis},#{directrix},$,$,#{fixed_ref_id})"
+                        "IFCFIXEDREFERENCESWEPTAREASOLID(#{profile_id},#{solid_position},#{directrix},$,$,#{fixed_ref_id})"
                     ),
                 );
                 (solid_id, "SweptSolid")
@@ -1494,6 +1501,14 @@ impl StepWriter {
             // (solid_entity_id, rep_type_token). For the map's own
             // IfcShapeRepresentation we use the returned rep_type
             // (SweptSolid / CSG / Brep).
+            //
+            // Passing `map_placement` as the solid `Position` here is
+            // not the #232 double-translation: a mapped item resolves
+            // as `MappingTarget × MappingOrigin⁻¹ × geometry`, so a
+            // Position equal to the MappingOrigin cancels against the
+            // inverse rather than compounding. `origin_feet` is
+            // `[0,0,0]` on every map rvt-rs builds today, which makes
+            // the two placements the same identity frame anyway.
             let (solid_id, rep_type) = self.emit_solid_shape(&rmap.shape, map_placement, z_axis);
             let body_rep_id = self.id();
             self.emit_entity(
@@ -1602,6 +1617,22 @@ impl StepWriter {
                     placement_id,
                     format!("IFCLOCALPLACEMENT(#{placement_parent},#{element_axis})"),
                 );
+                // The element translation is carried exactly once, by
+                // the `IfcLocalPlacement` above. Every swept solid this
+                // element emits is authored in the element-local frame
+                // (profiles are centred on their own origin), so its
+                // `Position` is the project-level identity placement —
+                // reusing `element_axis` there made a conforming
+                // consumer composing `ObjectPlacement × Position` apply
+                // the translation twice (#232). Revit's own exporter
+                // splits it the same way: on
+                // `2024_Core_Interior_slim.ifc` the `IfcWall`
+                // `SweptSolid` bodies sit at `Position = (0,0,0)` with
+                // the wall's `IfcLocalPlacement` carrying the location,
+                // and the `IfcSlab` / `IfcSpace` bodies do the mirror
+                // image — an identity placement with the frame in
+                // `Position`. Never both.
+                let solid_position = axis_placement;
 
                 // Emit the extrusion chain when geometry is present.
                 // Chain: IfcProfileDef subclass → IfcExtrudedAreaSolid
@@ -1660,7 +1691,7 @@ impl StepWriter {
                         prod_shape_id
                     })
                 } else if let Some(shape) = solid_shape {
-                    let (solid_id, rep_type) = self.emit_solid_shape(shape, element_axis, z_axis);
+                    let (solid_id, rep_type) = self.emit_solid_shape(shape, solid_position, z_axis);
                     let rep_id = self.id();
                     self.emit_entity(
                         rep_id,
@@ -1692,13 +1723,15 @@ impl StepWriter {
                         format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
                     );
                     let profile_id = self.emit_profile_def(ex, profile_placement);
-                    // Solid-local placement: reuse the element's own
-                    // axis so the extrusion sits at the element origin.
+                    // Solid-local placement: the identity axis, so the
+                    // extrusion sits at the element origin and the
+                    // element's own IfcLocalPlacement moves it into
+                    // the world exactly once (#232).
                     let solid_id = self.id();
                     self.emit_entity(
                         solid_id,
                         format!(
-                            "IFCEXTRUDEDAREASOLID(#{profile_id},#{element_axis},#{z_axis},{depth:.6})"
+                            "IFCEXTRUDEDAREASOLID(#{profile_id},#{solid_position},#{z_axis},{depth:.6})"
                         ),
                     );
                     // The representation groups the solid inside the
@@ -1851,7 +1884,11 @@ impl StepWriter {
                         // as the element, placed on the element's
                         // placement so the void sits where the door
                         // sits. We reuse the element's placement for
-                        // simplicity; IFC4 validators accept this.
+                        // simplicity; IFC4 validators accept this. The
+                        // solid's own `Position` stays identity for the
+                        // same reason it does on the filling element
+                        // (#232) — the opening's IfcLocalPlacement
+                        // below already carries `element_axis`.
                         let x_dim = ex.width_feet * 0.3048;
                         let y_dim = ex.depth_feet * 0.3048;
                         let depth_m = ex.height_feet * 0.3048;
@@ -1875,7 +1912,7 @@ impl StepWriter {
                         self.emit_entity(
                             o_solid,
                             format!(
-                                "IFCEXTRUDEDAREASOLID(#{o_profile},#{element_axis},#{z_axis},{depth_m:.6})"
+                                "IFCEXTRUDEDAREASOLID(#{o_profile},#{solid_position},#{z_axis},{depth_m:.6})"
                             ),
                         );
                         let o_rep = self.id();

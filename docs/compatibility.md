@@ -142,7 +142,7 @@ The bridge [`ifc::build_ifc_model`](../src/ifc/from_decoded.rs) maps each decode
 Column definitions:
 
 - **IFC entity + placement**: a valid `IfcWall` / `IfcSlab` / … is constructed and wired to the storey via `IfcRelContainedInSpatialStructure`. Always yes for every Revit class that has a mapping in [`category_map.rs`](../src/ifc/category_map.rs); unknown classes fall back to `IfcBuildingElementProxy` rather than being dropped.
-- **Extruded geometry**: an `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` + `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain is emitted and attached to the element's `Representation` slot, iff the caller supplies an `Extrusion` via one of the helpers in [`from_decoded.rs`](../src/ifc/from_decoded.rs) (`wall_extrusion`, `slab_extrusion`, `roof_extrusion`, `ceiling_extrusion`, `column_extrusion`). The helpers exist for the classes marked "yes"; they do not exist yet for the classes marked "no helper".
+- **Extruded geometry**: an `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` + `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain is emitted and attached to the element's `Representation` slot, iff the caller supplies an `Extrusion` via one of the helpers in [`from_decoded.rs`](../src/ifc/from_decoded.rs) (`wall_extrusion`, `slab_extrusion`, `roof_extrusion`, `ceiling_extrusion`, `column_extrusion`). The helpers exist for the classes marked "yes"; they do not exist yet for the classes marked "no helper". The solid's `Position` is the project-level identity placement: the element translation is carried once, by the element's own `IfcLocalPlacement`, so a consumer composing `ObjectPlacement × Position` lands on the element instead of twice past it (#232).
 - **Material association**: an `IfcMaterial` + `IfcRelAssociatesMaterial` is emitted iff the caller populates `BuilderOptions.materials` (see [`materials_from_revit`](../src/ifc/from_decoded.rs)) and sets `ElementInput.material_index`. For compound hosts, `ElementInput.material_layer_set_index` routes through an `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` chain (IFC-28 / IFC-29); for profile-driven members, `material_profile_set_index` routes through `IfcMaterialProfileSet` + `IfcMaterialProfileSetUsage` (IFC-30). Precedence order is `profile_set > layer_set > single material` — whichever is set wins.
 - **Property set**: an `IfcPropertySet` + `IfcPropertySingleValue` + `IfcRelDefinesByProperties` (IFC-31 / IFC-33) is emitted iff the caller supplies a `PropertySet` via a dedicated helper (`wall_property_set`, `door_property_set`, `window_property_set`, `stair_property_set` exist today). Quantity-typed properties route through `IfcQuantityArea` / `IfcQuantityVolume` / `IfcQuantityCount` / `IfcQuantityTime` / `IfcQuantityWeight` (IFC-32), with Imperial-to-SI conversion done at emission time (square-feet → m², cubic-feet → m³, pounds → kg).
 - **Opening / fill**: for doors / windows, iff the caller sets `host_element_index` and `extrusion` on the opening, the writer emits `IfcOpeningElement` + `IfcRelVoidsElement` (host → opening, IFC-37) + `IfcRelFillsElement` (opening → door/window, IFC-38).
@@ -151,10 +151,10 @@ Column definitions:
 |---|---|---|---|---|---|---|
 | Level | IfcBuildingStorey | built-in | n/a | n/a | n/a | n/a |
 | Grid | IfcGrid | yes | no helper | n/a | n/a | n/a |
-| Wall | IfcWall (STANDARD) | yes | yes (`wall_extrusion`) | yes | yes (`wall_property_set`) | n/a |
+| Wall | IfcWall (NOTDEFINED) | yes | yes (`wall_extrusion`) | yes | yes (`wall_property_set`) | n/a |
 | CurtainWall | IfcCurtainWall | yes | no helper | no helper | no helper | n/a |
-| Door | IfcDoor | yes | caller-supplied | yes | yes (`door_property_set`) | yes |
-| Window | IfcWindow | yes | caller-supplied | yes | yes (`window_property_set`) | yes |
+| Door | IfcDoor (DOOR) | yes | caller-supplied | yes | yes (`door_property_set`) | yes |
+| Window | IfcWindow (WINDOW) | yes | caller-supplied | yes | yes (`window_property_set`) | yes |
 | Floor | IfcSlab (FLOOR) | yes | yes (`slab_extrusion`) | yes | no helper | n/a |
 | Roof | IfcRoof | yes | yes (`roof_extrusion`) | yes | no helper | n/a |
 | Ceiling | IfcCovering (CEILING) | yes | yes (`ceiling_extrusion`) | yes | no helper | n/a |
@@ -166,7 +166,7 @@ Column definitions:
 | StructuralFraming | IfcBeam (BEAM) | yes | no helper | yes | no helper | n/a |
 | StructuralFoundation | IfcFooting | yes | no helper | yes | no helper | n/a |
 | Rebar | IfcReinforcingBar | yes | no helper | yes | no helper | n/a |
-| Room | IfcSpace (INTERNAL) | yes | no helper | n/a | no helper | n/a |
+| Room | IfcSpace (SPACE) | yes | no helper | n/a | no helper | n/a |
 | Area | IfcSpace | yes | no helper | n/a | no helper | n/a |
 | Space | IfcSpace | yes | no helper | n/a | no helper | n/a |
 | Furniture | IfcFurniture | yes | no helper | yes | no helper | n/a |
@@ -189,6 +189,7 @@ Column definitions:
 
 Notes:
 
+- The `PredefinedType` values in the IFC-entity column are the mapping's, not the IFC4 enum's closest reading. Where a recorded edge shows what the authoring witness chose, the table follows it (#220): Revit's own export of the 2024 Core Interior project writes `.NOTDEFINED.` on all 360 walls, `.SPACE.` on all 116 spaces, `.DOOR.` on all 132 doors and `.WINDOW.` on all 6 windows, so those are the values rvt-rs writes. `Area` / `Space` / `GenericModel` stay `$` — no edge records the witness's answer for them, and inventing one would be a claim.
 - "Yes (mapped; decoder pending)" rows: the class has a category-map entry and would round-trip through the bridge if a decoder existed, but no `ElementDecoder` for the class is registered in `all_decoders()` today, so the bridge never sees a decoded instance to map. See §3 MEP note.
 - The units slot is populated via `BuilderOptions.units` (typically from `RvtDocExporter::build_unit_list`) and emits as `IfcUnitAssignment`. Classifications (OmniClass / Uniformat from `PartAtom`) emit as `IfcClassification` + `IfcClassificationReference`.
 - The STEP writer is deterministic under `write_step_with_options(model, StepOptions { timestamp })` — a fixed `timestamp` produces byte-identical output across runs. Unicode escaping is ISO-10303-21-correct (BMP `\X2\HHHH\X0\`, supplementary `\X4\HHHHHHHH\X0\`, backslash doubled, control chars `\X\HH`).
