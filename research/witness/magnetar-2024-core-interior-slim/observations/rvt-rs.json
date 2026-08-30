@@ -55,7 +55,7 @@
     "entity_counts"
   ],
   "unsupported_entities": [
-    "real_file_element_geometry",
+    "partial_element_geometry",
     "revit_compound_assemblies_and_walltype_widths",
     "floor_slab_extrusion_thickness",
     "typed_door_window_discrimination_and_host_binding",

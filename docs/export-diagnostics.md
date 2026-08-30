@@ -71,6 +71,12 @@ and `unsupported_geometry_missing_dimensions`. A single element can appear in
 more than one geometry bucket because these are condition counts, not a
 deduplicated element total.
 
+`unsupported_features` carries exactly one geometry-coverage code:
+`real_file_element_geometry` when **no** exported building element has a
+recovered body, and `partial_element_geometry` when some do and some do not
+(Core Interior after #204: 256 `IFCCOLUMN` with bodies, 82 slabs/spaces
+without). Neither appears once every exported element carries geometry.
+
 Important nested fields:
 
 | Field | Type | Meaning |

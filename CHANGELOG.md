@@ -234,6 +234,16 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Fixed
 
+- **Geometry-coverage diagnostics no longer read "solved" from a partial
+  export.** `unsupported_features` used to carry `real_file_element_geometry`
+  only while *no* exported element had a body, so an export where one category
+  gained geometry silently dropped the gap for every other category. It now
+  reports `real_file_element_geometry` when nothing has a body and the new
+  `partial_element_geometry` when some do and some do not — on Core Interior,
+  256 `IFCCOLUMN` with bodies against 82 slabs/spaces without. The slim
+  manifest's `rooms_spaces` gap points at the new code accordingly. Documented
+  in `docs/export-diagnostics.md`; both `rvt-rs` observations record the new
+  code in `unsupported_entities`.
 - **`Global/ElemTable` record origin on the 40-byte project variant (#206)** —
   `elem_table::parse_records` walked 26,424 of the 26,425 declared records on
   `2024_Core_Interior.rvt`. `detect_layout` took the first `0xFF` run as

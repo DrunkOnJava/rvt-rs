@@ -1928,13 +1928,13 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
     if model.building_storeys.is_empty() {
         features.push("revit_levels_to_ifc_storeys".into());
     }
-    // Partial geometry is still a gap: the claim only clears when every
-    // emitted building element carries a recovered body (#204 landed
-    // IFCCOLUMN bodies while Floors/Rooms remain annotation-only).
-    if exported.building_elements_with_geometry == 0
-        || exported.building_elements_with_geometry < exported.building_elements
-    {
+    if exported.building_elements_with_geometry == 0 {
         features.push("real_file_element_geometry".into());
+    } else if exported.building_elements_with_geometry < exported.building_elements {
+        // Some categories carry a recovered body and others do not — a
+        // narrower, still-honest claim than "no geometry at all" (#204
+        // landed IFCCOLUMN bodies while Floors/Rooms stay annotations).
+        features.push("partial_element_geometry".into());
     }
     // Compound assemblies (layer widths) remain open even when display
     // Material names are recovered into IfcMaterial.

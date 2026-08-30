@@ -96,8 +96,8 @@
       "decoder_expected": 18,
       "decoder_tolerance": 4,
       "tracking_issue": 33,
-      "unsupported_feature": "real_file_element_geometry",
-      "notes": "Strict partition space-name recovery emits 18 IFCSPACE against 116 exported spaces; recall tracked in #84 (which records 50/116 from a different export path)."
+      "unsupported_feature": "partial_element_geometry",
+      "notes": "Strict partition space-name recovery emits 18 IFCSPACE against 116 exported spaces; recall tracked in #84 (which records 50/116 from a different export path). The named feature moved from real_file_element_geometry to partial_element_geometry on 2026-08-30: #204 gave IFCCOLUMN real bodies, so the export is no longer geometry-free, but spaces are still name-only."
     },
     "columns": {
       "status": "known",

@@ -240,16 +240,12 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     let last = haystack.len() - needle.len();
     let mut index = 0usize;
     while index <= last {
-        match haystack[index..=last].iter().position(|b| *b == first) {
-            Some(delta) => {
-                let start = index + delta;
-                if &haystack[start..start + needle.len()] == needle {
-                    return Some(start);
-                }
-                index = start + 1;
-            }
-            None => return None,
+        let delta = haystack[index..=last].iter().position(|b| *b == first)?;
+        let start = index + delta;
+        if &haystack[start..start + needle.len()] == needle {
+            return Some(start);
         }
+        index = start + 1;
     }
     None
 }
@@ -298,8 +294,7 @@ mod tests {
         buf[8..12].copy_from_slice(&0x0141u32.to_le_bytes());
         buf[12..16].copy_from_slice(&0x059fu32.to_le_bytes());
         buf[16..18].copy_from_slice(&0u16.to_le_bytes());
-        buf[CATEGORY_OFFSET..CATEGORY_OFFSET + 8]
-            .copy_from_slice(&(category as u64).to_le_bytes());
+        buf[CATEGORY_OFFSET..CATEGORY_OFFSET + 8].copy_from_slice(&(category as u64).to_le_bytes());
         buf[BBOX_MARKER_OFFSET..BBOX_MARKER_OFFSET + 8].copy_from_slice(&BBOX_MARKER);
         for (index, value) in bbox.iter().enumerate() {
             let at = BBOX_OFFSET + index * 8;
@@ -358,8 +353,7 @@ mod tests {
         let mut buf = vec![0u8; 37];
         buf.extend(synth_record(4242, OST_COLUMNS, bbox));
         buf.extend(vec![0u8; 11]);
-        let found =
-            find_category_records("Partitions/46", &buf, OST_COLUMNS, &declared(&[4242]));
+        let found = find_category_records("Partitions/46", &buf, OST_COLUMNS, &declared(&[4242]));
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].element_id, 4242);
         assert_eq!(found[0].offset, 37);

@@ -194,17 +194,11 @@ fn column_decoded(
     let fields = vec![
         (
             "m_locationX".into(),
-            InstanceField::Float {
-                value: cx,
-                size: 8,
-            },
+            InstanceField::Float { value: cx, size: 8 },
         ),
         (
             "m_locationY".into(),
-            InstanceField::Float {
-                value: cy,
-                size: 8,
-            },
+            InstanceField::Float { value: cy, size: 8 },
         ),
         (
             "m_locationZ".into(),
@@ -215,24 +209,15 @@ fn column_decoded(
         ),
         (
             "m_bboxWidth".into(),
-            InstanceField::Float {
-                value: dx,
-                size: 8,
-            },
+            InstanceField::Float { value: dx, size: 8 },
         ),
         (
             "m_bboxDepth".into(),
-            InstanceField::Float {
-                value: dy,
-                size: 8,
-            },
+            InstanceField::Float { value: dy, size: 8 },
         ),
         (
             "m_bboxHeight".into(),
-            InstanceField::Float {
-                value: dz,
-                size: 8,
-            },
+            InstanceField::Float { value: dz, size: 8 },
         ),
         (
             "m_builtinCategory".into(),
