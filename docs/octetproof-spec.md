@@ -1,10 +1,10 @@
 # Technical Specification: OctetProof — A License-Free Verification Protocol for Undocumented Binary Formats
 
-**Version:** 1.0.0
+**Version:** 1.0.1
 **Date:** 2026-08-30
 **Status:** Specification — 1.0.0. Supersedes the draft received from the project owner on 2026-08-30, which is retained verbatim at [`docs/octetproof-spec-draft.md`](octetproof-spec-draft.md) with its reviewer notes. The corrections applied here are listed in Section 19.
 **License of this document:** CC-BY-4.0
-**Reference implementation:** rvt-rs (Apache-2.0) — in-repo instance; umbrella repository planned
+**Reference implementation:** rvt-rs (Apache-2.0) — in-repo instance; umbrella repository: [DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof)
 **Primary domain:** Building Information Modeling (BIM) closed formats, with generalization to any undocumented binary container format
 
 -----
@@ -1014,7 +1014,7 @@ A corpus generated under spec version X is replayable under any version ≥ X. A
 
 ### 16.3 Reference implementation
 
-The reference implementation is `rvt-rs` (Apache-2.0), as an in-repo instance. The umbrella repository — vision, golden corpus, cross-witness CI gate, protocol spec, with decoders linked and never parsing a byte — is planned and earns its existence the day the second edge is recorded and gated.
+The reference implementation is `rvt-rs` (Apache-2.0), as an in-repo instance. The umbrella repository — vision, golden corpus, cross-witness CI gate, protocol spec, with decoders linked and never parsing a byte — is [DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof) (created 2026-08-30). It mirrors this repository's registry and committed observations and runs the adopted bridge witnesses as separate processes.
 
 What the in-repo instance provides today:
 
@@ -1063,6 +1063,10 @@ The reference implementation is not normative; any conforming implementation may
 Every version, date, and license above was checked against the GitHub API on 2026-08-30, except where explicitly marked unverified.
 
 -----
+
+## 19a. 1.0.1 (2026-08-30)
+
+Patch release, non-semantic (Section 16.1): the umbrella repository was created the same day as 1.0.0, so the header, Section 16.3 and the "planned" wording now point at [DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof). No schema, diff-function, or provenance change.
 
 ## 19. Changes from the 2026-08-30 draft
 

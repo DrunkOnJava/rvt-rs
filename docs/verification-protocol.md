@@ -157,11 +157,15 @@ third-party reader ever enters an Apache-2.0 artifact, and
 the binary stamps into every observation, and the registry entry drift
 apart (spec §9.6 forbids silent witness upgrades).
 
-The umbrella repository proposed for this protocol (vision, golden corpus,
-cross-witness CI gate, protocol spec; decoders linked, never parsing a
-byte) is deliberately **not** created yet. It earns its existence the day
-the second edge is recorded and gated. Until then this document, the
-registry, and the gates live here.
+The umbrella repository for this protocol exists:
+[DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof) (created
+2026-08-30 on the owner's call once the first edge was gated) — protocol,
+schemas, witness registry, golden corpus (manifests, observations, verdicts;
+bytes fetched by hash), verdict + replay tools, and its own fail-closed CI
+gate. It never parses a format byte; the adopted readers run there as
+separate processes. This repository stays the working copy of the registry
+and the place where decoder-side observations are produced; the umbrella
+mirrors them.
 
 ## OctetProof alignment
 
@@ -180,7 +184,7 @@ Schema 2020-12 documents —
 the spec maps its `registry.yaml` vocabulary onto the fields of
 `research/witness-registry.json` and names the four requirements
 (`ci_eligible`, coverage declaration, determinism attestation, exact version
-pinning) that stay umbrella scope until the second edge exists.
+pinning) that are enforced in the umbrella repository rather than here.
 
 What exists here today, per layer:
 
