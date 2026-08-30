@@ -110,9 +110,7 @@ python -m pip install dist/rvt-*.whl
 The viewer needs a WASM package and Node dependencies:
 
 ```bash
-wasm-pack build --target web -- --features wasm --no-default-features
-rm -rf viewer/pkg
-mv pkg viewer/pkg
+wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
 cd viewer
 npm install
 npm run typecheck
