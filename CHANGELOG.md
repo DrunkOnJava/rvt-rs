@@ -13,6 +13,26 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Registry coverage declarations — `covers` per adopted reader
+  (#229, OctetProof §9.4).** The registry recorded no coverage claim, so
+  nothing outside the observations themselves said that rvt-rs, IfcOpenShell
+  and IFClite now read `relations` and `storeys` as well as `entity_counts`.
+  Each adopted reader in `research/witness-registry.json` now declares
+  `covers`, drawn from the §9.4 controlled vocabulary: `entity_counts`,
+  `relations`, `storeys` for the three gated readers; `entity_counts` alone
+  for dwg-rs, which has produced no observation yet because the
+  `rvt-to-dwg` edge is still `pending` — its declaration is the surface it
+  would claim, not a reproduced agreement, and the notes say so. The
+  authoring witness `autodesk-revit-exporter` declares nothing: coverage is
+  a claim about *reading*, and an author emits the artifact rather than an
+  observation. `docs/schemas/witness-registry.schema.json` carries the field
+  with the vocabulary as an enum and two conditionals — an adopted reader
+  must declare it, an author must not — and `tests/witness_registry.rs`
+  enforces the same two rules plus the subset rule that makes the
+  declaration load-bearing: every committed observation's
+  `semantic_surface_covered` must be a subset of its witness's `covers`, so
+  a witness cannot widen its own claim without a registry change. No status,
+  lineage or `checked` value moved.
 - **Slab plan profiles — 80 / 80 exact against Revit's own export
   (#31, RE-25).** RE-22 recovered every slab by ElementId and left the
   profile as the bounding rectangle. It is in the file, but not as a
@@ -477,6 +497,22 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Changed
 
+- **OctetProof spec 1.1.0 → 1.1.1 — worked examples regenerated, coverage
+  row implemented (#224, #229).** Patch-level and non-semantic per §16.1: no
+  schema, diff-function, canonicalizer or status-vocabulary change. §6.2 and
+  §6.3 still quoted the two-witness, eight-field `entity_counts`-only
+  snapshot taken for 1.0.0; they are regenerated from the committed
+  `research/witness/magnetar-2024-core-interior-slim/` files at `5da2570`
+  (2026-08-30) — three witnesses across three implementation lineages, two
+  `schema_version: "1.1.0"` observations carrying `relations` and `storeys`,
+  and the complete thirteen-field `PASS` verdict with its independence
+  block. Trimming is confined to four arrays and each trim states its full
+  length; the verdict is byte-equal to the committed file. §5.3.1's
+  `coverage` row moves from "not implemented / umbrella scope" to
+  implemented-in-registry, §9.4 gains the reader-only and subset
+  clarifications, and §16.3 moves the coverage declaration into the provides
+  table, leaving `ci_eligible` as the only registry field still umbrella
+  scope. `docs/verification-protocol.md` records the same.
 - **Plan-loop floor annotations stand down where element records decode
   (#212, #219).** The 64 `IFCSLAB` boundary annotations the plan-loop scan
   emitted carried no ElementId, no bounding box and therefore no storey.

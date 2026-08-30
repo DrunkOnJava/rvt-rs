@@ -194,10 +194,11 @@ mirrors them.
 ## OctetProof alignment
 
 The protocol above is the in-repo instance of
-[OctetProof 1.1.0](octetproof-spec.md) (the received draft is kept verbatim at
+[OctetProof 1.1.1](octetproof-spec.md) (the received draft is kept verbatim at
 `docs/octetproof-spec-draft.md`; §19 lists the corrections that produced
 1.0.0, §20 the additive field classes that produced 1.1.0 — `relations`
-in §20.1 and `storeys` in §20.2).
+in §20.1 and `storeys` in §20.2 — and §20a the non-semantic 1.1.1 refresh of
+the §6 worked examples and the §5.3.1 coverage row).
 The observation and verdict shapes are published as machine-checkable JSON
 Schema 2020-12 documents —
 [`docs/schemas/witness-observation.schema.json`](schemas/witness-observation.schema.json)
@@ -208,17 +209,30 @@ Schema 2020-12 documents —
 `research/witness/magnetar-2024-core-interior-slim/` validate against them.
 §5.3.1 of
 the spec maps its `registry.yaml` vocabulary onto the fields of
-`research/witness-registry.json` and names the four requirements
-(`ci_eligible`, coverage declaration, determinism attestation, exact version
-pinning) that are enforced in the umbrella repository rather than here.
+`research/witness-registry.json` and names the requirements
+(`ci_eligible`, determinism attestation, exact version pinning) that are
+enforced in the umbrella repository rather than here.
+
+The §9.4 **coverage declaration is now implemented in this registry** — it was
+umbrella scope until #229. Every adopted reader carries `covers`, the list of
+semantic-surface classes it claims from the §9.4 vocabulary: `entity_counts`,
+`relations` and `storeys` for rvt-rs, IfcOpenShell and IFClite;
+`entity_counts` alone for dwg-rs, which has produced no observation yet
+because the `rvt-to-dwg` edge is still `pending`. An authoring witness
+declares nothing — coverage is a claim about *reading*, and
+`autodesk-revit-exporter` emits the artifact rather than an observation.
+`tests/witness_registry.rs` enforces both halves: an adopted reader must
+declare `covers`, an author must not, and every committed observation's
+`semantic_surface_covered` must be a subset of its witness's declaration, so
+a witness cannot widen its own claim without a registry change.
 
 What exists here today, per layer:
 
 | OctetProof layer | rvt-rs today |
 |---|---|
-| 1 Protocol | this document + [`docs/octetproof-spec.md`](octetproof-spec.md) (1.1.0) |
+| 1 Protocol | this document + [`docs/octetproof-spec.md`](octetproof-spec.md) (1.1.1) |
 | 2 Golden corpus | `research/witness/<artifact>/observations/*.json` + `verdict.json`; artifact hashes in the registry and the project-count manifests (the bytes themselves stay in the magnetar dataset, fetched by hash) |
-| 3 Witness registry | `research/witness-registry.json` (`lineage`, `checked`) |
+| 3 Witness registry | `research/witness-registry.json` (`lineage`, `checked`, `covers`) |
 | 4 CI gate | `tools/ci/witness-verdict.py` in the `ifcopenshell-validate` job: fail-closed statuses `PASS` / `DISAGREE` / `INSUFFICIENT_WITNESSES` / `INSUFFICIENT_INDEPENDENT_WITNESSES` / `REJECTED_INPUT` / `MANIFEST_ERROR` / `REPLAY_DRIFT`; observations and verdict published as a build artifact |
 | 5 Decoder witness mode | `rvt-ifc --observation PATH --artifact-id ID` (source witness); `tools/ci/witness-ifcopenshell.py --observation` and `tools/ci/witness-ifc-lite --observation` (two independent bridge witnesses). All three declare `entity_counts`, `relations` and `storeys`, each reading the void/fill chain and the storey set with its own parser — rvt-rs splits its own emitted STEP and resolves `IfcProject` → `IfcUnitAssignment` itself, IfcOpenShell uses `by_type` + attribute access + `ifcopenshell.util.unit`, IFClite uses `EntityScanner` + `parse_entity` + `ifc_lite_core::extract_length_unit_scale`. The storey elevation is unit-normalized to feet by each witness before it is emitted, because Revit's export of this corpus declares `FOOT` while rvt-rs writes `METRE` (§7.2, field class *storey sets*) |
 

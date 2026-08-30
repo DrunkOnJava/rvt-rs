@@ -34,11 +34,46 @@
           "license": { "type": "string" },
           "language": { "type": ["string", "null"] },
           "status": { "type": "string", "enum": ["adopted", "candidate", "rejected"] },
+          "covers": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "entity_counts",
+                "relations",
+                "storeys",
+                "layer_topology",
+                "linework",
+                "bounding_boxes",
+                "xdata_fields",
+                "text_content",
+                "3d_solids",
+                "meshes",
+                "bim_parameters"
+              ]
+            },
+            "description": "OctetProof §9.4 coverage declaration: the semantic-surface classes this witness claims to read. Readers only — an authoring witness emits an artifact, never an observation, so it declares nothing. A witness is compared only on what it declares, and every committed observation's `semantic_surface_covered` must be a subset of this list."
+          },
           "priority": { "type": "string", "enum": ["high", "medium", "low"] },
           "lineage": { "type": "string", "description": "id of the witness this one is built on; independence (§9.3) counts them as one" },
           "checked": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
           "notes": { "type": "string" }
-        }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "const": "author" } }, "required": ["kind"] },
+            "then": { "not": { "required": ["covers"] } }
+          },
+          {
+            "if": {
+              "properties": { "kind": { "const": "reader" }, "status": { "const": "adopted" } },
+              "required": ["kind", "status"]
+            },
+            "then": { "required": ["covers"] }
+          }
+        ]
       }
     },
     "artifacts": {
