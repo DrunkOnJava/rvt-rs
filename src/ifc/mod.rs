@@ -1137,12 +1137,18 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
     else {
         return None;
     };
+    // A wall whose joins resolved (RE-26) carries a different
+    // `BodySource`, and it is still a record-backed body: the join
+    // solver only moves the two plan ends of the run, never the box's
+    // `z`, so the elevation this reads is the same byte either way.
     let from_record = property_set.as_ref().is_some_and(|set| {
         set.properties.iter().any(|property| {
             property.name == "BodySource"
                 && matches!(
                     &property.value,
-                    entities::PropertyValue::Text(text) if text == RECORD_BBOX_BODY_SOURCE
+                    entities::PropertyValue::Text(text)
+                        if text == RECORD_BBOX_BODY_SOURCE
+                            || text == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
                 )
         })
     });

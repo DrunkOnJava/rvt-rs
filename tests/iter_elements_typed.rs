@@ -793,3 +793,193 @@ fn core_interior_2024_door_window_host_wall_binding() {
         );
     }
 }
+
+/// RE-26 (#215): every recovered column names its family/type symbol,
+/// and the section that symbol carries is the one the instance
+/// envelope already had.
+///
+/// The join is the last slot before the record's own ElementId in the
+/// counted reference list at `+0x88` that is itself an `OST_Columns`
+/// type-symbol record. On `2024_Core_Interior.rvt` that is `5755`
+/// (`Column_Sqaure : 24" x 24"`) on all 256 exported columns, which
+/// is the `IfcColumnType.Tag` Revit's own export writes for every one
+/// of them.
+#[test]
+fn core_interior_2024_column_type_symbol_join() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} missing", path.display());
+        return;
+    }
+    const COLUMN_TYPE_SYMBOL: u32 = 5755;
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    let columns =
+        rvt::partition_schema_mvp::columns_from_partition_category_records(&mut rf, version)
+            .expect("columns");
+    assert_eq!(
+        columns.len(),
+        256,
+        "the #211 instance rule still selects 256"
+    );
+
+    let mut joined = 0usize;
+    for column in &columns {
+        let mut symbol = None;
+        let mut section = (None, None);
+        let mut width = None;
+        let mut depth = None;
+        for (name, value) in &column.fields {
+            match (name.as_str(), value) {
+                (
+                    rvt::partition_schema_mvp::TYPE_SYMBOL_FIELD,
+                    walker::InstanceField::ElementId { id, .. },
+                ) => symbol = Some(*id),
+                (
+                    rvt::partition_schema_mvp::TYPE_PROFILE_WIDTH_FIELD,
+                    walker::InstanceField::Float { value, .. },
+                ) => section.0 = Some(*value),
+                (
+                    rvt::partition_schema_mvp::TYPE_PROFILE_DEPTH_FIELD,
+                    walker::InstanceField::Float { value, .. },
+                ) => section.1 = Some(*value),
+                ("m_bboxWidth", walker::InstanceField::Float { value, .. }) => {
+                    width = Some(*value);
+                }
+                ("m_bboxDepth", walker::InstanceField::Float { value, .. }) => {
+                    depth = Some(*value);
+                }
+                _ => {}
+            }
+        }
+        let Some(symbol) = symbol else { continue };
+        assert_eq!(
+            symbol, COLUMN_TYPE_SYMBOL,
+            "column {:?} joined to an unexpected type symbol",
+            column.id
+        );
+        let (section_width, section_depth) = (
+            section.0.expect("width travels with the join"),
+            section.1.expect("depth travels with the join"),
+        );
+        // The guard the join ships with: the type's section and the
+        // instance's plan envelope must agree, or the join is dropped.
+        assert!(
+            (section_width - width.expect("bbox width")).abs() < 1e-6
+                && (section_depth - depth.expect("bbox depth")).abs() < 1e-6,
+            "column {:?}: section {section_width} x {section_depth} disagrees with its envelope",
+            column.id
+        );
+        assert!(
+            (section_width - 2.0).abs() < 1e-6 && (section_depth - 2.0).abs() < 1e-6,
+            "the 24\" x 24\" symbol is a 2 ft square"
+        );
+        joined += 1;
+    }
+    assert_eq!(joined, 256, "every recovered column names its type symbol");
+}
+
+/// RE-26: a wall's record box is the untrimmed prism and the joins cut
+/// it back by half the thickness of the wall each end lands on.
+///
+/// The measured claim on `2024_Core_Interior.rvt`: all 360 walls
+/// resolve (none declines), 329 of them take a trim at one end or
+/// both, and the thin plan extent the solver reads as the thickness is
+/// one of the file's three wall thicknesses everywhere. Wall 20800 is
+/// walked explicitly because it is the arity gate's pinned wall.
+#[test]
+fn core_interior_2024_wall_join_trimmed_bodies() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} missing", path.display());
+        return;
+    }
+    use rvt::element_record_wall_joins as joins;
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    let walls = rvt::partition_schema_mvp::walls_from_partition_category_records(&mut rf, version)
+        .expect("walls");
+    assert_eq!(walls.len(), 360, "the #211 instance rule still selects 360");
+
+    let mut resolved = 0usize;
+    let mut trimmed = 0usize;
+    for wall in &walls {
+        let mut source = None;
+        let mut thickness = None;
+        let mut trim = (None, None);
+        let mut plan = (None, None, None, None);
+        for (name, value) in &wall.fields {
+            match (name.as_str(), value) {
+                (joins::WALL_BODY_SOURCE_FIELD, walker::InstanceField::String(text)) => {
+                    source = Some(text.clone());
+                }
+                (joins::WALL_THICKNESS_FIELD, walker::InstanceField::Float { value, .. }) => {
+                    thickness = Some(*value);
+                }
+                (joins::WALL_TRIM_START_FIELD, walker::InstanceField::Float { value, .. }) => {
+                    trim.0 = Some(*value);
+                }
+                (joins::WALL_TRIM_END_FIELD, walker::InstanceField::Float { value, .. }) => {
+                    trim.1 = Some(*value);
+                }
+                ("m_locationX", walker::InstanceField::Float { value, .. }) => {
+                    plan.0 = Some(*value)
+                }
+                ("m_locationY", walker::InstanceField::Float { value, .. }) => {
+                    plan.1 = Some(*value)
+                }
+                ("m_bboxWidth", walker::InstanceField::Float { value, .. }) => {
+                    plan.2 = Some(*value)
+                }
+                ("m_bboxDepth", walker::InstanceField::Float { value, .. }) => {
+                    plan.3 = Some(*value)
+                }
+                _ => {}
+            }
+        }
+        let Some(source) = source else { continue };
+        assert_eq!(source, joins::WALL_BODY_JOIN_TRIMMED);
+        resolved += 1;
+        let thickness = thickness.expect("thickness travels with the trim");
+        assert!(
+            [0.5, 2.0 / 3.0, 1.5]
+                .iter()
+                .any(|nominal| (thickness - nominal).abs() < 1e-4),
+            "wall {:?}: thickness {thickness} is not a 6\", 8\" or 18\" wall",
+            wall.id
+        );
+        let (start, end) = (trim.0.expect("start"), trim.1.expect("end"));
+        assert!(start >= 0.0 && end >= 0.0, "a join never lengthens a wall");
+        if start > 0.0 || end > 0.0 {
+            trimmed += 1;
+        }
+        if wall.id == Some(20800) {
+            // Record box x 85.5 -> 137.25 ft, both ends cut by half of
+            // an 8" wall. Revit's own export puts this wall's body at
+            // 85.8333 -> 136.9167 ft.
+            assert!((start - 1.0 / 3.0).abs() < 1e-4, "20800 start trim");
+            assert!((end - 1.0 / 3.0).abs() < 1e-4, "20800 end trim");
+            let centre = plan.0.expect("x");
+            let width = plan.2.expect("width");
+            assert!(
+                (centre - width / 2.0 - 85.833_333).abs() < 1e-4
+                    && (centre + width / 2.0 - 136.916_667).abs() < 1e-4,
+                "20800 emits {} +- {}",
+                centre,
+                width / 2.0
+            );
+        }
+    }
+    assert_eq!(resolved, 360, "no wall declines its joins on this file");
+    assert_eq!(trimmed, 329, "329 walls are cut at one end or both");
+}

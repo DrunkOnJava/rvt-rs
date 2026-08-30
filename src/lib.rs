@@ -121,6 +121,7 @@ pub mod corpus;
 pub mod elem_table;
 pub mod element_record_plan_profiles;
 pub mod element_record_storeys;
+pub mod element_record_wall_joins;
 pub mod elements;
 pub mod error;
 pub mod es_refs;
