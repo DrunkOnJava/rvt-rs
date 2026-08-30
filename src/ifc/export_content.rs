@@ -73,6 +73,10 @@ impl ExportContentPolicy {
     }
 }
 
+/// Property-set name carried by a body recovered from a partition
+/// element record's bounding box (#204 / #211).
+pub const ELEMENT_RECORD_PROPERTY_SET: &str = "RvtElementRecordGeometry";
+
 /// Classes that must never appear as production building elements.
 pub fn is_misleading_proxy_class(class_name: &str) -> bool {
     matches!(
@@ -182,42 +186,51 @@ pub fn append_typed_production_elements(
         let mut pending_host_id = None;
 
         if policy.include_geometry {
-            match decoded.class.as_str() {
-                "Wall" | "ArcWall" => {
-                    if let Some(geom) = wall_geometry_from_decoded(&decoded) {
-                        location_feet = Some(geom.location_feet);
-                        rotation_radians = Some(geom.rotation_radians);
-                        extrusion = Some(geom.extrusion);
-                        property_set = geom.property_set;
+            // Partition element records carry their own model bbox for
+            // every category, so one envelope path serves all of them
+            // (#204 columns, #211 walls / doors / windows). Checked
+            // before the class arms so a schema-field decoder is never
+            // asked to read element-record fields.
+            let element_record_geometry = if is_partition_element_record(&decoded) {
+                element_record_geometry_from_decoded(&decoded)
+            } else {
+                None
+            };
+            if let Some((location, body, properties)) = element_record_geometry {
+                location_feet = Some(location);
+                extrusion = Some(body);
+                property_set = Some(properties);
+            } else {
+                match decoded.class.as_str() {
+                    "Wall" | "ArcWall" => {
+                        if let Some(geom) = wall_geometry_from_decoded(&decoded) {
+                            location_feet = Some(geom.location_feet);
+                            rotation_radians = Some(geom.rotation_radians);
+                            extrusion = Some(geom.extrusion);
+                            property_set = geom.property_set;
+                        }
                     }
-                }
-                "Floor" => {
-                    if let Some(geom) = floor_boundary_annotation_from_decoded(&decoded) {
-                        // Boundary without resolved thickness: record
-                        // provenance only — do not claim an extruded body.
-                        property_set = Some(geom);
+                    "Floor" => {
+                        if let Some(geom) = floor_boundary_annotation_from_decoded(&decoded) {
+                            // Boundary without resolved thickness: record
+                            // provenance only — do not claim an extruded body.
+                            property_set = Some(geom);
+                        }
                     }
-                }
-                "Column" => {
-                    if let Some(geom) = column_geometry_from_decoded(&decoded) {
-                        location_feet = Some(geom.0);
-                        extrusion = Some(geom.1);
-                        property_set = Some(geom.2);
+                    "Door" => {
+                        let door = Door::from_decoded(&decoded);
+                        if let Some(host) = recover_door_host(&door).ok() {
+                            pending_host_id = Some(host.host_element_id);
+                        }
                     }
-                }
-                "Door" => {
-                    let door = Door::from_decoded(&decoded);
-                    if let Some(host) = recover_door_host(&door).ok() {
-                        pending_host_id = Some(host.host_element_id);
+                    "Window" => {
+                        let window = Window::from_decoded(&decoded);
+                        if let Some(host) = recover_window_host(&window).ok() {
+                            pending_host_id = Some(host.host_element_id);
+                        }
                     }
+                    _ => {}
                 }
-                "Window" => {
-                    let window = Window::from_decoded(&decoded);
-                    if let Some(host) = recover_window_host(&window).ok() {
-                        pending_host_id = Some(host.host_element_id);
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -437,14 +450,26 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
     })
 }
 
-/// Column placement + body from a partition element record (#204).
+/// True when this element came from a partition element record.
+fn is_partition_element_record(decoded: &DecodedElement) -> bool {
+    decoded.fields.iter().any(|(name, value)| {
+        matches!(
+            (name.as_str(), value),
+            ("m_source", InstanceField::String(source))
+                if source == "partition_element_record"
+        )
+    })
+}
+
+/// Placement + body from a partition element record (#204 columns,
+/// #211 walls / doors / windows).
 ///
 /// The record carries the element's model bounding box, so the
 /// placement is its plan centre at the box base and the body is the
-/// box itself — an envelope, not a recovered family profile. The
-/// property set says so rather than letting a consumer read the
-/// rectangle as a modelled section.
-fn column_geometry_from_decoded(
+/// box itself — an envelope, not a recovered family profile or a
+/// wall location curve. The property set says so rather than letting
+/// a consumer read the rectangle as a modelled section.
+fn element_record_geometry_from_decoded(
     decoded: &DecodedElement,
 ) -> Option<([f64; 3], Extrusion, PropertySet)> {
     let mut width = None;
@@ -510,7 +535,7 @@ fn column_geometry_from_decoded(
             profile_override: None,
         },
         PropertySet {
-            name: "RvtColumnGeometry".into(),
+            name: ELEMENT_RECORD_PROPERTY_SET.into(),
             properties,
         },
     ))

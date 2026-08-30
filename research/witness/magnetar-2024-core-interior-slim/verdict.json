@@ -10,32 +10,11 @@
       "unsupported_feature": null
     },
     {
-      "category": "walls",
-      "field": "entity_counts.IFCWALL",
-      "reason": "known_gap",
-      "tracking_issue": 30,
-      "unsupported_feature": "schema_field_wall_instances"
-    },
-    {
       "category": "floors",
       "field": "entity_counts.IFCSLAB",
       "reason": "known_gap",
       "tracking_issue": 31,
       "unsupported_feature": "floor_slab_extrusion_thickness"
-    },
-    {
-      "category": "doors",
-      "field": "entity_counts.IFCDOOR",
-      "reason": "known_gap",
-      "tracking_issue": 32,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
-    },
-    {
-      "category": "windows",
-      "field": "entity_counts.IFCWINDOW",
-      "reason": "known_gap",
-      "tracking_issue": 32,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
     },
     {
       "category": "rooms_spaces",
@@ -56,7 +35,7 @@
       "field": "entity_counts.IFCPROPERTYSET",
       "reason": "known_gap",
       "tracking_issue": 35,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+      "unsupported_feature": "revit_element_parameters_to_ifc_property_sets"
     }
   ],
   "independence": {
@@ -93,14 +72,17 @@
   "insufficient_witnesses": false,
   "schema_version": "1.0.0",
   "semantic_surface": [
+    "entity_counts.IFCWALL",
     "entity_counts.IFCROOF",
+    "entity_counts.IFCDOOR",
+    "entity_counts.IFCWINDOW",
     "entity_counts.IFCCOLUMN",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "e535c522deb0e53def892f31914767f40c1b329f4ce0ae4e325d7a941b15828d",
+  "verdict_hash_sha256": "afa87bb0a4e35ea8e5fa9a1adb21b29f8a0ba532571c88fd00c14dabcd4c7145",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

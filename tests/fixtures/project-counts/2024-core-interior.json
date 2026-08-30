@@ -25,14 +25,16 @@
       "notes": "Changed 2026-08-30 (#213): storeys come from the measured base-elevation distribution of the partition element records instead of Level-like name strings, so the count moved 12 → 11 and the elevations stopped being 0.0 placeholders. Measured against the sibling full-project manifest's reference export, all 11 are exact storey elevations there. This 20 KB element fixture carries no IFCBUILDINGSTOREY of its own, so `expected` mirrors the decoder side."
     },
     "walls": {
-      "status": "known",
+      "status": "decoder_baseline",
       "expected": 0,
       "source": "paired Revit IFC export",
       "source_ifc_type": "IFCWALL",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWALL",
-      "decoder_expected": 0,
-      "decoder_tolerance": 0
+      "decoder_expected": 360,
+      "decoder_tolerance": 0,
+      "tracking_issue": 211,
+      "notes": "The paired 20 KB element fixture carries none of this type; the same .rvt carries 360, scored against the full export in the sibling manifest magnetar-2024-core-interior-slim (#211). Recorded as a decoder baseline here so the reference side stays the element fixture and the count is not double-claimed."
     },
     "floors": {
       "status": "known_gap",
@@ -58,24 +60,28 @@
       "decoder_tolerance": 0
     },
     "doors": {
-      "status": "known",
+      "status": "decoder_baseline",
       "expected": 0,
       "source": "paired Revit IFC export",
       "source_ifc_type": "IFCDOOR",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCDOOR",
-      "decoder_expected": 0,
-      "decoder_tolerance": 0
+      "decoder_expected": 132,
+      "decoder_tolerance": 0,
+      "tracking_issue": 211,
+      "notes": "The paired 20 KB element fixture carries none of this type; the same .rvt carries 132, scored against the full export in the sibling manifest magnetar-2024-core-interior-slim (#211). Recorded as a decoder baseline here so the reference side stays the element fixture and the count is not double-claimed."
     },
     "windows": {
-      "status": "known",
+      "status": "decoder_baseline",
       "expected": 0,
       "source": "paired Revit IFC export",
       "source_ifc_type": "IFCWINDOW",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWINDOW",
-      "decoder_expected": 0,
-      "decoder_tolerance": 0
+      "decoder_expected": 6,
+      "decoder_tolerance": 0,
+      "tracking_issue": 211,
+      "notes": "The paired 20 KB element fixture carries none of this type; the same .rvt carries 6, scored against the full export in the sibling manifest magnetar-2024-core-interior-slim (#211). Recorded as a decoder baseline here so the reference side stays the element fixture and the count is not double-claimed."
     },
     "rooms_spaces": {
       "status": "known_gap",
@@ -87,7 +93,7 @@
       "decoder_expected": 18,
       "decoder_tolerance": 4,
       "tracking_issue": 33,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding",
+      "unsupported_feature": "partial_element_geometry",
       "notes": "Strict partition space-name recovers emit IFCSPACE; paired IFC has 0 spaces."
     },
     "columns": {
@@ -152,11 +158,11 @@
       "source_ifc_type": "IFCPROPERTYSET",
       "tolerance": 0,
       "decoder_metric": "step.IFCPROPERTYSET",
-      "decoder_expected": 320,
+      "decoder_expected": 818,
       "decoder_tolerance": 8,
       "tracking_issue": 35,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding",
-      "notes": "Current decoder emits RvtFloorGeometry property sets for plan-loop slabs (boundary annotation) plus RvtColumnGeometry sets for the 256 recovered columns (#204); not a match for the paired IFC property-set inventory."
+      "unsupported_feature": "revit_element_parameters_to_ifc_property_sets",
+      "notes": "Current decoder emits RvtFloorGeometry property sets for plan-loop slabs (boundary annotation) plus 754 RvtElementRecordGeometry sets for the columns, walls, doors and windows recovered from partition element records (#204/#211); not a match for the paired IFC property-set inventory, and no set carries a Revit element parameter yet (#35)."
     }
   }
 }

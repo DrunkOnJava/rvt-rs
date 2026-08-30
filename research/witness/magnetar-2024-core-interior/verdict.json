@@ -3,6 +3,13 @@
   "diffs": [],
   "excluded": [
     {
+      "category": "walls",
+      "field": "entity_counts.IFCWALL",
+      "reason": "decoder_baseline",
+      "tracking_issue": 211,
+      "unsupported_feature": null
+    },
+    {
       "category": "floors",
       "field": "entity_counts.IFCSHADINGDEVICE",
       "reason": "known_gap",
@@ -10,11 +17,25 @@
       "unsupported_feature": "floor_slab_extrusion_thickness"
     },
     {
+      "category": "doors",
+      "field": "entity_counts.IFCDOOR",
+      "reason": "decoder_baseline",
+      "tracking_issue": 211,
+      "unsupported_feature": null
+    },
+    {
+      "category": "windows",
+      "field": "entity_counts.IFCWINDOW",
+      "reason": "decoder_baseline",
+      "tracking_issue": 211,
+      "unsupported_feature": null
+    },
+    {
       "category": "rooms_spaces",
       "field": "entity_counts.IFCSPACE",
       "reason": "known_gap",
       "tracking_issue": 33,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+      "unsupported_feature": "partial_element_geometry"
     },
     {
       "category": "columns",
@@ -35,7 +56,7 @@
       "field": "entity_counts.IFCPROPERTYSET",
       "reason": "known_gap",
       "tracking_issue": 35,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+      "unsupported_feature": "revit_element_parameters_to_ifc_property_sets"
     }
   ],
   "independence": {
@@ -72,16 +93,13 @@
   "insufficient_witnesses": false,
   "schema_version": "1.0.0",
   "semantic_surface": [
-    "entity_counts.IFCWALL",
     "entity_counts.IFCROOF",
-    "entity_counts.IFCDOOR",
-    "entity_counts.IFCWINDOW",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "dd2c30d0393e6772e67f3146c41d492229f470f1be6cb3784c9715f6223c3d88",
+  "verdict_hash_sha256": "ae4679f6044a4c3caa0b2f3a6030648bc633b1d878957a759120f011f71ded5e",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

@@ -118,7 +118,9 @@ pub mod share;
 pub mod sheet;
 pub mod step_writer;
 
-pub use export_content::{ExportContentPolicy, is_misleading_proxy_class};
+pub use export_content::{
+    ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
+};
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model, entity_type_histogram};
 pub use step_writer::write_step;
 
@@ -1003,6 +1005,39 @@ pub(crate) const STOREY_BIND_SOURCE_PROPERTY: &str = "StoreyBindSource";
 /// Value of [`STOREY_BIND_SOURCE_PROPERTY`] for the #213 join.
 pub(crate) const STOREY_BIND_RECORD_ELEVATION: &str = "record_base_elevation";
 
+/// IFC types whose recorded base elevation *is* a storey elevation.
+///
+/// Measured on `2024_Core_Interior.rvt` against the fifteen
+/// `IfcBuildingStorey.Elevation` values in Revit's own export, over the
+/// element records the #211 instance rule selects:
+///
+/// | category | distinct base elevations | equal to a storey | not a storey |
+/// |---|---:|---:|---:|
+/// | `OST_Columns` | 11 | 11 | 0 |
+/// | `OST_Doors` | 11 | 11 | 0 |
+/// | `OST_Walls` | 13 | 12 (adds −40 ft) | 1 (56.4167 ft) |
+/// | `OST_Windows` | 6 | 0 | 6 (sill heights: 80.73, 95.73, …) |
+///
+/// A window sits at its sill height above the level that hosts it, so
+/// its record base is never a storey elevation; a wall may start
+/// mid-storey. Only `IFCCOLUMN` therefore *supplies* elevations, which
+/// keeps #213's measured "no false positives" claim exactly as it was
+/// recorded. Every record-bodied element still *binds* to the
+/// resulting set by exact match — see [`record_base_elevation_feet`].
+const STOREY_ELEVATION_SOURCE_TYPES: &[&str] = &["IFCCOLUMN"];
+
+/// Measured base elevation of an element that is allowed to define a
+/// storey elevation (see [`STOREY_ELEVATION_SOURCE_TYPES`]).
+fn record_storey_elevation_source_feet(entity: &entities::IfcEntity) -> Option<f64> {
+    let entities::IfcEntity::BuildingElement { ifc_type, .. } = entity else {
+        return None;
+    };
+    if !STOREY_ELEVATION_SOURCE_TYPES.contains(&ifc_type.as_str()) {
+        return None;
+    }
+    record_base_elevation_feet(entity)
+}
+
 /// Measured base elevation of an element whose body came from a
 /// record bbox, in feet.
 fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
@@ -1056,7 +1091,9 @@ fn apply_element_record_storeys(
     use crate::element_record_storeys as records;
 
     let measured = records::distinct_base_elevations_feet(
-        entities.iter().filter_map(record_base_elevation_feet),
+        entities
+            .iter()
+            .filter_map(record_storey_elevation_source_feet),
     );
     if measured.len() < records::MIN_DISTINCT_ELEVATIONS {
         return;
@@ -2121,20 +2158,51 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
     let has_typed_window = exported.by_ifc_type.get("IFCWINDOW").copied().unwrap_or(0) > 0;
     if !has_typed_door || !has_typed_window {
         features.push("typed_door_window_discrimination_and_host_binding".into());
+    } else if model.entities.iter().any(|e| {
+        matches!(
+            e,
+            entities::IfcEntity::BuildingElement { ifc_type, host_element_index, .. }
+                if (ifc_type == "IFCDOOR" || ifc_type == "IFCWINDOW")
+                    && host_element_index.is_none()
+        )
+    }) {
+        // Typed Door/Window recovered (#211) but not attached to a host
+        // wall — the discrimination half of the old composite feature is
+        // closed, the host-binding half is not.
+        features.push("door_window_host_wall_binding".into());
     }
     // Opening-index rows may be present in production_class_counts without
     // IFC emission until host Wall ElementIds join.
     features.push("opening_index_to_ifc_openingelement_host_join".into());
-    let has_schema_wall = exported.by_ifc_type.get("IFCWALL").copied().unwrap_or(0) > 0
-        && model.entities.iter().any(|e| {
-            matches!(
-                e,
-                entities::IfcEntity::BuildingElement { name, .. }
-                    if name.starts_with("Wall-")
-            )
-        });
+    // RE-19 stands: an `IFCWALL` recovered from a partition element record
+    // (#211) is not a schema-field wall decode. Only a wall carrying a
+    // non-element-record body clears this feature.
+    let has_schema_wall = model.entities.iter().any(|e| {
+        matches!(
+            e,
+            entities::IfcEntity::BuildingElement { ifc_type, name, property_set, .. }
+                if ifc_type == "IFCWALL"
+                    && name.starts_with("Wall-")
+                    && !matches!(
+                        property_set,
+                        Some(set) if set.name == ELEMENT_RECORD_PROPERTY_SET
+                    )
+        )
+    });
     if !has_schema_wall {
         features.push("schema_field_wall_instances".into());
+    }
+    // #35: no exported property set carries Revit element parameters —
+    // every set emitted today is rvt-rs provenance about a recovered body.
+    let has_parameter_property_set = model.entities.iter().any(|e| {
+        matches!(
+            e,
+            entities::IfcEntity::BuildingElement { property_set: Some(set), .. }
+                if !set.name.starts_with("Rvt")
+        )
+    });
+    if !has_parameter_property_set {
+        features.push("revit_element_parameters_to_ifc_property_sets".into());
     }
     features
 }
@@ -2295,6 +2363,50 @@ mod tests {
         entities
     }
 
+    fn record_element_of_class(id: u32, class: &str, base_z: f64) -> crate::walker::DecodedElement {
+        let mut decoded = column_record_element(id, (10.0, 10.0), base_z);
+        decoded.class = class.into();
+        decoded
+    }
+
+    /// #211: walls, doors and windows carry record bboxes too, but only
+    /// a column base is a storey elevation — a window sits at its sill
+    /// height above the level that hosts it. They must still *bind* to
+    /// the column-derived set.
+    #[test]
+    fn only_column_records_supply_storey_elevations() {
+        let mut entities = append_columns(vec![
+            record_element_of_class(1, "Column", 0.0),
+            record_element_of_class(2, "Column", 31.0),
+            record_element_of_class(3, "Window", 35.73),
+            record_element_of_class(4, "Wall", 31.0),
+            record_element_of_class(5, "Door", 0.0),
+        ]);
+        let mut storeys = vec![Storey {
+            name: "Level 1".into(),
+            elevation_feet: 0.0,
+        }];
+        apply_element_record_storeys(&mut entities, &mut storeys);
+
+        assert_eq!(
+            storeys.iter().map(|s| s.elevation_feet).collect::<Vec<_>>(),
+            vec![0.0, 31.0],
+            "the window sill height must not become a storey"
+        );
+        let bound: Vec<Option<usize>> = entities
+            .iter()
+            .map(|entity| match entity {
+                entities::IfcEntity::BuildingElement { storey_index, .. } => *storey_index,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            bound,
+            vec![Some(0), Some(1), None, Some(1), Some(0)],
+            "walls and doors bind by exact match; the window stays unbound"
+        );
+    }
+
     /// The #213 join reads the record base elevation back off an
     /// element the production path built, so the `BodySource` marker
     /// the two sides agree on cannot drift apart silently.
@@ -2351,7 +2463,7 @@ mod tests {
         assert!(
             property_set
                 .as_ref()
-                .expect("column carries RvtColumnGeometry")
+                .expect("record element carries RvtElementRecordGeometry")
                 .properties
                 .iter()
                 .any(|p| p.name == STOREY_BIND_SOURCE_PROPERTY),
