@@ -36,7 +36,7 @@
       "decoder_expected": 360,
       "decoder_tolerance": 0,
       "tracking_issue": 211,
-      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 360 of 360 IFCWALL recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding and door/window host-wall binding stay open (#86, door_window_host_wall_binding)."
+      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 360 of 360 IFCWALL recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding stays open (#86). Door/window host-wall binding closed 2026-08-30 (#222, RE-23): all 138 doors and windows now void into their host wall, scored by the relations.IFCRELFILLSELEMENT row below."
     },
     "floors": {
       "status": "known",
@@ -70,7 +70,7 @@
       "decoder_expected": 132,
       "decoder_tolerance": 0,
       "tracking_issue": 211,
-      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 132 of 132 IFCDOOR recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding and door/window host-wall binding stay open (#86, door_window_host_wall_binding)."
+      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 132 of 132 IFCDOOR recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding stays open (#86). Door/window host-wall binding closed 2026-08-30 (#222, RE-23): all 138 doors and windows now void into their host wall, scored by the relations.IFCRELFILLSELEMENT row below."
     },
     "windows": {
       "status": "known",
@@ -82,7 +82,7 @@
       "decoder_expected": 6,
       "decoder_tolerance": 0,
       "tracking_issue": 211,
-      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 6 of 6 IFCWINDOW recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding and door/window host-wall binding stay open (#86, door_window_host_wall_binding)."
+      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 6 of 6 IFCWINDOW recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding stays open (#86). Door/window host-wall binding closed 2026-08-30 (#222, RE-23): all 138 doors and windows now void into their host wall, scored by the relations.IFCRELFILLSELEMENT row below."
     },
     "rooms_spaces": {
       "status": "known_gap",
@@ -176,6 +176,18 @@
       "decoder_tolerance": 0,
       "tracking_issue": 212,
       "notes": "Added 2026-08-30 (#212, RE-22). Twenty OST_Floors instances carry a per-element Revit 'IFC Export As' override naming IfcShadingDevice, so Revit's exporter emits them as IFCSHADINGDEVICE rather than IFCSLAB even though they share a FloorType with elements that stay slabs. rvt-rs reads the override string out of the partition parameter block and honours it; measured 20 of 20 with an exact id-set match against the export's Tag values, tolerance 0. This manifest previously left these 20 unscored."
+    }
+  },
+  "relations": {
+    "opening_fills": {
+      "status": "known",
+      "relation_ifc_type": "IFCRELFILLSELEMENT",
+      "expected_pairs": 138,
+      "source": "full Revit IFC export",
+      "decoder_metric": "step.IFCRELFILLSELEMENT",
+      "decoder_expected_pairs": 138,
+      "tracking_issue": 222,
+      "notes": "Added 2026-08-30 (#222, RE-23). Revit's exporter voids each door and window out of its host wall with an IfcOpeningElement: IfcRelVoidsElement binds the opening to the wall, IfcRelFillsElement binds the opening to the door or window. This export carries 201 IfcOpeningElement, of which 138 are filled - 132 IfcDoor and 6 IfcWindow, every one hosted by an IfcWall - and 63 are unfilled penetrations of an IfcSlab or IfcShadingDevice, which are out of scope here. The pair set compared is [host Tag, filling Tag], read through the void/fill chain by all three witnesses independently: IfcOpenShell 0.8.5 by_type + attribute access, IFClite 7.1.1 EntityScanner + parse_entity, and rvt-rs by splitting its own emitted STEP. rvt-rs recovers the host from the partition element record's counted reference list at +0x88: the slot immediately before the record's own ElementId, accepted only when it is one of the 360 ElementIds the same instance rule selects as exported walls. Measured on this artifact: 138 of 138 pairs reproduced exactly - no wrong host, no missing pair, no extra pair - across all 273 records that frame those 138 elements. The 63 slab and shading-device openings are not emitted: rvt-rs recovers no opening that is not filled by a recovered element."
     }
   }
 }

@@ -1,8 +1,8 @@
 # Technical Specification: OctetProof — A License-Free Verification Protocol for Undocumented Binary Formats
 
-**Version:** 1.0.2
+**Version:** 1.1.0
 **Date:** 2026-08-30
-**Status:** Specification — 1.0.2. Supersedes the draft received from the project owner on 2026-08-30, which is retained verbatim at [`docs/octetproof-spec-draft.md`](octetproof-spec-draft.md) with its reviewer notes. The corrections applied here are listed in Section 19.
+**Status:** Specification — 1.1.0. Supersedes the draft received from the project owner on 2026-08-30, which is retained verbatim at [`docs/octetproof-spec-draft.md`](octetproof-spec-draft.md) with its reviewer notes. The corrections applied to reach 1.0.0 are listed in Section 19; the additive 1.1.0 change is Section 20.
 **License of this document:** CC-BY-4.0
 **Reference implementation:** rvt-rs (Apache-2.0) — in-repo instance; umbrella repository: [DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof)
 **Primary domain:** Building Information Modeling (BIM) closed formats, with generalization to any undocumented binary container format
@@ -325,6 +325,7 @@ Normative reading of the fields the gate consumes:
 - `counts.<category>.status` — `known` puts `entity_counts.<source_ifc_type>` inside the claimed surface; `known_gap` and `unsupported` exclude it first-class (Section 7.1 rule 3), and the exclusion is recorded in the verdict with its `tracking_issue` and `unsupported_feature`.
 - `counts.<category>.tolerance` — the per-category count tolerance (Section 7.2). Absent means exact.
 - The `decoder_*` fields are the decoder repository's own regression baseline, not a cross-witness input. The gate ignores them.
+- `relations.<category>` (1.1.0) — a relation category, parallel to a count category and read the same way. `relation_ifc_type` is the field name compared across witnesses (`relations.<relation_ifc_type>`); `expected_pairs` is the pair count on the reference side; `status` uses the count vocabulary, so `known` puts the relation inside the claimed surface and anything else excludes it first-class. There is no `tolerance` — Section 7.2 gives the field class no tolerance concept.
 
 **Planned extension — DWG bridge (not yet implemented).** When the RVT → DWG edge is recorded, the manifest gains a bridge block naming the export that produced it. This block is specified here so implementers can write against it; no manifest in the reference implementation carries it today:
 
@@ -461,7 +462,17 @@ The source witness, rvt-rs reading the `.rvt` directly — the same file, abbrev
 
 The committed hash `b6d9b6…` is over the full payload, not the abbreviation above; the abbreviated block is illustrative of shape only. Every other example in this section was byte-exact against the files committed on 2026-08-30; they are **dated snapshots of a decoder state**, not a live mirror of `research/witness/` (see 19b).
 
-Two properties of the payload are load-bearing. First, the two witnesses share only `entity_counts`; everything else in a payload is witness-specific and is not diffed. Second, a witness may report a type the other never emits (`IFCSHADINGDEVICE` here) — the diff is driven by the manifest's declared surface, not by the union of the payload keys, and a type absent from a payload counts as zero.
+Since 1.1.0 the payload may also carry `relations`, an object mapping a relation type to its sorted pair multiset:
+
+```json
+"relations": {
+  "IFCRELFILLSELEMENT": [["20796", "20827"], ["20798", "20810"], ["20798", "20815"]]
+}
+```
+
+A witness emitting it declares `relations` in `semantic_surface_covered` and sets `schema_version` to `"1.1.0"`; the examples below predate that and are 1.0.0 snapshots.
+
+Two properties of the payload are load-bearing. First, the witnesses share only what the manifest names — `entity_counts`, and since 1.1.0 `relations`; everything else in a payload is witness-specific and is not diffed. Second, a witness may report a type the other never emits (`IFCSHADINGDEVICE` here) — the diff is driven by the manifest's declared surface, not by the union of the payload keys, and a type absent from a payload counts as zero.
 
 Observations are **canonicalized** with RFC 8785 (JSON Canonicalization Scheme) before hashing or diffing. Key ordering, number formatting, and Unicode normalization are fixed. This guarantees bit-identical hashes across languages and platforms.
 
@@ -635,6 +646,7 @@ The diff function is the load-bearing definition of the protocol. It is the sing
 |Field class         |Comparison                                       |Tolerance                                                                              |
 |--------------------|-------------------------------------------------|-----------------------------------------------------------------------------------------|
 |Entity counts       |Exact integer equality                           |None, unless the manifest states a per-category integer tolerance with a written reason  |
+|Relation pair sets  |Exact equality of the sorted pair multiset       |None — the field class has no tolerance concept                                          |
 |Layer names         |Case-sensitive string equality after trim        |None                                                                                     |
 |Layer color/linetype|Exact                                            |None                                                                                     |
 |Bounding box        |Component-wise                                   |Relative `1e-6` with an absolute floor stated by the manifest in the artifact's model units|
@@ -652,6 +664,12 @@ abs(a - b) <= max(1e-6 * max(abs(a), abs(b)), floor_abs)
 The relative term is dimensionless and carries no unit. `floor_abs` is the only quantity with a unit: the manifest states it in the artifact's model units (millimetres for a metric Revit export, feet for an imperial one), and it exists so that components near zero, where the relative term collapses, still have a defined agreement band. A manifest that omits `floor_abs` for a geometric surface is a `MANIFEST_ERROR`.
 
 Counts are exact. A manifest may relax a category to an integer tolerance, but only with a written reason recorded in that category's `notes`, and changing a tolerance is a reviewed change like any other — the tolerance is the only place slack is allowed anywhere in the protocol, which is why it is the one place a prose justification is mandatory.
+
+**Relation pair sets** (added in 1.1.0). A relation names a binary relationship between two entities of the artifact — `IfcRelFillsElement` composed through `IfcRelVoidsElement` is the first one recorded, binding a host wall to the door or window that fills an opening cut out of it. The value is the list of `[a_identity, b_identity]` pairs, each identity being the entity's stable per-artifact identifier (for IFC, its `Tag`), sorted lexicographically. Duplicates are kept, so the value is a multiset and a witness that reports a relation twice disagrees with one that reports it once. An identity a witness cannot read is the empty string, never an omitted pair: a missing half must surface as a disagreement, not as a silent shortening of the list. Comparison is exact set equality; a diff reports the pair count on each side plus the pairs each side holds alone (`only_in_a` / `only_in_b`), with `tolerance_applied: false`.
+
+A relation is a strictly stronger claim than a count. Two witnesses can agree on 138 `IfcRelFillsElement` instances while disagreeing about every wall those 138 openings belong to; agreeing on the pair set means they agree on the topology.
+
+Manifests declare relations in a `relations` block parallel to `counts`, keyed by category, each entry carrying `relation_ifc_type`, `expected_pairs`, `status`, and — where the decoder's own baseline is tracked — `decoder_metric` and `decoder_expected_pairs`. `status` uses the same vocabulary as a count category, so a relation the two sides of an edge cannot be compared on is excluded first-class with its tracking issue rather than diffed.
 
 ### 7.3 Canonicalization
 
@@ -752,6 +770,7 @@ Lineage is declared in the registry, not inferred. Where the registry carries a 
 Every registered witness must declare, in the registry, the **semantic surface** it claims to cover, using the controlled vocabulary defined here:
 
 - `entity_counts`
+- `relations` (added in 1.1.0)
 - `layer_topology`
 - `linework`
 - `bounding_boxes`
@@ -1022,7 +1041,7 @@ What the in-repo instance provides today:
 |-------------------------------------|---------------------------------------------------------------------------------------|
 |Canonicalizer (Section 7.3)          |`tools/ci/witness-verdict.py`; the same rules in `src/bin/rvt_ifc.rs` for the Rust witness|
 |Diff function (Section 7.2)          |`tools/ci/witness-verdict.py`, exact counts with per-category manifest tolerance         |
-|Observation emitters (Section 6.2)   |`rvt-ifc --observation PATH --artifact-id ID` (source); `tools/ci/witness-ifcopenshell.py --observation` (bridge)|
+|Observation emitters (Section 6.2)   |`rvt-ifc --observation PATH --artifact-id ID` (source); `tools/ci/witness-ifcopenshell.py --observation` and `tools/ci/witness-ifc-lite --observation` (bridge). All three emit `entity_counts` and `relations`|
 |Verdict and independence (Sections 6.3, 9.3)|`tools/ci/witness-verdict.py --registry research/witness-registry.json`           |
 |Replay (Sections 8.4, 13)            |`tools/ci/witness-verdict.py --compare-committed`; pinned by `tests/witness_verdict.rs`  |
 |Registry (Section 5.3)               |`research/witness-registry.json`; consistency enforced by `tests/witness_registry.rs`    |
@@ -1063,6 +1082,59 @@ The reference implementation is not normative; any conforming implementation may
 Every version, date, and license above was checked against the GitHub API on 2026-08-30, except where explicitly marked unverified.
 
 -----
+
+## 20. 1.1.0 (2026-08-30) — additive field classes
+
+Minor release, additive and backward-compatible (Section 16.1). Nothing in the
+diff function, the canonicalizer, the provenance model or the verdict statuses
+changes, and a 1.0.0 observation remains valid input to a 1.1.0 gate.
+Observations emitted under this version declare `schema_version: "1.1.0"`;
+the published JSON Schema accepts both `1.0.0` and `1.1.0` so previously
+committed corpora stay valid (Section 16.2). Each subsection below is one
+independently added field class; a later additive field class joins this
+release as a further subsection rather than bumping the minor version again.
+
+### 20.1 Relation pair sets (`relations`)
+
+Adds one field class, one surface-vocabulary term, and one manifest block.
+
+**What is new.**
+
+1. **Section 7.2 — relation pair sets.** A relation is a binary relationship
+   between two entities, recorded as the sorted multiset of
+   `[a_identity, b_identity]` pairs. Comparison is exact set equality with no
+   tolerance concept; a diff names the pairs each side holds alone. The first
+   recorded relation is `IFCRELFILLSELEMENT` composed through
+   `IFCRELVOIDSELEMENT` — the host wall of every door and window on the
+   RVT → IFC edge.
+2. **Section 9.4 — `relations` joins the coverage vocabulary.** A witness
+   that declares it is compared on the manifest's relation categories; one
+   that does not is not.
+3. **Section 6.1 — manifests gain a `relations` block** parallel to `counts`,
+   with the same `status` vocabulary, so an incomparable relation is excluded
+   first-class with its tracking issue instead of diffed.
+4. **Section 6.2 — the observation payload gains an optional `relations`
+   object**, `{ "<RELATION_TYPE>": [[a, b], …] }`, under its own top-level
+   payload key. The observation envelope is otherwise unchanged: the
+   required-key set, the canonicalization rules and the hash definition are
+   the same, and `entity_counts` semantics are untouched.
+
+**Why it matters.** Entity counts are a weak agreement: two witnesses can
+report the same 138 `IfcRelFillsElement` instances while disagreeing about
+every wall those openings belong to. A pair set is an agreement about the
+model's topology, and it is the first surface in this corpus that is not a
+scalar. It is also the first surface where a decoder's *identity* recovery is
+gated rather than its *cardinality* — the pairs are ElementIds, so a wrong
+host is a diff, not a rounding.
+
+**Recorded instance.** `magnetar-2024-core-interior-slim`, where the claimed
+surface goes 10 → 11 fields as `relations.IFCRELFILLSELEMENT` joins with 138
+pairs on which `rvt-rs`, IfcOpenShell 0.8.5 and IFClite 7.1.1 agree exactly.
+On `magnetar-2024-core-interior` the same relation is `decoder_baseline` and
+excluded: its paired export is a 20 KB element fixture carrying no
+`IfcRelFillsElement` at all, so the two sides of that edge are not comparable
+on this field. This is Section 17 open question 6 in miniature — the surface a
+thin artifact can support is thin, and saying so is the point.
 
 ## 19b. 1.0.2 (2026-08-30)
 

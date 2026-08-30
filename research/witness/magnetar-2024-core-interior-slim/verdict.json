@@ -74,10 +74,11 @@
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT",
-    "entity_counts.IFCSHADINGDEVICE"
+    "entity_counts.IFCSHADINGDEVICE",
+    "relations.IFCRELFILLSELEMENT"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "48ef575a11505ee1fcbb02b37b3551e0e8d5618a1ec39aeb6d6cb250e085648c",
+  "verdict_hash_sha256": "1dbf9dc95ccf1510cb64b3e5ba2debb664c922ac6720f8c6d463d1ce4d394d8b",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

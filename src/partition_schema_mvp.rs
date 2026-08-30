@@ -151,17 +151,24 @@ pub fn recover_partition_schema_mvp(
         crate::partition_element_records::OST_WALLS,
         "Wall",
     )?;
-    out.doors = instances_from_partition_category_records(
+    // Doors and windows bind to a host wall (#222, RE-23). The
+    // candidate set is exactly the wall instances recovered above —
+    // a recovered host that is not itself an exported wall is
+    // discarded rather than emitted, so the join is self-checking.
+    let wall_ids: BTreeSet<u32> = out.walls.iter().filter_map(|wall| wall.id).collect();
+    out.doors = openings_from_partition_category_records(
         rf,
         revit_version,
         crate::partition_element_records::OST_DOORS,
         "Door",
+        &wall_ids,
     )?;
-    out.windows = instances_from_partition_category_records(
+    out.windows = openings_from_partition_category_records(
         rf,
         revit_version,
         crate::partition_element_records::OST_WINDOWS,
         "Window",
+        &wall_ids,
     )?;
 
     // --- 2024 slab instances from element records (#212, RE-22) ---
@@ -252,6 +259,108 @@ pub fn instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
     class: &str,
 ) -> Vec<DecodedElement> {
+    select_instance_records(records)
+        .values()
+        .map(|record| element_record_decoded(record, class))
+        .collect()
+}
+
+/// Field carrying the recovered host ElementId of a door or window.
+///
+/// The name is the one [`crate::elements::openings::Door`] /
+/// [`crate::elements::openings::Window`] already read from
+/// schema-field decodes, so the recovered value flows through the
+/// existing `recover_door_host` / `recover_window_host` path without
+/// a second host concept.
+pub const OPENING_HOST_FIELD: &str = "m_hostId";
+
+/// Field recording where [`OPENING_HOST_FIELD`] came from.
+pub const OPENING_HOST_PROVENANCE_FIELD: &str = "m_host_provenance";
+
+/// Value of [`OPENING_HOST_PROVENANCE_FIELD`] for the RE-23 carrier.
+pub const OPENING_HOST_PROVENANCE: &str = "partition_element_record_reference_list";
+
+/// Door / window instance selection with the host-wall binding
+/// attached (#222, RE-23).
+///
+/// The binding is the record's
+/// [`crate::partition_element_records::PartitionElementRecord::preceding_reference`]
+/// — the reference slot immediately before the record's own
+/// ElementId in the counted list at `+0x88` — accepted only when it
+/// is one of `host_candidates`, the ElementIds already selected as
+/// exported wall instances by the same rule. Both halves are
+/// required: the slot is where the byte says the host is, and the
+/// wall-set membership is what makes a wrong read fail closed rather
+/// than invent a host.
+///
+/// Measured on `2024_Core_Interior.rvt` against Revit's own export
+/// (`IfcRelVoidsElement` ∘ `IfcRelFillsElement`, read with
+/// IfcOpenShell): 138 of 138 `(host wall, filling element)` pairs
+/// reproduced — 132 doors, 6 windows — with no wrong host and no
+/// missing pair, across all 273 records that frame them.
+pub fn opening_instances_from_records(
+    records: Vec<crate::partition_element_records::PartitionElementRecord>,
+    class: &str,
+    host_candidates: &BTreeSet<u32>,
+) -> Vec<DecodedElement> {
+    select_instance_records(records)
+        .values()
+        .map(|record| {
+            let mut decoded = element_record_decoded(record, class);
+            if let Some(host) = record
+                .preceding_reference
+                .filter(|id| host_candidates.contains(id))
+            {
+                decoded.fields.push((
+                    OPENING_HOST_FIELD.into(),
+                    InstanceField::ElementId { tag: 0, id: host },
+                ));
+                decoded.fields.push((
+                    OPENING_HOST_PROVENANCE_FIELD.into(),
+                    InstanceField::String(OPENING_HOST_PROVENANCE.into()),
+                ));
+            }
+            decoded
+        })
+        .collect()
+}
+
+/// Recover door / window instances of one `BuiltInCategory` and bind
+/// each to its host wall (#222, RE-23).
+pub fn openings_from_partition_category_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    builtin_category: i64,
+    class: &str,
+    host_candidates: &BTreeSet<u32>,
+) -> Result<Vec<DecodedElement>> {
+    if !crate::partition_element_records::supports_revit_version(revit_version) {
+        return Ok(Vec::new());
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => return Ok(Vec::new()),
+    };
+    if declared.is_empty() {
+        return Ok(Vec::new());
+    }
+    let records = crate::partition_element_records::scan_category_records(
+        rf,
+        revit_version,
+        builtin_category,
+        &declared,
+    )?;
+    Ok(opening_instances_from_records(
+        records,
+        class,
+        host_candidates,
+    ))
+}
+
+/// Instance selection proper: one record per exported ElementId.
+fn select_instance_records(
+    records: Vec<crate::partition_element_records::PartitionElementRecord>,
+) -> std::collections::BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
     use crate::partition_element_records::PartitionElementRecord;
     use std::collections::BTreeMap;
 
@@ -289,9 +398,6 @@ pub fn instances_from_records(
         }
     }
     by_id
-        .values()
-        .map(|record| element_record_decoded(record, class))
-        .collect()
 }
 
 /// Vertical extent of a record's bounding box, quantised to 1e-4 ft
@@ -1089,6 +1195,7 @@ mod tests {
             container: crate::partition_element_records::CONTAINER_NONE,
             placement_kind: crate::partition_element_records::PLACEMENT_KIND_INSTANCE,
             bbox_feet,
+            preceding_reference: None,
         }
     }
 

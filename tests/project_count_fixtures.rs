@@ -286,6 +286,32 @@ fn project_count_manifests_are_complete_and_explicit() {
                 _ => panic!("{count_context}.status has unsupported value {status}"),
             }
         }
+
+        // `relations` (#222): the OctetProof 1.1.0 relation-pair-set
+        // field class. Optional per manifest, but every entry must
+        // name its relation type and both sides of the comparison.
+        if let Some(relations) = manifest.get("relations") {
+            for (category, spec) in obj(relations, &format!("{context}.relations")) {
+                let relation_context = format!("{context}.relations.{category}");
+                str_field(spec, "relation_ifc_type", &relation_context);
+                int_field(spec, "expected_pairs", &relation_context);
+                str_field(spec, "source", &relation_context);
+                str_field(spec, "decoder_metric", &relation_context);
+                int_field(spec, "decoder_expected_pairs", &relation_context);
+                let status = str_field(spec, "status", &relation_context);
+                match status {
+                    "known" => {}
+                    "known_gap" | "unsupported" => {
+                        str_field(spec, "unsupported_feature", &relation_context);
+                        int_field(spec, "tracking_issue", &relation_context);
+                    }
+                    "decoder_baseline" => {
+                        int_field(spec, "tracking_issue", &relation_context);
+                    }
+                    _ => panic!("{relation_context}.status has unsupported value {status}"),
+                }
+            }
+        }
     }
 }
 
@@ -424,6 +450,36 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
                     "{id}.{category}: expected diagnostics.unsupported_features to contain {feature}"
                 );
             }
+        }
+
+        // Relation pair sets (#222). Both sides are scored as counts
+        // here; the exact `[host Tag, filling Tag]` set equality is
+        // the OctetProof gate (`relations.<TYPE>` in the verdict's
+        // claimed surface) plus the corpus gate in
+        // tests/iter_elements_typed.rs.
+        let no_relations = serde_json::Map::new();
+        let relations = manifest
+            .get("relations")
+            .map(|relations| obj(relations, &format!("{id}.relations")))
+            .unwrap_or(&no_relations);
+        for (category, spec) in relations {
+            let relation_context = format!("{id}.relations.{category}");
+            let relation_type = str_field(spec, "relation_ifc_type", &relation_context);
+            if let Some(reference) = reference_ifc.as_ref() {
+                assert_with_tolerance(
+                    &format!("{relation_context} source {relation_type}"),
+                    count_step_constructor(reference, relation_type),
+                    int_field(spec, "expected_pairs", &relation_context),
+                    0,
+                );
+            }
+            let metric = str_field(spec, "decoder_metric", &relation_context);
+            assert_with_tolerance(
+                &format!("{relation_context} decoder {metric}"),
+                metric_actual(metric, &result.diagnostics, &step),
+                int_field(spec, "decoder_expected_pairs", &relation_context),
+                0,
+            );
         }
     }
 

@@ -499,3 +499,195 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
         assert!(slab.id.is_some(), "every record-backed slab carries an id");
     }
 }
+
+/// Split a STEP attribute list on top-level commas (quotes and nested
+/// lists shield their contents).
+fn step_attributes(args: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut start = 0usize;
+    for (index, ch) in args.char_indices() {
+        match ch {
+            '\'' => in_string = !in_string,
+            '(' if !in_string => depth += 1,
+            ')' if !in_string => depth = depth.saturating_sub(1),
+            ',' if !in_string && depth == 0 => {
+                out.push(args[start..index].trim());
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    out.push(args[start..].trim());
+    out
+}
+
+/// `(host Tag, filling Tag)` pairs read out of a Revit-authored IFC by
+/// following `IfcRelVoidsElement` into `IfcRelFillsElement`.
+///
+/// The reference side of the #222 / RE-23 gate: the set the decoder
+/// must reproduce exactly.
+fn reference_fill_pairs(step: &str) -> Vec<(String, String)> {
+    use std::collections::BTreeMap;
+    let mut instances: BTreeMap<u32, (String, Vec<String>)> = BTreeMap::new();
+    for line in step.lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix('#') else {
+            continue;
+        };
+        let Some((id_text, after_eq)) = rest.split_once('=') else {
+            continue;
+        };
+        let Ok(id) = id_text.trim().parse::<u32>() else {
+            continue;
+        };
+        let Some((ifc_type, args)) = after_eq.trim_start().split_once('(') else {
+            continue;
+        };
+        let Some(args) = args
+            .trim_end()
+            .strip_suffix(';')
+            .map(str::trim_end)
+            .and_then(|a| a.strip_suffix(')'))
+        else {
+            continue;
+        };
+        instances.insert(
+            id,
+            (
+                ifc_type.trim().to_ascii_uppercase(),
+                step_attributes(args)
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+            ),
+        );
+    }
+    let entity_ref = |attribute: &str| -> Option<u32> {
+        attribute.trim().strip_prefix('#')?.trim().parse().ok()
+    };
+    // `Tag` is IfcElement's one attribute past IfcProduct's seven.
+    let tag_of = |id: Option<u32>| -> String {
+        id.and_then(|id| instances.get(&id))
+            .and_then(|(_, attributes)| attributes.get(7))
+            .and_then(|attribute| {
+                attribute
+                    .trim()
+                    .strip_prefix('\'')
+                    .and_then(|t| t.strip_suffix('\''))
+            })
+            .unwrap_or_default()
+            .to_string()
+    };
+    let mut voided_by: BTreeMap<u32, u32> = BTreeMap::new();
+    for (ifc_type, attributes) in instances.values() {
+        if ifc_type != "IFCRELVOIDSELEMENT" {
+            continue;
+        }
+        if let (Some(host), Some(opening)) = (
+            attributes.get(4).and_then(|a| entity_ref(a)),
+            attributes.get(5).and_then(|a| entity_ref(a)),
+        ) {
+            voided_by.insert(opening, host);
+        }
+    }
+    let mut pairs = Vec::new();
+    for (ifc_type, attributes) in instances.values() {
+        if ifc_type != "IFCRELFILLSELEMENT" {
+            continue;
+        }
+        let opening = attributes.get(4).and_then(|a| entity_ref(a));
+        let filling = attributes.get(5).and_then(|a| entity_ref(a));
+        let host = opening.and_then(|id| voided_by.get(&id).copied());
+        pairs.push((tag_of(host), tag_of(filling)));
+    }
+    pairs.sort();
+    pairs
+}
+
+/// #222 / RE-23: every recovered door and window binds to the wall
+/// Revit's own exporter voids for it — exact pair set, no tolerance.
+#[test]
+fn core_interior_2024_door_window_host_wall_binding() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    let reference = project_dir.join("../IFC Exports/2024_Core_Interior_slim.ifc");
+    if !path.exists() || !reference.exists() {
+        eprintln!("skipping: {} or the slim export is missing", path.display());
+        return;
+    }
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    assert_eq!(version, 2024);
+    let limits = walker::WalkerLimits {
+        max_candidates: 2_000,
+        ..walker::WalkerLimits::default()
+    };
+    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
+        .expect("mvp");
+
+    let wall_ids: std::collections::BTreeSet<u32> =
+        mvp.walls.iter().filter_map(|wall| wall.id).collect();
+    assert_eq!(wall_ids.len(), 360, "the 360 exported wall instances");
+
+    let mut recovered: Vec<(String, String)> = Vec::new();
+    let mut unbound: Vec<u32> = Vec::new();
+    for opening in mvp.doors.iter().chain(mvp.windows.iter()) {
+        let id = opening.id.expect("record-backed opening carries an id");
+        let host = opening
+            .fields
+            .iter()
+            .find_map(|(name, value)| match (name.as_str(), value) {
+                (
+                    rvt::partition_schema_mvp::OPENING_HOST_FIELD,
+                    walker::InstanceField::ElementId { id, .. },
+                ) => Some(*id),
+                _ => None,
+            });
+        match host {
+            Some(host) => {
+                assert!(
+                    wall_ids.contains(&host),
+                    "recovered host {host} for {id} is not an exported wall"
+                );
+                recovered.push((host.to_string(), id.to_string()));
+            }
+            None => unbound.push(id),
+        }
+    }
+    recovered.sort();
+
+    let expected = reference_fill_pairs(&std::fs::read_to_string(&reference).expect("read export"));
+    assert_eq!(
+        expected.len(),
+        138,
+        "the export voids 132 doors and 6 windows out of their host walls"
+    );
+    assert!(unbound.is_empty(), "unbound doors/windows: {unbound:?}");
+    assert_eq!(
+        recovered, expected,
+        "recovered (host wall, opening) pairs must equal Revit's own IfcRelVoidsElement \
+         + IfcRelFillsElement chain exactly"
+    );
+
+    // The binding is what the reference list says, not a proximity
+    // guess: every bound opening records its carrier.
+    for opening in mvp.doors.iter().chain(mvp.windows.iter()) {
+        assert!(
+            opening.fields.iter().any(|(name, value)| matches!(
+                (name.as_str(), value),
+                (
+                    rvt::partition_schema_mvp::OPENING_HOST_PROVENANCE_FIELD,
+                    walker::InstanceField::String(text),
+                ) if text == rvt::partition_schema_mvp::OPENING_HOST_PROVENANCE
+            )),
+            "opening {:?} lacks host provenance",
+            opening.id
+        );
+    }
+}

@@ -1794,7 +1794,7 @@ impl StepWriter {
                 // IfcOpeningElement matching the shape + the two
                 // binding relationships.
                 if let (Some(h_idx), Some(ex)) = (host_element_index, extrusion) {
-                    if let Some(host_el_id) = entity_index_to_el_id.get(*h_idx).and_then(|o| *o) {
+                    {
                         // Emit a second extrusion chain — same shape
                         // as the element, placed on the element's
                         // placement so the void sits where the door
@@ -1850,15 +1850,23 @@ impl StepWriter {
                         // IfcOpeningElement: (GlobalId, OwnerHist, Name,
                         //   Desc, ObjectType, Placement, Rep, Tag,
                         //   PredefinedType). IFC4 adds PredefinedType.
+                        //
+                        // `Tag` repeats the filling element's own tag.
+                        // That is what Revit's exporter does — on
+                        // `2024_Core_Interior_slim.ifc` all 138
+                        // door/window openings carry the Tag of the
+                        // element that fills them — and it invents
+                        // nothing: the opening exists only because
+                        // that element does.
                         self.emit_entity(
                             opening_id,
                             format!(
-                                "IFCOPENINGELEMENT('{}',#{owner_hist},'Opening for {name_esc}',$,$,#{o_placement},#{o_prod_shape},$,.OPENING.)",
+                                "IFCOPENINGELEMENT('{}',#{owner_hist},'Opening for {name_esc}',$,$,#{o_placement},#{o_prod_shape},{tag_quoted},.OPENING.)",
                                 make_guid(opening_id),
                                 name_esc = escape(name),
                             ),
                         );
-                        void_fill_triples.push((host_el_id, opening_id, el_id));
+                        void_fill_triples.push((*h_idx, opening_id, el_id));
                     }
                 }
             }
@@ -1872,7 +1880,19 @@ impl StepWriter {
         // Together these tell IFC4 viewers "subtract this opening's
         // volume from the host wall, and fill the hole with this
         // door/window."
-        for (host_el_id, opening_id, el_id) in &void_fill_triples {
+        //
+        // The host is resolved here, after the element loop, rather
+        // than inside it: `entity_index_to_el_id` is only complete
+        // once every BuildingElement has been emitted, so resolving
+        // inline silently dropped the chain whenever a host happened
+        // to sit after its opening in `model.entities`.
+        for (host_entity_idx, opening_id, el_id) in &void_fill_triples {
+            let Some(host_el_id) = entity_index_to_el_id
+                .get(*host_entity_idx)
+                .and_then(|slot| *slot)
+            else {
+                continue;
+            };
             let voids_rel = self.id();
             self.emit_entity(
                 voids_rel,
