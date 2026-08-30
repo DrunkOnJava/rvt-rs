@@ -60,11 +60,13 @@ the hosted or self-hosted static viewer; see
 4. Export IFC / glTF / plan with the quality label in mind.
 5. Attach diagnostics JSON to bug reports for partial exports.
 
-Partition MVP recovers Level / Material / Room / Floor plan-loop names on
-supported project files, and 2023 ArcWall geometry on the research path.
-Still blocked (RE-19 / RE-20 negative on magnetar corpora): schema-field Walls,
-typed Door/Window host binding, Level ElementId storey assignment for
-Floors/Rooms, and compound-layer / slab-thickness geometry — see
+Partition MVP recovers Level / Material / Room names on supported project
+files, 2023 ArcWall geometry on the research path, and — on Revit 2024 —
+Wall / Door / Window / Column / Floor / BuildingPad instances from partition
+element records, with a measured slab thickness (#212). Still blocked
+(RE-19 / RE-20 negative on magnetar corpora): schema-field Walls, typed
+Door/Window host binding, Level ElementId storey assignment for Rooms, the
+recovered floor boundary polygon, and compound-layer geometry — see
 [status.md](status.md) and [supported-profile.md](supported-profile.md).
 
 The viewer can show a scene, categories, element info, schedule summary, export

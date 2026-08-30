@@ -13,6 +13,43 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Slab instance recovery — 80 / 80 `IFCSLAB` and 20 / 20
+  `IFCSHADINGDEVICE` exact ElementId sets on the Core Interior
+  full-project export (#212, RE-22).** RE-21 recorded `OST_Floors` as the
+  one category where the instance rule fails (99 selected, `TP 79 / FP 20 /
+  FN 1`). Both numbers reproduce and neither is a decoder error. The 20
+  "false positives" are the export's 20 `IFCSHADINGDEVICE` `Tag` values —
+  exported elements under a different entity type, so precision was already
+  100 %. The "false negative" is `Pad:Site Pad` ElementId 21975, whose record
+  carries `BuiltInCategory` `OST_BuildingPad` (`-2001263`), not `OST_Floors`;
+  Revit's own exporter maps a building pad to `IfcSlab` `.FLOOR.`. Adding
+  that category recovers the 80th slab.
+- **Per-element IFC export-type overrides (`partition_ifc_export_overrides`).**
+  The `IfcSlab` / `IfcShadingDevice` split is decided per instance, not per
+  type — the reference export carries `IFCSLABTYPE` *and*
+  `IFCSHADINGDEVICETYPE` rows with the same `Tag` (`4166`, `71848`). The
+  deciding value is in the file: a UTF-16LE string in the element's parameter
+  block, framed as a `u32` code-unit count then the value, with the owning
+  ElementId as a `u64` at `-0x0dc` and again at `-0x11e`. Requiring both slots
+  to agree and the id to be declared in `Global/ElemTable` accepts 31 entries
+  on this file naming 21 ids; the 20 that are also standalone placed instances
+  are exactly the export's `IFCSHADINGDEVICE` set (the 21st is a container
+  member the RE-21 rule already excludes). The scan is general; only
+  `IfcShadingDevice` is honoured as a target
+  (`ifc::category_map::EXPORT_OVERRIDE_TARGETS`), because it is the only value
+  a reference export has demonstrated — an unrecognised value leaves the
+  element on its class mapping rather than inventing a type.
+- **Slab extrusion thickness (#31, thickness half).** The record's
+  bounding-box `z` extent *is* the plate's thickness: it equals the export's
+  `IfcExtrudedAreaSolid.Depth` on 79 of 80 slabs at 1e-3 ft and sums to it on
+  the 80th (`Floor:Basement Slab` 22756, exported as stacked 0.3333 ft +
+  1.1667 ft solids). Record-backed slabs now carry `ThicknessResolved`,
+  `ThicknessFeet` and `ThicknessSource`, and
+  `floor_slab_extrusion_thickness` is raised per slab so the plan-loop path
+  still declares it. The slab *profile* remains the bounding-box rectangle —
+  `ProfileResolved` stays `false` and #31's polygon-profile half is open.
+  Evidence, rejected candidates and reproduction commands:
+  [`reports/element-framing/RE-22-slab-instance-rule.md`](reports/element-framing/RE-22-slab-instance-rule.md).
 - **Wall / Door / Window instance recovery — 360 / 132 / 6 exact ElementId
   sets on the Core Interior full-project export (#211, RE-21).** #210 showed
   the Revit 2024 partition element-record header reaches 100 % of the exported
@@ -290,6 +327,37 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Changed
 
+- **Plan-loop floor annotations stand down where element records decode
+  (#212, #219).** The 64 `IFCSLAB` boundary annotations the plan-loop scan
+  emitted carried no ElementId, no bounding box and therefore no storey.
+  Emitting them beside the record-backed slabs would double-count the same
+  plates, so `recover_partition_schema_mvp` clears `floors` whenever `slabs`
+  is non-empty — exactly one `IFCSLAB` per exported id. The plan-loop path
+  remains the only floor path on 2023 files and anywhere no element record
+  decodes.
+- **Plates bind to a storey by their record top face (#212, #219).** Revit
+  hangs a floor below the level that hosts it, so a slab's recorded base is
+  never a storey elevation while its top often is: measured over the 100
+  record-backed plates on Core Interior, 0 of 40 distinct base elevations is
+  a storey elevation and 51 plate tops are — every one of the 51 the storey
+  Revit's own export assigns, none wrong. Everything else keeps the #213
+  base-face join. `storey_bound_elements` goes 743 → 794 and the
+  `StoreyBindSource` property distinguishes `record_base_elevation` from
+  `record_top_elevation`.
+- **Slab record elevations are *not* admitted as a storey-elevation source
+  (#218).** Measured rather than assumed: slab tops would add −40 ft and
+  185.5 ft, two of the four storeys #213 misses, at the cost of 13 values
+  that are not storey elevations (each 0.1667 ft below a real one, the
+  structural-slab / topping interface). `STOREY_ELEVATION_SOURCE_TYPES` stays
+  `["IFCCOLUMN"]` and the recovered storey count stays 11.
+- **One record per ElementId now keeps the greatest bounding-box `z` extent
+  (#212).** 22 of the 100 slab ids are framed more than once with disagreeing
+  vertical extents; RE-21's first-by-`(stream, offset)` picked the 2 in
+  topping for the 12 `Floor:Floor 1` plates. Against the export's extrusion
+  depths, first-by-offset agrees on 67 of 80 and greatest-extent on 79 of 80.
+  The change is applied uniformly and perturbs nothing else: 268 walls, 132
+  doors and 88 columns also carry multiple records and every one agrees on
+  the box.
 - **The #204 column heuristic is retired in favour of a direct test (#211).**
   `partition_schema_mvp` no longer drops origin-centred family-local bounding
   boxes and no longer collapses co-located footprint groups to their highest

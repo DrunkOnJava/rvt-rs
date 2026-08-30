@@ -502,14 +502,17 @@ Acceptance criteria:
 
 Labels: `priority:P0`, `type:bug`, `area:walker`
 
-Status (2026-08-29): **partially landed.** Production
+Status (2026-08-30): **partially landed.** Production
 `iter_elements` filters HostObjAttr via `PRODUCTION_ELEMENT_MIN_SCORE`,
 prefers typed MVP decoders (fail closed), merges validated ArcWall
 partition records, and merges partition MVP Level / Material / Room /
-Floor plan-loop / 2024 ArcWallRectOpening recovers
-(`partition_schema_mvp`, ElemTable-confirmed related ids). IFC wires
-Level/Floor/Room/Material honestly. Remaining: schema-field Wall
-instances and typed Door/Window host binding from partition envelopes.
+2024 ArcWallRectOpening recovers (`partition_schema_mvp`,
+ElemTable-confirmed related ids) plus 2024 element-record Wall / Door /
+Window / Column / Floor / BuildingPad instances (#204 / #211 / #212;
+the Floor plan-loop scan now runs only where no element record
+decodes). IFC wires Level/Floor/Room/Material honestly. Remaining:
+schema-field Wall instances, typed Door/Window host binding from
+partition envelopes, and the recovered floor boundary polygon.
 
 - Current `iter_elements` on real projects can produce permissive
   parent-class hits like `HostObjAttr`.

@@ -413,3 +413,89 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
         mvp.rooms.len()
     );
 }
+
+/// #212 / RE-22: slabs come from `OST_Floors` + `OST_BuildingPad`
+/// element records under the #211 instance rule, the plan-loop floors
+/// stand down when they do, and the twenty per-element "IFC Export As"
+/// overrides are exactly the ids Revit's own export emits as
+/// `IfcShadingDevice`.
+#[test]
+fn core_interior_2024_slab_instances_and_export_overrides() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} missing", path.display());
+        return;
+    }
+
+    // The twenty `IFCSHADINGDEVICE` `Tag` values in
+    // `IFC Exports/2024_Core_Interior_slim.ifc`.
+    const SHADING_DEVICE_IDS: &[u32] = &[
+        20953, 64160, 64227, 64292, 64358, 64423, 64488, 64553, 64618, 64683, 70366, 71171, 71231,
+        71291, 71351, 71411, 71471, 71531, 71591, 71651,
+    ];
+    // `Pad:Site Pad:21975` — the one exported slab that is an
+    // `OST_BuildingPad`, not an `OST_Floors`.
+    const SITE_PAD_ID: u32 = 21975;
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    assert_eq!(version, 2024);
+    let limits = walker::WalkerLimits {
+        max_candidates: 2_000,
+        ..walker::WalkerLimits::default()
+    };
+    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
+        .expect("mvp");
+
+    assert_eq!(
+        mvp.slabs.len(),
+        100,
+        "expected the 100 exported OST_Floors / OST_BuildingPad instances"
+    );
+    assert!(
+        mvp.floors.is_empty(),
+        "plan-loop floors must stand down when record-backed slabs decode: \
+         emitting both double-counts the same plates"
+    );
+
+    let pads: Vec<_> = mvp
+        .slabs
+        .iter()
+        .filter(|e| e.class == "BuildingPad")
+        .collect();
+    assert_eq!(pads.len(), 1, "one OST_BuildingPad instance");
+    assert_eq!(pads[0].id, Some(SITE_PAD_ID));
+
+    let mut overridden: Vec<u32> = mvp
+        .slabs
+        .iter()
+        .filter(|e| {
+            e.fields.iter().any(|(name, value)| {
+                matches!(
+                    (name.as_str(), value),
+                    ("m_ifc_export_as", rvt::walker::InstanceField::String(text))
+                        if text == "IfcShadingDevice"
+                )
+            })
+        })
+        .filter_map(|e| e.id)
+        .collect();
+    overridden.sort_unstable();
+    assert_eq!(
+        overridden, SHADING_DEVICE_IDS,
+        "the IfcShadingDevice overrides must be exactly the export's IFCSHADINGDEVICE Tag set"
+    );
+
+    for slab in &mvp.slabs {
+        assert_eq!(
+            slab.provenance.decoder.as_deref(),
+            Some("partition_schema_mvp::element_category_record"),
+            "slabs come from the element-record carrier, not a plan-loop scan"
+        );
+        assert!(slab.id.is_some(), "every record-backed slab carries an id");
+    }
+}

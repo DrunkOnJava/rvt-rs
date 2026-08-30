@@ -83,6 +83,16 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCSLAB",
         predefined_type: Some("FLOOR"),
     },
+    // A Revit building pad is not a floor, but Revit's own exporter
+    // emits it as `IfcSlab` with `PredefinedType = .FLOOR.` — see the
+    // `Pad:Site Pad:21975` row in the Core Interior reference export
+    // (#212, RE-22). The class stays `BuildingPad` so the mapping is
+    // visible here rather than hidden behind a relabelled decode.
+    Mapping {
+        revit_class: "BuildingPad",
+        ifc_type: "IFCSLAB",
+        predefined_type: Some("FLOOR"),
+    },
     Mapping {
         revit_class: "Roof",
         ifc_type: "IFCROOF",
@@ -266,6 +276,39 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.revit_class == revit_class)
 }
 
+/// IFC entity types a per-element Revit "IFC Export As" override may
+/// redirect a decoded element to (#212, RE-22).
+///
+/// The override carrier is general —
+/// [`crate::partition_ifc_export_overrides`] returns whatever value
+/// string the parameter block holds — but acting on a value is a
+/// claim, so only values proven against a reference export are
+/// listed. An unlisted value leaves the element on its class mapping
+/// and is reported as an unhonoured override rather than guessed at.
+///
+/// `IfcShadingDevice` is the one proven value: on
+/// `2024_Core_Interior.rvt` the twenty `OST_Floors` instances that
+/// carry it are exactly the twenty `IFCSHADINGDEVICE` rows in
+/// Revit's own export, and the remaining seventy-nine plus the one
+/// `OST_BuildingPad` instance are exactly its eighty `IFCSLAB` rows.
+/// `IfcShadingDevice` declares no `PredefinedType` value rvt-rs can
+/// decode, so none is written (`$`, not an invented `.NOTDEFINED.`).
+pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[Mapping {
+    revit_class: "IfcShadingDevice",
+    ifc_type: "IFCSHADINGDEVICE",
+    predefined_type: None,
+}];
+
+/// Look up the IFC entity type a "IFC Export As" override value names.
+///
+/// The comparison is case-insensitive because the parameter value is
+/// user-entered text; everything else about it is exact.
+pub fn lookup_export_override(value: &str) -> Option<&'static Mapping> {
+    EXPORT_OVERRIDE_TARGETS
+        .iter()
+        .find(|m| m.revit_class.eq_ignore_ascii_case(value.trim()))
+}
+
 /// True when the mapping routes a Revit class through `IfcMember`
 /// (as opposed to `IfcBeam` / `IfcColumn` / `IfcFooting`). Useful
 /// for downstream code that wants to emit IfcMember-specific
@@ -288,6 +331,31 @@ pub fn is_ifc_member(revit_class: &str) -> bool {
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn export_override_maps_the_one_proven_value() {
+        let m = lookup_export_override("IfcShadingDevice").unwrap();
+        assert_eq!(m.ifc_type, "IFCSHADINGDEVICE");
+        assert_eq!(m.predefined_type, None);
+        // The parameter value is user-entered text.
+        assert!(lookup_export_override("  ifcshadingdevice  ").is_some());
+    }
+
+    #[test]
+    fn unproven_export_override_values_are_not_honoured() {
+        // A value the reference export never demonstrated must leave
+        // the element on its class mapping rather than invent a type.
+        assert!(lookup_export_override("IfcCovering").is_none());
+        assert!(lookup_export_override("IfcSlab").is_none());
+        assert!(lookup_export_override("").is_none());
+    }
+
+    #[test]
+    fn building_pad_maps_to_ifcslab_floor() {
+        let m = lookup("BuildingPad").unwrap();
+        assert_eq!(m.ifc_type, "IFCSLAB");
+        assert_eq!(m.predefined_type, Some("FLOOR"));
+    }
 
     #[test]
     fn lookup_known_class() {

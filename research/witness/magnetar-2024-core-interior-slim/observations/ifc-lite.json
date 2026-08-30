@@ -14,6 +14,7 @@
       "IFCMATERIAL": 10,
       "IFCPROPERTYSET": 0,
       "IFCROOF": 0,
+      "IFCSHADINGDEVICE": 20,
       "IFCSLAB": 80,
       "IFCSPACE": 116,
       "IFCUNITASSIGNMENT": 1,
@@ -22,7 +23,7 @@
     },
     "ifc_schema": "IFC4"
   },
-  "observation_hash_sha256": "882e1e0f7d546bed2b4cf94e0cb8867f257321235203adcb0ed48e8ef521b4f8",
+  "observation_hash_sha256": "951e6d45fa5c808e96099fb763b63952b543adaaf82555913df49555cd4929d4",
   "schema_version": "1.0.0",
   "semantic_surface_covered": [
     "entity_counts"
