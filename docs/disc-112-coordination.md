@@ -61,12 +61,21 @@ claim ES remapping works. ES refs stay outside #152 parent scoring.
 | Re-baseline [#81](https://github.com/DrunkOnJava/rvt-rs/issues/81)–[#96](https://github.com/DrunkOnJava/rvt-rs/issues/96) | Done earlier this day (housekeeping) |
 | crates.io / docs.rs / GitHub Releases | Human decision — docs readiness only |
 
+**P1 progress (2026-08-30, Phase 1 leftovers):**
+
+| Item | Status |
+|------|--------|
+| Relation domains + SCC/quarantine + `rvt-capabilities` | Done — [#178](https://github.com/DrunkOnJava/rvt-rs/pull/178) |
+| TransmissionData opportunistic extracts | Done — [#179](https://github.com/DrunkOnJava/rvt-rs/pull/179) |
+| Compound `0x0821` framing harness (no opening decode) | Done — [#179](https://github.com/DrunkOnJava/rvt-rs/pull/179) |
+| IFC `Pset_` validation stub (ES omitted) | Done — [#179](https://github.com/DrunkOnJava/rvt-rs/pull/179) |
+| CI Rust cache consolidation | Done — [#177](https://github.com/DrunkOnJava/rvt-rs/pull/177) |
+
 **P1 next (honest order):**
 
 1. Continue evidence-only [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152)–[#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) when new corpus or Steffen evidence packs arrive — do **not** invent Door/Window/Level ElementId successes (RE-19 / RE-20 negatives stand). RE-152 magnetar trailing-owner negative: `reports/element-framing/RE-152-elemtable-ownership-negative.md`
-2. Phase 1 leftovers (cloud-safe): relation-domain registry + SCC/quarantine stubs, capability doctor (`rvt-capabilities`), TransmissionData deepen, compound `0x0821` framing harness — **no invented decode claims**
-3. Phase 2 ES oracle fixture families — **blocked on Revit API**
-4. crates.io / docs.rs / GitHub Releases publish decisions (human)
+2. Phase 2 ES oracle fixture families — **blocked on Revit API**
+3. crates.io / docs.rs / GitHub Releases publish decisions (human)
 
 Hard walls unchanged: Door/Window discriminator, schema-field Wall, Level
 ElementIds on magnetar, AProperty host joins.
