@@ -4,6 +4,12 @@ must agree with the project-count manifest that the rvt-rs decoder is also
 gated against (docs/verification-protocol.md).
 
 Usage: witness-ifcopenshell.py <manifest.json> <corpus_dir> [--json OUT]
+                               [--observation OUT]
+
+`--observation` additionally writes an OctetProof observation
+(docs/octetproof-spec-draft.md §6.2): entity counts for every manifest
+`source_ifc_type`, canonicalized (sorted keys, no whitespace) and hashed so a
+replay can prove the witness saw the same thing.
 
 The manifest's `reference_ifc_file` is resolved under <corpus_dir>, its
 SHA-256 is checked against `source.reference_ifc_sha256` (a golden artifact
@@ -41,6 +47,7 @@ def main() -> int:
     parser.add_argument("manifest", type=Path)
     parser.add_argument("corpus_dir", type=Path)
     parser.add_argument("--json", type=Path, help="write the agreement record here")
+    parser.add_argument("--observation", type=Path, help="write an OctetProof observation here")
     args = parser.parse_args()
 
     manifest = json.loads(args.manifest.read_text())
@@ -97,6 +104,29 @@ def main() -> int:
     record["agree"] = drift == 0
     if args.json:
         args.json.write_text(json.dumps(record, indent=2))
+    if args.observation:
+        payload = {
+            "entity_counts": {c["ifc_type"]: c["ifcopenshell"] for c in record["categories"]},
+            "ifc_schema": model.schema,
+        }
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        observation = {
+            "schema_version": "1.0.0",
+            "witness_id": "ifcopenshell",
+            "witness_version": str(getattr(ifcopenshell, "version", "?")),
+            "artifact_id": manifest.get("id"),
+            "input_role": "bridge",
+            "input_file": reference_name,
+            "input_hash_sha256": actual_sha,
+            "deterministic": True,
+            "semantic_surface_covered": ["entity_counts"],
+            "observation": payload,
+            "observation_hash_sha256": hashlib.sha256(canonical).hexdigest(),
+            "unsupported_entities": [],
+            "warnings": [],
+        }
+        args.observation.parent.mkdir(parents=True, exist_ok=True)
+        args.observation.write_text(json.dumps(observation, indent=2, sort_keys=True) + "\n")
     if drift:
         print(f"error: {drift} categor{'y' if drift == 1 else 'ies'} drifted from the manifest", file=sys.stderr)
         return 1
