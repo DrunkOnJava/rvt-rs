@@ -198,6 +198,13 @@ pub fn append_typed_production_elements(
                         property_set = Some(geom);
                     }
                 }
+                "Column" => {
+                    if let Some(geom) = column_geometry_from_decoded(&decoded) {
+                        location_feet = Some(geom.0);
+                        extrusion = Some(geom.1);
+                        property_set = Some(geom.2);
+                    }
+                }
                 "Door" => {
                     let door = Door::from_decoded(&decoded);
                     if let Some(host) = recover_door_host(&door).ok() {
@@ -427,6 +434,85 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
             properties,
         }),
     })
+}
+
+/// Column placement + body from a partition element record (#204).
+///
+/// The record carries the element's model bounding box, so the
+/// placement is its plan centre at the box base and the body is the
+/// box itself — an envelope, not a recovered family profile. The
+/// property set says so rather than letting a consumer read the
+/// rectangle as a modelled section.
+fn column_geometry_from_decoded(
+    decoded: &DecodedElement,
+) -> Option<([f64; 3], Extrusion, PropertySet)> {
+    let mut width = None;
+    let mut depth = None;
+    let mut height = None;
+    let mut x = None;
+    let mut y = None;
+    let mut z = None;
+    let mut source_stream = None;
+    for (name, value) in &decoded.fields {
+        match (name.as_str(), value) {
+            ("m_bboxWidth", InstanceField::Float { value, .. }) => width = Some(*value),
+            ("m_bboxDepth", InstanceField::Float { value, .. }) => depth = Some(*value),
+            ("m_bboxHeight", InstanceField::Float { value, .. }) => height = Some(*value),
+            ("m_locationX", InstanceField::Float { value, .. }) => x = Some(*value),
+            ("m_locationY", InstanceField::Float { value, .. }) => y = Some(*value),
+            ("m_locationZ", InstanceField::Float { value, .. }) => z = Some(*value),
+            ("m_source_stream", InstanceField::String(value)) => {
+                source_stream = Some(value.clone());
+            }
+            _ => {}
+        }
+    }
+    let (x, y, z) = (x?, y?, z?);
+    let (width, depth, height) = (width?, depth?, height?);
+    if !(width.is_finite() && depth.is_finite() && height.is_finite()) {
+        return None;
+    }
+    // Fail closed rather than emit a degenerate solid.
+    if width <= 0.0 || depth <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let mut properties = vec![
+        Property {
+            name: "BodySource".into(),
+            value: PropertyValue::Text("partition_element_record_bbox".into()),
+        },
+        Property {
+            name: "ProfileResolved".into(),
+            value: PropertyValue::Boolean(false),
+        },
+        Property {
+            name: "LevelBindResolved".into(),
+            value: PropertyValue::Boolean(false),
+        },
+        Property {
+            name: "BoundingBoxHeight".into(),
+            value: PropertyValue::LengthFeet(height),
+        },
+    ];
+    if let Some(stream) = source_stream {
+        properties.push(Property {
+            name: "SourceStream".into(),
+            value: PropertyValue::Text(stream),
+        });
+    }
+    Some((
+        [x, y, z],
+        Extrusion {
+            width_feet: width,
+            depth_feet: depth,
+            height_feet: height,
+            profile_override: None,
+        },
+        PropertySet {
+            name: "RvtColumnGeometry".into(),
+            properties,
+        },
+    ))
 }
 
 /// Document a recovered floor boundary without inventing slab thickness.

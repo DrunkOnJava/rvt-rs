@@ -1928,7 +1928,12 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
     if model.building_storeys.is_empty() {
         features.push("revit_levels_to_ifc_storeys".into());
     }
-    if exported.building_elements_with_geometry == 0 {
+    // Partial geometry is still a gap: the claim only clears when every
+    // emitted building element carries a recovered body (#204 landed
+    // IFCCOLUMN bodies while Floors/Rooms remain annotation-only).
+    if exported.building_elements_with_geometry == 0
+        || exported.building_elements_with_geometry < exported.building_elements
+    {
         features.push("real_file_element_geometry".into());
     }
     // Compound assemblies (layer widths) remain open even when display

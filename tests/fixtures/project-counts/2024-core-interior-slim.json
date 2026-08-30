@@ -100,17 +100,16 @@
       "notes": "Strict partition space-name recovery emits 18 IFCSPACE against 116 exported spaces; recall tracked in #84 (which records 50/116 from a different export path)."
     },
     "columns": {
-      "status": "known_gap",
+      "status": "known",
       "expected": 256,
       "source": "full Revit IFC export",
       "source_ifc_type": "IFCCOLUMN",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCCOLUMN",
-      "decoder_expected": 0,
+      "decoder_expected": 256,
       "decoder_tolerance": 0,
       "tracking_issue": 204,
-      "unsupported_feature": "real_file_element_geometry",
-      "notes": "First manifest to measure columns at all; the element fixture expects 0. Issue #204 was filed for this gap."
+      "notes": "Closed 2026-08-30 (#204): `partition_element_records` decodes the Revit 2024 partition element-record header (`u64` ElementId, `i64` BuiltInCategory at +0x12, bbox marker at +0x50, six `f64` feet at +0x58), keeps OST_Columns (-2000100) records whose ElementId is declared in Global/ElemTable, drops family-local bboxes (type definitions), and collapses co-located superseded generations by highest ElementId. 256 of 256, no false positives, no misses — the first category on this artifact where rvt-rs and both bridge witnesses agree exactly on a real project count."
     },
     "beams": {
       "status": "known",
@@ -162,11 +161,11 @@
       "source_ifc_type": "IFCPROPERTYSET",
       "tolerance": 0,
       "decoder_metric": "step.IFCPROPERTYSET",
-      "decoder_expected": 64,
+      "decoder_expected": 320,
       "decoder_tolerance": 8,
       "tracking_issue": 35,
       "unsupported_feature": "typed_door_window_discrimination_and_host_binding",
-      "notes": "The ReferenceView_V1.2 export carries no IfcPropertySet at all (0, confirmed by both bridge readers); rvt-rs emits 64 RvtFloorGeometry sets for its plan-loop slab annotations. Neither side is a subset of the other."
+      "notes": "The ReferenceView_V1.2 export carries no IfcPropertySet at all (0, confirmed by both bridge readers); rvt-rs emits 64 RvtFloorGeometry sets for its plan-loop slab annotations plus 256 RvtColumnGeometry sets after #204. Neither side is a subset of the other."
     }
   }
 }

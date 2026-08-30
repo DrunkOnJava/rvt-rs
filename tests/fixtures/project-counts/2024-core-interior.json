@@ -90,14 +90,16 @@
       "notes": "Strict partition space-name recovers emit IFCSPACE; paired IFC has 0 spaces."
     },
     "columns": {
-      "status": "known",
+      "status": "decoder_baseline",
       "expected": 0,
       "source": "paired Revit IFC export",
       "source_ifc_type": "IFCCOLUMN",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCCOLUMN",
-      "decoder_expected": 0,
-      "decoder_tolerance": 0
+      "decoder_expected": 256,
+      "decoder_tolerance": 0,
+      "tracking_issue": 204,
+      "notes": "The paired 20 KB element fixture carries no IFCCOLUMN; the same .rvt carries 256, which is scored against the full export in the sibling manifest magnetar-2024-core-interior-slim. Recorded as a decoder baseline here so the reference side stays the element fixture and the count is not double-claimed."
     },
     "beams": {
       "status": "known",
@@ -149,11 +151,11 @@
       "source_ifc_type": "IFCPROPERTYSET",
       "tolerance": 0,
       "decoder_metric": "step.IFCPROPERTYSET",
-      "decoder_expected": 64,
+      "decoder_expected": 320,
       "decoder_tolerance": 8,
       "tracking_issue": 35,
       "unsupported_feature": "typed_door_window_discrimination_and_host_binding",
-      "notes": "Current decoder emits RvtFloorGeometry property sets for plan-loop slabs (boundary annotation); not a match for the paired IFC property-set inventory."
+      "notes": "Current decoder emits RvtFloorGeometry property sets for plan-loop slabs (boundary annotation) plus RvtColumnGeometry sets for the 256 recovered columns (#204); not a match for the paired IFC property-set inventory."
     }
   }
 }

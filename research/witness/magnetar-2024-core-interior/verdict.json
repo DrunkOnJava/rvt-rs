@@ -17,6 +17,13 @@
       "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
     },
     {
+      "category": "columns",
+      "field": "entity_counts.IFCCOLUMN",
+      "reason": "decoder_baseline",
+      "tracking_issue": 204,
+      "unsupported_feature": null
+    },
+    {
       "category": "materials",
       "field": "entity_counts.IFCMATERIAL",
       "reason": "known_gap",
@@ -69,13 +76,12 @@
     "entity_counts.IFCROOF",
     "entity_counts.IFCDOOR",
     "entity_counts.IFCWINDOW",
-    "entity_counts.IFCCOLUMN",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "e8bdb0a0748cd0904ae2da29594c902202fcf1a5e2ad1b5150c1d73ff6215bae",
+  "verdict_hash_sha256": "dd2c30d0393e6772e67f3146c41d492229f470f1be6cb3784c9715f6223c3d88",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

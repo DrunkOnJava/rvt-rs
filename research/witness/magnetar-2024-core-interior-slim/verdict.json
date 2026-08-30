@@ -45,13 +45,6 @@
       "unsupported_feature": "real_file_element_geometry"
     },
     {
-      "category": "columns",
-      "field": "entity_counts.IFCCOLUMN",
-      "reason": "known_gap",
-      "tracking_issue": 204,
-      "unsupported_feature": "real_file_element_geometry"
-    },
-    {
       "category": "materials",
       "field": "entity_counts.IFCMATERIAL",
       "reason": "known_gap",
@@ -101,12 +94,13 @@
   "schema_version": "1.0.0",
   "semantic_surface": [
     "entity_counts.IFCROOF",
+    "entity_counts.IFCCOLUMN",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "3f1e425bdee9710a7288fe60425e297ecdee4d968d1c773c88cd9973a776d1c4",
+  "verdict_hash_sha256": "f340d0481eb4fccc1b4a2a0f685261d7f5d4f7ff7bc06b4b2da6d22287f23b83",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",
