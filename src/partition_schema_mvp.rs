@@ -2,7 +2,8 @@
 //!
 //! Extends the ArcWall-only partition merge with fail-closed recovers
 //! for Level, Material, Room, Floor plan loops, and (on Revit 2024)
-//! ArcWallRectOpening index rows. Semantic `Door` / `Window` classes
+//! ArcWallRectOpening index rows plus `OST_Columns` element records
+//! ([`columns_from_partition_category_records`]). Semantic `Door` / `Window` classes
 //! are **not** invented from opening-index rows — those surface as
 //! `ArcWallRectOpening` with related-id provenance only. Related ids
 //! are cross-checked against `Global/ElemTable` when present; a hit
@@ -49,6 +50,8 @@ pub struct PartitionSchemaMvp {
     pub floors: Vec<DecodedElement>,
     /// 2024 ArcWallRectOpening index rows — not typed Door/Window.
     pub rect_openings: Vec<DecodedElement>,
+    /// 2024 `OST_Columns` partition element records (M4-09 / #204).
+    pub columns: Vec<DecodedElement>,
 }
 
 impl PartitionSchemaMvp {
@@ -59,13 +62,15 @@ impl PartitionSchemaMvp {
                 + self.materials.len()
                 + self.rooms.len()
                 + self.floors.len()
-                + self.rect_openings.len(),
+                + self.rect_openings.len()
+                + self.columns.len(),
         );
         out.extend(self.levels);
         out.extend(self.materials);
         out.extend(self.rooms);
         out.extend(self.floors);
         out.extend(self.rect_openings);
+        out.extend(self.columns);
         out
     }
 }
@@ -106,7 +111,160 @@ pub fn recover_partition_schema_mvp(
         out.rect_openings = rect_openings_from_partitions(rf, revit_version, limits)?;
     }
 
+    // --- 2024 OST_Columns partition element records (#204) ---
+    out.columns = columns_from_partition_category_records(rf, revit_version)?;
+
     Ok(out)
+}
+
+/// Recover architectural column instances from partition element
+/// records (M4-09 / #204).
+///
+/// Fail-closed pipeline, each step justified in
+/// [`crate::partition_element_records`]:
+///
+/// 1. Every candidate record's leading `u64` must be an ElementId
+///    declared in `Global/ElemTable`, and the record must carry the
+///    fixed bbox marker — a random byte match cannot become a column.
+/// 2. Records whose bbox is centred on the plan origin are family /
+///    type definitions (the symbol's own envelope in family
+///    coordinates), not placed instances, and are dropped.
+/// 3. Instances sharing a project-coordinate footprint origin are a
+///    superseded generation plus its replacement; Revit allocates
+///    ElementIds monotonically, so the highest id in each footprint
+///    group is the live element and the rest are dropped.
+///
+/// Nothing here invents an ElementId, a level binding, or a profile
+/// shape: the emitted geometry is exactly the recorded bounding box.
+pub fn columns_from_partition_category_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> Result<Vec<DecodedElement>> {
+    if !crate::partition_element_records::supports_revit_version(revit_version) {
+        return Ok(Vec::new());
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => return Ok(Vec::new()),
+    };
+    if declared.is_empty() {
+        return Ok(Vec::new());
+    }
+    let records = crate::partition_element_records::scan_category_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_COLUMNS,
+        &declared,
+    )?;
+    Ok(columns_from_records(records))
+}
+
+/// Instance selection over already-decoded category records — split
+/// out so the rule is unit-testable without a corpus file.
+pub fn columns_from_records(
+    records: Vec<crate::partition_element_records::PartitionElementRecord>,
+) -> Vec<DecodedElement> {
+    use crate::partition_element_records::PartitionElementRecord;
+    use std::collections::BTreeMap;
+
+    let mut by_footprint: BTreeMap<(i64, i64, i64), PartitionElementRecord> = BTreeMap::new();
+    for record in records {
+        if record.is_family_local() {
+            continue;
+        }
+        let key = record.footprint_key();
+        let replace = match by_footprint.get(&key) {
+            Some(existing) => record.element_id > existing.element_id,
+            None => true,
+        };
+        if replace {
+            by_footprint.insert(key, record);
+        }
+    }
+    let mut instances: Vec<PartitionElementRecord> = by_footprint.into_values().collect();
+    instances.sort_by_key(|record| record.element_id);
+    instances.iter().map(column_decoded).collect()
+}
+
+fn column_decoded(
+    record: &crate::partition_element_records::PartitionElementRecord,
+) -> DecodedElement {
+    let (cx, cy) = record.plan_centre_feet();
+    let (dx, dy, dz) = record.extents_feet();
+    let fields = vec![
+        (
+            "m_locationX".into(),
+            InstanceField::Float { value: cx, size: 8 },
+        ),
+        (
+            "m_locationY".into(),
+            InstanceField::Float { value: cy, size: 8 },
+        ),
+        (
+            "m_locationZ".into(),
+            InstanceField::Float {
+                value: record.bbox_feet[2],
+                size: 8,
+            },
+        ),
+        (
+            "m_bboxWidth".into(),
+            InstanceField::Float { value: dx, size: 8 },
+        ),
+        (
+            "m_bboxDepth".into(),
+            InstanceField::Float { value: dy, size: 8 },
+        ),
+        (
+            "m_bboxHeight".into(),
+            InstanceField::Float { value: dz, size: 8 },
+        ),
+        (
+            "m_builtinCategory".into(),
+            InstanceField::Integer {
+                value: record.builtin_category,
+                signed: true,
+                size: 8,
+            },
+        ),
+        (
+            "m_source_stream".into(),
+            InstanceField::String(record.stream.clone()),
+        ),
+        (
+            "m_source_offset".into(),
+            InstanceField::Integer {
+                value: record.offset as i64,
+                signed: false,
+                size: 8,
+            },
+        ),
+        (
+            "m_source".into(),
+            InstanceField::String("partition_element_record".into()),
+        ),
+        // Base/top Level ElementIds stay unrecovered (#86); the
+        // extrusion height below is the recorded bbox extent, not a
+        // level-to-level span.
+        ("m_level_bound".into(), InstanceField::Bool(false)),
+    ];
+    DecodedElement {
+        id: Some(record.element_id),
+        class: "Column".into(),
+        fields,
+        byte_range: record.offset
+            ..record
+                .offset
+                .saturating_add(crate::partition_element_records::RECORD_MIN_LEN),
+        provenance: ElementProvenance::partition(
+            &record.stream,
+            record.offset,
+            "partition_element_record",
+            "partition_schema_mvp::column_category_record",
+            0.8,
+            Some("level_binding_unresolved"),
+        ),
+    }
 }
 
 fn levels_from_storeys_and_names(
@@ -720,6 +878,70 @@ mod tests {
         assert_eq!(level.name.as_deref(), Some("Level 1"));
         assert_eq!(level.elevation_feet, Some(10.0));
         assert_eq!(level.is_building_story, Some(true));
+    }
+
+    fn column_record(
+        element_id: u32,
+        bbox_feet: [f64; 6],
+    ) -> crate::partition_element_records::PartitionElementRecord {
+        crate::partition_element_records::PartitionElementRecord {
+            stream: "Partitions/46".into(),
+            offset: element_id as usize,
+            element_id,
+            flags: 0x0141,
+            builtin_category: crate::partition_element_records::OST_COLUMNS,
+            bbox_feet,
+        }
+    }
+
+    #[test]
+    fn column_selection_drops_family_local_type_envelopes() {
+        let records = vec![
+            column_record(5755, [-1.0, -1.0, 0.0, 1.0, 1.0, 9.0]),
+            column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
+        ];
+        let out = columns_from_records(records);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, Some(20375));
+        assert_eq!(out[0].class, "Column");
+    }
+
+    #[test]
+    fn column_selection_keeps_newest_of_a_co_located_pair() {
+        let records = vec![
+            column_record(16347, [23.0, 109.0, 76.0, 25.0, 111.0, 91.0]),
+            column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
+            column_record(20376, [48.0, 109.0, 76.0, 50.0, 111.0, 90.33]),
+        ];
+        let out = columns_from_records(records);
+        let ids: Vec<Option<u32>> = out.iter().map(|e| e.id).collect();
+        assert_eq!(ids, vec![Some(20375), Some(20376)]);
+    }
+
+    #[test]
+    fn column_decoded_carries_plan_centre_and_extents() {
+        let out = columns_from_records(vec![column_record(
+            20375,
+            [23.0, 109.0, 76.0, 25.0, 111.0, 90.33],
+        )]);
+        let column = &out[0];
+        let field = |name: &str| {
+            column
+                .fields
+                .iter()
+                .find(|(n, _)| n == name)
+                .and_then(|(_, v)| match v {
+                    InstanceField::Float { value, .. } => Some(*value),
+                    _ => None,
+                })
+        };
+        assert_eq!(field("m_locationX"), Some(24.0));
+        assert_eq!(field("m_locationY"), Some(110.0));
+        assert_eq!(field("m_locationZ"), Some(76.0));
+        assert_eq!(field("m_bboxWidth"), Some(2.0));
+        assert_eq!(field("m_bboxDepth"), Some(2.0));
+        assert!((field("m_bboxHeight").unwrap() - 14.33).abs() < 1e-9);
+        assert!(column.provenance.confidence >= 0.55);
     }
 
     #[test]
