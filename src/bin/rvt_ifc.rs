@@ -79,7 +79,7 @@ struct Args {
     diagnostics: Option<PathBuf>,
     /// Witness mode: write an OctetProof observation of this input.
     ///
-    /// The observation (docs/octetproof-spec-draft.md §6.2) records the
+    /// The observation (docs/octetproof-spec.md §6.2) records the
     /// SHA-256 of the input bytes, the exported entity counts by IFC type,
     /// and a canonical hash of that payload so an independent replay can
     /// prove this witness saw the same thing. Compared against other

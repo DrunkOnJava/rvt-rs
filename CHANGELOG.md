@@ -13,7 +13,24 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
-- OctetProof witness mode and verdict gate (docs/octetproof-spec-draft.md,
+- **OctetProof 1.0.0 specification** — `docs/octetproof-spec.md` (CC-BY-4.0,
+  2026-08-30), the citable Layer-1 artifact of the cross-witness verification
+  protocol. Supersedes the received draft, which stays verbatim at
+  `docs/octetproof-spec-draft.md`; §19 lists every correction (jDwgParser is
+  GPL-3.0, ACadSharp's coverage is undeclared, LGPL is weak copyleft, ifc-lite's
+  license is unverified, the ACIS reader landed in ACadSharp v3.6.51). §6's
+  examples are now the real committed observation/verdict files, §7.2 states the
+  geometry tolerance as relative 1e-6 with a manifest-stated absolute floor,
+  §10.5 adds `REJECTED_INPUT` and `REPLAY_DRIFT`, and §5.3.1 maps the spec's
+  registry vocabulary onto `research/witness-registry.json`, marking
+  `ci_eligible`, coverage declarations, determinism attestation, and exact
+  version pinning as umbrella scope.
+- **Observation and verdict JSON Schemas** —
+  `docs/schemas/witness-observation.schema.json` and
+  `docs/schemas/witness-verdict.schema.json` (JSON Schema 2020-12) make the
+  OctetProof §6.2 / §6.3 shapes machine-checkable; the committed files under
+  `research/witness/magnetar-2024-core-interior/` validate against them.
+- OctetProof witness mode and verdict gate (docs/octetproof-spec.md,
   docs/verification-protocol.md): `rvt-ifc --observation PATH --artifact-id ID`
   emits a canonical, hashed observation of what the decoder wrote (STEP
   constructor histogram, input SHA-256); `tools/ci/witness-ifcopenshell.py
