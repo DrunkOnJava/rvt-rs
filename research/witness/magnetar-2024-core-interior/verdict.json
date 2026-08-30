@@ -11,10 +11,10 @@
     },
     {
       "category": "floors",
-      "field": "entity_counts.IFCSHADINGDEVICE",
-      "reason": "known_gap",
-      "tracking_issue": 31,
-      "unsupported_feature": "floor_slab_extrusion_thickness"
+      "field": "entity_counts.IFCSLAB",
+      "reason": "decoder_baseline",
+      "tracking_issue": 212,
+      "unsupported_feature": null
     },
     {
       "category": "doors",
@@ -57,6 +57,13 @@
       "reason": "known_gap",
       "tracking_issue": 35,
       "unsupported_feature": "revit_element_parameters_to_ifc_property_sets"
+    },
+    {
+      "category": "shading_devices",
+      "field": "entity_counts.IFCSHADINGDEVICE",
+      "reason": "decoder_baseline",
+      "tracking_issue": 212,
+      "unsupported_feature": null
     }
   ],
   "independence": {
@@ -99,7 +106,7 @@
     "entity_counts.IFCUNITASSIGNMENT"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "ae4679f6044a4c3caa0b2f3a6030648bc633b1d878957a759120f011f71ded5e",
+  "verdict_hash_sha256": "94d723919686963121c05c7475c3ea126e9f8d97fa4b9136c6e5656421c8b40a",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

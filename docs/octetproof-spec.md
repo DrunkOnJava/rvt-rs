@@ -1,8 +1,8 @@
 # Technical Specification: OctetProof — A License-Free Verification Protocol for Undocumented Binary Formats
 
-**Version:** 1.0.1
+**Version:** 1.0.2
 **Date:** 2026-08-30
-**Status:** Specification — 1.0.0. Supersedes the draft received from the project owner on 2026-08-30, which is retained verbatim at [`docs/octetproof-spec-draft.md`](octetproof-spec-draft.md) with its reviewer notes. The corrections applied here are listed in Section 19.
+**Status:** Specification — 1.0.2. Supersedes the draft received from the project owner on 2026-08-30, which is retained verbatim at [`docs/octetproof-spec-draft.md`](octetproof-spec-draft.md) with its reviewer notes. The corrections applied here are listed in Section 19.
 **License of this document:** CC-BY-4.0
 **Reference implementation:** rvt-rs (Apache-2.0) — in-repo instance; umbrella repository: [DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof)
 **Primary domain:** Building Information Modeling (BIM) closed formats, with generalization to any undocumented binary container format
@@ -459,7 +459,7 @@ The source witness, rvt-rs reading the `.rvt` directly — the same file, abbrev
 }
 ```
 
-The committed hash `b6d9b6…` is over the full payload, not the abbreviation above; the abbreviated block is illustrative of shape only. Every other example in this section is byte-exact.
+The committed hash `b6d9b6…` is over the full payload, not the abbreviation above; the abbreviated block is illustrative of shape only. Every other example in this section was byte-exact against the files committed on 2026-08-30; they are **dated snapshots of a decoder state**, not a live mirror of `research/witness/` (see 19b).
 
 Two properties of the payload are load-bearing. First, the two witnesses share only `entity_counts`; everything else in a payload is witness-specific and is not diffed. Second, a witness may report a type the other never emits (`IFCSHADINGDEVICE` here) — the diff is driven by the manifest's declared surface, not by the union of the payload keys, and a type absent from a payload counts as zero.
 
@@ -487,7 +487,7 @@ The verdict is the gate's output for one artifact. It records the whole decision
 |`verdict_hash_sha256`   |yes     |SHA-256 over the canonicalized verdict excluding `timestamp`                                             |
 |`timestamp`             |optional|ISO-8601. Omitted by default so the verdict is byte-reproducible.                                        |
 
-The committed passing verdict for the worked example, complete:
+The passing verdict for the worked example as committed on 2026-08-30, complete (a dated snapshot — see 19b):
 
 ```json
 {
@@ -1063,6 +1063,10 @@ The reference implementation is not normative; any conforming implementation may
 Every version, date, and license above was checked against the GitHub API on 2026-08-30, except where explicitly marked unverified.
 
 -----
+
+## 19b. 1.0.2 (2026-08-30)
+
+Patch release, non-semantic (Section 16.1). The §6.2 and §6.3 worked examples quote the observation and verdict as committed in the reference implementation on 2026-08-30. Later decoder work in that repository changes those files by design — the slab recovery in rvt-rs #212 moves `entity_counts.IFCSLAB` from 64 to 80, adds `IFCSHADINGDEVICE`, and takes `floors` off the excluded list — so the examples are now labelled dated snapshots rather than a live mirror of `research/witness/`. The protocol, the schemas, the diff function and the status vocabulary are unchanged; nothing here is normative. Readers wanting the current artifacts should read the committed files, which CI keeps in replay agreement with a fresh run.
 
 ## 19a. 1.0.1 (2026-08-30)
 

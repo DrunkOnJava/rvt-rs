@@ -37,17 +37,16 @@
       "notes": "The paired 20 KB element fixture carries none of this type; the same .rvt carries 360, scored against the full export in the sibling manifest magnetar-2024-core-interior-slim (#211). Recorded as a decoder baseline here so the reference side stays the element fixture and the count is not double-claimed."
     },
     "floors": {
-      "status": "known_gap",
-      "expected": 1,
-      "source": "paired Revit IFC export; exported as IFCSHADINGDEVICE named Floor:Structural Slab",
-      "source_ifc_type": "IFCSHADINGDEVICE",
+      "status": "decoder_baseline",
+      "expected": 0,
+      "source": "paired Revit IFC export; this 20 KB element fixture carries no IFCSLAB",
+      "source_ifc_type": "IFCSLAB",
       "tolerance": 0,
-      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSHADINGDEVICE",
-      "decoder_expected": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSLAB",
+      "decoder_expected": 80,
       "decoder_tolerance": 0,
-      "tracking_issue": 31,
-      "unsupported_feature": "floor_slab_extrusion_thickness",
-      "notes": "Production path recovers plan-loop IFCSLAB annotations (boundary only); paired IFC uses IFCSHADINGDEVICE."
+      "tracking_issue": 212,
+      "notes": "Changed 2026-08-30 (#212, RE-22): rvt-rs recovers 80 IFCSLAB from OST_Floors / OST_BuildingPad partition element records on this .rvt, replacing the 64 plan-loop boundary annotations it used to emit. This reference is an element-export fixture with one element in it and no IFCSLAB at all, so `expected` is 0 and the row is a decoder baseline, like walls / doors / windows / columns here. The authoritative measurement is the sibling full-project manifest, where the 80 id set matches Revit's export exactly at tolerance 0."
     },
     "roofs": {
       "status": "known",
@@ -158,11 +157,23 @@
       "source_ifc_type": "IFCPROPERTYSET",
       "tolerance": 0,
       "decoder_metric": "step.IFCPROPERTYSET",
-      "decoder_expected": 818,
+      "decoder_expected": 854,
       "decoder_tolerance": 8,
       "tracking_issue": 35,
       "unsupported_feature": "revit_element_parameters_to_ifc_property_sets",
-      "notes": "Current decoder emits RvtFloorGeometry property sets for plan-loop slabs (boundary annotation) plus 754 RvtElementRecordGeometry sets for the columns, walls, doors and windows recovered from partition element records (#204/#211); not a match for the paired IFC property-set inventory, and no set carries a Revit element parameter yet (#35)."
+      "notes": "Current decoder emits 854 RvtElementRecordGeometry sets, one per element recovered from a partition element record - 256 columns, 360 walls, 132 doors, 6 windows, 80 slabs and 20 shading devices (#204/#211/#212). The 64 RvtFloorGeometry sets the plan-loop path used to emit went away with the plan-loop slabs on 2026-08-30. Not a match for the paired IFC property-set inventory, and no set carries a Revit element parameter yet (#35)."
+    },
+    "shading_devices": {
+      "status": "decoder_baseline",
+      "expected": 1,
+      "source": "paired Revit IFC export; the fixture's single element is IFCSHADINGDEVICE 'Floor:Structural Slab:71411'",
+      "source_ifc_type": "IFCSHADINGDEVICE",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSHADINGDEVICE",
+      "decoder_expected": 20,
+      "decoder_tolerance": 0,
+      "tracking_issue": 212,
+      "notes": "Added 2026-08-30 (#212, RE-22). rvt-rs reads the per-element Revit 'IFC Export As' override out of the partition parameter block and emits 20 IFCSHADINGDEVICE on this .rvt. The fixture's one element, ElementId 71411, is one of those 20, so the set relation holds; the row is a decoder baseline because a one-element reference cannot score twenty. The sibling full-project manifest scores the same 20 as an exact id-set match at tolerance 0."
     }
   }
 }

@@ -2544,6 +2544,7 @@ mod tests {
         ("IFCREINFORCINGBAR", 14),
         ("IFCROOF", 9),
         ("IFCSANITARYTERMINAL", 9),
+        ("IFCSHADINGDEVICE", 9),
         ("IFCSLAB", 9),
         ("IFCSPACE", 11),
         ("IFCSTAIR", 9),

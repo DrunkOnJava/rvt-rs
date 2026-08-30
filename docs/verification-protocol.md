@@ -84,7 +84,7 @@ sync with the project-count manifests that already carry the artifact hashes.
 | Edge | Authoring witness | Artifacts | Agreement gates | Status |
 |---|---|---|---|---|
 | RVT → IFC (element fixture) | Autodesk Revit 2024 (magnetar dataset export) | `2024_Core_Interior.rvt` (c805df44…) → `2024_Core_Interior.ifc` (d07c7462…) | `tests/project_count_fixtures.rs` (rvt-rs decode vs manifest counts derived from the export); `tools/ci/witness-ifcopenshell.py` and `tools/ci/witness-ifc-lite` (two unrelated IFC parsers vs the same counts); `tools/ci/witness-verdict.py` (three-lineage verdict) | recorded, gated (tier-2 CI) |
-| RVT → IFC (full project) | Autodesk Revit 24.0.20.20 via ODA SDAI 23.12 | `2024_Core_Interior.rvt` (c805df44…) → `IFC Exports/2024_Core_Interior_slim.ifc` (bfdf36ff…, 19879 entities) | the same four gates, wired to `tests/fixtures/project-counts/2024-core-interior-slim.json`; claimed surface covers `IFCWALL` / `IFCDOOR` / `IFCWINDOW` / `IFCCOLUMN` at tolerance 0 since RE-21 | recorded, gated (tier-2 CI) |
+| RVT → IFC (full project) | Autodesk Revit 24.0.20.20 via ODA SDAI 23.12 | `2024_Core_Interior.rvt` (c805df44…) → `IFC Exports/2024_Core_Interior_slim.ifc` (bfdf36ff…, 19879 entities) | the same four gates, wired to `tests/fixtures/project-counts/2024-core-interior-slim.json`; claimed surface covers `IFCWALL` / `IFCDOOR` / `IFCWINDOW` / `IFCCOLUMN` at tolerance 0 since RE-21, plus `IFCSLAB` / `IFCSHADINGDEVICE` since RE-22 | recorded, gated (tier-2 CI) |
 | RVT → IFC (rvt-rs writer) | rvt-rs | rvt-rs output from Einhoven / synthetics | IfcOpenShell validation in `ci.yml` | recorded — validates the **writer**, not the decoder |
 | RVT → DWG | Autodesk Revit (pending) | none — no Revit-exported DWG exists in any public corpus | dwg-rs parse vs rvt-rs geometry recovery | **not recorded** |
 
@@ -94,21 +94,23 @@ category expectations there are zero — a real edge, and a weak one. The
 full-project export is the strong half of the same edge and it remains
 the place where the distance to Revit is measured: it carries 360
 `IfcWall`, 132 `IfcDoor`, 6 `IfcWindow`, 256 `IfcColumn`, 116
-`IfcSpace`, 80 `IfcSlab` and 15 `IfcBuildingStorey`, against which
-rvt-rs recovers 360 / 132 / 6 / 256 / 18 / 64 / 11 (2026-08-30; walls,
-doors and windows were 0 before #211, columns 0 before #204). Five of
-its thirteen categories are still `known_gap` or `decoder_baseline` with
-a tracking issue (#31, #33, #34, #35, and levels under #33), and the
-verdict's claimed surface is eight fields wide — `IFCWALL`, `IFCDOOR`
-and `IFCWINDOW` joined `IFCCOLUMN`, `IFCROOF`, `IFCBEAM`,
-`IFCFLOWTERMINAL` and `IFCUNITASSIGNMENT` when their **ElementId sets**,
-not merely their counts, matched the export at tolerance 0 (RE-21). Four
-of the eight are agreements about presence now; the other four are
-agreements about absence. The excluded list is still the point: floors
-(79 of 80 recoverable, wrong identity key — #212), spaces, materials and
-property sets remain the measured distance between this decoder and
-Revit's own exporter on a real project, recorded rather than rounded
-off.
+`IfcSpace`, 80 `IfcSlab`, 20 `IfcShadingDevice` and 15
+`IfcBuildingStorey`, against which rvt-rs recovers
+360 / 132 / 6 / 256 / 18 / 80 / 20 / 11 (2026-08-30; walls, doors and
+windows were 0 before #211, columns 0 before #204, slabs 64 plan-loop
+annotations with no ElementIds and shading devices 0 before #212).
+Three of its fourteen categories are still `known_gap` or
+`decoder_baseline` with a tracking issue (#33, #34, #35, and levels
+under #33), and the verdict's claimed surface is ten fields wide —
+`IFCSLAB` and `IFCSHADINGDEVICE` joined `IFCWALL`, `IFCDOOR`,
+`IFCWINDOW`, `IFCCOLUMN`, `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL` and
+`IFCUNITASSIGNMENT` when their **ElementId sets**, not merely their
+counts, matched the export at tolerance 0 (RE-21, RE-22). Six of the
+ten are agreements about presence now; the other four are agreements
+about absence. The excluded list is still the point: levels (11 of 15
+elevations, names unpaired — #33/#218), spaces, materials and property
+sets remain the measured distance between this decoder and Revit's own
+exporter on a real project, recorded rather than rounded off.
 
 ## The second edge: RVT → DWG
 
@@ -179,7 +181,7 @@ mirrors them.
 ## OctetProof alignment
 
 The protocol above is the in-repo instance of
-[OctetProof 1.0.0](octetproof-spec.md) (the received draft is kept verbatim at
+[OctetProof 1.0.2](octetproof-spec.md) (the received draft is kept verbatim at
 `docs/octetproof-spec-draft.md`; §19 of the 1.0.0 spec lists the corrections).
 The observation and verdict shapes are published as machine-checkable JSON
 Schema 2020-12 documents —
@@ -199,7 +201,7 @@ What exists here today, per layer:
 
 | OctetProof layer | rvt-rs today |
 |---|---|
-| 1 Protocol | this document + [`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.0) |
+| 1 Protocol | this document + [`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.2) |
 | 2 Golden corpus | `research/witness/<artifact>/observations/*.json` + `verdict.json`; artifact hashes in the registry and the project-count manifests (the bytes themselves stay in the magnetar dataset, fetched by hash) |
 | 3 Witness registry | `research/witness-registry.json` (`lineage`, `checked`) |
 | 4 CI gate | `tools/ci/witness-verdict.py` in the `ifcopenshell-validate` job: fail-closed statuses `PASS` / `DISAGREE` / `INSUFFICIENT_WITNESSES` / `INSUFFICIENT_INDEPENDENT_WITNESSES` / `REJECTED_INPUT` / `MANIFEST_ERROR` / `REPLAY_DRIFT`; observations and verdict published as a build artifact |

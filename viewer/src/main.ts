@@ -670,7 +670,19 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
     ),
   );
   const prodClasses = decoded.production_class_counts ?? {};
-  const classBits = ['Level', 'Floor', 'Room', 'Material', 'ArcWall', 'ArcWallRectOpening', 'Wall', 'Door', 'Window']
+  const classBits = [
+    'Level',
+    'Floor',
+    'BuildingPad',
+    'Room',
+    'Material',
+    'ArcWall',
+    'ArcWallRectOpening',
+    'Wall',
+    'Door',
+    'Window',
+    'Column',
+  ]
     .map((name) => {
       const n = prodClasses[name];
       return typeof n === 'number' && n > 0 ? `${name} ${n}` : null;

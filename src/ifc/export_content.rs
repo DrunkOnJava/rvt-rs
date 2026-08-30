@@ -77,6 +77,13 @@ impl ExportContentPolicy {
 /// element record's bounding box (#204 / #211).
 pub const ELEMENT_RECORD_PROPERTY_SET: &str = "RvtElementRecordGeometry";
 
+/// Decoded classes whose record bounding-box `z` extent is the
+/// element's own thickness rather than an envelope height (#212).
+pub const SLAB_THICKNESS_CLASSES: &[&str] = &["Floor", "BuildingPad"];
+
+/// Value of the `ThicknessSource` property on a record-backed plate.
+pub const RECORD_BBOX_THICKNESS_SOURCE: &str = "partition_element_record_bbox_z_extent";
+
 /// Classes that must never appear as production building elements.
 pub fn is_misleading_proxy_class(class_name: &str) -> bool {
     matches!(
@@ -171,7 +178,12 @@ pub fn append_typed_production_elements(
         let Some(mapping) = mapping else {
             continue;
         };
-        let ifc_type = mapping.ifc_type.to_string();
+        // A per-element Revit "IFC Export As" override redirects the
+        // entity type (#212, RE-22). Only values `category_map`
+        // recognises are honoured; anything else keeps the class
+        // mapping, so an unknown override can never invent a type.
+        let effective = ifc_export_override(&decoded).unwrap_or(mapping);
+        let ifc_type = effective.ifc_type.to_string();
 
         let name = match decoded.id {
             Some(id) => format!("{}-{}", decoded.class, id),
@@ -254,7 +266,7 @@ pub fn append_typed_production_elements(
             ifc_type,
             name,
             type_guid,
-            predefined_type: mapping.predefined_type.map(str::to_string),
+            predefined_type: effective.predefined_type.map(str::to_string),
             storey_index,
             material_index: None,
             property_set,
@@ -450,6 +462,21 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
     })
 }
 
+/// The IFC entity mapping a per-element "IFC Export As" override
+/// names, when the decoded element carries one and
+/// [`category_map::lookup_export_override`] recognises the value.
+fn ifc_export_override(decoded: &DecodedElement) -> Option<&'static category_map::Mapping> {
+    decoded
+        .fields
+        .iter()
+        .find_map(|(name, value)| match (name.as_str(), value) {
+            ("m_ifc_export_as", InstanceField::String(text)) => {
+                category_map::lookup_export_override(text)
+            }
+            _ => None,
+        })
+}
+
 /// True when this element came from a partition element record.
 fn is_partition_element_record(decoded: &DecodedElement) -> bool {
     decoded.fields.iter().any(|(name, value)| {
@@ -472,6 +499,7 @@ fn is_partition_element_record(decoded: &DecodedElement) -> bool {
 fn element_record_geometry_from_decoded(
     decoded: &DecodedElement,
 ) -> Option<([f64; 3], Extrusion, PropertySet)> {
+    let class = decoded.class.as_str();
     let mut width = None;
     let mut depth = None;
     let mut height = None;
@@ -524,6 +552,29 @@ fn element_record_geometry_from_decoded(
         properties.push(Property {
             name: "SourceStream".into(),
             value: PropertyValue::Text(stream),
+        });
+    }
+    // For a plate the recorded vertical extent *is* the element's
+    // thickness, which closes the `floor_slab_extrusion_thickness`
+    // gap the plan-loop path had to leave open (#31, #212). Measured
+    // against the reference export's `IfcExtrudedAreaSolid.Depth`:
+    // 79 of 80 slabs agree exactly, and the 80th
+    // (`Floor:Basement Slab`, 22756) is exported as two stacked
+    // solids of 0.3333 ft and 1.1667 ft whose depths sum to the
+    // recorded 1.5 ft. It is still the box extent, not a modelled
+    // layer set — `ProfileResolved` stays false.
+    if SLAB_THICKNESS_CLASSES.contains(&class) {
+        properties.push(Property {
+            name: "ThicknessResolved".into(),
+            value: PropertyValue::Boolean(true),
+        });
+        properties.push(Property {
+            name: "ThicknessFeet".into(),
+            value: PropertyValue::LengthFeet(height),
+        });
+        properties.push(Property {
+            name: "ThicknessSource".into(),
+            value: PropertyValue::Text(RECORD_BBOX_THICKNESS_SOURCE.into()),
         });
     }
     Some((
@@ -584,6 +635,118 @@ mod tests {
             byte_range: 0..0,
             provenance: Default::default(),
         }
+    }
+
+    #[test]
+    fn ifc_export_override_redirects_the_entity_type() {
+        let mut entities = vec![entities::IfcEntity::Project {
+            name: Some("t".into()),
+            description: None,
+            long_name: None,
+        }];
+        let mut storeys = Vec::new();
+        let mut slab = decoded("Floor", Some(20953));
+        slab.fields.push((
+            "m_ifc_export_as".into(),
+            InstanceField::String("IfcShadingDevice".into()),
+        ));
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
+        append_typed_production_elements([slab].into_iter(), &mut entities, &mut storeys, policy);
+        match &entities[1] {
+            entities::IfcEntity::BuildingElement {
+                ifc_type,
+                predefined_type,
+                ..
+            } => {
+                assert_eq!(ifc_type, "IFCSHADINGDEVICE");
+                assert_eq!(predefined_type.as_deref(), None);
+            }
+            _ => panic!("expected building element"),
+        }
+    }
+
+    #[test]
+    fn unrecognised_export_override_keeps_the_class_mapping() {
+        let mut entities = vec![entities::IfcEntity::Project {
+            name: Some("t".into()),
+            description: None,
+            long_name: None,
+        }];
+        let mut storeys = Vec::new();
+        let mut slab = decoded("Floor", Some(7));
+        slab.fields.push((
+            "m_ifc_export_as".into(),
+            InstanceField::String("IfcNotAProvenTarget".into()),
+        ));
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
+        append_typed_production_elements([slab].into_iter(), &mut entities, &mut storeys, policy);
+        match &entities[1] {
+            entities::IfcEntity::BuildingElement {
+                ifc_type,
+                predefined_type,
+                ..
+            } => {
+                assert_eq!(ifc_type, "IFCSLAB");
+                assert_eq!(predefined_type.as_deref(), Some("FLOOR"));
+            }
+            _ => panic!("expected building element"),
+        }
+    }
+
+    #[test]
+    fn record_backed_slab_records_a_resolved_thickness() {
+        let mut slab = decoded("Floor", Some(20311));
+        for (name, value) in [
+            ("m_locationX", 93.0),
+            ("m_locationY", 69.5),
+            ("m_locationZ", 75.8333),
+            ("m_bboxWidth", 168.0),
+            ("m_bboxDepth", 107.0),
+            ("m_bboxHeight", 0.1667),
+        ] {
+            slab.fields
+                .push((name.into(), InstanceField::Float { value, size: 8 }));
+        }
+        slab.fields.push((
+            "m_source".into(),
+            InstanceField::String("partition_element_record".into()),
+        ));
+        let (_, body, properties) =
+            element_record_geometry_from_decoded(&slab).expect("record geometry");
+        assert!((body.height_feet - 0.1667).abs() < 1e-6);
+        assert!(properties.properties.iter().any(|p| {
+            p.name == "ThicknessResolved" && matches!(p.value, PropertyValue::Boolean(true))
+        }));
+        assert!(properties.properties.iter().any(|p| {
+            p.name == "ThicknessSource"
+                && matches!(&p.value, PropertyValue::Text(t) if t == RECORD_BBOX_THICKNESS_SOURCE)
+        }));
+    }
+
+    #[test]
+    fn non_plate_record_bodies_do_not_claim_a_thickness() {
+        let mut column = decoded("Column", Some(20375));
+        for (name, value) in [
+            ("m_locationX", 24.0),
+            ("m_locationY", 110.0),
+            ("m_locationZ", 76.0),
+            ("m_bboxWidth", 2.0),
+            ("m_bboxDepth", 2.0),
+            ("m_bboxHeight", 14.33),
+        ] {
+            column
+                .fields
+                .push((name.into(), InstanceField::Float { value, size: 8 }));
+        }
+        let (_, _, properties) =
+            element_record_geometry_from_decoded(&column).expect("record geometry");
+        assert!(
+            !properties
+                .properties
+                .iter()
+                .any(|p| p.name == "ThicknessResolved"),
+            "an envelope height is not a thickness"
+        );
     }
 
     #[test]
