@@ -74,8 +74,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: publish-wheel-${{ matrix.os }}
+          save-if: false
+          shared-key: ci-release
 
       # abi3-py38 means one wheel per OS/arch covers every Python
       # >= 3.8. No per-Python-minor-version matrix needed.
@@ -185,8 +185,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: release-source-smoke
+          save-if: false
+          shared-key: ci-release
       - name: Install crate from release source
         run: cargo install --path . --locked --root /tmp/rvt-release-install
       - name: Run CLIs on sample file
@@ -217,8 +217,8 @@ jobs:
           toolchain: nightly
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: release-docs
+          save-if: false
+          shared-key: ci-docs-rs
       - name: Build docs with warnings denied
         run: cargo +nightly doc --no-deps --all-features -p rvt
 
@@ -237,6 +237,10 @@ jobs:
         with:
           toolchain: stable
           targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: false
+          shared-key: viewer-wasm
       - name: Install wasm-pack
         uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
         with:
@@ -294,8 +298,8 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          key: publish-crate
+          save-if: false
+          shared-key: ci-release
       # Verify the Cargo.toml version matches the git tag — prevents
       # mismatched publishes where the tag says v0.1.3 but the crate
       # goes out as 0.1.2 (or vice versa). Compare `pkgid` output to
