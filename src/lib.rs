@@ -119,6 +119,7 @@ pub mod compression;
 pub mod control;
 pub mod corpus;
 pub mod elem_table;
+pub mod element_record_storeys;
 pub mod elements;
 pub mod error;
 pub mod es_refs;

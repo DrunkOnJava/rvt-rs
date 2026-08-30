@@ -88,8 +88,36 @@ Important nested fields:
 | `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
+| `exported.storey_names` | array | Recovered building-storey display names, in emission order. |
+| `exported.storey_elevations_feet` | array | Recovered storey elevations in feet, aligned with `storey_names`. An all-zero list means only Level *name* strings were recovered — no elevation evidence was found. |
+| `exported.storey_bound_elements` | integer | Building elements contained in a specific storey rather than falling to the first one. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
 | `confidence.score` | number | Heuristic 0..1 readiness score for UI sorting and dashboards. |
+
+## Storey provenance
+
+`storey_count` / `storey_names` / `storey_elevations_feet` describe one of two
+different recoveries, and the elevations are how a reader tells them apart.
+
+- **Name-only.** Partition `Level`-like strings were recovered but nothing in
+  the file gave them an elevation, so every entry in
+  `storey_elevations_feet` is `0.0`. The storeys are real names in an
+  arbitrary order; they are not positions, and every element falls into the
+  first one.
+- **Measured elevations.** Base elevations were recovered — from 2023 ArcWall
+  trailers, or on Revit 2024 from the partition element-record bounding boxes
+  (#213) — so `storey_elevations_feet` carries distinct values and
+  `storey_bound_elements` counts the elements that matched one. Storeys whose
+  elevation was measured but whose name was not are labelled
+  `Elevation N ft`; a Level name is applied only when there is exactly one
+  recovered name per measured elevation, because any other pairing would be a
+  guess about which Level sits where. The unpaired names remain visible in
+  `decoded.production_class_counts.Level`, and a warning states how many were
+  left unplaced.
+
+Neither case resolves a Level *ElementId*: `LevelBindResolved` on an element's
+property set stays `false`, and elements bound by elevation additionally carry
+`StoreyBindSource = record_base_elevation` so the two joins are never confused.
 
 ## Example
 
@@ -128,7 +156,10 @@ Important nested fields:
     "classification_count": 0,
     "unit_assignment_count": 1,
     "material_count": 0,
-    "storey_count": 0
+    "storey_count": 0,
+    "storey_names": [],
+    "storey_elevations_feet": [],
+    "storey_bound_elements": 0
   },
   "skipped": [
     {

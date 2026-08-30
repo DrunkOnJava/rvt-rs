@@ -79,16 +79,30 @@ instance filter over-counts there, so those categories stay
 changed in this release. IFC export maps recovered
 Levels → storeys, Floors → boundary-annotated slabs, Rooms → spaces,
 Columns → `IfcColumn` with placement and a bounding-box extrusion
-(envelope, not a recovered family profile; base/top Level binding still
-open), and Material display names → `IfcMaterial`. Viewer File Status lists recovered
-storey names, material name samples, and an honest Parameters row (empty
-until AProperty* host joins). The scene tree groups elements under
-`IFCBUILDINGSTOREY` nodes (ArcWalls by elevation; Floors/Rooms remain
-Unassigned until Level ElementIds exist on both sides — bind plumbing is
-fail-closed and corpus-idle today). RE-20 (same corpora) found **no**
-recoverable Level ElementId map: `Level` is absent from Formats schema;
-LevelAssociationCell / name / elevation proximity scans are
-noise-dominated — Floors/Rooms stay Unassigned by evidence, not omission.
+(envelope, not a recovered family profile; base/top Level ElementId
+binding still open), and Material display names → `IfcMaterial`.
+**Storey elevations on Revit 2024 come from the element-record bounding
+boxes, not from names** (#213): the 256 recovered columns stand on
+exactly 11 distinct base elevations — 0, 31, 46, 61, 76, 91, 106, 121,
+136, 151, 166 ft — and all 11 equal an `IfcBuildingStorey.Elevation` in
+Revit's own export of the same file, with no false positives; the
+export's other four storeys carry no column record and are not claimed.
+Each recorded element is contained in the storey whose elevation equals
+its base (`IfcRelContainedInSpatialStructure` 1 → 11 on that file, 256
+of 338 elements bound), and both halves fail closed. The storey *names*
+are not recovered with the elevations: 12 Level-like name strings
+against 11 measured elevations is not a pairing, so each storey is
+labelled `Elevation N ft` and the names stay in
+`diagnostics.decoded.production_class_counts`. Viewer File Status lists
+recovered storey names, material name samples, and an honest Parameters
+row (empty until AProperty* host joins). The scene tree groups elements
+under `IFCBUILDINGSTOREY` nodes (ArcWalls and 2024 element records by
+elevation; Floors/Rooms remain Unassigned until Level ElementIds exist
+on both sides — bind plumbing is fail-closed and corpus-idle today).
+RE-20 (same corpora) found **no** recoverable Level ElementId map:
+`Level` is absent from Formats schema; LevelAssociationCell / name /
+elevation proximity scans are noise-dominated — Floors/Rooms stay
+Unassigned by evidence, not omission.
 RE-19 found **no** reliable Door vs Window discriminator and **no**
 schema-field / 2024 ArcWall envelope suitable for fail-closed decode —
 typed `Door`/`Window` and non-ArcWall `Wall` stay unsolved. AProperty*
@@ -109,7 +123,7 @@ decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
 | Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms/Floor plan-loops + 2024 ArcWallRectOpening (ElemTable-confirmed related ids) + 2024 `OST_Columns` partition element records (256/256 on Core Interior, cross-witness gated, #204); HostObjAttr filtered; RE-19 negative: no Door/Window discriminator / no schema-field Wall on magnetar corpora | Full model conversion is not ready; columns are the one category that matches Revit's exporter exactly. |
 | Typed decoder structs | Partial | `elements::all_decoders()` registers **81** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
-| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / 2024 `IfcColumn` with placement + bounding-box extrusion / Material display names; thickness + Door/Window host IFC still open; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
+| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; every emitted instance carries the full IFC4 attribute list its type declares, gated per instance against the EXPRESS schema by `tools/ci/ifc_schema_arity.py` (#214); 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / 2024 `IfcColumn` with placement + bounding-box extrusion + measured storey containment (#213) / Material display names; thickness + Door/Window host IFC still open; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, File Status shows production class counts + storey/material totals, supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Always-on patch corpus (`gen-fixture` project + MIT `empty.rfa`) covers identity, grow, shrink, multi-stream, missing-stream; optional Autodesk corpora add release-matrix + GUID/history checks; corrupt-gzip verification is unit-tested | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |
