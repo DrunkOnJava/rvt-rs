@@ -183,10 +183,10 @@ note: ADocument record not locatable in this release's stream
 ```
 
 Extending the entry-point detector to every release is task
-[L5B-11](../TODO-BLINDSIDE.md) *(not yet implemented)*.
+L5B-11 *(historical planning id; not yet implemented)*.
 
 Per-element typed views live under [`src/elements/`](../src/elements/) —
-80 decoders (Level, Wall, Floor, Roof, Door, Window, Column, Beam,
+81 decoders (Level, Wall, Floor, Roof, Door, Window, Column, Beam,
 Stair, Railing, Room, Furniture, Rebar, Phase, DesignOption, Workset,
 and more). Each takes the generic `DecodedElement` produced by the
 walker and projects it into a typed struct. Sample call:
@@ -212,7 +212,7 @@ table: [`src/elements/wall.rs`](../src/elements/wall.rs).
 
 Driving this loop off the live `Global/Latest` element table — so a
 Revit file's full Level / Wall / Door inventory falls out automatically
-— is task [L5B-01](../TODO-BLINDSIDE.md) *(not yet implemented)*; today
+— is task L5B-01 *(historical planning id; not yet implemented)*; today
 the walker exposes `ADocument`, and per-element decoders run against
 synthesised schema+bytes fixtures.
 
@@ -324,7 +324,7 @@ Today that path emits a valid IFC4 spatial tree (Project + Site +
 Building + Storey) but per-element branches are sparse — the
 end-to-end Revit walker that drives every decoded `Wall` / `Floor` /
 `Door` into `build_ifc_model` the way the synthetic test does is
-[L5B-01](../TODO-BLINDSIDE.md) + a handful of IFC tasks
+L5B-01 (historical planning id) + a handful of IFC tasks
 *(not yet implemented)*.
 
 ---

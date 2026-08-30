@@ -256,9 +256,9 @@ Add to the `[Unreleased]` section:
 - `cargo fmt --all`
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo test --lib elements`
-- Commit message: `feat(walker): Layer 5b MyClass decoder (#LXX)`
-  — use the L5B-XX task number from `TODO-BLINDSIDE.md`
-- Open PR referencing the task number
+- Commit message: `feat(walker): Layer 5b MyClass decoder (#NNN)`
+  — reference the GitHub issue (CLASS-xx / M3-xx in `TODO.md`)
+- Open PR referencing the issue
 
 ---
 
@@ -367,7 +367,7 @@ exporter + basic viewer; the rest fill in per-category coverage.
 - Open a GitHub Discussion for "how do I…" questions
 - File an Issue with the `class-decoder` label if you hit a
   blocker that looks like a bug in the scaffold
-- Reference `TODO-BLINDSIDE.md` at the repo parent for the
-  tracked L5B-XX task numbers
+- `TODO.md` and `ROADMAP.md` carry the tracked decoder work (the
+  historical L5B-XX planning ids were never checked in)
 - Read `CONTRIBUTING.md` and `CLEANROOM.md` for the source-
   provenance rules before contributing

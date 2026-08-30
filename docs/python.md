@@ -9,7 +9,7 @@ class (`RevitFile`) and one module-level helper (`rvt_to_ifc`),
 both documented in full below.
 
 Single source of truth for the runtime surface is
-[`src/python.rs`](../src/python.rs); the hand-maintained type stubs
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs); the hand-maintained type stubs
 at [`python/rvt/__init__.pyi`](../python/rvt/__init__.pyi) mirror
 it for mypy / pyright.
 
@@ -91,7 +91,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`src/python.rs`](../src/python.rs) at v0.1.2.
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) at v0.1.2.
 
 ### Module-level
 
@@ -418,11 +418,9 @@ matrix verbatim:
 | 2024 – 2026 | yes | full | yes |
 
 Full matrix and per-column definitions are in
-[`docs/compatibility.md`](./compatibility.md). The "walker
-partial" rows are tracked as L5B-11 in
-[`TODO-BLINDSIDE.md`](../../../TODO-BLINDSIDE.md); expanding to
-2016–2023 requires per-version entry-point heuristics and is
-active work, not shipped.
+[`docs/compatibility.md`](./compatibility.md). Expanding the generic
+walker to 2016–2023 requires per-version entry-point heuristics and is
+tracked in [`ROADMAP.md`](../ROADMAP.md) — active work, not shipped.
 
 File types: `.rvt`, `.rfa`, `.rte`, `.rft` all read through the
 same code path (CFB magic dispatch). The reference corpus is
@@ -513,7 +511,7 @@ On Apple Silicon, verify `pip install maturin` resolved a
 See [`CONTRIBUTING.md`](../CONTRIBUTING.md). Python-specific
 changes land in:
 
-- [`src/python.rs`](../src/python.rs) — the pyo3 binding layer
+- [`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) — the pyo3 binding layer
 - [`python/rvt/__init__.pyi`](../python/rvt/__init__.pyi) — type
   stubs (keep in sync)
 - [`tests/python/test_rvt.py`](../tests/python/test_rvt.py) —
