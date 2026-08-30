@@ -1,6 +1,7 @@
 # Verification protocol: cross-witness agreement for undocumented formats
 
-Status: **protocol v0 — one recorded edge, one independent witness gate.**
+Status: **protocol v0 — two recorded RVT → IFC edges, three independent
+reading witnesses.**
 This document defines what "verified" means for rvt-rs and its sibling
 [dwg-rs](https://github.com/DrunkOnJava/dwg-rs). It is deliberately small.
 It grows only when a new edge or witness is actually recorded, hashed, and
@@ -25,8 +26,8 @@ For a format with no specification, correctness cannot mean "matches the
 spec". It means: **agrees with N independent witnesses across M format
 boundaries**, where N, M, and the exact artifacts are recorded, hashed, and
 re-checked by CI. rvt-rs and dwg-rs are the first two reading witnesses;
-Revit's own exporters are the first authoring witness; IfcOpenShell is the
-first third-party reading witness.
+Revit's own exporters are the first authoring witness; IfcOpenShell and
+IFClite are the third-party reading witnesses on the IFC node.
 
 The research contribution is the protocol and its corpus, not any
 individual decoder.
@@ -82,16 +83,23 @@ sync with the project-count manifests that already carry the artifact hashes.
 
 | Edge | Authoring witness | Artifacts | Agreement gates | Status |
 |---|---|---|---|---|
-| RVT → IFC | Autodesk Revit 2024 (magnetar dataset export) | `2024_Core_Interior.rvt` (c805df44…) → `2024_Core_Interior.ifc` (d07c7462…) | `tests/project_count_fixtures.rs` (rvt-rs decode vs manifest counts derived from the export); `tools/ci/witness-ifcopenshell.py` (IfcOpenShell parse of the export vs the same counts) | recorded, gated (tier-2 CI) |
+| RVT → IFC (element fixture) | Autodesk Revit 2024 (magnetar dataset export) | `2024_Core_Interior.rvt` (c805df44…) → `2024_Core_Interior.ifc` (d07c7462…) | `tests/project_count_fixtures.rs` (rvt-rs decode vs manifest counts derived from the export); `tools/ci/witness-ifcopenshell.py` and `tools/ci/witness-ifc-lite` (two unrelated IFC parsers vs the same counts); `tools/ci/witness-verdict.py` (three-lineage verdict) | recorded, gated (tier-2 CI) |
+| RVT → IFC (full project) | Autodesk Revit 24.0.20.20 via ODA SDAI 23.12 | `2024_Core_Interior.rvt` (c805df44…) → `IFC Exports/2024_Core_Interior_slim.ifc` (bfdf36ff…, 19879 entities) | the same four gates, wired to `tests/fixtures/project-counts/2024-core-interior-slim.json` | recorded, gated (tier-2 CI) |
 | RVT → IFC (rvt-rs writer) | rvt-rs | rvt-rs output from Einhoven / synthetics | IfcOpenShell validation in `ci.yml` | recorded — validates the **writer**, not the decoder |
 | RVT → DWG | Autodesk Revit (pending) | none — no Revit-exported DWG exists in any public corpus | dwg-rs parse vs rvt-rs geometry recovery | **not recorded** |
 
-Honesty note on the first edge: the paired Core Interior IFC in the magnetar
-dataset is an element-export fixture (20 KB), not a full project schedule,
-so most category expectations there are zero. It is a real edge with an
-independent third-party witness, and a weak one. The full-project export
-(`2024_Core_Interior_slim.ifc`, bfdf36ff…, Autodesk Revit 24.0.20.20) is
-registered as an artifact but has no manifest yet.
+Honesty note on the two IFC edges: the paired Core Interior IFC is an
+element-export fixture (20 KB), not a full project schedule, so most
+category expectations there are zero — a real edge, and a weak one. The
+full-project export is the strong half of the same edge and it is
+unflattering: it carries 360 `IfcWall`, 132 `IfcDoor`, 256 `IfcColumn`,
+116 `IfcSpace`, 80 `IfcSlab` and 15 `IfcBuildingStorey`, against which
+rvt-rs recovers 0 / 0 / 0 / 18 / 64 / 12. Nine of its thirteen categories
+are therefore `known_gap` or `decoder_baseline` with a tracking issue
+(#30, #31, #32, #33, #34, #35, #204), and the verdict's claimed surface is
+four fields wide. The excluded list is the point: it is the measured
+distance between this decoder and Revit's own exporter on a real project,
+recorded rather than rounded off.
 
 ## The second edge: RVT → DWG
 
@@ -132,6 +140,23 @@ Copyleft (GPL/LGPL/CDDL) and non-Rust witnesses are adopted only as separate
 CI processes — never linked into the workspace. Unlicensed projects (reviter
 today) cannot be adopted at all until they carry a license.
 
+The third adopted reading witness, IFClite, shows the rule applied to a
+witness that could have been linked and deliberately is not. It is the
+crates.io crate `ifc-lite-core`, pinned at `=7.1.1` (published 2026-08-27),
+from `LTplus-AG/ifc-lite` — Rust, and MPL-2.0 in both the crate metadata and
+the repository LICENSE, which corrects an earlier registry entry that
+recorded `MIT` against a bare `ifc-lite` slug. Its independence is real: the
+crate carries its own byte-level STEP scanner and nom tokenizer and links no
+IfcOpenShell code. The project *validates its geometry kernel against*
+IfcOpenShell, which is a comparison, not a lineage — the same distinction
+that makes FreeCAD's BIM workbench (which runs IfcOpenShell) the same
+witness as its base. MPL-2.0 is file-level copyleft and would be safe to
+link, but `tools/ci/witness-ifc-lite` is still its own workspace root so no
+third-party reader ever enters an Apache-2.0 artifact, and
+`tests/witness_registry.rs` fails the build if the Cargo pin, the version
+the binary stamps into every observation, and the registry entry drift
+apart (spec §9.6 forbids silent witness upgrades).
+
 The umbrella repository proposed for this protocol (vision, golden corpus,
 cross-witness CI gate, protocol spec; decoders linked, never parsing a
 byte) is deliberately **not** created yet. It earns its existence the day
@@ -149,7 +174,9 @@ Schema 2020-12 documents —
 (§6.2) and
 [`docs/schemas/witness-verdict.schema.json`](schemas/witness-verdict.schema.json)
 (§6.3) — and the committed files under
-`research/witness/magnetar-2024-core-interior/` validate against them. §5.3.1 of
+`research/witness/magnetar-2024-core-interior/` and
+`research/witness/magnetar-2024-core-interior-slim/` validate against them.
+§5.3.1 of
 the spec maps its `registry.yaml` vocabulary onto the fields of
 `research/witness-registry.json` and names the four requirements
 (`ci_eligible`, coverage declaration, determinism attestation, exact version
@@ -163,7 +190,7 @@ What exists here today, per layer:
 | 2 Golden corpus | `research/witness/<artifact>/observations/*.json` + `verdict.json`; artifact hashes in the registry and the project-count manifests (the bytes themselves stay in the magnetar dataset, fetched by hash) |
 | 3 Witness registry | `research/witness-registry.json` (`lineage`, `checked`) |
 | 4 CI gate | `tools/ci/witness-verdict.py` in the `ifcopenshell-validate` job: fail-closed statuses `PASS` / `DISAGREE` / `INSUFFICIENT_WITNESSES` / `INSUFFICIENT_INDEPENDENT_WITNESSES` / `REJECTED_INPUT` / `MANIFEST_ERROR` / `REPLAY_DRIFT`; observations and verdict published as a build artifact |
-| 5 Decoder witness mode | `rvt-ifc --observation PATH --artifact-id ID` (source witness); `tools/ci/witness-ifcopenshell.py --observation` (bridge witness) |
+| 5 Decoder witness mode | `rvt-ifc --observation PATH --artifact-id ID` (source witness); `tools/ci/witness-ifcopenshell.py --observation` and `tools/ci/witness-ifc-lite --observation` (two independent bridge witnesses) |
 
 Observation payloads are hashed after canonicalization (sorted keys, no
 whitespace, UTF-8); `tests/witness_verdict.rs` recomputes those hashes from

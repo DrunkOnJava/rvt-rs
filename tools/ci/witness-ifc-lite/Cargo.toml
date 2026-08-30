@@ -1,0 +1,31 @@
+[package]
+name = "witness-ifc-lite"
+version = "0.1.0"
+edition = "2021"
+# NOT the workspace MSRV (1.85). ifc-lite-core 7.1.1 calls
+# `usize::is_multiple_of`, stabilised in Rust 1.87, so this witness needs a
+# newer toolchain than the `rvt` crate does. That is harmless precisely
+# because the witness is out-of-workspace: the MSRV job in ci.yml builds the
+# workspace only, and the `ifcopenshell-validate` job that runs this witness
+# uses `stable`.
+rust-version = "1.87"
+license = "Apache-2.0"
+publish = false
+description = "Third independent IFC reading witness for the OctetProof gate: counts IFC entity instances with ifc-lite-core and emits a canonical observation."
+
+# Deliberately its own workspace root, not a member of the `rvt` workspace.
+# ifc-lite-core is MPL-2.0; docs/verification-protocol.md requires third-party
+# witnesses to run as separate processes and never to be linked into the
+# Apache-2.0 tree. Keeping this crate out of the workspace means
+# `cargo build` / `cargo clippy --all-targets` at the repo root never pull
+# MPL-licensed code into a shipped artifact.
+[workspace]
+
+[dependencies]
+# Pinned by exact version (OctetProof §9.6 — floating ranges are forbidden for
+# a witness). Bumping this pin must also update WITNESS_VERSION in src/main.rs
+# and the `version` field of the `ifc-lite` witness in
+# research/witness-registry.json; tests/witness_registry.rs enforces that.
+ifc-lite-core = "=7.1.1"
+serde_json = "1"
+sha2 = "0.10"
