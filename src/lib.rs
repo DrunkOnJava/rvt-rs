@@ -59,6 +59,8 @@
 //! - [`identity`] — document-scoped ElementId / UniqueId contracts (Phase 1)
 //! - [`evidence`] — evidence tiers + research edge ledgers (Phase 1)
 //! - [`es_refs`] — ES reference occurrence locator contracts (Phase 1; no decoder)
+//! - [`relations`] — experimental relation-domain registry + SCC/quarantine stubs
+//! - [`capability`] — honest capability manifest snapshot for doctor/CLI
 //! - [`transmission_data`] — TransmissionData UTF-16LE detect-only probe
 //! - [`writer`] — byte-preserving OLE round-trip
 //! - [`redact`] — shared PII scrubbers for all CLIs
@@ -108,6 +110,7 @@
 
 pub mod arc_wall_record;
 pub mod basic_file_info;
+pub mod capability;
 pub mod class_index;
 pub mod class_tag_map;
 pub mod compression;
@@ -133,6 +136,7 @@ pub mod partitions;
 pub mod reader;
 pub mod rect_opening_index;
 pub mod redact;
+pub mod relations;
 pub mod round_trip;
 pub mod streams;
 pub mod transmission_data;
