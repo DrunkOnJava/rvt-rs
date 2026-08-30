@@ -11,7 +11,7 @@
       "IFCAXIS2PLACEMENT2D": 256,
       "IFCAXIS2PLACEMENT3D": 257,
       "IFCBUILDING": 1,
-      "IFCBUILDINGSTOREY": 12,
+      "IFCBUILDINGSTOREY": 11,
       "IFCCARTESIANPOINT": 513,
       "IFCCOLUMN": 256,
       "IFCCONVERSIONBASEDUNIT": 4,
@@ -19,7 +19,7 @@
       "IFCDIRECTION": 258,
       "IFCEXTRUDEDAREASOLID": 256,
       "IFCGEOMETRICREPRESENTATIONCONTEXT": 1,
-      "IFCLOCALPLACEMENT": 352,
+      "IFCLOCALPLACEMENT": 351,
       "IFCMATERIAL": 102,
       "IFCMEASUREWITHUNIT": 4,
       "IFCORGANIZATION": 1,
@@ -29,10 +29,10 @@
       "IFCPRODUCTDEFINITIONSHAPE": 256,
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 320,
-      "IFCPROPERTYSINGLEVALUE": 1536,
+      "IFCPROPERTYSINGLEVALUE": 1792,
       "IFCRECTANGLEPROFILEDEF": 256,
       "IFCRELAGGREGATES": 3,
-      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 1,
+      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 11,
       "IFCRELDEFINESBYPROPERTIES": 320,
       "IFCSHAPEREPRESENTATION": 256,
       "IFCSITE": 1,
@@ -47,9 +47,9 @@
       "IFCSPACE": 18
     },
     "material_count": 102,
-    "storey_count": 12
+    "storey_count": 11
   },
-  "observation_hash_sha256": "8f2282bc280c2c103dd54fa7fe6e20dae71811598064871b790e033676ae62be",
+  "observation_hash_sha256": "b1ae3c34ebf7b6261c11d65b67af240e1c398ac046f4e8838ca3a356080181d8",
   "schema_version": "1.0.0",
   "semantic_surface_covered": [
     "entity_counts"
@@ -63,9 +63,10 @@
     "schema_field_wall_instances"
   ],
   "warnings": [
-    "Unsupported or incomplete geometry was reported: unsupported_geometry_curve=18, unsupported_geometry_missing_level=274, unsupported_geometry_missing_dimensions=18, floor_boundary_annotation_only=64.",
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_curve=18, unsupported_geometry_missing_level=18, unsupported_geometry_missing_dimensions=18, floor_boundary_annotation_only=64.",
     "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
-    "12 building storey name(s) came from partition Level-like strings (RE-15/#86 via PR #117); ElementId↔Level binding is still pending.",
+    "11 building storey(s) lack a confident partition Level name and keep elevation fallback labels.",
+    "11 building storey elevation(s) were measured from partition element-record bounding boxes and 256 building element(s) bound to them by base elevation (#213); the 12 recovered Level name string(s) could not be paired with those elevations and are not asserted as storey names.",
     "Suppressed 18 low-confidence schema scan candidates from default export.",
     "Formats/Latest multipage integrity uncertain (checksum-page strip disabled; RVT_FORMATS_MULTIPAGE_UNVERIFIED)."
   ],

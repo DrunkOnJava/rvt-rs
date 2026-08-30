@@ -13,6 +13,44 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Storey elevations recovered from element-record bounding boxes, and
+  elevation-keyed spatial containment (#213).** `src/element_record_storeys.rs`
+  turns the distinct base `z` of the partition element records into building
+  storeys and binds each recorded element to the storey whose elevation matches
+  its base. On `2024_Core_Interior.rvt` the 256 recovered `OST_Columns` records
+  stand on exactly **11 distinct base elevations** — 0, 31, 46, 61, 76, 91,
+  106, 121, 136, 151, 166 ft — and **all 11 equal an `IfcBuildingStorey.Elevation`
+  in Revit's own export of the same file**, with no false positives; the
+  export's other four storeys (−40, −20, 15, 185.5 ft) carry no column record
+  and are not claimed. `IfcRelContainedInSpatialStructure` goes 1 → 11 and 256
+  of 338 building elements land in a specific storey instead of all 338
+  defaulting to the first one. Both halves fail closed: the storey set is
+  replaced only when the recovered `Level` rows carry no elevation of their own
+  (all at one value), and an element whose base matches no storey — or more
+  than one — stays unbound. The 2023 ArcWall path, which already recovers real
+  elevations, is untouched (verified on the Einhoven sample: 4 storeys,
+  4 containment relations, unchanged). Level *names* are deliberately not
+  paired with the measured elevations: on this file there are 12 name
+  candidates against 11 elevations, and a rank join puts `Level 6` at 91 ft
+  where the export puts `Level 7`, so every storey keeps an
+  `Elevation N ft` label and the 12 recovered names stay visible in
+  `diagnostics.decoded.production_class_counts.Level`. Level ElementId binding
+  remains unsolved (#86 / RE-20) and is not what this does.
+- **`diagnostics.exported.storey_elevations_feet` and
+  `diagnostics.exported.storey_bound_elements`** — the recovered elevations
+  alongside the existing `storey_names`, and how many building elements reached
+  a specific storey. An all-zero elevation list is the honest signal that only
+  Level name strings were recovered.
+- **`tools/ci/ifc_schema_arity.py`** — a fail-closed schema-conformance gate
+  that re-derives every entity's declared attribute count from the IFC4 EXPRESS
+  schema and compares it with what the STEP text actually wrote, for every
+  instance in a file, plus a null check on `PredefinedType` for the entity
+  types whose every `category_map` row supplies one. Wired into the
+  `ifcopenshell-validate` CI job over both committed fixtures and the
+  freshly emitted real-project IFC, into `tools/check-local.sh --ifcopenshell`,
+  and into `tools/ci/validate-real-ifc.py`. IfcOpenShell's `open()` accepts a
+  short record, so a count-only check never saw this class of defect.
+
 - **Column instance recovery — 256 of 256 `IFCCOLUMN` on the Core Interior
   full-project export (#204).** `src/partition_element_records.rs` decodes the
   Revit 2024 partition *element-record header*, a fixed 88-byte prologue whose
@@ -209,6 +247,25 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Changed
 
+- **`levels` moves from 12 name-derived storeys to 11 measured ones on Core
+  Interior (#213).** Both project-count manifests move
+  `diagnostics.exported.storey_count` from 12 to 11: the previous 12 came from
+  partition Level-like name strings that all defaulted to elevation 0.0, so
+  exactly one of them matched the export by accident; the 11 that replace them
+  are measured elevations that all match. Both `rvt-rs.json` observations were
+  regenerated (`IFCBUILDINGSTOREY` 12 → 11, `IFCRELCONTAINEDINSPATIALSTRUCTURE`
+  1 → 11, `IFCLOCALPLACEMENT` 352 → 351, `IFCPROPERTYSINGLEVALUE` 1536 → 1792
+  for the new `StoreyBindSource` property, `storey_count` 12 → 11), so their
+  `observation_hash_sha256` changed; both committed verdicts still `PASS`
+  byte-identically, because `entity_counts.IFCBUILDINGSTOREY` is a
+  `decoder_baseline` field and is excluded from the claimed surface.
+  `unsupported_geometry_missing_level` drops 274 → 18 — only the 18 spaces
+  remain unbound.
+- **Both committed synthetic IFC fixtures were regenerated** so they carry the
+  full attribute lists from #214. `tests/fixtures/synthetic-project.ifc` and
+  `tests/fixtures/synthetic-structural.ifc` change entity *text*, not entity
+  *counts*.
+
 - **API (breaking, pre-`0.2.0`)** — `elem_table::ElemTableLayout` gains a
   `marker_offset` field (offset of the `FF` marker *within* a record), so
   struct-literal construction needs updating. `start` now means record 0's
@@ -233,6 +290,34 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 - **ADR-004** — desktop distribution wrappers deferred.
 
 ### Fixed
+
+- **Every emitted IFC4 instance now carries the full attribute list its entity
+  type declares (#214).** The writer emitted building elements with the eight
+  `IfcProduct` + `Tag` attributes and stopped, so `IFCCOLUMN`, `IFCSLAB`,
+  `IFCWALL`, `IFCBEAM` and friends were one attribute short of the schema's
+  nine, `IFCDOOR` / `IFCWINDOW` three short of thirteen, and `IFCSPACE` three
+  short of eleven — 338 non-conformant instances on `2024_Core_Interior.rvt`
+  (256 + 64 + 18), 21 across the two committed fixtures. Reading
+  `PredefinedType` off such an instance raised *"Index 8 is out of range for
+  variant of size 8"*. `src/ifc/step_writer.rs` now drives emission from a
+  per-type attribute layout, `IfcEntity::BuildingElement` carries a
+  `predefined_type` populated from `category_map` (`.COLUMN.` for `Column`,
+  `.FLOOR.` for `Floor`, `.STANDARD.` for `Wall`, `.INTERNAL.` for `Room`, …),
+  and unknown optionals occupy their slot as `$` rather than being dropped.
+  `IFCSPACE` also stops writing the type GUID into slot 8: `IfcSpace` is a
+  spatial element with no `Tag`, so that slot is `LongName`.
+- **Three further attribute-arity defects the same audit surfaced.**
+  `IFCISHAPEPROFILEDEF` wrote 8 attributes against IFC4's 10 (the IFC4-only
+  `FlangeEdgeRadius` / `FlangeSlope` were missing), `IFCCLASSIFICATIONREFERENCE`
+  5 against 6 (`Sort`), and `IFCMATERIALLAYERSETUSAGE` 4 against 5
+  (`ReferenceExtent`). `IfcBuildingStorey.Elevation` was written as a bare
+  integer literal (`0`) where ISO-10303-21 requires a REAL; it is now
+  `0.000000`. The emitted Core Interior IFC goes from 338 mismatching
+  instances to 0 across all 33 entity types.
+- **A hostile `PredefinedType` can no longer corrupt a STEP record.** An
+  enumeration reference is written bare between dots and has no escape form, so
+  a value that is not a legal STEP enumeration name now degrades to `$`
+  (`tests/fuzz_regressions.rs` drives adversarial names through the path).
 
 - **Geometry-coverage diagnostics no longer read "solved" from a partial
   export.** `unsupported_features` used to carry `real_file_element_geometry`
