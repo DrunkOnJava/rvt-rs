@@ -170,6 +170,17 @@ jobs:
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
         run: cargo test --profile ci --test ifc_roundtrip
+      # #206: `elem_table_corpus` reads both corpora but was named by no CI
+      # job, so it took its skip path on every run — for months, while the
+      # 2024 project record walk was silently one record short. The family
+      # half is gated here (this job has RVT_SAMPLES_DIR); the project half
+      # is gated in `corpus-tier2`.
+      - name: ElemTable record framing (family corpus)
+        if: matrix.with_corpus
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+          RVT_REQUIRE_CORPUS: "1"
+        run: cargo test --profile ci --test elem_table_corpus -- --nocapture
 
   ifc-smoke:
     # IFC-42: run the synthetic-project integration test and assert
@@ -279,6 +290,27 @@ jobs:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
         run: cargo test --profile ci --test project_count_fixtures -- --nocapture
+      # #206: every target below reads RVT_PROJECT_CORPUS_DIR but was named
+      # by no corpus job, so all of them took their skip path on every CI
+      # run — the matrix jobs run them without the variable, and the corpus
+      # jobs name specific `--test` targets. `elem_table_corpus` hid a real
+      # decoder bug that way (26424 of 26425 declared records on the 2024
+      # project). A new corpus-reading target has to be added to this list
+      # to count as gated.
+      - name: Tier-two decoder gates (ElemTable, ArcWall, partitions, walker)
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
+        run: |
+          cargo test --profile ci \
+            --test elem_table_corpus \
+            --test arc_wall_corpus \
+            --test partition_scanner \
+            --test iter_elements_typed \
+            --test re15_geometry_invariants \
+            --test re19_door_window_wall_negative \
+            --test walker_to_ifc_integration \
+            -- --nocapture
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project

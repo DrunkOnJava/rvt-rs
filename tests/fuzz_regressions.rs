@@ -598,6 +598,7 @@ fn elem_table_public_layout_stride_zero_does_not_panic() {
     let layout = rvt::elem_table::ElemTableLayout {
         start: 0,
         stride: 0,
+        marker_offset: 0,
         framing: rvt::elem_table::RecordFraming::Implicit,
     };
     assert_no_panic("elem_table_stride_zero", &[0u8; 64], |d| {
@@ -610,6 +611,7 @@ fn elem_table_public_layout_huge_start_does_not_panic() {
     let layout = rvt::elem_table::ElemTableLayout {
         start: usize::MAX - 1,
         stride: 12,
+        marker_offset: 0,
         framing: rvt::elem_table::RecordFraming::Implicit,
     };
     assert_no_panic("elem_table_huge_start", &[0u8; 64], |d| {
@@ -622,6 +624,7 @@ fn elem_table_public_layout_huge_marker_does_not_panic() {
     let layout = rvt::elem_table::ElemTableLayout {
         start: 0,
         stride: 12,
+        marker_offset: usize::MAX,
         framing: rvt::elem_table::RecordFraming::Explicit {
             marker_len: usize::MAX,
         },

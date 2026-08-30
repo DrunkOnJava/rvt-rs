@@ -8,8 +8,15 @@
 //! | Variant               | Record start | Marker per record      | Record size |
 //! | ---                   | ---          | ---                    | ---         |
 //! | Family (.rfa, 2016-2026) | `0x30`     | none (implicit)        | 12 B        |
-//! | Project 2023 (.rvt)   | `0x1E`       | `FF FF FF FF` (4 B)    | 28 B        |
-//! | Project 2024 (.rvt)   | `0x22`       | `FF`×8 (8 B)           | 40 B        |
+//! | Project 2023 (.rvt)   | `0x1E`       | `FF FF FF FF` at `+0`  | 28 B        |
+//! | Project 2024 (.rvt)   | `0x1E`       | `FF`×8 at `+4`         | 40 B        |
+//!
+//! The marker is a sentinel-valued field *inside* a record, not necessarily
+//! the record's first byte: on the 40-byte 2024 variant each record opens
+//! with one zero `u32` and the `FF`×8 run only starts at `+4`. The record
+//! array is exactly `record_count × stride` bytes and ends flush with the
+//! end of the decompressed stream, which is what recovers the true origin
+//! (see `record_origin`).
 //!
 //! Header (bytes 0..0x10) is common across all variants:
 //!
@@ -54,8 +61,13 @@ pub enum RecordFraming {
 /// Detected record layout — where records start, how big they are, how they're framed.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ElemTableLayout {
+    /// Offset of record 0's **first byte** in the decompressed stream.
     pub start: usize,
     pub stride: usize,
+    /// Offset of the `FF` marker *within* a record. `0` on the 28-byte
+    /// project variant (the marker opens the record), `4` on the 40-byte
+    /// one (one zero `u32` precedes it). Unused for [`RecordFraming::Implicit`].
+    pub marker_offset: usize,
     pub framing: RecordFraming,
 }
 
@@ -111,9 +123,48 @@ fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
     })
 }
 
+/// Recover record 0's true origin (and the marker's in-record offset) from
+/// the declared record count.
+///
+/// The marker scan in [`detect_layout`] finds the first run of `0xFF` bytes,
+/// but that run is a sentinel-valued *field inside* record 0, not necessarily
+/// record 0's first byte — on the 40-byte Revit-2024 project variant the
+/// record opens one `u32` earlier. The record array is exactly
+/// `record_count × stride` bytes and ends flush with the end of the
+/// decompressed stream, so `len − record_count × stride` is the origin
+/// whenever it lands a whole number of `u32` fields (and less than one
+/// stride) ahead of the marker. Anything else — a stream that is too short,
+/// a `record_count` of 0, a non-`u32`-aligned or out-of-range difference —
+/// keeps the marker itself as the origin.
+fn record_origin(d: &[u8], marker_start: usize, stride: usize) -> (usize, usize) {
+    if stride == 0 || d.len() < 4 {
+        return (marker_start, 0);
+    }
+    let record_count = u16::from_le_bytes([d[2], d[3]]) as usize;
+    if record_count == 0 {
+        return (marker_start, 0);
+    }
+    let Some(span) = record_count.checked_mul(stride) else {
+        return (marker_start, 0);
+    };
+    if span > d.len() {
+        return (marker_start, 0);
+    }
+    let origin = d.len() - span;
+    if origin > marker_start {
+        return (marker_start, 0);
+    }
+    let marker_offset = marker_start - origin;
+    if marker_offset >= stride || marker_offset % 4 != 0 {
+        return (marker_start, 0);
+    }
+    (origin, marker_offset)
+}
+
 /// Detect the record layout by finding the first two per-record markers and
-/// taking their stride. Falls back to the family-file implicit layout
-/// (12 B from `0x30`) when no markers are present.
+/// taking their stride, then anchoring record 0's origin against the declared
+/// record count (see the module docs and `record_origin`). Falls back to the family-file
+/// implicit layout (12 B from `0x30`) when no markers are present.
 pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
     let scan_start = 0x10usize;
     let scan_end = d.len().min(512);
@@ -139,15 +190,18 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
         let (m0, marker_len) = markers[0];
         let (m1, _) = markers[1];
         let stride = m1 - m0;
+        let (start, marker_offset) = record_origin(d, m0, stride);
         ElemTableLayout {
-            start: m0,
+            start,
             stride,
+            marker_offset,
             framing: RecordFraming::Explicit { marker_len },
         }
     } else {
         ElemTableLayout {
             start: 0x30,
             stride: 12,
+            marker_offset: 0,
             framing: RecordFraming::Implicit,
         }
     }
@@ -194,7 +248,10 @@ pub fn parse_records_from_bytes(
                 (a, b)
             }
             RecordFraming::Explicit { marker_len } => {
-                let Some(body) = i.checked_add(marker_len) else {
+                let Some(body) = i
+                    .checked_add(layout.marker_offset)
+                    .and_then(|m| m.checked_add(marker_len))
+                else {
                     break;
                 };
                 if body > record_end {
@@ -219,9 +276,10 @@ pub fn parse_records_from_bytes(
                         break;
                     }
                     // 40-byte layout (observed on Revit 2024 projects):
-                    //   [8 B marker][4 B zero][u32 id_primary][16 B zero/payload][u32 id_secondary][8 B payload]
+                    //   [4 B zero][8 B marker][4 B zero][u32 id_primary][16 B zero/payload][u32 id_secondary]
+                    // `body` is past the leading zero u32 and the marker, so
                     // id_primary is at body+4, id_secondary at body+24
-                    // (record offsets +12 and +32 respectively).
+                    // (record offsets +16 and +36 respectively).
                     let a =
                         u32::from_le_bytes([d[body + 4], d[body + 5], d[body + 6], d[body + 7]]);
                     let b = u32::from_le_bytes([
@@ -418,6 +476,7 @@ mod tests {
         assert_eq!(layout.framing, RecordFraming::Explicit { marker_len: 4 });
         assert_eq!(layout.start, 0x1e);
         assert_eq!(layout.stride, 28);
+        assert_eq!(layout.marker_offset, 0);
     }
 
     #[test]
@@ -432,6 +491,7 @@ mod tests {
         assert_eq!(layout.framing, RecordFraming::Explicit { marker_len: 8 });
         assert_eq!(layout.start, 0x22);
         assert_eq!(layout.stride, 40);
+        assert_eq!(layout.marker_offset, 0);
     }
 
     #[test]
@@ -489,6 +549,67 @@ mod tests {
         assert_eq!(records[0].id_secondary, 1);
         assert_eq!(records[1].id_primary, 2);
         assert_eq!(records[1].id_secondary, 2);
+    }
+
+    #[test]
+    fn record_origin_recovers_the_u32_ahead_of_the_marker() {
+        // Exactly `record_count * 40` bytes past a 0x1e origin, with the
+        // FF marker one u32 into each record — the real 2024 project shape.
+        let mut buf = vec![0u8; 0x1e + 3 * 40];
+        buf[2] = 0x03; // record_count = 3
+        for k in 0..3usize {
+            let rs = 0x1e + 40 * k;
+            buf[rs + 4..rs + 12].fill(0xff);
+            buf[rs + 16] = (k + 1) as u8;
+            buf[rs + 36] = (k + 1) as u8;
+        }
+        let layout = detect_layout(&buf);
+        assert_eq!(layout.stride, 40);
+        assert_eq!(layout.framing, RecordFraming::Explicit { marker_len: 8 });
+        assert_eq!(layout.start, 0x1e, "origin is the marker minus one u32");
+        assert_eq!(layout.marker_offset, 4);
+        let records = parse_records_from_bytes(&buf, layout, 3);
+        assert_eq!(records.len(), 3, "no record is lost at the tail");
+        assert_eq!(records[0].offset, 0x1e);
+        assert_eq!(records[2].offset, 0x1e + 80);
+        for (k, r) in records.iter().enumerate() {
+            assert_eq!(r.id_primary, k as u32 + 1);
+            assert_eq!(r.id_secondary, k as u32 + 1);
+        }
+    }
+
+    #[test]
+    fn record_origin_rejects_a_non_u32_aligned_difference() {
+        // 28-byte stride, marker at the record start, and a stream length
+        // that would only "fit" record_count records at a 5-byte-earlier
+        // origin. A record field cannot start 5 bytes before the marker, so
+        // the marker stays the origin and the walk is honestly one short.
+        let mut buf = vec![0u8; 0x19 + 3 * 28];
+        buf[2] = 0x03; // record_count = 3
+        buf[0x1e..0x22].fill(0xff);
+        buf[0x22] = 0x01;
+        buf[0x26] = 0x01;
+        buf[0x3a..0x3e].fill(0xff);
+        buf[0x3e] = 0x02;
+        buf[0x42] = 0x02;
+        let layout = detect_layout(&buf);
+        assert_eq!(layout.stride, 28);
+        assert_eq!(layout.start, 0x1e);
+        assert_eq!(layout.marker_offset, 0);
+        let records = parse_records_from_bytes(&buf, layout, 3);
+        assert_eq!(records.len(), 2);
+    }
+
+    #[test]
+    fn record_origin_ignores_a_stream_shorter_than_the_declared_span() {
+        let mut buf = vec![0u8; 0x200];
+        buf[2] = 0xff; // record_count = 65_535 → span far exceeds the buffer
+        buf[3] = 0xff;
+        buf[0x22..0x2a].fill(0xff);
+        buf[0x4a..0x52].fill(0xff);
+        let layout = detect_layout(&buf);
+        assert_eq!(layout.start, 0x22);
+        assert_eq!(layout.marker_offset, 0);
     }
 
     #[test]

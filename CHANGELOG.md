@@ -209,6 +209,11 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Changed
 
+- **API (breaking, pre-`0.2.0`)** — `elem_table::ElemTableLayout` gains a
+  `marker_offset` field (offset of the `FF` marker *within* a record), so
+  struct-literal construction needs updating. `start` now means record 0's
+  first byte rather than the first `0xFF` run. `rvt-elem-table`'s text
+  summary reports the marker's in-record offset instead of sniffing byte 0.
 - **crates.io packaging works again** — `stream-evidence` is a path-only
   dev-dependency (Cargo strips it at publish) and `docs/data/*.csv` is no
   longer excluded from the package (`src/class_tag_map.rs` include_str!s
@@ -229,6 +234,37 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Fixed
 
+- **`Global/ElemTable` record origin on the 40-byte project variant (#206)** —
+  `elem_table::parse_records` walked 26,424 of the 26,425 declared records on
+  `2024_Core_Interior.rvt`. `detect_layout` took the first `0xFF` run as
+  record 0's first byte, but on that variant the run is a sentinel-valued
+  *field inside* the record: each record opens with a zero `u32` and only then
+  carries `FF`×8. The four-byte shift ran the walk out of bytes just short of
+  the last record. The decompressed stream is 1,057,030 bytes (gzip CRC32 and
+  `ISIZE` both verify) = `0x1E` + 26,425 × 40 exactly, and the `u32` ahead of
+  every marker is zero on all 26,425 records, so the origin is recovered as
+  `len − record_count × stride`; new `ElemTableLayout::marker_offset` keeps
+  field extraction anchored to the marker. Id values on the previously-parsed
+  records are byte-identical; `ElemRecord::offset`/`raw` shift by −4 and the
+  final record is no longer lost. The 28-byte 2023 variant is unchanged — its
+  end-anchored origin would fall five bytes ahead of the marker, which the
+  `u32`-alignment guard rejects, so it still walks 2,614 of 2,615 with a
+  23-byte tail (now pinned exactly rather than asserted as `<=`). Byte
+  evidence and record-count semantics:
+  `docs/elem-table-record-layout-2026-04-21.md` § "Where the record array
+  starts". Committed 270-byte MIT regression fixture under
+  `tests/fixtures/elem-table/`. No OctetProof observation changed
+  (`rvt-rs.json` stays `b6d9b67c…` on both recorded edges).
+- **Corpus gate gap that hid it (#206)** — `elem_table_corpus` read
+  `RVT_PROJECT_CORPUS_DIR` but was named by no CI job, so it took its skip
+  path on every run. It is now named by the `test` matrix job (family half,
+  `RVT_REQUIRE_CORPUS=1`) and by `corpus-tier2` (project half), together with
+  the six other corpus-reading targets that were equally ungated
+  (`arc_wall_corpus`, `partition_scanner`, `iter_elements_typed`,
+  `re15_geometry_invariants`, `re19_door_window_wall_negative`,
+  `walker_to_ifc_integration`). `elem_table_corpus` now fails instead of
+  skipping when the corpus is configured but a file is missing, and carries
+  one always-on committed-bytes test so the target is never wholly vacuous.
 - libFuzzer-caught panics in `compression::gzip_header_len`,
   `basic_file_info::extract_path`, and fuzz harness string truncation
   (nightly fuzz matrix unblocked after upload-artifact pin repair).
