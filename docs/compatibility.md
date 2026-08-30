@@ -52,7 +52,7 @@ Notes:
 
 ## 3. Element class decode coverage
 
-**81 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty_one` unit test. Production `walker::iter_elements` prefers typed decoders for `MVP_TYPED_CLASSES`, merges ArcWall partition recovers, and merges partition MVP Level/Material/Room/Floor plan-loop / 2024 opening-index rows; other registered classes still use generic `decode_instance`. Grouped by domain below.
+**81 decoder structs are registered today.** Counted directly from [`src/elements/mod.rs`](../src/elements/mod.rs) `all_decoders()` and pinned by the `all_decoders_len_is_eighty_one` unit test. Production `walker::iter_elements` prefers typed decoders for `MVP_TYPED_CLASSES`, merges ArcWall partition recovers, and merges partition MVP Level/Material/Room (and Floor plan-loops only where no element record decodes) / 2024 opening-index rows / 2024 element-record Wall/Door/Window/Column/Floor/BuildingPad instances; other registered classes still use generic `decode_instance`. Grouped by domain below.
 
 **Partial on real project files:** ArcWall, Level, Material, Room, Floor plan-loops, and 2024 ArcWallRectOpening index rows can surface from `Partitions/*` via fail-closed recovers. Schema-field Wall instances and typed Door/Window host binding from arbitrary projects remain unsolved (RE-19 negative on magnetar corpora). Floor/Room storey bind via Level ElementIds is idle (RE-20 negative). See [`docs/status.md`](status.md), `reports/element-framing/RE-19-door-window-wall-negative.md`, and `reports/element-framing/RE-20-level-elementid-negative.md`.
 

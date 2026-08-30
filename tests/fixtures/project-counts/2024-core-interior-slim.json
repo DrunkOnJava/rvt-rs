@@ -24,7 +24,7 @@
       "decoder_expected": 11,
       "decoder_tolerance": 0,
       "tracking_issue": 33,
-      "notes": "Changed 2026-08-30 (#213): storey elevations now come from the partition element-record bbox base-z distribution instead of from Level name strings, so the count moved 12 -> 11 and the elevations became real. The 256 recovered OST_Columns records stand on exactly 11 distinct base elevations - 0, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166 ft - and every one of the 11 equals an IfcBuildingStorey.Elevation in this export, with no false positives; the export's remaining four (-40, -20, 15, 185.5 ft) carry no column record and are not recovered. The previous 12 came from Level-like name strings that all defaulted to elevation 0.0, so only one of them matched by accident. Names are not paired with the measured elevations: there were 12 name candidates against 11 elevations, and a rank join puts Level 6 at 91 ft where this export puts Level 7, so every storey keeps an elevation-derived name. ElementId <-> Level binding is still open (#86)."
+      "notes": "Changed 2026-08-30 (#213): storey elevations now come from the partition element-record bbox base-z distribution instead of from Level name strings, so the count moved 12 -> 11 and the elevations became real. The 256 recovered OST_Columns records stand on exactly 11 distinct base elevations - 0, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166 ft - and every one of the 11 equals an IfcBuildingStorey.Elevation in this export, with no false positives; the export's remaining four (-40, -20, 15, 185.5 ft) carry no column record and are not recovered. The previous 12 came from Level-like name strings that all defaulted to elevation 0.0, so only one of them matched by accident. Names are not paired with the measured elevations: there were 12 name candidates against 11 elevations, and a rank join puts Level 6 at 91 ft where this export puts Level 7, so every storey keeps an elevation-derived name. ElementId <-> Level binding is still open (#86). Re-measured 2026-08-30 (#212, RE-22, #218): the record-backed slab set does not widen this. Slab record base elevations are 40 distinct values and not one of them is an IfcBuildingStorey.Elevation in this export - Revit hangs a floor plate below its level. Slab record top elevations are 26 distinct values, 13 of which are storey elevations (they add -40 ft and 185.5 ft, two of the four this recovery misses) and 13 of which are not (each sits 0.1667 ft below a storey, the structural-slab / architectural-topping interface). Admitting slab tops as an elevation source would buy two storeys for thirteen false ones, so ifc::STOREY_ELEVATION_SOURCE_TYPES stays IFCCOLUMN alone and the count stays 11."
     },
     "walls": {
       "status": "known",
@@ -39,17 +39,16 @@
       "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 360 of 360 IFCWALL recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding and door/window host-wall binding stay open (#86, door_window_host_wall_binding)."
     },
     "floors": {
-      "status": "known_gap",
+      "status": "known",
       "expected": 80,
       "source": "full Revit IFC export",
       "source_ifc_type": "IFCSLAB",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSLAB",
-      "decoder_expected": 64,
+      "decoder_expected": 80,
       "decoder_tolerance": 0,
-      "tracking_issue": 31,
-      "unsupported_feature": "floor_slab_extrusion_thickness",
-      "notes": "rvt-rs emits 64 plan-loop IFCSLAB boundary annotations against 80 exported slabs; recall issue #83 still records 61/80, so its number is stale by three. The export also carries 20 IFCSHADINGDEVICE, which no decoder path claims and which this manifest deliberately does not score."
+      "tracking_issue": 212,
+      "notes": "Closed 2026-08-30 (#212, RE-22). The #211 instance rule (no container reference at +0x32, placement kind 0xffffef7f at +0x42) is exact on OST_Floors too - the 99 ElementIds it selects are all exported, 79 as IFCSLAB and 20 as IFCSHADINGDEVICE, so there were never any false positives. Two things were missing. (1) The 80th exported slab, 'Pad:Site Pad' ElementId 21975, carries BuiltInCategory OST_BuildingPad (-2001263), not OST_Floors; its record decodes with the same header shape and Revit's exporter maps a building pad to IfcSlab .FLOOR. (2) The IfcSlab / IfcShadingDevice split is a per-instance Revit 'IFC Export As' override - the reference export carries IFCSLABTYPE and IFCSHADINGDEVICETYPE rows with the same Tag (4166, 71848), so the same FloorType lands on both sides - and it is readable: the UTF-16LE string 'IfcShadingDevice' sits in the element's parameter block with the owning ElementId as a u64 220 bytes ahead of it and again at 286, both of which must agree and be declared in Global/ElemTable. Thirty entries pass that test on this file, naming exactly the 20 IFCSHADINGDEVICE Tag values. Measured: 80 of 80 IFCSLAB and 20 of 20 IFCSHADINGDEVICE, exact id-set matches against the export's Tag values - no false positives, no misses, tolerance 0, verified with IfcOpenShell 0.8.5 and IFClite 7.1.1. Bodies are the record's own bounding box (an envelope: the plan profile is the box rectangle, not the recovered floor boundary polygon), but the vertical extent is the slab's real thickness - it equals the export's IfcExtrudedAreaSolid.Depth on 79 of 80 slabs and sums to it on the 80th (22756 'Floor:Basement Slab', exported as 0.3333 ft + 1.1667 ft = the recorded 1.5 ft), which closes floor_slab_extrusion_thickness (#31). The 64 plan-loop boundary annotations this row used to score are retired on files where records decode. The export's 20 IFCSHADINGDEVICE are now scored by their own row."
     },
     "roofs": {
       "status": "known",
@@ -160,11 +159,23 @@
       "source_ifc_type": "IFCPROPERTYSET",
       "tolerance": 0,
       "decoder_metric": "step.IFCPROPERTYSET",
-      "decoder_expected": 818,
+      "decoder_expected": 854,
       "decoder_tolerance": 8,
       "tracking_issue": 35,
       "unsupported_feature": "revit_element_parameters_to_ifc_property_sets",
-      "notes": "The ReferenceView_V1.2 export carries no IfcPropertySet at all (0, confirmed by both bridge readers); rvt-rs emits 64 RvtFloorGeometry sets for its plan-loop slab annotations plus 754 RvtElementRecordGeometry sets for the 256 columns, 360 walls, 132 doors and 6 windows recovered from partition element records (#204/#211). Neither side is a subset of the other, and no set carries a Revit element parameter yet (#35)."
+      "notes": "The ReferenceView_V1.2 export carries no IfcPropertySet at all (0, confirmed by both bridge readers); rvt-rs emits 854 RvtElementRecordGeometry sets, one per element recovered from a partition element record - 256 columns, 360 walls, 132 doors, 6 windows, 80 slabs and 20 shading devices (#204/#211/#212). The 64 RvtFloorGeometry sets the plan-loop path used to emit are gone with the plan-loop slabs. Neither side is a subset of the other, and no set carries a Revit element parameter yet (#35)."
+    },
+    "shading_devices": {
+      "status": "known",
+      "expected": 20,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCSHADINGDEVICE",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSHADINGDEVICE",
+      "decoder_expected": 20,
+      "decoder_tolerance": 0,
+      "tracking_issue": 212,
+      "notes": "Added 2026-08-30 (#212, RE-22). Twenty OST_Floors instances carry a per-element Revit 'IFC Export As' override naming IfcShadingDevice, so Revit's exporter emits them as IFCSHADINGDEVICE rather than IFCSLAB even though they share a FloorType with elements that stay slabs. rvt-rs reads the override string out of the partition parameter block and honours it; measured 20 of 20 with an exact id-set match against the export's Tag values, tolerance 0. This manifest previously left these 20 unscored."
     }
   }
 }

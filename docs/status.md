@@ -23,13 +23,14 @@ enforced by `tests/witness_registry.rs` plus the CI gates it names. Two
 RVT → IFC edges via Revit's exporter are recorded and gated today — the 20 KB
 element fixture and the full 19879-entity project export — each witnessed by
 three independent implementation lineages: rvt-rs on the `.rvt`, IfcOpenShell
-and IFClite on the `.ifc`. The full-project verdict's claimed surface is eight
-fields wide since #211 (`IFCWALL`, `IFCDOOR`, `IFCWINDOW`, `IFCCOLUMN`,
-`IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL`, `IFCUNITASSIGNMENT`). The RVT → DWG
+and IFClite on the `.ifc`. The full-project verdict's claimed surface is ten
+fields wide since #212 (`IFCWALL`, `IFCDOOR`, `IFCWINDOW`, `IFCCOLUMN`,
+`IFCSLAB`, `IFCSHADINGDEVICE`, `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL`,
+`IFCUNITASSIGNMENT`). The RVT → DWG
 edge with dwg-rs is still pending a Revit session.
 
 **OctetProof instance:** the citable protocol specification is
-[`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.0, 2026-08-30, CC-BY-4.0);
+[`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.2, 2026-08-30, CC-BY-4.0);
 the draft it supersedes is kept verbatim at `docs/octetproof-spec-draft.md`,
 and §19 of the spec lists every correction. Its observation / verdict / replay
 shapes are implemented in-repo — `rvt-ifc --observation`,
@@ -62,12 +63,14 @@ Production `walker::iter_elements` prefers typed MVP decoders on
 `Global/Latest` (fail closed), merges version-gated 2023 ArcWall partition
 recovers, and additionally merges fail-closed partition MVP recovers for
 `Level` (elevation + name), `Material` / `Room` (display-name candidates),
-`Floor` (ArcWall-excluded plan loops), and — on Revit 2024 —
+`Floor` (ArcWall-excluded plan loops, only on files where no element
+record decodes), and — on Revit 2024 —
 `ArcWallRectOpening` index rows with ElemTable-confirmed related-id
 provenance (still not typed `Door`/`Window`) plus `Wall`, `Door`,
-`Window` and `Column` instances from partition element records.
-**Walls, doors, windows and columns now match Revit's own exporter
-exactly on a real project**: the Revit 2024 partition element-record
+`Window`, `Column`, `Floor` and `BuildingPad` instances from partition
+element records.
+**Walls, doors, windows, columns and slabs now match Revit's own
+exporter exactly on a real project**: the Revit 2024 partition element-record
 header carries the element's `ElementId` and its `BuiltInCategory`,
 followed by a container reference at `+0x32`, a placement-kind word at
 `+0x42`, a fixed marker and the element's model bounding box. A record
@@ -85,16 +88,42 @@ type symbols plus 119 members of five container elements (nine such
 containers exist on the file across all four categories). RE-19 is
 untouched: this is a different carrier (the record's own
 `BuiltInCategory`), not an opening-index discriminator and not a
-schema-field wall, and both of those stay unsupported. `OST_Floors`
-does **not** follow the rule (99 selected against 80 exported, one
-exported slab has no record at all) and stays `known_gap` (#212). IFC
-export maps recovered Levels → storeys, Floors → boundary-annotated
-slabs, Rooms → spaces, and Walls / Doors / Windows / Columns →
-`IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` with placement and a
-bounding-box extrusion (envelope, not a recovered family profile or
-wall location curve; base/top Level ElementId binding and door/window
-host-wall binding still open), and Material display names →
-`IfcMaterial`.
+schema-field wall, and both of those stay unsupported.
+**`OST_Floors` follows the rule too** — RE-22 (#212) found its 99
+selections are *all* exported, 79 as `IfcSlab` and 20 as
+`IfcShadingDevice`, so there were never any false positives, and the
+80th exported slab is a building pad (`Pad:Site Pad`, ElementId 21975)
+carrying `OST_BuildingPad` (−2001263), not `OST_Floors`. The
+`IfcSlab` / `IfcShadingDevice` split is a **per-instance** Revit
+`IFC Export As` override — the export carries `IFCSLABTYPE` and
+`IFCSHADINGDEVICETYPE` rows with the same `Tag` (4166, 71848), so the
+same `FloorType` lands on both sides — and it is readable from the
+bytes: the UTF-16LE value string sits in the element's parameter block
+with the owning ElementId as a `u64` 220 bytes ahead of it and again
+at 286, both required to agree and to be declared in
+`Global/ElemTable`. Thirty-one entries pass that test on this file,
+naming 21 ids, of which the 20 that are also placed instances are
+exactly the export's `IFCSHADINGDEVICE` `Tag` set; only
+`IfcShadingDevice` is honoured as an override target, an unrecognised
+value leaves the element on its class mapping. Composed, the two rules
+give **80 of 80 `IfcSlab` and 20 of 20 `IfcShadingDevice`, exact
+ElementId sets at tolerance 0**, verified with IfcOpenShell 0.8.5 and
+IFClite 7.1.1. The record's bounding-box `z` extent is the slab's real
+extrusion thickness — it equals the export's
+`IfcExtrudedAreaSolid.Depth` on 79 of 80 slabs and sums to it on the
+80th (`Floor:Basement Slab`, exported as two stacked solids of
+0.3333 ft and 1.1667 ft) — which closes
+`floor_slab_extrusion_thickness` for record-backed slabs (#31); the
+plan-loop boundary annotations they replace stand down on files where
+records decode, so exactly one `IFCSLAB` is emitted per exported id.
+IFC export maps recovered Levels → storeys, Rooms → spaces, and
+Walls / Doors / Windows / Columns / Floors / BuildingPads →
+`IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` (or
+`IfcShadingDevice` when overridden) with placement and a
+bounding-box extrusion (envelope, not a recovered family profile,
+wall location curve or floor boundary polygon; base/top Level
+ElementId binding and door/window host-wall binding still open), and
+Material display names → `IfcMaterial`.
 **Storey elevations on Revit 2024 come from the element-record bounding
 boxes, not from names** (#213): the 256 recovered columns stand on
 exactly 11 distinct base elevations — 0, 31, 46, 61, 76, 91, 106, 121,
@@ -108,11 +137,19 @@ elevations, wall records land 12 (they add −40 ft) at the cost of one
 elevation that is not a storey, and **window records land 0 of 6** —
 a window sits at its sill height above its level, so its base is never
 a storey elevation. Every record-bodied element still *binds* to the
-column-derived set by exact match, so on Core Interior
-`IfcRelContainedInSpatialStructure` is 11 and 743 of 836 building
+column-derived set by exact match — plates by their record **top**
+face, since Revit hangs a floor below the level that hosts it (0 of 40
+distinct slab base elevations is a storey elevation; 51 of 100 plate
+tops are, and every one of the 51 is the storey Revit's own export
+assigns, with none wrong). So on Core Interior
+`IfcRelContainedInSpatialStructure` is 11 and 794 of 872 building
 elements land in a specific storey (all 256 columns, all 132 doors, 355
-of 360 walls; the 5 walls at −40 / 56.4167 ft and all 6 windows stay
-unbound rather than being placed by proximity). The storey *names* are
+of 360 walls, 51 of 100 plates; the 5 walls at −40 / 56.4167 ft, all 6
+windows and the 49 plates whose top is 2 in below a level stay unbound
+rather than being placed by proximity). Slab records are still not an
+elevation *source*: admitting their tops would add −40 ft and 185.5 ft
+— two of the four storeys this recovery misses — at the cost of 13
+values that are not storey elevations, so the count stays 11 (#218). The storey *names* are
 not recovered with the elevations: 12 Level-like name strings against
 11 measured elevations is not a pairing, so each storey is labelled
 `Elevation N ft` and the names stay in
@@ -134,8 +171,11 @@ suitable for fail-closed decode; both negatives stand, and the
 is a different carrier, and door/window **host-wall binding** is still
 unsolved (`door_window_host_wall_binding`). AProperty*
 carriers are not present in production `iter_elements` / Global/Latest
-candidate scans on these corpora (#35 host joins idle). Floor↔ElemTable
-id binding and slab extrusion thickness remain open. Eighty-one per-class
+candidate scans on these corpora (#35 host joins idle). Floor↔ElemTable id binding is closed for the recovered
+slab set (every record-backed slab carries its ElementId) and slab
+extrusion thickness is measured from the record bbox; the slab
+*profile* is still the bounding-box rectangle rather than the
+recovered boundary polygon (#31). Eighty-one per-class
 decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 `iter_elements`.
 
@@ -148,9 +188,9 @@ decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus; multipage integrity diagnostics in inspect/export/viewer | Developers can inspect class and field structure; Formats multipage integrity uncertain while strip stays disabled. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
-| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms/Floor plan-loops + 2024 ArcWallRectOpening (ElemTable-confirmed related ids) + 2024 partition element records for `OST_Walls` / `OST_Doors` / `OST_Windows` / `OST_Columns` (360/132/6/256 on Core Interior, exact ElementId sets, cross-witness gated, #204/#211, RE-21); HostObjAttr filtered; RE-19 negatives intact: no opening-index Door/Window discriminator, no schema-field Wall on magnetar corpora | Full model conversion is not ready; four categories on one Revit 2024 edge match Revit's exporter exactly, slabs and spaces do not. |
+| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms (+ Floor plan-loops only where no element records decode) + 2024 ArcWallRectOpening (ElemTable-confirmed related ids) + 2024 partition element records for `OST_Walls` / `OST_Doors` / `OST_Windows` / `OST_Columns` / `OST_Floors` / `OST_BuildingPad` (360/132/6/256/80 IFCSLAB + 20 IFCSHADINGDEVICE on Core Interior, exact ElementId sets, cross-witness gated, #204/#211/#212, RE-21/RE-22); HostObjAttr filtered; RE-19 negatives intact: no opening-index Door/Window discriminator, no schema-field Wall on magnetar corpora | Full model conversion is not ready; six categories on one Revit 2024 edge match Revit's exporter exactly, spaces and materials do not. |
 | Typed decoder structs | Partial | `elements::all_decoders()` registers **81** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
-| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; every emitted instance carries the full IFC4 attribute list its type declares, gated per instance against the EXPRESS schema by `tools/ci/ifc_schema_arity.py` (#214); 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / 2024 `IfcWall` + `IfcDoor` + `IfcWindow` + `IfcColumn` with placement + bounding-box extrusion + measured storey containment (#213) / Material display names; slab thickness + Door/Window host binding still open; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
+| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; every emitted instance carries the full IFC4 attribute list its type declares, gated per instance against the EXPRESS schema by `tools/ci/ifc_schema_arity.py` (#214); 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / 2024 `IfcWall` + `IfcDoor` + `IfcWindow` + `IfcColumn` + `IfcSlab` + `IfcShadingDevice` with placement + bounding-box extrusion + measured storey containment (#213/#212) + measured slab thickness (#212) / Material display names; slab boundary polygon + Door/Window host binding still open; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, File Status shows production class counts + storey/material totals, supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Always-on patch corpus (`gen-fixture` project + MIT `empty.rfa`) covers identity, grow, shrink, multi-stream, missing-stream; optional Autodesk corpora add release-matrix + GUID/history checks; corrupt-gzip verification is unit-tested | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |

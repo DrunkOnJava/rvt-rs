@@ -10,13 +10,6 @@
       "unsupported_feature": null
     },
     {
-      "category": "floors",
-      "field": "entity_counts.IFCSLAB",
-      "reason": "known_gap",
-      "tracking_issue": 31,
-      "unsupported_feature": "floor_slab_extrusion_thickness"
-    },
-    {
       "category": "rooms_spaces",
       "field": "entity_counts.IFCSPACE",
       "reason": "known_gap",
@@ -73,16 +66,18 @@
   "schema_version": "1.0.0",
   "semantic_surface": [
     "entity_counts.IFCWALL",
+    "entity_counts.IFCSLAB",
     "entity_counts.IFCROOF",
     "entity_counts.IFCDOOR",
     "entity_counts.IFCWINDOW",
     "entity_counts.IFCCOLUMN",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
-    "entity_counts.IFCUNITASSIGNMENT"
+    "entity_counts.IFCUNITASSIGNMENT",
+    "entity_counts.IFCSHADINGDEVICE"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "afa87bb0a4e35ea8e5fa9a1adb21b29f8a0ba532571c88fd00c14dabcd4c7145",
+  "verdict_hash_sha256": "48ef575a11505ee1fcbb02b37b3551e0e8d5618a1ec39aeb6d6cb250e085648c",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

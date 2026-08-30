@@ -4,7 +4,10 @@
 //! for Level, Material, Room, Floor plan loops, and (on Revit 2024)
 //! ArcWallRectOpening index rows plus `OST_Columns` / `OST_Walls` /
 //! `OST_Doors` / `OST_Windows` element records
-//! ([`instances_from_partition_category_records`]).
+//! ([`instances_from_partition_category_records`]) and
+//! `OST_Floors` / `OST_BuildingPad` slab instances
+//! ([`slabs_from_partition_category_records`], #212 / RE-22), which
+//! supersede the plan-loop floors on files where they decode.
 //!
 //! Semantic `Door` / `Window` classes are still **not** invented from
 //! opening-index rows — those keep surfacing as `ArcWallRectOpening`
@@ -30,6 +33,10 @@
 //!   must observe zero Level/Material/Floor/opening hits there.
 //! - Floor boundaries require closed plan polylines that survive
 //!   ArcWall-centerline exclusion and area thresholds (RE-15-07).
+//! - The plan-loop floors and the record-backed slabs are two views
+//!   of the same plates, so they are never emitted together: the
+//!   loops stand down when records decode, and remain the only floor
+//!   path where they do not.
 
 use crate::compression;
 use crate::partition_arc_walls::{self, PartitionArcWall};
@@ -65,6 +72,10 @@ pub struct PartitionSchemaMvp {
     pub doors: Vec<DecodedElement>,
     /// 2024 `OST_Windows` partition element records (#211).
     pub windows: Vec<DecodedElement>,
+    /// 2024 `OST_Floors` / `OST_BuildingPad` partition element
+    /// records (#212, RE-22). When this is non-empty it supersedes
+    /// [`Self::floors`] — see [`recover_partition_schema_mvp`].
+    pub slabs: Vec<DecodedElement>,
 }
 
 impl PartitionSchemaMvp {
@@ -79,7 +90,8 @@ impl PartitionSchemaMvp {
                 + self.columns.len()
                 + self.walls.len()
                 + self.doors.len()
-                + self.windows.len(),
+                + self.windows.len()
+                + self.slabs.len(),
         );
         out.extend(self.levels);
         out.extend(self.materials);
@@ -90,6 +102,7 @@ impl PartitionSchemaMvp {
         out.extend(self.walls);
         out.extend(self.doors);
         out.extend(self.windows);
+        out.extend(self.slabs);
         out
     }
 }
@@ -150,6 +163,19 @@ pub fn recover_partition_schema_mvp(
         crate::partition_element_records::OST_WINDOWS,
         "Window",
     )?;
+
+    // --- 2024 slab instances from element records (#212, RE-22) ---
+    //
+    // Record-backed slabs carry an ElementId, a model bounding box,
+    // a measured thickness and a storey, none of which the plan-loop
+    // scan can supply; emitting both would double-count the same
+    // plate. So the loops stand down whenever records were recovered,
+    // and stay the only floor path on releases (2023 and earlier) and
+    // files where no element record decodes.
+    out.slabs = slabs_from_partition_category_records(rf, revit_version)?;
+    if !out.slabs.is_empty() {
+        out.floors.clear();
+    }
 
     Ok(out)
 }
@@ -230,26 +256,110 @@ pub fn instances_from_records(
     use std::collections::BTreeMap;
 
     // One record per ElementId: a single element can be framed more
-    // than once across partitions. Keep the first by (stream, offset)
-    // so the choice is deterministic and byte-anchored.
+    // than once across partitions, and the frames can disagree on the
+    // vertical extent. Keep the greatest z-extent — that is the
+    // element's full body, and it is measured: against the reference
+    // export's `IfcExtrudedAreaSolid.Depth`, first-by-(stream, offset)
+    // agrees on 67 of 80 slabs and greatest-extent on 79 of 80 (the
+    // 80th is exported as two stacked solids whose depths sum to the
+    // recorded extent). The choice changes no wall, door, window or
+    // column bounding box on `2024_Core_Interior.rvt` — 268 walls,
+    // 132 doors and 88 columns carry more than one record and every
+    // one of them agrees on the box (#212, RE-22). Ties fall back to
+    // the first by (stream, offset), so the choice stays
+    // deterministic and byte-anchored.
     let mut by_id: BTreeMap<u32, PartitionElementRecord> = BTreeMap::new();
     for record in records {
         if !record.is_exported_instance() {
             continue;
         }
-        match by_id.get(&record.element_id) {
-            Some(existing)
-                if (existing.stream.as_str(), existing.offset)
-                    <= (record.stream.as_str(), record.offset) => {}
-            _ => {
-                by_id.insert(record.element_id, record);
+        let better = match by_id.get(&record.element_id) {
+            None => true,
+            Some(existing) => {
+                let candidate = z_extent_key(&record);
+                let held = z_extent_key(existing);
+                candidate > held
+                    || (candidate == held
+                        && (record.stream.as_str(), record.offset)
+                            < (existing.stream.as_str(), existing.offset))
             }
+        };
+        if better {
+            by_id.insert(record.element_id, record);
         }
     }
     by_id
         .values()
         .map(|record| element_record_decoded(record, class))
         .collect()
+}
+
+/// Vertical extent of a record's bounding box, quantised to 1e-4 ft
+/// so two frames of the same element compare exactly.
+fn z_extent_key(record: &crate::partition_element_records::PartitionElementRecord) -> i64 {
+    let (_, _, dz) = record.extents_feet();
+    if !dz.is_finite() {
+        return i64::MIN;
+    }
+    (dz * 10_000.0).round() as i64
+}
+
+/// Recover slab instances from partition element records (#212, RE-22).
+///
+/// Two `BuiltInCategory` ids feed one class, because Revit's own
+/// exporter maps both to `IfcSlab`:
+/// [`crate::partition_element_records::OST_FLOORS`] (class `Floor`)
+/// and [`crate::partition_element_records::OST_BUILDING_PAD`]
+/// (class `BuildingPad`). The pad is kept as its own class rather
+/// than relabelled a floor — the mapping to `IFCSLAB` happens in
+/// [`crate::ifc::category_map`], where it is visible.
+///
+/// Per-element IFC export-type overrides
+/// ([`crate::partition_ifc_export_overrides`]) are attached as the
+/// `m_ifc_export_as` field. The decoder does not act on the value;
+/// the IFC writer decides which values it is willing to honour.
+pub fn slabs_from_partition_category_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> Result<Vec<DecodedElement>> {
+    use crate::partition_element_records as per;
+
+    if !per::supports_revit_version(revit_version) {
+        return Ok(Vec::new());
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => return Ok(Vec::new()),
+    };
+    if declared.is_empty() {
+        return Ok(Vec::new());
+    }
+    let overrides = crate::partition_ifc_export_overrides::scan_ifc_export_overrides(
+        rf,
+        revit_version,
+        &declared,
+    )
+    .unwrap_or_default();
+
+    let mut out = Vec::new();
+    for (category, class) in [
+        (per::OST_FLOORS, "Floor"),
+        (per::OST_BUILDING_PAD, "BuildingPad"),
+    ] {
+        let records = per::scan_category_records(rf, revit_version, category, &declared)?;
+        for mut decoded in instances_from_records(records, class) {
+            if let Some(id) = decoded.id {
+                if let Some(value) = overrides.get(&id) {
+                    decoded.fields.push((
+                        "m_ifc_export_as".into(),
+                        InstanceField::String(value.clone()),
+                    ));
+                }
+            }
+            out.push(decoded);
+        }
+    }
+    Ok(out)
 }
 
 /// Back-compat alias for the #204 entry point.
@@ -980,6 +1090,59 @@ mod tests {
             placement_kind: crate::partition_element_records::PLACEMENT_KIND_INSTANCE,
             bbox_feet,
         }
+    }
+
+    #[test]
+    fn selection_keeps_the_greatest_vertical_extent_for_one_id() {
+        // A `Floor:Floor 1` plate is framed twice on Core Interior:
+        // Partitions/46 sees the 2 in topping, Partitions/55 the full
+        // 1 ft slab. The export's extrusion depth is 1 ft (#212).
+        let mut thin = element_record(
+            70433,
+            crate::partition_element_records::OST_FLOORS,
+            [20.0, 25.0, 30.667, 167.0, 114.0, 30.833],
+        );
+        thin.stream = "Partitions/46".into();
+        let mut full = element_record(
+            70433,
+            crate::partition_element_records::OST_FLOORS,
+            [20.0, 25.0, 29.833, 167.0, 114.0, 30.833],
+        );
+        full.stream = "Partitions/55".into();
+        for records in [
+            vec![thin.clone(), full.clone()],
+            vec![full.clone(), thin.clone()],
+        ] {
+            let out = instances_from_records(records, "Floor");
+            assert_eq!(out.len(), 1);
+            let height =
+                out[0]
+                    .fields
+                    .iter()
+                    .find_map(|(name, value)| match (name.as_str(), value) {
+                        ("m_bboxHeight", InstanceField::Float { value, .. }) => Some(*value),
+                        _ => None,
+                    });
+            assert!(
+                height.is_some_and(|h| (h - 1.0).abs() < 1e-3),
+                "expected the 1 ft frame, got {height:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn selection_tie_breaks_on_the_first_stream_and_offset() {
+        let mut a = element_record(
+            20311,
+            crate::partition_element_records::OST_FLOORS,
+            [9.0, 16.0, 75.833, 177.0, 123.0, 76.0],
+        );
+        a.stream = "Partitions/51".into();
+        let mut b = a.clone();
+        b.stream = "Partitions/46".into();
+        let out = instances_from_records(vec![a, b], "Floor");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, Some(20311));
     }
 
     #[test]

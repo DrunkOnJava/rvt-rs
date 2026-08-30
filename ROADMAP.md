@@ -16,11 +16,16 @@ real-project typed element extraction remains mostly unsolved**, with
 narrow exceptions: production `walker::iter_elements` prefers typed MVP
 decoders on `Global/Latest`, merges version-gated **ArcWall** partition
 recovers (Revit 2023 standard), and merges fail-closed partition MVP
-recovers for **Level** / **Material** / **Room** / **Floor** plan-loops
-plus 2024 **ArcWallRectOpening** index rows (ElemTable-confirmed related
-ids; never inventing typed `Door`/`Window` success). IFC export wires
-partition **Level** → storeys, **Floor** → boundary-annotated `IFCSLAB`,
-**Room** → `IFCSPACE`, and **Material** display names → `IfcMaterial`.
+recovers for **Level** / **Material** / **Room** (plus **Floor**
+plan-loops where no element records decode), 2024
+**ArcWallRectOpening** index rows (ElemTable-confirmed related ids;
+never inventing typed `Door`/`Window` success), and 2024 partition
+element-record **Wall** / **Door** / **Window** / **Column** /
+**Floor** / **BuildingPad** instances (#204 / #211 / #212). IFC export
+wires partition **Level** → storeys, **Floor** / **BuildingPad** →
+`IFCSLAB` (or `IFCSHADINGDEVICE` under a per-element Revit export
+override), **Room** → `IFCSPACE`, and **Material** display names →
+`IfcMaterial`.
 **RE-19 (2026-08-29) negative on magnetar corpora:** no reliable Door vs
 Window discriminator in the 2024 opening index / nearby partition strings /
 ElemTable payloads, and no schema-field `Wall` / fail-closed 2024 ArcWall
@@ -72,7 +77,7 @@ real project files, not only synthesized fixtures.
 - Known-count fixtures for levels, walls, floors, doors, and windows.
 - Generic partition record scanner.
 - `ElemTable` id to partition-record offset linkage.
-- Typed MVP decoders + ArcWall + partition Level/Material/Room/Floor plan-loop / 2024 opening-index (ElemTable-confirmed) merge wired into `iter_elements` without false positives; IFC Level/Floor/Room/Material emission (schema-field Wall and typed Door/Window host binding still open).
+- Typed MVP decoders + ArcWall + partition Level/Material/Room (+ Floor plan-loop where no records decode) / 2024 opening-index (ElemTable-confirmed) / 2024 element-record Wall/Door/Window/Column/Floor/BuildingPad merge wired into `iter_elements` without false positives; IFC Level/Floor/Room/Material emission (schema-field Wall, typed Door/Window host binding and the recovered floor boundary polygon still open).
 - Decode confidence and provenance attached to every element.
 
 ### 0.4.0: IFC Geometry Beta

@@ -993,6 +993,32 @@ fn export_rvt_doc(
     })
 }
 
+/// True when an emitted `IFCSLAB` carries no resolved thickness.
+///
+/// The property is written positively by the record-backed slab path
+/// and negatively by the plan-loop annotation path, so a slab with
+/// neither — or with `false` — is one whose extrusion depth rvt-rs
+/// does not know.
+fn slab_thickness_unresolved(entity: &entities::IfcEntity) -> bool {
+    let entities::IfcEntity::BuildingElement {
+        ifc_type,
+        property_set,
+        ..
+    } = entity
+    else {
+        return false;
+    };
+    if ifc_type != "IFCSLAB" {
+        return false;
+    }
+    !property_set.as_ref().is_some_and(|set| {
+        set.properties.iter().any(|property| {
+            property.name == "ThicknessResolved"
+                && matches!(property.value, entities::PropertyValue::Boolean(true))
+        })
+    })
+}
+
 /// Property recorded on a building element whose body came from a
 /// partition element record's bounding box.
 pub(crate) const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
@@ -1004,6 +1030,30 @@ pub(crate) const STOREY_BIND_SOURCE_PROPERTY: &str = "StoreyBindSource";
 
 /// Value of [`STOREY_BIND_SOURCE_PROPERTY`] for the #213 join.
 pub(crate) const STOREY_BIND_RECORD_ELEVATION: &str = "record_base_elevation";
+
+/// Value of [`STOREY_BIND_SOURCE_PROPERTY`] for the plate join —
+/// see [`STOREY_BIND_TOP_FACE_TYPES`].
+pub(crate) const STOREY_BIND_RECORD_TOP_ELEVATION: &str = "record_top_elevation";
+
+/// IFC types whose record **top** face sits at the storey elevation.
+///
+/// Revit hangs a floor plate *below* the level that hosts it, so a
+/// slab's recorded base is never a storey elevation while its top
+/// often is. Measured over the 100 record-backed plates on
+/// `2024_Core_Interior.rvt` against the storey Revit's own export
+/// assigns each of them (#212, RE-22):
+///
+/// | join | bound | correct | wrong |
+/// |---|---:|---:|---:|
+/// | base `z` equals a recovered storey elevation | 0 | 0 | 0 |
+/// | top `z` equals a recovered storey elevation | 51 | 51 | 0 |
+///
+/// The 49 that stay unbound sit either 2 in below their level (the
+/// structural-slab / architectural-topping interface) or on one of
+/// the four storeys #213's column-derived elevation set does not
+/// contain. They keep `storey_index: None` rather than being placed
+/// by proximity.
+const STOREY_BIND_TOP_FACE_TYPES: &[&str] = &["IFCSLAB", "IFCSHADINGDEVICE"];
 
 /// IFC types whose recorded base elevation *is* a storey elevation.
 ///
@@ -1036,6 +1086,34 @@ fn record_storey_elevation_source_feet(entity: &entities::IfcEntity) -> Option<f
         return None;
     }
     record_base_elevation_feet(entity)
+}
+
+/// Measured elevation an element binds to a storey by, plus the
+/// [`STOREY_BIND_SOURCE_PROPERTY`] value that says which face it is.
+///
+/// Plates bind by their top face
+/// ([`STOREY_BIND_TOP_FACE_TYPES`]); everything else binds by its
+/// base, exactly as #213 recorded.
+fn record_storey_bind_elevation_feet(entity: &entities::IfcEntity) -> Option<(f64, &'static str)> {
+    let base = record_base_elevation_feet(entity)?;
+    let entities::IfcEntity::BuildingElement {
+        ifc_type,
+        extrusion,
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    if !STOREY_BIND_TOP_FACE_TYPES.contains(&ifc_type.as_str()) {
+        return Some((base, STOREY_BIND_RECORD_ELEVATION));
+    }
+    // Fail closed: without a recovered body there is no top face to
+    // bind by, and the base is known not to be a storey elevation.
+    let height = extrusion.as_ref()?.height_feet;
+    if !height.is_finite() || height <= 0.0 {
+        return None;
+    }
+    Some((base + height, STOREY_BIND_RECORD_TOP_ELEVATION))
 }
 
 /// Measured base elevation of an element whose body came from a
@@ -1120,11 +1198,10 @@ fn apply_element_record_storeys(
     }
 
     for entity in entities.iter_mut() {
-        let Some(base_elevation) = record_base_elevation_feet(entity) else {
+        let Some((elevation, bind_source)) = record_storey_bind_elevation_feet(entity) else {
             continue;
         };
-        let Some(index) =
-            records::unique_storey_index_for_elevation(building_storeys, base_elevation)
+        let Some(index) = records::unique_storey_index_for_elevation(building_storeys, elevation)
         else {
             continue;
         };
@@ -1138,7 +1215,7 @@ fn apply_element_record_storeys(
             if let Some(set) = property_set.as_mut() {
                 set.properties.push(entities::Property {
                     name: STOREY_BIND_SOURCE_PROPERTY.into(),
-                    value: entities::PropertyValue::Text(STOREY_BIND_RECORD_ELEVATION.into()),
+                    value: entities::PropertyValue::Text(bind_source.into()),
                 });
             }
         }
@@ -1738,7 +1815,7 @@ pub fn build_export_diagnostics_with_limits(
         if elevation_fallback == model.building_storeys.len() && exported.storey_bound_elements > 0
         {
             warnings.push(format!(
-                "{} building storey elevation(s) were measured from partition element-record bounding boxes and {} building element(s) bound to them by base elevation (#213); the {level_names} recovered Level name string(s) could not be paired with those elevations and are not asserted as storey names.",
+                "{} building storey elevation(s) were measured from partition element-record bounding boxes and {} building element(s) bound to them by an exact record-face elevation match (base face, or top face for slabs and shading devices) (#213, #212); the {level_names} recovered Level name string(s) could not be paired with those elevations and are not asserted as storey names.",
                 model.building_storeys.len(),
                 exported.storey_bound_elements,
             ));
@@ -2150,8 +2227,12 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
     let slab_count = exported.by_ifc_type.get("IFCSLAB").copied().unwrap_or(0);
     if slab_count == 0 {
         features.push("floor_plan_loop_slab_export".into());
-    } else {
-        // Plan-loop slabs export without resolved thickness / extrusion.
+    } else if model.entities.iter().any(slab_thickness_unresolved) {
+        // A plan-loop slab is a boundary annotation with no thickness.
+        // A record-backed slab carries the recorded bbox `z` extent,
+        // which agrees with the reference export's
+        // `IfcExtrudedAreaSolid.Depth` on 79 of 80 slabs and sums to
+        // it on the 80th (#212, RE-22), so it does not raise this.
         features.push("floor_slab_extrusion_thickness".into());
     }
     let has_typed_door = exported.by_ifc_type.get("IFCDOOR").copied().unwrap_or(0) > 0;
@@ -2405,6 +2486,83 @@ mod tests {
             vec![Some(0), Some(1), None, Some(1), Some(0)],
             "walls and doors bind by exact match; the window stays unbound"
         );
+    }
+
+    /// #212 / RE-22: Revit hangs a floor plate below its level, so a
+    /// slab binds by its recorded *top* face while everything else
+    /// keeps the #213 base-face join. A plate whose top matches no
+    /// storey stays unbound rather than being placed by proximity.
+    #[test]
+    fn slabs_bind_to_a_storey_by_their_top_face() {
+        let mut slab = record_element_of_class(3, "Floor", 30.8333);
+        // A 2 in architectural topping: base 30.8333 ft, top 31 ft.
+        slab.fields.retain(|(n, _)| n != "m_bboxHeight");
+        slab.fields.push((
+            "m_bboxHeight".into(),
+            crate::walker::InstanceField::Float {
+                value: 0.1667,
+                size: 8,
+            },
+        ));
+        let mut interface = record_element_of_class(4, "Floor", 30.3333);
+        interface.fields.retain(|(n, _)| n != "m_bboxHeight");
+        interface.fields.push((
+            "m_bboxHeight".into(),
+            crate::walker::InstanceField::Float {
+                value: 0.5,
+                size: 8,
+            },
+        ));
+
+        let mut entities = append_columns(vec![
+            record_element_of_class(1, "Column", 0.0),
+            record_element_of_class(2, "Column", 31.0),
+            slab,
+            interface,
+        ]);
+        let mut storeys = vec![Storey {
+            name: "Level 1".into(),
+            elevation_feet: 0.0,
+        }];
+        apply_element_record_storeys(&mut entities, &mut storeys);
+
+        let bound: Vec<Option<usize>> = entities
+            .iter()
+            .map(|entity| match entity {
+                entities::IfcEntity::BuildingElement { storey_index, .. } => *storey_index,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            bound,
+            vec![Some(0), Some(1), Some(1), None],
+            "the topping's top (31 ft) binds; the structural slab's top              (30.8333 ft) matches no storey and stays unbound"
+        );
+    }
+
+    /// A plate with no recovered body has no top face to bind by, and
+    /// its base is known not to be a storey elevation — so it must not
+    /// fall back to the base join.
+    #[test]
+    fn a_bodyless_slab_does_not_bind_by_its_base() {
+        let mut slab = record_element_of_class(3, "Floor", 31.0);
+        slab.fields.retain(|(n, _)| n != "m_bboxHeight");
+        let mut entities = append_columns(vec![
+            record_element_of_class(1, "Column", 0.0),
+            record_element_of_class(2, "Column", 31.0),
+            slab,
+        ]);
+        let mut storeys = vec![Storey {
+            name: "Level 1".into(),
+            elevation_feet: 0.0,
+        }];
+        apply_element_record_storeys(&mut entities, &mut storeys);
+        match &entities[2] {
+            entities::IfcEntity::BuildingElement { storey_index, .. } => {
+                assert_eq!(*storey_index, None);
+            }
+            _ => panic!("expected building element"),
+        }
     }
 
     /// The #213 join reads the record base elevation back off an

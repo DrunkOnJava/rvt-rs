@@ -75,6 +75,16 @@ pub const OST_WALLS: i64 = -2_000_011;
 pub const OST_DOORS: i64 = -2_000_023;
 /// Autodesk `BuiltInCategory.OST_Windows`.
 pub const OST_WINDOWS: i64 = -2_000_014;
+/// Autodesk `BuiltInCategory.OST_Floors` — floor slabs.
+pub const OST_FLOORS: i64 = -2_000_032;
+/// Autodesk `BuiltInCategory.OST_BuildingPad` — site/building pads.
+///
+/// Revit's own exporter emits a building pad as `IfcSlab`, which is
+/// why it joins `OST_FLOORS` in the slab recovery: on
+/// `2024_Core_Interior.rvt` the single exported slab with no
+/// `OST_Floors` record (`Pad:Site Pad`, ElementId 21975) carries this
+/// category instead (#212, RE-22).
+pub const OST_BUILDING_PAD: i64 = -2_001_263;
 
 /// Lower bound of the Revit `BuiltInCategory` id band.
 pub const BUILTIN_CATEGORY_MIN: i64 = -2_100_000;
@@ -203,9 +213,15 @@ impl PartitionElementRecord {
     /// heuristic: it replaces the family-local bbox proxy and the
     /// highest-id-per-footprint collapse that #204 used for columns.
     ///
-    /// It is **not** exact for `OST_Floors` (99 selected against 80
-    /// exported, and one exported slab has no record at all) — slabs
-    /// keep their own open issue (#212).
+    /// RE-22 extended the same measurement to `OST_Floors` and found
+    /// the rule exact there too, once the reference side is read
+    /// correctly: the 99 selected ElementIds are *all* exported — 79
+    /// as `IfcSlab` and 20 as `IfcShadingDevice` — so there are no
+    /// false positives, and the 80th exported slab (`Pad:Site Pad`,
+    /// 21975) simply carries [`OST_BUILDING_PAD`] rather than
+    /// `OST_Floors`. `OST_Floors` + `OST_BuildingPad` under this rule
+    /// reproduce the export's 80 `IFCSLAB` and 20 `IFCSHADINGDEVICE`
+    /// id sets exactly (#212).
     pub fn is_exported_instance(&self) -> bool {
         !self.is_container_member() && self.is_placed_instance()
     }
