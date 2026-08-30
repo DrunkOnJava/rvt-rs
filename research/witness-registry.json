@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "protocol": "docs/verification-protocol.md",
+  "updated": "2026-08-30",
+  "nodes": [
+    { "id": "rvt", "format": "Autodesk Revit project/family (OLE/CFB container)", "specification": "none — undocumented; every reader is clean-room" },
+    { "id": "dwg", "format": "AutoCAD DWG", "specification": "Open Design Alliance published specification (v5.4.1)" },
+    { "id": "dxf", "format": "AutoCAD DXF", "specification": "Autodesk published DXF reference" },
+    { "id": "ifc", "format": "IFC4 / IFC2x3 STEP Part 21", "specification": "buildingSMART ISO 16739" },
+    { "id": "gltf", "format": "glTF 2.0", "specification": "Khronos glTF 2.0" },
+    { "id": "e57", "format": "ASTM E57 point cloud", "specification": "ASTM E2807" }
+  ],
+  "witnesses": [
+    { "id": "rvt-rs", "kind": "reader", "node": "rvt", "repo": "DrunkOnJava/rvt-rs", "license": "Apache-2.0", "language": "Rust", "status": "adopted", "notes": "the decoder under test; also writes ifc/gltf/svg" },
+    { "id": "dwg-rs", "kind": "reader", "node": "dwg", "repo": "DrunkOnJava/dwg-rs", "license": "Apache-2.0", "language": "Rust", "status": "adopted", "notes": "sibling clean-room reader; 20.1% measured real-file entity coverage (R2018 sample 44.2%) — not yet a reliable witness for Revit exports" },
+    { "id": "autodesk-revit-exporter", "kind": "author", "node": "rvt", "repo": null, "license": "proprietary (licensed seat)", "language": null, "status": "adopted", "notes": "produces the canonical exports that create edges; only needed once per artifact" },
+    { "id": "ifcopenshell", "kind": "reader", "node": "ifc", "repo": "IfcOpenShell/IfcOpenShell", "license": "LGPL-3.0", "language": "C++/Python", "status": "adopted", "notes": "runs as a separate process in CI; no linking, no copyleft contamination of the Rust workspace" },
+    { "id": "libredwg", "kind": "reader", "node": "dwg", "repo": "LibreDWG/libredwg", "license": "GPL-3.0", "language": "C", "status": "candidate", "priority": "high", "notes": "~99% read coverage through R2018; usable as a CI process witness, never linked" },
+    { "id": "acadsharp", "kind": "reader", "node": "dwg", "repo": "DomCR/ACadSharp", "license": "MIT", "language": "C#", "status": "candidate", "priority": "high", "notes": "already consulted comments-only for the LZ77 offset ambiguity (dwg-rs CLEANROOM.md)" },
+    { "id": "ezdwg", "kind": "reader", "node": "dwg", "repo": "ezdwg", "license": "MIT", "language": "Rust/Python", "status": "candidate", "priority": "medium" },
+    { "id": "ezdxf", "kind": "reader", "node": "dxf", "repo": "mozman/ezdxf", "license": "MIT", "language": "Python", "status": "candidate", "priority": "high", "notes": "DXF is the documented twin of DWG; Revit exports DXF too" },
+    { "id": "dxf-rs", "kind": "reader", "node": "dxf", "repo": "ixmilia/dxf-rs", "license": "MIT", "language": "Rust", "status": "candidate", "priority": "medium" },
+    { "id": "ifc-lite", "kind": "reader", "node": "ifc", "repo": "ifc-lite", "license": "MIT", "language": "Rust", "status": "candidate", "priority": "high", "notes": "second independent IFC witness; verified element-by-element against IfcOpenShell upstream" },
+    { "id": "web-ifc", "kind": "reader", "node": "ifc", "repo": "ThatOpen/engine_web-ifc", "license": "MPL-2.0", "language": "C++/WASM", "status": "candidate", "priority": "medium" },
+    { "id": "stepcode", "kind": "reader", "node": "ifc", "repo": "stepcode/stepcode", "license": "BSD-3-Clause", "language": "C++", "status": "candidate", "priority": "low", "notes": "generic Part 21 parser — syntax-level witness only" },
+    { "id": "gltf-rs", "kind": "reader", "node": "gltf", "repo": "gltf-rs/gltf", "license": "MIT/Apache-2.0", "language": "Rust", "status": "candidate", "priority": "medium", "notes": "witness for rvt-rs glTF output validity" },
+    { "id": "e57-rs", "kind": "reader", "node": "e57", "repo": "cry-inc/e57", "license": "MIT", "language": "Rust", "status": "candidate", "priority": "low", "notes": "point-cloud scan of rendered geometry — the external oracle of last resort" }
+  ],
+  "artifacts": [
+    { "id": "magnetar-2024-core-interior.rvt", "node": "rvt", "sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014", "bytes": 33718272, "source": "magnetar-io/revit-test-datasets Revit/2024_Core_Interior.rvt", "license": "MIT", "authored_by": "Autodesk Revit 2024", "redistributable": true },
+    { "id": "magnetar-2024-core-interior.ifc", "node": "ifc", "sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050", "bytes": 20392, "source": "magnetar-io/revit-test-datasets Revit/2024_Core_Interior.ifc", "license": "MIT", "derived_from": "magnetar-2024-core-interior.rvt", "via": "autodesk-revit-exporter", "redistributable": true, "notes": "element-export fixture (20 KB), not a full project schedule — most category counts are zero" },
+    { "id": "magnetar-2024-core-interior-slim.ifc", "node": "ifc", "sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d", "bytes": 1665968, "source": "magnetar-io/revit-test-datasets IFC Exports/2024_Core_Interior_slim.ifc", "license": "MIT", "derived_from": "magnetar-2024-core-interior.rvt", "via": "autodesk-revit-exporter", "redistributable": true, "notes": "full export, header 'Autodesk Revit 24.0.20.20 (ENU)' via ODA SDAI 23.12; no project-count manifest yet" },
+    { "id": "magnetar-revit-ifc5-einhoven.rvt", "node": "rvt", "sha256": "d3a0c6d37d3f47a1726bc5aa7fe3880ed3c13bbe819b5e64680f6710b15aa948", "bytes": 913408, "source": "magnetar-io/revit-test-datasets Revit/Revit_IFC5_Einhoven.rvt", "license": "MIT", "authored_by": "Autodesk Revit 2023", "redistributable": true, "notes": "no paired authentic export in the dataset; manifests for it are decoder baselines, not cross-witness agreements" },
+    { "id": "tier1-architectural-2024.rvt", "node": "rvt", "sha256": "3f50ce849ff022eb1c28ebfd91fb450d4a36af72fd19105d93caffb861e9560b", "bytes": 20480, "source": "corpus/tier1/architectural-2024", "license": "Apache-2.0", "authored_by": "rvt-rs gen-fixture", "redistributable": true, "notes": "owned synthetic; same witness as the decoder, so never counts as independent" },
+    { "id": "tier1-mep-2024.rvt", "node": "rvt", "sha256": "2c0516739b4eda099cfb18031f65e0c39f3cf52cf200b1a4a0451f4d25618604", "bytes": 20480, "source": "corpus/tier1/mep-2024", "license": "Apache-2.0", "authored_by": "rvt-rs gen-fixture", "redistributable": true },
+    { "id": "tier1-structural-2023.rvt", "node": "rvt", "sha256": "ce2e5038e02a4e81fd033d339827482cd3ce5f6bebf6cd1e03a8f8023d2dc7f5", "bytes": 20480, "source": "corpus/tier1/structural-2023", "license": "Apache-2.0", "authored_by": "rvt-rs gen-fixture", "redistributable": true }
+  ],
+  "edges": [
+    { "id": "rvt-to-ifc:revit-export:core-interior", "from": "rvt", "to": "ifc", "via": "autodesk-revit-exporter", "source_artifact": "magnetar-2024-core-interior.rvt", "derived_artifact": "magnetar-2024-core-interior.ifc", "status": "recorded" },
+    { "id": "rvt-to-ifc:revit-export:core-interior-slim", "from": "rvt", "to": "ifc", "via": "autodesk-revit-exporter", "source_artifact": "magnetar-2024-core-interior.rvt", "derived_artifact": "magnetar-2024-core-interior-slim.ifc", "status": "recorded-ungated", "notes": "artifact hashed; no manifest or gate compares against it yet" },
+    { "id": "rvt-to-dwg:revit-export", "from": "rvt", "to": "dwg", "via": "autodesk-revit-exporter", "source_artifact": null, "derived_artifact": null, "status": "pending", "notes": "no Revit-exported DWG exists in any public corpus; needs one licensed Revit session exporting the owned/redistributable projects (R2018 + R2013)" }
+  ],
+  "agreements": [
+    { "id": "core-interior:counts:rvt-rs-decode-vs-revit-export", "edge": "rvt-to-ifc:revit-export:core-interior", "witnesses": ["rvt-rs", "autodesk-revit-exporter"], "gate": "tests/project_count_fixtures.rs", "ci": "corpus-tier2", "scope": "per-category entity counts (manifest `decoder_metric` vs `expected`, tolerances stated per category)", "status": "gated", "notes": "the IFC side is counted by rvt-rs's own STEP constructor scan, so this is exporter-vs-decoder agreement with one reading witness" },
+    { "id": "core-interior:counts:ifcopenshell-vs-revit-export", "edge": "rvt-to-ifc:revit-export:core-interior", "witnesses": ["ifcopenshell", "autodesk-revit-exporter"], "gate": "tools/ci/witness-ifcopenshell.py", "ci": "ifcopenshell-validate", "scope": "per-category entity counts from an independent IFC parser against the same manifest expectations", "status": "gated", "notes": "first independent third-party reading witness; together with the previous agreement this is two readers agreeing across one edge" },
+    { "id": "writer:ifcopenshell-parses-rvt-rs-ifc", "edge": null, "witnesses": ["rvt-rs", "ifcopenshell"], "gate": ".github/workflows/ci.yml", "ci": "ifcopenshell-validate", "scope": "rvt-rs IFC output for Einhoven and the synthetic fixtures opens and validates", "status": "gated", "notes": "validates the writer only; says nothing about decode fidelity" }
+  ],
+  "rules": {
+    "verified_requires": "at least two independent witnesses agreeing across at least one recorded edge, within stated tolerance, enforced by a CI gate named here",
+    "single_witness_ceiling": "partial",
+    "tolerance_changes": "reviewed change with a written reason in the manifest",
+    "adopting_a_witness": "run it as a separate process in CI; never link copyleft or non-Rust code into the workspace"
+  }
+}

@@ -437,6 +437,16 @@ jobs:
           python tools/ci/validate-real-ifc.py \
             /tmp/walker-real-project.ifc \
             /tmp/walker-real-project.diagnostics.json
+      # Cross-witness gate (docs/verification-protocol.md): an independent
+      # IFC reader parses the Revit-authored reference export and must agree
+      # with the same manifest counts the rvt-rs decoder is gated against.
+      - name: Cross-witness gate — IfcOpenShell vs Revit-authored reference IFC
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          python tools/ci/witness-ifcopenshell.py \
+            tests/fixtures/project-counts/2024-core-interior.json \
+            "${RVT_PROJECT_CORPUS_DIR}"
 
   doc:
     name: cargo doc

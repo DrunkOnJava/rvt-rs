@@ -15,6 +15,14 @@ DOC-001 — statuses there must stay honest and must not claim
 converter-grade typed recovery. Keep that matrix, this page, the README,
 and the viewer support matrix aligned.
 
+**Verification protocol:** what "verified" means here is defined in
+[`docs/verification-protocol.md`](verification-protocol.md) — cross-witness
+agreement across recorded format edges, tracked in
+[`research/witness-registry.json`](../research/witness-registry.json) and
+enforced by `tests/witness_registry.rs` plus the CI gates it names. One
+edge (RVT → IFC via Revit's exporter, witnessed by IfcOpenShell) is recorded
+today; the RVT → DWG edge with dwg-rs is pending a Revit session.
+
 **Research program pointer:** the governing
 [unified research report](research/unified-research-report.md) (rev 1.1)
 sequences Phase 0 product readiness → Phase 1 identity/evidence contracts →

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/witness-registry.schema.json",
+  "title": "Cross-witness verification registry",
+  "description": "Nodes (formats), witnesses (readers/authors), hashed golden artifacts, recorded edges, and CI-gated agreements. See docs/verification-protocol.md. Listing a witness or edge is not a capability claim.",
+  "type": "object",
+  "required": ["schema_version", "protocol", "nodes", "witnesses", "artifacts", "edges", "agreements", "rules"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "protocol": { "type": "string" },
+    "updated": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "format", "specification"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "format": { "type": "string" },
+          "specification": { "type": "string" }
+        }
+      }
+    },
+    "witnesses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "node", "license", "status"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "kind": { "type": "string", "enum": ["reader", "author"] },
+          "node": { "type": "string" },
+          "repo": { "type": ["string", "null"] },
+          "license": { "type": "string" },
+          "language": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["adopted", "candidate", "rejected"] },
+          "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "node", "sha256", "bytes", "source", "license", "redistributable"],
+        "properties": {
+          "id": { "type": "string" },
+          "node": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer", "minimum": 1 },
+          "source": { "type": "string" },
+          "license": { "type": "string" },
+          "authored_by": { "type": "string" },
+          "derived_from": { "type": "string" },
+          "via": { "type": "string" },
+          "redistributable": { "type": "boolean" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "from", "to", "via", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "via": { "type": "string" },
+          "source_artifact": { "type": ["string", "null"] },
+          "derived_artifact": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["recorded", "recorded-ungated", "pending"] },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "agreements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "edge", "witnesses", "gate", "scope", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "edge": { "type": ["string", "null"] },
+          "witnesses": { "type": "array", "minItems": 2, "items": { "type": "string" } },
+          "gate": { "type": "string" },
+          "ci": { "type": "string" },
+          "scope": { "type": "string" },
+          "status": { "type": "string", "enum": ["gated", "recorded", "proposed"] },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "rules": { "type": "object" }
+  }
+}
