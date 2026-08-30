@@ -118,7 +118,9 @@ pub mod share;
 pub mod sheet;
 pub mod step_writer;
 
-pub use export_content::{ExportContentPolicy, is_misleading_proxy_class};
+pub use export_content::{
+    ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
+};
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model, entity_type_histogram};
 pub use step_writer::write_step;
 
@@ -1953,20 +1955,51 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
     let has_typed_window = exported.by_ifc_type.get("IFCWINDOW").copied().unwrap_or(0) > 0;
     if !has_typed_door || !has_typed_window {
         features.push("typed_door_window_discrimination_and_host_binding".into());
+    } else if model.entities.iter().any(|e| {
+        matches!(
+            e,
+            entities::IfcEntity::BuildingElement { ifc_type, host_element_index, .. }
+                if (ifc_type == "IFCDOOR" || ifc_type == "IFCWINDOW")
+                    && host_element_index.is_none()
+        )
+    }) {
+        // Typed Door/Window recovered (#211) but not attached to a host
+        // wall — the discrimination half of the old composite feature is
+        // closed, the host-binding half is not.
+        features.push("door_window_host_wall_binding".into());
     }
     // Opening-index rows may be present in production_class_counts without
     // IFC emission until host Wall ElementIds join.
     features.push("opening_index_to_ifc_openingelement_host_join".into());
-    let has_schema_wall = exported.by_ifc_type.get("IFCWALL").copied().unwrap_or(0) > 0
-        && model.entities.iter().any(|e| {
-            matches!(
-                e,
-                entities::IfcEntity::BuildingElement { name, .. }
-                    if name.starts_with("Wall-")
-            )
-        });
+    // RE-19 stands: an `IFCWALL` recovered from a partition element record
+    // (#211) is not a schema-field wall decode. Only a wall carrying a
+    // non-element-record body clears this feature.
+    let has_schema_wall = model.entities.iter().any(|e| {
+        matches!(
+            e,
+            entities::IfcEntity::BuildingElement { ifc_type, name, property_set, .. }
+                if ifc_type == "IFCWALL"
+                    && name.starts_with("Wall-")
+                    && !matches!(
+                        property_set,
+                        Some(set) if set.name == ELEMENT_RECORD_PROPERTY_SET
+                    )
+        )
+    });
     if !has_schema_wall {
         features.push("schema_field_wall_instances".into());
+    }
+    // #35: no exported property set carries Revit element parameters —
+    // every set emitted today is rvt-rs provenance about a recovered body.
+    let has_parameter_property_set = model.entities.iter().any(|e| {
+        matches!(
+            e,
+            entities::IfcEntity::BuildingElement { property_set: Some(set), .. }
+                if !set.name.starts_with("Rvt")
+        )
+    });
+    if !has_parameter_property_set {
+        features.push("revit_element_parameters_to_ifc_property_sets".into());
     }
     features
 }

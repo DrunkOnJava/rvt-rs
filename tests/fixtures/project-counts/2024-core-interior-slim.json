@@ -27,17 +27,16 @@
       "notes": "rvt-rs recovers 12 storeys from partition Level-like strings (elevation often 0.0 without ArcWall trailers); the export carries 15. ElementId <-> Level binding is still open (#86)."
     },
     "walls": {
-      "status": "known_gap",
+      "status": "known",
       "expected": 360,
       "source": "full Revit IFC export",
       "source_ifc_type": "IFCWALL",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWALL",
-      "decoder_expected": 0,
+      "decoder_expected": 360,
       "decoder_tolerance": 0,
-      "tracking_issue": 30,
-      "unsupported_feature": "schema_field_wall_instances",
-      "notes": "The 20 KB element fixture expects 0 walls; this full export expects 360, so this manifest is where wall recovery is actually measured. Instance recovery is evidence-only today (#81)."
+      "tracking_issue": 211,
+      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 360 of 360 IFCWALL recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding and door/window host-wall binding stay open (#86, door_window_host_wall_binding)."
     },
     "floors": {
       "status": "known_gap",
@@ -63,28 +62,28 @@
       "decoder_tolerance": 0
     },
     "doors": {
-      "status": "known_gap",
+      "status": "known",
       "expected": 132,
       "source": "full Revit IFC export",
       "source_ifc_type": "IFCDOOR",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCDOOR",
-      "decoder_expected": 0,
+      "decoder_expected": 132,
       "decoder_tolerance": 0,
-      "tracking_issue": 32,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+      "tracking_issue": 211,
+      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 132 of 132 IFCDOOR recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding and door/window host-wall binding stay open (#86, door_window_host_wall_binding)."
     },
     "windows": {
-      "status": "known_gap",
+      "status": "known",
       "expected": 6,
       "source": "full Revit IFC export",
       "source_ifc_type": "IFCWINDOW",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWINDOW",
-      "decoder_expected": 0,
+      "decoder_expected": 6,
       "decoder_tolerance": 0,
-      "tracking_issue": 32,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+      "tracking_issue": 211,
+      "notes": "Closed 2026-08-30 (#211): the partition element-record prologue carries a container reference at +0x32 (0xffffffffffffffff = none) and a placement-kind word at +0x42 (0xffffef7f placed instance / 0xffff8000 type-symbol envelope). Records that are standalone AND placed reproduce Revit's exported ElementId set exactly. Measured on this artifact: 6 of 6 IFCWINDOW recovered, exact id-set match against the export's Tag values — no false positives, no misses, tolerance 0. Bodies are the record's own bounding box (envelope, not a resolved profile or wall location curve); base/top Level binding and door/window host-wall binding stay open (#86, door_window_host_wall_binding)."
     },
     "rooms_spaces": {
       "status": "known_gap",
@@ -108,8 +107,8 @@
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCCOLUMN",
       "decoder_expected": 256,
       "decoder_tolerance": 0,
-      "tracking_issue": 204,
-      "notes": "Closed 2026-08-30 (#204): `partition_element_records` decodes the Revit 2024 partition element-record header (`u64` ElementId, `i64` BuiltInCategory at +0x12, bbox marker at +0x50, six `f64` feet at +0x58), keeps OST_Columns (-2000100) records whose ElementId is declared in Global/ElemTable, drops family-local bboxes (type definitions), and collapses co-located superseded generations by highest ElementId. 256 of 256, no false positives, no misses — the first category on this artifact where rvt-rs and both bridge witnesses agree exactly on a real project count."
+      "tracking_issue": 211,
+      "notes": "Closed 2026-08-30 (#204), instance rule replaced 2026-08-30 (#211): `partition_element_records` decodes the Revit 2024 partition element-record header (`u64` ElementId, `i64` BuiltInCategory at +0x12, container reference at +0x32, placement kind at +0x42, bbox marker at +0x50, six `f64` feet at +0x58) and keeps OST_Columns (-2000100) records whose ElementId is declared in Global/ElemTable and which are standalone placed instances. The #204 family-local bbox proxy and highest-id-per-footprint collapse are gone — the direct test reproduces the same 256 of 256 and additionally the exact wall / door / window id sets."
     },
     "beams": {
       "status": "known",
@@ -161,11 +160,11 @@
       "source_ifc_type": "IFCPROPERTYSET",
       "tolerance": 0,
       "decoder_metric": "step.IFCPROPERTYSET",
-      "decoder_expected": 320,
+      "decoder_expected": 818,
       "decoder_tolerance": 8,
       "tracking_issue": 35,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding",
-      "notes": "The ReferenceView_V1.2 export carries no IfcPropertySet at all (0, confirmed by both bridge readers); rvt-rs emits 64 RvtFloorGeometry sets for its plan-loop slab annotations plus 256 RvtColumnGeometry sets after #204. Neither side is a subset of the other."
+      "unsupported_feature": "revit_element_parameters_to_ifc_property_sets",
+      "notes": "The ReferenceView_V1.2 export carries no IfcPropertySet at all (0, confirmed by both bridge readers); rvt-rs emits 64 RvtFloorGeometry sets for its plan-loop slab annotations plus 754 RvtElementRecordGeometry sets for the 256 columns, 360 walls, 132 doors and 6 windows recovered from partition element records (#204/#211). Neither side is a subset of the other, and no set carries a Revit element parameter yet (#35)."
     }
   }
 }

@@ -13,6 +13,32 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Wall / Door / Window instance recovery — 360 / 132 / 6 exact ElementId
+  sets on the Core Interior full-project export (#211, RE-21).** #210 showed
+  the Revit 2024 partition element-record header reaches 100 % of the exported
+  ElementIds in every architectural category; what was missing was precision.
+  Two fields inside the 54 bytes that #210 recorded as sentinel padding supply
+  it: a **container reference** at `+0x32` (`u64`, `0xffff_ffff_ffff_ffff` =
+  none) and a **placement-kind** word at `+0x42` (`u32`, `0xffffef7f` placed
+  instance / `0xffff8000` family-type symbol envelope). A record that carries
+  no container reference **and** is marked a placed instance is exactly what
+  Revit's exporter emits: 360/360 `IFCWALL`, 132/132 `IFCDOOR`, 6/6
+  `IFCWINDOW` and 256/256 `IFCCOLUMN`, matching **ElementId sets** and not
+  merely counts, with no false positives and no misses at tolerance 0.
+  Each is emitted with a project placement and a bounding-box
+  `IfcExtrudedAreaSolid` (an envelope, not a recovered family profile or wall
+  location curve) plus an `RvtElementRecordGeometry` property set that says
+  so. `building_elements_with_geometry` on that file goes 256 → 754.
+  Evidence, histograms and reproduction commands:
+  [`reports/element-framing/RE-21-partition-element-record-instance-rule.md`](reports/element-framing/RE-21-partition-element-record-instance-rule.md).
+- **Every non-sentinel `+0x32` value is a container ElementId (#216
+  explained).** All nine observed on `2024_Core_Interior.rvt` are declared in
+  `Global/ElemTable`, are lower than every member id that names them, own a
+  contiguous ElementId block spanning several categories at once, and have no
+  element record of their own. The 136 `OST_Columns` ids Revit omits split
+  with no remainder into 17 type symbols and 119 members of five such
+  containers — which is precisely the split #216 described as "family-local"
+  plus "exact co-locations".
 - **Column instance recovery — 256 of 256 `IFCCOLUMN` on the Core Interior
   full-project export (#204).** `src/partition_element_records.rs` decodes the
   Revit 2024 partition *element-record header*, a fixed 88-byte prologue whose
@@ -209,6 +235,48 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Changed
 
+- **The #204 column heuristic is retired in favour of a direct test (#211).**
+  `partition_schema_mvp` no longer drops origin-centred family-local bounding
+  boxes and no longer collapses co-located footprint groups to their highest
+  `ElementId`; it applies
+  `PartitionElementRecord::is_exported_instance` instead. Columns stay at
+  256/256, and the same test additionally reproduces the wall, door and window
+  id sets — which the heuristic could not (648 / 139 / 8 against 360 / 132 /
+  6). `is_family_local` is kept as a documented, strictly weaker diagnostic:
+  the `+0x42` symbol set is a superset of it on every category, catching 15
+  door, 2 window and 1 wall symbols whose envelope is centred on only one axis.
+  `columns_from_records` remains as a back-compat alias for
+  `instances_from_records(records, "Column")`.
+- **`walls`, `doors` and `windows` are now scored, cross-witness-agreed
+  categories.** `tests/fixtures/project-counts/2024-core-interior-slim.json`
+  moves all three from `known_gap` (decoder 0) to `known` at tolerance 0, so
+  the OctetProof verdict for `magnetar-2024-core-interior-slim` compares
+  `entity_counts.IFCWALL` / `IFCDOOR` / `IFCWINDOW` across all three lineages
+  instead of excluding them — the claimed surface widens from five fields to
+  eight, four of which now assert presence rather than absence. The sibling
+  `magnetar-2024-core-interior` manifest records them as `decoder_baseline`
+  (its 20 KB reference fixture carries none). Both committed verdicts still
+  `PASS`; both `rvt-rs.json` observations were regenerated, so their
+  `observation_hash_sha256` changed. `docs/support-matrix.json`'s
+  `column-instance-recovery` row is superseded by
+  `element-record-instance-recovery`, still `verified`, now covering four
+  `BuiltInCategory` values with the scope and the remaining gaps stated.
+- **RE-19 is untouched and still reported.** The typed Wall / Door / Window
+  recovered here come from the element record's own `BuiltInCategory` field,
+  not from the 2024 `ArcWallRectOpening` index and not from a schema-field
+  decode. `schema_field_wall_instances` therefore still appears in
+  `diagnostics.unsupported_features` — the check now looks for a wall whose
+  body did **not** come from an element record, so an element-record wall can
+  no longer clear it by accident.
+- **Diagnostics: two composite `unsupported_features` split into what is
+  actually still missing.** `typed_door_window_discrimination_and_host_binding`
+  now fires only when no typed door or window is exported at all; when they
+  are exported but carry no host, the narrower
+  `door_window_host_wall_binding` fires instead. A new
+  `revit_element_parameters_to_ifc_property_sets` fires while every exported
+  `IfcPropertySet` is rvt-rs provenance about a recovered body rather than a
+  Revit element parameter (#35) — the two manifest rows that previously
+  borrowed the door/window feature name now use accurate ones.
 - **API (breaking, pre-`0.2.0`)** — `elem_table::ElemTableLayout` gains a
   `marker_offset` field (offset of the `FF` marker *within* a record), so
   struct-literal construction needs updating. `start` now means record 0's

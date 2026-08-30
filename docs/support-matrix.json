@@ -103,8 +103,8 @@
       "area": "elements",
       "name": "Decode typed elements from real project files",
       "status": "partial",
-      "evidence": "Production iter_elements: ArcWall (2023) + partition MVP Level/Material/Room/Floor + 2024 ArcWallRectOpening (ElemTable-confirmed ids); RE-19/RE-20 negatives",
-      "notes": "Narrow fail-closed MVP only. Generic real-project typed extraction is not solved. Never mark verified without corpus-backed converter-grade evidence (COR-001).",
+      "evidence": "Production iter_elements: ArcWall (2023) + partition MVP Level/Material/Room/Floor + 2024 ArcWallRectOpening (ElemTable-confirmed ids) + 2024 partition element-record Wall/Door/Window/Column instances (RE-21/#211); RE-19/RE-20 negatives",
+      "notes": "Narrow fail-closed MVP only. Four BuiltInCategories on one Revit 2024 edge match Revit's exporter exactly; generic real-project typed extraction is still not solved. Never mark verified without corpus-backed converter-grade evidence (COR-001).",
       "user_impact": "Useful recovery on supported subsets; full model conversion is not ready."
     },
     {
@@ -117,31 +117,31 @@
       "user_impact": "Developers can compose decoders; users should not read this as full coverage."
     },
     {
-      "id": "column-instance-recovery",
+      "id": "element-record-instance-recovery",
       "area": "elements",
-      "name": "Column instance recovery from Revit 2024 partition element records",
+      "name": "Wall / Door / Window / Column instance recovery from Revit 2024 partition element records",
       "status": "verified",
-      "evidence": "partition_element_records + partition_schema_mvp::columns_from_partition_category_records; tests/project_count_fixtures.rs (256/256, tolerance 0) and the magnetar-2024-core-interior-slim OctetProof verdict, where entity_counts.IFCCOLUMN is inside the claimed surface and rvt-rs, IfcOpenShell and IFClite agree exactly",
-      "notes": "Scope is exactly one BuiltInCategory (OST_Columns), one release band (Revit 2024) and one recorded edge. Bodies are the record's own bounding box, not a recovered family profile, and base/top Level ElementIds stay unbound (#86). The 392 OST_Columns records reduce to 256 by two steps: dropping family-local (origin-centred) envelopes, then collapsing each co-located footprint pair to its highest ElementId — a heuristic justified only by Revit's monotonic id allocation and by the resulting Tag set matching Revit's export exactly; #216 tracks replacing it with a direct test. This is not evidence for any other category or release.",
-      "user_impact": "Architectural columns come out of a Revit 2024 project as placed IFCCOLUMN with position and an envelope solid."
+      "evidence": "partition_element_records + partition_schema_mvp::instances_from_partition_category_records; tests/project_count_fixtures.rs (IFCWALL 360/360, IFCDOOR 132/132, IFCWINDOW 6/6, IFCCOLUMN 256/256, tolerance 0) and the magnetar-2024-core-interior-slim OctetProof verdict, where entity_counts.IFCWALL / IFCDOOR / IFCWINDOW / IFCCOLUMN are all inside the claimed surface and rvt-rs, IfcOpenShell and IFClite agree exactly",
+      "notes": "Scope is four BuiltInCategories (OST_Walls, OST_Doors, OST_Windows, OST_Columns), one release band (Revit 2024) and one recorded edge. Selection is a direct byte test, not a heuristic: the record must carry no container reference at +0x32 and placement kind 0xffffef7f at +0x42 (RE-21). It supersedes the #204 column rule, whose family-local bbox proxy and highest-ElementId-per-footprint collapse are removed. Bodies are the record's own bounding box, not a recovered family profile or wall location curve; base/top Level ElementIds stay unbound (#86) and doors/windows are not attached to a host wall (door_window_host_wall_binding). OST_Floors is explicitly NOT covered — the same rule selects 99 against 80 exported slabs (#212). This is not evidence for any other category or release.",
+      "user_impact": "Walls, doors, windows and architectural columns come out of a Revit 2024 project as placed IFC entities with position and an envelope solid, matching Revit's own export element for element."
     },
     {
       "id": "schema-field-wall",
       "area": "elements",
       "name": "Schema-field Wall decode (non-ArcWall)",
       "status": "unsupported",
-      "evidence": "RE-19 negative on magnetar corpora",
-      "notes": "No fail-closed schema-field Wall / 2024 ArcWall envelope suitable for production decode beyond the gated 2023 ArcWall path.",
+      "evidence": "RE-19 negative on magnetar corpora; unchanged by RE-21",
+      "notes": "No fail-closed schema-field Wall / 2024 ArcWall envelope suitable for production decode beyond the gated 2023 ArcWall path. RE-21/#211 recovers Wall instances from a different carrier (the partition element record's BuiltInCategory field, see element-record-instance-recovery); the schema-field mechanism this row names is still unsolved, and diagnostics keep reporting schema_field_wall_instances as unsupported.",
       "user_impact": "Arbitrary walls are not recovered as typed Walls."
     },
     {
       "id": "typed-door-window",
       "area": "elements",
-      "name": "Typed Door and Window host binding",
+      "name": "Typed Door and Window host-wall binding",
       "status": "unsupported",
-      "evidence": "RE-19: no reliable Door vs Window discriminator",
-      "notes": "2024 ArcWallRectOpening index may carry ElemTable-confirmed related ids without inventing typed Door/Window success.",
-      "user_impact": "Doors and windows are not typed IFC fills/voids from real projects."
+      "evidence": "RE-19: no reliable Door vs Window discriminator in the opening-index bytes; host binding still unrecovered after RE-21",
+      "notes": "RE-21/#211 recovers Door and Window *instances* from the partition element record's BuiltInCategory field (see element-record-instance-recovery) — that carrier is unrelated to RE-19's opening-index discriminator, which stays a negative. What remains unsupported here is the host binding: exported IFCDOOR / IFCWINDOW carry no IfcRelFillsElement / host wall, and the 2024 ArcWallRectOpening index still surfaces only ElemTable-confirmed related ids.",
+      "user_impact": "Doors and windows export as placed entities but are not typed IFC fills/voids of a host wall."
     },
     {
       "id": "level-elementid-storey-bind",

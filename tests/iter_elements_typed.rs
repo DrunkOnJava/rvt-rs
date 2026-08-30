@@ -334,27 +334,31 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
             .all(|e| e.class == "ArcWallRectOpening"),
         "opening index must not be relabeled as Door/Window"
     );
-    // RE-19: production path must not invent typed Door/Window / Wall from
-    // opening-index or schema-field paths on this corpus (negative result).
+    // Typed Wall / Door / Window come from the partition element-record
+    // carrier (#211), never from the opening index or a schema-field
+    // decode — RE-19's negative stands and is asserted by provenance
+    // below. The counts are the exact ElementId sets Revit's own full
+    // export tags: 360 IFCWALL, 132 IFCDOOR, 6 IFCWINDOW.
     let decoded: Vec<_> =
         walker::iter_elements_with_limits(&mut rf, walker::PRODUCTION_ELEMENT_MIN_SCORE, limits)
             .expect("iter_elements")
             .collect();
-    assert_eq!(
-        decoded.iter().filter(|e| e.class == "Door").count(),
-        0,
-        "RE-19: must not invent typed Door on 2024 Core Interior"
-    );
-    assert_eq!(
-        decoded.iter().filter(|e| e.class == "Window").count(),
-        0,
-        "RE-19: must not invent typed Window on 2024 Core Interior"
-    );
-    assert_eq!(
-        decoded.iter().filter(|e| e.class == "Wall").count(),
-        0,
-        "RE-19: must not invent schema-field Wall on 2024 Core Interior"
-    );
+    for (class, expected) in [("Wall", 360usize), ("Door", 132), ("Window", 6)] {
+        let hits: Vec<_> = decoded.iter().filter(|e| e.class == class).collect();
+        assert_eq!(
+            hits.len(),
+            expected,
+            "{class}: expected the exported instance count on 2024 Core Interior"
+        );
+        for hit in &hits {
+            assert_eq!(
+                hit.provenance.decoder.as_deref(),
+                Some("partition_schema_mvp::element_category_record"),
+                "RE-19: {class} must come from the partition element record, not a \
+                 schema-field or opening-index decode"
+            );
+        }
+    }
     assert!(
         decoded
             .iter()

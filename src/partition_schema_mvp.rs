@@ -2,13 +2,20 @@
 //!
 //! Extends the ArcWall-only partition merge with fail-closed recovers
 //! for Level, Material, Room, Floor plan loops, and (on Revit 2024)
-//! ArcWallRectOpening index rows plus `OST_Columns` element records
-//! ([`columns_from_partition_category_records`]). Semantic `Door` / `Window` classes
-//! are **not** invented from opening-index rows — those surface as
-//! `ArcWallRectOpening` with related-id provenance only. Related ids
-//! are cross-checked against `Global/ElemTable` when present; a hit
-//! confirms the id is declared, not that it is a host Wall or a
-//! Door/Window family instance.
+//! ArcWallRectOpening index rows plus `OST_Columns` / `OST_Walls` /
+//! `OST_Doors` / `OST_Windows` element records
+//! ([`instances_from_partition_category_records`]).
+//!
+//! Semantic `Door` / `Window` classes are still **not** invented from
+//! opening-index rows — those keep surfacing as `ArcWallRectOpening`
+//! with related-id provenance only, and RE-19's negative (no
+//! discriminator in the opening-index bytes, no schema-field Wall)
+//! stands untouched. Typed `Wall` / `Door` / `Window` come from a
+//! different carrier: the element record's own `BuiltInCategory`
+//! field, which names the category outright (#211). Opening-index
+//! related ids are cross-checked against `Global/ElemTable` when
+//! present; a hit confirms the id is declared, not that it is a host
+//! Wall or a Door/Window family instance.
 //!
 //! # Version guard
 //!
@@ -52,6 +59,12 @@ pub struct PartitionSchemaMvp {
     pub rect_openings: Vec<DecodedElement>,
     /// 2024 `OST_Columns` partition element records (M4-09 / #204).
     pub columns: Vec<DecodedElement>,
+    /// 2024 `OST_Walls` partition element records (#211).
+    pub walls: Vec<DecodedElement>,
+    /// 2024 `OST_Doors` partition element records (#211).
+    pub doors: Vec<DecodedElement>,
+    /// 2024 `OST_Windows` partition element records (#211).
+    pub windows: Vec<DecodedElement>,
 }
 
 impl PartitionSchemaMvp {
@@ -63,7 +76,10 @@ impl PartitionSchemaMvp {
                 + self.rooms.len()
                 + self.floors.len()
                 + self.rect_openings.len()
-                + self.columns.len(),
+                + self.columns.len()
+                + self.walls.len()
+                + self.doors.len()
+                + self.windows.len(),
         );
         out.extend(self.levels);
         out.extend(self.materials);
@@ -71,6 +87,9 @@ impl PartitionSchemaMvp {
         out.extend(self.floors);
         out.extend(self.rect_openings);
         out.extend(self.columns);
+        out.extend(self.walls);
+        out.extend(self.doors);
+        out.extend(self.windows);
         out
     }
 }
@@ -111,34 +130,69 @@ pub fn recover_partition_schema_mvp(
         out.rect_openings = rect_openings_from_partitions(rf, revit_version, limits)?;
     }
 
-    // --- 2024 OST_Columns partition element records (#204) ---
+    // --- 2024 partition element records (#204 columns, #211 the rest) ---
     out.columns = columns_from_partition_category_records(rf, revit_version)?;
+    out.walls = instances_from_partition_category_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_WALLS,
+        "Wall",
+    )?;
+    out.doors = instances_from_partition_category_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_DOORS,
+        "Door",
+    )?;
+    out.windows = instances_from_partition_category_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_WINDOWS,
+        "Window",
+    )?;
 
     Ok(out)
 }
 
 /// Recover architectural column instances from partition element
-/// records (M4-09 / #204).
+/// records (M4-09 / #204, instance rule replaced in #211).
+///
+/// Thin wrapper over [`instances_from_partition_category_records`]
+/// for `OST_Columns`.
+pub fn columns_from_partition_category_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> Result<Vec<DecodedElement>> {
+    instances_from_partition_category_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_COLUMNS,
+        "Column",
+    )
+}
+
+/// Recover placed element instances of one `BuiltInCategory` from
+/// partition element records (#211).
 ///
 /// Fail-closed pipeline, each step justified in
 /// [`crate::partition_element_records`]:
 ///
 /// 1. Every candidate record's leading `u64` must be an ElementId
 ///    declared in `Global/ElemTable`, and the record must carry the
-///    fixed bbox marker — a random byte match cannot become a column.
-/// 2. Records whose bbox is centred on the plan origin are family /
-///    type definitions (the symbol's own envelope in family
-///    coordinates), not placed instances, and are dropped.
-/// 3. Instances sharing a project-coordinate footprint origin are a
-///    superseded generation plus its replacement; Revit allocates
-///    ElementIds monotonically, so the highest id in each footprint
-///    group is the live element and the rest are dropped.
+///    fixed bbox marker — a random byte match cannot become an
+///    element.
+/// 2. The record must be a standalone placed instance:
+///    [`crate::partition_element_records::PartitionElementRecord::is_exported_instance`] — no container
+///    reference at `+0x32`, placement kind at `+0x42` equal to
+///    [`crate::partition_element_records::PLACEMENT_KIND_INSTANCE`].
 ///
 /// Nothing here invents an ElementId, a level binding, or a profile
 /// shape: the emitted geometry is exactly the recorded bounding box.
-pub fn columns_from_partition_category_records(
+pub fn instances_from_partition_category_records(
     rf: &mut RevitFile,
     revit_version: u32,
+    builtin_category: i64,
+    class: &str,
 ) -> Result<Vec<DecodedElement>> {
     if !crate::partition_element_records::supports_revit_version(revit_version) {
         return Ok(Vec::new());
@@ -153,41 +207,61 @@ pub fn columns_from_partition_category_records(
     let records = crate::partition_element_records::scan_category_records(
         rf,
         revit_version,
-        crate::partition_element_records::OST_COLUMNS,
+        builtin_category,
         &declared,
     )?;
-    Ok(columns_from_records(records))
+    Ok(instances_from_records(records, class))
 }
 
 /// Instance selection over already-decoded category records — split
 /// out so the rule is unit-testable without a corpus file.
-pub fn columns_from_records(
+///
+/// The selector is the direct test
+/// [`crate::partition_element_records::PartitionElementRecord::is_exported_instance`]. It supersedes
+/// the family-local bbox proxy plus highest-id-per-footprint collapse
+/// that #204 shipped for columns: both reproduced the 256 exported
+/// columns, only the direct test also reproduces the exact exported
+/// id sets for walls, doors and windows (#211).
+pub fn instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
+    class: &str,
 ) -> Vec<DecodedElement> {
     use crate::partition_element_records::PartitionElementRecord;
     use std::collections::BTreeMap;
 
-    let mut by_footprint: BTreeMap<(i64, i64, i64), PartitionElementRecord> = BTreeMap::new();
+    // One record per ElementId: a single element can be framed more
+    // than once across partitions. Keep the first by (stream, offset)
+    // so the choice is deterministic and byte-anchored.
+    let mut by_id: BTreeMap<u32, PartitionElementRecord> = BTreeMap::new();
     for record in records {
-        if record.is_family_local() {
+        if !record.is_exported_instance() {
             continue;
         }
-        let key = record.footprint_key();
-        let replace = match by_footprint.get(&key) {
-            Some(existing) => record.element_id > existing.element_id,
-            None => true,
-        };
-        if replace {
-            by_footprint.insert(key, record);
+        match by_id.get(&record.element_id) {
+            Some(existing)
+                if (existing.stream.as_str(), existing.offset)
+                    <= (record.stream.as_str(), record.offset) => {}
+            _ => {
+                by_id.insert(record.element_id, record);
+            }
         }
     }
-    let mut instances: Vec<PartitionElementRecord> = by_footprint.into_values().collect();
-    instances.sort_by_key(|record| record.element_id);
-    instances.iter().map(column_decoded).collect()
+    by_id
+        .values()
+        .map(|record| element_record_decoded(record, class))
+        .collect()
 }
 
-fn column_decoded(
+/// Back-compat alias for the #204 entry point.
+pub fn columns_from_records(
+    records: Vec<crate::partition_element_records::PartitionElementRecord>,
+) -> Vec<DecodedElement> {
+    instances_from_records(records, "Column")
+}
+
+fn element_record_decoded(
     record: &crate::partition_element_records::PartitionElementRecord,
+    class: &str,
 ) -> DecodedElement {
     let (cx, cy) = record.plan_centre_feet();
     let (dx, dy, dz) = record.extents_feet();
@@ -250,7 +324,7 @@ fn column_decoded(
     ];
     DecodedElement {
         id: Some(record.element_id),
-        class: "Column".into(),
+        class: class.into(),
         fields,
         byte_range: record.offset
             ..record
@@ -260,7 +334,7 @@ fn column_decoded(
             &record.stream,
             record.offset,
             "partition_element_record",
-            "partition_schema_mvp::column_category_record",
+            "partition_schema_mvp::element_category_record",
             0.8,
             Some("level_binding_unresolved"),
         ),
@@ -884,20 +958,36 @@ mod tests {
         element_id: u32,
         bbox_feet: [f64; 6],
     ) -> crate::partition_element_records::PartitionElementRecord {
+        element_record(
+            element_id,
+            crate::partition_element_records::OST_COLUMNS,
+            bbox_feet,
+        )
+    }
+
+    fn element_record(
+        element_id: u32,
+        builtin_category: i64,
+        bbox_feet: [f64; 6],
+    ) -> crate::partition_element_records::PartitionElementRecord {
         crate::partition_element_records::PartitionElementRecord {
             stream: "Partitions/46".into(),
             offset: element_id as usize,
             element_id,
             flags: 0x0141,
-            builtin_category: crate::partition_element_records::OST_COLUMNS,
+            builtin_category,
+            container: crate::partition_element_records::CONTAINER_NONE,
+            placement_kind: crate::partition_element_records::PLACEMENT_KIND_INSTANCE,
             bbox_feet,
         }
     }
 
     #[test]
-    fn column_selection_drops_family_local_type_envelopes() {
+    fn selection_drops_type_symbol_envelopes() {
+        let mut symbol = column_record(5755, [-1.0, -1.0, 0.0, 1.0, 1.0, 9.0]);
+        symbol.placement_kind = crate::partition_element_records::PLACEMENT_KIND_SYMBOL;
         let records = vec![
-            column_record(5755, [-1.0, -1.0, 0.0, 1.0, 1.0, 9.0]),
+            symbol,
             column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
         ];
         let out = columns_from_records(records);
@@ -907,15 +997,56 @@ mod tests {
     }
 
     #[test]
-    fn column_selection_keeps_newest_of_a_co_located_pair() {
+    fn selection_drops_container_members_not_the_higher_id() {
+        // The #204 rule kept the highest ElementId per footprint origin.
+        // The #211 rule keeps whichever record is standalone — here the
+        // *lower* id, which is what the container reference dictates.
+        let mut member = column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]);
+        member.container = 16_229;
         let records = vec![
             column_record(16347, [23.0, 109.0, 76.0, 25.0, 111.0, 91.0]),
-            column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
+            member,
             column_record(20376, [48.0, 109.0, 76.0, 50.0, 111.0, 90.33]),
         ];
         let out = columns_from_records(records);
         let ids: Vec<Option<u32>> = out.iter().map(|e| e.id).collect();
-        assert_eq!(ids, vec![Some(20375), Some(20376)]);
+        assert_eq!(ids, vec![Some(16347), Some(20376)]);
+    }
+
+    #[test]
+    fn selection_labels_each_category_with_its_own_class() {
+        for (category, class) in [
+            (crate::partition_element_records::OST_WALLS, "Wall"),
+            (crate::partition_element_records::OST_DOORS, "Door"),
+            (crate::partition_element_records::OST_WINDOWS, "Window"),
+        ] {
+            let out = instances_from_records(
+                vec![element_record(
+                    4242,
+                    category,
+                    [0.0, 0.0, 0.0, 4.0, 1.0, 8.0],
+                )],
+                class,
+            );
+            assert_eq!(out.len(), 1);
+            assert_eq!(out[0].class, class);
+            assert_eq!(out[0].id, Some(4242));
+            assert_eq!(
+                out[0].provenance.decoder.as_deref(),
+                Some("partition_schema_mvp::element_category_record")
+            );
+        }
+    }
+
+    #[test]
+    fn selection_keeps_one_record_per_element_id() {
+        let mut second = column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]);
+        second.offset = 999_999;
+        let out = columns_from_records(vec![
+            column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
+            second,
+        ]);
+        assert_eq!(out.len(), 1);
     }
 
     #[test]
