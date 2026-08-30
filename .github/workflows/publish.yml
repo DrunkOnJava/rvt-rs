@@ -266,6 +266,10 @@ jobs:
       - name: Install Playwright Chromium
         working-directory: viewer
         run: npx playwright install --with-deps chromium
+      # wasm-objdump makes wasm-no-network-imports.spec.ts run instead of
+      # skip, so the release path carries the same VW1-21 gate as deploy.
+      - name: Install wabt (for Import-table audit)
+        run: sudo apt-get update && sudo apt-get install -y wabt
       - name: Build viewer
         working-directory: viewer
         run: npm run build
