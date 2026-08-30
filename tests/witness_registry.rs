@@ -239,3 +239,84 @@ fn ifcopenshell_gate_script_is_wired() {
         "gate must be wired to the Core Interior manifest"
     );
 }
+
+/// IFClite is the third implementation lineage on the RVT → IFC edge. Its
+/// exact version pin (OctetProof §9.6) has to agree in three places — the
+/// Cargo dependency, the constant the binary stamps into every observation,
+/// and the registry entry — or a silent witness upgrade could move a verdict
+/// without anyone noticing. The gate must also stay out of the `rvt`
+/// workspace: `ifc-lite-core` is MPL-2.0 and is only ever run as a separate
+/// process (docs/verification-protocol.md).
+#[test]
+fn ifc_lite_gate_is_wired_and_version_pinned() {
+    let crate_dir = root().join("tools/ci/witness-ifc-lite");
+    let manifest =
+        std::fs::read_to_string(crate_dir.join("Cargo.toml")).expect("witness crate manifest");
+    assert!(
+        manifest.contains("[workspace]"),
+        "the witness crate must declare its own workspace root so the \
+         MPL-2.0 reader is never linked into the Apache-2.0 tree"
+    );
+    assert!(
+        crate_dir.join("Cargo.lock").is_file(),
+        "a committed lockfile is what makes `cargo run --locked` pin the \
+         witness and its transitive deps"
+    );
+    let root_manifest = std::fs::read_to_string(root().join("Cargo.toml")).unwrap();
+    assert!(
+        !root_manifest.contains("witness-ifc-lite"),
+        "the witness must not be a member of the rvt workspace"
+    );
+
+    let pin = manifest
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("ifc-lite-core = \"="))
+        .and_then(|rest| rest.split('"').next())
+        .expect("Cargo.toml must pin `ifc-lite-core = \"=X.Y.Z\"` exactly (§9.6)");
+
+    let source = std::fs::read_to_string(crate_dir.join("src/main.rs")).expect("witness source");
+    assert!(
+        source.contains(&format!("WITNESS_VERSION: &str = \"{pin}\"")),
+        "WITNESS_VERSION must equal the pinned ifc-lite-core version {pin}"
+    );
+    assert!(
+        source.contains("reference_ifc_sha256"),
+        "gate must verify the artifact hash"
+    );
+
+    let reg = read_json("research/witness-registry.json");
+    let entry = reg["witnesses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|w| w["id"] == "ifc-lite")
+        .expect("registry must carry the ifc-lite witness");
+    assert_eq!(entry["status"], "adopted", "ifc-lite must be adopted");
+    assert_eq!(
+        entry["version"].as_str(),
+        Some(pin),
+        "registry version must equal the Cargo pin {pin}"
+    );
+
+    let ci = std::fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
+    assert!(
+        ci.contains("tools/ci/witness-ifc-lite/Cargo.toml"),
+        "ci.yml must run the IFClite gate"
+    );
+    assert!(
+        ci.contains("/tmp/witness/observations/ifc-lite.json"),
+        "the IFClite observation must land in the directory the verdict reads"
+    );
+
+    let verdict = read_json("research/witness/magnetar-2024-core-interior/verdict.json");
+    let lineages: BTreeSet<&str> = verdict["independence"]["lineages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(
+        lineages.len() >= 3 && lineages.contains("ifc-lite"),
+        "the Core Interior verdict must span three lineages including ifc-lite, saw {lineages:?}"
+    );
+}

@@ -1,20 +1,55 @@
 {
-  "artifact_id": "magnetar-2024-core-interior",
+  "artifact_id": "magnetar-2024-core-interior-slim",
   "diffs": [],
   "excluded": [
     {
+      "category": "levels",
+      "field": "entity_counts.IFCBUILDINGSTOREY",
+      "reason": "decoder_baseline",
+      "tracking_issue": 33,
+      "unsupported_feature": null
+    },
+    {
+      "category": "walls",
+      "field": "entity_counts.IFCWALL",
+      "reason": "known_gap",
+      "tracking_issue": 30,
+      "unsupported_feature": "schema_field_wall_instances"
+    },
+    {
       "category": "floors",
-      "field": "entity_counts.IFCSHADINGDEVICE",
+      "field": "entity_counts.IFCSLAB",
       "reason": "known_gap",
       "tracking_issue": 31,
       "unsupported_feature": "floor_slab_extrusion_thickness"
+    },
+    {
+      "category": "doors",
+      "field": "entity_counts.IFCDOOR",
+      "reason": "known_gap",
+      "tracking_issue": 32,
+      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+    },
+    {
+      "category": "windows",
+      "field": "entity_counts.IFCWINDOW",
+      "reason": "known_gap",
+      "tracking_issue": 32,
+      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
     },
     {
       "category": "rooms_spaces",
       "field": "entity_counts.IFCSPACE",
       "reason": "known_gap",
       "tracking_issue": 33,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+      "unsupported_feature": "real_file_element_geometry"
+    },
+    {
+      "category": "columns",
+      "field": "entity_counts.IFCCOLUMN",
+      "reason": "known_gap",
+      "tracking_issue": 204,
+      "unsupported_feature": "real_file_element_geometry"
     },
     {
       "category": "materials",
@@ -47,12 +82,12 @@
   },
   "inputs": {
     "ifc-lite": {
-      "input_hash_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
+      "input_hash_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
       "role": "bridge",
       "witness_version": "7.1.1"
     },
     "ifcopenshell": {
-      "input_hash_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
+      "input_hash_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
       "role": "bridge",
       "witness_version": "0.8.5"
     },
@@ -65,17 +100,13 @@
   "insufficient_witnesses": false,
   "schema_version": "1.0.0",
   "semantic_surface": [
-    "entity_counts.IFCWALL",
     "entity_counts.IFCROOF",
-    "entity_counts.IFCDOOR",
-    "entity_counts.IFCWINDOW",
-    "entity_counts.IFCCOLUMN",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "e8bdb0a0748cd0904ae2da29594c902202fcf1a5e2ad1b5150c1d73ff6215bae",
+  "verdict_hash_sha256": "3f1e425bdee9710a7288fe60425e297ecdee4d968d1c773c88cd9973a776d1c4",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

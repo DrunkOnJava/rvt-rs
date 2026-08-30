@@ -1,0 +1,68 @@
+{
+  "artifact_id": "magnetar-2024-core-interior-slim",
+  "deterministic": true,
+  "input_file": "2024_Core_Interior.rvt",
+  "input_hash_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
+  "input_role": "source",
+  "observation": {
+    "building_elements_with_geometry": 0,
+    "entity_counts": {
+      "IFCAPPLICATION": 1,
+      "IFCAXIS2PLACEMENT3D": 1,
+      "IFCBUILDING": 1,
+      "IFCBUILDINGSTOREY": 12,
+      "IFCCARTESIANPOINT": 1,
+      "IFCCONVERSIONBASEDUNIT": 4,
+      "IFCDIMENSIONALEXPONENTS": 4,
+      "IFCDIRECTION": 2,
+      "IFCGEOMETRICREPRESENTATIONCONTEXT": 1,
+      "IFCLOCALPLACEMENT": 96,
+      "IFCMATERIAL": 102,
+      "IFCMEASUREWITHUNIT": 4,
+      "IFCORGANIZATION": 1,
+      "IFCOWNERHISTORY": 1,
+      "IFCPERSON": 1,
+      "IFCPERSONANDORGANIZATION": 1,
+      "IFCPROJECT": 1,
+      "IFCPROPERTYSET": 64,
+      "IFCPROPERTYSINGLEVALUE": 256,
+      "IFCRELAGGREGATES": 3,
+      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 1,
+      "IFCRELDEFINESBYPROPERTIES": 64,
+      "IFCSITE": 1,
+      "IFCSIUNIT": 6,
+      "IFCSLAB": 64,
+      "IFCSPACE": 18,
+      "IFCUNITASSIGNMENT": 1
+    },
+    "exported_building_elements": {
+      "IFCSLAB": 64,
+      "IFCSPACE": 18
+    },
+    "material_count": 102,
+    "storey_count": 12
+  },
+  "observation_hash_sha256": "b6d9b67c10c3350b69b58cbd2c6caeca405f63ce182e7291feba3e3ff10f3e00",
+  "schema_version": "1.0.0",
+  "semantic_surface_covered": [
+    "entity_counts"
+  ],
+  "unsupported_entities": [
+    "real_file_element_geometry",
+    "revit_compound_assemblies_and_walltype_widths",
+    "floor_slab_extrusion_thickness",
+    "typed_door_window_discrimination_and_host_binding",
+    "opening_index_to_ifc_openingelement_host_join",
+    "schema_field_wall_instances"
+  ],
+  "warnings": [
+    "No exported building elements include decoded geometry; see skipped diagnostics for missing curve/profile/dimension data.",
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_curve=18, unsupported_geometry_missing_level=18, unsupported_geometry_missing_dimensions=18, floor_boundary_annotation_only=64.",
+    "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
+    "12 building storey name(s) came from partition Level-like strings (RE-15/#86 via PR #117); ElementId↔Level binding is still pending.",
+    "Suppressed 18 low-confidence schema scan candidates from default export.",
+    "Formats/Latest multipage integrity uncertain (checksum-page strip disabled; RVT_FORMATS_MULTIPAGE_UNVERIFIED)."
+  ],
+  "witness_id": "rvt-rs",
+  "witness_version": "0.1.2"
+}

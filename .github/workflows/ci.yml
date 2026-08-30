@@ -464,13 +464,30 @@ jobs:
             tests/fixtures/project-counts/2024-core-interior.json \
             "${RVT_PROJECT_CORPUS_DIR}" \
             --observation /tmp/witness/observations/ifcopenshell.json
+      # Third implementation lineage on the same edge (OctetProof §9.3):
+      # IFClite reads the same reference IFC with its own hand-rolled STEP
+      # scanner — Rust, MPL-2.0, no IfcOpenShell code. It builds from
+      # tools/ci/witness-ifc-lite, which is its own workspace root, so the
+      # MPL dependency is never linked into the Apache-2.0 `rvt` tree, and
+      # `--locked` plus the `=7.1.1` pin keeps the witness version exact
+      # (§9.6). Two unrelated bridge readers must now report the same counts.
+      - name: Cross-witness gate — IFClite vs Revit-authored reference IFC
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          cargo run --release --locked \
+            --manifest-path tools/ci/witness-ifc-lite/Cargo.toml -- \
+            tests/fixtures/project-counts/2024-core-interior.json \
+            "${RVT_PROJECT_CORPUS_DIR}" \
+            --observation /tmp/witness/observations/ifc-lite.json
       # OctetProof verdict (docs/octetproof-spec-draft.md §6–§10): the source
-      # witness (rvt-rs reading the .rvt) and the bridge witness (IfcOpenShell
-      # reading Revit's .ifc) each emit a canonical observation; the verdict
-      # must PASS on the claimed surface with the §9.3 independence set, and
-      # the fresh observations must replay byte-for-byte against the
-      # committed ones under research/witness/. Fail-closed.
-      - name: OctetProof verdict — source witness vs bridge witness, replayed
+      # witness (rvt-rs reading the .rvt) and the two bridge witnesses
+      # (IfcOpenShell and IFClite reading Revit's .ifc) each emit a canonical
+      # observation; the verdict must PASS on the claimed surface with the
+      # §9.3 independence set — three lineages — and the fresh observations
+      # must replay byte-for-byte against the committed ones under
+      # research/witness/. Fail-closed.
+      - name: OctetProof verdict — source witness vs two bridge witnesses, replayed
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
@@ -484,6 +501,37 @@ jobs:
             --out /tmp/witness/verdict.json \
             --registry research/witness-registry.json \
             --compare-committed research/witness/magnetar-2024-core-interior/observations
+      # Second recorded edge on the same source .rvt: the full project export
+      # (IFC Exports/2024_Core_Interior_slim.ifc, 19879 entities) instead of
+      # the 20 KB element fixture. Same three witnesses, same verdict shape;
+      # the surface is deliberately four fields wide because the full export
+      # exposes 360 walls / 132 doors / 256 columns / 116 spaces that rvt-rs
+      # cannot claim yet, and those are excluded first-class with their
+      # tracking issues.
+      - name: OctetProof verdict — full-project export (slim), three witnesses
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          mkdir -p /tmp/witness-slim/observations
+          python tools/ci/witness-ifcopenshell.py \
+            tests/fixtures/project-counts/2024-core-interior-slim.json \
+            "${RVT_PROJECT_CORPUS_DIR}" \
+            --observation /tmp/witness-slim/observations/ifcopenshell.json
+          cargo run --release --locked \
+            --manifest-path tools/ci/witness-ifc-lite/Cargo.toml -- \
+            tests/fixtures/project-counts/2024-core-interior-slim.json \
+            "${RVT_PROJECT_CORPUS_DIR}" \
+            --observation /tmp/witness-slim/observations/ifc-lite.json
+          ./target/release/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" \
+            -o /tmp/witness-slim/core-interior-slim.rvt-rs.ifc \
+            --observation /tmp/witness-slim/observations/rvt-rs.json \
+            --artifact-id magnetar-2024-core-interior-slim
+          python tools/ci/witness-verdict.py \
+            tests/fixtures/project-counts/2024-core-interior-slim.json \
+            /tmp/witness-slim/observations \
+            --out /tmp/witness-slim/verdict.json \
+            --registry research/witness-registry.json \
+            --compare-committed research/witness/magnetar-2024-core-interior-slim/observations
       # §10.6: publish observations + verdict for human review of any
       # disagreement without re-running the gate.
       - name: Publish witness observations and verdict
@@ -491,7 +539,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: octetproof-core-interior
-          path: /tmp/witness/
+          path: |
+            /tmp/witness/
+            /tmp/witness-slim/
           retention-days: 90
           if-no-files-found: ignore
 
