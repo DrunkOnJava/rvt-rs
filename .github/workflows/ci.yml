@@ -551,9 +551,17 @@ jobs:
       # a real Revit 2024 project just produced — the file that carried
       # 338 short instances (256 IFCCOLUMN, 64 IFCSLAB, 18 IFCSPACE)
       # before the fix.
+      #
+      # `--witness-agreement` is passed only here: this is the recorded
+      # artifact, so every written PredefinedType must be the value
+      # Revit's own exporter writes for that type on
+      # 2024_Core_Interior_slim.ifc (#220). The same run also composes
+      # ObjectPlacement x Position for two pinned elements, which is
+      # what keeps the #232 double-translation from coming back.
       - name: Validate IFC4 schema arity of the real-project IFC
         run: |
-          python tools/ci/ifc_schema_arity.py /tmp/witness/core-interior.rvt-rs.ifc
+          python tools/ci/ifc_schema_arity.py --witness-agreement \
+            /tmp/witness/core-interior.rvt-rs.ifc
       # Second recorded edge on the same source .rvt: the full project export
       # (IFC Exports/2024_Core_Interior_slim.ifc, 19879 entities) instead of
       # the 20 KB element fixture. Same three witnesses, same verdict shape;

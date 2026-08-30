@@ -46,30 +46,42 @@ pub const MAPPINGS: &[Mapping] = &[
         predefined_type: None,
     },
     // Architectural — walls and hosted elements.
+    //
+    // `.NOTDEFINED.` rather than `.STANDARD.` is the authoring
+    // witness's own choice, not a shrug (#220): on
+    // `2024_Core_Interior_slim.ifc` Revit's exporter writes
+    // `.NOTDEFINED.` on all 360 `IFCWALL` rows, including the ones
+    // whose body is a plain `SweptSolid` that `.STANDARD.` would
+    // describe. Agreement with the recorded export is what the
+    // verdicts score, so where an edge shows the witness's answer we
+    // take it.
     Mapping {
         revit_class: "Wall",
         ifc_type: "IFCWALL",
-        predefined_type: Some("STANDARD"),
+        predefined_type: Some("NOTDEFINED"),
     },
     Mapping {
         revit_class: "ArcWall",
         ifc_type: "IFCWALL",
-        predefined_type: Some("STANDARD"),
+        predefined_type: Some("NOTDEFINED"),
     },
     Mapping {
         revit_class: "CurtainWall",
         ifc_type: "IFCCURTAINWALL",
         predefined_type: None,
     },
+    // Revit writes `.DOOR.` on all 132 `IFCDOOR` rows and `.WINDOW.`
+    // on all 6 `IFCWINDOW` rows of the same export (#220); emitting
+    // `$` there dropped a value the witness had already shown.
     Mapping {
         revit_class: "Door",
         ifc_type: "IFCDOOR",
-        predefined_type: None,
+        predefined_type: Some("DOOR"),
     },
     Mapping {
         revit_class: "Window",
         ifc_type: "IFCWINDOW",
-        predefined_type: None,
+        predefined_type: Some("WINDOW"),
     },
     // 2024 ArcWallRectOpening index rows — not typed Door/Window.
     Mapping {
@@ -194,10 +206,17 @@ pub const MAPPINGS: &[Mapping] = &[
         predefined_type: Some("RAFTER"),
     },
     // Spatial zoning.
+    //
+    // `.SPACE.` rather than `.INTERNAL.` (#220): Revit writes
+    // `.SPACE.` on all 116 `IFCSPACE` rows of
+    // `2024_Core_Interior_slim.ifc`. `Area` and `Space` keep `None` —
+    // no recorded edge shows what the witness does with those two
+    // Revit classes, and inventing a value is the thing this table
+    // exists to avoid.
     Mapping {
         revit_class: "Room",
         ifc_type: "IFCSPACE",
-        predefined_type: Some("INTERNAL"),
+        predefined_type: Some("SPACE"),
     },
     Mapping {
         revit_class: "Area",
@@ -361,7 +380,27 @@ mod tests {
     fn lookup_known_class() {
         let m = lookup("Wall").unwrap();
         assert_eq!(m.ifc_type, "IFCWALL");
-        assert_eq!(m.predefined_type, Some("STANDARD"));
+        assert_eq!(m.predefined_type, Some("NOTDEFINED"));
+    }
+
+    /// #220: the four mappings that now follow the authoring witness
+    /// instead of the closest-reading IFC4 enum. Each value is what
+    /// Revit's own exporter writes on `2024_Core_Interior_slim.ifc`
+    /// (360 walls `.NOTDEFINED.`, 116 spaces `.SPACE.`, 132 doors
+    /// `.DOOR.`, 6 windows `.WINDOW.`).
+    #[test]
+    fn witness_following_predefined_types() {
+        for (class, ifc_type, expected) in [
+            ("Wall", "IFCWALL", "NOTDEFINED"),
+            ("ArcWall", "IFCWALL", "NOTDEFINED"),
+            ("Room", "IFCSPACE", "SPACE"),
+            ("Door", "IFCDOOR", "DOOR"),
+            ("Window", "IFCWINDOW", "WINDOW"),
+        ] {
+            let m = lookup(class).unwrap();
+            assert_eq!(m.ifc_type, ifc_type, "{class} entity type");
+            assert_eq!(m.predefined_type, Some(expected), "{class} PredefinedType");
+        }
     }
 
     #[test]
@@ -399,12 +438,17 @@ mod tests {
     }
 
     #[test]
-    fn door_and_window_have_no_predefined_type_by_default() {
-        // IfcDoor / IfcWindow handle type variance via IfcDoorType /
-        // IfcWindowType, not PredefinedType. Confirm the mapping
-        // respects that.
-        assert_eq!(lookup("Door").unwrap().predefined_type, None);
-        assert_eq!(lookup("Window").unwrap().predefined_type, None);
+    fn door_and_window_follow_the_witness_predefined_type() {
+        // This used to assert `None`, on the reading that IfcDoor /
+        // IfcWindow carry their type variance on IfcDoorType /
+        // IfcWindowType rather than PredefinedType. That reading is
+        // defensible and still wrong for this table (#220): Revit's own
+        // exporter populates both — the type object *and* `.DOOR.` /
+        // `.WINDOW.` on the occurrence, on all 132 doors and all 6
+        // windows of the recorded artifact. Writing `$` where the
+        // witness wrote a value is a dropped observation, not restraint.
+        assert_eq!(lookup("Door").unwrap().predefined_type, Some("DOOR"));
+        assert_eq!(lookup("Window").unwrap().predefined_type, Some("WINDOW"));
     }
 
     #[test]
