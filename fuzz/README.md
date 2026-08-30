@@ -32,9 +32,10 @@ malformed input before they land in a real user's file.
   Install with `rustup toolchain install nightly` and either
   activate it with `rustup override set nightly` inside `fuzz/` or
   pass `+nightly` on every invocation (see below).
-- **cargo-fuzz itself:**
+- **cargo-fuzz itself** (the CLI builds on stable; only the fuzz
+  targets need nightly):
   ```
-  cargo install cargo-fuzz
+  cargo install cargo-fuzz --locked
   ```
 
 On macOS you may also need `xcode-select --install` for the
@@ -46,10 +47,7 @@ linker. On Linux, `clang` is recommended for sanitizer support.
 fuzz/
   Cargo.toml         # standalone fuzz crate, own [workspace] root
   .gitignore         # target/, corpus/, artifacts/, coverage/
-  src/lib.rs         # empty placeholder — Cargo refuses to parse a
-                     #   manifest with zero targets; delete when the
-                     #   first fuzz_targets/<name>.rs + [[bin]] lands
-  fuzz_targets/      # one .rs per libFuzzer target (currently empty)
+  fuzz_targets/      # one .rs per libFuzzer target (eleven today)
   README.md          # this file
 ```
 
@@ -66,10 +64,8 @@ List the available fuzz targets:
 ```
 cargo +nightly fuzz list
 ```
-(With no targets defined yet, this prints nothing — that is the
-expected state while the scaffold lands.)
 
-Run a target (once targets are added):
+Run a target:
 ```
 cargo +nightly fuzz run <target_name>
 ```
@@ -124,30 +120,31 @@ cargo +nightly fuzz coverage <target_name>
 Keep each target narrow — one parser surface per target — so that
 coverage feedback is meaningful and crashes are cheap to triage.
 
-## Planned targets (SEC-15 through SEC-23)
+## Current targets
 
-The fuzz targets themselves are tracked as separate tasks. This
-scaffold is SEC-14; the per-target implementations are SEC-15..23
-covering (among others):
+Eleven targets are checked in, one `[[bin]]` each in `fuzz/Cargo.toml`
+(`cargo +nightly fuzz list` prints the authoritative set):
 
 - `fuzz_open_bytes` — `RevitFile::open` on arbitrary bytes
 - `fuzz_gzip_header_len` — truncated-gzip header probe
 - `fuzz_inflate_at_with_limits` — bounded inflate against bomb inputs
+- `fuzz_parse_schema` — `Formats/Latest` schema field-type decoder
 - `fuzz_find_chunks` — chunk scanner
 - `fuzz_basic_file_info` — BasicFileInfo parser
 - `fuzz_part_atom` — PartAtom XML surface
 - `fuzz_walker_entry_detect` — Layer 5a walker entry-point detector
-- `fuzz_parse_schema` — schema field-type decoder
 - `fuzz_step_writer` — IFC STEP emission (output shape stability)
+- `fuzz_elem_table` — `Global/ElemTable` record parser
 - `fuzz_public_byte_parsers` — remaining public byte parsers (gzip offsets, class_index, ArcWall, rect opening, share fragment)
 
-See the `TODO-BLINDSIDE.md` / `ROADMAP.md` trail and each SEC-NN
-task description for scope of the individual targets.
+Scope for each target is described in its source file header; the
+security task ids that introduced them (SEC-14 onwards) are tracked in
+`TODO.md`.
 
 ## Related
 
-- Crash corpora accumulated from CI will eventually be committed
-  as regression inputs under `fuzz/corpus/<target>/` — see Q-04 in
-  the quality-bar task list for that follow-up.
-- A nightly `cargo-fuzz` GitHub Action that runs each target for a
-  bounded budget is tracked under SEC-25.
+- `.github/workflows/fuzz.yml` runs every target nightly (07:17 UTC)
+  with a bounded `-max_total_time` budget and uploads the crash corpus
+  as a workflow artifact when a target fails.
+- Stable, nightly-free regression coverage for crash-shaped inputs
+  lives in `tests/fuzz_regressions.rs` and runs in normal CI.
