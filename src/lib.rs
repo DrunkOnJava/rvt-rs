@@ -61,7 +61,8 @@
 //! - [`es_refs`] — ES reference occurrence locator contracts (Phase 1; no decoder)
 //! - [`relations`] — experimental relation-domain registry + SCC/quarantine stubs
 //! - [`capability`] — honest capability manifest snapshot for doctor/CLI
-//! - [`transmission_data`] — TransmissionData UTF-16LE detect-only probe
+//! - [`transmission_data`] — TransmissionData UTF-16LE detect + opportunistic XML/UUID/path extract
+//! - [`compound_framing`] — compound ArcWall `0x0821` marker tokenization (research; no opening decode)
 //! - [`writer`] — byte-preserving OLE round-trip
 //! - [`redact`] — shared PII scrubbers for all CLIs
 //! - [`ifc`] — IFC export scaffold
@@ -113,6 +114,7 @@ pub mod basic_file_info;
 pub mod capability;
 pub mod class_index;
 pub mod class_tag_map;
+pub mod compound_framing;
 pub mod compression;
 pub mod corpus;
 pub mod elem_table;

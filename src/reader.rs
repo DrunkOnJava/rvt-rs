@@ -309,10 +309,12 @@ impl RevitFile {
         self.read_stream(REVIT_PREVIEW_4_0)
     }
 
-    /// Detect-only probe of `TransmissionData` (UTF-16LE vs opaque vs empty).
+    /// Probe `TransmissionData` (UTF-16LE vs opaque vs empty) with
+    /// opportunistic UUID / path / XML-node extracts when UTF-16LE.
     ///
-    /// Does **not** decode linked-model tables or Autodesk transmission
-    /// field layouts — see [`crate::transmission_data`].
+    /// Does **not** resolve linked models or decode Autodesk transmission
+    /// field layouts — see [`crate::transmission_data`]. Empty extracts
+    /// ≠ “no links”.
     pub fn transmission_data_probe(
         &mut self,
     ) -> Result<crate::transmission_data::TransmissionDataProbe> {
