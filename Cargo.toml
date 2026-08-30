@@ -224,6 +224,20 @@ lto = true
 codegen-units = 1
 strip = true
 
+# CI-only profile: release optimisation without the parts sccache cannot
+# cache. `cargo build --release --all-targets` links 57 targets (18 bins,
+# 35 test binaries, 4 benches) through fat LTO at codegen-units = 1, which
+# was 781 s of the 848 s Windows test job on 2026-08-30 while every rustc
+# invocation was already a cache hit. Tests do not need LTO; shipped
+# binaries (publish.yml) keep `release`.
+[profile.ci]
+inherits = "release"
+lto = "off"
+codegen-units = 16
+strip = false
+debug = 0
+incremental = false
+
 # Docs.rs build configuration — see https://docs.rs/about/metadata
 [package.metadata.docs.rs]
 all-features = true
