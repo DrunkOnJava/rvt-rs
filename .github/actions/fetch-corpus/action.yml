@@ -1,0 +1,34 @@
+name: Fetch LFS corpus (cached)
+description: >-
+  Check out an external corpus repository with Git LFS, restoring it from the
+  Actions cache whenever the upstream HEAD is unchanged so the multi-hundred-MB
+  LFS payload is not re-downloaded on every run.
+inputs:
+  repository:
+    description: owner/name of the corpus repository
+    required: true
+  path:
+    description: checkout path relative to the workspace
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Resolve upstream HEAD
+      id: head
+      shell: bash
+      run: |
+        sha=$(git ls-remote "https://github.com/${{ inputs.repository }}.git" HEAD | cut -f1)
+        echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+    - name: Restore corpus from cache
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}
+        key: corpus-${{ inputs.repository }}-${{ steps.head.outputs.sha }}
+    - name: Check out corpus (cache miss)
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ inputs.repository }}
+        path: ${{ inputs.path }}
+        lfs: true
