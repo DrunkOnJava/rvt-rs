@@ -22,7 +22,9 @@ exclude = [
     "docs/outreach/*",
     "docs/announcement-draft.md",
     "docs/demo/*",
-    "docs/data/*.csv",
+    # docs/data/*.csv must ship: src/class_tag_map.rs `include_str!`s
+    # docs/data/tag-drift-2016-2026.csv, and excluding it made the packaged
+    # crate fail `cargo publish --dry-run` verification.
 ]
 
 # The SPDX identifier `Apache-2.0` is set above. The full license text
@@ -87,6 +89,13 @@ wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 
 [dev-dependencies]
+# Discussion #112 / #151 stream-evidence harness. Only
+# `examples/stream_evidence.rs` uses it, so it is a dev-dependency, and it is
+# path-only on purpose: Cargo strips path-only dev-dependencies at
+# `cargo publish`, which keeps `rvt` publishable while `tools/stream_evidence`
+# stays `publish = false` (a regular dependency made `cargo publish -p rvt`
+# fail with "no matching package named `stream-evidence`").
+stream-evidence = { path = "tools/stream_evidence" }
 # Statistical benchmarking harness — drives `benches/*` and
 # powers the criterion-based cells in `docs/benchmarks.md` (Q-05).
 # `html_reports` renders per-run HTML + SVG so CI artefacts are
@@ -97,11 +106,6 @@ criterion = { version = "0.7", features = ["html_reports"] }
 # synthetic fixtures under corpus/tier1/.
 sha2 = "0.10"
 hex = "0.4"
-# Discussion #112 / #151 stream-evidence harness (library used by
-# `examples/stream_evidence.rs` probes). Version pin satisfies cargo-deny
-# `wildcards = "deny"` (path-only deps are treated as `*`).
-stream-evidence = { path = "tools/stream_evidence", version = "=0.1.0" }
-
 # Seven shipped binaries. All depend on the `rvt` library crate.
 
 [[bin]]
