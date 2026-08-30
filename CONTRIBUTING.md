@@ -1,18 +1,63 @@
 # Contributing to rvt-rs
 
-Thanks for your interest. This project is small and evolving
-quickly, so contribution guidelines are intentionally light — but
-a few practices keep the repo healthy.
+Thanks for your interest. This project is small and evolving quickly, so
+the guidelines are intentionally light — but the gate below is the same one
+CI applies, and everything in it runs without Revit, without the Autodesk SDK,
+and without any private files: the synthetic fixtures under `corpus/tier1/`
+drive the default checks, and corpus-gated tests skip themselves while
+`RVT_PROJECT_CORPUS_DIR` is unset.
 
-Before opening a pull request, run the local gate:
+## Ten minutes to a first pull request
 
-```bash
-tools/check-local.sh
-```
+You need stable Rust 1.85 or newer (`rustup` installs it) and git.
 
-That script always runs fmt, clippy (`-D warnings`), rustdoc (`-D warnings`),
-and the workspace test suite. Opt into heavier checks without requiring network
-by default:
+1. Fork the repository on GitHub, then clone your fork:
+
+   ```bash
+   git clone git@github.com:<your-user>/rvt-rs.git
+   cd rvt-rs
+   ```
+
+2. Run the local gate. The first run compiles everything, which takes a few
+   minutes; later runs are incremental.
+
+   ```bash
+   tools/check-local.sh
+   ```
+
+   That runs `cargo fmt --check`, `cargo clippy` with `-D warnings`, rustdoc
+   with `-D warnings`, and the workspace test suite — the same checks a pull
+   request must pass. Green here means your machine is set up.
+
+3. Pick something small. Tasks that fit in an afternoon and need no corpus
+   files are labelled
+   [good first issue](https://github.com/DrunkOnJava/rvt-rs/labels/good%20first%20issue);
+   [`docs/contribution-map.md`](docs/contribution-map.md) lists the larger
+   areas and where each one starts.
+
+4. Branch, change, and run the gate again:
+
+   ```bash
+   git switch -c fix/short-description
+   # ...edit...
+   tools/check-local.sh
+   ```
+
+5. Commit with a [Conventional Commits](#commit-messages) message
+   (`docs(...)`, `fix(...)`, `test(...)`), push to your fork, and open a pull
+   request against `main`. The pull-request template asks what changed and
+   what you ran — fill in what applies and write "N/A" for the rest.
+
+6. A maintainer reviews and squash-merges. GitHub does not run CI on a
+   first-time contributor's pull request until a maintainer clicks
+   "Approve and run", so a PR that looks idle for a while is waiting on that,
+   not on you. Leave "Allow edits by maintainers" on and we can push small
+   fix-ups to your branch instead of bouncing it back.
+
+### Optional gates
+
+`tools/check-local.sh` never needs the network by default. Opt into the
+heavier checks when your change touches them:
 
 ```bash
 tools/check-local.sh --viewer          # viewer typecheck + build
@@ -22,20 +67,11 @@ tools/check-local.sh --deny --audit    # require cargo-deny / cargo-audit
 tools/check-local.sh --all-optional    # enable every optional gate
 ```
 
-For the fuller pre-push path (including optional supply-chain tools when
-installed, plus `--full` bench compile), use:
-
-```bash
-tools/quality.sh
-```
-
-`cargo-audit` and `cargo-deny` are optional locally but enforced in CI; with
-`tools/quality.sh`, set `RVT_REQUIRE_AUDIT=1` or `RVT_REQUIRE_DENY=1` when you
-want missing tools to fail. With `tools/check-local.sh`, pass `--audit` /
-`--deny` to make those tools required for that run.
-
-Supply-chain rules for Rust crates, viewer npm dependencies, advisory ignores,
-and GitHub Actions pinning are documented in
+`tools/quality.sh` is the fuller pre-push path (optional supply-chain tools
+when installed, plus `--full` bench compile); set `RVT_REQUIRE_AUDIT=1` or
+`RVT_REQUIRE_DENY=1` there when missing tools should fail. Supply-chain rules
+for Rust crates, viewer npm dependencies, advisory ignores, and GitHub Actions
+pinning are documented in
 [`docs/supply-chain-policy.md`](docs/supply-chain-policy.md).
 
 ## What's welcome
@@ -56,89 +92,25 @@ and GitHub Actions pinning are documented in
 
 ## Where help is most wanted
 
-**Current shipped surface** (as of April 2026 / post-Phase-5a):
+What actually works today is in [`docs/status.md`](docs/status.md) and the
+executable [`docs/support-matrix.json`](docs/support-matrix.json); the
+per-area starting points are in
+[`docs/contribution-map.md`](docs/contribution-map.md). In short:
 
-- 395 classes · 13,570 fields · 100% type classification
-- **80 typed element decoders** (every major element class:
-  walls, floors, roofs, ceilings, doors, windows, columns, beams,
-  stairs, railings, rooms, furniture, 11 MEP classes, annotations,
-  parameters — see `src/elements/mod.rs`'s `all_decoders()` for
-  the full list).
-- **Schema-directed ADocument walker** across all 11 releases
-  (fully on 2024-2026; graceful `Decoded::partial` on 2016-2023).
-- **Full IFC4 STEP export** (`rvt-ifc input.rfa input.ifc`): spatial
-  hierarchy + per-element entities + 8 IfcProfileDef subclasses
-  (IFC-24) + extruded / revolved / boolean / faceted-brep / swept-
-  path solids (IFC-16/17/18/19/20) + material layer sets + material
-  profile sets + property sets + opening/fill rels + IfcMember
-  secondary-member routing + IfcRepresentationMap shared geometry
-  (IFC-21) + ForgeUnit → IfcSIUnit/IfcConversionBasedUnit (IFC-39/40).
-- **Three-layer validation CI** on every commit: ifc-smoke
-  (substring counts) + IfcOpenShell (spec-level parse) + 382+
-  lib tests (per-feature coverage). See `docs/validation-evidence.md`.
-- **Python bindings**: `pip install rvt` (pyo3 + maturin wheel,
-  abi3-py38, one per OS/arch).
-- **Parameter system**: `ParameterElement` + `SharedParameter`
-  definitions, AProperty* value-carrier decoders (L5B-54), typed
-  `ParameterValue` enum, type-instance inheritance resolution
-  (L5B-55), calculated/reporting flag detection (L5B-56).
-
-**Most wanted right now:**
-
-1. **§L5B-11 — extend walker to Revit 2016–2023.** Walker finds
-   entry points across all 11 releases but fully decodes ADocument
-   fields only on 2024–2026. Older releases need per-band heuristics
-   (see recon report §Q6.5). Needs corpus byte-inspection.
-2. **§L5B-09 — generalize Container 2-column decoder.** Current
-   implementation handles `kind: 0x0e` with 6-byte records; other
-   container kinds need reverse-engineering against live instance
-   data.
-3. **§GEO — geometry extraction from the object graph.** Writer
-   + bridge can already emit per-element geometry when the caller
-   supplies dimensions; the *extraction* side (reading location
-   curves / profile shapes / arbitrary brep from the Revit element
-   bytes) is the open research frontier. GEO-27..35 tasks are the
-   breakdown.
-4. **§WRT — write path.** Byte-preserving stream-level patching
-   round-trips (`write_with_patches`), but field-level semantic
-   writes (edit a Wall's height and round-trip to a Revit-openable
-   .rvt) are the big next subsystem. WRT-01..14.
-5. **§VW1 — web viewer (WASM + Three.js).** VW1-01..24.
-6. **Corpus expansion.** We only have the `rac_basic_sample_family`
-   11-release corpus. Donations of real-world project RVTs (with
-   redistribution rights) would dramatically widen validation —
-   tracked as Q-01.
-
-   Seven permissive-licensed upstream repos contain usable corpus
-   material — see [`docs/corpus-hunt-2026-04-21.md`](docs/corpus-hunt-2026-04-21.md)
-   for the full list. Highest-leverage single targets:
-
-   - [`DynamoDS/DynamoRevit`](https://github.com/DynamoDS/DynamoRevit)
-     — `test/System/*.rfa` (MIT, © 2014 Autodesk)
-   - [`DynamoDS/DynamoWorkshops`](https://github.com/DynamoDS/DynamoWorkshops)
-     — 10 `.rvt` project files from Autodesk University (MIT)
-   - [`DynamoDS/RefineryToolkits`](https://github.com/DynamoDS/RefineryToolkits)
-     — `dt_GenerativeToolkit_TestRVT.rvt` (MIT)
-
-   Every committed fixture ships with a sibling `.license.json`
-   file carrying source repo + license SPDX identifier + SHA256
-   + original path. This preserves attribution and makes re-check
-   trivial.
-
-   Outreach targets for AEC educational content (not Sourcegraph-
-   indexable): Autodesk University session library, NIBS / GSA BIM
-   sample models, Penn State / Georgia Tech / TU Delft / ETH Zürich
-   AEC curricula. Email participation requests rather than scraping.
-
-Each layer has a clear validation oracle: rvt-info extracts
-document title + GUID via metadata; rvt-history gives the upgrade
-timeline via Phase D string scanning; IfcOpenShell validates IFC
-output against the full IFC4 schema (enforced in CI per IFC-41).
-
-See `docs/rvt-moat-break-reconnaissance.md` §Q6 for Layer 5a's
-research trail, including the documented refutation of the Q6.2
-hypothesis. See [`TODO.md`](TODO.md) and the GitHub milestones for
-the full per-task decomposition.
+- **Small, self-contained tasks** are labelled
+  [good first issue](https://github.com/DrunkOnJava/rvt-rs/labels/good%20first%20issue).
+- **Corpus.** Redistributable `.rvt` / `.rfa` files with known element counts
+  are the scarcest input. See [`docs/corpus-intake.md`](docs/corpus-intake.md)
+  and the corpus issue form, and never send a file you are not certain you
+  may share — a local probe you run yourself is the alternative.
+- **Decoder research.** A byte probe under `examples/` plus a dated evidence
+  table for one class or partition pattern (decoder issue form; the
+  reconnaissance report in `docs/rvt-moat-break-reconnaissance.md` shows the
+  shape). Generic real-project typed extraction is still mostly unsolved —
+  [`ROADMAP.md`](ROADMAP.md) says what is partial and which paths are known
+  negatives (RE-19, RE-20), so check before spending days on one.
+- **Tests that prevent false-positive decode claims**, viewer accessibility,
+  and plain-language documentation are always welcome.
 
 ## What needs discussion first
 
@@ -194,20 +166,21 @@ main `cargo build` does not need nightly Rust.
 
 To add a new fuzz target:
 
-1. Pick the parser surface you want to harden and check whether
-   it already has a tracked task in the `SEC-14..SEC-23` series
-   (listed in `fuzz/README.md`). If it does, claim that task.
+1. Pick the parser surface you want to harden and check the
+   "Current targets" list in `fuzz/README.md` so you do not duplicate
+   one of the eleven existing targets.
 2. Create `fuzz/fuzz_targets/<name>.rs` using the libfuzzer-sys
    template and register it as a `[[bin]]` entry in
    `fuzz/Cargo.toml`.
 3. Run the target locally (`cargo +nightly fuzz run <name>`) for
    long enough to exercise mutation — a few minutes at minimum,
    longer for anything that touches decompression or XML.
-4. Commit any reproducible crashes to `fuzz/corpus/<name>/` as
-   regression inputs (tracked separately under Q-04).
+4. Turn any reproducible crash into a stable regression test in
+   `tests/fuzz_regressions.rs` — it runs without nightly in normal CI.
+   `fuzz/corpus/` itself is git-ignored.
 
-The scaffold itself is tracked as SEC-14; the individual targets
-are SEC-15 through SEC-23, and a nightly CI runner is SEC-25.
+`.github/workflows/fuzz.yml` runs every target nightly with a bounded
+budget and uploads the crash corpus as an artifact on failure.
 
 ## Commit messages
 
