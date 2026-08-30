@@ -122,6 +122,19 @@ PLACEMENT_PROBES = {
     # arch topping slab, both of the 2024 Core Interior project.
     ("IfcColumn", "20375"): (7.0104, 33.2232, 23.1648),
     ("IfcSlab", "20345"): (50.9016, 7.62, 23.114),
+    # RE-26. The column's section now comes from family/type symbol
+    # 5755 rather than from its own envelope, and the pin is unchanged
+    # to 1e-10 — which is the measurement, not a coincidence: the type
+    # says the same 2 ft square the envelope did.
+    #
+    # Wall 20800 is the join-trim pin. Its record box runs x 85.5 ->
+    # 137.25 ft and the solver cuts BOTH ends back by half of the 8"
+    # wall each one lands on, so the emitted rectangle spans
+    # 85.8333 -> 136.9167 ft and its first profile point is the
+    # trimmed low corner. That is Revit's own world corner for this
+    # wall exactly (RE-26), and re-emitting the untrimmed box moves
+    # the point by 0.1016 m — 10^5 times the tolerance below.
+    ("IfcWall", "20800"): (26.162, 24.5872, 23.1648),
 }
 
 PROBE_TOLERANCE = 1e-6

@@ -13,6 +13,68 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Wall bodies are cut back by their joins, and the column profile comes
+  from the family type (#215, RE-26).** With #232's double translation gone,
+  the world-coordinate gap against Revit's own export was finally readable.
+  Read as a world *bounding box* rather than a vertex-mean centroid — the
+  centroid is not comparable when one side emits a box and the other a
+  62-facet mesh — the column "1.58 ft in Z" of #236 is **0.0000 ft**: all 256
+  columns already matched Revit's z extent at both ends. The wall gap was
+  real, and it was two things.
+
+  First, **an element can be framed by more than one partition record and the
+  newest frame wins.** 171 of 360 walls (and 96 of 132 doors) carry two frames
+  that disagree about the plan box, because Revit rewrites an edited element
+  into a higher-numbered `Partitions/*` stream and leaves the earlier copy in
+  place. The instance selector's tie-break moves from the first
+  `(stream, offset)` to the last. On the newest frame the box's thin plan
+  extent equals the nominal thickness of the `IfcWallType` Revit's export
+  assigns on **360 of 360** walls (201 of 360 on the oldest), its type slot in
+  the `+0x88` list equals that `IfcWallType.Tag` on 356 of 360 (183 of 360),
+  and `Global/ElemTable`'s `u32` at `+0x1c` — a monotone version counter —
+  ranks the same way across all 976 exported instances. No frame on the file
+  disagrees about the box's `z`, so nothing can move between storeys.
+
+  Second, **the record box is the untrimmed wall.** Every non-zero delta
+  between it and Revit's own `Axis` polyline, across all 720 wall ends, is
+  exactly 0.25, 0.3333 or 0.75 ft — half of the 6″, 8″ and 18″ wall
+  thicknesses on the file. `element_record_wall_joins` cuts each end back by
+  half the thickness of the perpendicular recovered wall whose centreline
+  lands on it, spans this wall's centreline and overlaps it in elevation, and
+  declines the whole element when candidates disagree. Every input is a
+  recorded bounding box; nothing is fitted. Result, measured with IfcOpenShell
+  0.8.5 in world coordinates at 1e-3 ft: **336 of 360 walls exact, up from
+  27**, worst residual 0.75 → 0.3333 ft, mean 0.2701 → 0.0220 ft, 309
+  improved and 16 regressed. The 31 wall ends it gets wrong are all
+  over-trims, and they fall inside feature classes that also produce a real
+  trim 125 and 22 times — Revit stores that decision per wall pair, and it is
+  in neither wall's box nor in 4 KiB past its record. This models Revit's join
+  cleanup rather than reading it, which the capability status says.
+
+  Third, **#215 is closed.** The last slot before a column record's own
+  ElementId in the `+0x88` list that is itself an `OST_Columns` type-symbol
+  record is `5755` (`Column_Sqaure:24" x 24"`) on **256 of 256** — the
+  `IfcColumnType.Tag` Revit's export writes for every one of them — and the
+  section that symbol carries is now the emitted profile, behind a fail-closed
+  check that it agrees with the instance envelope to 1e-6 ft. On this file it
+  is the same 2 ft square the envelope already had (worst disagreement
+  8.0e-15 ft), so **no vertex moves**; what changes is that `ProfileResolved`
+  now means the type said so instead of a box happening to be square. The
+  80 columns that still miss have a body Revit *cuts* inset from the full
+  prism, which no section can produce.
+
+  `tools/ci/ifc_schema_arity.py` gains wall `20800` as a pinned
+  `ObjectPlacement × Position × profile-point` probe — it is cut at both ends,
+  so re-emitting the untrimmed box moves the point by 0.1016 m, which the gate
+  reports when run against the pre-change export. Entity counts, relations,
+  storeys (15) and storey containment (801 of 872) are unchanged and the
+  diagnostics sidecar is byte-identical; the two committed `rvt-rs`
+  OctetProof observations were regenerated because the payload counts every
+  emitted entity type and `IFCPROPERTYSINGLEVALUE` moved 5611 → 8435 with the
+  new provenance properties. The four bridge-witness observations and both
+  `verdict.json` files are byte-identical, and both verdicts stay `PASS`.
+  Report: `reports/element-framing/RE-26-world-coordinate-residuals.md`.
+
 - **Registry coverage declarations — `covers` per adopted reader
   (#229, OctetProof §9.4).** The registry recorded no coverage claim, so
   nothing outside the observations themselves said that rvt-rs, IfcOpenShell

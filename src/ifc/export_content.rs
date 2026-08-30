@@ -515,8 +515,50 @@ fn element_record_geometry_from_decoded(
     let mut y = None;
     let mut z = None;
     let mut source_stream = None;
+    let mut wall_body_source = None;
+    let mut wall_thickness = None;
+    let mut wall_trim_start = None;
+    let mut wall_trim_end = None;
+    let mut type_symbol_id = None;
+    let mut type_profile = (None, None);
     for (name, value) in &decoded.fields {
         match (name.as_str(), value) {
+            (
+                crate::element_record_wall_joins::WALL_BODY_SOURCE_FIELD,
+                InstanceField::String(v),
+            ) => {
+                wall_body_source = Some(v.clone());
+            }
+            (
+                crate::element_record_wall_joins::WALL_THICKNESS_FIELD,
+                InstanceField::Float { value, .. },
+            ) => {
+                wall_thickness = Some(*value);
+            }
+            (
+                crate::element_record_wall_joins::WALL_TRIM_START_FIELD,
+                InstanceField::Float { value, .. },
+            ) => {
+                wall_trim_start = Some(*value);
+            }
+            (
+                crate::element_record_wall_joins::WALL_TRIM_END_FIELD,
+                InstanceField::Float { value, .. },
+            ) => {
+                wall_trim_end = Some(*value);
+            }
+            (
+                crate::partition_schema_mvp::TYPE_SYMBOL_FIELD,
+                InstanceField::ElementId { id, .. },
+            ) => type_symbol_id = Some(*id),
+            (
+                crate::partition_schema_mvp::TYPE_PROFILE_WIDTH_FIELD,
+                InstanceField::Float { value, .. },
+            ) => type_profile.0 = Some(*value),
+            (
+                crate::partition_schema_mvp::TYPE_PROFILE_DEPTH_FIELD,
+                InstanceField::Float { value, .. },
+            ) => type_profile.1 = Some(*value),
             ("m_bboxWidth", InstanceField::Float { value, .. }) => width = Some(*value),
             ("m_bboxDepth", InstanceField::Float { value, .. }) => depth = Some(*value),
             ("m_bboxHeight", InstanceField::Float { value, .. }) => height = Some(*value),
@@ -563,18 +605,32 @@ fn element_record_geometry_from_decoded(
             }
         }
     });
+    // The family/type symbol's section, when the instance joined to
+    // one and the section agrees with the instance envelope (#215,
+    // RE-26). The rectangle it gives is the same shape the envelope
+    // gave; what changes is that the type is now the authority for it.
+    let type_section = match type_profile {
+        (Some(w), Some(d)) if w > 0.0 && d > 0.0 => Some((w, d)),
+        _ => None,
+    };
+    let (width, depth) = type_section.unwrap_or((width, depth));
     let mut properties = vec![
-        // `BodySource` stays the record box: the placement, the plan
-        // envelope and the extrusion depth are all still read from it.
-        // What the sketch lines replace is the plan *profile*, which
+        // `BodySource` stays the record box unless a wall resolved its
+        // joins: the placement, the plan envelope and the extrusion
+        // depth are otherwise all still read from the box. What the
+        // sketch lines replace is the plan *profile*, which
         // `ProfileResolved` / `ProfileSource` report separately.
         Property {
             name: "BodySource".into(),
-            value: PropertyValue::Text("partition_element_record_bbox".into()),
+            value: PropertyValue::Text(
+                wall_body_source
+                    .clone()
+                    .unwrap_or_else(|| "partition_element_record_bbox".into()),
+            ),
         },
         Property {
             name: "ProfileResolved".into(),
-            value: PropertyValue::Boolean(profile.is_some()),
+            value: PropertyValue::Boolean(profile.is_some() || type_section.is_some()),
         },
         Property {
             name: "LevelBindResolved".into(),
@@ -599,6 +655,52 @@ fn element_record_geometry_from_decoded(
         properties.push(Property {
             name: "ProfileVoidCount".into(),
             value: PropertyValue::Integer(profile.inner_xy.len() as i64),
+        });
+    }
+    if let (Some((section_width, section_depth)), Some(symbol)) = (type_section, type_symbol_id) {
+        properties.push(Property {
+            name: "ProfileSource".into(),
+            value: PropertyValue::Text(crate::partition_schema_mvp::TYPE_PROFILE_SOURCE.into()),
+        });
+        properties.push(Property {
+            name: "TypeSymbolElementId".into(),
+            value: PropertyValue::Integer(i64::from(symbol)),
+        });
+        properties.push(Property {
+            name: "TypeSectionWidthFeet".into(),
+            value: PropertyValue::LengthFeet(section_width),
+        });
+        properties.push(Property {
+            name: "TypeSectionDepthFeet".into(),
+            value: PropertyValue::LengthFeet(section_depth),
+        });
+    }
+    // A wall whose joins resolved reports the trim it took and the
+    // thickness it read off the box's thin axis (RE-26).
+    if let (Some(thickness), Some(start), Some(end)) =
+        (wall_thickness, wall_trim_start, wall_trim_end)
+    {
+        properties.push(Property {
+            name: "ThicknessResolved".into(),
+            value: PropertyValue::Boolean(true),
+        });
+        properties.push(Property {
+            name: "ThicknessFeet".into(),
+            value: PropertyValue::LengthFeet(thickness),
+        });
+        properties.push(Property {
+            name: "ThicknessSource".into(),
+            value: PropertyValue::Text(
+                crate::element_record_wall_joins::WALL_THICKNESS_SOURCE.into(),
+            ),
+        });
+        properties.push(Property {
+            name: "JoinTrimStartFeet".into(),
+            value: PropertyValue::LengthFeet(start),
+        });
+        properties.push(Property {
+            name: "JoinTrimEndFeet".into(),
+            value: PropertyValue::LengthFeet(end),
         });
     }
     if let Some(stream) = source_stream {

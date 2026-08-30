@@ -145,12 +145,7 @@ pub fn recover_partition_schema_mvp(
 
     // --- 2024 partition element records (#204 columns, #211 the rest) ---
     out.columns = columns_from_partition_category_records(rf, revit_version)?;
-    out.walls = instances_from_partition_category_records(
-        rf,
-        revit_version,
-        crate::partition_element_records::OST_WALLS,
-        "Wall",
-    )?;
+    out.walls = walls_from_partition_category_records(rf, revit_version)?;
     // Doors and windows bind to a host wall (#222, RE-23). The
     // candidate set is exactly the wall instances recovered above —
     // a recovered host that is not itself an exported wall is
@@ -190,18 +185,66 @@ pub fn recover_partition_schema_mvp(
 /// Recover architectural column instances from partition element
 /// records (M4-09 / #204, instance rule replaced in #211).
 ///
-/// Thin wrapper over [`instances_from_partition_category_records`]
-/// for `OST_Columns`.
+/// The `OST_Columns` sweep carries the type-symbol envelopes too, so
+/// the family/type join of #215 costs no extra inflate — see
+/// [`column_instances_from_records`].
 pub fn columns_from_partition_category_records(
     rf: &mut RevitFile,
     revit_version: u32,
 ) -> Result<Vec<DecodedElement>> {
-    instances_from_partition_category_records(
+    let Some(records) = category_records(
         rf,
         revit_version,
         crate::partition_element_records::OST_COLUMNS,
-        "Column",
-    )
+    )?
+    else {
+        return Ok(Vec::new());
+    };
+    Ok(column_instances_from_records(records))
+}
+
+/// Recover wall instances from partition element records (#211), with
+/// the join-trimmed body of RE-26.
+pub fn walls_from_partition_category_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> Result<Vec<DecodedElement>> {
+    let Some(records) = category_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_WALLS,
+    )?
+    else {
+        return Ok(Vec::new());
+    };
+    Ok(wall_instances_from_records(records))
+}
+
+/// Every partition element record of one `BuiltInCategory`, or `None`
+/// on a release / file where the shape is not proven.
+fn category_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    builtin_category: i64,
+) -> Result<Option<Vec<crate::partition_element_records::PartitionElementRecord>>> {
+    if !crate::partition_element_records::supports_revit_version(revit_version) {
+        return Ok(None);
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => return Ok(None),
+    };
+    if declared.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(
+        crate::partition_element_records::scan_category_records(
+            rf,
+            revit_version,
+            builtin_category,
+            &declared,
+        )?,
+    ))
 }
 
 /// Recover placed element instances of one `BuiltInCategory` from
@@ -371,12 +414,30 @@ fn select_instance_records(
     // export's `IfcExtrudedAreaSolid.Depth`, first-by-(stream, offset)
     // agrees on 67 of 80 slabs and greatest-extent on 79 of 80 (the
     // 80th is exported as two stacked solids whose depths sum to the
-    // recorded extent). The choice changes no wall, door, window or
-    // column bounding box on `2024_Core_Interior.rvt` — 268 walls,
-    // 132 doors and 88 columns carry more than one record and every
-    // one of them agrees on the box (#212, RE-22). Ties fall back to
-    // the first by (stream, offset), so the choice stays
-    // deterministic and byte-anchored.
+    // recorded extent) (#212, RE-22).
+    //
+    // Ties go to the **newest** frame — the greatest (stream, offset)
+    // — because a Revit 2024 project rewrites an edited element into a
+    // higher-numbered `Partitions/NN` stream and leaves the earlier
+    // copy in place. On `2024_Core_Interior.rvt` 171 of 360 walls and
+    // 96 of 132 doors carry two frames that disagree about the plan
+    // box, and the newest one is the current state (RE-26 §3):
+    //
+    // - the newest frame's thin plan extent equals the nominal
+    //   thickness of the `IfcWallType` Revit's export assigns on
+    //   **360 of 360** walls; the oldest frame's on 201;
+    // - the newest frame's type slot in the counted reference list
+    //   at `+0x88` equals that `IfcWallType.Tag` on **356 of 360**;
+    //   the oldest frame's on 183;
+    // - `Global/ElemTable`'s `u32` at `+0x1c` is a monotone version
+    //   counter that ranks the same way — 36 on every one of the 480
+    //   instances whose newest frame is `Partitions/59`, 35 on the 12
+    //   whose newest is `/55`, 33 on the 18 whose newest is `/51`,
+    //   and at most 30 on the 344 framed only in `/46`.
+    //
+    // No frame of any instance on that file disagrees about the box's
+    // `z`, so this cannot move an element between storeys — checked
+    // over all 976 multi-framed instances.
     let mut by_id: BTreeMap<u32, PartitionElementRecord> = BTreeMap::new();
     for record in records {
         if !record.is_exported_instance() {
@@ -390,7 +451,7 @@ fn select_instance_records(
                 candidate > held
                     || (candidate == held
                         && (record.stream.as_str(), record.offset)
-                            < (existing.stream.as_str(), existing.offset))
+                            > (existing.stream.as_str(), existing.offset))
             }
         };
         if better {
@@ -499,7 +560,201 @@ pub fn slabs_from_partition_category_records(
 pub fn columns_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
 ) -> Vec<DecodedElement> {
-    instances_from_records(records, "Column")
+    column_instances_from_records(records)
+}
+
+/// Field carrying the ElementId of the family/type symbol a placed
+/// instance was recovered from (#215, RE-26).
+pub const TYPE_SYMBOL_FIELD: &str = "m_type_symbol_id";
+/// Field carrying the type symbol's plan width, in feet.
+pub const TYPE_PROFILE_WIDTH_FIELD: &str = "m_type_profile_width";
+/// Field carrying the type symbol's plan depth, in feet.
+pub const TYPE_PROFILE_DEPTH_FIELD: &str = "m_type_profile_depth";
+/// Field recording where the section in the two fields above came from.
+pub const TYPE_PROFILE_SOURCE_FIELD: &str = "m_type_profile_source";
+/// Value of [`TYPE_PROFILE_SOURCE_FIELD`] for the RE-26 carrier.
+pub const TYPE_PROFILE_SOURCE: &str = "family_type_symbol_envelope";
+/// How far the type section may sit from the instance envelope, in feet.
+///
+/// The join is accepted only when the symbol's plan extents match the
+/// instance's — a symbol that does not is a symbol this decoder has
+/// misread, or an instance that is scaled or rotated, and either way
+/// the box it would emit is not the one the record states. On
+/// `2024_Core_Interior.rvt` all 256 columns pass with a worst
+/// disagreement of 8.0e-15 ft.
+pub const TYPE_PROFILE_EPS_FEET: f64 = 1e-6;
+
+/// Column instance selection with the family/type symbol join
+/// attached (#215, RE-26).
+///
+/// The same category sweep carries both sides: the placed instances
+/// (`is_exported_instance`) and the type-symbol envelopes
+/// (`is_type_symbol`, RE-21 §5). Each instance names its symbol in
+/// the counted reference list at `+0x88` —
+/// [`crate::partition_element_records::PartitionElementRecord::type_symbol_reference`]
+/// — and the symbol's own bounding box is the section in family
+/// coordinates.
+///
+/// Measured on `2024_Core_Interior.rvt`: 256 of 256 exported columns
+/// join to symbol `5755`, which is the `IfcColumnType.Tag` Revit's
+/// own export writes for every one of them, and the section it gives
+/// is the 2 ft square the instance envelope already carried — so the
+/// join moves no vertex on this file. What it changes is where the
+/// profile comes from: the type says the section is a rectangle,
+/// instead of a box happening to be square.
+pub fn column_instances_from_records(
+    records: Vec<crate::partition_element_records::PartitionElementRecord>,
+) -> Vec<DecodedElement> {
+    use crate::partition_element_records::PartitionElementRecord;
+    use std::collections::BTreeMap;
+
+    let symbols: BTreeMap<u32, [f64; 6]> = records
+        .iter()
+        .filter(|record| record.is_type_symbol())
+        .map(|record| (record.element_id, record.bbox_feet))
+        .collect();
+    let symbol_ids: BTreeSet<u32> = symbols.keys().copied().collect();
+    select_instance_records(records)
+        .values()
+        .map(|record: &PartitionElementRecord| {
+            let mut decoded = element_record_decoded(record, "Column");
+            if let Some(symbol) = record
+                .type_symbol_reference(&symbol_ids)
+                .and_then(|id| symbols.get(&id).map(|bbox| (id, *bbox)))
+            {
+                attach_type_symbol_profile(&mut decoded, record, symbol.0, &symbol.1);
+            }
+            decoded
+        })
+        .collect()
+}
+
+/// Attach the type symbol's section to a placed instance, when the
+/// section agrees with the instance's own plan envelope.
+fn attach_type_symbol_profile(
+    decoded: &mut DecodedElement,
+    record: &crate::partition_element_records::PartitionElementRecord,
+    symbol_id: u32,
+    symbol_bbox: &[f64; 6],
+) {
+    let width = symbol_bbox[3] - symbol_bbox[0];
+    let depth = symbol_bbox[4] - symbol_bbox[1];
+    if !(width.is_finite() && depth.is_finite()) || width <= 0.0 || depth <= 0.0 {
+        return;
+    }
+    let (dx, dy, _) = record.extents_feet();
+    if (width - dx).abs() > TYPE_PROFILE_EPS_FEET || (depth - dy).abs() > TYPE_PROFILE_EPS_FEET {
+        return;
+    }
+    decoded.fields.push((
+        TYPE_SYMBOL_FIELD.into(),
+        InstanceField::ElementId {
+            tag: 0,
+            id: symbol_id,
+        },
+    ));
+    decoded.fields.push((
+        TYPE_PROFILE_WIDTH_FIELD.into(),
+        InstanceField::Float {
+            value: width,
+            size: 8,
+        },
+    ));
+    decoded.fields.push((
+        TYPE_PROFILE_DEPTH_FIELD.into(),
+        InstanceField::Float {
+            value: depth,
+            size: 8,
+        },
+    ));
+    decoded.fields.push((
+        TYPE_PROFILE_SOURCE_FIELD.into(),
+        InstanceField::String(TYPE_PROFILE_SOURCE.into()),
+    ));
+}
+
+/// Wall instance selection with the join-trimmed body attached
+/// (RE-26).
+///
+/// The record box is the wall's untrimmed prism; Revit's exported
+/// body is the same prism after the joins cut it back, and
+/// [`crate::element_record_wall_joins`] recovers the cut from the
+/// recovered wall set alone. A wall the solver declines keeps its
+/// record box and says so in `m_wall_body_source`.
+pub fn wall_instances_from_records(
+    records: Vec<crate::partition_element_records::PartitionElementRecord>,
+) -> Vec<DecodedElement> {
+    use crate::element_record_wall_joins as joins;
+
+    let selected = select_instance_records(records);
+    let boxes: Vec<crate::partition_element_records::PartitionElementRecord> =
+        selected.values().cloned().collect();
+    let trims = joins::join_trims(&boxes);
+    selected
+        .values()
+        .map(|record| {
+            let mut decoded = element_record_decoded(record, "Wall");
+            if let Some(trim) = trims.get(&record.element_id) {
+                apply_wall_join_trim(&mut decoded, record, trim);
+            }
+            decoded
+        })
+        .collect()
+}
+
+/// Rewrite a wall's plan centre and plan extents to the trimmed body.
+fn apply_wall_join_trim(
+    decoded: &mut DecodedElement,
+    record: &crate::partition_element_records::PartitionElementRecord,
+    trim: &crate::element_record_wall_joins::WallJoinTrim,
+) {
+    use crate::element_record_wall_joins as joins;
+
+    let low = record.bbox_feet[trim.axis] + trim.start_feet;
+    let high = record.bbox_feet[trim.axis + 3] - trim.end_feet;
+    let (centre_field, extent_field) = if trim.axis == 0 {
+        ("m_locationX", "m_bboxWidth")
+    } else {
+        ("m_locationY", "m_bboxDepth")
+    };
+    for (name, value) in decoded.fields.iter_mut() {
+        if name == centre_field {
+            *value = InstanceField::Float {
+                value: (low + high) * 0.5,
+                size: 8,
+            };
+        } else if name == extent_field {
+            *value = InstanceField::Float {
+                value: high - low,
+                size: 8,
+            };
+        }
+    }
+    decoded.fields.push((
+        joins::WALL_BODY_SOURCE_FIELD.into(),
+        InstanceField::String(joins::WALL_BODY_JOIN_TRIMMED.into()),
+    ));
+    decoded.fields.push((
+        joins::WALL_THICKNESS_FIELD.into(),
+        InstanceField::Float {
+            value: trim.thickness_feet,
+            size: 8,
+        },
+    ));
+    decoded.fields.push((
+        joins::WALL_TRIM_START_FIELD.into(),
+        InstanceField::Float {
+            value: trim.start_feet,
+            size: 8,
+        },
+    ));
+    decoded.fields.push((
+        joins::WALL_TRIM_END_FIELD.into(),
+        InstanceField::Float {
+            value: trim.end_feet,
+            size: 8,
+        },
+    ));
 }
 
 fn element_record_decoded(
@@ -1224,6 +1479,7 @@ mod tests {
             bbox_feet,
             preceding_reference: None,
             owner_reference: None,
+            references: Vec::new(),
         }
     }
 

@@ -77,7 +77,7 @@ real project files, not only synthesized fixtures.
 - Known-count fixtures for levels, walls, floors, doors, and windows.
 - Generic partition record scanner.
 - `ElemTable` id to partition-record offset linkage.
-- Typed MVP decoders + ArcWall + partition Level/Material/Room (+ Floor plan-loop where no records decode) / 2024 opening-index (ElemTable-confirmed) / 2024 element-record Wall/Door/Window/Column/Floor/BuildingPad merge wired into `iter_elements` without false positives; IFC Level/Floor/Room/Material emission (slab plan profiles recovered from OST_SketchLines records, #31/RE-25; schema-field Wall and typed Door/Window host binding still open).
+- Typed MVP decoders + ArcWall + partition Level/Material/Room (+ Floor plan-loop where no records decode) / 2024 opening-index (ElemTable-confirmed) / 2024 element-record Wall/Door/Window/Column/Floor/BuildingPad merge wired into `iter_elements` without false positives; IFC Level/Floor/Room/Material emission (slab plan profiles recovered from OST_SketchLines records, #31/RE-25; wall bodies join-trimmed and column sections joined to their family type, #215/RE-26; schema-field Wall and typed Door/Window host binding still open).
 - Decode confidence and provenance attached to every element.
 
 ### 0.4.0: IFC Geometry Beta
