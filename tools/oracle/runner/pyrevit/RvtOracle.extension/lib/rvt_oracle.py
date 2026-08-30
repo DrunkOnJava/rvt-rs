@@ -541,6 +541,8 @@ class Runner(object):
             after_value = after_entry[1]["value"] if after_entry else None
             unique_id = after_entry[0]["unique_id"] if after_entry else element["unique_id"]
             payload = dict(extra)
+            payload["revit_version"] = int(self.app.VersionNumber)
+            payload["revit_build"] = self.app.VersionBuild
             payload["owner_role"] = element["role"]
             payload["file_before"] = self.files["seed"]
             payload["file_after"] = self.files[label]
@@ -661,7 +663,7 @@ class Runner(object):
             except Exception as err:  # keep going; the failure is itself evidence
                 self.log("transition {} FAILED: {}".format(transition_id, err))
                 self.observations.append(
-                    observation(FIXTURE_ID, transition_id, kind, "E0", self.document_key("seed"), None, None, None, [{"kind": "opaque", "label": "transition failed"}], {"operation": "Rejected", "reason": str(err)})
+                    observation(FIXTURE_ID, transition_id, kind, "E0", self.document_key("seed"), None, None, None, [{"kind": "opaque", "label": "transition failed"}], {"operation": "Rejected", "reason": str(err), "revit_version": int(self.app.VersionNumber), "revit_build": self.app.VersionBuild})
                 )
         self.write_bundle(roles)
 
