@@ -175,5 +175,17 @@
       "tracking_issue": 212,
       "notes": "Added 2026-08-30 (#212, RE-22). rvt-rs reads the per-element Revit 'IFC Export As' override out of the partition parameter block and emits 20 IFCSHADINGDEVICE on this .rvt. The fixture's one element, ElementId 71411, is one of those 20, so the set relation holds; the row is a decoder baseline because a one-element reference cannot score twenty. The sibling full-project manifest scores the same 20 as an exact id-set match at tolerance 0."
     }
+  },
+  "relations": {
+    "opening_fills": {
+      "status": "decoder_baseline",
+      "relation_ifc_type": "IFCRELFILLSELEMENT",
+      "expected_pairs": 0,
+      "source": "paired Revit IFC export",
+      "decoder_metric": "step.IFCRELFILLSELEMENT",
+      "decoder_expected_pairs": 138,
+      "tracking_issue": 222,
+      "notes": "Excluded first-class, exactly as the walls / doors / windows / columns / floors rows on this manifest are. The paired export is a 20 KB element fixture with one IfcOpeningElement and no IfcRelFillsElement at all, while rvt-rs reads the same .rvt and recovers 138 door/window host bindings, so the two sides are not comparable here. The strong half of this edge is magnetar-2024-core-interior-slim, where the same 138 pairs are inside the claimed surface at exact-set equality (#222, RE-23)."
+    }
   }
 }

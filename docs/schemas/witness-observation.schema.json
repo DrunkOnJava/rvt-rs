@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://drunkonjava.github.io/rvt-rs/schemas/witness-observation.schema.json",
   "title": "OctetProof witness observation",
-  "description": "What one witness saw in one golden-artifact input, plus enough provenance to replay it. OctetProof 1.0.0 §6.2 (docs/octetproof-spec.md). Producers: `rvt-ifc --observation PATH --artifact-id ID` (source witness) and `tools/ci/witness-ifcopenshell.py --observation PATH` (bridge witness). Committed instances live under research/witness/<artifact_id>/observations/. Emitting an observation is not a capability claim; only a PASS verdict across independent witnesses is.",
+  "description": "What one witness saw in one golden-artifact input, plus enough provenance to replay it. OctetProof 1.1.0 §6.2 (docs/octetproof-spec.md). Producers: `rvt-ifc --observation PATH --artifact-id ID` (source witness) and `tools/ci/witness-ifcopenshell.py --observation PATH` (bridge witness). Committed instances live under research/witness/<artifact_id>/observations/. Emitting an observation is not a capability claim; only a PASS verdict across independent witnesses is.",
   "type": "object",
   "required": [
     "schema_version",
@@ -21,9 +21,9 @@
   ],
   "properties": {
     "schema_version": {
-      "description": "The OctetProof version this observation conforms to.",
+      "description": "The OctetProof version this observation conforms to. 1.1.0 added the optional `relations` payload key and the `relations` surface term (§20); the envelope is otherwise unchanged, so 1.0.0 observations stay valid (§16.2).",
       "type": "string",
-      "const": "1.0.0"
+      "enum": ["1.0.0", "1.1.0"]
     },
     "witness_id": {
       "description": "Registry id (research/witness-registry.json → witnesses[].id). A witness absent from the registry makes the verdict a MANIFEST_ERROR.",
@@ -68,6 +68,7 @@
         "type": "string",
         "enum": [
           "entity_counts",
+          "relations",
           "layer_topology",
           "linework",
           "bounding_boxes",
@@ -80,7 +81,7 @@
       }
     },
     "observation": {
-      "description": "The payload — the only part that is canonicalized, hashed, and diffed. `entity_counts` is the cross-witness surface; every other key is witness-specific and is not compared.",
+      "description": "The payload — the only part that is canonicalized, hashed, and diffed. `entity_counts` and `relations` are the cross-witness surface; every other key is witness-specific and is not compared.",
       "type": "object",
       "required": ["entity_counts"],
       "properties": {
@@ -88,6 +89,19 @@
           "description": "Per-type instance counts. A type absent here counts as zero.",
           "type": "object",
           "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "relations": {
+          "description": "Per-relation pair multisets (§7.2, added in 1.1.0). Each value is the relation's `[a_identity, b_identity]` pairs sorted lexicographically, duplicates kept. An identity the witness cannot read is the empty string, never an omitted pair. A relation absent here is an empty set.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": { "type": "string" }
+            }
+          }
         }
       }
     },

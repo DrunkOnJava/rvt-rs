@@ -13,6 +13,57 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Door and window host-wall binding — 138 / 138 exact
+  `IfcRelFillsElement` pairs against Revit's own export (#222, RE-23).**
+  #211 recovered the exact door and window instance sets but left them
+  unattached. The host is in the record: past the bounding box, at
+  `+0x88`, every partition element record carries a counted reference
+  list — a `u32` length then that many `u64` slots — and the slot
+  immediately before the record's own ElementId is the host wall. The
+  value is accepted only when it is one of the 360 ElementIds the RE-21
+  instance rule selects as exported walls, so a wrong read fails closed
+  instead of inventing a host. Measured on `2024_Core_Interior.rvt`:
+  273 of 273 door and window records give the correct host, and the
+  emitted `(host wall, filling element)` pair set equals the reference
+  export's `IfcRelVoidsElement` ∘ `IfcRelFillsElement` chain exactly —
+  138 pairs, no wrong host, no missing pair, no extra pair. Three
+  fixed-shape readings were measured and rejected: `u64 @ +0xac`
+  (186 / 273), `u64 @ +0xa4` (81 / 273) and "the last two slots are
+  (host, self)" (192 / 273). The list length is not fixed (6 on every
+  door record, 18 on every window record, up to 101 elsewhere) and 81
+  door records continue past their own id with a trailing type-symbol
+  slot.
+- **The IFC4 opening chain Revit itself emits.** Each bound door or
+  window now ships an `IfcOpeningElement` — bodied with the element's
+  own record bounding box, `Tag` repeating the filling element's, as
+  the reference export does on all 138 — plus `IfcRelVoidsElement`
+  (wall → opening) and `IfcRelFillsElement` (opening → door/window).
+  `tools/ci/ifc_schema_arity.py` passes on the fresh export: 18 192
+  instances across 40 entity types, `IfcOpeningElement` at its declared
+  arity of 9, both relationships at 6. The export's other 63
+  `IfcOpeningElement` (42 slab penetrations, 20 shading-device
+  penetrations, 1 unfilled wall opening) are not recovered — rvt-rs
+  emits no opening that is not filled by a recovered element.
+- **OctetProof `relations`: a second cross-witness field class
+  (spec 1.1.0, §7.2 / §9.4 / §20).** Entity counts are a weak
+  agreement — two witnesses can report the same 138 fill relationships
+  while disagreeing about every wall those openings belong to. A
+  relation is the sorted multiset of `[host Tag, filling Tag]` pairs,
+  compared as an exact set with no tolerance concept; a diff names the
+  pairs each side holds alone. All three witnesses emit it, each with
+  its own parser — `rvt-ifc --observation` splits its own emitted STEP,
+  `tools/ci/witness-ifcopenshell.py` uses `by_type` plus attribute
+  access, `tools/ci/witness-ifc-lite` uses `EntityScanner` plus
+  `parse_entity` — and the three payloads are byte-identical on the
+  full-project artifact. Manifests gain a `relations` block parallel to
+  `counts`, `tools/ci/witness-verdict.py` compares it, and
+  `docs/schemas/witness-observation.schema.json` /
+  `witness-verdict.schema.json` are updated. The
+  `magnetar-2024-core-interior-slim` claimed surface goes **10 → 11
+  fields**; on the 20 KB element-fixture artifact the same relation is
+  `decoder_baseline` and excluded first-class, because that export
+  carries no `IfcRelFillsElement` at all. Both verdicts stay `PASS`.
+
 - **Slab instance recovery — 80 / 80 `IFCSLAB` and 20 / 20
   `IFCSHADINGDEVICE` exact ElementId sets on the Core Interior
   full-project export (#212, RE-22).** RE-21 recorded `OST_Floors` as the
@@ -443,6 +494,20 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 - **ADR-004** — desktop distribution wrappers deferred.
 
 ### Fixed
+
+- **Host recovery for doors and windows sat in a dead branch (#222).**
+  `ifc::export_content` consulted `recover_door_host` /
+  `recover_window_host` only in the `else` arm of the element-record
+  geometry check, so a door with a record bounding box — which is every
+  door recovered since #211 — skipped it entirely and could never be
+  voided into a wall. The lookup is now independent of which geometry
+  carrier produced the body.
+- **The void/fill chain depended on element emission order (#222).**
+  `ifc::step_writer` resolved `host_element_index` against
+  `entity_index_to_el_id` *inside* the element loop, so a host emitted
+  after its own opening silently dropped the `IfcRelVoidsElement` /
+  `IfcRelFillsElement` pair. Both relationships are now emitted after
+  the loop, when the index is complete.
 
 - **Every emitted IFC4 instance now carries the full attribute list its entity
   type declares (#214).** The writer emitted building elements with the eight

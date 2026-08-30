@@ -20,12 +20,16 @@
       "IFCWALL": 0,
       "IFCWINDOW": 0
     },
-    "ifc_schema": "IFC4"
+    "ifc_schema": "IFC4",
+    "relations": {
+      "IFCRELFILLSELEMENT": []
+    }
   },
-  "observation_hash_sha256": "f8fef6590eb29b00247f511314b30b759f6f5b35489bab7ec125bf660792eebe",
-  "schema_version": "1.0.0",
+  "observation_hash_sha256": "5b57eafeab4c2ef3d51ce12dfa0dca37c6ab700c72cde4a4e53bfeb2cccc10c7",
+  "schema_version": "1.1.0",
   "semantic_surface_covered": [
-    "entity_counts"
+    "entity_counts",
+    "relations"
   ],
   "unsupported_entities": [],
   "warnings": [],
