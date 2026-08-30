@@ -462,6 +462,7 @@ mod tests {
             ifc_type: "IFCWALL".into(),
             name: name.into(),
             type_guid: None,
+            predefined_type: None,
             storey_index: None,
             material_index: None,
             property_set: None,

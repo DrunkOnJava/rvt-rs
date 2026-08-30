@@ -787,6 +787,7 @@ fn step_writer_handles_adversarial_model_strings() {
                 ifc_type: "IfcWall".into(),
                 name: name.clone(),
                 type_guid: Some(name.clone()),
+                predefined_type: Some(name.clone()),
                 storey_index: Some(0),
                 material_index: Some(0),
                 property_set: Some(PropertySet {

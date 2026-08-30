@@ -437,6 +437,15 @@ pub struct ExportedModelDiagnostics {
     /// [`IfcModel::building_storeys`]). Empty when no levels recovered.
     #[serde(default)]
     pub storey_names: Vec<String>,
+    /// Recovered building-storey elevations in feet, same order as
+    /// `storey_names`. All-zero means no elevation was recovered — the
+    /// Level rows carried names only (#213).
+    #[serde(default)]
+    pub storey_elevations_feet: Vec<f64>,
+    /// Building elements contained in a specific storey rather than
+    /// falling to the writer's default container.
+    #[serde(default)]
+    pub storey_bound_elements: usize,
     /// Sample of recovered material display names (capped) for File
     /// Status / inspect — not a full inventory when counts are large.
     #[serde(default)]
@@ -938,6 +947,9 @@ fn export_rvt_doc(
                     ifc_type: "IFCWALL".to_string(),
                     name,
                     type_guid: wall.element_id().map(|id| id.to_string()),
+                    predefined_type: category_map::lookup("ArcWall")
+                        .and_then(|m| m.predefined_type)
+                        .map(str::to_string),
                     storey_index,
                     material_index: None,
                     property_set,
@@ -953,6 +965,13 @@ fn export_rvt_doc(
             }
         }
     }
+
+    // #213 — element-record base elevations become storey elevations,
+    // then bind. Runs after every element source has contributed so it
+    // sees the whole record set, and before the geometry strip so the
+    // no-geometry modes (where no record bbox was attached in the
+    // first place) find nothing to bind and change nothing.
+    apply_element_record_storeys(&mut entities, &mut building_storeys);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -972,6 +991,123 @@ fn export_rvt_doc(
         material_profile_sets: Vec::new(),
         representation_maps: Vec::new(),
     })
+}
+
+/// Property recorded on a building element whose body came from a
+/// partition element record's bounding box.
+pub(crate) const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
+
+/// Property name carrying how an element reached its storey. Only
+/// written when a storey was actually resolved, so its absence is the
+/// honest "unbound" state rather than a claim of failure.
+pub(crate) const STOREY_BIND_SOURCE_PROPERTY: &str = "StoreyBindSource";
+
+/// Value of [`STOREY_BIND_SOURCE_PROPERTY`] for the #213 join.
+pub(crate) const STOREY_BIND_RECORD_ELEVATION: &str = "record_base_elevation";
+
+/// Measured base elevation of an element whose body came from a
+/// record bbox, in feet.
+fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
+    let entities::IfcEntity::BuildingElement {
+        property_set,
+        location_feet,
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    let from_record = property_set.as_ref().is_some_and(|set| {
+        set.properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(
+                    &property.value,
+                    entities::PropertyValue::Text(text) if text == RECORD_BBOX_BODY_SOURCE
+                )
+        })
+    });
+    if !from_record {
+        return None;
+    }
+    location_feet.map(|[_, _, z]| z)
+}
+
+/// #213: derive storey elevations from the element-record bounding-box
+/// distribution, then contain each recorded element in the storey whose
+/// elevation matches its base.
+///
+/// Both halves fail closed:
+///
+/// - The storey set is replaced **only** when the recovered storeys
+///   carry no elevation of their own (all at one value, which on the
+///   current corpora means every Level row defaulted to 0.0) and at
+///   least [`crate::element_record_storeys::MIN_DISTINCT_ELEVATIONS`]
+///   distinct elevations were measured. A file whose ArcWall trailers
+///   already gave real elevations keeps them.
+/// - Binding is an exact elevation match, and an element whose base
+///   matches no storey — or matches more than one — keeps
+///   `storey_index: None` and falls to the writer's default container.
+///
+/// Level *names* are not paired with the measured elevations unless
+/// there is exactly one name per elevation; see
+/// [`crate::element_record_storeys`] for why a rank join is not
+/// defensible on `2024_Core_Interior.rvt`.
+fn apply_element_record_storeys(
+    entities: &mut [entities::IfcEntity],
+    building_storeys: &mut Vec<Storey>,
+) {
+    use crate::element_record_storeys as records;
+
+    let measured = records::distinct_base_elevations_feet(
+        entities.iter().filter_map(record_base_elevation_feet),
+    );
+    if measured.len() < records::MIN_DISTINCT_ELEVATIONS {
+        return;
+    }
+
+    if records::storeys_lack_elevation_evidence(building_storeys) {
+        let level_names: Vec<String> = building_storeys
+            .iter()
+            .map(|storey| storey.name.clone())
+            .collect();
+        let recovery = records::storeys_from_base_elevations(&measured, &level_names);
+        if recovery.storeys.is_empty() {
+            return;
+        }
+        // Storey indices recorded against the previous list no longer
+        // mean anything; drop them rather than silently re-point an
+        // element at an unrelated storey.
+        for entity in entities.iter_mut() {
+            if let entities::IfcEntity::BuildingElement { storey_index, .. } = entity {
+                *storey_index = None;
+            }
+        }
+        *building_storeys = recovery.storeys;
+    }
+
+    for entity in entities.iter_mut() {
+        let Some(base_elevation) = record_base_elevation_feet(entity) else {
+            continue;
+        };
+        let Some(index) =
+            records::unique_storey_index_for_elevation(building_storeys, base_elevation)
+        else {
+            continue;
+        };
+        if let entities::IfcEntity::BuildingElement {
+            storey_index,
+            property_set,
+            ..
+        } = entity
+        {
+            *storey_index = Some(index);
+            if let Some(set) = property_set.as_mut() {
+                set.properties.push(entities::Property {
+                    name: STOREY_BIND_SOURCE_PROPERTY.into(),
+                    value: entities::PropertyValue::Text(STOREY_BIND_RECORD_ELEVATION.into()),
+                });
+            }
+        }
+    }
 }
 
 /// Placeholder thickness used only when the ArcWall trailer has no
@@ -1239,6 +1375,10 @@ fn append_diagnostic_walker_proxy_candidates(
             ifc_type: "IFCBUILDINGELEMENTPROXY".to_string(),
             name,
             type_guid: candidate.decoded.id.map(|id| id.to_string()),
+            // Diagnostic candidates are unclassified by construction —
+            // asserting a PredefinedType would be a claim the scan
+            // cannot make. The slot is still written, as `$`.
+            predefined_type: None,
             storey_index: None,
             material_index: None,
             property_set: Some(property_set),
@@ -1551,6 +1691,23 @@ pub fn build_export_diagnostics_with_limits(
                 "{elevation_fallback} building storey(s) lack a confident partition Level name and keep elevation fallback labels."
             ));
         }
+        // #213: when the storey elevations were measured from element
+        // records, say so, and say how many recovered Level names went
+        // unplaced — a reader comparing `storey_count` against the
+        // recovered `Level` class count should not have to guess why
+        // the two differ.
+        let level_names = production_class_counts
+            .get("Level")
+            .copied()
+            .unwrap_or_default();
+        if elevation_fallback == model.building_storeys.len() && exported.storey_bound_elements > 0
+        {
+            warnings.push(format!(
+                "{} building storey elevation(s) were measured from partition element-record bounding boxes and {} building element(s) bound to them by base elevation (#213); the {level_names} recovered Level name string(s) could not be paired with those elevations and are not asserted as storey names.",
+                model.building_storeys.len(),
+                exported.storey_bound_elements,
+            ));
+        }
     }
     let unresolved_thickness = model
         .entities
@@ -1681,6 +1838,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut by_ifc_type = std::collections::BTreeMap::<String, usize>::new();
     let mut building_elements = 0usize;
     let mut building_elements_with_geometry = 0usize;
+    let mut storey_bound_elements = 0usize;
     for entity in &model.entities {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -1688,11 +1846,15 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             extrusion,
             solid_shape,
             representation_map_index,
+            storey_index,
             ..
         } = entity
         {
             building_elements += 1;
             *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
+            if storey_index.is_some() {
+                storey_bound_elements += 1;
+            }
             if location_feet.is_some()
                 && (extrusion.is_some()
                     || solid_shape.is_some()
@@ -1718,6 +1880,12 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             .iter()
             .map(|s| s.name.clone())
             .collect(),
+        storey_elevations_feet: model
+            .building_storeys
+            .iter()
+            .map(|s| s.elevation_feet)
+            .collect(),
+        storey_bound_elements,
         material_names_sample: model
             .materials
             .iter()
@@ -2110,6 +2278,153 @@ fn export_confidence_summary(
 mod tests {
     use super::*;
 
+    /// A `Column` in the shape
+    /// `partition_schema_mvp::columns_from_partition_category_records`
+    /// produces: plan centre + record base `z`, bbox extents, and the
+    /// `partition_element_record` source marker.
+    fn column_record_element(
+        id: u32,
+        centre: (f64, f64),
+        base_z: f64,
+    ) -> crate::walker::DecodedElement {
+        use crate::walker::{DecodedElement, ElementProvenance, InstanceField};
+        let float = |value: f64| InstanceField::Float { value, size: 8 };
+        DecodedElement {
+            id: Some(id),
+            class: "Column".into(),
+            fields: vec![
+                ("m_locationX".into(), float(centre.0)),
+                ("m_locationY".into(), float(centre.1)),
+                ("m_locationZ".into(), float(base_z)),
+                ("m_bboxWidth".into(), float(2.0)),
+                ("m_bboxDepth".into(), float(2.0)),
+                ("m_bboxHeight".into(), float(15.0)),
+                (
+                    "m_source".into(),
+                    InstanceField::String("partition_element_record".into()),
+                ),
+            ],
+            byte_range: 0..88,
+            provenance: ElementProvenance::partition(
+                "Partitions/46",
+                0,
+                "partition_element_record",
+                "partition_schema_mvp::column_category_record",
+                0.8,
+                Some("level_binding_unresolved"),
+            ),
+        }
+    }
+
+    fn append_columns(decoded: Vec<crate::walker::DecodedElement>) -> Vec<entities::IfcEntity> {
+        let mut entities = Vec::new();
+        let mut storeys = Vec::new();
+        export_content::append_typed_production_elements(
+            decoded.into_iter(),
+            &mut entities,
+            &mut storeys,
+            export_content::ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry),
+        );
+        entities
+    }
+
+    /// The #213 join reads the record base elevation back off an
+    /// element the production path built, so the `BodySource` marker
+    /// the two sides agree on cannot drift apart silently.
+    #[test]
+    fn record_base_elevation_round_trips_through_the_production_path() {
+        let entities = append_columns(vec![column_record_element(1, (10.0, 10.0), 76.0)]);
+        assert_eq!(entities.len(), 1);
+        assert_eq!(record_base_elevation_feet(&entities[0]), Some(76.0));
+    }
+
+    /// Storeys with no elevation of their own are replaced by the
+    /// measured distribution, and every recorded element lands in the
+    /// storey at its own base.
+    #[test]
+    fn element_records_supply_storey_elevations_and_containment() {
+        let mut entities = append_columns(vec![
+            column_record_element(1, (10.0, 10.0), 0.0),
+            column_record_element(2, (30.0, 10.0), 0.0),
+            column_record_element(3, (10.0, 30.0), 15.0),
+            column_record_element(4, (30.0, 30.0), 31.0),
+        ]);
+        // What the partition Level rows give today: names, no elevation.
+        let mut storeys = vec![
+            Storey {
+                name: "Level 1".into(),
+                elevation_feet: 0.0,
+            },
+            Storey {
+                name: "Roof".into(),
+                elevation_feet: 0.0,
+            },
+        ];
+        apply_element_record_storeys(&mut entities, &mut storeys);
+
+        assert_eq!(
+            storeys.iter().map(|s| s.elevation_feet).collect::<Vec<_>>(),
+            vec![0.0, 15.0, 31.0],
+        );
+        // 2 names against 3 measured elevations is not a pairing.
+        assert_eq!(storeys[0].name, "Elevation 0.000 ft");
+
+        let bound: Vec<Option<usize>> = entities
+            .iter()
+            .map(|entity| match entity {
+                entities::IfcEntity::BuildingElement { storey_index, .. } => *storey_index,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(bound, vec![Some(0), Some(0), Some(1), Some(2)]);
+
+        let entities::IfcEntity::BuildingElement { property_set, .. } = &entities[3] else {
+            panic!("expected a building element");
+        };
+        assert!(
+            property_set
+                .as_ref()
+                .expect("column carries RvtColumnGeometry")
+                .properties
+                .iter()
+                .any(|p| p.name == STOREY_BIND_SOURCE_PROPERTY),
+            "a bound element must record how it reached its storey"
+        );
+    }
+
+    /// Storeys that already carry real elevations (the 2023 ArcWall
+    /// path) are not replaced, and an element whose base matches none
+    /// of them stays unbound rather than being placed by proximity.
+    #[test]
+    fn existing_elevations_survive_and_unmatched_elements_stay_unbound() {
+        let mut entities = append_columns(vec![
+            column_record_element(1, (10.0, 10.0), 12.0),
+            column_record_element(2, (30.0, 10.0), 7.5),
+        ]);
+        let mut storeys = vec![
+            Storey {
+                name: "Ground".into(),
+                elevation_feet: 0.0,
+            },
+            Storey {
+                name: "First".into(),
+                elevation_feet: 12.0,
+            },
+        ];
+        apply_element_record_storeys(&mut entities, &mut storeys);
+
+        assert_eq!(storeys.len(), 2);
+        assert_eq!(storeys[1].name, "First");
+        let bound: Vec<Option<usize>> = entities
+            .iter()
+            .map(|entity| match entity {
+                entities::IfcEntity::BuildingElement { storey_index, .. } => *storey_index,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(bound, vec![Some(1), None]);
+    }
+
     #[test]
     fn exported_diagnostics_include_storey_and_material_name_samples() {
         let model = IfcModel {
@@ -2210,6 +2525,7 @@ mod tests {
             ifc_type: ifc_type.to_string(),
             name: name.to_string(),
             type_guid: None,
+            predefined_type: None,
             storey_index,
             material_index: None,
             property_set: None,

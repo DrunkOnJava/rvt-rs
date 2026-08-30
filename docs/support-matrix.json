@@ -126,6 +126,15 @@
       "user_impact": "Walls, doors, windows and architectural columns come out of a Revit 2024 project as placed IFC entities with position and an envelope solid, matching Revit's own export element for element."
     },
     {
+      "id": "record-elevation-storey-bind",
+      "area": "elements",
+      "name": "Storey elevations and containment from Revit 2024 element-record bounding boxes",
+      "status": "verified",
+      "evidence": "element_record_storeys + ifc::apply_element_record_storeys; on 2024_Core_Interior.rvt the 256 OST_Columns records carry 11 distinct base elevations (0, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166 ft) and all 11 equal an IfcBuildingStorey.Elevation in the paired Revit export, measured with IfcOpenShell 0.8.5; IfcRelContainedInSpatialStructure 1 -> 11 with 256 of 338 elements bound; tests/fixtures/project-counts/2024-core-interior*.json gate diagnostics.exported.storey_count at 11, tolerance 0",
+      "notes": "Elevations only. The join is elevation equality within 1e-3 ft and fails closed on both a miss and an ambiguity, and the storey set is derived this way only when the recovered Level rows carry no elevation of their own. It does not recover which named Level sits at an elevation - 12 name candidates against 11 measured elevations is not a pairing, and a rank join mislabels (Level 6 at 91 ft where the export puts Level 7) - so storeys are labelled 'Elevation N ft'. Level ElementId binding stays unsupported (#86 / RE-20). Scope is Revit 2024 partition element records for the one decoded category (OST_Columns); the export's other four storeys carry no such record and are not recovered.",
+      "user_impact": "Columns from a Revit 2024 project land in storeys at their real elevations instead of all defaulting to the first storey; the storeys are labelled by elevation, not by Revit Level name."
+    },
+    {
       "id": "schema-field-wall",
       "area": "elements",
       "name": "Schema-field Wall decode (non-ArcWall)",

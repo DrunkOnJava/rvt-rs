@@ -1353,6 +1353,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             ifc_type: ifc_type.to_string(),
             name: input.display_name.clone(),
             type_guid: input.guid.clone(),
+            predefined_type: mapping.and_then(|m| m.predefined_type).map(str::to_string),
             storey_index: input.storey_index,
             material_index: input.material_index,
             property_set: input.property_set.clone(),

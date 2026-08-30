@@ -21,10 +21,10 @@
       "source_ifc_type": "IFCBUILDINGSTOREY",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.storey_count",
-      "decoder_expected": 12,
+      "decoder_expected": 11,
       "decoder_tolerance": 0,
       "tracking_issue": 33,
-      "notes": "rvt-rs recovers 12 storeys from partition Level-like strings (elevation often 0.0 without ArcWall trailers); the export carries 15. ElementId <-> Level binding is still open (#86)."
+      "notes": "Changed 2026-08-30 (#213): storey elevations now come from the partition element-record bbox base-z distribution instead of from Level name strings, so the count moved 12 -> 11 and the elevations became real. The 256 recovered OST_Columns records stand on exactly 11 distinct base elevations - 0, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166 ft - and every one of the 11 equals an IfcBuildingStorey.Elevation in this export, with no false positives; the export's remaining four (-40, -20, 15, 185.5 ft) carry no column record and are not recovered. The previous 12 came from Level-like name strings that all defaulted to elevation 0.0, so only one of them matched by accident. Names are not paired with the measured elevations: there were 12 name candidates against 11 elevations, and a rank join puts Level 6 at 91 ft where this export puts Level 7, so every storey keeps an elevation-derived name. ElementId <-> Level binding is still open (#86)."
     },
     "walls": {
       "status": "known",

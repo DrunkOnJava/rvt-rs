@@ -14,6 +14,13 @@ from pathlib import Path
 
 import ifcopenshell
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from ifc_schema_arity import (  # noqa: E402 - path set above
+    check_arity,
+    check_predefined_types,
+)
+
 
 STEP_TO_IFCOPENSHELL = {
     "IFCBEAM": "IfcBeam",
@@ -90,6 +97,13 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
     if model.schema != "IFC4":
         fail(f"schema regressed: got {model.schema}, expected IFC4")
 
+    # #214: IfcOpenShell parses a record that lists fewer attributes
+    # than its type declares, so a count check alone never notices a
+    # truncated instance. Re-derive every entity's declared attribute
+    # count from the EXPRESS schema and compare it with the STEP text.
+    instances_checked = check_arity(ifc_path, model.schema)
+    predefined_populated = check_predefined_types(ifc_path)
+
     assert_exact(model, "IfcProject", 1)
     assert_exact(model, "IfcSite", 1)
     assert_exact(model, "IfcBuilding", 1)
@@ -159,6 +173,17 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
     print(f"  file: {ifc_path}")
     print(f"  schema: {model.schema}")
     print(f"  entities: {len(list(model))}")
+    print(
+        f"  schema arity: {sum(instances_checked.values())} instance(s) across "
+        f"{len(instances_checked)} entity type(s) match their declared attribute count"
+    )
+    print(
+        "  PredefinedType populated: "
+        + (
+            ", ".join(f"{k}={v}" for k, v in sorted(predefined_populated.items()))
+            or "no required type present"
+        )
+    )
     print(f"  exported.by_ifc_type: {by_ifc_type}")
     print(
         f"  spatial containment: {len(contained)} rel(s), "

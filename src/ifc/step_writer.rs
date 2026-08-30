@@ -53,6 +53,148 @@ pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> Strin
     w.finish()
 }
 
+/// Attribute layout of the tail an IFC4 building-element instance
+/// carries after `IfcProduct`'s seven common attributes
+/// (`GlobalId`, `OwnerHistory`, `Name`, `Description`, `ObjectType`,
+/// `ObjectPlacement`, `Representation`).
+///
+/// IFC4 requires an instance to list **every** attribute its entity
+/// type declares; an unknown optional occupies its slot as `$`.
+/// Omitting the trailing ones entirely — which is what the writer did
+/// before #214 — yields a record that most readers tolerate but that
+/// no spec-conformant consumer can index, so `IfcColumn.PredefinedType`
+/// raised "index 8 is out of range for variant of size 8".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ElementTail {
+    /// `Tag` only — the entity declares no `PredefinedType`
+    /// (`IfcFurnishingElement`, `IfcFlowController`). Arity 8.
+    Tag,
+    /// `Tag, PredefinedType` — the shape almost every
+    /// `IfcBuildingElement` subtype takes. Arity 9.
+    TagPredefined,
+    /// `Tag, OverallHeight, OverallWidth, PredefinedType,
+    /// OperationType|PartitioningType, UserDefined…Type` —
+    /// `IfcDoor` / `IfcWindow`. Arity 13.
+    Opening,
+    /// `LongName, CompositionType, PredefinedType,
+    /// ElevationWithFlooring` — `IfcSpace`, which is an
+    /// `IfcSpatialStructureElement` and so declares no `Tag` at all.
+    /// Arity 11.
+    Space,
+    /// `Tag, SteelGrade, NominalDiameter, CrossSectionArea,
+    /// BarLength, PredefinedType, BarSurface` —
+    /// `IfcReinforcingBar`. Arity 14.
+    ReinforcingBar,
+    /// `Tag, NumberOfRisers, NumberOfTreads, RiserHeight,
+    /// TreadLength, PredefinedType` — `IfcStairFlight`. Arity 13.
+    StairFlight,
+}
+
+impl ElementTail {
+    /// Total IFC4 attribute count for an entity with this tail.
+    #[cfg(test)]
+    const fn arity(self) -> usize {
+        match self {
+            ElementTail::Tag => 8,
+            ElementTail::TagPredefined => 9,
+            ElementTail::Opening => 13,
+            ElementTail::Space => 11,
+            ElementTail::ReinforcingBar => 14,
+            ElementTail::StairFlight => 13,
+        }
+    }
+}
+
+/// Which tail an emitted STEP entity name takes.
+///
+/// Every value here is the IFC4 EXPRESS declaration, cross-checked
+/// against `ifcopenshell.ifcopenshell_wrapper.schema_by_name("IFC4")
+/// .declaration_by_name(<name>).attribute_count()`; the same table is
+/// re-derived from the schema by `tools/ci/ifc_schema_arity.py` on
+/// every emitted file, so a wrong row cannot survive CI.
+///
+/// Unlisted names fall through to [`ElementTail::TagPredefined`],
+/// which is the shape of every remaining `IfcBuildingElement`
+/// subtype in IFC4.
+fn element_tail_for(ifc_upper: &str) -> ElementTail {
+    match ifc_upper {
+        "IFCFURNISHINGELEMENT" | "IFCFLOWCONTROLLER" => ElementTail::Tag,
+        "IFCDOOR" | "IFCWINDOW" => ElementTail::Opening,
+        "IFCSPACE" => ElementTail::Space,
+        "IFCREINFORCINGBAR" => ElementTail::ReinforcingBar,
+        "IFCSTAIRFLIGHT" => ElementTail::StairFlight,
+        _ => ElementTail::TagPredefined,
+    }
+}
+
+/// Total IFC4 attribute count the writer emits for `ifc_upper`.
+///
+/// Exists for the arity regression test, which compares it against the
+/// schema-derived table *and* against the emitted text, so a layout
+/// that renders the wrong number of slots fails twice.
+#[cfg(test)]
+pub(crate) fn element_attribute_arity(ifc_upper: &str) -> usize {
+    element_tail_for(ifc_upper).arity()
+}
+
+/// Accept a `PredefinedType` token only when it is a well-formed STEP
+/// enumeration name: uppercase ASCII letters, digits and underscores,
+/// starting with a letter.
+///
+/// An enumeration reference is written bare between dots, so unlike a
+/// string it has no escape form — a caller-supplied value with a
+/// quote, dot or newline in it would corrupt the record. Rejecting
+/// writes `$` instead, which is always legal for an optional
+/// attribute. (`tests/fuzz_regressions.rs` drives hostile names
+/// through this path.)
+fn step_enum_token(raw: &str) -> Option<String> {
+    let token = raw.trim().to_ascii_uppercase();
+    let mut chars = token.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_uppercase() => {}
+        _ => return None,
+    }
+    if chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
+        Some(token)
+    } else {
+        None
+    }
+}
+
+/// Render the attribute tail for one building element.
+///
+/// `tag_quoted` and `name_quoted` are already STEP-quoted (`'…'` or
+/// `$`). `predefined` is the bare enum token (`"COLUMN"`), written as
+/// `.COLUMN.`; `None` writes `$` — the writer never invents an enum
+/// value it did not decode.
+fn element_attribute_tail(
+    ifc_upper: &str,
+    tag_quoted: &str,
+    predefined: Option<&str>,
+    name_quoted: &str,
+) -> String {
+    let pt = match predefined.and_then(step_enum_token) {
+        Some(token) => format!(".{token}."),
+        None => "$".to_string(),
+    };
+    match element_tail_for(ifc_upper) {
+        ElementTail::Tag => tag_quoted.to_string(),
+        ElementTail::TagPredefined => format!("{tag_quoted},{pt}"),
+        // OverallHeight / OverallWidth stay `$`: the opening's own
+        // extrusion carries the geometry, and a nominal panel size is
+        // not decoded from the file.
+        ElementTail::Opening => format!("{tag_quoted},$,$,{pt},$,$"),
+        // IfcSpace has no Tag attribute — slot 8 is LongName. Before
+        // #214 the writer put the type GUID there, which typed as a
+        // label but meant the wrong thing; the element's own Name
+        // carries the identity instead. CompositionType `.ELEMENT.`
+        // matches what Revit's exporter writes for a room.
+        ElementTail::Space => format!("{name_quoted},.ELEMENT.,{pt},$"),
+        ElementTail::ReinforcingBar => format!("{tag_quoted},$,$,$,$,{pt},$"),
+        ElementTail::StairFlight => format!("{tag_quoted},$,$,$,$,{pt}"),
+    }
+}
+
 struct StepWriter {
     out: String,
     next_id: usize,
@@ -152,11 +294,14 @@ impl StepWriter {
                 let tf = flange_thickness_feet * 0.3048;
                 // IFCIShapeProfileDef(ProfileType, ProfileName,
                 // Position, OverallWidth, OverallDepth,
-                // WebThickness, FlangeThickness, FilletRadius?).
+                // WebThickness, FlangeThickness, FilletRadius?,
+                // FlangeEdgeRadius?, FlangeSlope?) — ten attributes
+                // in IFC4; the last two are IFC4 additions over
+                // IFC2X3 and must still occupy their slots (#214).
                 self.emit_entity(
                     profile_id,
                     format!(
-                        "IFCISHAPEPROFILEDEF(.AREA.,$,#{profile_placement},{w:.6},{d:.6},{tw:.6},{tf:.6},$)"
+                        "IFCISHAPEPROFILEDEF(.AREA.,$,#{profile_placement},{w:.6},{d:.6},{tw:.6},{tf:.6},$,$,$)"
                     ),
                 );
             }
@@ -931,7 +1076,10 @@ impl StepWriter {
             self.emit_entity(
                 id,
                 format!(
-                    "IFCBUILDINGSTOREY('{}',#{owner_hist},'{name_escaped}',$,$,#{placement_id},$,'{name_escaped}',.ELEMENT.,{elevation_m})",
+                    // `Elevation` is an IfcLengthMeasure (REAL), so it
+                    // needs a decimal point — `0` is an INTEGER literal
+                    // and ISO-10303-21 does not admit it here (#214).
+                    "IFCBUILDINGSTOREY('{}',#{owner_hist},'{name_escaped}',$,$,#{placement_id},$,'{name_escaped}',.ELEMENT.,{elevation_m:.6})",
                     make_guid(id),
                 ),
             );
@@ -1023,7 +1171,10 @@ impl StepWriter {
                 self.emit_entity(
                     ref_id,
                     format!(
-                        "IFCCLASSIFICATIONREFERENCE($,'{code_escaped}',{name_str},#{classification_id},$)"
+                        // (Location, Identification, Name,
+                        //  ReferencedSource, Description, Sort) — six
+                        // attributes in IFC4 (#214).
+                        "IFCCLASSIFICATIONREFERENCE($,'{code_escaped}',{name_str},#{classification_id},$,$)"
                     ),
                 );
                 ref_ids.push(ref_id);
@@ -1331,6 +1482,7 @@ impl StepWriter {
                 ifc_type,
                 name,
                 type_guid,
+                predefined_type,
                 storey_index,
                 material_index,
                 property_set,
@@ -1529,24 +1681,26 @@ impl StepWriter {
                     Some(id) => format!("#{id}"),
                     None => "$".into(),
                 };
-                // IFC<TYPE>(GlobalId, OwnerHist, Name, Desc, ObjectType,
-                //   ObjectPlacement, Representation, Tag)
-                // Some subclasses (IfcDoor/IfcWindow) want extra predefined
-                // fields — the minimal 8-field form is valid for IfcWall,
-                // IfcSlab, IfcRoof, IfcCovering, IfcColumn, IfcBeam. Door
-                // and Window are emitted with their 10-field variants.
+                // Every IFC4 instance carries every attribute its
+                // entity type declares — an unknown optional is `$`,
+                // never an omitted slot (#214). The shared head is
+                // IfcProduct's:
+                //   (GlobalId, OwnerHist, Name, Desc, ObjectType,
+                //    ObjectPlacement, Representation)
+                // and `element_attribute_tail` supplies the rest for
+                // the type, so a reader can index PredefinedType
+                // instead of hitting "index out of range".
                 let ifc_upper = ifc_type.to_ascii_uppercase();
-                let line = if ifc_upper == "IFCDOOR" || ifc_upper == "IFCWINDOW" {
-                    format!(
-                        "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},{rep_slot},{tag_quoted},$,$)",
-                        make_guid(el_id),
-                    )
-                } else {
-                    format!(
-                        "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},{rep_slot},{tag_quoted})",
-                        make_guid(el_id),
-                    )
-                };
+                let tail = element_attribute_tail(
+                    &ifc_upper,
+                    &tag_quoted,
+                    predefined_type.as_deref(),
+                    &name_quoted,
+                );
+                let line = format!(
+                    "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},{rep_slot},{tail})",
+                    make_guid(el_id),
+                );
                 self.emit_entity(el_id, line);
                 per_storey_elements[idx].push(el_id);
                 entity_index_to_el_id[entity_idx] = Some(el_id);
@@ -1600,7 +1754,12 @@ impl StepWriter {
                             // wall-type-specific offsets would override.
                             self.emit_entity(
                                 usage_id,
-                                format!("IFCMATERIALLAYERSETUSAGE(#{ls_id},.AXIS2.,.POSITIVE.,0.)"),
+                                // ReferenceExtent (the fifth, IFC4-only
+                                // attribute) stays `$` — undecoded, but
+                                // its slot is still written (#214).
+                                format!(
+                                    "IFCMATERIALLAYERSETUSAGE(#{ls_id},.AXIS2.,.POSITIVE.,0.,$)"
+                                ),
                             );
                             let rel_id = self.id();
                             self.emit_entity(
@@ -2266,6 +2425,7 @@ mod tests {
                     ifc_type: "IfcWall".into(),
                     name: "North Wall".into(),
                     type_guid: None,
+                    predefined_type: None,
                     storey_index: None,
                     material_index: None,
                     property_set: None,
@@ -2282,6 +2442,7 @@ mod tests {
                     ifc_type: "IfcSlab".into(),
                     name: "Level 1 Floor".into(),
                     type_guid: Some("101".into()),
+                    predefined_type: None,
                     storey_index: None,
                     material_index: None,
                     property_set: None,
@@ -2298,6 +2459,7 @@ mod tests {
                     ifc_type: "IfcDoor".into(),
                     name: "Front Door".into(),
                     type_guid: None,
+                    predefined_type: None,
                     storey_index: None,
                     material_index: None,
                     property_set: None,
@@ -2349,19 +2511,88 @@ mod tests {
         assert_eq!(s.matches("IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(), 0);
     }
 
-    #[test]
-    fn step_door_and_window_get_10_field_form() {
-        // IfcDoor and IfcWindow have OverallHeight/OverallWidth slots
-        // after the standard 8 fields; we emit them as `$,$` (unknown)
-        // until geometry lands. Verify they land as 10-field forms.
+    /// IFC4 attribute counts for every STEP entity name this writer
+    /// can emit as an `IfcEntity::BuildingElement`.
+    ///
+    /// Each row is the entity's `attribute_count()` in the IFC4
+    /// EXPRESS schema, read with
+    /// `ifcopenshell.ifcopenshell_wrapper.schema_by_name("IFC4")
+    ///  .declaration_by_name(<name>).attribute_count()` (IfcOpenShell
+    /// 0.8.5). `tools/ci/ifc_schema_arity.py` re-derives the same
+    /// numbers from the schema on every emitted `.ifc` in CI, so this
+    /// table cannot silently drift away from the spec — it exists so
+    /// the Rust suite fails without a Python toolchain too (#214).
+    const IFC4_ELEMENT_ARITY: &[(&str, usize)] = &[
+        ("IFCBEAM", 9),
+        ("IFCBUILDINGELEMENTPROXY", 9),
+        ("IFCCOLUMN", 9),
+        ("IFCCOVERING", 9),
+        ("IFCCURTAINWALL", 9),
+        ("IFCDOOR", 13),
+        ("IFCELECTRICAPPLIANCE", 9),
+        ("IFCFLOWCONTROLLER", 8),
+        ("IFCFOOTING", 9),
+        ("IFCFURNISHINGELEMENT", 8),
+        ("IFCFURNITURE", 9),
+        ("IFCLIGHTFIXTURE", 9),
+        ("IFCMEMBER", 9),
+        ("IFCOPENINGELEMENT", 9),
+        ("IFCPLATE", 9),
+        ("IFCRAILING", 9),
+        ("IFCRAMP", 9),
+        ("IFCRAMPFLIGHT", 9),
+        ("IFCREINFORCINGBAR", 14),
+        ("IFCROOF", 9),
+        ("IFCSANITARYTERMINAL", 9),
+        ("IFCSLAB", 9),
+        ("IFCSPACE", 11),
+        ("IFCSTAIR", 9),
+        ("IFCSTAIRFLIGHT", 13),
+        ("IFCWALL", 9),
+        ("IFCWALLSTANDARDCASE", 9),
+        ("IFCWINDOW", 13),
+    ];
+
+    /// Count top-level attributes in a STEP argument list, honouring
+    /// quoted strings and nested aggregates.
+    fn step_argument_count(args: &str) -> usize {
+        if args.trim().is_empty() {
+            return 0;
+        }
+        let mut count = 1;
+        let mut depth = 0usize;
+        let mut in_string = false;
+        let mut chars = args.chars().peekable();
+        while let Some(c) = chars.next() {
+            if in_string {
+                if c == '\'' {
+                    if chars.peek() == Some(&'\'') {
+                        chars.next();
+                    } else {
+                        in_string = false;
+                    }
+                }
+                continue;
+            }
+            match c {
+                '\'' => in_string = true,
+                '(' => depth += 1,
+                ')' => depth = depth.saturating_sub(1),
+                ',' if depth == 0 => count += 1,
+                _ => {}
+            }
+        }
+        count
+    }
+
+    fn single_element_step(ifc_type: &str, predefined_type: Option<&str>) -> String {
         use super::super::entities::IfcEntity;
         let model = IfcModel {
-            project_name: None,
-            description: None,
             entities: vec![IfcEntity::BuildingElement {
-                ifc_type: "IfcDoor".into(),
-                name: "Door".into(),
-                type_guid: None,
+                ifc_type: ifc_type.into(),
+                name: "Element".into(),
+                type_guid: Some("tag-1".into()),
+                predefined_type: predefined_type.map(str::to_string),
                 storey_index: None,
                 material_index: None,
                 property_set: None,
@@ -2374,30 +2605,111 @@ mod tests {
                 solid_shape: None,
                 representation_map_index: None,
             }],
-            classifications: Vec::new(),
-            units: Vec::new(),
-            building_storeys: Vec::new(),
-            materials: Vec::new(),
-            material_layer_sets: Vec::new(),
-            material_profile_sets: Vec::new(),
-            representation_maps: Vec::new(),
+            ..IfcModel::default()
         };
-        let s = write_step(&model);
-        // The door line should have 9 commas (10 fields). Grep the
-        // full constructor by finding the line that starts with a
-        // GUID and contains "IFCDOOR(".
-        let line = s
+        write_step(&model)
+    }
+
+    fn element_args<'a>(step: &'a str, ifc_type: &str) -> &'a str {
+        let needle = format!("{ifc_type}(");
+        let line = step
             .lines()
-            .find(|l| l.contains("IFCDOOR("))
-            .expect("IFCDOOR emitted");
-        let open = line.find("IFCDOOR(").unwrap() + "IFCDOOR(".len();
+            .find(|l| l.contains(&needle))
+            .unwrap_or_else(|| panic!("{ifc_type} was not emitted:\n{step}"));
+        let open = line.find(&needle).unwrap() + needle.len();
         let close = line.rfind(");").unwrap();
-        let args = &line[open..close];
-        assert_eq!(
-            args.matches(',').count(),
-            9,
-            "IFCDOOR args expected 10 fields (9 commas), got: {args}"
-        );
+        &line[open..close]
+    }
+
+    /// #214: every emitted building element must carry the full IFC4
+    /// attribute list for its type — optional slots written as `$`,
+    /// never dropped. Before the fix `IFCCOLUMN` / `IFCSLAB` shipped
+    /// eight attributes against a declared nine, so a consumer asking
+    /// for `PredefinedType` got "index 8 is out of range".
+    #[test]
+    fn every_emitted_element_type_has_full_ifc4_attribute_arity() {
+        for (ifc_type, expected) in IFC4_ELEMENT_ARITY {
+            assert_eq!(
+                element_attribute_arity(ifc_type),
+                *expected,
+                "{ifc_type}: writer layout table disagrees with the IFC4 schema"
+            );
+            let step = single_element_step(ifc_type, None);
+            let args = element_args(&step, ifc_type);
+            assert_eq!(
+                step_argument_count(args),
+                *expected,
+                "{ifc_type} emitted {args}"
+            );
+        }
+    }
+
+    /// Every `category_map` row that can become a building element
+    /// must resolve to an arity the table above pins, so adding a
+    /// Revit class cannot introduce an unvalidated entity type.
+    #[test]
+    fn category_map_entity_types_are_covered_by_the_arity_table() {
+        use super::super::category_map::MAPPINGS;
+        // Spatial containers are emitted by their own writer paths,
+        // not through the BuildingElement branch.
+        const SPATIAL: &[&str] = &["IFCBUILDINGSTOREY", "IFCGRID"];
+        for mapping in MAPPINGS {
+            if SPATIAL.contains(&mapping.ifc_type) {
+                continue;
+            }
+            assert!(
+                IFC4_ELEMENT_ARITY
+                    .iter()
+                    .any(|(name, _)| *name == mapping.ifc_type),
+                "{} ({}) is missing from IFC4_ELEMENT_ARITY",
+                mapping.ifc_type,
+                mapping.revit_class
+            );
+        }
+    }
+
+    /// The mapped `PredefinedType` reaches the STEP record as a dotted
+    /// enumeration in the schema's declared slot, and an absent one
+    /// still occupies its slot as `$`.
+    #[test]
+    fn predefined_type_lands_in_its_declared_slot() {
+        for (ifc_type, predefined, tail) in [
+            ("IFCCOLUMN", Some("COLUMN"), ",'tag-1',.COLUMN."),
+            ("IFCSLAB", Some("FLOOR"), ",'tag-1',.FLOOR."),
+            ("IFCWALL", Some("STANDARD"), ",'tag-1',.STANDARD."),
+            ("IFCMEMBER", Some("BRACE"), ",'tag-1',.BRACE."),
+            (
+                "IFCSPACE",
+                Some("INTERNAL"),
+                ",'Element',.ELEMENT.,.INTERNAL.,$",
+            ),
+            ("IFCDOOR", Some("DOOR"), ",'tag-1',$,$,.DOOR.,$,$"),
+            ("IFCCOLUMN", None, ",'tag-1',$"),
+            ("IFCDOOR", None, ",'tag-1',$,$,$,$,$"),
+        ] {
+            let step = single_element_step(ifc_type, predefined);
+            let args = element_args(&step, ifc_type);
+            assert!(
+                args.ends_with(tail),
+                "{ifc_type} with {predefined:?} should end in {tail}, got {args}"
+            );
+        }
+    }
+
+    /// A `PredefinedType` that is not a legal STEP enumeration name
+    /// degrades to `$` instead of corrupting the record — STEP
+    /// enumeration references have no escape form.
+    #[test]
+    fn hostile_predefined_type_degrades_to_dollar() {
+        for hostile in ["has space", "quote'inside", "0LEADING", "", "dot.ted"] {
+            let step = single_element_step("IFCCOLUMN", Some(hostile));
+            let args = element_args(&step, "IFCCOLUMN");
+            assert!(
+                args.ends_with(",'tag-1',$"),
+                "hostile predefined type {hostile:?} leaked into {args}"
+            );
+            assert_eq!(step_argument_count(args), 9);
+        }
     }
 
     /// IFC-28: A BuildingElement that references a MaterialLayerSet
@@ -2415,6 +2727,7 @@ mod tests {
                 ifc_type: "IFCWALL".into(),
                 name: "Exterior Wall".into(),
                 type_guid: None,
+                predefined_type: None,
                 storey_index: None,
                 material_index: None,
                 property_set: None,
@@ -2495,6 +2808,7 @@ mod tests {
                 ifc_type: "IFCCOLUMN".into(),
                 name: "W12x26 Col".into(),
                 type_guid: None,
+                predefined_type: None,
                 storey_index: None,
                 material_index: None,
                 property_set: None,
@@ -2560,6 +2874,7 @@ mod tests {
                 ifc_type: "IFCBEAM".into(),
                 name: "Beam".into(),
                 type_guid: None,
+                predefined_type: None,
                 storey_index: None,
                 material_index: None,
                 property_set: None,
@@ -2635,6 +2950,7 @@ mod tests {
                 ifc_type: "IFCCOLUMN".into(),
                 name: "C1".into(),
                 type_guid: None,
+                predefined_type: None,
                 storey_index: None,
                 material_index: None,
                 property_set: None,
@@ -2769,6 +3085,7 @@ mod tests {
                 ifc_type: "IFCBUILDINGELEMENTPROXY".into(),
                 name: "E1".into(),
                 type_guid: None,
+                predefined_type: None,
                 storey_index: None,
                 material_index: None,
                 property_set: None,
@@ -2911,6 +3228,7 @@ mod tests {
                 ifc_type: "IFCCOLUMN".into(),
                 name: "C1".into(),
                 type_guid: None,
+                predefined_type: None,
                 storey_index: None,
                 material_index: None,
                 property_set: None,
@@ -3036,6 +3354,7 @@ mod tests {
                     ifc_type: "IFCDOOR".into(),
                     name: "D1".into(),
                     type_guid: Some("D-TYPE".into()),
+                    predefined_type: None,
                     storey_index: None,
                     material_index: None,
                     property_set: None,
@@ -3052,6 +3371,7 @@ mod tests {
                     ifc_type: "IFCDOOR".into(),
                     name: "D2".into(),
                     type_guid: Some("D-TYPE".into()),
+                    predefined_type: None,
                     storey_index: None,
                     material_index: None,
                     property_set: None,
@@ -3068,6 +3388,7 @@ mod tests {
                     ifc_type: "IFCDOOR".into(),
                     name: "D3".into(),
                     type_guid: Some("D-TYPE".into()),
+                    predefined_type: None,
                     storey_index: None,
                     material_index: None,
                     property_set: None,
@@ -3148,6 +3469,7 @@ mod tests {
                 ifc_type: "IFCDOOR".into(),
                 name: "D".into(),
                 type_guid: None,
+                predefined_type: None,
                 storey_index: None,
                 material_index: None,
                 property_set: None,
@@ -3216,6 +3538,7 @@ mod tests {
                 ifc_type: "IFCWALL".into(),
                 name: "W".into(),
                 type_guid: None,
+                predefined_type: None,
                 storey_index: None,
                 material_index: None,
                 property_set: None,

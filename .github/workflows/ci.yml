@@ -464,6 +464,20 @@ jobs:
           print(f"  IfcFacetedBrep: 1 (tetrahedron)")
           PY
 
+      # #214: IfcOpenShell's parser accepts a record that lists fewer
+      # attributes than its entity type declares — the failure only
+      # surfaces when a consumer reads the missing attribute, which is
+      # how IFCCOLUMN shipped eight attributes against a declared nine
+      # for as long as it did. Re-derive every entity's declared
+      # attribute count from the IFC4 EXPRESS schema and compare it
+      # with what the STEP text actually wrote, for every instance in
+      # every committed fixture.
+      - name: Validate IFC4 schema arity of the committed fixtures
+        run: |
+          python tools/ci/ifc_schema_arity.py \
+            tests/fixtures/synthetic-project.ifc \
+            tests/fixtures/synthetic-structural.ifc
+
       # M5-03: real-project walker → IFC end-to-end gate. Emit a
       # fresh IFC4 STEP from the small 2023 Einhoven project via
       # `rvt-ifc`, then load it in IfcOpenShell and cross-check
@@ -533,6 +547,13 @@ jobs:
             --out /tmp/witness/verdict.json \
             --registry research/witness-registry.json \
             --compare-committed research/witness/magnetar-2024-core-interior/observations
+      # #214: same schema-arity gate as the fixtures above, on the IFC
+      # a real Revit 2024 project just produced — the file that carried
+      # 338 short instances (256 IFCCOLUMN, 64 IFCSLAB, 18 IFCSPACE)
+      # before the fix.
+      - name: Validate IFC4 schema arity of the real-project IFC
+        run: |
+          python tools/ci/ifc_schema_arity.py /tmp/witness/core-interior.rvt-rs.ifc
       # Second recorded edge on the same source .rvt: the full project export
       # (IFC Exports/2024_Core_Interior_slim.ifc, 19879 entities) instead of
       # the 20 KB element fixture. Same three witnesses, same verdict shape;
