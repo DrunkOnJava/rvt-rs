@@ -1,0 +1,16 @@
+{
+  "source_url": "https://github.com/magnetar-io/revit-test-datasets/blob/main/Revit/2024_Core_Interior.rvt",
+  "source_repo": "magnetar-io/revit-test-datasets",
+  "source_path": "Revit/2024_Core_Interior.rvt",
+  "source_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
+  "source_bytes": 33718272,
+  "license": "MIT",
+  "copyright": "magnetar-io/revit-test-datasets contributors; authored by Autodesk Revit 2024",
+  "sha256": "79df3ff426899c9f95cac882105cc93fa915d82fde0e6025157773b044278bd6",
+  "bytes": 270,
+  "revit_release": "2024",
+  "file_type": "excerpt of decompressed Global/ElemTable",
+  "redistribution": "public",
+  "derivation": "rvt::compression::inflate_stream_at(\"Global/ElemTable\", stored, 8) over the source .rvt yields 1057030 bytes (gzip CRC32 and ISIZE both verify). This fixture is bytes 0..0x1E of that stream with the u16 LE record_count at offset 2 rewritten from 26425 to 6, followed verbatim by records 0, 1, 2 and 26422, 26423, 26424 (40 bytes each, taken at 0x1E + 40*k). Total 0x1E + 6*40 = 270 bytes, so the fixture preserves the property under test: the record array is exactly record_count * stride bytes and ends flush with the end of the stream.",
+  "notes": "Regression fixture for #206. On the pre-fix decoder the record origin was taken at the first 0xFF run (record +4) instead of the record's first byte, so a full stream walked one record short; on this excerpt that shows up as 5 records parsed instead of 6."
+}
