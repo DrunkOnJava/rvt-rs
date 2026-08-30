@@ -757,9 +757,9 @@ Three conclusions:
    a format-version change. Readers that handle 2020 files should in
    principle handle 2021 files' PartitionTable exactly the same way.
 
-Probe files: [`examples/partition_invariant.rs`](examples/partition_invariant.rs),
-[`examples/partition_diff.rs`](examples/partition_diff.rs),
-[`examples/partition_full.rs`](examples/partition_full.rs).
+Probe files: [`examples/partition_invariant.rs`](../examples/partition_invariant.rs),
+[`examples/partition_diff.rs`](../examples/partition_diff.rs),
+[`examples/partition_full.rs`](../examples/partition_full.rs).
 
 ## Addendum — Contents stream + long-lived name disclosure (2026-04-19)
 
@@ -831,7 +831,7 @@ customer files should redact both patterns. The `rvt-analyze --redact`
 flag handles this automatically; the committed demo output in
 `docs/demo/` is pre-scrubbed.
 
-Probe file: [`examples/contents_probe.rs`](examples/contents_probe.rs).
+Probe file: [`examples/contents_probe.rs`](../examples/contents_probe.rs).
 
 ## Addendum — Q5 field-type encoding (2026-04-19)
 
@@ -1649,7 +1649,7 @@ Source:
   ([`src/walker.rs:604`](../src/walker.rs)).
 - [`src/bin/rvt_doc.rs`](../src/bin/rvt_doc.rs) — CLI that exposes
   `read_adocument` output.
-- [`src/python.rs:257`](../src/python.rs) — `read_adocument`
+- [`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) — `read_adocument`
   Python binding.
 
 Tests:

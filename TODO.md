@@ -1284,27 +1284,24 @@ These should not block the MVP unless a real user need moves them up.
 
 ## Audit Snapshot
 
-Last local audit basis: 2026-04-25.
+Last local audit basis: 2026-08-30 (`main` at `c2be426`, rustc 1.98.0 stable).
 
-Observed local checks:
+Observed local checks (`tools/check-local.sh`, default gates):
 
-- `cargo test --workspace --all-targets` passed.
-- `cargo check --lib --features wasm --no-default-features` passed.
-- `npm run typecheck` in `viewer/` passed.
-- `npm run build` in `viewer/` passed with a bundle-size warning.
-- `cargo deny check` passed with allowlist warnings.
-- `cargo fmt --all -- --check` failed due formatting drift in the
-  current worktree.
+- `cargo fmt --all -- --check` passed.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-  failed on current Rust due one lint in `src/formats.rs`.
-- `cargo audit` was not installed locally.
+  passed.
+- `cargo doc --no-deps --lib` with `RUSTDOCFLAGS=-D warnings` passed.
+- `cargo test --workspace --all-targets --all-features` passed
+  (1,074 tests, 0 failures; corpus-gated suites skipped because
+  `RVT_PROJECT_CORPUS_DIR` was unset).
+- Optional gates (`--viewer`, `--deny`, `--audit`, `--corpus`,
+  `--ifcopenshell`) were not re-run in this snapshot.
 
-Observed model extraction state:
-
-- `Revit_IFC5_Einhoven.rvt` generic walker: 9 `HostObjAttr` candidates.
-- `Revit_IFC5_Einhoven.rvt` ArcWall path: Revit-2023-specific wall
-  records emit `IFCWALL` entries, currently geometry-free.
-- `2024_Core_Interior.rvt`: IFC scaffold only; no typed elements.
+Observed model extraction state: see [`docs/status.md`](docs/status.md)
+(reviewed 2026-08-29) and [`docs/support-matrix.json`](docs/support-matrix.json).
+The 2026-04-25 numbers previously listed here are superseded by the RE-19 /
+RE-20 negatives and the partition MVP work on `main`.
 
 Do not use this snapshot as a substitute for current CI. Re-run checks
 before closing any issue.
