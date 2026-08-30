@@ -43,12 +43,15 @@ You need stable Rust 1.85 or newer (`rustup` installs it) and git.
    tools/check-local.sh
    ```
 
-5. Commit with a [Conventional Commits](#commit-messages) message
+5. Optional: `git config core.hooksPath .githooks` turns on a pre-commit hook
+   that runs only `cargo fmt --check`, so the cheapest failure never reaches CI.
+
+6. Commit with a [Conventional Commits](#commit-messages) message
    (`docs(...)`, `fix(...)`, `test(...)`), push to your fork, and open a pull
    request against `main`. The pull-request template asks what changed and
    what you ran — fill in what applies and write "N/A" for the rest.
 
-6. A maintainer reviews and squash-merges. GitHub does not run CI on a
+7. A maintainer reviews and squash-merges. GitHub does not run CI on a
    first-time contributor's pull request until a maintainer clicks
    "Approve and run", so a PR that looks idle for a while is waiting on that,
    not on you. Leave "Allow edits by maintainers" on and we can push small
