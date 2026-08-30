@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/witness-observation.schema.json",
+  "title": "OctetProof witness observation",
+  "description": "What one witness saw in one golden-artifact input, plus enough provenance to replay it. OctetProof 1.0.0 §6.2 (docs/octetproof-spec.md). Producers: `rvt-ifc --observation PATH --artifact-id ID` (source witness) and `tools/ci/witness-ifcopenshell.py --observation PATH` (bridge witness). Committed instances live under research/witness/<artifact_id>/observations/. Emitting an observation is not a capability claim; only a PASS verdict across independent witnesses is.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "witness_id",
+    "witness_version",
+    "artifact_id",
+    "input_role",
+    "input_file",
+    "input_hash_sha256",
+    "deterministic",
+    "semantic_surface_covered",
+    "observation",
+    "observation_hash_sha256",
+    "unsupported_entities",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "The OctetProof version this observation conforms to.",
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "witness_id": {
+      "description": "Registry id (research/witness-registry.json → witnesses[].id). A witness absent from the registry makes the verdict a MANIFEST_ERROR.",
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "witness_version": {
+      "description": "Exact version of the witness that produced this observation (§9.6).",
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_id": {
+      "description": "The golden artifact's manifest `id`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "input_role": {
+      "description": "Which side of the recorded edge this witness read. Resolved against the manifest hashes by the gate; a mismatch is REJECTED_INPUT (§10.5).",
+      "type": "string",
+      "enum": ["source", "bridge"]
+    },
+    "input_file": {
+      "description": "File name of the input as read.",
+      "type": "string",
+      "minLength": 1
+    },
+    "input_hash_sha256": {
+      "description": "SHA-256 of the input bytes. Must equal the manifest hash for the declared role.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "deterministic": {
+      "description": "The witness's attestation for this run (§9.5). Anything but true rejects the witness.",
+      "type": "boolean"
+    },
+    "semantic_surface_covered": {
+      "description": "The §9.4 controlled vocabulary this witness claims for this run. A witness is compared only on what it declares; `entity_counts` is required by the reference gate.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "entity_counts",
+          "layer_topology",
+          "linework",
+          "bounding_boxes",
+          "xdata_fields",
+          "text_content",
+          "3d_solids",
+          "meshes",
+          "bim_parameters"
+        ]
+      }
+    },
+    "observation": {
+      "description": "The payload — the only part that is canonicalized, hashed, and diffed. `entity_counts` is the cross-witness surface; every other key is witness-specific and is not compared.",
+      "type": "object",
+      "required": ["entity_counts"],
+      "properties": {
+        "entity_counts": {
+          "description": "Per-type instance counts. A type absent here counts as zero.",
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "observation_hash_sha256": {
+      "description": "SHA-256 over the canonicalized `observation` payload (§7.3: sorted keys, no insignificant whitespace, UTF-8). Replay compares a fresh run against this value.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "unsupported_entities": {
+      "description": "What the witness could not read. Recorded, never a disagreement (§7.1 rule 4).",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "description": "Non-fatal notes from the run.",
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
