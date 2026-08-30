@@ -55,6 +55,9 @@ confidence-threshold = 0.8
 # (one fewer thing to audit when advisories land).
 multiple-versions = "warn"
 wildcards = "deny"
+# Path-only dev-dependencies on private workspace members (stream-evidence)
+# carry no `version` and would otherwise count as wildcards.
+allow-wildcard-paths = true
 # Explicit allowed skip list — known benign duplicates in common
 # transitive dep trees. Add entries here with comments rather than
 # raising the severity globally.
