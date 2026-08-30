@@ -16,14 +16,24 @@ add-in binaries or invented `.rvt` layouts.
    `docs/schemas/es-observation.schema.json`.
 5. Hand fixtures to CI as opaque regression inputs (never discovery oracles).
 
-## Suggested layout (external machine)
+## Layout
 
 ```text
 tools/oracle/
-  README.md          # this file
-  runner/            # future: C# / pyRevit / RevitAddIn project (not in Cloud)
-  out/               # generated fixtures (git-ignored locally)
+  README.md                       # this file
+  runner/pyrevit/                 # pyRevit extension: seed + N1-N4, R1/R2, C1/C2, C3a/C4a
+    README.md                     #   how to install, run, and what it writes
+    RvtOracle.extension/lib/rvt_oracle.py
+    RvtOracle.extension/RvtOracle.tab/ES Remap.panel/Run ES-remap-00.pushbutton/script.py
+  out/                            # generated fixtures + observations (git-ignored)
 ```
+
+The runner is a first cut written **without a Revit install**: it targets the
+documented Revit API (Wall.Create, DirectShape, DataStorage, ExtensibleStorage
+SchemaBuilder/Entity, ElementTransformUtils.CopyElements, Document.SaveAs) and
+writes observations in the `es-observation.schema.json` shape, but it has not
+been executed inside Revit yet. Treat the first run as a debugging session and
+commit the API fixes back.
 
 ## Blocked-on-Revit checklist
 
