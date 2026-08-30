@@ -75,6 +75,14 @@
 //!   not sentinel-terminated, and the count is bounded by
 //!   [`REFERENCE_LIST_MAX_ENTRIES`] so a garbage word cannot make the
 //!   decoder walk off.
+//! - One more slot of that list is read, and only for placed
+//!   instances: [`PartitionElementRecord::type_symbol_reference`],
+//!   the last slot before the record's own id that is itself a
+//!   `PLACEMENT_KIND_SYMBOL` record of the same `BuiltInCategory`.
+//!   On the recorded edge that is `5755` on all 256 exported
+//!   `OST_Columns` instances, which is the `IfcColumnType.Tag` Revit's
+//!   own export writes for every one of them (#215, RE-26). What the
+//!   remaining slots mean is still recorded, not claimed.
 //! - A *second* counted list follows the first, framed identically.
 //!   Its last slot is named [`PartitionElementRecord::owner_reference`]
 //!   because on every [`OST_SKETCH_LINES`] record of the recorded edge
@@ -199,6 +207,15 @@ pub struct PartitionElementRecord {
     /// element that is — the caller does
     /// (`element_record_plan_profiles`).
     pub owner_reference: Option<u32>,
+    /// The first counted reference list at `+0x88`, verbatim (#215,
+    /// #228, RE-26).
+    ///
+    /// Empty when the list does not decode. [`Self::preceding_reference`]
+    /// is one read of this list; [`Self::type_symbol_reference`] is
+    /// another. The slots are kept as `u64` so a caller sees the list
+    /// exactly as framed.
+    #[serde(default)]
+    pub references: Vec<u64>,
 }
 
 impl PartitionElementRecord {
@@ -291,6 +308,37 @@ impl PartitionElementRecord {
     /// id sets exactly (#212).
     pub fn is_exported_instance(&self) -> bool {
         !self.is_container_member() && self.is_placed_instance()
+    }
+
+    /// The family/type symbol this instance is placed from (#215,
+    /// RE-26).
+    ///
+    /// `symbols` is the ElementId set of the records of the **same**
+    /// `BuiltInCategory` that carry [`PLACEMENT_KIND_SYMBOL`] — the
+    /// type envelopes RE-21 §5 identified. The answer is the last
+    /// slot of [`Self::references`] **before** the record's own
+    /// ElementId that is in that set.
+    ///
+    /// Slots after the record's own id are ignored on purpose: RE-23
+    /// §3 measured that 81 door records carry a trailing symbol slot
+    /// that is not the door's own type, and every column record on
+    /// the recorded edge carries `75407` there while its type is
+    /// `5755`.
+    ///
+    /// Measured on `2024_Core_Interior.rvt`: all 256 exported
+    /// `OST_Columns` instances have exactly one candidate before
+    /// their own id and it is `5755` (`Column_Sqaure : 24" x 24"`),
+    /// which is the `IfcColumnType.Tag` Revit's own export writes for
+    /// every one of them.
+    pub fn type_symbol_reference(&self, symbols: &BTreeSet<u32>) -> Option<u32> {
+        let own = u64::from(self.element_id);
+        let index = self.references.iter().position(|slot| *slot == own)?;
+        self.references[..index]
+            .iter()
+            .rev()
+            .filter(|slot| **slot <= u64::from(u32::MAX))
+            .map(|slot| *slot as u32)
+            .find(|id| symbols.contains(id))
     }
 }
 
@@ -427,10 +475,11 @@ pub fn decode_at(
     let container = read_u64(buf, offset + CONTAINER_OFFSET)?;
     let placement_kind =
         read_u64(buf, offset + PLACEMENT_KIND_OFFSET).map(|v| (v & 0xffff_ffff) as u32)?;
-    let preceding_reference = offset
+    let references = offset
         .checked_add(REFERENCE_LIST_OFFSET)
         .and_then(|at| decode_reference_list(buf, at))
-        .and_then(|entries| slot_before(&entries, element_id));
+        .unwrap_or_default();
+    let preceding_reference = slot_before(&references, element_id);
     let owner_reference = offset
         .checked_add(REFERENCE_LIST_OFFSET)
         .and_then(|at| decode_owner_reference(buf, at));
@@ -445,6 +494,7 @@ pub fn decode_at(
         bbox_feet,
         preceding_reference,
         owner_reference,
+        references,
     })
 }
 
@@ -837,10 +887,61 @@ mod tests {
     }
 
     #[test]
+    fn type_symbol_reference_is_the_symbol_slot_before_the_records_own_id() {
+        // ElementId 20375 (`OST_Columns`) framed with the nine-slot
+        // list Partitions/46 carries for it. Two of the slots are
+        // column type symbols — 5755 before its own id and 75407
+        // after — and only the first is the column's own type.
+        let buf = with_reference_list(
+            synth_record(20375, OST_COLUMNS, [23.0, 109.0, 76.0, 25.0, 111.0, 90.333]),
+            &[3, 4258, 4546, 5755, 20307, 20308, 20375, 20843, 75407],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[20375])).expect("decodes");
+        let symbols: BTreeSet<u32> = [5755u32, 75407].into_iter().collect();
+        assert_eq!(record.type_symbol_reference(&symbols), Some(5755));
+    }
+
+    #[test]
+    fn type_symbol_reference_is_absent_without_a_symbol_slot() {
+        let buf = with_reference_list(
+            synth_record(20375, OST_COLUMNS, [23.0, 109.0, 76.0, 25.0, 111.0, 90.333]),
+            &[3, 4258, 20375, 75407],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[20375])).expect("decodes");
+        let symbols: BTreeSet<u32> = [5755u32, 75407].into_iter().collect();
+        assert_eq!(record.type_symbol_reference(&symbols), None);
+    }
+
+    #[test]
+    fn type_symbol_reference_is_absent_without_a_self_slot() {
+        let buf = with_reference_list(
+            synth_record(20375, OST_COLUMNS, [23.0, 109.0, 76.0, 25.0, 111.0, 90.333]),
+            &[3, 5755, 20307],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[20375])).expect("decodes");
+        let symbols: BTreeSet<u32> = [5755u32].into_iter().collect();
+        assert_eq!(record.type_symbol_reference(&symbols), None);
+    }
+
+    #[test]
+    fn reference_list_is_kept_verbatim_on_the_record() {
+        let buf = with_reference_list(
+            synth_record(25947, OST_DOORS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]),
+            &[3, 20274, 23756, 24301, 25488, 25947],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[25947])).expect("decodes");
+        assert_eq!(
+            record.references,
+            vec![3, 20274, 23756, 24301, 25488, 25947]
+        );
+    }
+
+    #[test]
     fn a_record_without_a_reference_list_still_decodes() {
         let buf = synth_record(22805, OST_COLUMNS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]);
         let record = decode_at("Partitions/46", &buf, 0, &declared(&[22805])).expect("decodes");
         assert_eq!(record.preceding_reference, None);
         assert_eq!(record.owner_reference, None);
+        assert!(record.references.is_empty());
     }
 }

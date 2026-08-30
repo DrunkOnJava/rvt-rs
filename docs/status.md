@@ -145,11 +145,52 @@ names and elevations on Revit 2024, #218), Rooms → spaces, and
 Walls / Doors / Windows / Columns / Floors / BuildingPads →
 `IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` (or
 `IfcShadingDevice` when overridden) with placement and an extrusion.
-The extrusion body is the record's bounding box everywhere except the
-plan profile of a slab whose sketch closes, which is the sketch itself
-(no recovered family profile or wall location curve anywhere; base/top
+The extrusion body is the record's bounding box except for the plan
+profile of a slab whose sketch closes, which is the sketch itself, and
+the plan run of a wall, which is the box cut back by its joins (base/top
 Level ElementId binding still open), and
 Material display names → `IfcMaterial`.
+**Wall bodies now carry the length their joins leave them and the wall's
+real thickness** (#215, RE-26). An element can be framed by more than one
+partition record, and 171 of 360 walls carry two frames that disagree
+about the plan box: Revit rewrites an edited element into a
+higher-numbered `Partitions/*` stream and leaves the earlier copy in
+place, so the **newest** frame is the current state. On that frame the
+box's thin plan extent equals the nominal thickness of the `IfcWallType`
+Revit's own export assigns on **360 of 360** walls (201 of 360 on the
+oldest frame) and its type slot in the `+0x88` list equals that
+`IfcWallType.Tag` on 356 of 360 (183 of 360 on the oldest);
+`Global/ElemTable`'s `u32` at `+0x1c` is a monotone version counter that
+ranks the same way. No frame on the file disagrees about the box's `z`,
+so nothing moves between storeys. What is left after that is the run:
+every non-zero delta between the box and Revit's own `Axis` polyline
+across all 720 wall ends is exactly 0.25, 0.3333 or 0.75 ft — half of
+the 6″, 8″ and 18″ wall thicknesses on the file — so an end is cut back
+by half the thickness of the perpendicular recovered wall whose
+centreline lands on it, and candidates that disagree decline the whole
+element. Measured against Revit's export in world coordinates
+(IfcOpenShell 0.8.5, axis-aligned bounding box, tolerance 1e-3 ft):
+**336 of 360 walls exact, up from 27**, worst residual 0.75 → 0.3333 ft,
+mean 0.2701 → 0.0220 ft, 309 improved and 16 regressed. The 31 wall ends
+the rule gets wrong are all over-trims, and they sit inside feature
+classes that also produce a real trim 125 and 22 times — Revit stores
+that decision per wall pair and it is in neither wall's box nor in 4 KiB
+past its record. This models Revit's join cleanup rather than reading it,
+which is why the capability is `partial`.
+**Every recovered column names its family type** (#215, RE-26): the last
+slot before the record's own ElementId in the `+0x88` list that is
+itself an `OST_Columns` type-symbol record is `5755`
+(`Column_Sqaure:24" x 24"`) on **256 of 256**, which is the
+`IfcColumnType.Tag` Revit's export writes for every one of them, and the
+section that symbol carries is emitted as the profile. On this file it is
+the same 2 ft square the instance envelope already had — the two agree to
+8.0e-15 ft — so no vertex moves; what changes is that `ProfileResolved`
+now means the type said so. The column residual is **unchanged and was
+never what #236 reported**: measured as a world bounding box rather than
+a vertex-mean centroid, all 256 columns match Revit's z extent exactly at
+both ends, 176 of 256 match on every corner, and the 80 that do not have
+a body Revit *cuts* inset from the full prism (62 exported as
+`IfcPolygonalFaceSet`), which no section can produce.
 **Doors and windows are bound to their host wall** (#222, RE-23): the
 element record's counted reference list at `+0x88` names the host in
 the slot immediately before the record's own ElementId, accepted only
@@ -244,9 +285,9 @@ decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus; multipage integrity diagnostics in inspect/export/viewer | Developers can inspect class and field structure; Formats multipage integrity uncertain while strip stays disabled. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
-| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms (+ Floor plan-loops only where no element records decode) + 2024 ArcWallRectOpening (ElemTable-confirmed related ids) + 2024 partition element records for `OST_Walls` / `OST_Doors` / `OST_Windows` / `OST_Columns` / `OST_Floors` / `OST_BuildingPad` (360/132/6/256/80 IFCSLAB + 20 IFCSHADINGDEVICE on Core Interior, exact ElementId sets, cross-witness gated, #204/#211/#212, RE-21/RE-22); HostObjAttr filtered; RE-19 negatives intact: no opening-index Door/Window discriminator, no schema-field Wall on magnetar corpora | Full model conversion is not ready; six categories on one Revit 2024 edge match Revit's exporter exactly, spaces and materials do not. |
+| Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms (+ Floor plan-loops only where no element records decode) + 2024 ArcWallRectOpening (ElemTable-confirmed related ids) + 2024 partition element records for `OST_Walls` / `OST_Doors` / `OST_Windows` / `OST_Columns` / `OST_Floors` / `OST_BuildingPad` (360/132/6/256/80 IFCSLAB + 20 IFCSHADINGDEVICE on Core Interior, exact ElementId sets, cross-witness gated, #204/#211/#212, RE-21/RE-22); wall bodies join-trimmed and columns joined to their family type (#215, RE-26); HostObjAttr filtered; RE-19 negatives intact: no opening-index Door/Window discriminator, no schema-field Wall on magnetar corpora | Full model conversion is not ready; six categories on one Revit 2024 edge match Revit's exporter exactly, spaces and materials do not. |
 | Typed decoder structs | Partial | `elements::all_decoders()` registers **81** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
-| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; every emitted instance carries the full IFC4 attribute list its type declares, gated per instance against the EXPRESS schema by `tools/ci/ifc_schema_arity.py` (#214); the element translation is carried once, by the element's `IfcLocalPlacement`, with the swept solid's `Position` at identity — the same gate composes `ObjectPlacement × Position` for pinned elements so the double-translation of #232 cannot return, and under `--witness-agreement` checks every written `PredefinedType` against the value Revit's own exporter writes for that type (#220: 360 walls `.NOTDEFINED.`, 18 spaces `.SPACE.`, 132 doors `.DOOR.`, 6 windows `.WINDOW.`, 256 columns `.COLUMN.`, 80 slabs `.FLOOR.`); 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / 2024 `IfcWall` + `IfcDoor` + `IfcWindow` + `IfcColumn` + `IfcSlab` + `IfcShadingDevice` with placement + bounding-box extrusion + named Revit Level storeys with measured containment (#218/#213/#212) + measured slab thickness (#212) + the `IfcOpeningElement` / `IfcRelVoidsElement` / `IfcRelFillsElement` chain that voids all 138 doors and windows out of their host wall (#222, exact pair-set match) / Material display names; slab boundary polygon still open; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
+| IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; every emitted instance carries the full IFC4 attribute list its type declares, gated per instance against the EXPRESS schema by `tools/ci/ifc_schema_arity.py` (#214); the element translation is carried once, by the element's `IfcLocalPlacement`, with the swept solid's `Position` at identity — the same gate composes `ObjectPlacement × Position` for pinned elements so the double-translation of #232 cannot return, and under `--witness-agreement` checks every written `PredefinedType` against the value Revit's own exporter writes for that type (#220: 360 walls `.NOTDEFINED.`, 18 spaces `.SPACE.`, 132 doors `.DOOR.`, 6 windows `.WINDOW.`, 256 columns `.COLUMN.`, 80 slabs `.FLOOR.`); 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / 2024 `IfcWall` + `IfcDoor` + `IfcWindow` + `IfcColumn` + `IfcSlab` + `IfcShadingDevice` with placement + bounding-box extrusion (join-trimmed run and thin-axis thickness for walls, family/type section for columns, sketch profile for slabs; #215, RE-25/RE-26) + named Revit Level storeys with measured containment (#218/#213/#212) + measured slab thickness (#212) + the `IfcOpeningElement` / `IfcRelVoidsElement` / `IfcRelFillsElement` chain that voids all 138 doors and windows out of their host wall (#222, exact pair-set match) / Material display names; the plan profile of a wall, door or window is still its record envelope; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
 | Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, File Status shows production class counts + storey/material totals, supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
 | Stream-level writer | Partial | Always-on patch corpus (`gen-fixture` project + MIT `empty.rfa`) covers identity, grow, shrink, multi-stream, missing-stream; optional Autodesk corpora add release-matrix + GUID/history checks; corrupt-gzip verification is unit-tested | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |
