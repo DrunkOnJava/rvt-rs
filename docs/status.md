@@ -23,6 +23,14 @@ enforced by `tests/witness_registry.rs` plus the CI gates it names. One
 edge (RVT → IFC via Revit's exporter, witnessed by IfcOpenShell) is recorded
 today; the RVT → DWG edge with dwg-rs is pending a Revit session.
 
+**OctetProof instance:** the draft protocol spec received 2026-08-30 lives at
+`docs/octetproof-spec-draft.md` (reviewer notes in its Appendix A). Its
+observation / verdict / replay shapes are implemented in-repo — `rvt-ifc
+--observation`, `tools/ci/witness-verdict.py`, committed artifacts under
+`research/witness/` — and gated in CI; see the "OctetProof alignment" section
+of `docs/verification-protocol.md`. The umbrella repository still waits for the
+second (RVT → DWG) edge.
+
 **Research program pointer:** the governing
 [unified research report](research/unified-research-report.md) (rev 1.1)
 sequences Phase 0 product readiness → Phase 1 identity/evidence contracts →
