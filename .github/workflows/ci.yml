@@ -140,11 +140,11 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-release
       - name: Build
-        run: cargo build --release --all-targets
+        run: cargo build --profile ci --all-targets
       - name: Unit tests
-        run: cargo test --release --lib --bins
+        run: cargo test --profile ci --lib --bins
       - name: Doc tests
-        run: cargo test --release --doc
+        run: cargo test --profile ci --doc
       # Regression-proof the Q5.2 100%-classification claim. Fails if
       # any field in any release decodes to FieldType::Unknown, or if
       # any expected corpus file is missing (guarantees non-vacuous
@@ -154,7 +154,7 @@ jobs:
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_REQUIRE_CORPUS: "1"
-        run: cargo test --release --test field_type_coverage -- --nocapture
+        run: cargo test --profile ci --test field_type_coverage -- --nocapture
       # Broader integration suite (round-trips, part-atom parsing,
       # history extraction, stream inventory, etc.). Kept on Windows
       # as well as Ubuntu because CFB stream names historically came
@@ -164,12 +164,12 @@ jobs:
         if: matrix.with_corpus
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-        run: cargo test --release --test samples
+        run: cargo test --profile ci --test samples
       - name: IFC export integration tests
         if: matrix.with_corpus
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-        run: cargo test --release --test ifc_roundtrip
+        run: cargo test --profile ci --test ifc_roundtrip
 
   ifc-smoke:
     # IFC-42: run the synthetic-project integration test and assert
@@ -191,7 +191,7 @@ jobs:
           save-if: false
           shared-key: ci-release
       - name: Build + run synthetic-project integration test
-        run: cargo test --release --test ifc_synthetic_project
+        run: cargo test --profile ci --test ifc_synthetic_project
       - name: Assert entity counts in committed fixture
         run: |
           set -euo pipefail
@@ -238,11 +238,11 @@ jobs:
       - name: Tier-one open / schema / known-count inventory
         env:
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: cargo test --release --test corpus_tier1_health -- --nocapture
+        run: cargo test --profile ci --test corpus_tier1_health -- --nocapture
       - name: Tier-one known-count manifests
         env:
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: cargo test --release --test project_count_fixtures -- --nocapture
+        run: cargo test --profile ci --test project_count_fixtures -- --nocapture
 
   corpus-tier2:
     # M2-03 Tier 2: optional external project corpus. Clones the MIT
@@ -269,16 +269,16 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           RVT_CORPUS_TIER2_LIMIT: "8"
-        run: cargo test --release --test corpus_tier2_health -- --nocapture
+        run: cargo test --profile ci --test corpus_tier2_health -- --nocapture
       - name: Tier-two project corpus smoke
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: cargo test --release --test project_corpus_smoke -- --nocapture
+        run: cargo test --profile ci --test project_corpus_smoke -- --nocapture
       - name: Tier-two known-count manifests
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: cargo test --release --test project_count_fixtures -- --nocapture
+        run: cargo test --profile ci --test project_count_fixtures -- --nocapture
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project
@@ -310,11 +310,11 @@ jobs:
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: cargo test --release --test cfb_roundtrip_delta -- --nocapture
+        run: cargo test --profile ci --test cfb_roundtrip_delta -- --nocapture
       - name: Run project known-count fixture tests
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: cargo test --release --test project_count_fixtures -- --nocapture
+        run: cargo test --profile ci --test project_count_fixtures -- --nocapture
 
   ifcopenshell-validate:
     # IFC-41: load the committed synthetic-project.ifc fixture in
@@ -443,10 +443,10 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
-          cargo build --release --bin rvt-ifc
+          cargo build --profile ci --bin rvt-ifc
           SAMPLE="${RVT_PROJECT_CORPUS_DIR}/Revit_IFC5_Einhoven.rvt"
           test -f "$SAMPLE"
-          ./target/release/rvt-ifc "$SAMPLE" \
+          ./target/ci/rvt-ifc "$SAMPLE" \
             -o /tmp/walker-real-project.ifc \
             --diagnostics /tmp/walker-real-project.diagnostics.json
           python tools/ci/validate-real-ifc.py \
@@ -491,7 +491,7 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
-          ./target/release/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" \
+          ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" \
             -o /tmp/witness/core-interior.rvt-rs.ifc \
             --observation /tmp/witness/observations/rvt-rs.json \
             --artifact-id magnetar-2024-core-interior
@@ -522,7 +522,7 @@ jobs:
             tests/fixtures/project-counts/2024-core-interior-slim.json \
             "${RVT_PROJECT_CORPUS_DIR}" \
             --observation /tmp/witness-slim/observations/ifc-lite.json
-          ./target/release/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" \
+          ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" \
             -o /tmp/witness-slim/core-interior-slim.rvt-rs.ifc \
             --observation /tmp/witness-slim/observations/rvt-rs.json \
             --artifact-id magnetar-2024-core-interior-slim
