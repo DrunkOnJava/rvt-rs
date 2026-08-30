@@ -538,14 +538,43 @@ fn element_record_geometry_from_decoded(
     if width <= 0.0 || depth <= 0.0 || height <= 0.0 {
         return None;
     }
+    // The sketched plan profile, when the element's `OST_SketchLines`
+    // records closed one (#31, RE-25). It is recovered in project
+    // plan coordinates and the body is placed at the record's plan
+    // centre, so the profile is expressed relative to that centre.
+    let profile = crate::element_record_plan_profiles::plan_profile_from_fields(&decoded.fields);
+    let profile_override = profile.as_ref().map(|profile| {
+        let outer: Vec<(f64, f64)> = profile
+            .outer_xy
+            .iter()
+            .map(|(px, py)| (px - x, py - y))
+            .collect();
+        let voids: Vec<Vec<(f64, f64)>> = profile
+            .inner_xy
+            .iter()
+            .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
+            .collect();
+        if voids.is_empty() {
+            entities::ProfileDef::ArbitraryClosed { points: outer }
+        } else {
+            entities::ProfileDef::ArbitraryWithVoids {
+                points: outer,
+                voids,
+            }
+        }
+    });
     let mut properties = vec![
+        // `BodySource` stays the record box: the placement, the plan
+        // envelope and the extrusion depth are all still read from it.
+        // What the sketch lines replace is the plan *profile*, which
+        // `ProfileResolved` / `ProfileSource` report separately.
         Property {
             name: "BodySource".into(),
             value: PropertyValue::Text("partition_element_record_bbox".into()),
         },
         Property {
             name: "ProfileResolved".into(),
-            value: PropertyValue::Boolean(false),
+            value: PropertyValue::Boolean(profile.is_some()),
         },
         Property {
             name: "LevelBindResolved".into(),
@@ -556,6 +585,22 @@ fn element_record_geometry_from_decoded(
             value: PropertyValue::LengthFeet(height),
         },
     ];
+    if let Some(profile) = profile.as_ref() {
+        properties.push(Property {
+            name: "ProfileSource".into(),
+            value: PropertyValue::Text(
+                crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE.into(),
+            ),
+        });
+        properties.push(Property {
+            name: "ProfileVertexCount".into(),
+            value: PropertyValue::Integer(profile.vertex_count() as i64),
+        });
+        properties.push(Property {
+            name: "ProfileVoidCount".into(),
+            value: PropertyValue::Integer(profile.inner_xy.len() as i64),
+        });
+    }
     if let Some(stream) = source_stream {
         properties.push(Property {
             name: "SourceStream".into(),
@@ -570,7 +615,10 @@ fn element_record_geometry_from_decoded(
     // (`Floor:Basement Slab`, 22756) is exported as two stacked
     // solids of 0.3333 ft and 1.1667 ft whose depths sum to the
     // recorded 1.5 ft. It is still the box extent, not a modelled
-    // layer set — `ProfileResolved` stays false.
+    // layer set. The plan profile is a separate question, answered
+    // above: the sketch boundary when the element's
+    // `OST_SketchLines` records close one (#31, RE-25), the box
+    // rectangle when they do not.
     if SLAB_THICKNESS_CLASSES.contains(&class) {
         properties.push(Property {
             name: "ThicknessResolved".into(),
@@ -591,7 +639,7 @@ fn element_record_geometry_from_decoded(
             width_feet: width,
             depth_feet: depth,
             height_feet: height,
-            profile_override: None,
+            profile_override,
         },
         PropertySet {
             name: ELEMENT_RECORD_PROPERTY_SET.into(),

@@ -500,6 +500,108 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
     }
 }
 
+/// #31 / RE-25: every recovered slab carries the plan profile its
+/// `OST_SketchLines` records close, and the plates whose sketch does
+/// not close carry none.
+///
+/// The join is by ElementId only — the last slot of the second
+/// counted reference list at `+0x88` — so this asserts an exact
+/// partition of the 100 record-backed plates: the 80 the reference
+/// export writes as `IfcSlab` resolve a profile, the 20 it writes as
+/// `IfcShadingDevice` (rotated plates, whose sketch-line boxes are
+/// axis-aligned envelopes of diagonal segments) resolve none.
+#[test]
+fn core_interior_2024_slab_plan_profiles() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} missing", path.display());
+        return;
+    }
+    // The twenty `IFCSHADINGDEVICE` `Tag` values — the plates whose
+    // sketch does not close from bounding boxes alone.
+    const SHADING_DEVICE_IDS: &[u32] = &[
+        20953, 64160, 64227, 64292, 64358, 64423, 64488, 64553, 64618, 64683, 70366, 71171, 71231,
+        71291, 71351, 71411, 71471, 71531, 71591, 71651,
+    ];
+    const SITE_PAD_ID: u32 = 21975;
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    let limits = walker::WalkerLimits {
+        max_candidates: 2_000,
+        ..walker::WalkerLimits::default()
+    };
+    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
+        .expect("mvp");
+    assert_eq!(mvp.slabs.len(), 100);
+
+    let mut without: Vec<u32> = Vec::new();
+    let mut ring = 0usize;
+    let mut rectangle = 0usize;
+    for slab in &mvp.slabs {
+        let id = slab.id.expect("record-backed slab carries an id");
+        let Some(profile) =
+            rvt::element_record_plan_profiles::plan_profile_from_fields(&slab.fields)
+        else {
+            without.push(id);
+            continue;
+        };
+        // The profile's plan bounds are the record's own plan box:
+        // every vertex is a corner of a recorded bounding box.
+        let bounds = profile.plan_bounds_feet().expect("bounds");
+        let mut record_box = [f64::NAN; 4];
+        for (name, value) in &slab.fields {
+            if let rvt::walker::InstanceField::Float { value, .. } = value {
+                match name.as_str() {
+                    "m_locationX" => record_box[0] = *value,
+                    "m_locationY" => record_box[1] = *value,
+                    "m_bboxWidth" => record_box[2] = *value,
+                    "m_bboxDepth" => record_box[3] = *value,
+                    _ => {}
+                }
+            }
+        }
+        let width = bounds[2] - bounds[0];
+        let depth = bounds[3] - bounds[1];
+        assert!(
+            (width - record_box[2]).abs() < 1e-6 && (depth - record_box[3]).abs() < 1e-6,
+            "slab {id}: profile bounds {width} x {depth} disagree with the record box"
+        );
+        match (profile.outer_xy.len(), profile.inner_xy.len()) {
+            (26, 1) => ring += 1,
+            (4, 0) => rectangle += 1,
+            other => panic!("slab {id}: unexpected profile shape {other:?}"),
+        }
+        if id == SITE_PAD_ID {
+            let mut xs: Vec<f64> = profile.outer_xy.iter().map(|p| p.0).collect();
+            let mut ys: Vec<f64> = profile.outer_xy.iter().map(|p| p.1).collect();
+            xs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            ys.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            for (got, want) in xs.iter().zip([20.0, 20.0, 167.0, 167.0]) {
+                assert!((got - want).abs() < 1e-6, "Site Pad x {got} != {want}");
+            }
+            for (got, want) in ys.iter().zip([25.0, 25.0, 114.0, 114.0]) {
+                assert!((got - want).abs() < 1e-6, "Site Pad y {got} != {want}");
+            }
+        }
+    }
+    without.sort_unstable();
+    assert_eq!(
+        without, SHADING_DEVICE_IDS,
+        "the plates without a closed sketch must be exactly the export's \
+         IFCSHADINGDEVICE Tag set"
+    );
+    assert_eq!(
+        ring, 42,
+        "42 perimeter plates: 26-vertex outer loop + 1 void"
+    );
+    assert_eq!(rectangle, 38, "38 rectangular plates: 4-vertex outer loop");
+}
+
 /// Split a STEP attribute list on top-level commas (quotes and nested
 /// lists shield their contents).
 fn step_attributes(args: &str) -> Vec<&str> {

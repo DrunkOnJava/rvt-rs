@@ -250,6 +250,9 @@ impl StepWriter {
     ///   `IFCArbitraryClosedProfileDef`; if the polyline isn't
     ///   already closed (last == first), the writer appends the
     ///   first point at the tail.
+    /// - `ArbitraryWithVoids { points, voids }` emits one
+    ///   `IFCPOLYLINE` for the outer ring and one per hole, then
+    ///   `IFCArbitraryProfileDefWithVoids`.
     ///
     /// All length values are converted from feet to metres at emit
     /// time (factor 0.3048).
@@ -432,8 +435,57 @@ impl StepWriter {
                     format!("IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#{polyline_id})"),
                 );
             }
+            Some(ProfileDef::ArbitraryWithVoids { points, voids }) => {
+                let outer_id = self.emit_closed_polyline(points);
+                let inner_ids: Vec<usize> = voids
+                    .iter()
+                    .map(|hole| self.emit_closed_polyline(hole))
+                    .collect();
+                let inner_refs = inner_ids
+                    .iter()
+                    .map(|id| format!("#{id}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                // IFCArbitraryProfileDefWithVoids(ProfileType,
+                // ProfileName, OuterCurve, InnerCurves) — four
+                // attributes in IFC4, the fourth a set of curves.
+                self.emit_entity(
+                    profile_id,
+                    format!("IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,$,#{outer_id},({inner_refs}))"),
+                );
+            }
         }
         profile_id
+    }
+
+    /// Emit one `IFCCARTESIANPOINT` per vertex plus the
+    /// `IFCPOLYLINE` that lists them, closing the ring by repeating
+    /// the first point when the caller did not. Returns the polyline
+    /// entity id. Coordinates are feet in, metres out.
+    fn emit_closed_polyline(&mut self, points: &[(f64, f64)]) -> usize {
+        let mut metres: Vec<(f64, f64)> = points
+            .iter()
+            .map(|(x, y)| (*x * 0.3048, *y * 0.3048))
+            .collect();
+        if let (Some(first), Some(last)) = (metres.first().copied(), metres.last().copied()) {
+            if (first.0 - last.0).abs().max((first.1 - last.1).abs()) > 1e-9_f64 {
+                metres.push(first);
+            }
+        }
+        let mut point_ids: Vec<usize> = Vec::with_capacity(metres.len());
+        for (x, y) in &metres {
+            let pt_id = self.id();
+            self.emit_entity(pt_id, format!("IFCCARTESIANPOINT(({x:.6},{y:.6}))"));
+            point_ids.push(pt_id);
+        }
+        let polyline_id = self.id();
+        let refs = point_ids
+            .iter()
+            .map(|id| format!("#{id}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        self.emit_entity(polyline_id, format!("IFCPOLYLINE(({refs}))"));
+        polyline_id
     }
 
     /// Emit a richer solid body (IFC-18 / IFC-19 / IFC-20) and

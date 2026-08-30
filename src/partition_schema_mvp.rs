@@ -424,6 +424,12 @@ fn z_extent_key(record: &crate::partition_element_records::PartitionElementRecor
 /// ([`crate::partition_ifc_export_overrides`]) are attached as the
 /// `m_ifc_export_as` field. The decoder does not act on the value;
 /// the IFC writer decides which values it is willing to honour.
+///
+/// The plate's sketched plan profile
+/// ([`crate::element_record_plan_profiles`]) is attached in the same
+/// pass when it closes — the `OST_SketchLines` records that carry it
+/// are read from the same stream sweep, so the profile costs one
+/// extra needle search rather than a second inflate (#31, RE-25).
 pub fn slabs_from_partition_category_records(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -447,12 +453,30 @@ pub fn slabs_from_partition_category_records(
     )
     .unwrap_or_default();
 
+    let categories = [
+        per::OST_FLOORS,
+        per::OST_BUILDING_PAD,
+        per::OST_SKETCH_LINES,
+    ];
+    let scanned = per::scan_category_records_multi(rf, revit_version, &categories, &declared)?;
+    let sketch_lines: Vec<per::PartitionElementRecord> = scanned
+        .iter()
+        .filter(|record| record.builtin_category == per::OST_SKETCH_LINES)
+        .cloned()
+        .collect();
+    let profiles =
+        crate::element_record_plan_profiles::plan_profiles_from_sketch_line_records(&sketch_lines);
+
     let mut out = Vec::new();
     for (category, class) in [
         (per::OST_FLOORS, "Floor"),
         (per::OST_BUILDING_PAD, "BuildingPad"),
     ] {
-        let records = per::scan_category_records(rf, revit_version, category, &declared)?;
+        let records: Vec<per::PartitionElementRecord> = scanned
+            .iter()
+            .filter(|record| record.builtin_category == category)
+            .cloned()
+            .collect();
         for mut decoded in instances_from_records(records, class) {
             if let Some(id) = decoded.id {
                 if let Some(value) = overrides.get(&id) {
@@ -460,6 +484,9 @@ pub fn slabs_from_partition_category_records(
                         "m_ifc_export_as".into(),
                         InstanceField::String(value.clone()),
                     ));
+                }
+                if let Some(profile) = profiles.get(&id) {
+                    decoded.fields.extend(profile.fields());
                 }
             }
             out.push(decoded);
@@ -1196,6 +1223,7 @@ mod tests {
             placement_kind: crate::partition_element_records::PLACEMENT_KIND_INSTANCE,
             bbox_feet,
             preceding_reference: None,
+            owner_reference: None,
         }
     }
 
