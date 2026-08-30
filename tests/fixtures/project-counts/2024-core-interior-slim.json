@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "id": "magnetar-2024-core-interior-slim",
+  "project_file": "2024_Core_Interior.rvt",
+  "reference_ifc_file": "../IFC Exports/2024_Core_Interior_slim.ifc",
+  "source": {
+    "repo": "magnetar-io/revit-test-datasets",
+    "license": "MIT",
+    "revit_release": 2024,
+    "rvt_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
+    "rvt_bytes": 33718272,
+    "reference_ifc_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
+    "reference_ifc_bytes": 1665968,
+    "notes": "Full-project export of the same .rvt as magnetar-2024-core-interior. Header: FILE_NAME '... ODA SDAI 23.12', 'Autodesk Revit 24.0.20.20 (ENU) - IFC 24.0.20.20'; FILE_DESCRIPTION ViewDefinition [ReferenceView_V1.2], ExchangeRequirement [Architecture]; FILE_SCHEMA IFC4; 19879 entity instances. It lives beside the Revit/ tree in the dataset, hence the '../IFC Exports/' path relative to RVT_PROJECT_CORPUS_DIR. Every `expected` below was measured on 2026-08-30 with IfcOpenShell 0.8.5 (by_type, include_subtypes=False), independently reproduced with IFClite 7.1.1 (ifc-lite-core, own STEP scanner) and by the STEP-constructor count this test uses; all three agree exactly on all thirteen types. The source side is the same .rvt, so every decoder_* value here is identical to the sibling manifest — what changes is the reference side, which is a real project schedule instead of a 20 KB element fixture, so the gaps are visible instead of hidden behind zeros."
+  },
+  "counts": {
+    "levels": {
+      "status": "decoder_baseline",
+      "expected": 15,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCBUILDINGSTOREY",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.storey_count",
+      "decoder_expected": 12,
+      "decoder_tolerance": 0,
+      "tracking_issue": 33,
+      "notes": "rvt-rs recovers 12 storeys from partition Level-like strings (elevation often 0.0 without ArcWall trailers); the export carries 15. ElementId <-> Level binding is still open (#86)."
+    },
+    "walls": {
+      "status": "known_gap",
+      "expected": 360,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCWALL",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWALL",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
+      "tracking_issue": 30,
+      "unsupported_feature": "schema_field_wall_instances",
+      "notes": "The 20 KB element fixture expects 0 walls; this full export expects 360, so this manifest is where wall recovery is actually measured. Instance recovery is evidence-only today (#81)."
+    },
+    "floors": {
+      "status": "known_gap",
+      "expected": 80,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCSLAB",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSLAB",
+      "decoder_expected": 64,
+      "decoder_tolerance": 0,
+      "tracking_issue": 31,
+      "unsupported_feature": "floor_slab_extrusion_thickness",
+      "notes": "rvt-rs emits 64 plan-loop IFCSLAB boundary annotations against 80 exported slabs; recall issue #83 still records 61/80, so its number is stale by three. The export also carries 20 IFCSHADINGDEVICE, which no decoder path claims and which this manifest deliberately does not score."
+    },
+    "roofs": {
+      "status": "known",
+      "expected": 0,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCROOF",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCROOF",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "doors": {
+      "status": "known_gap",
+      "expected": 132,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCDOOR",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCDOOR",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
+      "tracking_issue": 32,
+      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+    },
+    "windows": {
+      "status": "known_gap",
+      "expected": 6,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCWINDOW",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCWINDOW",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
+      "tracking_issue": 32,
+      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+    },
+    "rooms_spaces": {
+      "status": "known_gap",
+      "expected": 116,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCSPACE",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSPACE",
+      "decoder_expected": 18,
+      "decoder_tolerance": 4,
+      "tracking_issue": 33,
+      "unsupported_feature": "real_file_element_geometry",
+      "notes": "Strict partition space-name recovery emits 18 IFCSPACE against 116 exported spaces; recall tracked in #84 (which records 50/116 from a different export path)."
+    },
+    "columns": {
+      "status": "known_gap",
+      "expected": 256,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCCOLUMN",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCCOLUMN",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
+      "tracking_issue": 204,
+      "unsupported_feature": "real_file_element_geometry",
+      "notes": "First manifest to measure columns at all; the element fixture expects 0. Issue #204 was filed for this gap."
+    },
+    "beams": {
+      "status": "known",
+      "expected": 0,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCBEAM",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCBEAM",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "mep": {
+      "status": "known",
+      "expected": 0,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCFLOWTERMINAL",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.by_ifc_type.IFCFLOWTERMINAL",
+      "decoder_expected": 0,
+      "decoder_tolerance": 0
+    },
+    "materials": {
+      "status": "known_gap",
+      "expected": 10,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCMATERIAL",
+      "tolerance": 0,
+      "decoder_metric": "diagnostics.exported.material_count",
+      "decoder_expected": 102,
+      "decoder_tolerance": 5,
+      "tracking_issue": 34,
+      "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
+      "notes": "Over-count, not under-count: partition display-name recovery yields 102 IfcMaterial against the export's 10 IfcMaterial plus 150 IfcMaterialConstituentSet / 309 IfcMaterialConstituent, which rvt-rs does not model."
+    },
+    "units": {
+      "status": "known",
+      "expected": 1,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCUNITASSIGNMENT",
+      "tolerance": 0,
+      "decoder_metric": "step.IFCUNITASSIGNMENT",
+      "decoder_expected": 1,
+      "decoder_tolerance": 0
+    },
+    "property_sets": {
+      "status": "known_gap",
+      "expected": 0,
+      "source": "full Revit IFC export",
+      "source_ifc_type": "IFCPROPERTYSET",
+      "tolerance": 0,
+      "decoder_metric": "step.IFCPROPERTYSET",
+      "decoder_expected": 64,
+      "decoder_tolerance": 8,
+      "tracking_issue": 35,
+      "unsupported_feature": "typed_door_window_discrimination_and_host_binding",
+      "notes": "The ReferenceView_V1.2 export carries no IfcPropertySet at all (0, confirmed by both bridge readers); rvt-rs emits 64 RvtFloorGeometry sets for its plan-loop slab annotations. Neither side is a subset of the other."
+    }
+  }
+}

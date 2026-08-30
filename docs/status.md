@@ -19,9 +19,12 @@ and the viewer support matrix aligned.
 [`docs/verification-protocol.md`](verification-protocol.md) — cross-witness
 agreement across recorded format edges, tracked in
 [`research/witness-registry.json`](../research/witness-registry.json) and
-enforced by `tests/witness_registry.rs` plus the CI gates it names. One
-edge (RVT → IFC via Revit's exporter, witnessed by IfcOpenShell) is recorded
-today; the RVT → DWG edge with dwg-rs is pending a Revit session.
+enforced by `tests/witness_registry.rs` plus the CI gates it names. Two
+RVT → IFC edges via Revit's exporter are recorded and gated today — the 20 KB
+element fixture and the full 19879-entity project export — each witnessed by
+three independent implementation lineages: rvt-rs on the `.rvt`, IfcOpenShell
+and IFClite on the `.ifc`. The RVT → DWG edge with dwg-rs is still pending a
+Revit session.
 
 **OctetProof instance:** the citable protocol specification is
 [`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.0, 2026-08-30, CC-BY-4.0);

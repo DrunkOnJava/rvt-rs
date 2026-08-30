@@ -1,0 +1,34 @@
+{
+  "artifact_id": "magnetar-2024-core-interior-slim",
+  "deterministic": true,
+  "input_file": "../IFC Exports/2024_Core_Interior_slim.ifc",
+  "input_hash_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
+  "input_role": "bridge",
+  "observation": {
+    "entity_counts": {
+      "IFCBEAM": 0,
+      "IFCBUILDINGSTOREY": 15,
+      "IFCCOLUMN": 256,
+      "IFCDOOR": 132,
+      "IFCFLOWTERMINAL": 0,
+      "IFCMATERIAL": 10,
+      "IFCPROPERTYSET": 0,
+      "IFCROOF": 0,
+      "IFCSLAB": 80,
+      "IFCSPACE": 116,
+      "IFCUNITASSIGNMENT": 1,
+      "IFCWALL": 360,
+      "IFCWINDOW": 6
+    },
+    "ifc_schema": "IFC4"
+  },
+  "observation_hash_sha256": "882e1e0f7d546bed2b4cf94e0cb8867f257321235203adcb0ed48e8ef521b4f8",
+  "schema_version": "1.0.0",
+  "semantic_surface_covered": [
+    "entity_counts"
+  ],
+  "unsupported_entities": [],
+  "warnings": [],
+  "witness_id": "ifcopenshell",
+  "witness_version": "0.8.5"
+}

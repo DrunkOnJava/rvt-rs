@@ -183,10 +183,10 @@ witnesses:
     copyleft: weak     # dynamic link only, per the Section 9.2 row
   - id: ifc-lite
     language: Rust
-    license: unverified
+    license: MPL-2.0      # LTplus-AG/ifc-lite; crate ifc-lite-core, pinned =7.1.1
     versions: [IFC2x3, IFC4, IFC4x3, IFC5]
     ci_eligible: true
-    copyleft: unknown
+    copyleft: weak
 ```
 
 `copyleft` is a three-valued declaration — `none`, `weak`, `strong` — not a boolean. Weak copyleft (LGPL, MPL, CDDL) permits the Section 9.2 dynamic-link treatment; strong copyleft (GPL, AGPL) permits only the isolated-process treatment. A witness whose license this registry has not verified against its upstream declares `license: unverified` and `copyleft: unknown`, and cannot be one half of a sole agreeing pair until it is verified.
@@ -1054,7 +1054,7 @@ The reference implementation is not normative; any conforming implementation may
 - jDwgParser (GPL-3.0, Java; `ebandal/jDwgParser`, last pushed 2026-05-21). The project claims 74/74 entity types and a 92.2% sample pass rate through R2018; those are its own figures, not reproduced under this protocol.
 - LibreDWG 0.14 (GPL-3.0, C). The project claims ~99% read coverage through R2018; its own figure.
 - IfcOpenShell (LGPL-3.0, mature IFC engine; the first third-party reading witness in the reference implementation).
-- ifc-lite (Rust/TypeScript IFC toolkit). **License unverified** — the registry entry names no upstream owner, and the closest public candidates disagree on their license, so no SPDX identifier is asserted here (Section 19, note 4).
+- IFClite (`LTplus-AG/ifc-lite`; crates.io crate `ifc-lite-core` 7.1.1, published 2026-08-27). **MPL-2.0**, asserted from the crate metadata and the repository LICENSE, both read on 2026-08-30 (Section 19, note 4). A Rust STEP/IFC parser with its own byte-level scanner; the project verifies its geometry kernel against IfcOpenShell, which is a comparison, not a shared lineage. Third reading witness on the IFC node in the reference implementation.
 - STEPcode (BSD-3-Clause on file, NOASSERTION on GitHub; NIST-rooted STEP parser).
 - libE57Format (C++, ASTM E57 point cloud).
 - rvt-rs (Apache-2.0, clean-room RVT reader; reference implementation for this protocol).
@@ -1073,7 +1073,7 @@ This section records every difference between this document and `docs/octetproof
 1. **jDwgParser license.** The draft's §5.3 carried `license: (TBD — verify)` and `copyleft: false`. `ebandal/jDwgParser` is **GPL-3.0**, Java, last pushed 2026-05-21. It is therefore a secondary, isolated-process witness under §9.2 and §9.3, and never one half of a sole agreeing pair. Corrected in §5.3, §9.3, and §18.
 2. **ACadSharp coverage.** The draft's §5.3 gave ACadSharp `coverage_pct: 92`. That figure is jDwgParser's self-reported sample pass rate, not ACadSharp's. ACadSharp's coverage is undeclared and is recorded as such; §5.3 and §9.1 now define `undeclared` and require a reproduced agreement before a figure is registered.
 3. **LGPL is weak copyleft.** The draft marked IfcOpenShell `copyleft: false`. LGPL-3.0 is weak copyleft; the §9.2 dynamic-link row is the correct treatment. `copyleft` becomes a three-valued field (`none` / `weak` / `strong`) in §5.3, the §9.2 table names the three tiers explicitly, and §9.3 and §10.3 now say "strong copyleft" where the draft said "GPL/AGPL".
-4. **ifc-lite license.** The draft listed MPL-2.0; the in-repo registry carries MIT. Neither was verifiable: the registry entry names no upstream owner, and a GitHub search on 2026-08-30 returns candidates that disagree — `LTplus-AG/ifc-lite` (MPL-2.0, TypeScript-primary with Rust crates), `zahmadsaleem/ifc-lite-headless` (MPL-2.0, Rust), `spookylukey/ifc-lite-python` (no license), among others. The entry is therefore marked `license: unverified`, `copyleft: unknown`, and §9.2 makes an unverified license gate-ineligible until resolved.
+4. **ifc-lite license.** The draft listed MPL-2.0; the in-repo registry carries MIT. Neither was verifiable: the registry entry names no upstream owner, and a GitHub search on 2026-08-30 returns candidates that disagree — `LTplus-AG/ifc-lite` (MPL-2.0, TypeScript-primary with Rust crates), `zahmadsaleem/ifc-lite-headless` (MPL-2.0, Rust), `spookylukey/ifc-lite-python` (no license), among others. The entry was therefore marked `license: unverified`, `copyleft: unknown`, and §9.2 makes an unverified license gate-ineligible until resolved. **Resolved the same day**, before the witness was adopted: the crate the reference implementation actually pins is `ifc-lite-core` 7.1.1 (crates.io, published 2026-08-27), whose `license` field is **MPL-2.0** and whose `repository` is `https://github.com/LTplus-AG/ifc-lite`, which the GitHub API reports as MPL-2.0. `zahmadsaleem/ifc-lite-headless` is a different project and is not what is adopted. §5.3 and §18 now carry `MPL-2.0` / `copyleft: weak`, and the in-repo registry names the exact upstream and the exact pinned version per §9.6.
 5. **ACIS support attribution.** The draft's §11 attributed ACIS payload support to "2026-07-29" and §18 to "ACadSharp v3.7.1". Both are right in part: the ACIS reader for 3DSOLID / REGION / BODY landed in **v3.6.51, released 2026-07-29** (PR #1139); **v3.7.1** is the current release, 2026-08-18. Corrected in §11 and §18.
 6. **jDwgParser and LibreDWG coverage figures.** The draft's §18 stated "74/74 entity types, 92.2% sample pass rate" and "~99% read coverage" as facts. Both are the projects' own claims, unreproduced under this protocol, and are now labelled as such in §5.3 and §18.
 7. **Unverified port example removed.** §9.3's illustration of a port that counts as one lineage cited `@node-projects/acad-ts`, which no GitHub search on 2026-08-30 resolves. It is replaced with the four lineage pairs the in-repo registry actually declares: a Rust FFI wrapper over LibreDWG, a workbench running IfcOpenShell, a GDAL driver wrapping dgnlib, and a toolkit whose mesh path is web-ifc.

@@ -13,12 +13,45 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Third independent IFC witness — IFClite** (`tools/ci/witness-ifc-lite`):
+  a small Rust binary over the crates.io crate `ifc-lite-core`, pinned at
+  `=7.1.1` (`LTplus-AG/ifc-lite`, MPL-2.0 — verified against crates.io and the
+  GitHub API on 2026-08-30; the registry previously recorded `MIT` and a bare
+  repo slug, both corrected). It counts every manifest `source_ifc_type` by
+  exact STEP keyword with its own scanner — no IfcOpenShell code — and emits
+  an OctetProof §6.2 observation in the same shape as the Python bridge
+  witness. Its canonical payload hashes byte-identically to IfcOpenShell's on
+  the element fixture. The crate is its own workspace root and is run as a
+  separate process, so MPL code is never linked into the Apache-2.0 tree;
+  `tests/witness_registry.rs` now fails if the Cargo pin, the binary's
+  `WITNESS_VERSION`, and the registry entry drift apart (spec §9.6). The
+  Core Interior verdict now lists three lineages —
+  `["ifc-lite", "ifcopenshell", "rvt-rs"]` — one source reader and two
+  unrelated bridge readers.
+- **Second recorded edge: the full-project export** —
+  `tests/fixtures/project-counts/2024-core-interior-slim.json` registers
+  `IFC Exports/2024_Core_Interior_slim.ifc` (bfdf36ff…, 1665968 bytes, IFC4,
+  Autodesk Revit 24.0.20.20 via ODA SDAI 23.12, 19879 entities), which had
+  been an artifact with no manifest. Counts measured with IfcOpenShell 0.8.5
+  and independently reproduced by IFClite 7.1.1 and the STEP-constructor
+  count: 360 `IFCWALL`, 132 `IFCDOOR`, 256 `IFCCOLUMN`, 116 `IFCSPACE`, 80
+  `IFCSLAB`, 15 `IFCBUILDINGSTOREY`, 10 `IFCMATERIAL`, 6 `IFCWINDOW`, 1
+  `IFCUNITASSIGNMENT`, 0 `IFCROOF` / `IFCBEAM` / `IFCFLOWTERMINAL` /
+  `IFCPROPERTYSET` — all three readers agree exactly. rvt-rs recovers 0 / 0 /
+  0 / 18 / 64 / 12, so nine categories are recorded as `known_gap` or
+  `decoder_baseline` against #30, #31, #32, #33, #34, #35 and the new #204
+  (columns, which had no tracking issue), leaving a four-field claimed
+  surface. Observations and a `PASS` verdict are committed under
+  `research/witness/magnetar-2024-core-interior-slim/` and gated in the
+  `ifcopenshell-validate` job; the registry edge moves from
+  `recorded-ungated` to `recorded`. No capability status changed.
 - **OctetProof 1.0.0 specification** — `docs/octetproof-spec.md` (CC-BY-4.0,
   2026-08-30), the citable Layer-1 artifact of the cross-witness verification
   protocol. Supersedes the received draft, which stays verbatim at
   `docs/octetproof-spec-draft.md`; §19 lists every correction (jDwgParser is
   GPL-3.0, ACadSharp's coverage is undeclared, LGPL is weak copyleft, ifc-lite's
-  license is unverified, the ACIS reader landed in ACadSharp v3.6.51). §6's
+  license needed verification — resolved in note 4 to MPL-2.0 once the exact
+  upstream was pinned, the ACIS reader landed in ACadSharp v3.6.51). §6's
   examples are now the real committed observation/verdict files, §7.2 states the
   geometry tolerance as relative 1e-6 with a manifest-stated absolute floor,
   §10.5 adds `REJECTED_INPUT` and `REPLAY_DRIFT`, and §5.3.1 maps the spec's
