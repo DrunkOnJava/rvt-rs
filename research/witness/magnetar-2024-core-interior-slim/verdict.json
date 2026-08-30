@@ -3,13 +3,6 @@
   "diffs": [],
   "excluded": [
     {
-      "category": "levels",
-      "field": "entity_counts.IFCBUILDINGSTOREY",
-      "reason": "decoder_baseline",
-      "tracking_issue": 33,
-      "unsupported_feature": null
-    },
-    {
       "category": "rooms_spaces",
       "field": "entity_counts.IFCSPACE",
       "reason": "known_gap",
@@ -65,6 +58,7 @@
   "insufficient_witnesses": false,
   "schema_version": "1.0.0",
   "semantic_surface": [
+    "entity_counts.IFCBUILDINGSTOREY",
     "entity_counts.IFCWALL",
     "entity_counts.IFCSLAB",
     "entity_counts.IFCROOF",
@@ -75,10 +69,11 @@
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT",
     "entity_counts.IFCSHADINGDEVICE",
-    "relations.IFCRELFILLSELEMENT"
+    "relations.IFCRELFILLSELEMENT",
+    "storeys.IFCBUILDINGSTOREY"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "1dbf9dc95ccf1510cb64b3e5ba2debb664c922ac6720f8c6d463d1ce4d394d8b",
+  "verdict_hash_sha256": "cd171b3167c602d0882dd8a0d38c99791012a9fe693043e43e2d43b028554325",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

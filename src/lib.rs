@@ -135,6 +135,7 @@ pub mod part_atom;
 pub mod partition_arc_walls;
 pub mod partition_element_records;
 pub mod partition_ifc_export_overrides;
+pub mod partition_level_records;
 pub mod partition_name_candidates;
 pub mod partition_scanner;
 pub mod partition_schema_mvp;

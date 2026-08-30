@@ -81,9 +81,10 @@ struct Args {
     ///
     /// The observation (docs/octetproof-spec.md §6.2) records the
     /// SHA-256 of the input bytes, the exported entity counts by IFC type,
-    /// the `IfcRelFillsElement` host/filling `Tag` pairs, and a canonical
-    /// hash of that payload so an independent replay can prove this
-    /// witness saw the same thing. Compared against other witnesses by
+    /// the `IfcRelFillsElement` host/filling `Tag` pairs, the
+    /// `IfcBuildingStorey` name/elevation set, and a canonical hash of
+    /// that payload so an independent replay can prove this witness saw
+    /// the same thing. Compared against other witnesses by
     /// tools/ci/witness-verdict.py.
     #[arg(long, value_name = "PATH")]
     observation: Option<PathBuf>,
@@ -236,6 +237,7 @@ fn write_observation(
     let payload = serde_json::json!({
         "entity_counts": entity_counts,
         "relations": relation_pairs(step),
+        "storeys": storey_set(step),
         "exported_building_elements": diagnostics.exported.by_ifc_type,
         "storey_count": diagnostics.exported.storey_count,
         "material_count": diagnostics.exported.material_count,
@@ -251,7 +253,7 @@ fn write_observation(
         "input_file": input.file_name().and_then(|n| n.to_str()),
         "input_hash_sha256": input_hash,
         "deterministic": true,
-        "semantic_surface_covered": ["entity_counts", "relations"],
+        "semantic_surface_covered": ["entity_counts", "relations", "storeys"],
         "observation": payload,
         "observation_hash_sha256": format!("{:x}", Sha256::digest(canonical.as_bytes())),
         "unsupported_entities": diagnostics.unsupported_features,
@@ -470,6 +472,166 @@ fn relation_pairs(step: &str) -> std::collections::BTreeMap<String, Vec<Vec<Stri
     out
 }
 
+/// Attribute index of `Name` on `IfcBuildingStorey` (`IfcRoot` +2).
+const IFC_BUILDING_STOREY_NAME_INDEX: usize = 2;
+
+/// Attribute index of `Elevation` on `IfcBuildingStorey`: the tenth and
+/// last attribute of the IFC4 entity.
+const IFC_BUILDING_STOREY_ELEVATION_INDEX: usize = 9;
+
+/// Metres in one international foot, exactly.
+const METRES_PER_FOOT: f64 = 0.3048;
+
+/// Parse a STEP `REAL`/`INTEGER` literal.
+fn step_number(attribute: &str) -> Option<f64> {
+    attribute.trim().parse::<f64>().ok()
+}
+
+/// Multiplier that takes this model's declared `LENGTHUNIT` to metres.
+///
+/// Walks `IfcProject.UnitsInContext` → `IfcUnitAssignment.Units` and
+/// resolves the first length unit: an `IfcSIUnit` contributes its SI
+/// prefix, an `IfcConversionBasedUnit` its
+/// `IfcMeasureWithUnit.ValueComponent` times the SI unit that measure
+/// is expressed in. `None` when the model declares no length unit —
+/// the caller must not guess, because a wrong scale silently moves
+/// every storey.
+fn length_unit_scale_to_metres(
+    instances: &std::collections::BTreeMap<u32, StepInstance<'_>>,
+) -> Option<f64> {
+    fn si_prefix_multiplier(prefix: &str) -> f64 {
+        match prefix
+            .trim()
+            .trim_matches('.')
+            .to_ascii_uppercase()
+            .as_str()
+        {
+            "EXA" => 1e18,
+            "PETA" => 1e15,
+            "TERA" => 1e12,
+            "GIGA" => 1e9,
+            "MEGA" => 1e6,
+            "KILO" => 1e3,
+            "HECTO" => 1e2,
+            "DECA" => 1e1,
+            "DECI" => 1e-1,
+            "CENTI" => 1e-2,
+            "MILLI" => 1e-3,
+            "MICRO" => 1e-6,
+            "NANO" => 1e-9,
+            "PICO" => 1e-12,
+            "FEMTO" => 1e-15,
+            "ATTO" => 1e-18,
+            _ => 1.0,
+        }
+    }
+    fn enum_value(attribute: &str) -> String {
+        attribute.trim().trim_matches('.').to_ascii_uppercase()
+    }
+    fn si_scale(instance: &StepInstance<'_>) -> Option<f64> {
+        if !instance.ifc_type.eq_ignore_ascii_case("IFCSIUNIT") {
+            return None;
+        }
+        Some(match instance.attributes.get(2) {
+            Some(prefix) if prefix.trim() != "$" => si_prefix_multiplier(prefix),
+            _ => 1.0,
+        })
+    }
+
+    let project = instances
+        .values()
+        .find(|instance| instance.ifc_type.eq_ignore_ascii_case("IFCPROJECT"))?;
+    let assignment = instances.get(&entity_ref(project.attributes.get(8)?)?)?;
+    let units = assignment.attributes.first()?.trim();
+    let units = units.strip_prefix('(')?.strip_suffix(')')?;
+    for reference in split_attributes(units) {
+        let Some(unit) = entity_ref(reference).and_then(|id| instances.get(&id)) else {
+            continue;
+        };
+        let Some(unit_type) = unit.attributes.get(1).map(|a| enum_value(a)) else {
+            continue;
+        };
+        if unit_type != "LENGTHUNIT" {
+            continue;
+        }
+        if let Some(scale) = si_scale(unit) {
+            return Some(scale);
+        }
+        if unit.ifc_type.eq_ignore_ascii_case("IFCCONVERSIONBASEDUNIT") {
+            let measure = instances.get(&entity_ref(unit.attributes.get(3)?)?)?;
+            let value = measure.attributes.first()?.trim();
+            let ratio = value
+                .split_once('(')
+                .and_then(|(_, rest)| rest.strip_suffix(')'))
+                .and_then(step_number)
+                .or_else(|| step_number(value))?;
+            let base = instances.get(&entity_ref(measure.attributes.get(1)?)?)?;
+            return Some(ratio * si_scale(base)?);
+        }
+    }
+    None
+}
+
+/// `IfcBuildingStorey` `[Name, Elevation]` pairs, canonically sorted.
+///
+/// The elevation is converted from the model's declared `LENGTHUNIT`
+/// to feet and rendered with six decimals, so the field compares
+/// across witnesses whose files declare different units — Revit's own
+/// export of this corpus declares `FOOT` while rvt-rs writes `METRE`
+/// (OctetProof §7.2, field class *storey sets*). The name is the
+/// decoded `Name` string verbatim; an unset `Name` contributes an
+/// empty string rather than dropping the storey, so a missing half
+/// surfaces as a disagreement and never as a silent omission.
+///
+/// An empty list is returned when the model declares no length unit:
+/// a storey whose unit is unknown is not a measurement.
+fn storey_set(step: &str) -> std::collections::BTreeMap<String, Vec<Vec<String>>> {
+    let instances = parse_step_instances(step);
+    let mut storeys: Vec<Vec<String>> = Vec::new();
+    if let Some(scale) = length_unit_scale_to_metres(&instances) {
+        for instance in instances.values() {
+            if !instance.ifc_type.eq_ignore_ascii_case("IFCBUILDINGSTOREY") {
+                continue;
+            }
+            let name = instance
+                .attributes
+                .get(IFC_BUILDING_STOREY_NAME_INDEX)
+                .and_then(|attribute| step_string(attribute))
+                .unwrap_or_default();
+            let elevation = instance
+                .attributes
+                .get(IFC_BUILDING_STOREY_ELEVATION_INDEX)
+                .and_then(|attribute| step_number(attribute));
+            let feet = match elevation {
+                Some(value) => format_elevation_feet(value * scale / METRES_PER_FOOT),
+                None => String::new(),
+            };
+            storeys.push(vec![name, feet]);
+        }
+    }
+    storeys.sort();
+    let mut out = std::collections::BTreeMap::new();
+    out.insert("IFCBUILDINGSTOREY".to_string(), storeys);
+    out
+}
+
+/// Render an elevation in feet at 1e-6 ft, as a string.
+///
+/// A string, not a JSON number, because the canonical form
+/// (OctetProof §7.3) is defined over integers and strings only — two
+/// runtimes must not be trusted to print the same `f64` the same way.
+/// `-0` is normalised to `0`.
+fn format_elevation_feet(feet: f64) -> String {
+    if !feet.is_finite() {
+        return String::new();
+    }
+    let rendered = format!("{feet:.6}");
+    if rendered == "-0.000000" {
+        return "0.000000".to_string();
+    }
+    rendered
+}
+
 fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
     if diagnostics.confidence.level == "scaffold" {
         eprintln!(
@@ -539,5 +701,65 @@ mod tests {
     fn a_model_without_openings_declares_an_empty_relation_set() {
         let pairs = relation_pairs("#1=IFCWALL('g',#2,'Wall-1',$,$,#3,$,'1',.NOTDEFINED.);\n");
         assert_eq!(pairs.get("IFCRELFILLSELEMENT"), Some(&Vec::new()));
+    }
+
+    /// A metric model: the elevation is already in metres, so feet is
+    /// the raw value divided by 0.3048.
+    #[test]
+    fn storeys_are_reported_in_feet_from_an_si_model() {
+        let step = concat!(
+            "#6=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);\n",
+            "#24=IFCUNITASSIGNMENT((#6));\n",
+            "#30=IFCPROJECT('g',#5,'p',$,$,$,$,(#29),#24);\n",
+            "#36=IFCBUILDINGSTOREY('g',#5,'Basement 2',$,$,#35,$,'Basement 2',.ELEMENT.,-12.192000);\n",
+            "#40=IFCBUILDINGSTOREY('g',#5,'Level 1',$,$,#39,$,'Level 1',.ELEMENT.,0.000000);\n",
+        );
+        assert_eq!(
+            storey_set(step).get("IFCBUILDINGSTOREY"),
+            Some(&vec![
+                vec!["Basement 2".to_string(), "-40.000000".to_string()],
+                vec!["Level 1".to_string(), "0.000000".to_string()],
+            ])
+        );
+    }
+
+    /// Revit's own export of an imperial project: `FOOT` as an
+    /// `IfcConversionBasedUnit` over `METRE`, so the raw `Elevation`
+    /// is already in feet and must come back unchanged.
+    #[test]
+    fn a_conversion_based_foot_model_reports_the_same_feet() {
+        let step = concat!(
+            "#19=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);\n",
+            "#21=IFCMEASUREWITHUNIT(IFCRATIOMEASURE(0.30480000000000002),#19);\n",
+            "#22=IFCCONVERSIONBASEDUNIT(#20,.LENGTHUNIT.,'FOOT',#21);\n",
+            "#92=IFCUNITASSIGNMENT((#22));\n",
+            "#100=IFCPROJECT('g',#18,'',$,$,'','',(#95),#92);\n",
+            "#109=IFCBUILDINGSTOREY('g',#18,'Basement 2',$,'Level:Level 1',#108,$,'Basement 2',.ELEMENT.,-40.);\n",
+            "#164=IFCBUILDINGSTOREY('g',#18,'Level 13',$,'Level:Level 1',#163,$,'Level 13',.ELEMENT.,185.5);\n",
+        );
+        assert_eq!(
+            storey_set(step).get("IFCBUILDINGSTOREY"),
+            Some(&vec![
+                vec!["Basement 2".to_string(), "-40.000000".to_string()],
+                vec!["Level 13".to_string(), "185.500000".to_string()],
+            ])
+        );
+    }
+
+    /// A model with no resolvable length unit is not a measurement:
+    /// the storey set is empty rather than silently metres.
+    #[test]
+    fn a_model_without_a_length_unit_reports_no_storeys() {
+        let step = concat!(
+            "#30=IFCPROJECT('g',#5,'p',$,$,$,$,(#29),$);\n",
+            "#36=IFCBUILDINGSTOREY('g',#5,'Level 1',$,$,#35,$,'Level 1',.ELEMENT.,0.);\n",
+        );
+        assert_eq!(storey_set(step).get("IFCBUILDINGSTOREY"), Some(&Vec::new()));
+    }
+
+    #[test]
+    fn negative_zero_normalises() {
+        assert_eq!(format_elevation_feet(-0.0), "0.000000");
+        assert_eq!(format_elevation_feet(f64::NAN), "");
     }
 }

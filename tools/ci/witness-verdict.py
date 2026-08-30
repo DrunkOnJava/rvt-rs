@@ -8,13 +8,14 @@ Usage: witness-verdict.py <manifest.json> <observations_dir> --out verdict.json
 Every `observations/*.json` is an observation in the §6.2 shape. The claimed
 semantic surface is the set of manifest categories carrying `source_ifc_type`
 with status `known`, plus the manifest's `relations` categories carrying
-`relation_ifc_type` with status `known`; categories whose status is
-`known_gap`, `unsupported` or `decoder_baseline` are excluded first-class
-(§7.1 rule 3) and listed in the verdict with their tracking issue, never
-diffed. Entity counts compare with the manifest's per-category `tolerance`
-(exact by default, §7.2). Relation pair sets compare as exact sorted
-multisets — the field class has no tolerance concept, so a diff reports the
-pairs each side holds alone (§7.2, OctetProof 1.1.0).
+`relation_ifc_type` and its `storeys` categories carrying `storey_ifc_type`,
+both with status `known`; categories whose status is `known_gap`,
+`unsupported` or `decoder_baseline` are excluded first-class (§7.1 rule 3) and
+listed in the verdict with their tracking issue, never diffed. Entity counts
+compare with the manifest's per-category `tolerance` (exact by default, §7.2).
+Relation pair sets and storey sets compare as exact sorted multisets — neither
+field class has a tolerance concept, so a diff reports the pairs each side
+holds alone (§7.2, OctetProof 1.1.0).
 
 Fail-closed (§5.4, §10.5): fewer than two observations → INSUFFICIENT_WITNESSES;
 any diff inside the surface → DISAGREE; an observation whose
@@ -216,6 +217,52 @@ def main() -> int:
                 only_b = sorted(set(values[b]) - set(values[a]))
                 verdict["diffs"].append({
                     "field": f"relations.{relation_type}",
+                    "witness_a": a, "value_a": len(values[a]),
+                    "witness_b": b, "value_b": len(values[b]),
+                    "tolerance_applied": False,
+                    "only_in_a": [list(pair) for pair in only_a],
+                    "only_in_b": [list(pair) for pair in only_b],
+                })
+
+    # `storeys` — the second 1.1.0 field class (§7.2). A storey set is a
+    # sorted multiset of `[name, elevation_feet]` pairs, the elevation
+    # already normalised to feet at 1e-6 by each witness; agreement is exact
+    # set equality with no tolerance, so a diff names the storeys each side
+    # holds alone rather than a scalar delta.
+    for category, spec in manifest.get("storeys", {}).items():
+        storey_type = spec.get("storey_ifc_type")
+        if not storey_type:
+            continue
+        status = spec.get("status")
+        if status != "known":
+            verdict["excluded"].append({
+                "field": f"storeys.{storey_type}",
+                "category": category,
+                "reason": status,
+                "tracking_issue": spec.get("tracking_issue"),
+                "unsupported_feature": spec.get("unsupported_feature"),
+            })
+            continue
+        verdict["semantic_surface"].append(f"storeys.{storey_type}")
+        for wid, obs in observations.items():
+            if "storeys" not in (obs.get("semantic_surface_covered") or []):
+                verdict["status"] = "MANIFEST_ERROR"
+                verdict.setdefault("manifest_errors", []).append(f"{wid} does not declare storeys")
+        if verdict["status"] != "PASS":
+            continue
+        values = {
+            wid: [tuple(pair) for pair in obs.get("observation", {}).get("storeys", {}).get(storey_type, [])]
+            for wid, obs in observations.items()
+        }
+        wids = sorted(values)
+        for i, a in enumerate(wids):
+            for b in wids[i + 1:]:
+                if sorted(values[a]) == sorted(values[b]):
+                    continue
+                only_a = sorted(set(values[a]) - set(values[b]))
+                only_b = sorted(set(values[b]) - set(values[a]))
+                verdict["diffs"].append({
+                    "field": f"storeys.{storey_type}",
                     "witness_a": a, "value_a": len(values[a]),
                     "witness_b": b, "value_b": len(values[b]),
                     "tolerance_applied": False,
