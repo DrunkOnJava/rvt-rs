@@ -27,7 +27,7 @@ ElemTable payloads, and no schema-field `Wall` / fail-closed 2024 ArcWall
 envelope — see
 [`reports/element-framing/RE-19-door-window-wall-negative.md`](reports/element-framing/RE-19-door-window-wall-negative.md).
 Host IFC voids/fills, Floor↔ElemTable id binding, and slab extrusion
-thickness remain open. Eighty per-class decoder structs exist in
+thickness remain open. Eighty-one per-class decoder structs exist in
 `elements::all_decoders()`; MVP classes are consulted by `iter_elements`,
 while the broader registry remains a library building block (see
 [`docs/status.md`](docs/status.md) and

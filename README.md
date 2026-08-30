@@ -172,7 +172,7 @@ All modules compile under both the default build and the `wasm` feature flag. Se
 | `part_atom` | Atom XML with Autodesk `partatom` namespace — title, OmniClass, taxonomies — read + encode |
 | `formats` | Parse + encode `Formats/Latest` with `FieldType` classification (100 % over the 11-release corpus) |
 | `walker` | Schema-directed instance walker + generic `decode_instance` + `detect_adocument_start` entry-point finder (does **not** dispatch through the 81-decoder registry) |
-| `elements` | 80 `ElementDecoder` registry entries in `all_decoders()` (Wall, Floor, Door, Window, Column, Beam, Stair, Railing, Rebar, Room, Furniture, …) — synthesized-fixture unit tests only; not reached on real project files |
+| `elements` | 81 `ElementDecoder` registry entries in `all_decoders()` (Wall, Floor, Door, Window, Column, Beam, Stair, Railing, Rebar, Room, Furniture, …) — synthesized-fixture unit tests only; not reached on real project files |
 | `geometry` | Curve / Face / Solid variants (Line, Arc, Ellipse, NURBS, Hermite, Ruled, Revolved, Extrusion, Sweep, Blend, SweptBlend, Boolean, Mesh, PointCloud) |
 | `object_graph` | `DocumentHistory`, string-record extractor for Global/Latest + Partitions/NN |
 | `class_index` | Quick class-name inventory (BTreeSet) |
@@ -397,23 +397,35 @@ is absent, so partial corpora are okay — you'll just see
 - **BTreeSet for class names** — deterministic ordering in output (plus
   sorted JSON) matters for diffable CLI output.
 
-## Running the tests
+## For contributors
 
-```bash
-cargo test --release
-```
+rvt-rs is a clean-room reader for Revit files: an Apache-2.0 Rust core with
+Python bindings and a WebAssembly viewer, with no Revit install or Autodesk
+SDK at build or run time. Contributing does not need private files either —
+the checked-in `corpus/tier1/` synthetic fixtures drive the default gates, and
+corpus-backed tests skip themselves while `RVT_PROJECT_CORPUS_DIR` is unset.
 
-Expected output (as of 2026-04-21):
-
-```
-test result: ok. 697 passed; 0 failed   (lib unit tests)
-test result: ok.  38 passed; 0 failed   (fuzz-regression harness, Q-04)
-test result: ok.   9 passed; 0 failed   (integration tests, 11-version corpus)
-test result: ok.   3 passed; 0 failed   (ifc_roundtrip + ifc_synthetic_project/structural)
-...
-```
-
-Integration tests are skipped if the sample RFAs are absent. The fuzz-regression harness (`tests/fuzz_regressions.rs`) runs hand-crafted adversarial inputs through each libFuzzer target's entry point — no libFuzzer runtime needed — so any future commit that regresses crash-resistance trips the gate locally.
+- **Build:** stable Rust 1.85 or newer, then `cargo build`. Viewer:
+  `cd viewer && npm ci`. Python bindings: [`docs/python.md`](docs/python.md).
+- **Gate:** `tools/check-local.sh` runs what CI requires — `cargo fmt --check`,
+  `cargo clippy -D warnings`, rustdoc with `-D warnings`, and the workspace
+  tests (1,074 as of 2026-08-30). `--viewer`, `--corpus`, `--deny`, `--audit`
+  add the optional gates.
+- **Where the tests live:** unit tests next to the code in `src/`; integration
+  tests in `tests/` (corpus-gated ones skip without `RVT_PROJECT_CORPUS_DIR`);
+  `tests/fuzz_regressions.rs` replays crash-shaped inputs on stable Rust;
+  libFuzzer targets in `fuzz/`; Playwright browser tests in `viewer/tests/`;
+  Python tests in `tests/python/`.
+- **What "done" looks like:** the gate is green, the pull-request template's
+  checklist is filled in, and any change to user-visible capability updates
+  [`docs/status.md`](docs/status.md) and
+  [`docs/support-matrix.json`](docs/support-matrix.json) in the same PR — the
+  project does not claim what its tests cannot show.
+- **Start here:** [`CONTRIBUTING.md`](CONTRIBUTING.md) walks from clone to a
+  first pull request; [`docs/contribution-map.md`](docs/contribution-map.md)
+  maps the larger areas; small tasks carry the
+  [good first issue](https://github.com/DrunkOnJava/rvt-rs/labels/good%20first%20issue)
+  label.
 
 ## License and trademarks
 

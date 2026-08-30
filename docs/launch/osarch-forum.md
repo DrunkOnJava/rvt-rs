@@ -31,7 +31,7 @@ All file-format observations come from publicly-shipped Autodesk sample content 
 1. Open the CFB container (no Revit required).
 2. Decompress the truncated-gzip streams (`Formats/Latest`, `Global/Latest`, `Partitions/NN`).
 3. Parse the full class schema. 100% of fields across the 11-release reference corpus (Revit 2016-2026) classify into typed encodings — no `Unknown`s.
-4. Project schema-typed instance bytes through one of **80** per-class decoder structs (Wall, Floor, Roof, Ceiling, Door, Window, Column, Beam, Stair, Railing, Room, Area, Space, Furniture, Rebar, Level, Grid, Material, Category, Phase, DesignOption, Workset, MEP, annotations, and more — see `docs/compatibility.md` §3). These structs pass synthesized-fixture tests; **generic real-project typed extraction is unsolved**, so live `.rvt` → typed IFC is not the default path yet.
+4. Project schema-typed instance bytes through one of **81** per-class decoder structs (Wall, Floor, Roof, Ceiling, Door, Window, Column, Beam, Stair, Railing, Room, Area, Space, Furniture, Rebar, Level, Grid, Material, Category, Phase, DesignOption, Workset, MEP, annotations, and more — see `docs/compatibility.md` §3). These structs pass synthesized-fixture tests; **generic real-project typed extraction is unsolved**, so live `.rvt` → typed IFC is not the default path yet.
 5. Map each decoded element into `ifc::build_ifc_model`, emit IFC4 STEP via `ifc::write_step`.
 
 A committed synthetic-project fixture lives at [`tests/fixtures/synthetic-project.ifc`](../../tests/fixtures/synthetic-project.ifc) — 157 lines of IFC4 with:
