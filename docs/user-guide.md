@@ -63,10 +63,12 @@ the hosted or self-hosted static viewer; see
 Partition MVP recovers Level / Material / Room names on supported project
 files, 2023 ArcWall geometry on the research path, and — on Revit 2024 —
 Wall / Door / Window / Column / Floor / BuildingPad instances from partition
-element records, with a measured slab thickness (#212). Still blocked
-(RE-19 / RE-20 negative on magnetar corpora): schema-field Walls, typed
-Door/Window host binding, Level ElementId storey assignment for Rooms, the
-recovered floor boundary polygon, and compound-layer geometry — see
+element records, with a measured slab thickness (#212) and, for all 80
+exported slabs, the plan profile their `OST_SketchLines` records close
+(#31, RE-25). Still blocked (RE-19 / RE-20 negative on magnetar corpora):
+schema-field Walls, typed Door/Window host binding, Level ElementId storey
+assignment for Rooms, the profile of the 20 rotated shading plates, and
+compound-layer geometry — see
 [status.md](status.md) and [supported-profile.md](supported-profile.md).
 
 The viewer can show a scene, categories, element info, schedule summary, export

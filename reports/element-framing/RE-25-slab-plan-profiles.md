@@ -245,21 +245,25 @@ Building-element counts, diagnostics and both OctetProof verdicts are
 | `IFCARBITRARYPROFILEDEFWITHVOIDS` | 0 | 42 |
 | `IFCPOLYLINE` | 0 | 122 |
 | `IFCCARTESIANPOINT` | 1847 | 3381 |
-| `IFCPROPERTYSINGLEVALUE` | 5364 | 5604 |
-| total instances | 18192 | 20088 |
+| `IFCPROPERTYSINGLEVALUE` | 5371 | 5611 |
+| total instances | 18209 | 20105 |
 | `IFCSLAB` / `IFCSHADINGDEVICE` / `IFCWALL` / `IFCDOOR` / `IFCWINDOW` / `IFCCOLUMN` | 80 / 20 / 360 / 132 / 6 / 256 | unchanged |
-| `storey_bound_elements` | 794 | 794 |
+| `IFCBUILDINGSTOREY` | 15 | 15 |
+| `storey_bound_elements` | 801 | 801 |
 | diagnostics sidecar | — | byte-identical to `main` |
 
-`tools/ci/ifc_schema_arity.py` passes on the fresh export: 20 088
+(Baseline is `main` at a0044f4, after RE-24 / #230 landed the 15 Level
+records.)
+
+`tools/ci/ifc_schema_arity.py` passes on the fresh export: 20 105
 instances across 43 entity types, `IfcArbitraryClosedProfileDef` at its
 declared arity of 3 and `IfcArbitraryProfileDefWithVoids` at 4,
-`IfcPolyline` at 1. Both verdicts stay `PASS` — element fixture 4 fields /
-10 excluded, full project 11 fields / 4 excluded, 0 diffs, all three
-witnesses replaying against the committed observations. The committed
+`IfcPolyline` at 1. Both verdicts stay `PASS` — element fixture 6 fields /
+10 excluded, full project 13 fields / 3 excluded, 0 diffs, all three
+witnesses replaying against the committed observations. The two committed
 `rvt-rs` observations were regenerated because the observation payload
-counts *every* emitted entity type; the two `verdict.json` files are
-byte-identical.
+counts *every* emitted entity type; the four bridge-witness observations
+and both `verdict.json` files are byte-identical.
 
 ## 10. Open
 

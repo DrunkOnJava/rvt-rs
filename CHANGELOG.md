@@ -13,6 +13,42 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Slab plan profiles — 80 / 80 exact against Revit's own export
+  (#31, RE-25).** RE-22 recovered every slab by ElementId and left the
+  profile as the bounding rectangle. It is in the file, but not as a
+  polyline: **each boundary line of a Revit sketch is its own partition
+  element record**, `BuiltInCategory` `OST_SketchLines` (−2000045), with
+  the same 88-byte prologue and the segment's own bounding box. A
+  *second* counted reference list follows the `+0x88` list RE-23 read,
+  framed identically, and its last slot names the sketched element: the
+  3688 sketch-line records on `2024_Core_Interior.rvt` name 126 owners,
+  among them all 80 exported `IFCSLAB` and all 20 exported
+  `IFCSHADINGDEVICE` ids. The join is by ElementId alone — no geometry,
+  no proximity, no containment. Segments are chained by **closure, not
+  fitting**: a box degenerate on one axis contributes its endpoints, and
+  every other box (a diagonal, or one of the 37 recorded looser than
+  their line) is placed only when exactly one pair of still-open
+  vertices fits it; an ambiguous segment, a vertex that does not finish
+  at degree 2, an unused edge, a zero-extent box or a loop under three
+  vertices rejects the whole element. Measured against the reference
+  export's `IfcExtrudedAreaSolid` swept areas in the project plan frame
+  at tolerance 1e-3 ft per vertex: **80 of 80 exact** across 122 loops
+  (80 outer + 42 rectangular voids), worst vertex deviation
+  **1.563e-12 ft** — the same doubles, differing only in Revit's own
+  floating dust — and 2.842e-14 ft re-measured on the emitted IFC. 42
+  perimeter plates emit `IFCARBITRARYPROFILEDEFWITHVOIDS` (a 26-vertex
+  ring around one rectangular courtyard void) and 38 emit
+  `IFCARBITRARYCLOSEDPROFILEDEF`; before this, all 80 were rectangles,
+  accidentally exact on 38 and filling a courtyard on 42. The 20
+  exported `IFCSHADINGDEVICE` are rotated plates whose 57 sketch-line
+  boxes include one of zero extent and 21 diagonals with no
+  axis-parallel anchor: the closure declines all 20 and they keep the
+  record box with `ProfileResolved: false`. The pre-RE-25 plan-loop scan
+  is a measured dead end — 2317 closed plan-polyline candidates across
+  all eight inflated partitions, none with the plan bounds of any
+  recovered plate, and no ordered vertex run of the export's polygon
+  anywhere in the file at any stride. Building-element counts, the
+  diagnostics sidecar and both OctetProof verdicts are unchanged.
 - **Revit `Level` records — 15 / 15 exact `(name, elevation)` storeys
   against Revit's own export (#218, RE-24).** #213 derived storey
   elevations from the bounding-box distribution of the recovered column
