@@ -62,7 +62,7 @@
       }
     },
     "semantic_surface": {
-      "description": "The fields actually compared — `entity_counts.<TYPE>` from the manifest `counts` categories whose status is `known`, and `relations.<RELATION_TYPE>` from the `relations` categories whose status is `known` (§7.2, added in 1.1.0).",
+      "description": "The fields actually compared — `entity_counts.<TYPE>` from the manifest `counts` categories whose status is `known`, `relations.<RELATION_TYPE>` from the `relations` categories whose status is `known`, and `storeys.<STOREY_TYPE>` from the `storeys` categories whose status is `known` (§7.2, both added in 1.1.0).",
       "type": "array",
       "items": { "type": "string" }
     },
@@ -98,12 +98,12 @@
             "type": ["number", "boolean"]
           },
           "only_in_a": {
-            "description": "Relation-pair diffs only (§7.2): the pairs witness A holds and witness B does not. `value_a` / `value_b` carry the pair counts.",
+            "description": "Set-valued field classes only — relation pair sets and storey sets (§7.2): the pairs witness A holds and witness B does not. `value_a` / `value_b` carry the set sizes.",
             "type": "array",
             "items": { "type": "array", "items": { "type": "string" } }
           },
           "only_in_b": {
-            "description": "Relation-pair diffs only: the pairs witness B holds and witness A does not.",
+            "description": "Set-valued field classes only: the pairs witness B holds and witness A does not.",
             "type": "array",
             "items": { "type": "array", "items": { "type": "string" } }
           }

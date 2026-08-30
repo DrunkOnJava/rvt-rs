@@ -312,6 +312,32 @@ fn project_count_manifests_are_complete_and_explicit() {
                 }
             }
         }
+
+        // `storeys` (#218): the OctetProof 1.1.0 storey-set field
+        // class. Optional per manifest, but every entry must name its
+        // spatial type and both sides of the comparison.
+        if let Some(storeys) = manifest.get("storeys") {
+            for (category, spec) in obj(storeys, &format!("{context}.storeys")) {
+                let storey_context = format!("{context}.storeys.{category}");
+                str_field(spec, "storey_ifc_type", &storey_context);
+                int_field(spec, "expected_storeys", &storey_context);
+                str_field(spec, "source", &storey_context);
+                str_field(spec, "decoder_metric", &storey_context);
+                int_field(spec, "decoder_expected_storeys", &storey_context);
+                let status = str_field(spec, "status", &storey_context);
+                match status {
+                    "known" => {}
+                    "known_gap" | "unsupported" => {
+                        str_field(spec, "unsupported_feature", &storey_context);
+                        int_field(spec, "tracking_issue", &storey_context);
+                    }
+                    "decoder_baseline" => {
+                        int_field(spec, "tracking_issue", &storey_context);
+                    }
+                    _ => panic!("{storey_context}.status has unsupported value {status}"),
+                }
+            }
+        }
     }
 }
 
@@ -478,6 +504,35 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
                 &format!("{relation_context} decoder {metric}"),
                 metric_actual(metric, &result.diagnostics, &step),
                 int_field(spec, "decoder_expected_pairs", &relation_context),
+                0,
+            );
+        }
+
+        // Storey sets (#218). Both sides are scored as counts here;
+        // the exact `[name, elevation]` set equality is the
+        // OctetProof gate (`storeys.<TYPE>` in the verdict's claimed
+        // surface).
+        let no_storeys = serde_json::Map::new();
+        let storeys = manifest
+            .get("storeys")
+            .map(|storeys| obj(storeys, &format!("{id}.storeys")))
+            .unwrap_or(&no_storeys);
+        for (category, spec) in storeys {
+            let storey_context = format!("{id}.storeys.{category}");
+            let storey_type = str_field(spec, "storey_ifc_type", &storey_context);
+            if let Some(reference) = reference_ifc.as_ref() {
+                assert_with_tolerance(
+                    &format!("{storey_context} source {storey_type}"),
+                    count_step_constructor(reference, storey_type),
+                    int_field(spec, "expected_storeys", &storey_context),
+                    0,
+                );
+            }
+            let metric = str_field(spec, "decoder_metric", &storey_context);
+            assert_with_tolerance(
+                &format!("{storey_context} decoder {metric}"),
+                metric_actual(metric, &result.diagnostics, &step),
+                int_field(spec, "decoder_expected_storeys", &storey_context),
                 0,
             );
         }

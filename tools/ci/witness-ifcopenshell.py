@@ -8,9 +8,11 @@ Usage: witness-ifcopenshell.py <manifest.json> <corpus_dir> [--json OUT]
 
 `--observation` additionally writes an OctetProof observation
 (docs/octetproof-spec-draft.md §6.2): entity counts for every manifest
-`source_ifc_type` plus, for every manifest `relations` category, the relation's
-`[host Tag, filling Tag]` pair set, canonicalized (sorted keys, no whitespace)
-and hashed so a replay can prove the witness saw the same thing.
+`source_ifc_type`, for every manifest `relations` category the relation's
+`[host Tag, filling Tag]` pair set, and for every manifest `storeys` category
+the `[Name, Elevation]` set of that spatial type in feet, canonicalized
+(sorted keys, no whitespace) and hashed so a replay can prove the witness saw
+the same thing.
 
 The manifest's `reference_ifc_file` is resolved under <corpus_dir>, its
 SHA-256 is checked against `source.reference_ifc_sha256` (a golden artifact
@@ -33,6 +35,7 @@ import sys
 from pathlib import Path
 
 import ifcopenshell
+import ifcopenshell.util.unit
 
 
 def fills_element_pairs(model) -> list[list[str]]:
@@ -64,6 +67,42 @@ def fills_element_pairs(model) -> list[list[str]]:
 
 
 RELATION_READERS = {"IFCRELFILLSELEMENT": fills_element_pairs}
+
+#: Metres in one international foot, exactly.
+METRES_PER_FOOT = 0.3048
+
+
+def format_elevation_feet(feet: float) -> str:
+    """Render an elevation in feet at 1e-6 ft, as a string.
+
+    A string, not a JSON number, because the canonical form (OctetProof §7.3)
+    is defined over integers and strings only — two runtimes must not be
+    trusted to print the same float the same way. `-0` normalises to `0`.
+    """
+    rendered = f"{feet:.6f}"
+    return "0.000000" if rendered == "-0.000000" else rendered
+
+
+def building_storey_set(model, ifc_type: str) -> list[list[str]]:
+    """`IfcBuildingStorey` `[Name, Elevation]` pairs, canonically sorted.
+
+    The elevation is converted from the model's declared `LENGTHUNIT` to feet,
+    so the field compares across witnesses whose files declare different units
+    — Revit's own export of this corpus declares `FOOT` while rvt-rs writes
+    `METRE` (OctetProof 1.1.0 §7.2, field class *storey sets*). An unset `Name`
+    or `Elevation` contributes an empty string rather than dropping the storey:
+    a missing half must surface as a disagreement, never as a silent omission.
+    """
+    scale = ifcopenshell.util.unit.calculate_unit_scale(model)
+    if not scale:
+        return []
+    out = []
+    for storey in model.by_type(ifc_type, include_subtypes=False):
+        name = storey.Name or ""
+        elevation = getattr(storey, "Elevation", None)
+        feet = "" if elevation is None else format_elevation_feet(elevation * scale / METRES_PER_FOOT)
+        out.append([name, feet])
+    return sorted(out)
 
 
 def sha256_of(path: Path) -> str:
@@ -155,6 +194,27 @@ def main() -> int:
         })
         print(f"{category:<16} {relation_type:<22} {expected:>8} {len(pairs):>6} {0:>4}  {'ok' if ok else 'DRIFT'}")
 
+    storeys: dict[str, list[list[str]]] = {}
+    for category, spec in manifest.get("storeys", {}).items():
+        storey_type = spec.get("storey_ifc_type")
+        if storey_type != "IFCBUILDINGSTOREY":
+            print(f"error: {category}: no reader for storey type {storey_type}", file=sys.stderr)
+            return 1
+        pairs = building_storey_set(model, storey_type)
+        storeys[storey_type] = pairs
+        expected = int(spec.get("expected_storeys", 0))
+        ok = len(pairs) == expected
+        drift += 0 if ok else 1
+        record["storeys"] = record.get("storeys", [])
+        record["storeys"].append({
+            "category": category,
+            "storey_ifc_type": storey_type,
+            "expected_storeys": expected,
+            "ifcopenshell_storeys": len(pairs),
+            "agree": ok,
+        })
+        print(f"{category:<16} {storey_type:<22} {expected:>8} {len(pairs):>6} {0:>4}  {'ok' if ok else 'DRIFT'}")
+
     record["agree"] = drift == 0
     if args.json:
         args.json.write_text(json.dumps(record, indent=2))
@@ -162,6 +222,7 @@ def main() -> int:
         payload = {
             "entity_counts": {c["ifc_type"]: c["ifcopenshell"] for c in record["categories"]},
             "relations": relations,
+            "storeys": storeys,
             "ifc_schema": model.schema,
         }
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
@@ -174,7 +235,7 @@ def main() -> int:
             "input_file": reference_name,
             "input_hash_sha256": actual_sha,
             "deterministic": True,
-            "semantic_surface_covered": ["entity_counts", "relations"],
+            "semantic_surface_covered": ["entity_counts", "relations", "storeys"],
             "observation": payload,
             "observation_hash_sha256": hashlib.sha256(canonical).hexdigest(),
             "unsupported_entities": [],
@@ -185,7 +246,7 @@ def main() -> int:
     if drift:
         print(f"error: {drift} categor{'y' if drift == 1 else 'ies'} drifted from the manifest", file=sys.stderr)
         return 1
-    print("cross-witness: IfcOpenShell agrees with the manifest for every source_ifc_type and relation")
+    print("cross-witness: IfcOpenShell agrees with the manifest for every source_ifc_type, relation and storey set")
     return 0
 
 

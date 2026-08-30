@@ -11,7 +11,7 @@
       "IFCAXIS2PLACEMENT2D": 992,
       "IFCAXIS2PLACEMENT3D": 855,
       "IFCBUILDING": 1,
-      "IFCBUILDINGSTOREY": 11,
+      "IFCBUILDINGSTOREY": 15,
       "IFCCARTESIANPOINT": 1847,
       "IFCCOLUMN": 256,
       "IFCCONVERSIONBASEDUNIT": 4,
@@ -20,7 +20,7 @@
       "IFCDOOR": 132,
       "IFCEXTRUDEDAREASOLID": 992,
       "IFCGEOMETRICREPRESENTATIONCONTEXT": 1,
-      "IFCLOCALPLACEMENT": 1023,
+      "IFCLOCALPLACEMENT": 1027,
       "IFCMATERIAL": 102,
       "IFCMEASUREWITHUNIT": 4,
       "IFCOPENINGELEMENT": 138,
@@ -31,10 +31,10 @@
       "IFCPRODUCTDEFINITIONSHAPE": 992,
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 854,
-      "IFCPROPERTYSINGLEVALUE": 5364,
+      "IFCPROPERTYSINGLEVALUE": 5371,
       "IFCRECTANGLEPROFILEDEF": 992,
       "IFCRELAGGREGATES": 3,
-      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 11,
+      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 13,
       "IFCRELDEFINESBYPROPERTIES": 854,
       "IFCRELFILLSELEMENT": 138,
       "IFCRELVOIDSELEMENT": 138,
@@ -614,13 +614,78 @@
         ]
       ]
     },
-    "storey_count": 11
+    "storey_count": 15,
+    "storeys": {
+      "IFCBUILDINGSTOREY": [
+        [
+          "Basement 1",
+          "-20.000000"
+        ],
+        [
+          "Basement 2",
+          "-40.000000"
+        ],
+        [
+          "Level 1",
+          "0.000000"
+        ],
+        [
+          "Level 10",
+          "136.000000"
+        ],
+        [
+          "Level 11",
+          "151.000000"
+        ],
+        [
+          "Level 12",
+          "166.000000"
+        ],
+        [
+          "Level 13",
+          "185.500000"
+        ],
+        [
+          "Level 3 - Wall Layouts 1",
+          "31.000000"
+        ],
+        [
+          "Level 4 - Wall Layouts 2",
+          "46.000000"
+        ],
+        [
+          "Level 4 - Wall Layouts 3",
+          "61.000000"
+        ],
+        [
+          "Level 6",
+          "76.000000"
+        ],
+        [
+          "Level 7",
+          "91.000000"
+        ],
+        [
+          "Level 8",
+          "106.000000"
+        ],
+        [
+          "Level 9",
+          "121.000000"
+        ],
+        [
+          "Mez 1-2",
+          "15.000000"
+        ]
+      ]
+    }
   },
-  "observation_hash_sha256": "ee2c1a6c73c3d57e20c06693161e5f175fd95a752473c531ffc171d2ca938339",
+  "observation_hash_sha256": "a563146259c52a98b8686cff9a2b201474560f3d6463420da5b46d8659fc0af7",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
-    "relations"
+    "relations",
+    "storeys"
   ],
   "unsupported_entities": [
     "partial_element_geometry",
@@ -630,10 +695,9 @@
     "revit_element_parameters_to_ifc_property_sets"
   ],
   "warnings": [
-    "Unsupported or incomplete geometry was reported: unsupported_geometry_curve=18, unsupported_geometry_missing_level=78, unsupported_geometry_missing_dimensions=18.",
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_curve=18, unsupported_geometry_missing_level=71, unsupported_geometry_missing_dimensions=18.",
     "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
-    "11 building storey(s) lack a confident partition Level name and keep elevation fallback labels.",
-    "11 building storey elevation(s) were measured from partition element-record bounding boxes and 794 building element(s) bound to them by an exact record-face elevation match (base face, or top face for slabs and shading devices) (#213, #212); the 12 recovered Level name string(s) could not be paired with those elevations and are not asserted as storey names.",
+    "15 building storey name(s) came from partition Level-like strings (RE-15/#86 via PR #117); ElementId↔Level binding is still pending.",
     "Suppressed 18 low-confidence schema scan candidates from default export.",
     "Formats/Latest multipage integrity uncertain (checksum-page strip disabled; RVT_FORMATS_MULTIPAGE_UNVERIFIED)."
   ],
