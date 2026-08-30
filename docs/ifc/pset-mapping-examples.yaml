@@ -1,0 +1,36 @@
+# IFC Pset mapping examples (Lane D stub). Schema constraints only —
+# not converter-grade. Default IFC omits ES.
+schema_version: 1
+honesty:
+  - Default IFC omits ES / Extensible Storage edges
+  - Typed Door/Window recovery unsupported (RE-19)
+  - Unknown Pset_ names are ReservedUnknown until evidence + matrix update
+examples:
+  - revit_concept: wall_arcwall_2023
+    ifc_pset: Pset_WallCommon
+    status: emitted_when_typed
+    notes: ArcWall 2023 gated path
+  - revit_concept: door_typed
+    ifc_pset: Pset_DoorCommon
+    status: helper_only
+    notes: RE-19 negative — no typed Door success
+  - revit_concept: window_typed
+    ifc_pset: Pset_WindowCommon
+    status: helper_only
+    notes: RE-19 negative — no typed Window success
+  - revit_concept: extensible_storage
+    ifc_pset: null
+    status: omitted_by_default
+    notes: Governing decision section 3.3
+reserved_pset_policy:
+  allow_common:
+    - Pset_WallCommon
+    - Pset_DoorCommon
+    - Pset_WindowCommon
+    - Pset_StairCommon
+    - Pset_ColumnCommon
+    - Pset_BeamCommon
+    - Pset_MemberCommon
+  revit_type_prefix: Pset_RevitType_
+  toolkit_prefix: Pset_RvtRs
+  unknown_reserved: flag_do_not_invent_templates
