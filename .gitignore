@@ -142,3 +142,6 @@ _project_corpus/
 
 # Revit-hosted oracle runner output (owned synthetic fixtures + observations)
 tools/oracle/out/
+
+# Any local cargo target dir (e.g. target-msrv/ used for MSRV checks) — never commit build output.
+/target*/
