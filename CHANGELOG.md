@@ -13,6 +13,27 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Cooperative cancellation + progress** — `rvt::control::{CancelToken,
+  WalkerControl, Stage, ProgressEvent}` and additive `*_with_control` entry
+  points beside the existing `*_with_limits` ones
+  (`walker::scan_candidates_with_control`, `walker::iter_elements_with_control`,
+  `partition_scanner::scan_partitions_with_control`); new `Error::Cancelled`
+  variant. `rvt-elements --progress` prints each stage to stderr. Output is
+  unchanged when no control is attached.
+- **Property-based test suite** — `tests/proptest_parsers.rs` (proptest)
+  asserts never-panic / in-bounds behaviour for the public byte parsers and
+  JSON round-trips for the ES / fixture research record types on stable Rust.
+- **Explicit corpus-path strictness** — when `RVT_PROJECT_CORPUS_DIR` is set,
+  a missing directory or zero matching tier-two manifests now fails
+  `project_count_fixtures` loudly instead of silently dropping coverage.
+- **Revit-hosted oracle runner (untested skeleton)** —
+  `tools/oracle/runner/pyrevit/` builds the ES-remap-00 seed and runs
+  N1–N4 / R1–R2 / C1–C2 / C3a–C4a, writing `es-observation` records. Written
+  without Revit; no ES on-disk layout is asserted.
+- **Contributor onboarding** — clone-to-first-PR quickstart in
+  `CONTRIBUTING.md`, README "For contributors", `good first issue` label,
+  opt-in `.githooks/pre-commit` (`cargo fmt --check`), and
+  `tests/binary_inventory.rs` pinning the shipped-binary count.
 - **Experimental relation domains + capability doctor** — `relations`
   registry (ES / BIM / ElemTable isolation), Tarjan SCC + condensation +
   quarantine stubs with unit tests; `capability::CapabilityManifest`
@@ -91,6 +112,19 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Changed
 
+- **crates.io packaging works again** — `stream-evidence` is a path-only
+  dev-dependency (Cargo strips it at publish) and `docs/data/*.csv` is no
+  longer excluded from the package (`src/class_tag_map.rs` include_str!s
+  the tag-drift CSV). `cargo publish -p rvt --dry-run` packages and verifies.
+- **Release path proven by dry-run** — `publish.yml`'s viewer smoke now uses
+  the same magnetar Einhoven sample as `deploy-viewer.yml` (the old phi-ag
+  family sample could never satisfy `projectSampleTest`) and installs wabt so
+  the WASM import audit runs; the CLI smoke keeps phi-ag. Three
+  `workflow_dispatch` dry-runs: all verification jobs green.
+- **wasm-pack builds straight into `viewer/pkg`** via `--out-dir` (no
+  `rm`/`mv` shuffle) in every workflow and doc.
+- **Formats/Latest page-strip stays disabled**; the walker now records when
+  the 64 KiB schema scan cap applies only through #188 (open).
 - **Honesty sync** — README, `docs/status.md`, compatibility, and
   supported-profile language emphasize inspection + narrow MVP
   recovers; generic converter claims removed.
