@@ -577,13 +577,78 @@
           "80750"
         ]
       ]
+    },
+    "storeys": {
+      "IFCBUILDINGSTOREY": [
+        [
+          "Basement 1",
+          "-20.000000"
+        ],
+        [
+          "Basement 2",
+          "-40.000000"
+        ],
+        [
+          "Level 1",
+          "0.000000"
+        ],
+        [
+          "Level 10",
+          "136.000000"
+        ],
+        [
+          "Level 11",
+          "151.000000"
+        ],
+        [
+          "Level 12",
+          "166.000000"
+        ],
+        [
+          "Level 13",
+          "185.500000"
+        ],
+        [
+          "Level 3 - Wall Layouts 1",
+          "31.000000"
+        ],
+        [
+          "Level 4 - Wall Layouts 2",
+          "46.000000"
+        ],
+        [
+          "Level 4 - Wall Layouts 3",
+          "61.000000"
+        ],
+        [
+          "Level 6",
+          "76.000000"
+        ],
+        [
+          "Level 7",
+          "91.000000"
+        ],
+        [
+          "Level 8",
+          "106.000000"
+        ],
+        [
+          "Level 9",
+          "121.000000"
+        ],
+        [
+          "Mez 1-2",
+          "15.000000"
+        ]
+      ]
     }
   },
-  "observation_hash_sha256": "5c2d55189f9edc862582683b4da3f20c72f43194621c97f8fef6b6ee9af3bd92",
+  "observation_hash_sha256": "5a101408488d591d4e7d15fe39969f1ee295c282dfe53c1f093468ae3e5cb2d0",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
-    "relations"
+    "relations",
+    "storeys"
   ],
   "unsupported_entities": [],
   "warnings": [],

@@ -8,10 +8,11 @@
 //!
 //! `--observation` additionally writes an OctetProof observation
 //! (docs/octetproof-spec-draft.md §6.2): entity counts for every manifest
-//! `source_ifc_type` plus, for every manifest `relations` category, the
-//! relation's `[host Tag, filling Tag]` pair set, canonicalized (sorted keys,
-//! no whitespace, UTF-8) and hashed so a replay can prove the witness saw the
-//! same thing.
+//! `source_ifc_type`, for every manifest `relations` category the relation's
+//! `[host Tag, filling Tag]` pair set, and for every manifest `storeys`
+//! category the `[Name, Elevation]` set of that spatial type in feet,
+//! canonicalized (sorted keys, no whitespace, UTF-8) and hashed so a replay
+//! can prove the witness saw the same thing.
 //!
 //! The manifest's `reference_ifc_file` is resolved under <corpus_dir>, its
 //! SHA-256 is checked against `source.reference_ifc_sha256` (a golden artifact
@@ -32,7 +33,10 @@ use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use ifc_lite_core::{decode_ifc_string, parse_entity, EntityScanner, Token};
+use ifc_lite_core::{
+    build_entity_index, decode_ifc_string, extract_length_unit_scale, parse_entity, EntityDecoder,
+    EntityScanner, Token,
+};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -177,6 +181,88 @@ fn fills_element_pairs(bytes: &[u8]) -> Vec<Vec<String>> {
         .collect();
     pairs.sort();
     pairs
+}
+
+/// Attribute index of `Name` on `IfcBuildingStorey` (`IfcRoot` +2).
+const IFC_BUILDING_STOREY_NAME_INDEX: usize = 2;
+
+/// Attribute index of `Elevation` on `IfcBuildingStorey`: the tenth and last
+/// attribute of the IFC4 entity.
+const IFC_BUILDING_STOREY_ELEVATION_INDEX: usize = 9;
+
+/// Metres in one international foot, exactly.
+const METRES_PER_FOOT: f64 = 0.3048;
+
+/// Render an elevation in feet at 1e-6 ft, as a string.
+///
+/// A string, not a JSON number, because the canonical form (OctetProof §7.3)
+/// is defined over integers and strings only — two runtimes must not be
+/// trusted to print the same `f64` the same way. `-0` normalises to `0`.
+fn format_elevation_feet(feet: f64) -> String {
+    if !feet.is_finite() {
+        return String::new();
+    }
+    let rendered = format!("{feet:.6}");
+    if rendered == "-0.000000" {
+        return "0.000000".to_string();
+    }
+    rendered
+}
+
+/// `IfcBuildingStorey` `[Name, Elevation]` pairs, canonically sorted.
+///
+/// The elevation is converted from the model's declared `LENGTHUNIT` to feet
+/// with `ifc_lite_core::extract_length_unit_scale` — this lineage's own unit
+/// resolver — so the field compares across witnesses whose files declare
+/// different units: Revit's own export of this corpus declares `FOOT` while
+/// rvt-rs writes `METRE` (OctetProof 1.1.0 §7.2, field class *storey sets*).
+///
+/// An unset `Name` or `Elevation` contributes an empty string rather than
+/// dropping the storey: a missing half must surface as a disagreement, never
+/// as a silent omission. An empty list is returned when the model declares no
+/// resolvable length unit — a storey whose unit is unknown is not a
+/// measurement.
+fn building_storey_set(bytes: &[u8]) -> Vec<Vec<String>> {
+    let index = build_entity_index(bytes);
+    let mut decoder = EntityDecoder::with_index(bytes, index);
+    let mut project_id = None;
+    let mut storeys: Vec<(u32, usize, usize)> = Vec::new();
+    let mut scanner = EntityScanner::new(bytes);
+    while let Some((id, type_name, start, end)) = scanner.next_entity() {
+        match type_name.trim().to_uppercase().as_str() {
+            "IFCPROJECT" if project_id.is_none() => project_id = Some(id),
+            "IFCBUILDINGSTOREY" => storeys.push((id, start, end)),
+            _ => {}
+        }
+    }
+    let Some(project_id) = project_id else {
+        return Vec::new();
+    };
+    let Ok(scale) = extract_length_unit_scale(&mut decoder, project_id) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Vec<String>> = Vec::new();
+    for (_, start, end) in storeys {
+        let Ok((_, _, args)) = parse_entity(&bytes[start..end]) else {
+            continue;
+        };
+        let name = match args.get(IFC_BUILDING_STOREY_NAME_INDEX) {
+            Some(Token::String(raw)) => token_string(raw),
+            _ => String::new(),
+        };
+        let elevation = match args.get(IFC_BUILDING_STOREY_ELEVATION_INDEX) {
+            Some(Token::Float(value)) => Some(*value),
+            Some(Token::Integer(value)) => Some(*value as f64),
+            _ => None,
+        };
+        let feet = match elevation {
+            Some(value) => format_elevation_feet(value * scale / METRES_PER_FOOT),
+            None => String::new(),
+        };
+        out.push(vec![name, feet]);
+    }
+    out.sort();
+    out
 }
 
 struct Args {
@@ -356,6 +442,48 @@ fn run() -> Result<i32, String> {
         relations.insert(relation_type.to_string(), json!(pairs));
     }
 
+    let empty_storeys = Map::new();
+    let storey_categories = manifest
+        .get("storeys")
+        .and_then(Value::as_object)
+        .unwrap_or(&empty_storeys);
+    let mut storeys = Map::new();
+    let mut storey_records = Vec::new();
+    for (category, spec) in storey_categories {
+        let storey_type = spec
+            .get("storey_ifc_type")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("{category}: storeys entry needs storey_ifc_type"))?;
+        if storey_type != "IFCBUILDINGSTOREY" {
+            return Err(format!(
+                "{category}: no reader for storey type {storey_type}"
+            ));
+        }
+        let pairs = building_storey_set(&bytes);
+        let expected = spec
+            .get("expected_storeys")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        let actual = pairs.len() as i64;
+        let ok = actual == expected;
+        if !ok {
+            drift += 1;
+        }
+        println!(
+            "{category:<16} {storey_type:<22} {expected:>8} {actual:>8} {:>4}  {}",
+            0,
+            if ok { "ok" } else { "DRIFT" }
+        );
+        storey_records.push(json!({
+            "category": category,
+            "storey_ifc_type": storey_type,
+            "expected_storeys": expected,
+            "ifc_lite_storeys": actual,
+            "agree": ok,
+        }));
+        storeys.insert(storey_type.to_string(), json!(pairs));
+    }
+
     if let Some(path) = args.json.as_ref() {
         let record = json!({
             "schema_version": 1,
@@ -366,6 +494,7 @@ fn run() -> Result<i32, String> {
             "witness": format!("{WITNESS_ID} {WITNESS_VERSION}"),
             "categories": records,
             "relations": relation_records,
+            "storeys": storey_records,
             "agree": drift == 0,
         });
         write_json(path, &record)?;
@@ -375,6 +504,7 @@ fn run() -> Result<i32, String> {
         let payload = json!({
             "entity_counts": Value::Object(entity_counts),
             "relations": Value::Object(relations),
+            "storeys": Value::Object(storeys),
             "ifc_schema": schema,
         });
         let observation = json!({
@@ -386,7 +516,7 @@ fn run() -> Result<i32, String> {
             "input_file": reference_name,
             "input_hash_sha256": actual_sha,
             "deterministic": true,
-            "semantic_surface_covered": ["entity_counts", "relations"],
+            "semantic_surface_covered": ["entity_counts", "relations", "storeys"],
             "observation": payload,
             "observation_hash_sha256": canonical_hash(&payload),
             "unsupported_entities": [],
@@ -403,7 +533,7 @@ fn run() -> Result<i32, String> {
         return Ok(1);
     }
     println!(
-        "cross-witness: IFClite agrees with the manifest for every source_ifc_type and relation"
+        "cross-witness: IFClite agrees with the manifest for every source_ifc_type, relation and storey set"
     );
     Ok(0)
 }

@@ -13,6 +13,69 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Revit `Level` records — 15 / 15 exact `(name, elevation)` storeys
+  against Revit's own export (#218, RE-24).** #213 derived storey
+  elevations from the bounding-box distribution of the recovered column
+  records: 11 of the export's 15, with no names, because a rank join of
+  12 name candidates onto 11 elevations mislabels. The Levels are in the
+  file as elements. A `Level` record carries the same 88-byte element
+  prologue with `OST_Levels` (−2000240) at `+0x12`, but no bounding box
+  — a datum plane is not a solid — so it ends at `+0x56` where a column
+  record's bbox marker would start, which is why the #211 reader rejected
+  it. Of the 75 `OST_Levels` records on `2024_Core_Interior.rvt` the #211
+  instance test (no container at `+0x32`, placement kind `0xffffef7f` at
+  `+0x42`) selects exactly **15**. Each owns exactly one name/elevation
+  parameter block, framed the way RE-22 framed the `IFC Export As`
+  overrides: the owning ElementId as a `u64` at `value-0x47`, a 56-byte
+  `0xff` sentinel run, three zero bytes, the `u32` UTF-16 length, then
+  the name; the elevation is an `f64` in feet 55 bytes past an 8-byte
+  marker (`05 00 00 00 48 02 00 00`) searched forward from the end of the
+  name, repeated 153 bytes later, both copies required to agree. All
+  **15 of 15** pairs equal an `IfcBuildingStorey` `Name` / `Elevation` in
+  Revit's export exactly — `Basement 2` −40, `Basement 1` −20, `Level 1`
+  0, `Mez 1-2` 15, `Level 3 / 4 / 4 - Wall Layouts 1 / 2 / 3` at
+  31 / 46 / 61, `Level 6`…`Level 13` at 76 / 91 / 106 / 121 / 136 / 151 /
+  166 / 185.5 ft — including the four elevations no column stands on. The
+  names are asserted rather than joined: the block is keyed by the
+  Level's own ElementId, so the file states the pairing. Recovery is
+  all-or-nothing per file — a Level with no accepted block emits nothing,
+  and the whole set is discarded unless every Level record owns exactly
+  one block and no two levels share an elevation. `levels` moves from
+  `decoder_baseline` to `known` at tolerance 0 on **both** manifests.
+- **Wider storey set, more bound elements.** Containment is unchanged —
+  still an exact elevation match, plates by their record top face — but
+  with 15 storeys instead of 11, **801 of 872** building elements land in
+  a specific storey, up from 794: all 256 columns, all 132 doors, 359 of
+  360 walls (was 355) and 54 of 100 record-backed plates (was 51 —
+  `IFCSLAB` 44 of 80, `IFCSHADINGDEVICE` 10 of 20). The 6 windows still
+  bind to nothing, because a window record's base is its sill height and
+  never a storey elevation; the 46 plates that remain unbound sit
+  0.1667 ft below their level at the structural-slab /
+  architectural-topping interface (#219) — a thickness question, not an
+  elevation-set one. `element_record_storeys` survives as the fallback
+  for files with no recoverable Level records.
+- **OctetProof `storeys`: a third cross-witness field class (spec 1.1.0,
+  §7.2 / §9.4 / §20.2).** A storey set is the sorted set of
+  `[name, elevation]` pairs, compared exactly with no tolerance concept.
+  It is the first field class in the protocol where the two sides of an
+  edge express the same physical quantity in *different declared units*:
+  Revit's export of this imperial project declares `FOOT`, rvt-rs writes
+  `METRE`, and the raw numbers differ by 3.28. Each witness therefore
+  resolves its own file's `LENGTHUNIT` and renders the elevation in feet
+  at 1e-6 as a fixed six-decimal string, which keeps the canonical form
+  integer/string only (§7.3) — `rvt-ifc --observation` walks
+  `IfcProject` → `IfcUnitAssignment` in its own emitted STEP,
+  `tools/ci/witness-ifcopenshell.py` uses
+  `ifcopenshell.util.unit.calculate_unit_scale`, and
+  `tools/ci/witness-ifc-lite` uses
+  `ifc_lite_core::extract_length_unit_scale`. The three payloads are
+  byte-identical on both artifacts. Manifests gain a `storeys` block
+  parallel to `counts` and `relations`; `tools/ci/witness-verdict.py`
+  compares it as a separate field class; the observation and verdict
+  schemas are updated. Claimed surfaces:
+  `magnetar-2024-core-interior-slim` **11 → 13 fields**,
+  `magnetar-2024-core-interior` **4 → 6**. Both verdicts stay `PASS`.
+
 - **Door and window host-wall binding — 138 / 138 exact
   `IfcRelFillsElement` pairs against Revit's own export (#222, RE-23).**
   #211 recovered the exact door and window instance sets but left them
