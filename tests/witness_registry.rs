@@ -39,6 +39,49 @@ fn is_sha256(s: &str) -> bool {
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
+/// The OctetProof §9.4 controlled vocabulary. A registry `covers` entry and an
+/// observation's `semantic_surface_covered` both draw from exactly this list;
+/// witness identifiers are never members of it.
+const COVERAGE_VOCABULARY: &[&str] = &[
+    "entity_counts",
+    "relations",
+    "storeys",
+    "layer_topology",
+    "linework",
+    "bounding_boxes",
+    "xdata_fields",
+    "text_content",
+    "3d_solids",
+    "meshes",
+    "bim_parameters",
+];
+
+/// `covers` as declared by one witness, or `None` when the entry omits it.
+fn declared_covers(entry: &Value) -> Option<BTreeSet<String>> {
+    let id = entry["id"].as_str().unwrap();
+    let raw = entry.get("covers")?;
+    let arr = raw
+        .as_array()
+        .unwrap_or_else(|| panic!("witness {id}: `covers` must be an array"));
+    assert!(!arr.is_empty(), "witness {id}: `covers` must not be empty");
+    let mut out = BTreeSet::new();
+    for item in arr {
+        let class = item
+            .as_str()
+            .unwrap_or_else(|| panic!("witness {id}: `covers` entries must be strings"))
+            .to_string();
+        assert!(
+            COVERAGE_VOCABULARY.contains(&class.as_str()),
+            "witness {id}: `covers` entry {class} is not in the §9.4 vocabulary"
+        );
+        assert!(
+            out.insert(class.clone()),
+            "witness {id}: duplicate `covers` entry {class}"
+        );
+    }
+    Some(out)
+}
+
 #[test]
 fn registry_is_internally_consistent() {
     let reg = read_json("research/witness-registry.json");
@@ -73,6 +116,26 @@ fn registry_is_internally_consistent() {
             assert!(
                 w.get("priority").is_some(),
                 "candidate witness {} needs a priority",
+                w["id"]
+            );
+        }
+
+        // OctetProof §9.4: the coverage declaration is a claim about what a
+        // witness *reads*. An authoring witness emits the artifact itself and
+        // never an observation, so it declares nothing; an adopted reader must.
+        let covers = declared_covers(w);
+        let kind = w["kind"].as_str().unwrap();
+        if kind == "author" {
+            assert!(
+                covers.is_none(),
+                "authoring witness {} must not declare `covers` (§9.4 is a reading claim)",
+                w["id"]
+            );
+        }
+        if kind == "reader" && status == "adopted" {
+            assert!(
+                covers.is_some(),
+                "adopted reader {} must declare `covers` (§9.4 coverage declaration)",
                 w["id"]
             );
         }
@@ -318,5 +381,111 @@ fn ifc_lite_gate_is_wired_and_version_pinned() {
     assert!(
         lineages.len() >= 3 && lineages.contains("ifc-lite"),
         "the Core Interior verdict must span three lineages including ifc-lite, saw {lineages:?}"
+    );
+}
+
+/// OctetProof §9.4: a witness is compared only on what the registry says it
+/// covers. Every committed observation therefore has to claim a surface the
+/// registry already declares — an observation that widened
+/// `semantic_surface_covered` without a registry PR would be a witness
+/// silently enlarging its own claim, which §9.4 calls a registration
+/// violation.
+#[test]
+fn committed_observations_stay_inside_their_registered_coverage() {
+    let reg = read_json("research/witness-registry.json");
+    let entries = reg["witnesses"].as_array().unwrap();
+
+    let base = root().join("research/witness");
+    let mut artifact_dirs: Vec<PathBuf> = std::fs::read_dir(&base)
+        .unwrap_or_else(|e| panic!("read {}: {e}", base.display()))
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.join("observations").is_dir())
+        .collect();
+    artifact_dirs.sort();
+    assert!(
+        !artifact_dirs.is_empty(),
+        "no committed observations under research/witness"
+    );
+
+    let mut checked = 0;
+    for dir in artifact_dirs {
+        let obs_dir = dir.join("observations");
+        let mut files: Vec<PathBuf> = std::fs::read_dir(&obs_dir)
+            .unwrap_or_else(|e| panic!("read {}: {e}", obs_dir.display()))
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+            .collect();
+        files.sort();
+
+        for path in files {
+            let rel = path.strip_prefix(root()).unwrap_or(&path).to_owned();
+            let obs: Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let witness_id = obs["witness_id"]
+                .as_str()
+                .unwrap_or_else(|| panic!("{}: observation needs a witness_id", rel.display()));
+            let entry = entries
+                .iter()
+                .find(|w| w["id"] == witness_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}: witness {witness_id} is not in the registry",
+                        rel.display()
+                    )
+                });
+            let covers = declared_covers(entry).unwrap_or_else(|| {
+                panic!(
+                    "{}: witness {witness_id} emits observations but declares no `covers`",
+                    rel.display()
+                )
+            });
+
+            let claimed: BTreeSet<String> = obs["semantic_surface_covered"]
+                .as_array()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}: semantic_surface_covered must be an array",
+                        rel.display()
+                    )
+                })
+                .iter()
+                .map(|v| {
+                    v.as_str()
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}: semantic_surface_covered entries must be strings",
+                                rel.display()
+                            )
+                        })
+                        .to_string()
+                })
+                .collect();
+            assert!(
+                !claimed.is_empty(),
+                "{}: semantic_surface_covered must not be empty",
+                rel.display()
+            );
+            for class in &claimed {
+                assert!(
+                    COVERAGE_VOCABULARY.contains(&class.as_str()),
+                    "{}: {class} is not in the §9.4 vocabulary",
+                    rel.display()
+                );
+            }
+            let undeclared: Vec<&String> = claimed.difference(&covers).collect();
+            assert!(
+                undeclared.is_empty(),
+                "{}: witness {witness_id} claims {undeclared:?} which its registry \
+                 `covers` {covers:?} does not declare (§9.4)",
+                rel.display()
+            );
+            checked += 1;
+        }
+    }
+    assert!(
+        checked >= 6,
+        "expected at least six committed observations, saw {checked}"
     );
 }

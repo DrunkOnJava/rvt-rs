@@ -1,8 +1,8 @@
 # Technical Specification: OctetProof — A License-Free Verification Protocol for Undocumented Binary Formats
 
-**Version:** 1.1.0
+**Version:** 1.1.1
 **Date:** 2026-08-30
-**Status:** Specification — 1.1.0. Supersedes the draft received from the project owner on 2026-08-30, which is retained verbatim at [`docs/octetproof-spec-draft.md`](octetproof-spec-draft.md) with its reviewer notes. The corrections applied to reach 1.0.0 are listed in Section 19; the additive 1.1.0 change is Section 20.
+**Status:** Specification — 1.1.1. Supersedes the draft received from the project owner on 2026-08-30, which is retained verbatim at [`docs/octetproof-spec-draft.md`](octetproof-spec-draft.md) with its reviewer notes. The corrections applied to reach 1.0.0 are listed in Section 19; the additive 1.1.0 change is Section 20; the non-semantic 1.1.1 change is Section 20a.
 **License of this document:** CC-BY-4.0
 **Reference implementation:** rvt-rs (Apache-2.0) — in-repo instance; umbrella repository: [DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof)
 **Primary domain:** Building Information Modeling (BIM) closed formats, with generalization to any undocumented binary container format
@@ -215,7 +215,7 @@ The reference implementation carries the registry as `research/witness-registry.
 |—                                        |`checked`                       |Extension: the date this registry verified the entry against the upstream API. Absent means unverified.                               |
 |—                                        |`notes`                         |Extension; the registry's `candidate_claims` rule applies — any figure quoted here is the project's own claim                          |
 |`ci_eligible`                            |not implemented                 |**Umbrella scope.** The in-repo gate runs a fixed witness set named by the CI job rather than filtering the registry.                  |
-|`coverage` / §9.4 coverage declaration   |not implemented                 |**Umbrella scope.** The per-run claim lives in the observation's `semantic_surface_covered`; there is no registry-level declaration to check it against.|
+|`coverage` / §9.4 coverage declaration   |`covers`                        |Implemented in the registry — an array drawn from the §9.4 vocabulary, declared by every adopted reader and by readers only, since coverage is a claim about reading and an authoring witness emits an artifact rather than an observation. `tests/witness_registry.rs` requires every committed observation's `semantic_surface_covered` to be a subset of its witness's `covers`, so the per-run claim can never exceed the registered one.|
 |`versions`                               |not implemented                 |**Umbrella scope.** `node` names the format, not the supported version range.                                                          |
 |§9.5 determinism attestation             |not implemented                 |**Umbrella scope.** The observation carries a per-run `deterministic` flag; there is no cross-OS, cross-architecture attestation.      |
 |§9.6 exact version pinning               |not implemented                 |**Umbrella scope.** The observation carries `witness_version`; CI pins IfcOpenShell to a version range, not a commit.                  |
@@ -257,7 +257,7 @@ Every example in this section is valid JSON and matches the reference implementa
 - [`docs/schemas/witness-observation.schema.json`](schemas/witness-observation.schema.json)
 - [`docs/schemas/witness-verdict.schema.json`](schemas/witness-verdict.schema.json)
 
-The worked example throughout is the first committed artifact, `magnetar-2024-core-interior`: the RVT → IFC edge, with `rvt-rs` as the source witness and IfcOpenShell as the bridge witness. The files quoted below are the real committed ones under `research/witness/magnetar-2024-core-interior/`.
+The worked example throughout is the RVT → IFC edge of the magnetar Core Interior project, with `rvt-rs` as the source witness reading the `.rvt` and IfcOpenShell and IFClite as two independent bridge witnesses reading Revit's own `.ifc`. Section 6.1 quotes the manifest of the first recorded artifact, `magnetar-2024-core-interior` (the 20 KB element-export fixture). Sections 6.2 and 6.3 quote the full-project artifact `magnetar-2024-core-interior-slim`, whose observations and verdict are the ones the gate emits today: three witnesses, three implementation lineages, and a thirteen-field surface spanning all three field classes. All of them are the real committed files under `research/witness/`, as of commit `5da2570` (2026-08-30) — **dated snapshots of a decoder state**, not a live mirror (see 19b and 20a).
 
 ### 6.1 Golden Artifact Manifest
 
@@ -366,7 +366,7 @@ An observation is what one witness saw in one input, plus enough provenance to r
 
 |Key                        |Type            |Meaning                                                                                                     |
 |---------------------------|----------------|------------------------------------------------------------------------------------------------------------|
-|`schema_version`           |string          |`"1.0.0"` for this specification                                                                            |
+|`schema_version`           |string          |`"1.0.0"`, or `"1.1.0"` for an observation carrying a field class added in Section 20                       |
 |`witness_id`               |string          |Registry id; must resolve in the registry when the gate runs with one                                        |
 |`witness_version`          |string          |The exact version that produced this observation                                                            |
 |`artifact_id`              |string          |The manifest `id`                                                                                           |
@@ -380,36 +380,72 @@ An observation is what one witness saw in one input, plus enough provenance to r
 |`unsupported_entities`     |array of string |What the witness could not read; recorded, never a disagreement (Section 7.1 rule 4)                          |
 |`warnings`                 |array of string |Non-fatal notes from the run                                                                                 |
 
-The bridge witness, IfcOpenShell reading the Revit-authored IFC — the complete committed file:
+The bridge witness, IfcOpenShell reading the Revit-authored IFC — the committed file `research/witness/magnetar-2024-core-interior-slim/observations/ifcopenshell.json` at commit `5da2570` (2026-08-30), verbatim except that the two pair arrays are trimmed for length: `relations.IFCRELFILLSELEMENT` shows 3 of its 138 pairs and `storeys.IFCBUILDINGSTOREY` 3 of its 15. Nothing else is abbreviated, and no key is omitted:
 
 ```json
 {
-  "artifact_id": "magnetar-2024-core-interior",
+  "artifact_id": "magnetar-2024-core-interior-slim",
   "deterministic": true,
-  "input_file": "2024_Core_Interior.ifc",
-  "input_hash_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
+  "input_file": "../IFC Exports/2024_Core_Interior_slim.ifc",
+  "input_hash_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
   "input_role": "bridge",
   "observation": {
     "entity_counts": {
       "IFCBEAM": 0,
-      "IFCCOLUMN": 0,
-      "IFCDOOR": 0,
+      "IFCBUILDINGSTOREY": 15,
+      "IFCCOLUMN": 256,
+      "IFCDOOR": 132,
       "IFCFLOWTERMINAL": 0,
-      "IFCMATERIAL": 1,
-      "IFCPROPERTYSET": 25,
+      "IFCMATERIAL": 10,
+      "IFCPROPERTYSET": 0,
       "IFCROOF": 0,
-      "IFCSHADINGDEVICE": 1,
-      "IFCSPACE": 0,
+      "IFCSHADINGDEVICE": 20,
+      "IFCSLAB": 80,
+      "IFCSPACE": 116,
       "IFCUNITASSIGNMENT": 1,
-      "IFCWALL": 0,
-      "IFCWINDOW": 0
+      "IFCWALL": 360,
+      "IFCWINDOW": 6
     },
-    "ifc_schema": "IFC4"
+    "ifc_schema": "IFC4",
+    "relations": {
+      "IFCRELFILLSELEMENT": [
+        [
+          "20796",
+          "20827"
+        ],
+        [
+          "20798",
+          "20810"
+        ],
+        [
+          "20798",
+          "20815"
+        ]
+      ]
+    },
+    "storeys": {
+      "IFCBUILDINGSTOREY": [
+        [
+          "Basement 1",
+          "-20.000000"
+        ],
+        [
+          "Basement 2",
+          "-40.000000"
+        ],
+        [
+          "Level 1",
+          "0.000000"
+        ]
+      ]
+    }
   },
-  "observation_hash_sha256": "8cf4046509bb788406e93261f0dcb10708fbf33ae195d12f8ddc99b41a93398f",
-  "schema_version": "1.0.0",
+  "observation_hash_sha256": "5a101408488d591d4e7d15fe39969f1ee295c282dfe53c1f093468ae3e5cb2d0",
+  "schema_version": "1.1.0",
   "semantic_surface_covered": [
-    "entity_counts"
+    "entity_counts",
+    "relations",
+    "storeys"
   ],
   "unsupported_entities": [],
   "warnings": [],
@@ -418,52 +454,99 @@ The bridge witness, IfcOpenShell reading the Revit-authored IFC — the complete
 }
 ```
 
-The source witness, rvt-rs reading the `.rvt` directly — the same file, abbreviated in the `entity_counts`, `unsupported_entities`, and `warnings` arrays only:
+The third witness, IFClite reading the same bytes with its own STEP scanner, is not reproduced here: its payload canonicalizes to the same hash `5a101408…`, so the file differs only in `witness_id` and `witness_version`. Two unrelated implementations reporting a bit-identical payload is the agreement the protocol is for.
+
+The source witness, rvt-rs reading the `.rvt` directly — the committed `observations/rvt-rs.json` from the same directory and commit, abbreviated in four places: `entity_counts` shows 12 of its 43 types, the two pair arrays show the same 3 of 138 and 3 of 15 as above, `unsupported_entities` 2 of 5, and `warnings` 1 of 5. Every scalar and every other key is verbatim. The 31 types dropped from `entity_counts` are the STEP scaffolding rvt-rs emits and the manifest does not name — `IFCCARTESIANPOINT`, `IFCLOCALPLACEMENT`, and the like; `IFCROOF`, `IFCBEAM` and `IFCFLOWTERMINAL` are absent from the full file too, and that absence is load-bearing below:
 
 ```json
 {
-  "artifact_id": "magnetar-2024-core-interior",
+  "artifact_id": "magnetar-2024-core-interior-slim",
   "deterministic": true,
   "input_file": "2024_Core_Interior.rvt",
   "input_hash_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
   "input_role": "source",
   "observation": {
-    "building_elements_with_geometry": 0,
+    "building_elements_with_geometry": 854,
     "entity_counts": {
-      "IFCBUILDINGSTOREY": 12,
+      "IFCBUILDINGSTOREY": 15,
+      "IFCCOLUMN": 256,
+      "IFCDOOR": 132,
       "IFCMATERIAL": 102,
-      "IFCPROPERTYSET": 64,
-      "IFCSLAB": 64,
+      "IFCPROPERTYSET": 854,
+      "IFCRELFILLSELEMENT": 138,
+      "IFCSHADINGDEVICE": 20,
+      "IFCSLAB": 80,
       "IFCSPACE": 18,
-      "IFCUNITASSIGNMENT": 1
+      "IFCUNITASSIGNMENT": 1,
+      "IFCWALL": 360,
+      "IFCWINDOW": 6
     },
     "exported_building_elements": {
-      "IFCSLAB": 64,
-      "IFCSPACE": 18
+      "IFCCOLUMN": 256,
+      "IFCDOOR": 132,
+      "IFCSHADINGDEVICE": 20,
+      "IFCSLAB": 80,
+      "IFCSPACE": 18,
+      "IFCWALL": 360,
+      "IFCWINDOW": 6
     },
     "material_count": 102,
-    "storey_count": 12
+    "relations": {
+      "IFCRELFILLSELEMENT": [
+        [
+          "20796",
+          "20827"
+        ],
+        [
+          "20798",
+          "20810"
+        ],
+        [
+          "20798",
+          "20815"
+        ]
+      ]
+    },
+    "storey_count": 15,
+    "storeys": {
+      "IFCBUILDINGSTOREY": [
+        [
+          "Basement 1",
+          "-20.000000"
+        ],
+        [
+          "Basement 2",
+          "-40.000000"
+        ],
+        [
+          "Level 1",
+          "0.000000"
+        ]
+      ]
+    }
   },
-  "observation_hash_sha256": "b6d9b67c10c3350b69b58cbd2c6caeca405f63ce182e7291feba3e3ff10f3e00",
-  "schema_version": "1.0.0",
+  "observation_hash_sha256": "70f8df9dd188b7e42947bfa167b2810333b3d0dc4398019ea40570b7fcb87c24",
+  "schema_version": "1.1.0",
   "semantic_surface_covered": [
-    "entity_counts"
+    "entity_counts",
+    "relations",
+    "storeys"
   ],
   "unsupported_entities": [
-    "real_file_element_geometry",
-    "floor_slab_extrusion_thickness"
+    "partial_element_geometry",
+    "revit_compound_assemblies_and_walltype_widths"
   ],
   "warnings": [
-    "No exported building elements include decoded geometry; see skipped diagnostics for missing curve/profile/dimension data."
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_curve=18, unsupported_geometry_missing_level=71, unsupported_geometry_missing_dimensions=18."
   ],
   "witness_id": "rvt-rs",
   "witness_version": "0.1.2"
 }
 ```
 
-The committed hash `b6d9b6…` is over the full payload, not the abbreviation above; the abbreviated block is illustrative of shape only. Every other example in this section was byte-exact against the files committed on 2026-08-30; they are **dated snapshots of a decoder state**, not a live mirror of `research/witness/` (see 19b).
+Both committed hashes are over the full payload, not the abbreviations above; where an array is trimmed the block is illustrative of shape only, and `5a101408…` and `70f8df9d…` are the hashes of the untrimmed files. The examples in this section are **dated snapshots of a decoder state**, not a live mirror of `research/witness/` (see 19b and 20a).
 
-Since 1.1.0 the payload may also carry `relations`, an object mapping a relation type to its sorted pair multiset:
+Both observations declare `schema_version` `"1.1.0"`, because both carry the two field classes Section 20 adds. `relations` is an object mapping a relation type to its sorted pair multiset:
 
 ```json
 "relations": {
@@ -471,9 +554,9 @@ Since 1.1.0 the payload may also carry `relations`, an object mapping a relation
 }
 ```
 
-A witness emitting it declares `relations` in `semantic_surface_covered` and sets `schema_version` to `"1.1.0"`; the examples below predate that and are 1.0.0 snapshots.
+A witness emitting it declares `relations` in `semantic_surface_covered` and sets `schema_version` to `"1.1.0"`. A 1.0.0 observation carries neither key and remains valid input to a 1.1.0 gate.
 
-Since 1.1.0 the payload may also carry `storeys`, an object mapping a spatial type to its sorted `[name, elevation-in-feet]` set:
+`storeys` is an object mapping a spatial type to its sorted `[name, elevation-in-feet]` set:
 
 ```json
 "storeys": {
@@ -481,9 +564,9 @@ Since 1.1.0 the payload may also carry `storeys`, an object mapping a spatial ty
 }
 ```
 
-A witness emitting it declares `storeys` in `semantic_surface_covered`. The elevation is a string in feet, unit-normalized by each witness from its own file's declared `LENGTHUNIT` (Section 7.2, field class *storey sets*).
+A witness emitting it declares `storeys` in `semantic_surface_covered`. The elevation is a string in feet, unit-normalized by each witness from its own file's declared `LENGTHUNIT` (Section 7.2, field class *storey sets*) — here from Revit's `FOOT` on the bridge side and from rvt-rs's own `METRE` on the source side, which is why both print `-20.000000` for `Basement 1`.
 
-Two properties of the payload are load-bearing. First, the witnesses share only what the manifest names — `entity_counts`, and since 1.1.0 `relations` and `storeys`; everything else in a payload is witness-specific and is not diffed. Second, a witness may report a type the other never emits (`IFCSHADINGDEVICE` here) — the diff is driven by the manifest's declared surface, not by the union of the payload keys, and a type absent from a payload counts as zero.
+Three properties of the payload are load-bearing. First, the witnesses share only what the manifest names — `entity_counts`, and since 1.1.0 `relations` and `storeys`; everything else in a payload is witness-specific and is not diffed, which is why `building_elements_with_geometry`, `exported_building_elements`, `material_count` and `storey_count` appear on one side and nowhere in the verdict. Second, a witness may report a type the other never emits (`IFCROOF`, `IFCBEAM` and `IFCFLOWTERMINAL` here, which the bridge reports as zero and the source payload omits entirely) — the diff is driven by the manifest's declared surface, not by the union of the payload keys, and a type absent from a payload counts as zero. Third, what a witness may claim is bounded by its registry `covers` (Section 9.4): all three witnesses here declare `entity_counts`, `relations` and `storeys`, and an observation claiming more than its registration would be rejected before the diff runs.
 
 Observations are **canonicalized** with RFC 8785 (JSON Canonicalization Scheme) before hashing or diffing. Key ordering, number formatting, and Unicode normalization are fixed. This guarantees bit-identical hashes across languages and platforms.
 
@@ -498,7 +581,7 @@ The verdict is the gate's output for one artifact. It records the whole decision
 |`status`                |yes     |One of the Section 10.5 vocabulary                                                                      |
 |`witnesses_compared`    |yes     |Sorted witness ids remaining in the gate after commercial witnesses are dropped                          |
 |`inputs`                |yes     |Per witness: `input_hash_sha256`, resolved `role`, `witness_version`                                     |
-|`semantic_surface`      |yes     |The fields actually compared, as `entity_counts.<TYPE>`                                                  |
+|`semantic_surface`      |yes     |The fields actually compared, as `<field_class>.<TYPE>` — `entity_counts.<TYPE>`, and since 1.1.0 `relations.<TYPE>` and `storeys.<TYPE>`|
 |`excluded`              |yes     |Fields removed from the surface first-class, with reason and tracking issue                              |
 |`diffs`                 |yes     |Pairwise disagreements inside the surface                                                                |
 |`insufficient_witnesses`|yes     |True when fewer than two observations were present                                                       |
@@ -509,26 +592,19 @@ The verdict is the gate's output for one artifact. It records the whole decision
 |`verdict_hash_sha256`   |yes     |SHA-256 over the canonicalized verdict excluding `timestamp`                                             |
 |`timestamp`             |optional|ISO-8601. Omitted by default so the verdict is byte-reproducible.                                        |
 
-The passing verdict for the worked example as committed on 2026-08-30, complete (a dated snapshot — see 19b):
+The passing verdict for the worked example — `research/witness/magnetar-2024-core-interior-slim/verdict.json` at commit `5da2570` (2026-08-30), complete, nothing trimmed (a dated snapshot — see 19b and 20a):
 
 ```json
 {
-  "artifact_id": "magnetar-2024-core-interior",
+  "artifact_id": "magnetar-2024-core-interior-slim",
   "diffs": [],
   "excluded": [
-    {
-      "category": "floors",
-      "field": "entity_counts.IFCSHADINGDEVICE",
-      "reason": "known_gap",
-      "tracking_issue": 31,
-      "unsupported_feature": "floor_slab_extrusion_thickness"
-    },
     {
       "category": "rooms_spaces",
       "field": "entity_counts.IFCSPACE",
       "reason": "known_gap",
       "tracking_issue": 33,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+      "unsupported_feature": "partial_element_geometry"
     },
     {
       "category": "materials",
@@ -542,12 +618,13 @@ The passing verdict for the worked example as committed on 2026-08-30, complete 
       "field": "entity_counts.IFCPROPERTYSET",
       "reason": "known_gap",
       "tracking_issue": 35,
-      "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+      "unsupported_feature": "revit_element_parameters_to_ifc_property_sets"
     }
   ],
   "independence": {
     "commercial_dropped": [],
     "lineages": [
+      "ifc-lite",
       "ifcopenshell",
       "rvt-rs"
     ],
@@ -559,8 +636,13 @@ The passing verdict for the worked example as committed on 2026-08-30, complete 
     "strong_copyleft": []
   },
   "inputs": {
+    "ifc-lite": {
+      "input_hash_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
+      "role": "bridge",
+      "witness_version": "7.1.1"
+    },
     "ifcopenshell": {
-      "input_hash_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
+      "input_hash_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
       "role": "bridge",
       "witness_version": "0.8.5"
     },
@@ -573,37 +655,43 @@ The passing verdict for the worked example as committed on 2026-08-30, complete 
   "insufficient_witnesses": false,
   "schema_version": "1.0.0",
   "semantic_surface": [
+    "entity_counts.IFCBUILDINGSTOREY",
     "entity_counts.IFCWALL",
+    "entity_counts.IFCSLAB",
     "entity_counts.IFCROOF",
     "entity_counts.IFCDOOR",
     "entity_counts.IFCWINDOW",
     "entity_counts.IFCCOLUMN",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
-    "entity_counts.IFCUNITASSIGNMENT"
+    "entity_counts.IFCUNITASSIGNMENT",
+    "entity_counts.IFCSHADINGDEVICE",
+    "relations.IFCRELFILLSELEMENT",
+    "storeys.IFCBUILDINGSTOREY"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "3df3ba73bb3f86fd3fab63c4a4db5fb7074fa18036056f01bba45d0c0b43f53a",
+  "verdict_hash_sha256": "cd171b3167c602d0882dd8a0d38c99791012a9fe693043e43e2d43b028554325",
   "witnesses_compared": [
+    "ifc-lite",
     "ifcopenshell",
     "rvt-rs"
   ]
 }
 ```
 
-This is what an honest thin verdict looks like: eight fields inside the surface, of which seven are zero counts, and four categories excluded as tracked decoder gaps. The verdict says so rather than rounding up to "verified".
+Read the whole record, not the `PASS`. Thirteen fields are inside the surface and three categories are excluded first-class as tracked decoder gaps, each named with its issue. The surface spans all three field classes: eleven counts (of which `IFCROOF`, `IFCBEAM` and `IFCFLOWTERMINAL` are zero on both sides), one relation of 138 pairs, and one storey set of 15 `[name, elevation]` pairs. `independence.lineages` carries three unrelated implementations — a Rust source reader and two bridge readers in C++/Python and Rust — with `strong_copyleft` and `commercial_dropped` both empty, so Section 9.3 is satisfied with margin rather than by exactly meeting the floor. What the verdict does *not* claim is equally explicit: `IFCSPACE`, `IFCMATERIAL` and `IFCPROPERTYSET` are measured gaps between rvt-rs and Revit's own exporter, recorded rather than rounded up to "verified".
 
 On disagreement, `status` becomes `DISAGREE` and `diffs` carries one entry per disagreeing pair per field. `tolerance_applied` records the tolerance the comparison actually used, taken from the manifest category (`0` for an exact field):
 
 ```json
 {
-  "artifact_id": "magnetar-2024-core-interior",
+  "artifact_id": "magnetar-2024-core-interior-slim",
   "diffs": [
     {
       "field": "entity_counts.IFCWALL",
       "tolerance_applied": 0,
-      "value_a": 0,
-      "value_b": 3,
+      "value_a": 360,
+      "value_b": 357,
       "witness_a": "ifcopenshell",
       "witness_b": "rvt-rs"
     }
@@ -617,6 +705,7 @@ On disagreement, `status` becomes `DISAGREE` and `diffs` carries one entry per d
   "status": "DISAGREE",
   "verdict_hash_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "witnesses_compared": [
+    "ifc-lite",
     "ifcopenshell",
     "rvt-rs"
   ],
@@ -624,13 +713,16 @@ On disagreement, `status` becomes `DISAGREE` and `diffs` carries one entry per d
 }
 ```
 
+This example is constructed, not committed: the two hypothetical values stand in for a regression, and the committed verdict above carries `diffs: []`. Note that a third agreeing witness does not dissolve a disagreement — `diffs` is pairwise, so one dissenting reader is enough to fail the gate.
+
 On replay, the gate re-hashes each fresh payload against the committed observation of the same witness and records the outcome per witness. Any value other than `match` sets `REPLAY_DRIFT`. The two keys that change are shown below; the rest of the verdict is as above:
 
 ```json
 {
   "replay": {
+    "ifc-lite": "match",
     "ifcopenshell": "match",
-    "rvt-rs": "drift (committed b6d9b67c10c3350b69b58cbd2c6caeca405f63ce182e7291feba3e3ff10f3e00, fresh 0000000000000000000000000000000000000000000000000000000000000000)"
+    "rvt-rs": "drift (committed 70f8df9dd188b7e42947bfa167b2810333b3d0dc4398019ea40570b7fcb87c24, fresh 0000000000000000000000000000000000000000000000000000000000000000)"
   },
   "status": "REPLAY_DRIFT"
 }
@@ -803,7 +895,9 @@ Every registered witness must declare, in the registry, the **semantic surface**
 
 The same vocabulary is what an observation's `semantic_surface_covered` array and a manifest's `faithful_surface` / `explicitly_excluded` arrays draw from. Witness identifiers are never members of it.
 
-A witness may only be compared on fields it declares. Declaring a field it cannot actually parse is a registration violation and grounds for removal.
+The declaration is a claim about **reading**, so it belongs to reading witnesses only. An authoring witness produces the artifact that creates an edge and never emits an observation to compare; it declares no coverage, and the absence is not an omission.
+
+A witness may only be compared on fields it declares. Declaring a field it cannot actually parse is a registration violation and grounds for removal. Conversely, an observation may not claim a class the registry does not carry for that witness: `semantic_surface_covered` must be a subset of the registered declaration, checked before the diff runs.
 
 -----
 
@@ -1066,10 +1160,11 @@ What the in-repo instance provides today:
 |Verdict and independence (Sections 6.3, 9.3)|`tools/ci/witness-verdict.py --registry research/witness-registry.json`           |
 |Replay (Sections 8.4, 13)            |`tools/ci/witness-verdict.py --compare-committed`; pinned by `tests/witness_verdict.rs`  |
 |Registry (Section 5.3)               |`research/witness-registry.json`; consistency enforced by `tests/witness_registry.rs`    |
+|Coverage declaration (Section 9.4)   |`covers` per adopted reader in `research/witness-registry.json`; `tests/witness_registry.rs` holds every observation's `semantic_surface_covered` inside it|
 |CI gate (Section 10)                 |the `ifcopenshell-validate` job, observations and verdict published as build artifacts   |
 |Machine-checkable schemas (Section 6)|`docs/schemas/witness-observation.schema.json`, `docs/schemas/witness-verdict.schema.json`|
 
-What it does not provide, all of it umbrella scope (Section 5.3.1): containers (Section 10.3), hash chaining and the Ed25519 chain root (Section 12.2), the recording requirement (Section 12.3), the cross-platform determinism attestation (Section 9.5), exact version pinning of external witnesses (Section 9.6), and the `ci_eligible` / coverage-declaration registry fields.
+What it does not provide, all of it umbrella scope (Section 5.3.1): containers (Section 10.3), hash chaining and the Ed25519 chain root (Section 12.2), the recording requirement (Section 12.3), the cross-platform determinism attestation (Section 9.5), exact version pinning of external witnesses (Section 9.6), and the `ci_eligible` registry field.
 
 The reference implementation is not normative; any conforming implementation may be used. Conformance is tested by validating observations and verdicts against the published schemas and by running the reference implementation's test suite against the candidate.
 
@@ -1206,6 +1301,44 @@ fixture supports the field as strongly as the full 19879-entity export does:
 Revit writes the complete fifteen-storey spatial hierarchy into an export
 carrying a single building element, so both edges are comparable here where
 `relations.IFCRELFILLSELEMENT` is comparable on only one.
+
+## 20a. 1.1.1 (2026-08-30)
+
+Patch release, non-semantic (Section 16.1). No schema, diff-function,
+canonicalizer, provenance or status-vocabulary change; every observation and
+verdict valid under 1.1.0 is valid unchanged here.
+
+1. **§6.2 and §6.3 worked examples refreshed.** They quoted the
+   `magnetar-2024-core-interior` files as committed for 1.0.0 — two witnesses,
+   two lineages, an eight-field `entity_counts`-only surface — which 19b had
+   already labelled a dated snapshot. They are now regenerated from the
+   full-project artifact `magnetar-2024-core-interior-slim` at commit
+   `5da2570` (2026-08-30): three witnesses across three implementation
+   lineages, `schema_version: "1.1.0"` observations carrying `relations` and
+   `storeys`, and a thirteen-field verdict surface spanning all three field
+   classes with three categories excluded first-class. Trimming is confined to
+   four arrays and each trim is stated with its full length; every other byte
+   is the committed file. The `DISAGREE` and `REPLAY_DRIFT` blocks — which are
+   constructed, not committed — move to the same artifact so their identifiers
+   and the replay hash match the examples above them. The surrounding prose is
+   reconciled with what the new blocks show: the `schema_version` row of the
+   §6.2 key table, the `semantic_surface` row of the §6.3 key table (a surface
+   entry is `<field_class>.<TYPE>`, not only `entity_counts.<TYPE>`), the §6
+   preamble naming which artifact each subsection quotes, and the
+   load-bearing-properties paragraph, whose example of a type one witness
+   never emits was `IFCSHADINGDEVICE` and is now `IFCROOF` / `IFCBEAM` /
+   `IFCFLOWTERMINAL`. Closes rvt-rs #224.
+2. **§5.3.1 coverage row updated from "not implemented" to implemented.** The
+   §9.4 coverage declaration is no longer umbrella scope: the reference
+   implementation's registry carries `covers` per adopted reader, drawn from
+   the §9.4 vocabulary, and `tests/witness_registry.rs` requires every
+   committed observation's `semantic_surface_covered` to be a subset of it.
+   §9.4 gains the two clarifications that implementation forced — the
+   declaration is reader-only, because an authoring witness emits an artifact
+   rather than an observation, and the subset rule is checked before the diff
+   runs — and §16.3 moves the row from "does not provide" to the provides
+   table, leaving `ci_eligible` as the only registry field still umbrella
+   scope. Closes rvt-rs #229.
 
 ## 19b. 1.0.2 (2026-08-30)
 
