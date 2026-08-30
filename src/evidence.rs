@@ -117,6 +117,16 @@ impl EvidenceLedger {
     pub fn max_tier(&self) -> Option<EvidenceTier> {
         self.records.iter().map(|r| r.tier).max()
     }
+
+    /// Serialize to pretty JSON for research artifacts.
+    pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+
+    /// Deserialize from JSON (round-trip helper).
+    pub fn from_json_str(s: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(s)
+    }
 }
 
 /// Append-only typed-edge ledger.
@@ -135,6 +145,16 @@ impl EdgeLedger {
         self.edges
             .iter()
             .filter(|e| matches!(e.kind, EdgeKind::EsElementIdRef | EdgeKind::EsValueTree))
+    }
+
+    /// Serialize to pretty JSON for research artifacts.
+    pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+
+    /// Deserialize from JSON (round-trip helper).
+    pub fn from_json_str(s: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(s)
     }
 }
 
@@ -173,5 +193,16 @@ mod tests {
         let json = serde_json::to_value(&edges).expect("ser");
         let back: EdgeLedger = serde_json::from_value(json).expect("de");
         assert_eq!(back.edges.len(), 2);
+
+        let mut evidence = EvidenceLedger::default();
+        evidence.push(EvidenceRecord::research_stub("phase1 leftover"));
+        let e_json = evidence.to_json_string().expect("evidence ser");
+        let e_back = EvidenceLedger::from_json_str(&e_json).expect("evidence de");
+        assert_eq!(e_back.records.len(), 1);
+        assert!(e_back.records[0].non_claims.len() >= 2);
+
+        let edge_json = edges.to_json_string().expect("edge ser");
+        let edge_back = EdgeLedger::from_json_str(&edge_json).expect("edge de");
+        assert_eq!(edge_back.es_edges().count(), 1);
     }
 }

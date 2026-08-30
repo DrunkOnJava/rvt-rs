@@ -13,6 +13,13 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Experimental relation domains + capability doctor** — `relations`
+  registry (ES / BIM / ElemTable isolation), Tarjan SCC + condensation +
+  quarantine stubs with unit tests; `capability::CapabilityManifest`
+  honest snapshot (ArcWall 2023 verified, compound/`es.elementid_remap`
+  unsupported); `rvt-capabilities` CLI; evidence ledger JSON round-trip
+  helpers; `docs/schemas/capability-manifest.schema.json`. Architecture
+  only — not wired to production IFC/topology claims.
 - **TransmissionData opportunistic extracts** — UTF-16LE probe now harvests
   UUID / path-like / XML node-name triage tokens when present; empty extract
   list explicitly means unknown, not “no links”. Still no linked-model
