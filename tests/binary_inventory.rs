@@ -18,7 +18,10 @@ fn declared_bins() -> Vec<String> {
             in_bin = line == "[[bin]]";
             continue;
         }
-        if in_bin && let Some(rest) = line.strip_prefix("name") {
+        if !in_bin {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("name") {
             let name = rest
                 .trim_start()
                 .trim_start_matches('=')

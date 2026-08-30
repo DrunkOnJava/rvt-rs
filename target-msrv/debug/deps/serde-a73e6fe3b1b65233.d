@@ -1,0 +1,14 @@
+/Users/griffin/Developer/worktrees/rvt-rs/msrv-fix/target-msrv/debug/deps/libserde-a73e6fe3b1b65233.rmeta: /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/griffin/Developer/worktrees/rvt-rs/msrv-fix/target-msrv/debug/build/serde-e7df531d41797cfe/out/private.rs
+
+/Users/griffin/Developer/worktrees/rvt-rs/msrv-fix/target-msrv/debug/deps/libserde-a73e6fe3b1b65233.rlib: /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/griffin/Developer/worktrees/rvt-rs/msrv-fix/target-msrv/debug/build/serde-e7df531d41797cfe/out/private.rs
+
+/Users/griffin/Developer/worktrees/rvt-rs/msrv-fix/target-msrv/debug/deps/serde-a73e6fe3b1b65233.d: /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/griffin/Developer/worktrees/rvt-rs/msrv-fix/target-msrv/debug/build/serde-e7df531d41797cfe/out/private.rs
+
+/Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/griffin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/griffin/Developer/worktrees/rvt-rs/msrv-fix/target-msrv/debug/build/serde-e7df531d41797cfe/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/griffin/Developer/worktrees/rvt-rs/msrv-fix/target-msrv/debug/build/serde-e7df531d41797cfe/out
