@@ -140,13 +140,26 @@ registry, and the gates live here.
 
 ## OctetProof alignment
 
-The protocol above is the in-repo instance of the OctetProof draft
-(`docs/octetproof-spec-draft.md`, received 2026-08-30, reviewer notes in its
-Appendix A). What exists here today, per layer:
+The protocol above is the in-repo instance of
+[OctetProof 1.0.0](octetproof-spec.md) (the received draft is kept verbatim at
+`docs/octetproof-spec-draft.md`; §19 of the 1.0.0 spec lists the corrections).
+The observation and verdict shapes are published as machine-checkable JSON
+Schema 2020-12 documents —
+[`docs/schemas/witness-observation.schema.json`](schemas/witness-observation.schema.json)
+(§6.2) and
+[`docs/schemas/witness-verdict.schema.json`](schemas/witness-verdict.schema.json)
+(§6.3) — and the committed files under
+`research/witness/magnetar-2024-core-interior/` validate against them. §5.3.1 of
+the spec maps its `registry.yaml` vocabulary onto the fields of
+`research/witness-registry.json` and names the four requirements
+(`ci_eligible`, coverage declaration, determinism attestation, exact version
+pinning) that stay umbrella scope until the second edge exists.
+
+What exists here today, per layer:
 
 | OctetProof layer | rvt-rs today |
 |---|---|
-| 1 Protocol | this document + the draft spec |
+| 1 Protocol | this document + [`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.0) |
 | 2 Golden corpus | `research/witness/<artifact>/observations/*.json` + `verdict.json`; artifact hashes in the registry and the project-count manifests (the bytes themselves stay in the magnetar dataset, fetched by hash) |
 | 3 Witness registry | `research/witness-registry.json` (`lineage`, `checked`) |
 | 4 CI gate | `tools/ci/witness-verdict.py` in the `ifcopenshell-validate` job: fail-closed statuses `PASS` / `DISAGREE` / `INSUFFICIENT_WITNESSES` / `INSUFFICIENT_INDEPENDENT_WITNESSES` / `REJECTED_INPUT` / `MANIFEST_ERROR` / `REPLAY_DRIFT`; observations and verdict published as a build artifact |
