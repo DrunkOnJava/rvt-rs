@@ -92,8 +92,7 @@ changes, then use the standard npm scripts:
 
 ```bash
 # From the repo root — build WASM into viewer/pkg/
-wasm-pack build --target web -- --features wasm --no-default-features
-rm -rf viewer/pkg && mv pkg viewer/pkg
+wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
 
 cd viewer
 npm ci

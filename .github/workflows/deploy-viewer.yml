@@ -1,7 +1,8 @@
 name: Deploy viewer
 
 # VW1-18 — build the WASM + the Vite site and publish to
-# https://drunkonjava.github.io/rvt-rs/viewer/ via GitHub Pages.
+# https://drunkonjava.github.io/rvt-rs/ via GitHub Pages (Pages root;
+# the old `/viewer/` sub-path 404s).
 # Runs on every push to main that touches viewer/ or src/ (so the
 # WASM stays fresh), plus manual runs.
 
@@ -73,15 +74,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y wabt
 
       - name: Build WASM
-        # wasm-pack argument parsing is order-sensitive. Everything
-        # before `--` goes to wasm-pack; everything after goes to
-        # cargo. Default out-dir (`./pkg`) avoids an interaction
-        # where `--out-dir` after `--features` is forwarded to
-        # `cargo build`, which doesn't recognise it.
-        run: |
-          wasm-pack build --target web -- --features wasm --no-default-features
-          rm -rf viewer/pkg
-          mv pkg viewer/pkg
+        # wasm-pack argument parsing is order-sensitive. Everything before
+        # `--` goes to wasm-pack (including `--out-dir`); everything after
+        # goes to cargo. Putting `--out-dir` before `--` writes straight into
+        # viewer/pkg, so no rm/mv shuffle is needed.
+        run: wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
 
       - name: Verify no network imports in wasm (VW1-21)
         run: |
