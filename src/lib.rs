@@ -116,6 +116,7 @@ pub mod class_index;
 pub mod class_tag_map;
 pub mod compound_framing;
 pub mod compression;
+pub mod control;
 pub mod corpus;
 pub mod elem_table;
 pub mod elements;

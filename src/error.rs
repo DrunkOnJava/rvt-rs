@@ -38,4 +38,10 @@ pub enum Error {
 
     #[error("Invalid UTF-16: {0}")]
     Utf16(String),
+
+    /// A caller-supplied [`crate::control::CancelToken`] was cancelled
+    /// while a scan was running. Partial results are discarded; the
+    /// file itself is fine.
+    #[error("operation cancelled by caller")]
+    Cancelled,
 }
