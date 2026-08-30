@@ -10,7 +10,7 @@ use rvt::RevitFile;
 use rvt::elements::typed_json::mvp_typed_view;
 use rvt::walker::{
     DecodedElement, InstanceField, PRODUCTION_ELEMENT_MIN_SCORE, WalkerLimits,
-    iter_elements_with_limits,
+    iter_elements_with_control,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -39,6 +39,11 @@ struct Cli {
     /// viewer/export low-confidence filter.
     #[arg(long, default_value_t = 0.0)]
     min_confidence: f32,
+
+    /// Print scan progress to stderr (`progress: <stage> <done>/<total>`).
+    /// Useful on large project files where the walker runs for a while.
+    #[arg(long)]
+    progress: bool,
 }
 
 #[derive(Serialize)]
@@ -71,10 +76,19 @@ struct CountsOut {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let mut rf = RevitFile::open(&cli.file)?;
-    let elements: Vec<DecodedElement> = iter_elements_with_limits(
+    let control = if cli.progress {
+        rvt::control::WalkerControl::new().with_progress(|event| {
+            let total = event.total.map(|t| format!("/{t}")).unwrap_or_default();
+            eprintln!("progress: {} {}{total}", event.stage.as_str(), event.done);
+        })
+    } else {
+        rvt::control::WalkerControl::new()
+    };
+    let elements: Vec<DecodedElement> = iter_elements_with_control(
         &mut rf,
         PRODUCTION_ELEMENT_MIN_SCORE,
         WalkerLimits::default(),
+        &control,
     )?
     .filter(|e| e.meets_confidence(cli.min_confidence))
     .collect();
