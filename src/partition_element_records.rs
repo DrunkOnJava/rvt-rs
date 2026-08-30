@@ -75,6 +75,14 @@
 //!   not sentinel-terminated, and the count is bounded by
 //!   [`REFERENCE_LIST_MAX_ENTRIES`] so a garbage word cannot make the
 //!   decoder walk off.
+//! - A *second* counted list follows the first, framed identically.
+//!   Its last slot is named [`PartitionElementRecord::owner_reference`]
+//!   because on every [`OST_SKETCH_LINES`] record of the recorded edge
+//!   it names the element whose sketch the line belongs to: the 3106
+//!   sketch-line records on `2024_Core_Interior.rvt` name 135 owners,
+//!   and 100 of them are exactly the 80 `IfcSlab` + 20
+//!   `IfcShadingDevice` ElementIds the reference export tags (#31,
+//!   RE-25). On other categories it is only what the byte says.
 //! - Category membership alone is **not** an instance claim: a
 //!   family symbol carries the same category as its instances.
 
@@ -103,6 +111,15 @@ pub const OST_FLOORS: i64 = -2_000_032;
 /// `OST_Floors` record (`Pad:Site Pad`, ElementId 21975) carries this
 /// category instead (#212, RE-22).
 pub const OST_BUILDING_PAD: i64 = -2_001_263;
+
+/// Autodesk `BuiltInCategory.OST_SketchLines` — the lines of a
+/// sketch (floor / roof / ceiling boundary, extrusion profile).
+///
+/// Records of this category carry the sketch segment's own bounding
+/// box, which for a plan boundary line is the segment itself, and
+/// name the sketched element in
+/// [`PartitionElementRecord::owner_reference`] (#31, RE-25).
+pub const OST_SKETCH_LINES: i64 = -2_000_045;
 
 /// Lower bound of the Revit `BuiltInCategory` id band.
 pub const BUILTIN_CATEGORY_MIN: i64 = -2_100_000;
@@ -170,6 +187,18 @@ pub struct PartitionElementRecord {
     /// that the value is a wall — the caller does
     /// (`partition_schema_mvp::opening_instances_from_records`).
     pub preceding_reference: Option<u32>,
+    /// Last slot of the *second* counted reference list at `+0x88`
+    /// (#31, RE-25).
+    ///
+    /// `None` when either list does not decode, when the second list
+    /// is empty, or when its last slot is outside the `u32`
+    /// ElementId range.
+    ///
+    /// On an [`OST_SKETCH_LINES`] record this is the element whose
+    /// sketch the line belongs to. Nothing here checks what kind of
+    /// element that is — the caller does
+    /// (`element_record_plan_profiles`).
+    pub owner_reference: Option<u32>,
 }
 
 impl PartitionElementRecord {
@@ -317,6 +346,27 @@ pub fn decode_reference_list(buf: &[u8], at: usize) -> Option<Vec<u64>> {
     Some(out)
 }
 
+/// Decode the last slot of the *second* counted reference list whose
+/// first list's `u32` length prefix sits at `at` (#31, RE-25).
+///
+/// Both lists are framed identically — a `u32` count followed by that
+/// many `u64` slots — so the second starts `4 + 8 * n1` bytes after
+/// the first. Returns `None` unless both decode through
+/// [`decode_reference_list`] and the second's last slot is a non-zero
+/// `u32`-range ElementId.
+pub fn decode_owner_reference(buf: &[u8], at: usize) -> Option<u32> {
+    let first = decode_reference_list(buf, at)?;
+    let second_at = at
+        .checked_add(4)?
+        .checked_add(first.len().checked_mul(8)?)?;
+    let second = decode_reference_list(buf, second_at)?;
+    let last = *second.last()?;
+    if last == 0 || last > u64::from(u32::MAX) {
+        return None;
+    }
+    Some(last as u32)
+}
+
 /// The slot immediately before `element_id`'s last occurrence in
 /// `entries`, when that slot is a `u32`-range ElementId.
 fn slot_before(entries: &[u64], element_id: u32) -> Option<u32> {
@@ -381,6 +431,9 @@ pub fn decode_at(
         .checked_add(REFERENCE_LIST_OFFSET)
         .and_then(|at| decode_reference_list(buf, at))
         .and_then(|entries| slot_before(&entries, element_id));
+    let owner_reference = offset
+        .checked_add(REFERENCE_LIST_OFFSET)
+        .and_then(|at| decode_owner_reference(buf, at));
     Some(PartitionElementRecord {
         stream: stream.to_string(),
         offset,
@@ -391,6 +444,7 @@ pub fn decode_at(
         placement_kind,
         bbox_feet,
         preceding_reference,
+        owner_reference,
     })
 }
 
@@ -453,6 +507,26 @@ pub fn scan_category_records(
     builtin_category: i64,
     declared_ids: &BTreeSet<u32>,
 ) -> Result<Vec<PartitionElementRecord>> {
+    scan_category_records_multi(rf, revit_version, &[builtin_category], declared_ids)
+}
+
+/// Scan every `Partitions/*` stream once for records in **any** of
+/// `builtin_categories`.
+///
+/// Same result as calling [`scan_category_records`] per category and
+/// concatenating, but each stream is inflated once instead of once
+/// per category — inflation dominates the cost on a 190 MiB project
+/// file, and the slab path needs three categories at a time
+/// (`OST_Floors`, `OST_BuildingPad`, `OST_SketchLines`).
+///
+/// Records are returned grouped by category in the order given, and
+/// by `(stream, offset)` within a category.
+pub fn scan_category_records_multi(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    builtin_categories: &[i64],
+    declared_ids: &BTreeSet<u32>,
+) -> Result<Vec<PartitionElementRecord>> {
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -461,21 +535,24 @@ pub fn scan_category_records(
         .into_iter()
         .filter(|s| s.starts_with("Partitions/"))
         .collect();
-    let mut out = Vec::new();
+    let mut per_category: Vec<Vec<PartitionElementRecord>> =
+        vec![Vec::new(); builtin_categories.len()];
     for stream in streams {
         let Ok(raw) = rf.read_stream(&stream) else {
             continue;
         };
         let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
         let concat: Vec<u8> = chunks.into_iter().flatten().collect();
-        out.extend(find_category_records(
-            &stream,
-            &concat,
-            builtin_category,
-            declared_ids,
-        ));
+        for (index, category) in builtin_categories.iter().enumerate() {
+            per_category[index].extend(find_category_records(
+                &stream,
+                &concat,
+                *category,
+                declared_ids,
+            ));
+        }
     }
-    Ok(out)
+    Ok(per_category.into_iter().flatten().collect())
 }
 
 #[cfg(test)]
@@ -709,9 +786,61 @@ mod tests {
     }
 
     #[test]
+    fn owner_reference_is_the_last_slot_of_the_second_list() {
+        // An `OST_SketchLines` record as `Partitions/46` frames it:
+        // a five-slot sibling list, then a two-slot list whose last
+        // entry is the sketched element (slab 20311).
+        let mut buf = with_reference_list(
+            synth_record(
+                20310,
+                OST_SKETCH_LINES,
+                [20.0, 25.0, 46.0, 20.0, 114.0, 46.0],
+            ),
+            &[20309, 20310, 20312, 20313, 20315],
+        );
+        buf.extend_from_slice(&2u32.to_le_bytes());
+        buf.extend_from_slice(&20_308u64.to_le_bytes());
+        buf.extend_from_slice(&20_311u64.to_le_bytes());
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[20310])).expect("decodes");
+        assert_eq!(record.builtin_category, OST_SKETCH_LINES);
+        assert_eq!(record.owner_reference, Some(20_311));
+    }
+
+    #[test]
+    fn owner_reference_is_absent_without_a_second_list() {
+        let buf = with_reference_list(
+            synth_record(
+                20310,
+                OST_SKETCH_LINES,
+                [20.0, 25.0, 46.0, 20.0, 114.0, 46.0],
+            ),
+            &[20309, 20310],
+        );
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[20310])).expect("decodes");
+        assert_eq!(record.owner_reference, None);
+    }
+
+    #[test]
+    fn owner_reference_rejects_a_slot_outside_the_element_id_range() {
+        let mut buf = with_reference_list(
+            synth_record(
+                20310,
+                OST_SKETCH_LINES,
+                [20.0, 25.0, 46.0, 20.0, 114.0, 46.0],
+            ),
+            &[20309, 20310],
+        );
+        buf.extend_from_slice(&1u32.to_le_bytes());
+        buf.extend_from_slice(&(u64::from(u32::MAX) + 1).to_le_bytes());
+        let record = decode_at("Partitions/46", &buf, 0, &declared(&[20310])).expect("decodes");
+        assert_eq!(record.owner_reference, None);
+    }
+
+    #[test]
     fn a_record_without_a_reference_list_still_decodes() {
         let buf = synth_record(22805, OST_COLUMNS, [1.0, 2.0, 0.0, 3.0, 4.0, 8.0]);
         let record = decode_at("Partitions/46", &buf, 0, &declared(&[22805])).expect("decodes");
         assert_eq!(record.preceding_reference, None);
+        assert_eq!(record.owner_reference, None);
     }
 }

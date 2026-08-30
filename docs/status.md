@@ -116,14 +116,39 @@ extrusion thickness — it equals the export's
 `floor_slab_extrusion_thickness` for record-backed slabs (#31); the
 plan-loop boundary annotations they replace stand down on files where
 records decode, so exactly one `IFCSLAB` is emitted per exported id.
+**Every one of the 80 slabs also carries its real plan profile** (#31,
+RE-25): each boundary line of a Revit sketch is its own partition
+element record — `BuiltInCategory` `OST_SketchLines` (−2000045), the
+same 88-byte prologue, its own bounding box — and the last slot of the
+*second* counted reference list at `+0x88` names the sketched element.
+On Core Interior 3688 such records name 126 owners, among them all 80
+exported `IFCSLAB` and all 20 exported `IFCSHADINGDEVICE` ids; the join
+is by ElementId alone, with no geometry in it. Segments are chained by
+closure rather than fitted: a box degenerate on one axis contributes its
+endpoints, every other box is placed only when exactly one pair of
+still-open vertices fits it, and anything ambiguous rejects the whole
+element. Measured against the reference export's swept areas, **80 of 80
+slab profiles are exact** — 122 loops (80 outer plus 42 rectangular
+voids), worst vertex deviation 1.563e-12 ft, tolerance 1e-3 ft — so 42
+perimeter plates emit `IfcArbitraryProfileDefWithVoids` (a 26-vertex
+outer ring around one rectangular courtyard void) and 38 emit
+`IfcArbitraryClosedProfileDef`. The 20 shading devices are rotated
+plates whose sketch-line boxes are axis-aligned envelopes of diagonal
+segments; the closure declines them, and they keep the record box
+rectangle with `ProfileResolved: false`. The pre-RE-25 plan-loop scan is
+a measured dead end for this: 2317 closed plan-polyline candidates
+across all eight inflated partitions, none with the plan bounds of any
+recovered plate, and no ordered vertex run of the export's polygon
+anywhere in the file at any stride.
 IFC export maps recovered Levels → storeys (with their real Revit
 names and elevations on Revit 2024, #218), Rooms → spaces, and
 Walls / Doors / Windows / Columns / Floors / BuildingPads →
 `IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` (or
-`IfcShadingDevice` when overridden) with placement and a
-bounding-box extrusion (envelope, not a recovered family profile,
-wall location curve or floor boundary polygon; base/top Level
-ElementId binding still open), and
+`IfcShadingDevice` when overridden) with placement and an extrusion.
+The extrusion body is the record's bounding box everywhere except the
+plan profile of a slab whose sketch closes, which is the sketch itself
+(no recovered family profile or wall location curve anywhere; base/top
+Level ElementId binding still open), and
 Material display names → `IfcMaterial`.
 **Doors and windows are bound to their host wall** (#222, RE-23): the
 element record's counted reference list at `+0x88` names the host in

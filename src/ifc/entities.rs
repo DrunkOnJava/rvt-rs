@@ -398,6 +398,23 @@ impl Extrusion {
             profile_override: Some(ProfileDef::ArbitraryClosed { points }),
         }
     }
+
+    /// Extrusion of an arbitrary closed polygon with holes
+    /// (`IFCArbitraryProfileDefWithVoids`). `width_feet` /
+    /// `depth_feet` are set from the **outer** polygon's plan
+    /// bounding box, so a consumer that ignores the override still
+    /// reads a sane envelope.
+    pub fn arbitrary_with_voids(
+        points: Vec<(f64, f64)>,
+        voids: Vec<Vec<(f64, f64)>>,
+        height_feet: f64,
+    ) -> Self {
+        let mut base = Self::arbitrary_closed(points, height_feet);
+        if let Some(ProfileDef::ArbitraryClosed { points }) = base.profile_override.take() {
+            base.profile_override = Some(ProfileDef::ArbitraryWithVoids { points, voids });
+        }
+        base
+    }
 }
 
 /// Boolean operation between two solids (IFC-19).
@@ -626,6 +643,18 @@ pub enum ProfileDef {
     /// the first. No self-intersection check is performed — callers
     /// supplying degenerate polygons will emit degenerate IFC.
     ArbitraryClosed { points: Vec<(f64, f64)> },
+    /// `IFCArbitraryProfileDefWithVoids` — an `ArbitraryClosed`
+    /// outer curve with one `IFCPOLYLINE` per hole. Points are in
+    /// local 2D coordinates (feet); the writer auto-closes every
+    /// polyline. Use it when the recovered boundary genuinely has
+    /// voids: emitting only the outer loop would fill them, which
+    /// states more solid than the source carries. IFC4 expects the
+    /// outer curve counter-clockwise and each inner curve
+    /// clockwise; the writer emits the point order it is given.
+    ArbitraryWithVoids {
+        points: Vec<(f64, f64)>,
+        voids: Vec<Vec<(f64, f64)>>,
+    },
 }
 
 /// One layer of a compound building-element material assembly
