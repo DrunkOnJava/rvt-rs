@@ -326,6 +326,7 @@ Normative reading of the fields the gate consumes:
 - `counts.<category>.tolerance` — the per-category count tolerance (Section 7.2). Absent means exact.
 - The `decoder_*` fields are the decoder repository's own regression baseline, not a cross-witness input. The gate ignores them.
 - `relations.<category>` (1.1.0) — a relation category, parallel to a count category and read the same way. `relation_ifc_type` is the field name compared across witnesses (`relations.<relation_ifc_type>`); `expected_pairs` is the pair count on the reference side; `status` uses the count vocabulary, so `known` puts the relation inside the claimed surface and anything else excludes it first-class. There is no `tolerance` — Section 7.2 gives the field class no tolerance concept.
+- `storeys.<category>` (1.1.0) — a storey-set category, parallel to a relation category. `storey_ifc_type` is the field name compared across witnesses (`storeys.<storey_ifc_type>`); `expected_storeys` is the storey count on the reference side; `status` uses the count vocabulary. There is no `tolerance` here either.
 
 **Planned extension — DWG bridge (not yet implemented).** When the RVT → DWG edge is recorded, the manifest gains a bridge block naming the export that produced it. This block is specified here so implementers can write against it; no manifest in the reference implementation carries it today:
 
@@ -472,7 +473,17 @@ Since 1.1.0 the payload may also carry `relations`, an object mapping a relation
 
 A witness emitting it declares `relations` in `semantic_surface_covered` and sets `schema_version` to `"1.1.0"`; the examples below predate that and are 1.0.0 snapshots.
 
-Two properties of the payload are load-bearing. First, the witnesses share only what the manifest names — `entity_counts`, and since 1.1.0 `relations`; everything else in a payload is witness-specific and is not diffed. Second, a witness may report a type the other never emits (`IFCSHADINGDEVICE` here) — the diff is driven by the manifest's declared surface, not by the union of the payload keys, and a type absent from a payload counts as zero.
+Since 1.1.0 the payload may also carry `storeys`, an object mapping a spatial type to its sorted `[name, elevation-in-feet]` set:
+
+```json
+"storeys": {
+  "IFCBUILDINGSTOREY": [["Basement 1", "-20.000000"], ["Basement 2", "-40.000000"], ["Level 1", "0.000000"]]
+}
+```
+
+A witness emitting it declares `storeys` in `semantic_surface_covered`. The elevation is a string in feet, unit-normalized by each witness from its own file's declared `LENGTHUNIT` (Section 7.2, field class *storey sets*).
+
+Two properties of the payload are load-bearing. First, the witnesses share only what the manifest names — `entity_counts`, and since 1.1.0 `relations` and `storeys`; everything else in a payload is witness-specific and is not diffed. Second, a witness may report a type the other never emits (`IFCSHADINGDEVICE` here) — the diff is driven by the manifest's declared surface, not by the union of the payload keys, and a type absent from a payload counts as zero.
 
 Observations are **canonicalized** with RFC 8785 (JSON Canonicalization Scheme) before hashing or diffing. Key ordering, number formatting, and Unicode normalization are fixed. This guarantees bit-identical hashes across languages and platforms.
 
@@ -647,6 +658,7 @@ The diff function is the load-bearing definition of the protocol. It is the sing
 |--------------------|-------------------------------------------------|-----------------------------------------------------------------------------------------|
 |Entity counts       |Exact integer equality                           |None, unless the manifest states a per-category integer tolerance with a written reason  |
 |Relation pair sets  |Exact equality of the sorted pair multiset       |None — the field class has no tolerance concept                                          |
+|Storey sets         |Exact equality of the sorted set of (name, elevation rounded to 1e-6 ft)|None — the field class has no tolerance concept                           |
 |Layer names         |Case-sensitive string equality after trim        |None                                                                                     |
 |Layer color/linetype|Exact                                            |None                                                                                     |
 |Bounding box        |Component-wise                                   |Relative `1e-6` with an absolute floor stated by the manifest in the artifact's model units|
@@ -670,6 +682,14 @@ Counts are exact. A manifest may relax a category to an integer tolerance, but o
 A relation is a strictly stronger claim than a count. Two witnesses can agree on 138 `IfcRelFillsElement` instances while disagreeing about every wall those 138 openings belong to; agreeing on the pair set means they agree on the topology.
 
 Manifests declare relations in a `relations` block parallel to `counts`, keyed by category, each entry carrying `relation_ifc_type`, `expected_pairs`, `status`, and — where the decoder's own baseline is tracked — `decoder_metric` and `decoder_expected_pairs`. `status` uses the same vocabulary as a count category, so a relation the two sides of an edge cannot be compared on is excluded first-class with its tracking issue rather than diffed.
+
+**Storey sets** (added in 1.1.0). A storey set names the artifact's spatial storeys as the sorted set of `[name, elevation]` pairs, one per storey. The name is the entity's `Name` attribute as the witness decodes it, compared as exact UTF-8 bytes. The elevation is a *unit-normalized* string: each witness resolves the artifact's own declared length unit and renders the storey elevation in feet at 1e-6 ft with six decimal places, normalizing `-0` to `0`. The normalization is the point of the field class — Revit's IFC export of an imperial project declares `FOOT` (an `IfcConversionBasedUnit` over `METRE`) while a decoder may write `METRE`, so the raw `Elevation` numbers of two faithful witnesses differ by a factor of 3.28 and the field would be undiffable without it. The value is carried as a string, not a number, because Section 7.3's canonical form is defined over integers and strings: two runtimes must not be trusted to print the same `f64` identically.
+
+An unset name or an unreadable elevation is the empty string, never an omitted storey — a missing half must surface as a disagreement, not as a silent shortening. A witness that cannot resolve the artifact's length unit emits an empty storey set rather than guessing metres, which disagrees loudly with any witness that could. Unicode normalization is deliberately **not** applied to the name: the three reference witnesses run on three runtimes with three different Unicode tables, and a normalizer that disagrees between them would launder a real difference into agreement. A name that differs only in composition form is therefore a diff — fail-closed, and the strict direction.
+
+Comparison is exact set equality; a diff reports the storey count on each side plus the storeys each side holds alone (`only_in_a` / `only_in_b`), with `tolerance_applied: false`. Like a relation, a storey set is a strictly stronger claim than a count: two witnesses can agree on fifteen `IfcBuildingStorey` instances while placing every one of them at a different height, or under a different name.
+
+Manifests declare storeys in a `storeys` block parallel to `counts` and `relations`, keyed by category, each entry carrying `storey_ifc_type`, `expected_storeys`, `status`, and — where the decoder's own baseline is tracked — `decoder_metric` and `decoder_expected_storeys`.
 
 ### 7.3 Canonicalization
 
@@ -771,6 +791,7 @@ Every registered witness must declare, in the registry, the **semantic surface**
 
 - `entity_counts`
 - `relations` (added in 1.1.0)
+- `storeys` (added in 1.1.0)
 - `layer_topology`
 - `linework`
 - `bounding_boxes`
@@ -1135,6 +1156,56 @@ excluded: its paired export is a 20 KB element fixture carrying no
 `IfcRelFillsElement` at all, so the two sides of that edge are not comparable
 on this field. This is Section 17 open question 6 in miniature — the surface a
 thin artifact can support is thin, and saying so is the point.
+
+### 20.2 Storey sets (`storeys`)
+
+Adds one field class, one surface-vocabulary term, and one manifest block.
+Independent of 20.1: a witness may declare either, both, or neither.
+
+**What is new.**
+
+1. **Section 7.2 — storey sets.** A storey set is the sorted set of
+   `[name, elevation]` pairs naming an artifact's spatial storeys, with the
+   elevation *unit-normalized* to feet at 1e-6 and carried as a fixed
+   six-decimal string. Comparison is exact set equality with no tolerance
+   concept; a diff names the storeys each side holds alone. The first
+   recorded storey type is `IFCBUILDINGSTOREY`.
+2. **Section 9.4 — `storeys` joins the coverage vocabulary.**
+3. **Section 6.1 — manifests gain a `storeys` block** parallel to `counts`
+   and `relations`, with the same `status` vocabulary.
+4. **Section 6.2 — the observation payload gains an optional `storeys`
+   object**, `{ "<STOREY_TYPE>": [[name, elevation], …] }`, under its own
+   top-level payload key, separate from `relations`. The envelope, the
+   canonicalization rules and the hash definition are unchanged.
+
+**Why it matters.** This is the first field class in the protocol where the
+two sides of an edge express the *same physical quantity in different units*.
+Revit's IFC export of an imperial project declares `FOOT`; a decoder writing
+SI declares `METRE`; both are faithful and their raw `Elevation` numbers
+differ by 3.28. Comparing them requires each witness to resolve its own
+file's declared length unit before emitting — which makes unit resolution
+part of the claimed surface rather than an implementation detail, and makes a
+unit-handling bug a `DISAGREE` instead of a silently 3.28×-wrong building.
+The elevation travels as a string for the same reason the canonicalizer is
+restricted to integers and strings (Section 7.3): a Rust witness and a Python
+witness must not be asked to print the same `f64` identically.
+
+It is also the first surface carrying a decoder-recovered *label*. A count
+proves cardinality; a relation proves topology; a storey set proves that the
+decoder read the name Revit wrote and put it at the height Revit wrote,
+which is the claim a spatial hierarchy actually makes.
+
+**Recorded instance.** Both `magnetar-2024-core-interior` and
+`magnetar-2024-core-interior-slim`, where `storeys.IFCBUILDINGSTOREY` joins
+the claimed surface with the same fifteen pairs — `Basement 2` at −40 ft
+through `Level 13` at 185.5 ft — on which `rvt-rs`, IfcOpenShell 0.8.5 and
+IFClite 7.1.1 agree exactly. `entity_counts.IFCBUILDINGSTOREY` joins on the
+same commit, moving both manifests' `levels` category from `decoder_baseline`
+to `known` at tolerance 0. Unusually for this corpus the thin 20 KB element
+fixture supports the field as strongly as the full 19879-entity export does:
+Revit writes the complete fifteen-storey spatial hierarchy into an export
+carrying a single building element, so both edges are comparable here where
+`relations.IFCRELFILLSELEMENT` is comparable on only one.
 
 ## 19b. 1.0.2 (2026-08-30)
 

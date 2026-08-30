@@ -139,6 +139,54 @@ fn committed_observations_rehash_and_name_registered_inputs() {
                         previous = Some(pair);
                     }
                 }
+                // Storey sets (#218): `[name, elevation-in-feet]`, sorted,
+                // the elevation always a six-decimal string so the canonical
+                // form stays integer/string only (spec §7.2, §7.3).
+                let storeys = &obs["observation"]["storeys"];
+                assert!(storeys.is_object(), "{ctx}: storeys payload");
+                for (storey_type, entries) in storeys.as_object().unwrap() {
+                    let entries = entries
+                        .as_array()
+                        .unwrap_or_else(|| panic!("{ctx}: storeys.{storey_type} must be an array"));
+                    let mut previous: Option<Vec<&str>> = None;
+                    for entry in entries {
+                        let entry: Vec<&str> = entry
+                            .as_array()
+                            .unwrap_or_else(|| {
+                                panic!("{ctx}: storeys.{storey_type} entries must be arrays")
+                            })
+                            .iter()
+                            .map(|field| {
+                                field.as_str().unwrap_or_else(|| {
+                                    panic!("{ctx}: storeys.{storey_type} fields must be strings")
+                                })
+                            })
+                            .collect();
+                        assert_eq!(entry.len(), 2, "{ctx}: storeys.{storey_type} pair arity");
+                        let elevation = entry[1];
+                        assert!(
+                            elevation
+                                .split_once('.')
+                                .is_some_and(|(_, frac)| frac.len() == 6),
+                            "{ctx}: storeys.{storey_type} elevation {elevation} must carry six decimals"
+                        );
+                        assert!(
+                            elevation.parse::<f64>().is_ok(),
+                            "{ctx}: storeys.{storey_type} elevation {elevation} must parse"
+                        );
+                        assert_ne!(
+                            elevation, "-0.000000",
+                            "{ctx}: storeys.{storey_type} must normalise negative zero"
+                        );
+                        if let Some(previous) = &previous {
+                            assert!(
+                                previous.as_slice() <= entry.as_slice(),
+                                "{ctx}: storeys.{storey_type} must be canonically sorted"
+                            );
+                        }
+                        previous = Some(entry);
+                    }
+                }
             }
             seen += 1;
         }

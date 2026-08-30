@@ -21,7 +21,7 @@
   ],
   "properties": {
     "schema_version": {
-      "description": "The OctetProof version this observation conforms to. 1.1.0 added the optional `relations` payload key and the `relations` surface term (§20); the envelope is otherwise unchanged, so 1.0.0 observations stay valid (§16.2).",
+      "description": "The OctetProof version this observation conforms to. 1.1.0 added the optional `relations` and `storeys` payload keys and their surface terms (§20.1, §20.2); the envelope is otherwise unchanged, so 1.0.0 observations stay valid (§16.2).",
       "type": "string",
       "enum": ["1.0.0", "1.1.0"]
     },
@@ -69,6 +69,7 @@
         "enum": [
           "entity_counts",
           "relations",
+          "storeys",
           "layer_topology",
           "linework",
           "bounding_boxes",
@@ -81,7 +82,7 @@
       }
     },
     "observation": {
-      "description": "The payload — the only part that is canonicalized, hashed, and diffed. `entity_counts` and `relations` are the cross-witness surface; every other key is witness-specific and is not compared.",
+      "description": "The payload — the only part that is canonicalized, hashed, and diffed. `entity_counts`, `relations` and `storeys` are the cross-witness surface; every other key is witness-specific and is not compared.",
       "type": "object",
       "required": ["entity_counts"],
       "properties": {
@@ -92,6 +93,19 @@
         },
         "relations": {
           "description": "Per-relation pair multisets (§7.2, added in 1.1.0). Each value is the relation's `[a_identity, b_identity]` pairs sorted lexicographically, duplicates kept. An identity the witness cannot read is the empty string, never an omitted pair. A relation absent here is an empty set.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "storeys": {
+          "description": "Per-type storey sets (§7.2, added in 1.1.0). Each value is the spatial type's `[name, elevation]` pairs sorted lexicographically. The name is the entity's `Name` as the witness decoded it; the elevation is that storey's height in feet, unit-normalized by the witness from its own file's declared LENGTHUNIT and rendered with six decimal places (`-0` normalized to `0`). A string, not a number, so the canonical form stays integer/string only. An unset name or unreadable elevation is the empty string, never an omitted storey. A type absent here is an empty set.",
           "type": "object",
           "additionalProperties": {
             "type": "array",

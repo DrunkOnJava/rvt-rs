@@ -892,6 +892,16 @@ fn export_rvt_doc(
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
 
+    // #218 / RE-24 — the Revit `Level` elements themselves, with their
+    // own names and elevations, replace whatever the walker produced.
+    // Runs before the ArcWall path so its `building_storeys.is_empty()`
+    // guard keeps the recovered set, and before
+    // `apply_element_record_storeys`, whose replacement half is a
+    // no-op once the storeys carry real, distinct elevations.
+    if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
+        apply_partition_level_storeys(rf, revit_version, &mut entities, &mut building_storeys);
+    }
+
     // RE-14.3 / RE-15 — shared partition ArcWall path. Production
     // `iter_elements` also merges validated ArcWalls as
     // `DecodedElement`s for API consumers; IFC emission of those
@@ -1140,6 +1150,52 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
         return None;
     }
     location_feet.map(|[_, _, z]| z)
+}
+
+/// #218 / RE-24: replace the storey list with the Revit `Level`
+/// elements recovered from the partition streams, names and
+/// elevations together.
+///
+/// Fail closed twice over:
+///
+/// - [`crate::partition_level_records::scan_partition_levels`] returns
+///   nothing unless every standalone `OST_Levels` record owns exactly
+///   one accepted name/elevation block and no two levels share an
+///   elevation. A partial recovery is never emitted as a smaller
+///   building.
+/// - Storey indices recorded against the previous list are dropped,
+///   because they no longer refer to the same storeys.
+///
+/// Unlike [`apply_element_record_storeys`] this pairs a *name* with an
+/// elevation, because the file states the pairing: the elevation is
+/// read out of a parameter block whose owner slot carries the Level's
+/// own `ElementId`, so nothing is joined by rank. See
+/// `reports/element-framing/RE-24-level-records.md`.
+fn apply_partition_level_storeys(
+    rf: &mut crate::RevitFile,
+    revit_version: u32,
+    entities: &mut [entities::IfcEntity],
+    building_storeys: &mut Vec<Storey>,
+) {
+    let Ok(levels) = crate::partition_level_records::recover_partition_levels(rf, revit_version)
+    else {
+        return;
+    };
+    if levels.is_empty() {
+        return;
+    }
+    for entity in entities.iter_mut() {
+        if let entities::IfcEntity::BuildingElement { storey_index, .. } = entity {
+            *storey_index = None;
+        }
+    }
+    *building_storeys = levels
+        .into_iter()
+        .map(|level| Storey {
+            name: level.name,
+            elevation_feet: level.elevation_feet,
+        })
+        .collect();
 }
 
 /// #213: derive storey elevations from the element-record bounding-box

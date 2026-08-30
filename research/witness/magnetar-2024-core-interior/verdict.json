@@ -107,13 +107,15 @@
   "insufficient_witnesses": false,
   "schema_version": "1.0.0",
   "semantic_surface": [
+    "entity_counts.IFCBUILDINGSTOREY",
     "entity_counts.IFCROOF",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
-    "entity_counts.IFCUNITASSIGNMENT"
+    "entity_counts.IFCUNITASSIGNMENT",
+    "storeys.IFCBUILDINGSTOREY"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "6cf6ccd20f59e79b554c64175c00c07ec9ca89668bd42cc417f9b1377f7ad728",
+  "verdict_hash_sha256": "c615cc6c4606c3486be2a82af7566b4e6a5002623ffd39227f591b9df5182efa",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

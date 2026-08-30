@@ -15,16 +15,15 @@
   },
   "counts": {
     "levels": {
-      "status": "decoder_baseline",
+      "status": "known",
       "expected": 15,
       "source": "full Revit IFC export",
       "source_ifc_type": "IFCBUILDINGSTOREY",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.storey_count",
-      "decoder_expected": 11,
+      "decoder_expected": 15,
       "decoder_tolerance": 0,
-      "tracking_issue": 33,
-      "notes": "Changed 2026-08-30 (#213): storey elevations now come from the partition element-record bbox base-z distribution instead of from Level name strings, so the count moved 12 -> 11 and the elevations became real. The 256 recovered OST_Columns records stand on exactly 11 distinct base elevations - 0, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166 ft - and every one of the 11 equals an IfcBuildingStorey.Elevation in this export, with no false positives; the export's remaining four (-40, -20, 15, 185.5 ft) carry no column record and are not recovered. The previous 12 came from Level-like name strings that all defaulted to elevation 0.0, so only one of them matched by accident. Names are not paired with the measured elevations: there were 12 name candidates against 11 elevations, and a rank join puts Level 6 at 91 ft where this export puts Level 7, so every storey keeps an elevation-derived name. ElementId <-> Level binding is still open (#86). Re-measured 2026-08-30 (#212, RE-22, #218): the record-backed slab set does not widen this. Slab record base elevations are 40 distinct values and not one of them is an IfcBuildingStorey.Elevation in this export - Revit hangs a floor plate below its level. Slab record top elevations are 26 distinct values, 13 of which are storey elevations (they add -40 ft and 185.5 ft, two of the four this recovery misses) and 13 of which are not (each sits 0.1667 ft below a storey, the structural-slab / architectural-topping interface). Admitting slab tops as an elevation source would buy two storeys for thirteen false ones, so ifc::STOREY_ELEVATION_SOURCE_TYPES stays IFCCOLUMN alone and the count stays 11."
+      "notes": "Closed 2026-08-30 (#218, RE-24): the storeys are the Revit Level elements themselves. A Level record carries OST_Levels (-2000240) with the same 88-byte prologue every element record has but no bounding box, so it ends at +0x56 where a column's bbox marker would start; its name and elevation live in a parameter block whose owner slot carries the Level's own ElementId at value-0x47, the same owner-at-a-fixed-negative-offset framing RE-22 found for the per-instance IFC Export As overrides. Fifteen of the seventy-five OST_Levels records on this .rvt are standalone placed instances under the #211 rule, and each owns exactly one name/elevation block; the recovery is all-or-nothing, so a level with no block emits no storey at all. Measured on this artifact: 15 of 15 (name, elevation) pairs equal an IfcBuildingStorey in this export exactly - Basement 2 -40, Basement 1 -20, Level 1 0, Mez 1-2 15, Level 3/4/4 - Wall Layouts 1/2/3 at 31/46/61, Level 6..13 at 76/91/106/121/136/151/166/185.5 ft - no wrong elevation, no missing storey, no extra storey, tolerance 0. The exact pair set is scored by the storeys.IFCBUILDINGSTOREY row below. This supersedes #213's count of 11: the bbox base-z distribution of the 256 OST_Columns records saw only the eleven storeys that have a column standing on them, and could pair no names with them (12 name candidates against 11 elevations). The four it missed (-40, -20, 15, 185.5 ft) are recovered here. ifc::STOREY_ELEVATION_SOURCE_TYPES stays IFCCOLUMN alone: it is now only a fallback for files with no recoverable Level records, and the #212/RE-22 measurement that rejected slab tops as an elevation source (they would add -40 and 185.5 ft but also thirteen false elevations sitting 0.1667 ft below a storey) still stands."
     },
     "walls": {
       "status": "known",
@@ -176,6 +175,18 @@
       "decoder_tolerance": 0,
       "tracking_issue": 212,
       "notes": "Added 2026-08-30 (#212, RE-22). Twenty OST_Floors instances carry a per-element Revit 'IFC Export As' override naming IfcShadingDevice, so Revit's exporter emits them as IFCSHADINGDEVICE rather than IFCSLAB even though they share a FloorType with elements that stay slabs. rvt-rs reads the override string out of the partition parameter block and honours it; measured 20 of 20 with an exact id-set match against the export's Tag values, tolerance 0. This manifest previously left these 20 unscored."
+    }
+  },
+  "storeys": {
+    "building_storeys": {
+      "status": "known",
+      "storey_ifc_type": "IFCBUILDINGSTOREY",
+      "expected_storeys": 15,
+      "source": "full Revit IFC export",
+      "decoder_metric": "diagnostics.exported.storey_count",
+      "decoder_expected_storeys": 15,
+      "tracking_issue": 218,
+      "notes": "Added 2026-08-30 (#218, RE-24). The compared value is the exact set of [Name, Elevation] pairs, with the elevation converted from each file's declared LENGTHUNIT to feet and rendered at 1e-6 ft: this export declares FOOT (IfcConversionBasedUnit, ratio 0.3048) while rvt-rs writes METRE, so the field would be incomparable as raw numbers. All three witnesses read it independently - IfcOpenShell 0.8.5 by_type + ifcopenshell.util.unit.calculate_unit_scale, IFClite 7.1.1 EntityScanner + ifc_lite_core::extract_length_unit_scale, and rvt-rs by splitting its own emitted STEP and resolving IfcProject -> IfcUnitAssignment itself. Measured on this artifact: 15 of 15 pairs reproduced exactly. Names are asserted, not guessed: each elevation comes out of the parameter block owned by the Level's own ElementId, so the pairing is stated by the file rather than joined by rank (which #213 showed puts Level 6 at 91 ft where this export puts Level 7)."
     }
   },
   "relations": {
