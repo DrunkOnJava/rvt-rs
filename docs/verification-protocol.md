@@ -97,16 +97,40 @@ registered as an artifact but has no manifest yet.
 
 This is the edge that turns the protocol from "one lucky dataset" into a
 method. It needs one licensed Revit session exporting the owned/redistributable
-projects to DWG (R2018 and R2013). Then:
+projects to DWG (R2018 and R2013). The plan, in order:
 
-- dwg-rs must reliably parse Revit's exports — LINE, LWPOLYLINE, ARC,
-  CIRCLE, TEXT, MTEXT, INSERT, HATCH and the LAYER/LTYPE/BLOCK tables. Its
-  measured real-file coverage is the gating number (20.1% aggregate on the
-  current sample set, 44.2% on R2018).
-- The agreement scope is geometry-shaped: wall location curves, floor
-  boundary loops, level elevations, category/layer mapping, text. It cannot
-  witness identity-level questions (ElementIds, Extensible Storage) — those
-  keep the API-runner oracle.
+1. **2D plan-view export first.** A plan view flattens to LINE, LWPOLYLINE,
+   ARC, CIRCLE, TEXT, MTEXT, INSERT, HATCH and the LAYER/LTYPE/BLOCK tables —
+   the subset dwg-rs must parse reliably (measured real-file coverage today:
+   20.1% aggregate, 44.2% on R2018). Three independent readers witness it:
+   dwg-rs, ACadSharp (MIT, C#, separate process) and jDwgParser (GPL-3.0,
+   Java, separate process). Agreement scope: wall location curves, floor
+   boundary loops, level elevations, category → layer mapping, text.
+2. **3D solid export second.** Revit flattens walls into ACIS 3DSOLID /
+   REGION / BODY payloads; ACadSharp reads those since v3.6.51 (2026-07-29),
+   MESH is still unimplemented there, and dwg-rs has no ACIS path. This edge
+   waits for that coverage.
+3. Neither edge can witness identity-level questions (ElementIds, Extensible
+   Storage) — those keep the API-runner oracle.
+
+### Witness inventory and independence
+
+`research/witness-registry.json` carries every known witness per node with
+its license, language, and — where this repository checked it against the
+GitHub API — a `checked` date. Two rules keep the inventory honest:
+
+- **Independence.** Two witnesses count as independent only if neither is
+  built on the other's implementation. uncad is FFI over LibreDWG; FreeCAD's
+  BIM workbench runs IfcOpenShell; GDAL's DGN driver wraps dgnlib; Ara3D's
+  mesh side is web-ifc. Each pair is one witness, not two.
+- **Claims stay the project's own.** A coverage or pass-rate figure quoted in
+  a candidate's notes (jDwgParser's "100% entity types / 92% samples", for
+  example) is that project's claim until an agreement recorded here
+  reproduces it.
+
+Copyleft (GPL/LGPL/CDDL) and non-Rust witnesses are adopted only as separate
+CI processes — never linked into the workspace. Unlicensed projects (reviter
+today) cannot be adopted at all until they carry a license.
 
 The umbrella repository proposed for this protocol (vision, golden corpus,
 cross-witness CI gate, protocol spec; decoders linked, never parsing a
