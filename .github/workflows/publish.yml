@@ -245,7 +245,7 @@ jobs:
           save-if: false
           shared-key: viewer-wasm
       - name: Install wasm-pack
-        uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
+        uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2.87.4
         with:
           tool: wasm-pack@0.14.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
