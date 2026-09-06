@@ -65,7 +65,7 @@ jobs:
       # hand-curated CHANGELOG.md (see RELEASE.md §Workflow).
       - name: Render unreleased section
         if: github.ref == 'refs/heads/main'
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
         with:
           config: cliff.toml
           args: --unreleased --verbose
@@ -92,7 +92,7 @@ jobs:
       # (Q-10) can pull it down for the GitHub Release body.
       - name: Render release notes on tag
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
         with:
           config: cliff.toml
           args: --verbose --current
