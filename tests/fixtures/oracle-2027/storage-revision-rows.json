@@ -1,0 +1,46 @@
+[
+  {
+    "variant": "baseline",
+    "source_sha256": "33fa7a61f897b22bca004c290530e51828fa9c3b010c7b71128161d40da4a815",
+    "stream": "Global/ElemTable",
+    "member": "stream-0005-candidate-0000.inflated",
+    "inflated_offset": 96790,
+    "hex": "00000000ffffffffffffffff00000000e70a000000000000000000000000000000000000e70a0000",
+    "owner": 2791,
+    "stored_record_increment": 0,
+    "other_field": 0
+  },
+  {
+    "variant": "wall_height",
+    "source_sha256": "572301375869c154375b4ec61b2906e8d6a23f0a42f645c911251d371aefc062",
+    "stream": "Global/ElemTable",
+    "member": "stream-0005-candidate-0000.inflated",
+    "inflated_offset": 96790,
+    "hex": "00000000ffffffffffffffff00000000e70a000000000000000000000100000001000000e70a0000",
+    "owner": 2791,
+    "stored_record_increment": 1,
+    "other_field": 1
+  },
+  {
+    "variant": "wall_thickness",
+    "source_sha256": "9bc04afce2f926a6b4074339916845b3f5082f5d9a6cc9451cb4468c37c449bf",
+    "stream": "Global/ElemTable",
+    "member": "stream-0005-candidate-0000.inflated",
+    "inflated_offset": 96790,
+    "hex": "00000000ffffffffffffffff00000000e70a000000000000000000000100000000000000e70a0000",
+    "owner": 2791,
+    "stored_record_increment": 1,
+    "other_field": 0
+  },
+  {
+    "variant": "floor_thickness",
+    "source_sha256": "63166fb8681d630d4d850bceeafd2ee030f943722232c55931684d0b67290da7",
+    "stream": "Global/ElemTable",
+    "member": "stream-0005-candidate-0000.inflated",
+    "inflated_offset": 96950,
+    "hex": "00000000eb0a00000000000000000000eb0a000000000000000000000100000000000000eb0a0000",
+    "owner": 2795,
+    "stored_record_increment": 1,
+    "other_field": 0
+  }
+]

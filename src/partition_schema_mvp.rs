@@ -1,13 +1,14 @@
-//! Schema / partition MVP recovers for production `iter_elements`.
+//! Record-backed partition recovery for production `iter_elements`.
+//! Unbound name and polyline hypotheses are a separate explicit research API.
 //!
 //! Extends the ArcWall-only partition merge with fail-closed recovers
-//! for Level, Material, Room, Floor plan loops, and (on Revit 2024)
+//! for (on Revit 2024)
 //! ArcWallRectOpening index rows plus `OST_Columns` / `OST_Walls` /
 //! `OST_Doors` / `OST_Windows` element records
 //! ([`instances_from_partition_category_records`]) and
 //! `OST_Floors` / `OST_BuildingPad` slab instances
 //! ([`slabs_from_partition_category_records`], #212 / RE-22), which
-//! supersede the plan-loop floors on files where they decode.
+//! are kept separate from unbound plan-loop hypotheses.
 //!
 //! Semantic `Door` / `Window` classes are still **not** invented from
 //! opening-index rows — those keep surfacing as `ArcWallRectOpening`
@@ -33,10 +34,8 @@
 //!   must observe zero Level/Material/Floor/opening hits there.
 //! - Floor boundaries require closed plan polylines that survive
 //!   ArcWall-centerline exclusion and area thresholds (RE-15-07).
-//! - The plan-loop floors and the record-backed slabs are two views
-//!   of the same plates, so they are never emitted together: the
-//!   loops stand down when records decode, and remain the only floor
-//!   path where they do not.
+//! - Plan loops, names, and inferred elevations are research candidates,
+//!   never production element instances. No fallback promotes them.
 
 use crate::compression;
 use crate::partition_arc_walls::{self, PartitionArcWall};
@@ -58,10 +57,6 @@ const ARCWALL_EXCLUDE_EPS: f64 = 0.05;
 /// Bundle of partition-derived MVP `DecodedElement`s.
 #[derive(Debug, Clone, Default)]
 pub struct PartitionSchemaMvp {
-    pub levels: Vec<DecodedElement>,
-    pub materials: Vec<DecodedElement>,
-    pub rooms: Vec<DecodedElement>,
-    pub floors: Vec<DecodedElement>,
     /// 2024 ArcWallRectOpening index rows — not typed Door/Window.
     pub rect_openings: Vec<DecodedElement>,
     /// 2024 `OST_Columns` partition element records (M4-09 / #204).
@@ -73,8 +68,7 @@ pub struct PartitionSchemaMvp {
     /// 2024 `OST_Windows` partition element records (#211).
     pub windows: Vec<DecodedElement>,
     /// 2024 `OST_Floors` / `OST_BuildingPad` partition element
-    /// records (#212, RE-22). When this is non-empty it supersedes
-    /// [`Self::floors`] — see [`recover_partition_schema_mvp`].
+    /// records (#212, RE-22). Unbound plan-loop guesses are never merged.
     pub slabs: Vec<DecodedElement>,
 }
 
@@ -82,21 +76,13 @@ impl PartitionSchemaMvp {
     /// Flatten in a stable order for merging into `iter_elements`.
     pub fn into_elements(self) -> Vec<DecodedElement> {
         let mut out = Vec::with_capacity(
-            self.levels.len()
-                + self.materials.len()
-                + self.rooms.len()
-                + self.floors.len()
-                + self.rect_openings.len()
+            self.rect_openings.len()
                 + self.columns.len()
                 + self.walls.len()
                 + self.doors.len()
                 + self.windows.len()
                 + self.slabs.len(),
         );
-        out.extend(self.levels);
-        out.extend(self.materials);
-        out.extend(self.rooms);
-        out.extend(self.floors);
         out.extend(self.rect_openings);
         out.extend(self.columns);
         out.extend(self.walls);
@@ -114,29 +100,6 @@ pub fn recover_partition_schema_mvp(
     limits: WalkerLimits,
 ) -> Result<PartitionSchemaMvp> {
     let mut out = PartitionSchemaMvp::default();
-
-    // --- Levels + Materials + Rooms from partition strings / ArcWall elev ---
-    let strings = crate::object_graph::string_records_from_partitions(rf).unwrap_or_default();
-    let string_values: Vec<&str> = strings.iter().map(|r| r.value.as_str()).collect();
-
-    let level_names = building_storey_name_candidates(string_values.iter().copied());
-    let name_set = collect_name_candidates(string_values.iter().copied());
-
-    let walls = match partition_arc_walls::scan_partition_arc_walls_with_limits(
-        rf,
-        revit_version,
-        limits,
-    ) {
-        Ok(scan) => scan.walls,
-        Err(_) => Vec::new(),
-    };
-
-    out.levels = levels_from_storeys_and_names(&walls, &level_names);
-    out.materials = materials_from_names(&name_set);
-    out.rooms = rooms_from_names(&name_set);
-
-    // --- Floor plan loops (ArcWall-excluded) ---
-    out.floors = floors_from_partition_plan_loops(rf, &walls, limits)?;
 
     // --- 2024 opening index (not Door/Window) ---
     if ArcWallRectOpeningIndex::supports_revit_version(revit_version) {
@@ -166,18 +129,54 @@ pub fn recover_partition_schema_mvp(
         &wall_ids,
     )?;
 
-    // --- 2024 slab instances from element records (#212, RE-22) ---
-    //
-    // Record-backed slabs carry an ElementId, a model bounding box,
-    // a measured thickness and a storey, none of which the plan-loop
-    // scan can supply; emitting both would double-count the same
-    // plate. So the loops stand down whenever records were recovered,
-    // and stay the only floor path on releases (2023 and earlier) and
-    // files where no element record decodes.
+    // Only actual category-backed slab records enter production output.
     out.slabs = slabs_from_partition_category_records(rf, revit_version)?;
-    if !out.slabs.is_empty() {
-        out.floors.clear();
-    }
+
+    Ok(out)
+}
+
+/// Research-only semantic guesses from names and plan polylines. These are
+/// not established element instances and must not be merged into production
+/// element enumeration, IFC entities, or renderable geometry.
+#[derive(Debug, Clone, Default)]
+pub struct PartitionSchemaCandidates {
+    pub levels: Vec<DecodedElement>,
+    pub materials: Vec<DecodedElement>,
+    pub rooms: Vec<DecodedElement>,
+    pub floors: Vec<DecodedElement>,
+}
+
+/// Explicit research entry point for unbound name/plan-loop hypotheses.
+/// Native empty-room models contain room-like strings in template data;
+/// neither a plausible name nor a closed polyline proves a live element.
+pub fn recover_partition_schema_candidates(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    limits: WalkerLimits,
+) -> Result<PartitionSchemaCandidates> {
+    let mut out = PartitionSchemaCandidates::default();
+    // --- Levels + Materials + Rooms from partition strings / ArcWall elev ---
+    let strings = crate::object_graph::string_records_from_partitions(rf).unwrap_or_default();
+    let string_values: Vec<&str> = strings.iter().map(|r| r.value.as_str()).collect();
+
+    let level_names = building_storey_name_candidates(string_values.iter().copied());
+    let name_set = collect_name_candidates(string_values.iter().copied());
+
+    let walls = match partition_arc_walls::scan_partition_arc_walls_with_limits(
+        rf,
+        revit_version,
+        limits,
+    ) {
+        Ok(scan) => scan.walls,
+        Err(_) => Vec::new(),
+    };
+
+    out.levels = levels_from_storeys_and_names(&walls, &level_names);
+    out.materials = materials_from_names(&name_set);
+    out.rooms = rooms_from_names(&name_set);
+
+    // --- Floor plan loops (ArcWall-excluded) ---
+    out.floors = floors_from_partition_plan_loops(rf, &walls, limits)?;
 
     Ok(out)
 }

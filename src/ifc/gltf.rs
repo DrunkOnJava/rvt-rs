@@ -2,9 +2,9 @@
 //!
 //! Produces a `.glb` file ready to load into Three.js, BabylonJS,
 //! Blender, or any glTF 2.0 viewer. The export strategy for the
-//! first pass is intentionally simple: one unit-cube mesh shared
-//! across all elements, placed with per-element transforms derived
+//! rectangular-extrusion path shares a unit-cube vertex buffer, placed with per-element transforms derived
 //! from each `BuildingElement`'s `extrusion` + `location_feet`.
+//! Revit feet/Z-up coordinates are converted to glTF meters/Y-up (x,z,-y).
 //! Each element gets a material drawn from `PbrMaterial::from_
 //! material_info` (VW1-06).
 //!
@@ -24,7 +24,7 @@
 //! ```
 
 use super::IfcModel;
-use super::entities::IfcEntity;
+use super::entities::{IfcEntity, ProfileDef};
 use super::pbr::PbrMaterial;
 use serde::{Deserialize, Serialize};
 
@@ -86,6 +86,9 @@ pub struct Node {
     pub matrix: Option<[f32; 16]>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<usize>,
+    /// Missing/unsupported geometry is explicit; never represented by a placeholder cube.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extras: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -220,7 +223,8 @@ fn unit_cube_indices() -> [u16; 36] {
 /// Each `BuildingElement` with an `extrusion` becomes a Node
 /// with a cube mesh scaled to the extrusion's (width × depth ×
 /// height) and translated to `location_feet`. Elements without
-/// geometry are emitted as transform-less nodes for hierarchy.
+/// geometry, or with unsupported profile/solid geometry, are emitted as
+/// mesh-less nodes with a reason in extras. They never receive proxy geometry.
 pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
     let mut bin = Vec::<u8>::new();
     let mut doc = GltfDocument::default();
@@ -325,9 +329,94 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             material_index,
             location_feet,
             extrusion,
+            solid_shape,
+            rotation_radians,
             ..
         } = ent
         {
+            let dimensions = match (solid_shape, extrusion) {
+                (Some(_), _) => Err("unsupported_solid_shape"),
+                (_, None) => Err("missing_geometry"),
+                (_, Some(e)) => match &e.profile_override {
+                    None => Ok((e.width_feet, e.depth_feet, e.height_feet)),
+                    Some(ProfileDef::Rectangle {
+                        width_feet,
+                        depth_feet,
+                    }) => Ok((*width_feet, *depth_feet, e.height_feet)),
+                    Some(_) => Err("unsupported_profile"),
+                },
+            }
+            .and_then(|dims| {
+                if [dims.0, dims.1, dims.2]
+                    .iter()
+                    .all(|v| v.is_finite() && *v > 0.0 && (*v as f32).is_finite())
+                    && location_feet
+                        .is_none_or(|p| p.iter().all(|v| v.is_finite() && (*v as f32).is_finite()))
+                    && rotation_radians.is_none_or(f64::is_finite)
+                {
+                    Ok(dims)
+                } else {
+                    Err("invalid_geometry")
+                }
+            });
+            let (sx, sy, sz) = match dimensions {
+                Ok(dims) => dims,
+                Err(reason) => {
+                    scene_nodes.push(doc.nodes.len());
+                    doc.nodes.push(Node {
+                        name: Some(name.clone()),
+                        extras: Some(serde_json::json!({"rvt_rs_geometry": reason})),
+                        ..Default::default()
+                    });
+                    continue;
+                }
+            };
+            // Revit stores feet with Z up; glTF requires meters with Y up.
+            // Right-handed basis conversion: (x, y, z) -> (x, z, -y).
+            // Compute in f64 and validate after final f32 conversion so adding
+            // half-height cannot create an infinite placement unnoticed.
+            const FEET_TO_METERS: f64 = 0.3048;
+            let origin = location_feet.unwrap_or([0.0; 3]);
+            let (sx, sy, sz) = (
+                sx * FEET_TO_METERS,
+                sy * FEET_TO_METERS,
+                sz * FEET_TO_METERS,
+            );
+            let (tx, ty, tz) = (
+                origin[0] * FEET_TO_METERS,
+                origin[1] * FEET_TO_METERS,
+                origin[2] * FEET_TO_METERS + sz * 0.5,
+            );
+            let angle = rotation_radians.unwrap_or(0.0);
+            let (sin, cos) = (angle.sin(), angle.cos());
+            let matrix = [
+                sx * cos,
+                0.0,
+                -sx * sin,
+                0.0,
+                -sy * sin,
+                0.0,
+                -sy * cos,
+                0.0,
+                0.0,
+                sz,
+                0.0,
+                0.0,
+                tx,
+                tz,
+                -ty,
+                1.0,
+            ]
+            .map(|v| v as f32);
+            if !matrix.iter().all(|v| v.is_finite()) {
+                scene_nodes.push(doc.nodes.len());
+                doc.nodes.push(Node {
+                    name: Some(name.clone()),
+                    extras: Some(serde_json::json!({"rvt_rs_geometry": "invalid_geometry"})),
+                    ..Default::default()
+                });
+                continue;
+            }
             let mut primitive = Primitive {
                 attributes: {
                     let mut m = std::collections::BTreeMap::new();
@@ -347,32 +436,12 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             };
             let mesh_idx = doc.meshes.len();
             doc.meshes.push(mesh);
-            // Transform: translate to location, scale to extrusion
-            // dims. Default unit cube = 1×1×1 centered at origin.
-            let (sx, sy, sz) = extrusion
-                .as_ref()
-                .map(|e| {
-                    (
-                        e.width_feet as f32,
-                        e.depth_feet as f32,
-                        e.height_feet as f32,
-                    )
-                })
-                .unwrap_or((1.0, 1.0, 1.0));
-            let (tx, ty, tz) = location_feet
-                .map(|l| (l[0] as f32, l[1] as f32, l[2] as f32 + sz * 0.5))
-                .unwrap_or((0.0, 0.0, sz * 0.5));
-            let matrix = [
-                sx, 0.0, 0.0, 0.0, // col 0
-                0.0, sy, 0.0, 0.0, // col 1
-                0.0, 0.0, sz, 0.0, // col 2
-                tx, ty, tz, 1.0, // col 3 (translation)
-            ];
             let node = Node {
                 name: Some(name.clone()),
                 mesh: Some(mesh_idx),
                 matrix: Some(matrix),
                 children: Vec::new(),
+                extras: None,
             };
             let node_idx = doc.nodes.len();
             doc.nodes.push(node);
@@ -522,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn each_building_element_becomes_a_node_with_mesh() {
+    fn only_supported_geometry_becomes_a_mesh() {
         let model = IfcModel {
             entities: vec![
                 mk_wall(
@@ -540,9 +609,28 @@ mod tests {
             ..Default::default()
         };
         let (doc, _) = build_gltf(&model);
-        assert_eq!(doc.meshes.len(), 2);
+        assert_eq!(doc.meshes.len(), 1);
         assert_eq!(doc.nodes.len(), 2);
+        assert!(doc.nodes[1].mesh.is_none());
+        assert_eq!(
+            doc.nodes[1].extras.as_ref().unwrap()["rvt_rs_geometry"],
+            "missing_geometry"
+        );
         assert_eq!(doc.scenes[0].nodes.len(), 2);
+    }
+
+    #[test]
+    fn unsupported_circle_is_not_replaced_by_a_box() {
+        let model = IfcModel {
+            entities: vec![mk_wall("round", None, Some(Extrusion::circle(2.0, 5.0)))],
+            ..Default::default()
+        };
+        let (doc, _) = build_gltf(&model);
+        assert!(doc.meshes.is_empty());
+        assert_eq!(
+            doc.nodes[0].extras.as_ref().unwrap()["rvt_rs_geometry"],
+            "unsupported_profile"
+        );
     }
 
     #[test]
@@ -559,13 +647,60 @@ mod tests {
         };
         let (doc, _) = build_gltf(&model);
         let m = doc.nodes[0].matrix.unwrap();
-        assert_eq!(m[0], 20.0); // scale X
-        assert_eq!(m[5], 0.5); // scale Y
-        assert_eq!(m[10], 10.0); // scale Z
-        assert_eq!(m[12], 3.0); // translate X
-        assert_eq!(m[13], 7.0); // translate Y
-        // translate Z = loc.z + height/2 = 0 + 5 = 5
-        assert_eq!(m[14], 5.0);
+        let expected = [
+            (0, 20.0 * 0.3048),
+            (6, -0.5 * 0.3048),
+            (9, 10.0 * 0.3048),
+            (12, 3.0 * 0.3048),
+            (13, 5.0 * 0.3048),
+            (14, -7.0 * 0.3048),
+        ];
+        for (index, expected) in expected {
+            assert!((m[index] - expected).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn rotation_and_large_placement_keep_valid_meter_transforms() {
+        let mut wall = mk_wall(
+            "rotated",
+            Some([0.0, 0.0, 3.0e38]),
+            Some(Extrusion::rectangle(2.0, 1.0, 3.0e38)),
+        );
+        if let IfcEntity::BuildingElement {
+            rotation_radians, ..
+        } = &mut wall
+        {
+            *rotation_radians = Some(std::f64::consts::FRAC_PI_2);
+        }
+        let (doc, _) = build_gltf(&IfcModel {
+            entities: vec![wall],
+            ..Default::default()
+        });
+        let m = doc.nodes[0].matrix.unwrap();
+        assert!(m.iter().all(|v| v.is_finite()));
+        assert!((m[2] + 2.0 * 0.3048).abs() < 1e-6);
+        assert!((m[4] + 0.3048).abs() < 1e-6);
+        assert!(m[13] > 1.0e38);
+    }
+
+    #[test]
+    fn unrepresentable_geometry_has_no_mesh_or_nonfinite_matrix() {
+        let model = IfcModel {
+            entities: vec![mk_wall(
+                "invalid",
+                Some([f64::MAX, 0.0, 0.0]),
+                Some(Extrusion::rectangle(1.0, 1.0, 1.0)),
+            )],
+            ..Default::default()
+        };
+        let (doc, _) = build_gltf(&model);
+        assert!(doc.meshes.is_empty());
+        assert!(doc.nodes[0].matrix.is_none());
+        assert_eq!(
+            doc.nodes[0].extras.as_ref().unwrap()["rvt_rs_geometry"],
+            "invalid_geometry"
+        );
     }
 
     #[test]

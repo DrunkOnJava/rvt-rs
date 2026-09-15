@@ -52,3 +52,37 @@ commit the API fixes back.
 - Claiming remapping works from Cloud-only work
 - Scoring ES refs into ElemTable ownership (#152)
 - Emitting ES edges on default IFC
+
+## Additional bounded probes
+
+The repository also contains read-only probes for native stream framing,
+bounded parameter occurrences, and the opt-in native scene CLI. These are
+research tools rather than runtime dependencies or claims of universal model
+recovery. Private source files, API snapshots, source hashes, and local run
+directories stay outside the public fixture set.
+
+`oracle_stream_dump` records stream names, hashes, candidate compressed members,
+inflated member files, and failed candidates. A candidate is an observation,
+not validated segmentation. `oracle_parameter_probe` reports bounded source
+occurrences and structured issues for unsupported profiles, invalid budgets,
+truncation, invalid UTF-16, and budget exhaustion. It does not select current
+revisions, attach values to elements, or establish geometry or semantic parity.
+
+```sh
+cargo run --release --example oracle_parameter_probe -- model.rvt > occurrences.json
+python tools/oracle/compare_parameters.py snapshot.json occurrences.json \
+  -o comparison.json
+```
+
+The native scene CLI is schema-profile-gated. It validates version, lengths,
+flags, finite values, owner membership, duplicate identities, and
+class-specific framing before emitting geometry. Unknown profiles, ambiguous
+records, resource limits, and unsupported layouts return explicit diagnostics;
+the CLI exits 2 when no supported meshes are available. Malformed input exits
+1. Unsupported cuts, attachments, slanted or variable layers, and other
+unqualified layouts remain meshless.
+
+Only synthetic or explicitly redistributable spans belong in always-on
+regression fixtures. Corpus intake requires scrubbed content and confirmed
+redistribution rights. These checks do not certify complete Revit semantics,
+full regeneration, visibility parity, or render parity.

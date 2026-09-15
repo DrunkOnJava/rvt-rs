@@ -1730,3 +1730,30 @@ and compatibility matrix:
 > same-era version bands.
 
 **End of report.**
+
+## 2026-09-14 — Public-fork native-path addendum
+
+The native saved-record/world-model work is an opt-in path parallel to the
+legacy walker/exporter. Its current entrypoints are
+[`rvt-native-document`](../src/bin/rvt_native_document.rs),
+[`rvt-native-scene`](../src/bin/rvt_native_scene.rs),
+[`rvt-native-world-model`](../src/bin/rvt_native_world_model.rs), and
+[`rvt-native-saved-scene`](../src/bin/rvt_native_saved_scene.rs). The
+portable, version-qualified byte rules are collected in the
+[native format reference](research/native-format-reference.md).
+
+The reproducible probe surface includes
+[`research_native_coverage`](../examples/research_native_coverage.rs),
+[`research_current_content`](../examples/research_current_content.rs),
+[`research_physical_graph`](../examples/research_physical_graph.rs), and
+[`research_saved_scene`](../examples/research_saved_scene.rs). These probes
+preserve source ownership, bounded budgets, and refusal states. They do not
+establish universal typed recovery or converter-grade IFC output.
+
+A recorded checkpoint contains 48 lab cases, 144 structural rows, and 72
+strict rows, with 1,272 Rust tests at that checkpoint. Those are historical
+research counts rather than current release checks. Multi-loop/non-rectangular
+curved trims, full regeneration, visibility parity, and render parity remain
+unproven.
+
+We have generated and analyzed many Revit files to discern the file structure and variation.

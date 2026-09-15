@@ -1,0 +1,18 @@
+{
+  "space_id": 1000,
+  "topology_id": 2000,
+  "circuit_id": 3000,
+  "rule": "negative signed subindex bitwise complement, reverse directedpoints",
+  "segments": [
+    {"directed_key": {"host_or_link_instance_id": 1001, "linked_element_id": -1, "major_index": 0, "sub_index": 0}, "base_key": {"host_or_link_instance_id": 1001, "linked_element_id": -1, "major_index": 0, "sub_index": 0}, "points": [[0.0, 0.0], [2.0, 0.0]]},
+    {"directed_key": {"host_or_link_instance_id": 1002, "linked_element_id": -1, "major_index": 0, "sub_index": -2}, "base_key": {"host_or_link_instance_id": 1002, "linked_element_id": -1, "major_index": 0, "sub_index": 1}, "points": [[2.0, 0.0], [4.0, 0.0]]},
+    {"directed_key": {"host_or_link_instance_id": 1002, "linked_element_id": -1, "major_index": 0, "sub_index": -1}, "base_key": {"host_or_link_instance_id": 1002, "linked_element_id": -1, "major_index": 0, "sub_index": 0}, "points": [[4.0, 0.0], [4.0, 3.0]]},
+    {"directed_key": {"host_or_link_instance_id": 1003, "linked_element_id": -1, "major_index": 0, "sub_index": -1}, "base_key": {"host_or_link_instance_id": 1003, "linked_element_id": -1, "major_index": 0, "sub_index": 0}, "points": [[4.0, 3.0], [0.0, 3.0]]},
+    {"directed_key": {"host_or_link_instance_id": 1004, "linked_element_id": -1, "major_index": 0, "sub_index": 0}, "base_key": {"host_or_link_instance_id": 1004, "linked_element_id": -1, "major_index": 0, "sub_index": 0}, "points": [[0.0, 3.0], [0.0, 1.0]]},
+    {"directed_key": {"host_or_link_instance_id": 1001, "linked_element_id": -1, "major_index": 0, "sub_index": -2}, "base_key": {"host_or_link_instance_id": 1001, "linked_element_id": -1, "major_index": 0, "sub_index": 1}, "points": [[0.0, 1.0], [0.0, 0.0]]}
+  ],
+  "closed_endpoint_max_gap": 0.0,
+  "signed_area_square_feet": 12.0,
+  "saved_area_square_feet": 12.0,
+  "note": "Synthetic six-segment carrier with a reversed sub-index -2; no customer or corpus data."
+}

@@ -22,8 +22,8 @@
 //!
 //! ```text
 //! [u16 LE element_count]
-//! [u16 LE record_count]
-//! [12 bytes zero-padding]
+//! [u32 LE record_count]
+//! [remaining header fields, not all zero on workshared projects]
 //! ```
 //!
 //! The `header_flag = 0x0011` at `0x22` is present only on family files.
@@ -37,11 +37,13 @@ use serde::{Deserialize, Serialize};
 /// Header extracted from the first 32 bytes of decompressed Global/ElemTable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElemTableHeader {
-    /// Declared number of distinct ElementIds in this file.
+    /// Legacy name for the first header word. Its semantics are unconfirmed:
+    /// 1370 occurs on projects with radically different element counts. Do
+    /// not use this value as a count or a completeness denominator.
     pub element_count: u16,
     /// Declared number of records (may differ if some elements have multiple
     /// records, e.g. versioned entries).
-    pub record_count: u16,
+    pub record_count: u32,
     /// Invariant magic word that appears at byte offset 0x1e on family files
     /// across every Revit release we've inspected. 0 on project files.
     pub header_flag: u16,
@@ -107,7 +109,7 @@ fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
         ));
     }
     let element_count = u16::from_le_bytes([d[0], d[1]]);
-    let record_count = u16::from_le_bytes([d[2], d[3]]);
+    let record_count = u32::from_le_bytes([d[2], d[3], d[4], d[5]]);
     let header_flag = [0x1eusize, 0x22]
         .iter()
         .find_map(|&off| {
@@ -137,10 +139,10 @@ fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
 /// a `record_count` of 0, a non-`u32`-aligned or out-of-range difference —
 /// keeps the marker itself as the origin.
 fn record_origin(d: &[u8], marker_start: usize, stride: usize) -> (usize, usize) {
-    if stride == 0 || d.len() < 4 {
+    if stride == 0 || d.len() < 6 {
         return (marker_start, 0);
     }
-    let record_count = u16::from_le_bytes([d[2], d[3]]) as usize;
+    let record_count = u32::from_le_bytes([d[2], d[3], d[4], d[5]]) as usize;
     if record_count == 0 {
         return (marker_start, 0);
     }
@@ -427,6 +429,38 @@ pub fn parse_records_rough(rf: &mut RevitFile, max_records: usize) -> Result<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_record_count_is_not_truncated_at_sixteen_bits() {
+        let count = 65_538u32;
+        let mut bytes = vec![0; 30 + count as usize * 28];
+        bytes[2..6].copy_from_slice(&count.to_le_bytes());
+        for index in 0..count as usize {
+            let at = 30 + index * 28;
+            bytes[at..at + 4].fill(0xff);
+            bytes[at + 4..at + 8].copy_from_slice(&(index as u32 + 1).to_le_bytes());
+            bytes[at + 8..at + 12].copy_from_slice(&(index as u32 + 1).to_le_bytes());
+        }
+        let header = parse_header_bytes(&bytes).unwrap();
+        assert_eq!(header.record_count, count);
+        let records = parse_records_from_bytes(&bytes, detect_layout(&bytes), count as usize);
+        assert_eq!(records.len(), count as usize);
+        assert_eq!(records.last().unwrap().id_primary, count);
+    }
+
+    #[test]
+    fn large_40_byte_table_recovers_origin_from_full_count() {
+        let count = 65_538u32;
+        let mut bytes = vec![0; 30 + count as usize * 40];
+        bytes[2..6].copy_from_slice(&count.to_le_bytes());
+        for index in 0..count as usize {
+            let at = 30 + index * 40;
+            bytes[at + 4..at + 12].fill(0xff);
+        }
+        let layout = detect_layout(&bytes);
+        assert_eq!(layout.start, 30);
+        assert_eq!(layout.marker_offset, 4);
+    }
 
     #[test]
     fn header_has_element_count() {

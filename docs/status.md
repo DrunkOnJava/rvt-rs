@@ -326,3 +326,42 @@ The first broadly useful release should let a non-technical AEC user:
 Until those five conditions hold, rvt-rs should present itself as an
 open-source Revit inspection and reverse-engineering toolkit, not as a complete
 replacement for production Revit export workflows.
+
+## Native path status (2026-09-14)
+
+The native saved-record/world-model work is an opt-in, source-qualified path
+parallel to the legacy walker/exporter. It is exposed by the
+[`rvt-native-document`](../src/bin/rvt_native_document.rs),
+[`rvt-native-scene`](../src/bin/rvt_native_scene.rs),
+[`rvt-native-world-model`](../src/bin/rvt_native_world_model.rs), and
+[`rvt-native-saved-scene`](../src/bin/rvt_native_saved_scene.rs) entrypoints.
+It does not replace the legacy path and does not claim universal typed model
+recovery or drop-in IFC conversion.
+
+The current research handoff is [native world-model research](native-world-model-research.md);
+the portable byte-level rules are in the [native format reference](research/native-format-reference.md).
+Representative byte and projection probes include
+[`research_native_coverage`](../examples/research_native_coverage.rs),
+[`research_current_content`](../examples/research_current_content.rs),
+[`research_physical_graph`](../examples/research_physical_graph.rs), and
+[`research_saved_scene`](../examples/research_saved_scene.rs).
+
+A recorded checkpoint contains 48 lab cases, 144 structural rows, and 72
+strict rows, alongside 1,272 Rust tests. Those figures are historical
+research evidence, not a current release-gate count; release checks are
+reported separately when run. The native limits remain explicit: multi-loop
+and non-rectangular curved trims, full regeneration, visibility parity, and
+render parity are unproven.
+
+We have generated and analyzed many Revit files to discern the file structure and variation.
+
+### Parser framing update — 2026-09-14
+
+The parser now prefers an authored length-prefixed release field where the
+format provides one, reads wide table counts without narrowing them, and
+requires matching gzip integrity fields before applying a multipage recovery
+rule. The experimental parameter-record API remains profile-gated and reports
+bounded source occurrences rather than typed model, geometry, or IFC results.
+Unsupported ownership and nested stores remain explicit. These observations are
+research notes, not a general support claim; current release checks are
+reported separately when run.

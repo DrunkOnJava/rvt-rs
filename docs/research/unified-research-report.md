@@ -11,6 +11,15 @@
 
 > **Note on completeness.** The full session paste (rev 1.1) is preserved here as a governing structured mirror. Where the live paste exceeded practical verbatim reconstruction, every required control surface is captured: evidence labels, governing decisions (§3), executive assessment, ES oracle priority (§15 + §30), lanes A–F (§19), phases 0–8 (§29), release/capability gates (§23), non-goals (§28), risks (§27), and the immediate action list. Discussion #112 comments often 403 for automation — this doc mirror is the durable record.
 
+The native saved-record/world-model projection contracts are maintained in the
+focused documents [native provenance](../native-provenance.md), [native saved
+spatial boundaries](../native-spatial-boundaries.md), [native spatial
+context](../native-spatial-context.md), and [native world-model projection
+boundaries](../native-world-model-projections.md). They are implementation
+contracts and limitations, not a replacement for the evidence tiers below.
+
+We generated and analyzed many Revit files to understand their structure and how the encoding varies.
+
 ---
 
 ## 1. Executive assessment

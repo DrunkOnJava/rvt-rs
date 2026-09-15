@@ -1,16 +1,51 @@
 # rvt-rs
 
-**Apache-2.0 clean-room Rust/Python toolkit for inspecting Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) without a Revit installation.** Opens the OLE/CFB container, decodes Revit's truncated-gzip streams, extracts metadata and previews, parses the embedded `Formats/Latest` schema, and classifies all observed schema field encodings across an 11-release 2016–2026 reference corpus.
+**Apache-2.0 Rust/Python toolkit for inspecting Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) without a Revit installation.** Opens the OLE/CFB container, decodes Revit's truncated-gzip streams, extracts metadata and previews, parses the embedded `Formats/Latest` schema, and classifies all observed schema field encodings across an 11-release 2016–2026 reference corpus.
+
+This research fork also includes a newer native saved-record/world-model path
+with controlled Revit2027 API comparisons. Its interoperability research uses
+serialized bytes, API witnesses and explicitly documented binary/debugger
+inspection; the additions are not exclusively clean-room research. See
+[the current research scope](docs/native-world-model-research.md). The older
+walker/exporter status descriptions below remain separate from this native path.
+
+The native path is opt-in and runs parallel to the legacy walker/exporter. Its
+entrypoints are [`rvt-native-document`](src/bin/rvt_native_document.rs),
+[`rvt-native-scene`](src/bin/rvt_native_scene.rs),
+[`rvt-native-world-model`](src/bin/rvt_native_world_model.rs), and
+[`rvt-native-saved-scene`](src/bin/rvt_native_saved_scene.rs). It is not a
+universal typed-model reader or a drop-in IFC converter. Unsupported geometry
+in the legacy `rvt-gltf` path is omitted and reported as diagnostics; it is
+never represented by a placeholder cube.
+
+For reproducible format rules and research probes, start with the [native
+format reference](docs/research/native-format-reference.md), [native world-model
+research](docs/native-world-model-research.md), and the examples
+[`research_native_coverage`](examples/research_native_coverage.rs),
+[`research_current_content`](examples/research_current_content.rs),
+[`research_physical_graph`](examples/research_physical_graph.rs), and
+[`research_saved_scene`](examples/research_saved_scene.rs). A recorded
+checkpoint contains 48 lab cases, 144 structural rows, 72 strict rows, and
+1,272 Rust tests; these are historical evidence counts, not current release
+checks. Multi-loop/non-rectangular curved trims, full regeneration, visibility
+parity, and render parity remain unproven.
+
+We have generated and analyzed many Revit files to discern the file structure and variation.
 
 **This is not yet a full Revit model reader.** Schema-directed instance walking has a verified `ADocument` beachhead on Revit 2024–2026 (document-level metadata only — not per-element), and `Formats/Latest` schema classification covers 100% of observed field encodings. IFC4 STEP emission produces a valid spatial tree with typed elements **when fed synthesized `DecodedElement` inputs from the test fixtures** — see `tests/fixtures/synthetic-project.ifc`.
 
-**Generic real-project typed element extraction is mostly unsolved**, with narrow partition MVP exceptions. Production `walker::iter_elements` prefers typed MVP decoders on `Global/Latest` (fail closed), merges version-gated 2023 ArcWall partition recovers, and merges fail-closed partition MVP recovers for Level / Material / Room / Floor plan-loops plus 2024 ArcWallRectOpening index rows (corpus-proven on magnetar Einhoven / Core Interior). Opening related ids are ElemTable-confirmed (still not typed Door/Window). On Revit 2024 it additionally merges partition *element records*, whose header names the element's `BuiltInCategory` outright: `OST_Walls` / `OST_Doors` / `OST_Windows` / `OST_Columns` records that carry no container reference and are marked placed instances reproduce Revit's own exported ElementId sets exactly — 360 `IfcWall`, 132 `IfcDoor`, 6 `IfcWindow`, 256 `IfcColumn` on `2024_Core_Interior.rvt`, tolerance 0, cross-witness gated (#204 / #211, `reports/element-framing/RE-21-partition-element-record-instance-rule.md`). Bodies are the record's bounding box, except for the plan profile of a slab, which is the sketch boundary its `OST_SketchLines` records close (#31, `reports/element-framing/RE-25-slab-plan-profiles.md`), and the plan run of a wall, which is the box cut back by its joins — 336 of 360 walls then match Revit's world envelope exactly, up from 27, and every column carries the section its family type declares (#215, `reports/element-framing/RE-26-world-coordinate-residuals.md`). Doors and windows are bound to their host wall (#222, RE-23); schema-field Walls remain open — diagnostic scans still find `HostObjAttr`-style candidates on `Global/Latest` for those classes. **81** per-class decoder structs ship in `elements::all_decoders()`; `MVP_TYPED_CLASSES` are consulted by `iter_elements`, while the broader registry remains a library building block. Root-cause investigation (`reports/element-framing/RE-01-synthesis.md`) found that element instance data lives in `Partitions/*` streams with a wire envelope that has only been reverse-engineered for ArcWall (2023) and opening-index (2024) subsets. Q-01 community-corpus open/scaffold validation has been run (`docs/corpus-hunt-2026-04-21.md`: 222/223 real files pass open → schema → scaffold IFC); that is not full typed model recovery. See [What does not work yet](#what-does-not-work-yet) below.
+**Generic real-project typed element extraction is mostly unsolved.** The
+legacy walker has narrow, version-gated decoder paths and fails closed when
+the required record or ownership evidence is absent. The native path is
+parallel and opt-in; its saved-record projections retain source ownership and
+refusals, but neither path claims universal typed recovery or converter-grade
+IFC output. See [What does not work yet](#what-does-not-work-yet) below.
 
 **A zero-upload, client-side browser viewer ships alongside the library**, live at <https://drunkonjava.github.io/rvt-rs/>. Drop a `.rvt` / `.rfa` file onto the page — the WebAssembly build parses it in-tab, renders 3D via Three.js with orbit controls + element picking + scene tree, and offers one-click **Export glTF** / **Export IFC** / **Export plan SVG**. No upload, no account, no telemetry. CI asserts the compiled `.wasm` has zero `fetch` / `XMLHttpRequest` / `WebSocket` imports.
 
 For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). Installation paths live in [`docs/install.md`](docs/install.md). For the short support boundary, read [`docs/status.md`](docs/status.md), the supported MVP input profile in [`docs/supported-profile.md`](docs/supported-profile.md), and the executable capability matrix in [`docs/support-matrix.json`](docs/support-matrix.json) (statuses are honest ceilings, not converter-grade claims). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
 
-Rust 2024 edition (MSRV 1.85). **Eighteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.85). **Twenty-five CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `gen-fixture`, `rvt-native-scene`, `rvt-native-document`, `rvt-native-equipment`, `rvt-native-world-model`, `rvt-native-revision-diff`, `rvt-native-saved-scene`, `rvt-native-network`) plus 115 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -34,7 +69,7 @@ Rust 2024 edition (MSRV 1.85). **Eighteen CLIs ship** (`rvt-analyze`, `rvt-info`
 | IFC4 STEP export — materials | ✓ | Single-material via `IfcMaterial` + `IfcRelAssociatesMaterial`; compound assemblies via `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` (IFC-28/29). Walls / floors / roofs with layered composition emit correctly. |
 | IFC4 STEP export — properties | ✓ | `IfcPropertySet` + `IfcPropertySingleValue` with typed values (`IfcText`, `IfcInteger`, `IfcReal`, `IfcBoolean`, `IfcLengthMeasure`, `IfcPlaneAngleMeasure`, `IfcAreaMeasure`, `IfcVolumeMeasure`, `IfcCountMeasure`, `IfcTimeMeasure`, `IfcMassMeasure`) wired via `IfcRelDefinesByProperties`. |
 | IFC4 STEP export — openings | ✓ | `IfcOpeningElement` + `IfcRelVoidsElement` + `IfcRelFillsElement` — doors and windows cut actual holes in their host walls (BlenderBIM verified). |
-| Geometry extraction | partial | Extrusion helpers ship for walls/slabs/roofs/ceilings/columns/beams/stairs/doors/windows (GEO-27..35, IFC-16..26). Swept / revolved / BRep variants exist (IFC-17/18/19/20) but with `rvt` feature-flagged rectangular fallbacks in the default emission path. |
+| Geometry extraction | partial | Extrusion helpers ship for walls/slabs/roofs/ceilings/columns/beams/stairs/doors/windows (GEO-27..35, IFC-16..26). Unsupported/missing glTF geometry remains meshless with diagnostics. The separate `rvt-native-scene` command supports a measured 2027 native subset. |
 | glTF 2.0 binary export | ✓ | `model_to_glb()` produces a valid `.glb` file that loads in Three.js's `GLTFLoader` (VW1-04). `rvt-gltf` CLI. |
 | 2D plan-view SVG export | ✓ | `render_plan_svg()` produces per-category-coloured SVG (walls black, doors blue, columns red, …) (VW1-11). `rvt-sheet` CLI. |
 | Browser viewer | ✓ | Live at <https://drunkonjava.github.io/rvt-rs/>. WebAssembly build of the core library + Three.js + Vite. Zero-upload, in-tab parse, Export glTF/IFC/SVG buttons, URL-based share via `share::ViewerState`. (VW1-01 through VW1-24 shipped.) |
@@ -51,6 +86,86 @@ Rust 2024 edition (MSRV 1.85). **Eighteen CLIs ship** (`rvt-analyze`, `rvt-info`
 | Partition-stream wire format | not reverse-engineered | 12 RE probes in `examples/probe_*` tested five hypotheses; all refuted. `Global/ContentDocuments` identified as a structured index but its id space does not match `ElemTable`'s (6/30705 overlap). Blocker on element extraction. |
 | Scalar-Container wire format on real bytes | assumption only | L5B-09 fix assumes Vector-equivalent layout for kinds 0x01/0x02/0x04/0x05/0x07/0x0b/0x0d. Round-trip tests use synthesized bytes; no real-.rvt round-trip has been exercised. Tracked as WF-01..03. |
 | Patched CFB roundtrip for grow/shrink cases | covered | Family corpus tests cover identity, grow, shrink, multi-stream, and missing-stream patches; project-corpus tests cover identity/grow/shrink/multi while preserving unpatched streams plus GUID/history. |
+
+## Native equipment inventory
+
+`rvt-native-equipment model.rvt --json equipment.json` extracts measured
+mechanical/electrical equipment categories through the native record reader.
+It preserves instance and type attributes as separate source-qualified claims,
+including stable element identities, definition IDs/shared GUIDs and units where
+resolved. Output must be new. Unknown categories, missing references and
+unsupported graphs remain diagnostics. Neither equipment inventory completeness
+nor successful graph traversal establishes universal attribute parity or an
+as-built asset inventory. No external parser or per-file API witness is used.
+
+`rvt-native-world-model model.rvt --json observations.json` combines the
+source-qualified equipment inventory with spatial context, explicit connector
+networks, construction/material assets, authored lifecycle states and saved
+representation declarations. Instance cached transforms, placement points,
+room/level references and linked-model placement remain distinct. Link source
+locations are saved claims; the command does not load external documents.
+
+The world-model command qualifies measured native records and selects embedded
+content through explicit ContentDocuments element tables. Unique physical
+candidates may be current within that namespace; ambiguous duplicates remain
+unresolved. Embedded IDs are never assigned a main-document UniqueId.
+
+It additionally exports bounded family extrusion meshes by detail level,
+including locked-datum rectangles and qualified parameter expressions,
+straight-wall room boundary modes, phase-qualified door adjacency and opening rectangles, connector frames,
+single-layer wall/floor surfaces with separate base/paint/effective materials,
+typed owned appearance trees, and revision snapshots. These projections retain their source chains and refuse
+unsupported dependencies. Full world-model completeness remains false.
+`rvt-native-revision-diff` compares two snapshots or world-model reports while
+separating file bytes, record bodies, saved values and dependency invalidation.
+See the research scope for measured denominators and unresolved cases.
+
+
+## Native 2027 scene subset
+
+`rvt-native-document` exposes the newer structural saved-record path. It reads
+measured 2023/2024/2027 layouts, writes records as JSONL, and writes a separate
+coverage manifest. This is not complete semantic or geometry extraction.
+
+```bash
+cargo build --release --bin rvt-native-document
+./target/release/rvt-native-document model.rvt --id 123,456 \
+  --jsonl records.jsonl --summary coverage.json
+```
+
+Omit `--id` to inspect all indexed owners. Output paths must be new. Exit 2
+means incomplete selected graph coverage; exit 1 means fatal extraction failure.
+Partial JSONL is never a successful complete import. Records include native
+UniqueIds, body hashes, explicit graph edges, and a limited saved-metadata
+projection. Family parameter slots remain untyped until definitions are resolved;
+values are serialized state, not API-evaluated quantities. The manifest exposes
+uninterpreted storage suffixes and skipped embedded content. For large graphs,
+`--max-graph-values` changes an implementation budget, not a format rule.
+
+`rvt-native-scene` reads an RVT directly and writes geometry JSON and a GLB,
+using Rust only. It needs no Revit installation, Python, API snapshots, or
+external converter:
+
+```sh
+cargo build --release --bin rvt-native-scene
+./target/release/rvt-native-scene model.rvt --json scene.json --glb scene.glb
+```
+
+The supported subset uses a **complete-schema-hash-gated named registry profile**
+for Revit 2027, native current-record routing, straight/arc wall surface records,
+and horizontal polygonal floors with supported linked openings. GLB coordinates
+convert native feet/Z-up to metres/Y-up. Geometry JSON includes native identities,
+source record coordinates, coverage counts, and refusal reasons. It explicitly
+marks document geometry incomplete.
+
+Unjoined vertical single-layer walls can include internal, disjoint rectangular
+through-openings, with complete cut meshes qualified against controlled Revit
+witnesses. Joined walls, overlapping or edge-touching cuts, sloped floors and
+unsupported inner-sketch floor layouts remain explicitly unsupported. An unknown
+version/schema profile produces diagnostics and no meshes; the CLI exits 2 when
+no supported meshes are available. Malformed input fails explicitly. The existing
+legacy walker/version gates are unchanged. This is a useful controlled subset,
+not general project geometry support. See [native scene evidence and limits](tools/oracle/README.md#additional-bounded-probes).
 
 ## Why the schema matters
 
@@ -199,7 +314,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-**Seventeen CLIs** ship in the box:
+**Twenty-two CLIs** ship in the box:
 
 ```bash
 cargo build --release
@@ -409,7 +524,7 @@ corpus-backed tests skip themselves while `RVT_PROJECT_CORPUS_DIR` is unset.
   `cd viewer && npm ci`. Python bindings: [`docs/python.md`](docs/python.md).
 - **Gate:** `tools/check-local.sh` runs what CI requires — `cargo fmt --check`,
   `cargo clippy -D warnings`, rustdoc with `-D warnings`, and the workspace
-  tests (1,074 as of 2026-08-30). `--viewer`, `--corpus`, `--deny`, `--audit`
+  tests; the count is reported by the run. `--viewer`, `--corpus`, `--deny`, `--audit`
   add the optional gates.
 - **Where the tests live:** unit tests next to the code in `src/`; integration
   tests in `tests/` (corpus-gated ones skip without `RVT_PROJECT_CORPUS_DIR`);
@@ -450,3 +565,42 @@ corpus-backed tests skip themselves while `RVT_PROJECT_CORPUS_DIR` is unset.
   made by inspecting the bytes of publicly-shipped Autodesk sample
   content and by parsing the public `RevitAPI.dll` NuGet package's
   exported symbol list. See [`NOTICE`](NOTICE).
+
+`rvt-native-revision-diff before.json after.json --json changes.json` compares
+native revision snapshots or world-model reports. File hashes, record-body
+hashes, saved parameter changes and dependency invalidations remain separate;
+matching saved UIDs do not establish cross-document real-world identity.
+
+### Current saved graphics and material export
+
+The research `rvt-native-saved-scene` command reads current native channel-103
+BReps and explicit meshes, resolves shared symbol graphics from the same RVT,
+and exports source-qualified JSON and glTF. It requires no installed Revit,
+Docker converter, or exported geometry sidecar:
+
+```sh
+cargo run --release --bin rvt-native-saved-scene -- model.rvt \
+  --json saved-scene.json --glb saved-scene.glb
+```
+
+Outputs must be new paths. Omit `--ids` to inspect all indexed graphics owners,
+including type/symbol assets; this is an asset inventory rather than a filtered
+whole-building view. JSON positions use internal feet/Z-up; glTF converts to
+meters/Y-up. Each face batch retains owner identity, current record hashes,
+reference sources and material interpretation. Unknown graphics and material
+semantics remain explicit. The rendering profile is bounded; native saved
+material values remain separately identified where the profile changes their
+appearance.
+
+This complements `rvt-native-scene`, which reconstructs supported 2027 geometry
+from saved construction operations. The saved-graphics route has a separate,
+independent bounded surface/normal/identity qualification. It does not
+assert complete Revit-format or whole-document coverage. See
+`docs/native-world-model-research.md` for the research handoff and open gates.
+
+Use `--detail-level 1`, `2`, or `3` for coarse, medium, or fine saved graphics
+(default3). Rendering detail and category-dependent quantity detail are separate
+choices. `--max-graph-values` and `--max-graph-objects` independently bound decoded
+values and objects; explicit larger budgets can admit large valid assets while
+retaining all structural checks. The document diagnostic CLI keeps its100,000
+value/object defaults; the saved-scene CLI defaults both to1,000,000.

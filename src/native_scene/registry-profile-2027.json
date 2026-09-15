@@ -1,0 +1,13 @@
+{
+  "version": 2027,
+  "schema_sha256": "d961c44726fe7fc32bce4425639481a5d5e91acecec7b7fd897610fc369f046f",
+  "evidence": "Native Revit 2027 build 27.2.0.39; geometry-v2, geometry-holdout-v2 and adverse-v1. Full Formats/Latest hash gate. Named registry identities independently checked against declaration registration order and recursive references; not a general structural schema parser.",
+  "classes": [
+    {"name":"SWall","tag":3899,"name_offset":425182,"repeated_id_offset":48},
+    {"name":"ArcWall","tag":450,"name_offset":71448,"repeated_id_offset":48},
+    {"name":"Floor","tag":2153,"name_offset":258007,"repeated_id_offset":50},
+    {"name":"Opening","tag":2912,"name_offset":335196,"repeated_id_offset":38},
+    {"name":"VarSketch","tag":4489,"name_offset":488433,"repeated_id_offset":44},
+    {"name":"SWallRectOpening","tag":3900,"name_offset":425205,"repeated_id_offset":48}
+  ]
+}

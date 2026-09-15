@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "source_sha256": "7d772c366e45ade2e1adf95b543ed433f2e5d5a22c697bcb4cf1532a9d6c54bc",
+  "variant": "walls-v3/duplicate_mark",
+  "stream": "Partitions/1",
+  "prepared_member_offset": 44,
+  "inflated_span_offset": 571,
+  "false_parameter_offset": 603,
+  "interpretation": "Mark parameter id used in warning/reference data; next u32 is2784, coinciding with first wall id, not a string length. Whole-member blind scan accepts5580bytes of arbitrary validUTF16. Context has no measured Element carrier; research framing rejects it.",
+  "bytes_hex": "ffffffffffffffff0080ffff0a200000280d00000000ffffffff1006040000000db9f0ffffffffffe00a000000000000e10a000000000000040b0000000000000000000000000000000000000000000000000000000000000000000000000000008f0000000000000000000000ad0000"
+}

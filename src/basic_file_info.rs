@@ -43,7 +43,8 @@ impl BasicFileInfo {
         }
         let raw = cow.into_owned();
 
-        let version = extract_version(&raw)
+        let version = extract_length_prefixed_version(data)
+            .or_else(|| extract_version(&raw))
             .ok_or_else(|| Error::BasicFileInfo("no 4-digit Revit version found".into()))?;
         let build = extract_build(&raw);
         let original_path = extract_path(&raw);
@@ -142,6 +143,25 @@ fn utf16le(s: &str) -> Vec<u8> {
         out.extend_from_slice(&unit.to_le_bytes());
     }
     out
+}
+
+/// Prefer the authored four-character version field over years embedded in
+/// paths or build timestamps. The stream contains binary fields, so a string
+/// need not begin on an even byte boundary relative to the whole stream.
+fn extract_length_prefixed_version(data: &[u8]) -> Option<u32> {
+    data.windows(12).find_map(|window| {
+        if window[..4] != [4, 0, 0, 0] {
+            return None;
+        }
+        let mut year = 0u32;
+        for pair in window[4..].chunks_exact(2) {
+            if pair[1] != 0 || !pair[0].is_ascii_digit() {
+                return None;
+            }
+            year = year * 10 + u32::from(pair[0] - b'0');
+        }
+        (2014..=2030).contains(&year).then_some(year)
+    })
 }
 
 fn extract_version(text: &str) -> Option<u32> {
@@ -438,4 +458,23 @@ mod tests {
         let re = BasicFileInfo::from_bytes(&bytes).unwrap();
         assert_eq!(re.version, 2026);
     }
+}
+#[test]
+fn authored_version_precedes_path_and_build_year_guesses() {
+    let mut bytes = utf16le("C:\\Projects\\2026\\example.rvt");
+    bytes.extend_from_slice(&4u32.to_le_bytes());
+    bytes.extend_from_slice(&utf16le("2023"));
+    bytes.extend_from_slice(&18u32.to_le_bytes());
+    bytes.extend_from_slice(&utf16le("20260220_1515(x64)"));
+    let info = BasicFileInfo::from_bytes(&bytes).unwrap();
+    assert_eq!(info.version, 2023);
+    assert_eq!(info.build.as_deref(), Some("20260220_1515(x64)"));
+}
+
+#[test]
+fn length_prefixed_version_is_not_required_to_be_stream_aligned() {
+    let mut bytes = vec![0xff];
+    bytes.extend_from_slice(&4u32.to_le_bytes());
+    bytes.extend_from_slice(&utf16le("2024"));
+    assert_eq!(BasicFileInfo::from_bytes(&bytes).unwrap().version, 2024);
 }

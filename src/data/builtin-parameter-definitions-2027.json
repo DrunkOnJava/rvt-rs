@@ -1,0 +1,2106 @@
+{
+  "format": "rvt-builtin-definition-catalog/v1",
+  "schema_sha256": "d961c44726fe7fc32bce4425639481a5d5e91acecec7b7fd897610fc369f046f",
+  "revit_version": 2027,
+  "caption_locale": "en-US",
+  "evidence": "Revit API definition metadata; no owner state or parameter values",
+  "source_snapshot_sha256": "9c8f0faefbd200e5701678ea93f638ed8c4df64111ecb7c710579f733d8c6a72",
+  "definitions": [
+    {
+      "parameter_id": -1155115,
+      "caption": "Lower End Bottom Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1155114,
+      "caption": "Upper End Top Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1154647,
+      "caption": "Default Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1153100,
+      "caption": "Classification",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152385,
+      "caption": "Image",
+      "storage_type": "ElementId",
+      "spec_type_id": "autodesk.spec.reference:image-1.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152384,
+      "caption": "Type Image",
+      "storage_type": "ElementId",
+      "spec_type_id": "autodesk.spec.reference:image-1.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152341,
+      "caption": "Source URL",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152340,
+      "caption": "Source",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152339,
+      "caption": "External Material ID",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152338,
+      "caption": "Sharing",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.int64-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152337,
+      "caption": "Asset library id",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152330,
+      "caption": "Electrical Resistivity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.electrical:resistivity-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152329,
+      "caption": "Reflectivity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152328,
+      "caption": "Porosity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152327,
+      "caption": "Permeability",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.energy:permeability-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152326,
+      "caption": "Transmits Light",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152325,
+      "caption": "Vapor Pressure",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.hvac:pressure-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152324,
+      "caption": "Specific Heat of Vaporization",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.energy:specificHeatOfVaporization-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152323,
+      "caption": "Liquid Viscosity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.hvac:viscosity-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152322,
+      "caption": "Compressibility",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152321,
+      "caption": "Gas Viscosity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.hvac:viscosity-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152320,
+      "caption": "Emissivity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152314,
+      "caption": "Thermally Treated",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152313,
+      "caption": "Density",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:massDensity-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152312,
+      "caption": "Specific Heat",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.energy:specificHeat-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152308,
+      "caption": "Thermal Conductivity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.energy:thermalConductivity-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152307,
+      "caption": "Thermal Expansion Coefficient 2",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:thermalExpansionCoefficient-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152306,
+      "caption": "Thermal Expansion Coefficient 1",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:thermalExpansionCoefficient-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152305,
+      "caption": "Shear Modulus 12",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152304,
+      "caption": "Poisson Ratio 23",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152303,
+      "caption": "Poisson Ratio 12",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152302,
+      "caption": "Young's Modulus 2",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1152301,
+      "caption": "Young's Modulus 1",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150481,
+      "caption": "Description",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150468,
+      "caption": "System Abbreviation",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150466,
+      "caption": "Property Set Name",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150465,
+      "caption": "Subclass",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150464,
+      "caption": "Class",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150437,
+      "caption": "Insulation Thickness",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:pipeInsulationThickness-2.0.0",
+      "group_type_id": "autodesk.revit.group:insulation-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150434,
+      "caption": "Overall Size",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.revit.group:insulation-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150431,
+      "caption": "Insulation Thickness",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.hvac:ductInsulationThickness-2.0.0",
+      "group_type_id": "autodesk.revit.group:insulation-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150430,
+      "caption": "Insulation Type",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.revit.group:insulation-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150410,
+      "caption": "Two Line Drop Symbol",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.revit.group:systemtypeRisedrop-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150409,
+      "caption": "Two Line Rise Symbol",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.revit.group:systemtypeRisedrop-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150408,
+      "caption": "Single Line Drop Symbol",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.revit.group:systemtypeRisedrop-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150407,
+      "caption": "Single Line Rise Symbol",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.revit.group:systemtypeRisedrop-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150406,
+      "caption": "Single Line Tee Up Symbol",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.revit.group:systemtypeRisedrop-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1150405,
+      "caption": "Single Line Tee Down Symbol",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.revit.group:systemtypeRisedrop-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141040,
+      "caption": "Wall Thickness",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:pipeSize-2.0.0",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141033,
+      "caption": "Lower End Invert Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141032,
+      "caption": "Upper End Invert Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141031,
+      "caption": "Lower End Obvert Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141030,
+      "caption": "Upper End Obvert Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141029,
+      "caption": "Lower End Bottom of Insulation Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.revit.group:insulation-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141028,
+      "caption": "Lower End Top of Insulation Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.revit.group:insulation-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141027,
+      "caption": "Upper End Bottom of Insulation Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.revit.group:insulation-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141026,
+      "caption": "Upper End Top of Insulation Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.revit.group:insulation-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141024,
+      "caption": "Lower End Top Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141023,
+      "caption": "Upper End Bottom Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141021,
+      "caption": "Lower End Centerline Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141020,
+      "caption": "Upper End Centerline Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1141008,
+      "caption": "SU/SD from Bottom",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140988,
+      "caption": "Spot Centerline Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140987,
+      "caption": "Spot Bottom of Insulation Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140986,
+      "caption": "Spot Bottom Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140985,
+      "caption": "Spot Top of Insulation Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140984,
+      "caption": "Spot Top Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140982,
+      "caption": "SU/SD from Top",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140422,
+      "caption": "Keynote",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140417,
+      "caption": "Grade",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140416,
+      "caption": "Species",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140415,
+      "caption": "Thermal expansion coefficient",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:thermalExpansionCoefficient-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140414,
+      "caption": "Bending",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140413,
+      "caption": "Shear modulus",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140412,
+      "caption": "Poisson ratio",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140410,
+      "caption": "Shear perpendicular to grain",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140409,
+      "caption": "Shear parallel to grain",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140408,
+      "caption": "Compression perpendicular to grain",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140407,
+      "caption": "Compression parallel to grain",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140401,
+      "caption": "Young modulus",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140400,
+      "caption": "Material Type",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140363,
+      "caption": "Category",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140362,
+      "caption": "Category",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140355,
+      "caption": "Name",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140335,
+      "caption": "Calculations",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140334,
+      "caption": "System Type",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140332,
+      "caption": "Abbreviation",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140331,
+      "caption": "Graphic Overrides",
+      "storage_type": "None",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140328,
+      "caption": "Flow Conversion Method",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140327,
+      "caption": "Number of Elements",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.int64-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140326,
+      "caption": "System Equipment",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140325,
+      "caption": "System Classification",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140324,
+      "caption": "System Name",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140323,
+      "caption": "Lightweight",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140322,
+      "caption": "Behavior",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140321,
+      "caption": "Resistance calculation strength",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140320,
+      "caption": "Reduction factor for shear",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140319,
+      "caption": "Minimum tensile strength",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140318,
+      "caption": "Minimum yield stress",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140317,
+      "caption": "Shear strength modification",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140316,
+      "caption": "Shear reinforcement yield stress",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140315,
+      "caption": "Bending reinforcement",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140314,
+      "caption": "Concrete compression",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140312,
+      "caption": "Thermal expansion coefficient Z",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:thermalExpansionCoefficient-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140311,
+      "caption": "Thermal expansion coefficient Y",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:thermalExpansionCoefficient-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140310,
+      "caption": "Thermal expansion coefficient X",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:thermalExpansionCoefficient-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140309,
+      "caption": "Unit weight",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:unitWeight-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140308,
+      "caption": "Shear modulus Z",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140307,
+      "caption": "Shear modulus Y",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140306,
+      "caption": "Shear modulus X",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140305,
+      "caption": "Poisson ratio Z",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140304,
+      "caption": "Poisson ratio Y",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140303,
+      "caption": "Poisson ratio X",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140302,
+      "caption": "Young modulus Z",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140301,
+      "caption": "Young modulus Y",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140300,
+      "caption": "Young modulus X",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.structural:stress-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140285,
+      "caption": "Velocity Pressure",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:pressure-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140279,
+      "caption": "Segment Description",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140278,
+      "caption": "Connection Type",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140277,
+      "caption": "Pipe Segment",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140276,
+      "caption": "Routing Preferences",
+      "storage_type": "None",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:segmentsFittings-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140257,
+      "caption": "Fixture Units",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140256,
+      "caption": "Slope",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:slope-2.0.0",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140253,
+      "caption": "Volume",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:volume-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140246,
+      "caption": "Fixture Units",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140242,
+      "caption": "Static Pressure",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:pressure-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140238,
+      "caption": "Outside Diameter",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:pipeSize-2.0.0",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140237,
+      "caption": "Invert Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140226,
+      "caption": "Additional Flow",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:flow-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140225,
+      "caption": "Diameter",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:pipeSize-2.0.0",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140218,
+      "caption": "Fluid Type",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140217,
+      "caption": "Fluid Temperature",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:temperature-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140215,
+      "caption": "Fluid Dynamic Viscosity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:viscosity-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140214,
+      "caption": "Fluid Density",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:density-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140213,
+      "caption": "Flow",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:flow-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140212,
+      "caption": "Inside Diameter",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:pipeSize-2.0.0",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140211,
+      "caption": "Reynolds Number",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140210,
+      "caption": "Relative Roughness",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140209,
+      "caption": "Flow State",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140208,
+      "caption": "Friction Factor",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140207,
+      "caption": "Velocity",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:velocity-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140206,
+      "caption": "Friction",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:friction-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140205,
+      "caption": "Pressure Drop",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:pressure-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140204,
+      "caption": "Roughness",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.piping:roughness-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140202,
+      "caption": "Material",
+      "storage_type": "ElementId",
+      "spec_type_id": "autodesk.spec.aec:material-1.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140200,
+      "caption": "Schedule/Type",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140104,
+      "caption": "Panel",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:electricalLoads-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1140103,
+      "caption": "Circuit Number",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:electricalLoads-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114240,
+      "caption": "Size",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114132,
+      "caption": "Middle Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114125,
+      "caption": "Section",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.int64-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanicalAirflow-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114120,
+      "caption": "Area",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:area-2.0.0",
+      "group_type_id": "autodesk.parameter.group:mechanical-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114106,
+      "caption": "Vertical Justification",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114105,
+      "caption": "Horizontal Justification",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114003,
+      "caption": "End Middle Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114002,
+      "caption": "Start Middle Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1114000,
+      "caption": "Reference Level",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019100,
+      "caption": "Cross-Section",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.revit.group:wallCrossSectionDefinition-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019017,
+      "caption": "Type IFC Predefined Type",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:ifc-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019016,
+      "caption": "IFC Predefined Type",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:ifc-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019015,
+      "caption": "Export Type to IFC As",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:ifc-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019014,
+      "caption": "Export to IFC As",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:ifc-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019013,
+      "caption": "Export Type to IFC",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:ifc-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019012,
+      "caption": "Export to IFC",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:ifc-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019001,
+      "caption": "Type IfcGUID",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:ifc-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1019000,
+      "caption": "IfcGUID",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:ifc-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1013449,
+      "caption": "Has Association",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1013201,
+      "caption": "Design Option",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1012829,
+      "caption": "Base Extension Distance",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1012828,
+      "caption": "Top Extension Distance",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1012806,
+      "caption": "Volume",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:volume-2.0.0",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1012805,
+      "caption": "Area",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:area-2.0.0",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1012201,
+      "caption": "Scope Box",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.revit.group:viewExtents-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1012101,
+      "caption": "Phase Demolished",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:phasing-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1012100,
+      "caption": "Phase Created",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:phasing-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1010109,
+      "caption": "Model",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1010108,
+      "caption": "Manufacturer",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1010106,
+      "caption": "Comments",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1010105,
+      "caption": "Type Comments",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1010104,
+      "caption": "URL",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec.string:url-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1010103,
+      "caption": "Description",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1008002,
+      "caption": "Symbol at End 1 Default",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1008001,
+      "caption": "Symbol at End 2 Default",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1008000,
+      "caption": "Name",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1007112,
+      "caption": "Structural",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1007111,
+      "caption": "Building Story",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1007110,
+      "caption": "Story Above",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1007109,
+      "caption": "Elevation Base",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1007102,
+      "caption": "Elevation",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1007100,
+      "caption": "Symbol",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1006939,
+      "caption": "Computation Height",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1006305,
+      "caption": "Line Pattern",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1006304,
+      "caption": "Color",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1006303,
+      "caption": "Line Weight",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1006016,
+      "caption": "Slope",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:slope-2.0.0",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1005556,
+      "caption": "Code Name",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1005500,
+      "caption": "Structural Material",
+      "storage_type": "ElementId",
+      "spec_type_id": "autodesk.spec.aec:material-1.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1005436,
+      "caption": "Roughness",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.int64-2.0.0",
+      "group_type_id": "autodesk.revit.group:analyticalProperties-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1005435,
+      "caption": "Absorptance",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:number-2.0.0",
+      "group_type_id": "autodesk.revit.group:analyticalProperties-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1005434,
+      "caption": "Thermal Mass",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.energy:heatCapacityPerArea-2.0.0",
+      "group_type_id": "autodesk.revit.group:analyticalProperties-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1005431,
+      "caption": "Thermal Resistance (R)",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.energy:thermalResistance-2.0.0",
+      "group_type_id": "autodesk.revit.group:analyticalProperties-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1005430,
+      "caption": "Thermal Transmittance (U)",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec.energy:heatTransferCoefficient-2.0.0",
+      "group_type_id": "autodesk.revit.group:analyticalProperties-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1004005,
+      "caption": "Length",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002554,
+      "caption": "Shininess",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.int64-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002553,
+      "caption": "Smoothness",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.int64-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002552,
+      "caption": "Glow",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002551,
+      "caption": "Transparency",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.int64-2.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002550,
+      "caption": "Color",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002503,
+      "caption": "Classification Title",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002502,
+      "caption": "Classification Number",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002501,
+      "caption": "Assembly Description",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002500,
+      "caption": "Assembly Code",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002116,
+      "caption": "Structure",
+      "storage_type": "None",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:construction-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002112,
+      "caption": "Wrapping at Inserts",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:construction-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002111,
+      "caption": "Wrapping at Ends",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:construction-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002110,
+      "caption": "Coarse Scale Fill Color",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002108,
+      "caption": "Host Id",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002107,
+      "caption": "Material",
+      "storage_type": "ElementId",
+      "spec_type_id": "autodesk.spec.aec:material-1.0.0",
+      "group_type_id": "autodesk.parameter.group:materials-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002106,
+      "caption": "Coarse Scale Fill Pattern",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:graphics-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002103,
+      "caption": "Structure",
+      "storage_type": "None",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:construction-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002062,
+      "caption": "Level",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002052,
+      "caption": "Family and Type",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002051,
+      "caption": "Family",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002050,
+      "caption": "Type",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002002,
+      "caption": "Family Name",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002001,
+      "caption": "Type Name",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1002000,
+      "caption": "Type Id",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001954,
+      "caption": "Structural",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:structural-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001953,
+      "caption": "Perimeter",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001952,
+      "caption": "Level",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001951,
+      "caption": "Height Offset From Level",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001902,
+      "caption": "Default Thickness",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:construction-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001900,
+      "caption": "Thickness",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001713,
+      "caption": "Related to Mass",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001655,
+      "caption": "Elevation at Bottom Core",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001654,
+      "caption": "Elevation at Top Core",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001598,
+      "caption": "Elevation at Top",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001596,
+      "caption": "Structural",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:structural-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001561,
+      "caption": "Elevation at Bottom",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:dimensions-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001405,
+      "caption": "Type Mark",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001372,
+      "caption": "Host",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001370,
+      "caption": "Moves With Nearby Elements",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001364,
+      "caption": "Offset from Host",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001363,
+      "caption": "Host",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001360,
+      "caption": "Elevation from Level",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001352,
+      "caption": "Level",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001206,
+      "caption": "Fire Rating",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001205,
+      "caption": "Cost",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.measurable:currency-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001203,
+      "caption": "Mark",
+      "storage_type": "String",
+      "spec_type_id": "autodesk.spec:spec.string-2.0.0",
+      "group_type_id": "autodesk.parameter.group:identityData-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001122,
+      "caption": "Location Line",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001121,
+      "caption": "Hosted",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.revit.group:reference-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001119,
+      "caption": "Structural Usage",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:structural-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001118,
+      "caption": "Base is Attached",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001117,
+      "caption": "Top is Attached",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001109,
+      "caption": "Top Offset",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001108,
+      "caption": "Base Offset",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001107,
+      "caption": "Base Constraint",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001105,
+      "caption": "Unconnected Height",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001103,
+      "caption": "Top Constraint",
+      "storage_type": "ElementId",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001007,
+      "caption": "Room Bounding",
+      "storage_type": "Integer",
+      "spec_type_id": "autodesk.spec:spec.bool-1.0.0",
+      "group_type_id": "autodesk.parameter.group:constraints-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001006,
+      "caption": "Function",
+      "storage_type": "Integer",
+      "spec_type_id": "",
+      "group_type_id": "autodesk.parameter.group:construction-1.0.0",
+      "is_shared": false
+    },
+    {
+      "parameter_id": -1001000,
+      "caption": "Width",
+      "storage_type": "Double",
+      "spec_type_id": "autodesk.spec.aec:length-2.0.1",
+      "group_type_id": "autodesk.parameter.group:construction-1.0.0",
+      "is_shared": false
+    }
+  ]
+}
