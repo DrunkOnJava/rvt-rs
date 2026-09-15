@@ -175,7 +175,7 @@ fn einhoven_iter_elements_yields_typed_arcwalls_with_location_curves() {
 }
 
 #[test]
-fn einhoven_partition_schema_mvp_levels_materials_floors() {
+fn einhoven_research_candidates_are_excluded_from_production() {
     let Some(project_dir) = project_dir() else {
         eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
         return;
@@ -211,18 +211,30 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
 
     let mut rf2 = RevitFile::open(&path).unwrap();
     let decoded: Vec<_> = walker::iter_elements(&mut rf2).unwrap().collect();
-    let floors: Vec<_> = decoded.iter().filter(|e| e.class == "Floor").collect();
+    assert!(
+        decoded
+            .iter()
+            .all(|e| !matches!(e.class.as_str(), "Floor" | "Level" | "Material" | "Room")),
+        "unbound name/elevation/plan-loop candidates must not enter production"
+    );
+    let candidates = rvt::partition_schema_mvp::recover_partition_schema_candidates(
+        &mut rf2,
+        version,
+        walker::WalkerLimits::default(),
+    )
+    .unwrap();
+    let floors: Vec<_> = candidates.floors.iter().collect();
+    let levels: Vec<_> = candidates.levels.iter().collect();
+    let materials: Vec<_> = candidates.materials.iter().collect();
+    let rooms: Vec<_> = candidates.rooms.iter().collect();
     let doors: Vec<_> = decoded.iter().filter(|e| e.class == "Door").collect();
     let windows: Vec<_> = decoded.iter().filter(|e| e.class == "Window").collect();
-    let levels: Vec<_> = decoded.iter().filter(|e| e.class == "Level").collect();
-    let materials: Vec<_> = decoded.iter().filter(|e| e.class == "Material").collect();
-    let rooms: Vec<_> = decoded.iter().filter(|e| e.class == "Room").collect();
     let openings: Vec<_> = decoded
         .iter()
         .filter(|e| e.class == "ArcWallRectOpening")
         .collect();
 
-    // Levels: elevation-derived storeys merge into production iter_elements.
+    // Research-only levels retain measured elevations and candidate names.
     assert!(
         levels.len() >= 2,
         "expected ≥2 Level DecodedElements from partition storeys, got {}",
@@ -243,7 +255,7 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
         "expected ≥2 Levels with recovered elevations, got {level_elevations}"
     );
 
-    // Materials: strict partition display names.
+    // Research-only materials retain candidate partition display names.
     assert!(
         materials.len() >= 5,
         "expected ≥5 Material DecodedElements from partition names, got {}",
@@ -254,7 +266,7 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
         assert!(m.name.is_some());
     }
 
-    // Floors: ArcWall-excluded plan loops with recoverable boundaries.
+    // Research-only floors retain ArcWall-excluded candidate plan loops.
     assert!(
         !floors.is_empty(),
         "expected ≥1 Floor plan-loop DecodedElement on Einhoven"
@@ -395,23 +407,19 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
         elem_confirmed >= 50,
         "expected ≥50 openings with both related ids in ElemTable, got {elem_confirmed}"
     );
-    // Materials / rooms may still surface from strings even when ArcWall
-    // standard decode is version-gated off.
-    assert!(
-        mvp.materials.len() >= 5,
-        "expected material name recovers on 2024, got {}",
-        mvp.materials.len()
-    );
-
-    eprintln!(
-        "2024 Core Interior MVP ok · openings={} · elem_confirmed={} · materials={} · levels={} · floors={} · rooms={}",
-        mvp.rect_openings.len(),
-        elem_confirmed,
-        mvp.materials.len(),
-        mvp.levels.len(),
-        mvp.floors.len(),
-        mvp.rooms.len()
-    );
+    // Name guesses remain available only through the explicit research API.
+    let candidates =
+        rvt::partition_schema_mvp::recover_partition_schema_candidates(&mut rf, version, limits)
+            .unwrap();
+    assert!(candidates.materials.len() >= 5);
+    assert!(decoded.iter().all(|element| !matches!(
+        element.provenance.decoder.as_deref(),
+        Some(
+            "partition_schema_mvp::material_name"
+                | "partition_schema_mvp::room_name"
+                | "partition_schema_mvp::floor_plan_loop"
+        )
+    )));
 }
 
 /// #212 / RE-22: slabs come from `OST_Floors` + `OST_BuildingPad`
@@ -455,11 +463,6 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
         mvp.slabs.len(),
         100,
         "expected the 100 exported OST_Floors / OST_BuildingPad instances"
-    );
-    assert!(
-        mvp.floors.is_empty(),
-        "plan-loop floors must stand down when record-backed slabs decode: \
-         emitting both double-counts the same plates"
     );
 
     let pads: Vec<_> = mvp

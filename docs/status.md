@@ -326,3 +326,22 @@ The first broadly useful release should let a non-technical AEC user:
 Until those five conditions hold, rvt-rs should present itself as an
 open-source Revit inspection and reverse-engineering toolkit, not as a complete
 replacement for production Revit export workflows.
+
+## Native path status
+
+The native saved-record/world-model path runs alongside the legacy
+walker/exporter. Its opt-in commands provide bounded JSON or GLB projections
+for supported saved records, spatial context, relationships, parameters,
+materials, lifecycle state, revisions, and graphics. Unsupported versions,
+records, relationships, and geometry remain diagnostics; universal typed-model
+recovery and drop-in IFC conversion are not claimed.
+
+The legacy walker does not promote unbound room, material, level-name, or
+plan-loop candidates into production elements. Their absence remains an
+explicit capability gap until ownership evidence is available.
+
+See [native world-model capability](native-world-model-research.md) and the
+[native format reference](research/native-format-reference.md) for the
+serialized field and relationship boundaries. Multi-loop/non-rectangular
+curved trims, full regeneration, visibility parity, and render parity remain
+unproven.

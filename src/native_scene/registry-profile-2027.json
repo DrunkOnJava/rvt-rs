@@ -1,0 +1,11 @@
+{
+  "version": 2027,
+  "classes": [
+    {"name":"SWall","tag":3899},
+    {"name":"ArcWall","tag":450},
+    {"name":"Floor","tag":2153},
+    {"name":"Opening","tag":2912},
+    {"name":"VarSketch","tag":4489},
+    {"name":"SWallRectOpening","tag":3900}
+  ]
+}

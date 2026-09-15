@@ -131,6 +131,16 @@ pub mod geometry;
 pub mod identity;
 pub mod ifc;
 pub mod level_bind;
+pub mod native_document;
+pub mod native_element;
+pub mod native_equipment;
+pub mod native_index;
+pub mod native_metadata;
+pub mod native_parameter_definitions;
+pub mod native_parameters;
+pub mod native_scene;
+pub mod native_segments;
+pub mod native_spatial_context;
 pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;
@@ -139,6 +149,7 @@ pub mod partition_element_records;
 pub mod partition_ifc_export_overrides;
 pub mod partition_level_records;
 pub mod partition_name_candidates;
+pub mod partition_parameter_records;
 pub mod partition_scanner;
 pub mod partition_schema_mvp;
 pub mod partitions;
@@ -147,6 +158,7 @@ pub mod rect_opening_index;
 pub mod redact;
 pub mod relations;
 pub mod round_trip;
+pub mod schema_registry;
 pub mod streams;
 pub mod transmission_data;
 pub mod walker;
@@ -171,3 +183,47 @@ pub mod wasm;
 
 pub use error::{Error, Result};
 pub use reader::RevitFile;
+
+pub mod native_network;
+pub mod native_network_document;
+
+pub mod native_appearance;
+pub mod native_materials;
+pub mod native_shader;
+pub mod native_texture;
+pub mod native_texture_mapping;
+pub mod native_wall_joins;
+
+pub mod native_lifecycle;
+
+pub mod native_representations;
+
+pub mod native_embedded;
+
+pub mod native_content_documents;
+
+pub mod native_family_geometry;
+
+pub mod native_room_connections;
+pub mod native_spatial_boundaries;
+
+pub mod native_revision;
+
+pub mod native_surfaces;
+
+pub mod native_empty_faces;
+pub mod native_es_catalog;
+pub mod native_export_metadata;
+pub mod native_extensible_storage;
+pub mod native_graphics_traversal;
+pub mod native_parametric_mesh;
+pub mod native_parametric_surface;
+pub mod native_saved_glb;
+pub mod native_saved_mesh;
+pub mod native_saved_metrics;
+pub mod native_saved_scene;
+
+pub mod native_saved_material_quantities;
+pub mod native_saved_materials;
+
+pub mod native_standard_view;

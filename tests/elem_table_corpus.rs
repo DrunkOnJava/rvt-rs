@@ -198,8 +198,8 @@ fn project_2024_file_parses_all_declared_records() {
     // return every one of them — #206 was a four-byte origin shift that lost
     // the last record.
     assert_eq!(
-        records.len() as u16,
-        header.record_count,
+        records.len(),
+        header.record_count as usize,
         "parse_records should return exactly header.record_count on 2024 project files"
     );
     let last = records.last().expect("at least one record");

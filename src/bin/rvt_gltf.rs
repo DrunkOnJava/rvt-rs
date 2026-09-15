@@ -14,7 +14,10 @@
 
 use clap::Parser;
 use rvt::RevitFile;
-use rvt::ifc::{Exporter, RvtDocExporter, gltf::model_to_glb};
+use rvt::ifc::{
+    Exporter, RvtDocExporter,
+    gltf::{build_gltf, write_glb},
+};
 use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -56,7 +59,22 @@ fn run(cli: &Cli) -> Result<(), String> {
     let model = RvtDocExporter
         .export(&mut rf)
         .map_err(|e| format!("export: {e}"))?;
-    let glb = model_to_glb(&model);
+    let (document, binary) = build_gltf(&model);
+    if document.meshes.is_empty() {
+        eprintln!("warning: no supported decoded geometry; GLB contains no meshes");
+    }
+    let omitted = document
+        .nodes
+        .iter()
+        .filter(|node| node.mesh.is_none())
+        .count();
+    if omitted > 0 {
+        eprintln!(
+            "warning: {omitted} element(s) have missing or unsupported geometry; see node extras for reasons"
+        );
+    }
+    let mut glb = Vec::new();
+    write_glb(&document, &binary, &mut glb);
     fs::write(&cli.dst, &glb).map_err(|e| format!("write {}: {e}", cli.dst.display()))?;
     if cli.verbose {
         println!(

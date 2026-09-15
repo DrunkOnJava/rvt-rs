@@ -138,6 +138,7 @@ viewer/public/demos/*
 !viewer/public/demos/.gitkeep
 
 _corpus_candidates/
+_corpus/
 _project_corpus/
 
 # Revit-hosted oracle runner output (owned synthetic fixtures + observations)

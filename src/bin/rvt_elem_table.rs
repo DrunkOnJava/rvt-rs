@@ -56,7 +56,7 @@ fn run() -> anyhow::Result<()> {
         #[derive(serde::Serialize)]
         struct Out<'a> {
             element_count: u16,
-            record_count: u16,
+            record_count: u32,
             header_flag: u16,
             decompressed_bytes: usize,
             parsed_records: usize,
@@ -78,7 +78,7 @@ fn run() -> anyhow::Result<()> {
 
     println!("Global/ElemTable · {}", cli.file.display());
     println!(
-        "  declared element_count={}  declared record_count={}",
+        "  legacy header word={} (not an element count)  declared record_count={}",
         header.element_count, header.record_count
     );
     println!(

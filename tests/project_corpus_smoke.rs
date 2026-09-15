@@ -114,7 +114,7 @@ fn exercise_full_pipeline(path: &PathBuf) -> Result<(), String> {
     if records.is_empty() {
         return Err("parse_records returned empty vec".into());
     }
-    if records.len() as u16 > header.record_count {
+    if records.len() > header.record_count as usize {
         return Err(format!(
             "parsed {} records > header record_count {}",
             records.len(),
