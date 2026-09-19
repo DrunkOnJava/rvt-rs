@@ -97,7 +97,7 @@ main.ts
   ├── category toggles
   ├── export-quality label + IFC bar selector
   ├── File status (decode / export confidence)
-  ├── element-info panel (raycast picking)
+  ├── element-info panel (raycast picking) + host / hosted jump rows
   └── status line
 ```
 
