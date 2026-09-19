@@ -231,17 +231,31 @@ tolerance 0, with `levels` inside the claimed surface, and both
 OctetProof verdicts carry `entity_counts.IFCBUILDINGSTOREY` **and**
 `storeys.IFCBUILDINGSTOREY` — the exact `[name, elevation]` set — on
 which rvt-rs, IfcOpenShell 0.8.5 and IFClite 7.1.1 agree byte for byte.
-Containment is unchanged and still an exact elevation match, so the wider
-storey set binds more: **801 of 872** building elements now land in a
-specific storey (was 794 with 11 storeys) — all 256 columns, all 132
-doors, 359 of 360 walls (was 355) and 54 of 100 record-backed plates
-(was 51 — `IFCSLAB` 44 of 80, `IFCSHADINGDEVICE` 10 of 20). Plates still
-bind by their record **top** face, since Revit hangs a floor below the
-level that hosts it. The 6 windows still bind to nothing: a window
-record's base is its sill height, never a storey elevation, so the wider
-set does not help them. The 46 plates that remain unbound sit 0.1667 ft
-below their level at the structural-slab / architectural-topping
-interface (#219) — a thickness question, not an elevation-set one.
+**The element record names the Level that hosts it** (#219, RE-27), and
+that is now the first join tried. The counted reference list at `+0x88`
+— the same list RE-23 reads for a door's host wall — carries the host
+`Level` as a plain ElementId slot, and it is accepted only when it names
+exactly **one** of the fifteen recovered Levels. That restriction is not
+a threshold: a Revit column or wall carries a base *and* a top
+constraint and both are in the list, so all 344 `OST_Columns` records
+that name a Level name two of them and resolve to nothing, keeping the
+elevation join they already bind exactly on. Where both joins answer the
+same element the two agree **537 of 537**, with 0 disagreements, which
+is why the stated join runs first. Containment therefore moves **801 →
+853 of 872**: all 256 columns, all 132 doors, all 6 windows, all 100
+record-backed plates (`IFCSLAB` 80 of 80, `IFCSHADINGDEVICE` 20 of 20)
+and 359 of 360 walls. The 46 plates that used to sit 0.1667 ft below
+their level at the structural-slab / architectural-topping interface,
+and the 6 windows whose record base is a sill height 4.73 ft above their
+level, are exactly the elements a named Level reaches and an inferred
+elevation cannot. What stays unbound is **19**: the 18 name-only
+`IFCSPACE` rows, which come from a partition string and carry no element
+record at all, and one wall whose record names no single Level. Those 19
+are contained in the **`IfcBuilding`** — "in this building, storey
+unknown" — where the writer used to drop them into whichever storey came
+first, which on this file put 71 elements, some of them at 185 ft, into
+`Basement 2` at −40 ft. Reference side **NOT MEASURED**: none of these
+853 are scored against Revit's own `IfcRelContainedInSpatialStructure`.
 The #213 column-derived path (`STOREY_ELEVATION_SOURCE_TYPES` =
 `IFCCOLUMN`) survives as the fallback for files with no recoverable Level
 records; its measurement stands unchanged, including the RE-22 finding

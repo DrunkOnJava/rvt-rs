@@ -90,7 +90,7 @@ Important nested fields:
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
 | `exported.storey_names` | array | Recovered building-storey display names, in emission order. |
 | `exported.storey_elevations_feet` | array | Recovered storey elevations in feet, aligned with `storey_names`. An all-zero list means only Level *name* strings were recovered — no elevation evidence was found. |
-| `exported.storey_bound_elements` | integer | Building elements contained in a specific storey rather than falling to the first one. |
+| `exported.storey_bound_elements` | integer | Building elements contained in a specific storey. The rest are contained in the `IfcBuilding`, never in a named storey. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
 | `confidence.score` | number | Heuristic 0..1 readiness score for UI sorting and dashboards. |
 
@@ -102,8 +102,8 @@ different recoveries, and the elevations are how a reader tells them apart.
 - **Name-only.** Partition `Level`-like strings were recovered but nothing in
   the file gave them an elevation, so every entry in
   `storey_elevations_feet` is `0.0`. The storeys are real names in an
-  arbitrary order; they are not positions, and every element falls into the
-  first one.
+  arbitrary order; they are not positions, and no element is contained in
+  one.
 - **Measured elevations.** Base elevations were recovered — from 2023 ArcWall
   trailers, or on Revit 2024 from the partition element-record bounding boxes
   (#213) — so `storey_elevations_feet` carries distinct values and
@@ -115,9 +115,33 @@ different recoveries, and the elevations are how a reader tells them apart.
   `decoded.production_class_counts.Level`, and a warning states how many were
   left unplaced.
 
-Neither case resolves a Level *ElementId*: `LevelBindResolved` on an element's
-property set stays `false`, and elements bound by elevation additionally carry
-`StoreyBindSource = record_base_elevation` so the two joins are never confused.
+A third recovery sits in front of both and is the only one the file *states*
+rather than infers. On Revit 2024 a partition element record's counted
+reference list names the `Level` that hosts the element, and when it names
+exactly one recovered Level the element is contained in that Level's storey
+(#219, RE-27). Such an element carries `LevelBindResolved = true`,
+`LevelElementId`, and `LevelBindSource =
+partition_element_record_reference_list`. A record that names no Level, or two
+— a column and a wall each carry a base *and* a top constraint, with nothing
+in the bytes saying which slot is which — resolves to nothing and keeps the
+elevation join.
+
+Every element that reached a storey says how, in `StoreyBindSource`:
+
+| value | join |
+|---|---|
+| `record_level_reference` | the Level ElementId the record names (#219) |
+| `record_base_elevation` | the record's base face equals a storey elevation (#213) |
+| `record_top_elevation` | the record's top face equals one — plates hang below their level (#212) |
+
+The property's *absence* is the honest unbound state. An unbound element is
+contained in the `IfcBuilding`, which says "in this building, storey unknown";
+it is never written into the first storey, because that would state a
+containment nothing measured.
+
+`LevelBindResolved` still stays `false` for every element whose storey came
+from an elevation match, and for the typed `Floor` / `Room` `m_level_id` join,
+which remains unrecovered (#86 / RE-20).
 
 ## Geometry placement
 

@@ -144,8 +144,14 @@ pub fn recover_partition_schema_mvp(
     }
 
     // --- 2024 partition element records (#204 columns, #211 the rest) ---
-    out.columns = columns_from_partition_category_records(rf, revit_version)?;
-    out.walls = walls_from_partition_category_records(rf, revit_version)?;
+    //
+    // The `Level` ElementId set costs one partition sweep and is read
+    // once here for every category below: each record-backed element
+    // binds to the Level its counted reference list names, when it
+    // names exactly one (#219, RE-27).
+    let level_ids = level_element_ids(rf, revit_version)?;
+    out.columns = columns_from_partition_category_records(rf, revit_version, &level_ids)?;
+    out.walls = walls_from_partition_category_records(rf, revit_version, &level_ids)?;
     // Doors and windows bind to a host wall (#222, RE-23). The
     // candidate set is exactly the wall instances recovered above —
     // a recovered host that is not itself an exported wall is
@@ -157,6 +163,7 @@ pub fn recover_partition_schema_mvp(
         crate::partition_element_records::OST_DOORS,
         "Door",
         &wall_ids,
+        &level_ids,
     )?;
     out.windows = openings_from_partition_category_records(
         rf,
@@ -164,6 +171,7 @@ pub fn recover_partition_schema_mvp(
         crate::partition_element_records::OST_WINDOWS,
         "Window",
         &wall_ids,
+        &level_ids,
     )?;
 
     // --- 2024 slab instances from element records (#212, RE-22) ---
@@ -174,7 +182,7 @@ pub fn recover_partition_schema_mvp(
     // plate. So the loops stand down whenever records were recovered,
     // and stay the only floor path on releases (2023 and earlier) and
     // files where no element record decodes.
-    out.slabs = slabs_from_partition_category_records(rf, revit_version)?;
+    out.slabs = slabs_from_partition_category_records(rf, revit_version, &level_ids)?;
     if !out.slabs.is_empty() {
         out.floors.clear();
     }
@@ -191,6 +199,7 @@ pub fn recover_partition_schema_mvp(
 pub fn columns_from_partition_category_records(
     rf: &mut RevitFile,
     revit_version: u32,
+    level_ids: &BTreeSet<u32>,
 ) -> Result<Vec<DecodedElement>> {
     let Some(records) = category_records(
         rf,
@@ -200,7 +209,7 @@ pub fn columns_from_partition_category_records(
     else {
         return Ok(Vec::new());
     };
-    Ok(column_instances_from_records(records))
+    Ok(column_instances_from_records(records, level_ids))
 }
 
 /// Recover wall instances from partition element records (#211), with
@@ -208,6 +217,7 @@ pub fn columns_from_partition_category_records(
 pub fn walls_from_partition_category_records(
     rf: &mut RevitFile,
     revit_version: u32,
+    level_ids: &BTreeSet<u32>,
 ) -> Result<Vec<DecodedElement>> {
     let Some(records) = category_records(
         rf,
@@ -217,7 +227,22 @@ pub fn walls_from_partition_category_records(
     else {
         return Ok(Vec::new());
     };
-    Ok(wall_instances_from_records(records))
+    Ok(wall_instances_from_records(records, level_ids))
+}
+
+/// The `Level` ElementIds the #219 / RE-27 reference-list join tests
+/// against, or an empty set on a release / file with no proven Level
+/// framing (the join then resolves nothing and every element keeps the
+/// elevation join it already had).
+pub fn level_element_ids(rf: &mut RevitFile, revit_version: u32) -> Result<BTreeSet<u32>> {
+    if !crate::partition_level_records::supports_revit_version(revit_version) {
+        return Ok(BTreeSet::new());
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => return Ok(BTreeSet::new()),
+    };
+    crate::partition_level_records::scan_partition_level_ids(rf, revit_version, &declared)
 }
 
 /// Every partition element record of one `BuiltInCategory`, or `None`
@@ -269,6 +294,7 @@ pub fn instances_from_partition_category_records(
     revit_version: u32,
     builtin_category: i64,
     class: &str,
+    level_ids: &BTreeSet<u32>,
 ) -> Result<Vec<DecodedElement>> {
     if !crate::partition_element_records::supports_revit_version(revit_version) {
         return Ok(Vec::new());
@@ -286,7 +312,7 @@ pub fn instances_from_partition_category_records(
         builtin_category,
         &declared,
     )?;
-    Ok(instances_from_records(records, class))
+    Ok(instances_from_records(records, class, level_ids))
 }
 
 /// Instance selection over already-decoded category records — split
@@ -301,10 +327,11 @@ pub fn instances_from_partition_category_records(
 pub fn instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
     class: &str,
+    level_ids: &BTreeSet<u32>,
 ) -> Vec<DecodedElement> {
     select_instance_records(records)
         .values()
-        .map(|record| element_record_decoded(record, class))
+        .map(|record| element_record_decoded(record, class, level_ids))
         .collect()
 }
 
@@ -345,11 +372,12 @@ pub fn opening_instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
     class: &str,
     host_candidates: &BTreeSet<u32>,
+    level_ids: &BTreeSet<u32>,
 ) -> Vec<DecodedElement> {
     select_instance_records(records)
         .values()
         .map(|record| {
-            let mut decoded = element_record_decoded(record, class);
+            let mut decoded = element_record_decoded(record, class, level_ids);
             if let Some(host) = record
                 .preceding_reference
                 .filter(|id| host_candidates.contains(id))
@@ -376,6 +404,7 @@ pub fn openings_from_partition_category_records(
     builtin_category: i64,
     class: &str,
     host_candidates: &BTreeSet<u32>,
+    level_ids: &BTreeSet<u32>,
 ) -> Result<Vec<DecodedElement>> {
     if !crate::partition_element_records::supports_revit_version(revit_version) {
         return Ok(Vec::new());
@@ -397,6 +426,7 @@ pub fn openings_from_partition_category_records(
         records,
         class,
         host_candidates,
+        level_ids,
     ))
 }
 
@@ -494,6 +524,7 @@ fn z_extent_key(record: &crate::partition_element_records::PartitionElementRecor
 pub fn slabs_from_partition_category_records(
     rf: &mut RevitFile,
     revit_version: u32,
+    level_ids: &BTreeSet<u32>,
 ) -> Result<Vec<DecodedElement>> {
     use crate::partition_element_records as per;
 
@@ -538,7 +569,7 @@ pub fn slabs_from_partition_category_records(
             .filter(|record| record.builtin_category == category)
             .cloned()
             .collect();
-        for mut decoded in instances_from_records(records, class) {
+        for mut decoded in instances_from_records(records, class, level_ids) {
             if let Some(id) = decoded.id {
                 if let Some(value) = overrides.get(&id) {
                     decoded.fields.push((
@@ -559,8 +590,9 @@ pub fn slabs_from_partition_category_records(
 /// Back-compat alias for the #204 entry point.
 pub fn columns_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
+    level_ids: &BTreeSet<u32>,
 ) -> Vec<DecodedElement> {
-    column_instances_from_records(records)
+    column_instances_from_records(records, level_ids)
 }
 
 /// Field carrying the ElementId of the family/type symbol a placed
@@ -604,6 +636,7 @@ pub const TYPE_PROFILE_EPS_FEET: f64 = 1e-6;
 /// instead of a box happening to be square.
 pub fn column_instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
+    level_ids: &BTreeSet<u32>,
 ) -> Vec<DecodedElement> {
     use crate::partition_element_records::PartitionElementRecord;
     use std::collections::BTreeMap;
@@ -617,7 +650,7 @@ pub fn column_instances_from_records(
     select_instance_records(records)
         .values()
         .map(|record: &PartitionElementRecord| {
-            let mut decoded = element_record_decoded(record, "Column");
+            let mut decoded = element_record_decoded(record, "Column", level_ids);
             if let Some(symbol) = record
                 .type_symbol_reference(&symbol_ids)
                 .and_then(|id| symbols.get(&id).map(|bbox| (id, *bbox)))
@@ -683,6 +716,7 @@ fn attach_type_symbol_profile(
 /// record box and says so in `m_wall_body_source`.
 pub fn wall_instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
+    level_ids: &BTreeSet<u32>,
 ) -> Vec<DecodedElement> {
     use crate::element_record_wall_joins as joins;
 
@@ -693,7 +727,7 @@ pub fn wall_instances_from_records(
     selected
         .values()
         .map(|record| {
-            let mut decoded = element_record_decoded(record, "Wall");
+            let mut decoded = element_record_decoded(record, "Wall", level_ids);
             if let Some(trim) = trims.get(&record.element_id) {
                 apply_wall_join_trim(&mut decoded, record, trim);
             }
@@ -760,10 +794,13 @@ fn apply_wall_join_trim(
 fn element_record_decoded(
     record: &crate::partition_element_records::PartitionElementRecord,
     class: &str,
+    level_ids: &BTreeSet<u32>,
 ) -> DecodedElement {
     let (cx, cy) = record.plan_centre_feet();
     let (dx, dy, dz) = record.extents_feet();
-    let fields = vec![
+    let level_id =
+        crate::element_record_level_refs::unique_level_reference(&record.references, level_ids);
+    let mut fields = vec![
         (
             "m_locationX".into(),
             InstanceField::Float { value: cx, size: 8 },
@@ -815,11 +852,21 @@ fn element_record_decoded(
             "m_source".into(),
             InstanceField::String("partition_element_record".into()),
         ),
-        // Base/top Level ElementIds stay unrecovered (#86); the
-        // extrusion height below is the recorded bbox extent, not a
+        // The host Level, when the record's counted reference list
+        // names exactly one of them (#219, RE-27). The extrusion
+        // height below is still the recorded bbox extent, never a
         // level-to-level span.
-        ("m_level_bound".into(), InstanceField::Bool(false)),
+        (
+            "m_level_bound".into(),
+            InstanceField::Bool(level_id.is_some()),
+        ),
     ];
+    if let Some(id) = level_id {
+        fields.push((
+            crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),
+            InstanceField::ElementId { tag: 0, id },
+        ));
+    }
     DecodedElement {
         id: Some(record.element_id),
         class: class.into(),
@@ -1422,6 +1469,21 @@ fn rect_openings_from_partitions(
 
 #[cfg(test)]
 mod tests {
+
+    /// Test shims: every corpus record in these fixtures is synthetic
+    /// and names no `Level`, so the #219 join has nothing to resolve.
+    fn columns_from_records_t(
+        records: Vec<crate::partition_element_records::PartitionElementRecord>,
+    ) -> Vec<DecodedElement> {
+        columns_from_records(records, &BTreeSet::new())
+    }
+
+    fn instances_from_records_t(
+        records: Vec<crate::partition_element_records::PartitionElementRecord>,
+        class: &str,
+    ) -> Vec<DecodedElement> {
+        instances_from_records(records, class, &BTreeSet::new())
+    }
     use super::*;
 
     #[test]
@@ -1504,7 +1566,7 @@ mod tests {
             vec![thin.clone(), full.clone()],
             vec![full.clone(), thin.clone()],
         ] {
-            let out = instances_from_records(records, "Floor");
+            let out = instances_from_records_t(records, "Floor");
             assert_eq!(out.len(), 1);
             let height =
                 out[0]
@@ -1531,7 +1593,7 @@ mod tests {
         a.stream = "Partitions/51".into();
         let mut b = a.clone();
         b.stream = "Partitions/46".into();
-        let out = instances_from_records(vec![a, b], "Floor");
+        let out = instances_from_records_t(vec![a, b], "Floor");
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].id, Some(20311));
     }
@@ -1544,7 +1606,7 @@ mod tests {
             symbol,
             column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
         ];
-        let out = columns_from_records(records);
+        let out = columns_from_records_t(records);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].id, Some(20375));
         assert_eq!(out[0].class, "Column");
@@ -1562,7 +1624,7 @@ mod tests {
             member,
             column_record(20376, [48.0, 109.0, 76.0, 50.0, 111.0, 90.33]),
         ];
-        let out = columns_from_records(records);
+        let out = columns_from_records_t(records);
         let ids: Vec<Option<u32>> = out.iter().map(|e| e.id).collect();
         assert_eq!(ids, vec![Some(16347), Some(20376)]);
     }
@@ -1574,7 +1636,7 @@ mod tests {
             (crate::partition_element_records::OST_DOORS, "Door"),
             (crate::partition_element_records::OST_WINDOWS, "Window"),
         ] {
-            let out = instances_from_records(
+            let out = instances_from_records_t(
                 vec![element_record(
                     4242,
                     category,
@@ -1596,7 +1658,7 @@ mod tests {
     fn selection_keeps_one_record_per_element_id() {
         let mut second = column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]);
         second.offset = 999_999;
-        let out = columns_from_records(vec![
+        let out = columns_from_records_t(vec![
             column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
             second,
         ]);
@@ -1605,7 +1667,7 @@ mod tests {
 
     #[test]
     fn column_decoded_carries_plan_centre_and_extents() {
-        let out = columns_from_records(vec![column_record(
+        let out = columns_from_records_t(vec![column_record(
             20375,
             [23.0, 109.0, 76.0, 25.0, 111.0, 90.33],
         )]);
