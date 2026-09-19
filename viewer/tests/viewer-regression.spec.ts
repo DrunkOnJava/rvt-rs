@@ -285,6 +285,49 @@ largeProjectDemoTest(
   },
 );
 
+largeProjectDemoTest(
+  'selecting a door in Core Interior shows its host wall and jumps to it',
+  async ({ page }) => {
+    // Same 33.7 MB decode as the card test above — Einhoven has walls
+    // only, so Core Interior is the sample with recovered openings
+    // (132 doors / 6 windows, 138 host binds).
+    test.slow();
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/ready/);
+
+    await page.locator('[data-demo-id="core-interior-2024"]').click();
+    await expect(page.locator('#status')).toHaveText(/loaded/, { timeout: 300_000 });
+
+    // Doors nest under their host wall in the scene tree (M4-04).
+    const door = page.locator('.tree-node', { hasText: 'IFCDOOR' }).first();
+    await expect(door).toBeVisible();
+    await door.click();
+
+    const relations = page.locator('#info-relations');
+    await expect(relations).toBeVisible();
+    await expect(relations).toContainText(/Hosted by/);
+    const hostRow = relations.locator('.info-relation').first();
+    await expect(hostRow).toContainText(/IFCWALL/);
+    const hostIndex = await hostRow.getAttribute('data-entity-index');
+    expect(hostIndex).toMatch(/^\d+$/);
+
+    // Keyboard-accessible jump: the row is a real button.
+    await hostRow.focus();
+    await expect(hostRow).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    // The wall is now selected in the tree, and its panel lists the
+    // openings it hosts — including the door we came from.
+    await expect(
+      page.locator(`.tree-node.selected[data-entity-index="${hostIndex}"]`),
+    ).toHaveCount(1);
+    await expect(relations).toContainText(/Hosts \d+ opening/);
+    await expect(relations.locator('.info-relation').first()).toContainText(
+      /IFCDOOR|IFCWINDOW/,
+    );
+  },
+);
+
 projectSampleTest(
   'opens a project sample and exposes geometry diagnostics, toggles, and element info',
   async ({ page }) => {

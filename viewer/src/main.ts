@@ -142,8 +142,63 @@ renderer.domElement.addEventListener('pointerdown', (ev) => {
   const hit = hits[0]!;
   const userData = hit.object.userData as { entityIndex?: number };
   if (userData.entityIndex === undefined) return;
-  showElementInfo(userData.entityIndex);
+  selectEntity(userData.entityIndex);
 });
+
+// ---------- Selection highlight (M4-04) ----------
+const highlightMaterial = new THREE.MeshStandardMaterial({
+  color: 0x6bb7ff,
+  emissive: 0x14304d,
+  side: THREE.DoubleSide,
+});
+let highlighted: Array<{
+  mesh: THREE.Mesh;
+  material: THREE.Material | THREE.Material[];
+}> = [];
+
+function clearHighlight(): void {
+  for (const entry of highlighted) entry.mesh.material = entry.material;
+  highlighted = [];
+}
+
+/** Tint every mesh carrying `entityIndex` so the scene agrees with the tree. */
+function highlightEntity(idx: number): void {
+  clearHighlight();
+  if (!currentModel) return;
+  currentModel.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if ((obj.userData as { entityIndex?: number }).entityIndex !== idx) return;
+    highlighted.push({ mesh, material: mesh.material });
+    mesh.material = highlightMaterial;
+  });
+}
+
+/**
+ * Single entry point for "select this element": tree row, 3-D
+ * highlight, and the info panel (including its host relationships).
+ * Host / hosted rows in the panel call this to jump across the
+ * relationship.
+ */
+function selectEntity(idx: number): void {
+  selectTreeRow(idx);
+  highlightEntity(idx);
+  showElementInfo(idx);
+}
+
+function selectTreeRow(idx: number): void {
+  document
+    .querySelectorAll('.tree-node.selected')
+    .forEach((el) => el.classList.remove('selected'));
+  const row = treeEl.querySelector<HTMLElement>(`.tree-node[data-entity-index="${idx}"]`);
+  if (!row) return;
+  row.classList.add('selected');
+  row.scrollIntoView({
+    block: 'nearest',
+    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+  });
+  row.focus();
+}
 
 // ---------- Status ----------
 function setStatus(text: string): void {
@@ -300,6 +355,17 @@ interface IfcModel {
   materials?: Array<{ name: string; color_packed?: number; transparency?: number }>;
   entities?: Array<{ name: string; ifc_type: string; guid?: string }>;
 }
+interface RelatedElement {
+  entity_index: number;
+  name: string;
+  ifc_type: string;
+}
+interface ElementInfoPanel {
+  name: string;
+  ifc_type: string;
+  host?: RelatedElement | null;
+  hosted?: RelatedElement[];
+}
 interface SceneNode {
   name: string;
   ifc_type: string;
@@ -430,7 +496,14 @@ async function loadBytes(file: File): Promise<void> {
           schedule: unknown;
           diagnostics: ExportDiagnostics;
         }
+      | { type: 'info'; index: number; panel: ElementInfoPanel | null }
       | { type: 'error'; message: string };
+    if (msg.type === 'info') {
+      // Stale reply for an element the user already clicked past.
+      if (msg.index !== pendingInfoIndex) return;
+      renderRelations(msg.panel);
+      return;
+    }
     if (msg.type === 'progress') {
       setStatus(msg.step);
       setLoadStep(msg.step);
@@ -541,6 +614,7 @@ function renderErrorStatusPanel(message: string): void {
 }
 
 function renderScene(glb: Uint8Array): void {
+  clearHighlight();
   if (currentModel) {
     scene.remove(currentModel);
     currentModel.traverse((obj) => {
@@ -656,6 +730,9 @@ function buildTreeNode(node: SceneNode): HTMLElement {
   }
   row.setAttribute('role', 'treeitem');
   row.tabIndex = 0;
+  if (node.entity_index !== null) {
+    row.dataset.entityIndex = String(node.entity_index);
+  }
   row.textContent =
     node.ifc_type === 'IFCBUILDINGSTOREY'
       ? storeyNodeLabel(node)
@@ -670,7 +747,10 @@ function buildTreeNode(node: SceneNode): HTMLElement {
       .querySelectorAll('.tree-node.selected')
       .forEach((el) => el.classList.remove('selected'));
     row.classList.add('selected');
-    if (node.entity_index !== null) showElementInfo(node.entity_index);
+    if (node.entity_index !== null) {
+      highlightEntity(node.entity_index);
+      showElementInfo(node.entity_index);
+    }
   };
   row.addEventListener('click', activate);
   row.addEventListener('keydown', (ev) => {
@@ -730,7 +810,61 @@ function applyCategoryVisibility(): void {
   });
 }
 
+/** Index whose relationship payload we are waiting on from the worker. */
+let pendingInfoIndex: number | null = null;
+
+function requestRelations(idx: number): void {
+  pendingInfoIndex = idx;
+  document.getElementById('info-relations')?.remove();
+  worker?.postMessage({ type: 'info', index: idx });
+}
+
+/**
+ * Host relationships (M4-04) computed by `element_info_panel` in
+ * Rust: the wall a door or window sits in, and the openings a wall
+ * carries. Each row re-selects its element — mouse or keyboard.
+ */
+function renderRelations(panel: ElementInfoPanel | null): void {
+  document.getElementById('info-relations')?.remove();
+  const host = panel?.host ?? null;
+  const hosted = panel?.hosted ?? [];
+  if (!host && hosted.length === 0) return;
+  const box = document.createElement('div');
+  box.id = 'info-relations';
+  box.className = 'info-relations';
+  if (host) {
+    box.appendChild(relationHeading('Hosted by'));
+    box.appendChild(relationRow(host));
+  }
+  if (hosted.length > 0) {
+    box.appendChild(
+      relationHeading(`Hosts ${hosted.length} opening${hosted.length === 1 ? '' : 's'}`),
+    );
+    for (const rel of hosted) box.appendChild(relationRow(rel));
+  }
+  infoEl.appendChild(box);
+}
+
+function relationHeading(text: string): HTMLElement {
+  const heading = document.createElement('div');
+  heading.className = 'info-relations-title';
+  heading.textContent = text;
+  return heading;
+}
+
+function relationRow(rel: RelatedElement): HTMLElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'info-relation';
+  btn.dataset.entityIndex = String(rel.entity_index);
+  btn.setAttribute('aria-label', `Select ${rel.name} (${rel.ifc_type})`);
+  btn.textContent = `${rel.name} · ${rel.ifc_type}`;
+  btn.addEventListener('click', () => selectEntity(rel.entity_index));
+  return btn;
+}
+
 function showElementInfo(idx: number): void {
+  requestRelations(idx);
   if (!model) return;
   const e = model.entities?.[idx];
   if (e) {
@@ -1265,6 +1399,8 @@ document.addEventListener('keydown', (ev) => {
   const selected = treeEl.querySelector('.tree-node.selected');
   if (selected) {
     selected.classList.remove('selected');
+    clearHighlight();
+    pendingInfoIndex = null;
     infoEl.textContent =
       'Select an element in the 3-D view or scene tree (Enter / Space on a tree row).';
   }
