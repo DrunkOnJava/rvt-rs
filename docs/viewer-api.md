@@ -47,7 +47,10 @@ use rvt::ifc::scene_graph::{
 - `distinct_ifc_types(&SceneNode) -> Vec<String>` — populate the
   layer-toggle UI.
 - `element_info_panel(&IfcModel, entity_index) -> Option<ElementInfoPanel>` —
-  click-to-inspect payload.
+  click-to-inspect payload. `host` / `hosted` carry the wall a door
+  or window sits in and the openings a wall carries, each as a
+  `RelatedElement { entity_index, name, ifc_type }` the viewer uses
+  to re-select the other end of the relationship.
 - `build_schedule(&IfcModel) -> Schedule` + `Schedule::to_csv()`
   — tabular element export.
 

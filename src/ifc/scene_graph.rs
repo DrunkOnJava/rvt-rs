@@ -157,6 +157,17 @@ impl CategoryFilter {
     }
 }
 
+/// One end of a host relationship (M4-04). Carries enough to label
+/// the row and to re-select the related element: `entity_index` is
+/// the same index the scene graph puts on its nodes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RelatedElement {
+    /// Index into `model.entities`.
+    pub entity_index: usize,
+    pub name: String,
+    pub ifc_type: String,
+}
+
 /// Element info panel payload (VW1-08). The shape a viewer's
 /// "click to inspect" UI reads — a single JSON-ready struct
 /// describing an element's identity, location, and property set.
@@ -185,6 +196,14 @@ pub struct ElementInfoPanel {
     /// element's `Pset_*Common` property set. Empty when no
     /// property set is attached.
     pub properties: Vec<(String, String)>,
+    /// The element this one is hosted by — the wall a door or
+    /// window sits in (M4-04). `None` when nothing hosts it.
+    #[serde(default)]
+    pub host: Option<RelatedElement>,
+    /// Elements hosted by this one, in entity order — the doors and
+    /// windows a wall carries. Empty when it hosts nothing.
+    #[serde(default)]
+    pub hosted: Vec<RelatedElement>,
 }
 
 /// Build an element-info panel payload (VW1-08) for the entity at
@@ -203,6 +222,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         property_set,
         location_feet,
         rotation_radians,
+        host_element_index,
         ..
     } = ent
     else {
@@ -226,6 +246,22 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
                 .collect()
         })
         .unwrap_or_default();
+    let host = host_element_index.and_then(|i| related_element(model, i));
+    let hosted: Vec<RelatedElement> = model
+        .entities
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| {
+            matches!(
+                e,
+                IfcEntity::BuildingElement {
+                    host_element_index: Some(h),
+                    ..
+                } if *h == entity_index
+            )
+        })
+        .filter_map(|(i, _)| related_element(model, i))
+        .collect();
     Some(ElementInfoPanel {
         name: name.clone(),
         ifc_type: ifc_type.clone(),
@@ -236,7 +272,22 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         rotation_radians: *rotation_radians,
         material_name,
         properties,
+        host,
+        hosted,
     })
+}
+
+/// Describe the `BuildingElement` at `entity_index` as a host
+/// relationship row. `None` for out-of-range or non-element indices.
+fn related_element(model: &IfcModel, entity_index: usize) -> Option<RelatedElement> {
+    match model.entities.get(entity_index)? {
+        IfcEntity::BuildingElement { name, ifc_type, .. } => Some(RelatedElement {
+            entity_index,
+            name: name.clone(),
+            ifc_type: ifc_type.clone(),
+        }),
+        _ => None,
+    }
 }
 
 fn format_property_value(v: &super::entities::PropertyValue) -> String {
@@ -959,6 +1010,67 @@ mod tests {
             .find(|(n, _)| n == "IsExternal")
             .unwrap();
         assert_eq!(ext.1, "true");
+    }
+
+    #[test]
+    fn info_panel_reports_host_and_hosted_openings() {
+        let model = IfcModel {
+            entities: vec![
+                mk_element("Wall-80747", "IFCWALL", Some(0), None),
+                mk_element("Door-80750", "IFCDOOR", Some(0), Some(0)),
+                mk_element("Window-80751", "IFCWINDOW", Some(0), Some(0)),
+                mk_element("Wall-80900", "IFCWALL", Some(0), None),
+            ],
+            building_storeys: vec![Storey {
+                name: "Level 1".into(),
+                elevation_feet: 0.0,
+            }],
+            ..Default::default()
+        };
+
+        let door = element_info_panel(&model, 1).unwrap();
+        assert_eq!(
+            door.host,
+            Some(RelatedElement {
+                entity_index: 0,
+                name: "Wall-80747".into(),
+                ifc_type: "IFCWALL".into(),
+            })
+        );
+        assert!(door.hosted.is_empty());
+
+        let wall = element_info_panel(&model, 0).unwrap();
+        assert!(wall.host.is_none());
+        assert_eq!(
+            wall.hosted
+                .iter()
+                .map(|r| (r.entity_index, r.ifc_type.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(1, "IFCDOOR"), (2, "IFCWINDOW")]
+        );
+
+        // A wall that hosts nothing reports neither side.
+        let bare = element_info_panel(&model, 3).unwrap();
+        assert!(bare.host.is_none());
+        assert!(bare.hosted.is_empty());
+    }
+
+    #[test]
+    fn info_panel_host_fields_survive_serde_as_snake_case() {
+        let model = IfcModel {
+            entities: vec![
+                mk_element("Wall-1", "IFCWALL", None, None),
+                mk_element("Door-1", "IFCDOOR", None, Some(0)),
+            ],
+            ..Default::default()
+        };
+        let panel = element_info_panel(&model, 1).unwrap();
+        let json = serde_json::to_string(&panel).unwrap();
+        assert!(json.contains("\"host\""));
+        assert!(json.contains("\"entity_index\""));
+        assert!(json.contains("\"ifc_type\""));
+        let back: ElementInfoPanel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.host.unwrap().name, "Wall-1");
     }
 
     #[test]

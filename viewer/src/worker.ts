@@ -5,13 +5,16 @@
  *
  * Protocol:
  *   main → worker: { type: 'parse', bytes: Uint8Array, mode?: string }
+ *   main → worker: { type: 'info', index: number }
  *   worker → main: { type: 'progress', step: string }
  *   worker → main: { type: 'summary', summary }   (VW1-20 partial)
  *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics }
+ *   worker → main: { type: 'info', index, panel }
  *   worker → main: { type: 'error', message: string }
  */
 
 import init, {
+  elementInfoPanel,
   openRvtBytesWithDiagnosticsMode,
   buildSceneGraph,
   modelToGlb,
@@ -20,7 +23,13 @@ import init, {
   quickSummary,
 } from '../pkg/rvt.js';
 
-type ParseMsg = { type: 'parse'; bytes: Uint8Array; mode?: string };
+type ParseMsg =
+  | { type: 'parse'; bytes: Uint8Array; mode?: string }
+  | { type: 'info'; index: number };
+
+// Retained so `info` requests can re-run element_info_panel (host /
+// hosted relationships, M4-04) without shipping a panel per element.
+let parsedModel: unknown = null;
 
 // DedicatedWorkerGlobalScope.postMessage has a slightly shifty
 // TS signature across lib.dom.d.ts versions — strictly-typed
@@ -36,6 +45,18 @@ const send = (msg: unknown, transfer?: Transferable[]): void => {
 
 self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
   const msg = ev.data;
+  if (msg.type === 'info') {
+    let panel: unknown = null;
+    try {
+      if (parsedModel !== null) panel = elementInfoPanel(parsedModel, msg.index);
+    } catch {
+      // A panel we cannot build is a missing relationship section,
+      // not a failed load — reply with null rather than throwing.
+      panel = null;
+    }
+    send({ type: 'info', index: msg.index, panel });
+    return;
+  }
   if (msg.type !== 'parse') return;
 
   try {
@@ -56,6 +77,7 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
       diagnostics: unknown;
     };
     const model = exportResult.model;
+    parsedModel = model;
 
     send({ type: 'progress', step: 'building scene graph' });
     const scene = buildSceneGraph(model);
