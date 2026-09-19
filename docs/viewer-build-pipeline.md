@@ -162,8 +162,13 @@ world-space camera position; apply it to Three.js's `PerspectiveCamera`
 or `OrthographicCamera` per `ViewMode::is_orthographic()`.
 
 Click-picking: Three.js `Raycaster` returns the intersected object;
-use the `userData.entityIndex` (set when building the scene) to
-call `elementInfoPanel(model, entityIndex)` for the info panel.
+use the `userData.entityIndex` to call
+`elementInfoPanel(model, entityIndex)` for the info panel. That
+value comes from the glTF node's `extras`, which `build_gltf`
+writes as `{ entityIndex, ifcType }` on every element node — the
+loader surfaces `extras` as `userData`. `userData.ifcType` is what
+the category toggles and the schedule's per-type highlight match
+on.
 
 ## VW1-18 — Static site on GitHub Pages
 

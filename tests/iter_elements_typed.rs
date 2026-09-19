@@ -1346,3 +1346,176 @@ fn core_interior_2024_basement_wall_type_slot_is_an_index_artifact() {
         "1851 appears nowhere in Revit's own export"
     );
 }
+
+/// #88 / RE-28: the wall *type* record family, and the join that
+/// gives every exported wall the `IfcWallType` Revit's own export
+/// assigns it.
+///
+/// Measured on `2024_Core_Interior.rvt`: eight `OST_Walls` records
+/// carry the bbox-less type shape with placement kind `0xffff8080`;
+/// Revit exports four of them as `IfcWallType` and never places the
+/// other four. Every one of the 360 exported wall instance records
+/// names **exactly one** of the eight in its `+0x88` reference list,
+/// and the distribution of those names equals the export's own
+/// `IfcRelDefinesByType` distribution — 129 / 127 / 100 / 4. That
+/// includes the four `18" Basement` walls RE-26 §3 could not place,
+/// whose `references[1]` is `1851` (a record of a different category)
+/// while the type-record slot in the same list is `3897`.
+#[test]
+fn core_interior_2024_wall_type_record_join() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} missing", path.display());
+        return;
+    }
+    use rvt::partition_element_records as per;
+    use rvt::partition_type_records as ptr;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    let declared: BTreeSet<u32> = rvt::elem_table::parse_records(&mut rf)
+        .expect("elem table")
+        .iter()
+        .map(|r| r.id_primary)
+        .collect();
+
+    let type_records = ptr::scan_type_records(&mut rf, version, per::OST_WALLS, &declared)
+        .expect("wall type records");
+    let type_ids = ptr::type_definition_ids(&type_records);
+    let expected_types: BTreeSet<u32> = [1710u32, 1711, 3897, 11356, 17328, 17337, 17339, 17341]
+        .into_iter()
+        .collect();
+    assert_eq!(
+        type_ids, expected_types,
+        "the bbox-less OST_Walls type-definition record set"
+    );
+
+    // The newest frame of each exported wall instance, the RE-26
+    // tie-break: greatest (stream, offset).
+    let instances = per::scan_category_records(&mut rf, version, per::OST_WALLS, &declared)
+        .expect("wall records");
+    let mut newest: BTreeMap<u32, per::PartitionElementRecord> = BTreeMap::new();
+    for record in instances
+        .into_iter()
+        .filter(per::PartitionElementRecord::is_exported_instance)
+    {
+        let newer = match newest.get(&record.element_id) {
+            Some(held) => {
+                (record.stream.as_str(), record.offset) > (held.stream.as_str(), held.offset)
+            }
+            None => true,
+        };
+        if newer {
+            newest.insert(record.element_id, record);
+        }
+    }
+    assert_eq!(
+        newest.len(),
+        360,
+        "the #211 instance rule still selects 360"
+    );
+
+    let mut histogram: BTreeMap<u32, usize> = BTreeMap::new();
+    let mut unresolved = 0usize;
+    for (element_id, record) in &newest {
+        match ptr::unique_type_reference(&record.references, &type_ids) {
+            Some(type_id) => *histogram.entry(type_id).or_default() += 1,
+            None => {
+                unresolved += 1;
+                eprintln!("wall {element_id} names no single wall-type record");
+            }
+        }
+    }
+    assert_eq!(unresolved, 0, "every wall names exactly one type record");
+    let expected_histogram: BTreeMap<u32, usize> =
+        [(3897u32, 4usize), (17328, 127), (17337, 129), (17341, 100)]
+            .into_iter()
+            .collect();
+    assert_eq!(
+        histogram, expected_histogram,
+        "wall -> IfcWallType distribution matches Revit's own export"
+    );
+
+    // The four `18" Basement` walls: positional references[1] says
+    // 1851, the type-record set says 3897.
+    for basement in [22771u32, 22773, 22775, 22777] {
+        let record = newest.get(&basement).expect("basement wall record");
+        assert_eq!(
+            record.references.get(1).copied(),
+            Some(1851),
+            "wall {basement} still carries 1851 at references[1]"
+        );
+        assert_eq!(
+            ptr::unique_type_reference(&record.references, &type_ids),
+            Some(3897),
+            "wall {basement} joins the 18-inch Basement type"
+        );
+    }
+}
+
+/// #34 / RE-28: the `OST_Materials` record family bounds the material
+/// over-count with a record count instead of a name heuristic.
+///
+/// Measured on `2024_Core_Interior.rvt`: 86 records carry
+/// `OST_Materials`, every one of them naming its own ElementId in its
+/// slot list. Revit's own export of the same file writes 10
+/// `IfcMaterial`; `partition_name_candidates` currently yields 102.
+/// The record family is a real, closed set — it is not, however, a
+/// recovery, because these records carry no name, and this test
+/// asserts nothing about which ten of the 86 Revit exports.
+#[test]
+fn core_interior_2024_material_record_family() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} missing", path.display());
+        return;
+    }
+    use rvt::partition_type_records as ptr;
+    use std::collections::BTreeSet;
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    let declared: BTreeSet<u32> = rvt::elem_table::parse_records(&mut rf)
+        .expect("elem table")
+        .iter()
+        .map(|r| r.id_primary)
+        .collect();
+
+    let records = ptr::scan_type_records(&mut rf, version, ptr::OST_MATERIALS, &declared)
+        .expect("material records");
+    let ids: BTreeSet<u32> = records.iter().map(|r| r.element_id).collect();
+    assert_eq!(records.len(), 86, "OST_Materials record count");
+    assert_eq!(ids.len(), 86, "one record per material ElementId");
+    assert!(
+        records
+            .iter()
+            .all(|r| r.slots.contains(&u64::from(r.element_id))),
+        "every material record names its own id in its slot list"
+    );
+
+    // The one material slot a wall type carries on this file: the
+    // 18-inch Basement type 3897 names 3652, and the four walls of
+    // that type are the four Revit associates with `Concrete`.
+    assert!(ids.contains(&3652), "3652 is an OST_Materials record");
+    let wall_types = ptr::scan_type_records(
+        &mut rf,
+        version,
+        rvt::partition_element_records::OST_WALLS,
+        &declared,
+    )
+    .expect("wall type records");
+    let basement = wall_types
+        .iter()
+        .find(|r| r.element_id == 3897)
+        .expect("18-inch Basement type record");
+    assert_eq!(basement.slots, vec![3652, 3897, 3898]);
+}

@@ -47,12 +47,35 @@ use rvt::ifc::scene_graph::{
 - `distinct_ifc_types(&SceneNode) -> Vec<String>` — populate the
   layer-toggle UI.
 - `element_info_panel(&IfcModel, entity_index) -> Option<ElementInfoPanel>` —
-  click-to-inspect payload. `host` / `hosted` carry the wall a door
-  or window sits in and the openings a wall carries, each as a
-  `RelatedElement { entity_index, name, ifc_type }` the viewer uses
-  to re-select the other end of the relationship.
+  click-to-inspect payload. Every field arrives display-ready, so
+  the frontend never re-derives a unit, a rounding rule, or an
+  index → name lookup:
+  - `host` / `hosted` carry the wall a door or window sits in and
+    the openings a wall carries, each as a
+    `RelatedElement { entity_index, name, ifc_type }` the viewer
+    uses to re-select the other end of the relationship.
+  - `storey: Option<PanelStorey { index, name, elevation_feet, elevation_label }>`
+    resolves `storey_index`; `index` addresses the same
+    `IFCBUILDINGSTOREY` scene node, so the viewer can jump to it.
+  - `material: Option<PanelMaterial { index, name, element_count }>`
+    resolves `material_index` and counts the elements sharing it.
+  - `property_group: Option<PanelPropertyGroup { name, properties }>`
+    is the element's property set as one titled group of
+    `PanelProperty { name, value, kind, numeric }` rows — values
+    carry their unit, booleans read as `Yes` / `No`.
+  - `placement_rows` / `extent_rows` are `PanelRow { label, value }`
+    lists in feet (location X/Y/Z, rotation in degrees, extrusion
+    width/depth/height plus the profile shape).
+  - `missing` names the absent optionals from the fixed set
+    `storey`, `material`, `properties`, `placement`, `extents`.
+    The viewer reports one as "not recovered" only where the
+    export diagnostics agree it is a known decode gap.
 - `build_schedule(&IfcModel) -> Schedule` + `Schedule::to_csv()`
-  — tabular element export.
+  — tabular element export. `Schedule::groups` is the per-IFC-type
+  breakdown (`ScheduleTypeGroup { ifc_type, count, entity_indices,
+  storeys }`, biggest first) that drives the viewer's schedule
+  panel and its per-type scene highlight. Rebuild it with
+  `Schedule::from_rows` after resorting or filtering rows.
 
 ## Camera
 
