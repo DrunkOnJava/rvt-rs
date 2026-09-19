@@ -15,20 +15,28 @@ AEC users without overstating current capability.
 
 ## Open Remainders (as of 2026-09-19)
 
-Six roadmap issues closed on 2026-09-19 against measured evidence: wall
-geometry (#30), floor and slab geometry (#31), the IFCSLAB recall lift
-(#83), the real slab boundary profiles that replaced the rectangle (#87),
-wall instance recovery (#81), and the end-to-end MVP workflow (#66). What
-is left is narrower and each remainder is named, so pick one rather than
-re-opening a solved carrier:
+Twelve roadmap and follow-up issues closed on 2026-09-19 against measured
+evidence: wall geometry (#30), floor and slab geometry (#31), doors and
+windows with host relationships (#32), the end-to-end MVP workflow (#66),
+wall instance recovery (#81), the IFCSLAB recall lift (#83), the real slab
+boundary profiles that replaced the rectangle (#87), the two viewer and
+reader reporting gaps (#187, #188), the `IFCSHADINGDEVICE`
+`.NOTDEFINED.` witness mismatch (#235), the `18" Basement` wall-type slot
+(#240, an index artifact rather than a second id space — RE-28), and the
+80 cut column bodies (#239, RE-29). What is left is narrower and each
+remainder is named, so pick one rather than re-opening a solved carrier:
 
 | Issue | Named remainder |
 |---|---|
-| [#32](https://github.com/DrunkOnJava/rvt-rs/issues/32) | Doors and windows are bound to their host wall and the void/fill chain is exact (#222); the viewer does not yet display the host relationship. The opening cut itself is [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227). |
-| [#33](https://github.com/DrunkOnJava/rvt-rs/issues/33) / [#219](https://github.com/DrunkOnJava/rvt-rs/issues/219) | Storey containment binds 801 of 872 building elements. The 71 unbound are 46 record-backed plates (a 0.1667 ft structural-slab / architectural-topping offset), 18 spaces, 6 windows (a window's base is its sill height) and 1 wall. |
+| [#33](https://github.com/DrunkOnJava/rvt-rs/issues/33) / [#219](https://github.com/DrunkOnJava/rvt-rs/issues/219) | Storey containment binds 853 of 872 building elements since #267 / RE-27 read the Level the element record names. The 19 that remain are the 18 name-only spaces, which come from a partition string and have no element record to read, and one wall whose record names no single Level. Those 19 are contained in the `IfcBuilding`, not silently filed under the lowest storey. Nothing on this corpus is scored against Revit's own `IfcRelContainedInSpatialStructure` yet — the reference side is NOT MEASURED. |
+| [#238](https://github.com/DrunkOnJava/rvt-rs/issues/238) | Wall join trims are down to 9 over-trimmed ends on 9 walls (from 31 on 24) since #274 / RE-29 required the trim candidate to be named in the record's reference list. The 9 are one side of each of two true L corners; no feature in the record orders the two sides, so this needs a new carrier, not a better heuristic. |
+| [#88](https://github.com/DrunkOnJava/rvt-rs/issues/88) | Compound wall-layer thicknesses. RE-28 sweeps 128 KiB around each wall-type record and finds no run of `f64` summing to the type's nominal width, and the paired reference export is a `ReferenceView_V1.2` file with zero `IfcMaterialLayerSet`, so the acceptance criterion has **no oracle on this corpus**. Progress needs a layer-set-carrying export of the same `.rvt` or an owner-supplied wall-type schedule — not more probing. |
 | [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) | The Revit 2024 ArcWall envelope is still undecoded; RE-21's partition element record is a different carrier and does not close it. |
 | [#86](https://github.com/DrunkOnJava/rvt-rs/issues/86) | Partition names are partial and the Level ElementId bind stays blocked by the RE-20 negative. |
 | [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | The reported sketch-to-solid pipeline is untouched for sweeps and revolves; only the closed-loop plan profile of a slab is recovered (RE-25). |
+| [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227) | Doors and windows are bound to their host wall and the `(host wall, filling element)` pair set equals Revit's export on 138 of 138 (#222, RE-23), and the viewer now shows and can jump across that relationship (#269, #272). What is open is the opening cut itself: the `IfcOpeningElement` is still bodied with the door/window bounding box rather than cut from the wall location curve. |
+| [#34](https://github.com/DrunkOnJava/rvt-rs/issues/34) | Materials are still partition display-name strings, 102 against the export's 10. RE-28 bounds the real carrier at 86 `OST_Materials` records, but they carry no recovered name — the RE-24 name block resolves 0 of 86 — so the next step is decoding the parameter table the name sits in, fail-closed. |
+| [#90](https://github.com/DrunkOnJava/rvt-rs/issues/90) | Space bodies are still a placeholder; the real room boundary polygon is not recovered. |
 
 ## Work That Needs Design Discussion
 

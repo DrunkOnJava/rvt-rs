@@ -168,7 +168,24 @@ value comes from the glTF node's `extras`, which `build_gltf`
 writes as `{ entityIndex, ifcType }` on every element node — the
 loader surfaces `extras` as `userData`. `userData.ifcType` is what
 the category toggles and the schedule's per-type highlight match
-on.
+on. Until #272 `build_gltf` wrote no `extras` at all, so picking,
+the selection highlight and the category toggles were all inert
+against the 3-D scene even though this page documented
+`userData.entityIndex` as set.
+
+The panel itself is rendered, not computed, in TypeScript. The Rust
+`element_info_panel` returns display-ready rows — name, IFC type and
+predefined type, GUID, the resolved storey (its `index` addresses
+the same `IFCBUILDINGSTOREY` scene node, so the row is clickable),
+placement and extents in feet, the property set as unit-carrying
+rows with booleans as `Yes` / `No`, and `host` / `hosted` rows for
+jumping across a door-to-wall relationship. Absent optionals are
+omitted; `missing` drives a "not recovered" note only where the
+export diagnostics agree the field is a known decode gap.
+`build_schedule` likewise returns `Schedule::groups`, the per-IFC-type
+breakdown (biggest first) the schedule panel lists and highlights
+from. Keep unit formatting and index resolution on the Rust side:
+the frontend should never re-derive a unit or an index to name.
 
 ## VW1-18 — Static site on GitHub Pages
 
@@ -269,10 +286,31 @@ natively grew the module to 4057 MB in 139 ms and trapped, because
 each gzip member reserved `min(4 x remaining input, 256 MiB)` and
 `inflate_all_chunks_with_limits` retains every member's buffer. The
 reservation is now capped at 1 MiB per member and the retained
-buffer trimmed (#256), which puts that file at 419 MB of linear
-memory and a 28 s browser load. Any future chunked path must keep
-the same property: bound what a member reserves, and do not hold
-more inflated buffers alive than the scene needs.
+buffer trimmed (#256), which put that file at 419 MB of linear
+memory and, at the time, a 28 s browser load. Any future chunked
+path must keep the same property: bound what a member reserves, and
+do not hold more inflated buffers alive than the scene needs.
+
+### Performance: inflate each stream once per file
+
+The 28 s figure above is pre-#266 and no longer holds. Every
+partition consumer used to open the CFB stream and inflate all its
+gzip members for itself — once per `BuiltInCategory`, once per
+sweep, and again for the diagnostics pass — which on Core Interior
+meant re-inflating 178.9 MiB of `Partitions/*` more than twenty
+times. `RevitFile::inflated_partition` now memoises it per stream
+path, `RevitFile::partition_string_records` memoises the UTF-16
+extraction, string candidates are screened on the raw code units
+before any decode, and the category sweep uses `memchr::memmem`.
+
+Natively, `rvt-ifc --mode geometry` on Core Interior went from
+26.07 s / 2641.4 MiB peak RSS to **1.69 s / 490.1 MiB** (Apple
+Silicon, `/usr/bin/time -l`, best of three); in the browser the same
+33.7 MB file decodes in **about 3 s**, measured on the deployed
+site. Output is byte-identical. The viewer's loading-card estimate
+follows that measurement — `DECODE_BYTES_PER_SECOND` is 11 MB/s
+since #271 — and the bar stays indeterminate, because a chunked
+progress signal is still the unshipped work described above.
 
 ## VW1-23 — Drag-and-drop user RVT support
 

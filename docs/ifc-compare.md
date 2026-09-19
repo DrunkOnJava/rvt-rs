@@ -39,13 +39,25 @@ issue that tracks the remainder:
 
 | IFC type | Recovered | Remaining gap tracked in |
 |---|---|---|
-| `IFCWALL` | Revit 2024 set exact (RE-21), joins cut back (RE-26) | #238 (31 over-trimmed ends), #23 (2024 ArcWall records) |
+| `IFCWALL` | Revit 2024 set exact (RE-21); run cut back by the joins the record names (RE-26, RE-29), 351 of 360 world-exact | #238 (9 over-trimmed ends at two true L corners), #23 (2024 ArcWall records) |
 | `IFCDOOR` | Revit 2024 set and host binding exact (RE-21, RE-23) | #227 (opening cut from the wall curve) |
-| `IFCSLAB` | Revit 2024 set with sketch-line profiles (RE-22, RE-25) | #219 (plate storey containment) |
-| `IFCSPACE` | name-only, placeholder body | #90 RE-15-10 |
-| `IFCWINDOW` | Revit 2024 set and host binding exact (RE-21, RE-23) | #219 (storey containment) |
-| `IFCMATERIALLAYERSETUSAGE` | nominal type thickness only | #88 RE-15-08 |
+| `IFCSLAB` | Revit 2024 set with sketch-line profiles, 80 of 80 (RE-22, RE-25); all 80 storey-bound (RE-27), as are the 20 IFCSHADINGDEVICE plates | nothing slab-specific; #219's plate containment is closed |
+| `IFCSPACE` | name-only, placeholder body; the 18 spaces are 18 of the 19 elements with no storey evidence | #90 RE-15-10 (boundary polygon), #219 (storey containment) |
+| `IFCWINDOW` | Revit 2024 set and host binding exact (RE-21, RE-23); all 6 storey-bound (RE-27) | nothing window-specific; #219's window containment is closed |
+| `IFCMATERIALLAYERSETUSAGE` | nothing emitted — layer thicknesses are not near the wall-type record and the reference export is a `ReferenceView_V1.2` file with zero `IfcMaterialLayerSet`, so there is no oracle on this corpus (RE-28) | #88 RE-15-08 |
 | `IFCOPENINGELEMENT` | opening, void and fill chain per host (RE-23) | #227 (true opening cut) |
+
+The table lists exactly the types `catalogued_divergence_notes` in
+`src/ifc/compare.rs` carries a note for; `IFCCOLUMN` has no note because
+it has no remaining gap — since RE-29 its body is the record prism minus
+the walls it names, exact on 256 of 256 against Revit's own export.
+
+**The shipped note strings lag this table.** Those constants still quote
+the pre-#274 figures — "31 over-trimmed wall ends" for `IFCWALL`, where
+RE-29 leaves 9 — and still name #219 as the open tracker for `IFCSLAB`
+and `IFCWINDOW` storey containment, which #267 / RE-27 closed for both.
+The table above is the measured state; refreshing the constants is a code
+change, not a docs one.
 
 Scaffold-only `rvt-ifc` exports (no typed products) will report large
 object/entity gaps versus real Revit IFCs — that is expected until the

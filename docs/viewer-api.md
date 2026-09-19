@@ -150,6 +150,13 @@ let glb_bytes = model_to_glb(&model);
 // Write to disk or pass to Three.js's GLTFLoader via Blob.
 ```
 
+`build_gltf` writes `extras: { entityIndex, ifcType }` on every
+element node, which glTF loaders surface as `userData`. That is what
+raycast picking, the selection highlight, the category toggles and
+the schedule's per-type highlight all match on; before #272 no
+`extras` were written at all, so those behaviours were inert against
+the 3-D scene.
+
 ### 2D (SVG plan view)
 
 ```rust
@@ -207,11 +214,27 @@ same call grew the module to 4057 MB in 139 ms and trapped at the
 4 GiB ceiling. The reservation is now capped by
 `INITIAL_INFLATE_CAPACITY_BYTES` (1 MiB) as well as by the caller's
 output limit, and the retained buffer is `shrink_to_fit`. Measured
-after the change: Core Interior decodes under Node in 29 s at 419 MB
-of linear memory, and the viewer loads it in headless Chromium in
-28 s with 889 entities and 854 elements carrying geometry;
-`Revit_IFC5_Einhoven.rvt` dropped from 43 MB to 20 MB. Decoded bytes
-are unchanged — only the allocation strategy moved.
+after that change (#256) and before #266: Core Interior decoded under
+Node in 29 s at 419 MB of linear memory, and the viewer loaded it in
+headless Chromium in 28 s with 889 entities and 854 elements carrying
+geometry; `Revit_IFC5_Einhoven.rvt` dropped from 43 MB to 20 MB.
+Decoded bytes are unchanged — only the allocation strategy moved.
+
+**Since #266 the same file decodes in about 3 s.** Each
+`Partitions/*` stream is inflated once per file and memoised on the
+`RevitFile` handle, instead of once per partition consumer and again
+for the diagnostics pass; string candidates are screened on the raw
+UTF-16 code units before any decode, and the category sweep uses
+`memchr::memmem`. Natively, `rvt-ifc --mode geometry` on Core
+Interior went from 26.07 s / 2641.4 MiB peak RSS to **1.69 s /
+490.1 MiB** (Apple Silicon, `/usr/bin/time -l`, best of three), and
+the emitted IFC is byte-identical. In the browser the 33.7 MB demo
+decodes in **about 3 s**, measured on the deployed site — 6.7 s
+including the 32 MB download. That measurement is what
+`DECODE_BYTES_PER_SECOND` in `viewer/src/main.ts` encodes (11 MB/s
+since #271, up from 1.15 MB/s) to set the loading card's "about N s"
+hint; the progress bar stays indeterminate because the decoder
+cannot report real progress.
 
 ## Full frontend pipeline
 
