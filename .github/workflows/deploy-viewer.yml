@@ -32,9 +32,14 @@ permissions:
   pages: write
   id-token: write
 
+# One build per ref. A newer push to a pull request supersedes its
+# in-flight build; pushes to main queue instead. The deploy job below
+# serialises on the Pages group. A single `pages` group shared by every
+# PR build and deploy made PR checks cancel each other whenever two
+# runs queued.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: viewer-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -100,12 +105,21 @@ jobs:
         working-directory: viewer
         run: npm ci
 
+      - name: Restore native build cache (shared with CI)
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
+        with:
+          save-if: false
+          shared-key: ci-release
+
       - name: Stage redistributable demos
         working-directory: viewer
         run: |
-          # gen-fixture is built with the WASM crate above via cargo; ensure release bin exists
-          cargo build --release --bin gen-fixture
-          npm run stage:demos
+          # gen-fixture generates the synthetic-mvp demo. Build it with the
+          # CI profile so the shared cache serves its dependencies; the
+          # release profile's full LTO rebuilt the crate from scratch here
+          # (39 s per run). The stager finds the binary on PATH.
+          cargo build --profile ci --bin gen-fixture
+          PATH="$(pwd)/../target/ci:$PATH" npm run stage:demos
 
       - name: Install Playwright Chromium
         working-directory: viewer
@@ -134,6 +148,9 @@ jobs:
     if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

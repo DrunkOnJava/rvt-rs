@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed: 2026-08-30
+Last reviewed: 2026-09-19
 
 This page is the public source of truth for what rvt-rs can do today. It is
 intentionally blunt so users can decide quickly whether the tool fits their
@@ -261,7 +261,12 @@ The #213 column-derived path (`STOREY_ELEVATION_SOURCE_TYPES` =
 records; its measurement stands unchanged, including the RE-22 finding
 that admitting slab tops as an elevation source would buy −40 ft and
 185.5 ft at the cost of 13 false elevations.
-Viewer File Status lists
+The public viewer's demo gallery leads with the two files this section
+measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
+checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
+913 KB) and `2024_Core_Interior.rvt` (2024, 33.7 MB). Staging refuses a file
+whose bytes do not match the catalog hash, and both cards are gated by
+Playwright. Viewer File Status lists
 recovered storey names, material name samples, and an honest Parameters
 row (empty until AProperty* host joins). The scene tree groups elements
 under `IFCBUILDINGSTOREY` nodes (ArcWalls and 2024 element records by
@@ -283,10 +288,13 @@ and the opening-index rows still carry no Door/Window discriminator and
 no host claim of their own. AProperty*
 carriers are not present in production `iter_elements` / Global/Latest
 candidate scans on these corpora (#35 host joins idle). Floor↔ElemTable id binding is closed for the recovered
-slab set (every record-backed slab carries its ElementId) and slab
-extrusion thickness is measured from the record bbox; the slab
-*profile* is still the bounding-box rectangle rather than the
-recovered boundary polygon (#31). Eighty-one per-class
+slab set (every record-backed slab carries its ElementId), slab
+extrusion thickness is measured from the record bbox, and the slab
+*profile* is the boundary polygon its `OST_SketchLines` records close
+on **80 of 80** exported slabs (#31, RE-25, closed 2026-09-19). What is
+still a bounding-box rectangle there is the profile of the 20 rotated
+shading plates, which the closure declines and which carry
+`ProfileResolved: false`. Eighty-one per-class
 decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 `iter_elements`.
 
@@ -295,14 +303,14 @@ decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 | Capability | Status | Evidence | User impact |
 |---|---|---|---|
 | Open `.rvt`, `.rfa`, `.rte`, `.rft` CFB containers | Full | `reader`, CI matrix | Files can be inspected without Revit. |
-| Decode Revit truncated-gzip streams (gated checksum-page strip on Partitions/Global, #151) | Full | `compression`, `checksum_page_framing`, fuzz | Internal streams can be read safely; Formats/Latest stays ungated by default — multipage integrity uncertain (`RVT_FORMATS_MULTIPAGE_UNVERIFIED`). |
+| Decode Revit truncated-gzip streams (gated checksum-page strip on Partitions/Global, #151) | Full | `compression`, `checksum_page_framing`, fuzz, `inflate_capacity_hint_does_not_scale_with_remaining_input` (#256) | Internal streams can be read safely; Formats/Latest stays ungated by default — multipage integrity uncertain (`RVT_FORMATS_MULTIPAGE_UNVERIFIED`). A multi-member stream reserves at most 1 MiB per member before decoding (`INITIAL_INFLATE_CAPACITY_BYTES`) and trims the retained buffer, so a 33.7 MB project decodes inside wasm32's 4 GiB linear memory rather than trapping. |
 | Extract metadata, PartAtom XML, preview PNG | Full | `basic_file_info`, `part_atom`, tests | Users can identify and audit files. |
 | Parse `Formats/Latest` schema | Full | 100 percent field classification over 2016-2026 family corpus; multipage integrity diagnostics in inspect/export/viewer | Developers can inspect class and field structure; Formats multipage integrity uncertain while strip stays disabled. |
 | Read document-level ADocument data | Partial | Reliable on newer samples; older/project bands need more corpus proof | Good for diagnostics, not complete model extraction. |
 | Decode typed elements from real project files | **Partial** | Production `iter_elements`: ArcWall (2023) + partition MVP Levels/Materials/Rooms (+ Floor plan-loops only where no element records decode) + 2024 ArcWallRectOpening (ElemTable-confirmed related ids) + 2024 partition element records for `OST_Walls` / `OST_Doors` / `OST_Windows` / `OST_Columns` / `OST_Floors` / `OST_BuildingPad` (360/132/6/256/80 IFCSLAB + 20 IFCSHADINGDEVICE on Core Interior, exact ElementId sets, cross-witness gated, #204/#211/#212, RE-21/RE-22); wall bodies join-trimmed and columns joined to their family type (#215, RE-26); HostObjAttr filtered; RE-19 negatives intact: no opening-index Door/Window discriminator, no schema-field Wall on magnetar corpora | Full model conversion is not ready; six categories on one Revit 2024 edge match Revit's exporter exactly, spaces and materials do not. |
 | Typed decoder structs | Partial | `elements::all_decoders()` registers **81** decoders; `MVP_TYPED_CLASSES` consulted by `iter_elements`; ArcWall uses a separate partition decoder | Library building blocks plus production MVP/ArcWall path. |
 | IFC4 writer | Partial | Synthetic fixtures validate in IfcOpenShell; every emitted instance carries the full IFC4 attribute list its type declares, gated per instance against the EXPRESS schema by `tools/ci/ifc_schema_arity.py` (#214); the element translation is carried once, by the element's `IfcLocalPlacement`, with the swept solid's `Position` at identity — the same gate composes `ObjectPlacement × Position` for pinned elements so the double-translation of #232 cannot return, and under `--witness-agreement` checks every written `PredefinedType` against the value Revit's own exporter writes for that type (#220: 360 walls `.NOTDEFINED.`, 18 spaces `.SPACE.`, 132 doors `.DOOR.`, 6 windows `.WINDOW.`, 256 columns `.COLUMN.`, 80 slabs `.FLOOR.`); 2023 Einhoven ArcWall `IfcWall` + partition Level storeys / Floor boundary `IfcSlab` / Room `IfcSpace` / 2024 `IfcWall` + `IfcDoor` + `IfcWindow` + `IfcColumn` + `IfcSlab` + `IfcShadingDevice` with placement + bounding-box extrusion (join-trimmed run and thin-axis thickness for walls, family/type section for columns, sketch profile for slabs; #215, RE-25/RE-26) + named Revit Level storeys with measured containment (#218/#213/#212) + measured slab thickness (#212) + the `IfcOpeningElement` / `IfcRelVoidsElement` / `IfcRelFillsElement` chain that voids all 138 doors and windows out of their host wall (#222, exact pair-set match) / Material display names; the plan profile of a wall, door or window is still its record envelope; `rvt-ifc --diagnostics` JSON readiness sidecar; `--mode` gates scaffold/typed/geometry/strict | Correct writer path exists, but real-file typed inputs are incomplete / unsolved. |
-| Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, File Status shows production class counts + storey/material totals, supported-profile matrix | Useful for local inspection; geometry reflects decoded coverage. |
+| Browser viewer | Partial | GitHub Pages deployment, no-network WASM import gate, File Status shows production class counts + storey/material totals, supported-profile matrix, two hash-verified MIT real projects at the top of the demo gallery with Playwright coverage (#257) | Useful for local inspection; geometry reflects decoded coverage. The public site now opens a real Revit project, not only 20 KB synthetics. |
 | Stream-level writer | Partial | Always-on patch corpus (`gen-fixture` project + MIT `empty.rfa`) covers identity, grow, shrink, multi-stream, missing-stream; optional Autodesk corpora add release-matrix + GUID/history checks; corrupt-gzip verification is unit-tested | Useful for controlled stream replacement, not semantic Revit editing. |
 | Python package | Partial | CI wheel builds and pytest | Useful for metadata/schema automation. |
 | User-facing inspect CLI | Partial | `rvt-inspect` reports file health, decoded coverage, IFC export readiness, warnings, next steps, and stable JSON | Useful for support triage without Revit internals. |

@@ -388,8 +388,16 @@ Honest boundary of what rvt-rs can demonstrate today:
   works (13/13 streams), but rewriting a specific schema field back
   into a Revit file is the [WRT-01 … WRT-14] task family
   *(not yet implemented)*.
-- **Web viewer** — the [VW1-*] tasks (WASM build, Three.js viewer,
-  glTF export) are *(not yet implemented)*.
+- **Web viewer demo gallery beyond two real projects** — the
+  [VW1-*] tasks shipped (WASM build, Three.js viewer, glTF export;
+  live at <https://drunkonjava.github.io/rvt-rs/>), and the gallery
+  described in [`docs/viewer-demos.json`](viewer-demos.json) opens
+  `Revit_IFC5_Einhoven.rvt` (2023, 913 KB) and
+  `2024_Core_Interior.rvt` (2024, 33.7 MB) from the MIT
+  magnetar-io/revit-test-datasets corpus, hash-verified at staging
+  time. Every other gallery entry is a 20 KB synthetic or a family
+  `.rfa`; a broader redistributable real-project corpus is
+  *(not yet available)*.
 
 Each of these lands as individual commits on `main` with linked task
 IDs (`git log --oneline | grep -E "(IFC|GEO|L5B|WRT)-"`).

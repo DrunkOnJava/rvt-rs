@@ -380,24 +380,31 @@ pub fn format_human_report(report: &IfcCompareReport) -> String {
 
 fn catalogued_divergence_notes(deltas: &BTreeMap<String, CountDelta>) -> Vec<String> {
     let mut notes = Vec::new();
-    // Keep these tied to open RE-15 / CLASS issues so QA reports stay honest.
+    // Keep these tied to the OPEN issue that tracks each type's remaining
+    // gap so QA reports stay honest. Revit 2024 partition element records
+    // (RE-21 to RE-26) closed the RE-15 recall issues for walls, doors,
+    // windows and slabs; what is left is geometry residuals, storey
+    // containment, compound layers and spaces.
     const CATALOGUE: &[(&str, &str)] = &[
         (
             "IFCWALL",
-            "Wall recall gaps tracked in #81 (RE-15-01); expect left < right on real projects until ≥95%.",
+            "Revit 2024 wall set is exact (RE-21); 31 over-trimmed wall ends tracked in #238 (RE-26). Earlier releases: 2023 ArcWall only, 2024 ArcWall records tracked in #23.",
         ),
-        ("IFCDOOR", "Door recall gaps tracked in #82 (RE-15-02)."),
+        (
+            "IFCDOOR",
+            "Revit 2024 door set and host binding are exact (RE-21, RE-23); the opening cut from the wall location curve is tracked in #227.",
+        ),
         (
             "IFCSLAB",
-            "Slab recall / profile gaps tracked in #83 (RE-15-03) and #87 (RE-15-07).",
+            "Revit 2024 slabs carry sketch-line profiles (RE-22, RE-25); plate storey containment is tracked in #219.",
         ),
         (
             "IFCSPACE",
-            "Space recall gaps tracked in #84 (RE-15-04) and #90 (RE-15-10).",
+            "Spaces are name-only with a placeholder body; real space boundaries are tracked in #90 (RE-15-10).",
         ),
         (
             "IFCWINDOW",
-            "Window decoder still open as #91 (CLASS-11); left often zero vs Revit reference.",
+            "Revit 2024 window set and host binding are exact (RE-21, RE-23); window storey containment is tracked in #219.",
         ),
         (
             "IFCMATERIALLAYERSETUSAGE",
@@ -405,7 +412,7 @@ fn catalogued_divergence_notes(deltas: &BTreeMap<String, CountDelta>) -> Vec<Str
         ),
         (
             "IFCOPENINGELEMENT",
-            "Opening / void relationships tracked in #89 (RE-15-09).",
+            "Opening, void and fill chain is emitted per host binding (RE-23); the true opening cut is tracked in #227.",
         ),
     ];
     for (ty, note) in CATALOGUE {
@@ -680,7 +687,7 @@ END-ISO-10303-21;
             report
                 .notes
                 .iter()
-                .any(|n| n.contains("#81") || n.contains("RE-15-01"))
+                .any(|n| n.contains("#238") || n.contains("RE-26"))
         );
         let human = format_human_report(&report);
         assert!(human.contains("IFCWALL"));
