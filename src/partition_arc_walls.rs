@@ -9,7 +9,6 @@
 use crate::arc_wall_record::{
     ArcWallRecord, ArcWallScanStatus, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
 };
-use crate::compression;
 use crate::ifc::Storey;
 use crate::walker::{WalkerLimitHit, WalkerLimits};
 use crate::{Result, RevitFile};
@@ -118,11 +117,7 @@ pub fn scan_partition_arc_walls_with_limits(
         });
     }
 
-    let partition_streams: Vec<String> = rf
-        .stream_names()
-        .into_iter()
-        .filter(|s| s.starts_with("Partitions/"))
-        .collect();
+    let partition_streams = rf.partition_stream_names();
 
     let mut walls = Vec::new();
     let mut scanned_bytes = 0usize;
@@ -132,11 +127,10 @@ pub fn scan_partition_arc_walls_with_limits(
             limit_hit.get_or_insert(WalkerLimitHit::MaxCandidates);
             break;
         }
-        let Ok(raw) = rf.read_stream(&partition) else {
+        let Ok(inflated) = rf.inflated_partition(&partition) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks_for_stream(&partition, &raw);
-        let concat: Vec<u8> = chunks.into_iter().flatten().collect();
+        let concat = inflated.bytes();
         if concat.len() < STANDARD_RECORD_MIN_SIZE {
             continue;
         }
@@ -147,7 +141,7 @@ pub fn scan_partition_arc_walls_with_limits(
         };
         let report = ArcWallRecord::scan_standard_for_revit_version_with_limits(
             revit_version,
-            &concat,
+            concat,
             partition_limits,
         );
         scanned_bytes = scanned_bytes.saturating_add(report.scanned_bytes);
@@ -155,10 +149,10 @@ pub fn scan_partition_arc_walls_with_limits(
             limit_hit.get_or_insert(hit);
         }
         for off in report.offsets {
-            let Ok(record) = ArcWallRecord::decode_standard(&concat, off) else {
+            let Ok(record) = ArcWallRecord::decode_standard(concat, off) else {
                 continue;
             };
-            let trailer = ArcWallRecord::decode_trailer(&concat, off);
+            let trailer = ArcWallRecord::decode_trailer(concat, off);
             walls.push(PartitionArcWall {
                 partition: partition.clone(),
                 offset: off,

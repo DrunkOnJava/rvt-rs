@@ -933,6 +933,7 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "hex",
+ "memchr",
  "proptest",
  "quick-xml",
  "serde",

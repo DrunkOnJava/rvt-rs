@@ -145,36 +145,53 @@ pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
             as usize;
         if (1..=400).contains(&cnt) && i + 8 + 2 * cnt <= decomp.len() {
             let body = &decomp[i + 8..i + 8 + 2 * cnt];
-            // decode UTF-16LE
-            let (cow, _, _) = UTF_16LE.decode(body);
-            let text = cow.into_owned();
-            if !text.contains('\0') {
-                let printable = text
-                    .chars()
-                    .filter(|c| c.is_ascii_graphic() || *c == ' ' || *c == '\t' || *c == '\n')
-                    .count();
-                // Require EVERY char to be printable (strict). The prior
-                // 90%/integer-division check false-positived on length-1
-                // records where 9/10 == 0, letting `\xFF\xFF` + a single
-                // control character through and consuming the cursor past
-                // real adjacent records like "Elevation 0", "A100", etc.
-                let total_chars = text.chars().count();
-                if total_chars >= 1 && printable == total_chars {
-                    out.push(StringRecord {
-                        offset: i,
-                        tag,
-                        value: text
-                            .trim_end_matches(&['\0', '/', ' ', '\t'] as &[_])
-                            .to_string(),
-                    });
-                    i += 8 + 2 * cnt;
-                    continue;
-                }
+            // Screen on the raw code units before decoding. Every char an
+            // accepted record can hold is ASCII (see `is_printable_ascii_utf16le`),
+            // so acceptance is decidable on the bytes, and a length field
+            // that happened to land in 1..=400 — which binary data does at
+            // a large fraction of offsets — is rejected on its first code
+            // unit instead of after a full decode and heap allocation.
+            if is_printable_ascii_utf16le(body) {
+                let (cow, _, _) = UTF_16LE.decode(body);
+                let text = cow.into_owned();
+                out.push(StringRecord {
+                    offset: i,
+                    tag,
+                    value: text
+                        .trim_end_matches(&['\0', '/', ' ', '\t'] as &[_])
+                        .to_string(),
+                });
+                i += 8 + 2 * cnt;
+                continue;
             }
         }
         i += 1;
     }
     out
+}
+
+/// Whether `body` is a non-empty UTF-16LE run of printable ASCII.
+///
+/// This is the byte-level statement of the strict record test: every
+/// char must be `is_ascii_graphic`, space, tab or newline, and no char
+/// may be NUL. Only ASCII scalar values encode as `[byte, 0x00]` in
+/// UTF-16LE, and every other sequence — non-ASCII, an astral pair, a
+/// lone surrogate that decodes to U+FFFD — yields a char outside that
+/// set, so the two tests accept exactly the same bodies.
+///
+/// (Strictness matters: the pre-#211 90 %/integer-division check
+/// false-positived on length-1 records where `9 / 10 == 0`, letting
+/// `\xFF\xFF` plus a single control character through and consuming the
+/// cursor past real adjacent records like `Elevation 0` or `A100`.)
+fn is_printable_ascii_utf16le(body: &[u8]) -> bool {
+    !body.is_empty()
+        && body.chunks_exact(2).all(|unit| {
+            unit[1] == 0
+                && (unit[0].is_ascii_graphic()
+                    || unit[0] == b' '
+                    || unit[0] == b'\t'
+                    || unit[0] == b'\n')
+        })
 }
 
 /// Pull all string records from a Revit file's `Global/Latest` stream.
@@ -191,17 +208,24 @@ pub fn string_records_from_file(rf: &mut crate::RevitFile) -> Result<Vec<StringR
 /// Autodesk parameter-group + spec identifiers, localized format strings,
 /// timestamps, asset-library references, etc.
 pub fn string_records_from_partitions(rf: &mut crate::RevitFile) -> Result<Vec<StringRecord>> {
+    Ok(rf.partition_string_records()?.as_ref().clone())
+}
+
+/// Uncached extraction behind [`crate::reader::RevitFile::partition_string_records`].
+pub(crate) fn extract_partition_string_records(
+    rf: &mut crate::RevitFile,
+) -> Result<Vec<StringRecord>> {
     let partition_name = rf
         .partition_stream_name()
         .ok_or_else(|| crate::Error::StreamNotFound("no Partitions/NN stream".into()))?;
-    let bytes = rf.read_stream(&partition_name)?;
+    let inflated = rf.inflated_partition(&partition_name)?;
     // Concatenate all gzip chunks with an FF-sentinel separator so the
     // extractor sees clear boundaries between them (in case record scans
     // cross chunks accidentally).
-    let chunks = compression::inflate_all_chunks_for_stream(&partition_name, &bytes);
     let sep = [0xFFu8; 16];
-    let mut joined = Vec::new();
-    for (i, c) in chunks.iter().enumerate() {
+    let mut joined =
+        Vec::with_capacity(inflated.bytes().len() + sep.len() * inflated.chunk_count());
+    for (i, c) in inflated.chunks().enumerate() {
         if i > 0 {
             joined.extend_from_slice(&sep);
         }

@@ -49,7 +49,7 @@
 //! export — no misses, no extras. The 21st (`16925`) is a container
 //! member, which the instance rule already excludes.
 
-use crate::{Result, RevitFile, compression};
+use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -237,19 +237,13 @@ pub fn scan_ifc_export_overrides(
     if !supports_revit_version(revit_version) || declared.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let streams: Vec<String> = rf
-        .stream_names()
-        .into_iter()
-        .filter(|s| s.starts_with("Partitions/"))
-        .collect();
+    let streams = rf.partition_stream_names();
     let mut entries = Vec::new();
     for stream in streams {
-        let Ok(raw) = rf.read_stream(&stream) else {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
-        let concat: Vec<u8> = chunks.into_iter().flatten().collect();
-        entries.extend(find_overrides(&stream, &concat, declared));
+        entries.extend(find_overrides(&stream, inflated.bytes(), declared));
     }
     Ok(overrides_by_element_id(entries))
 }

@@ -38,7 +38,6 @@
 //!   loops stand down when records decode, and remain the only floor
 //!   path where they do not.
 
-use crate::compression;
 use crate::partition_arc_walls::{self, PartitionArcWall};
 use crate::partition_name_candidates::{
     NameBucket, building_storey_name_candidates, classify_name, collect_name_candidates,
@@ -116,7 +115,7 @@ pub fn recover_partition_schema_mvp(
     let mut out = PartitionSchemaMvp::default();
 
     // --- Levels + Materials + Rooms from partition strings / ArcWall elev ---
-    let strings = crate::object_graph::string_records_from_partitions(rf).unwrap_or_default();
+    let strings = rf.partition_string_records().unwrap_or_default();
     let string_values: Vec<&str> = strings.iter().map(|r| r.value.as_str()).collect();
 
     let level_names = building_storey_name_candidates(string_values.iter().copied());
@@ -1033,11 +1032,10 @@ fn floors_from_partition_plan_loops(
     let floor_cap = limits.max_candidates.min(64);
 
     for stream in partition_streams_largest_first(rf) {
-        let Ok(raw) = rf.read_stream(&stream) else {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
-        let concat: Vec<u8> = chunks.into_iter().flatten().collect();
+        let concat = inflated.bytes();
         scanned = scanned.saturating_add(concat.len() as u64);
         if scanned > limits.max_scan_bytes as u64 && floors.is_empty() {
             // Still allow the first (largest) stream even if over budget.
@@ -1045,7 +1043,7 @@ fn floors_from_partition_plan_loops(
             break;
         }
 
-        for candidate in scan_closed_plan_loops(&concat) {
+        for candidate in scan_closed_plan_loops(concat) {
             if floors.len() >= floor_cap {
                 break;
             }
@@ -1306,17 +1304,16 @@ fn rect_openings_from_partitions(
     // Largest partition first — 2024 Core Interior openings live in
     // the ~98 MiB Partitions/46 stream.
     for stream in partition_streams_largest_first(rf) {
-        let Ok(raw) = rf.read_stream(&stream) else {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
-        let concat: Vec<u8> = chunks.into_iter().flatten().collect();
-        let offsets = ArcWallRectOpeningIndex::find_all_for_revit_version(revit_version, &concat);
+        let concat = inflated.bytes();
+        let offsets = ArcWallRectOpeningIndex::find_all_for_revit_version(revit_version, concat);
         for off in offsets {
             if out.len() >= opening_cap {
                 break;
             }
-            let Ok(rec) = ArcWallRectOpeningIndex::decode(&concat, off) else {
+            let Ok(rec) = ArcWallRectOpeningIndex::decode(concat, off) else {
                 continue;
             };
             let a_in = elem_ids.contains(&rec.related_id_a);

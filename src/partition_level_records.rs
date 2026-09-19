@@ -112,7 +112,7 @@
 //!   elevation; the recovery is all-or-nothing per file at the
 //!   caller's gate (see [`recovered_levels_are_a_storey_set`]).
 
-use crate::{Result, RevitFile, compression};
+use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -524,21 +524,16 @@ pub fn scan_partition_levels(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let streams: Vec<String> = rf
-        .stream_names()
-        .into_iter()
-        .filter(|s| s.starts_with("Partitions/"))
-        .collect();
+    let streams = rf.partition_stream_names();
     let mut records = Vec::new();
     let mut blocks = Vec::new();
     for stream in streams {
-        let Ok(raw) = rf.read_stream(&stream) else {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
-        let concat: Vec<u8> = chunks.into_iter().flatten().collect();
-        records.extend(find_level_records(&stream, &concat, declared_ids));
-        blocks.extend(find_name_blocks(&concat, declared_ids));
+        let concat = inflated.bytes();
+        records.extend(find_level_records(&stream, concat, declared_ids));
+        blocks.extend(find_name_blocks(concat, declared_ids));
     }
     let levels = levels_from_records_and_blocks(&records, blocks);
     if !recovered_levels_are_a_storey_set(&records, &levels) {
