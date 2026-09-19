@@ -23,38 +23,59 @@
 //!    half of the 6", 8" and 18" wall thicknesses on the file — and
 //!    zero everywhere else.
 //!
-//! [`join_trims`] applies (2) to the wall set recovered from the
+//! 3. **The record names the walls it joins.** The counted reference
+//!    list at `+0x88` holds, besides the type and the two Levels, the
+//!    ElementIds of the other walls this wall is joined to. Requiring
+//!    a candidate to be named there removes 14 over-trims on the
+//!    recorded edge and costs nothing: 16 of the 360 walls name no
+//!    other wall at all, and every one of them is a wall Revit leaves
+//!    untrimmed (#238, RE-28 §2).
+//!
+//! 4. **A candidate only cuts where its own cut-back run reaches.**
+//!    A wall whose end has itself been cut back no longer covers the
+//!    centreline of a wall beyond that cut, and Revit does not trim
+//!    there. The candidate's run is therefore reduced by its own
+//!    trims before the span test — ignoring the trims imposed by
+//!    walls on the line being resolved, which are the joins this very
+//!    end makes and cannot pre-empt itself (RE-28 §3).
+//!
+//! [`join_trims`] applies (2)–(4) to the wall set recovered from the
 //! records. It is a solver over recorded boxes, not a fit: a
-//! candidate must be perpendicular, must have its centreline exactly
-//! on the end being resolved, must span this wall's centreline along
-//! its own run, and must overlap it in elevation. When the candidates
-//! at one end disagree about their thickness the **whole element** is
+//! candidate must be perpendicular, must be named in this record's
+//! reference list, must have its centreline exactly on the end being
+//! resolved, must span this wall's centreline along its own reduced
+//! run, and must overlap it in elevation. When the candidates at one
+//! end disagree about their thickness the **whole element** is
 //! declined and keeps its record box.
 //!
 //! # Honesty
 //!
-//! - This models Revit's join cleanup; it does not read it. Revit
-//!   stores the join state per wall pair, and no byte carrying it has
-//!   been identified — the trimmed endpoints are not in the record
-//!   (searched as `f64` over 4 KiB past every wall record on the
-//!   recorded edge; no fixed carrier).
-//! - Measured end to end on `2024_Core_Interior.rvt`: the trimmed box
-//!   equals Revit's world bounding box on **336 of 360** walls, up
-//!   from 39 of 360 for the untrimmed box; worst corner residual
-//!   0.75 → 0.3333 ft, mean 0.2657 → 0.0220 ft. Re-measured on the
-//!   emitted IFC against `main`, 309 walls improve, 35 are unchanged
-//!   and 16 regress.
-//! - The 24 misses are all **over-trims** at a junction where Revit
-//!   let the wall run on. They are confined to one feature class —
-//!   an 8" wall meeting another 8" wall — where the same feature
-//!   values also produce a real trim 125 times, so no available byte
-//!   separates them. They are recorded, not papered over.
+//! - The *which walls join* half is read from the file; the *where
+//!   the join cuts* half is still modelled. Revit's per-pair
+//!   butt/mitre choice is not in the record — the trimmed endpoints
+//!   were searched as `f64` over 4 KiB past every wall record on the
+//!   recorded edge and no fixed carrier holds them.
+//! - Measured end to end on `2024_Core_Interior.rvt`, world
+//!   axis-aligned bounding box against Revit's own export: the
+//!   trimmed box is exact on **351 of 360** walls, up from 336 for
+//!   the geometry-only solver and 39 for the untrimmed box; worst
+//!   corner residual 0.3333 ft, mean 0.0220 → 0.0081 ft. Per end,
+//!   689 → **711 of 720** correct, with no end that the geometry-only
+//!   solver had right made wrong.
+//! - The 9 residual ends are one side of a **true L corner** — two
+//!   walls whose runs both stop at the other's centreline, with
+//!   nothing continuing past the corner. Revit cuts exactly one of
+//!   the pair and the file offers no feature that says which: across
+//!   the two distinct corners on the recorded edge the survivor is
+//!   the thicker wall once and the thinner wall once, the lower
+//!   ElementId once and the higher once. They are recorded, not
+//!   papered over (#238, RE-28 §4).
 //! - Only axis-parallel walls are resolved. Every wall on the
 //!   recorded edge is axis-parallel; a wall whose box is square in
 //!   plan has no identifiable thin axis and is declined.
 
 use crate::partition_element_records::PartitionElementRecord;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Field carrying which body a recovered wall is emitting.
 pub const WALL_BODY_SOURCE_FIELD: &str = "m_wall_body_source";
@@ -145,36 +166,104 @@ pub fn wall_run(record: &PartitionElementRecord) -> Option<WallRun> {
     })
 }
 
-/// Half the thickness of the wall whose centreline lands on `coord`,
-/// or `Some(0.0)` when nothing joins there.
+/// The other recovered walls a record names in its counted reference
+/// list at `+0x88` (#238, RE-28 §2).
 ///
-/// `None` means the candidates disagree about their thickness, which
-/// declines the element.
-fn trim_at(runs: &[WallRun], wall: &WallRun, coord: f64) -> Option<f64> {
-    let mut thickness: Option<f64> = None;
-    for other in runs {
-        if other.element_id == wall.element_id || other.axis == wall.axis {
-            continue;
-        }
-        if (other.centre_feet - coord).abs() > JOIN_EPS_FEET {
-            continue;
-        }
-        if wall.centre_feet < other.start_feet - JOIN_EPS_FEET
-            || wall.centre_feet > other.end_feet + JOIN_EPS_FEET
-        {
-            continue;
-        }
-        if wall.top_feet.min(other.top_feet) - wall.base_feet.max(other.base_feet) <= JOIN_EPS_FEET
-        {
-            continue;
-        }
-        match thickness {
-            None => thickness = Some(other.thickness_feet),
-            Some(held) if (held - other.thickness_feet).abs() <= JOIN_EPS_FEET => {}
-            Some(_) => return None,
-        }
+/// `wall_ids` is the ElementId set of the recovered wall instances,
+/// so a slot that names a type, a Level, a column or an id this
+/// decoder has not recovered is dropped rather than guessed at. The
+/// record's own id is never a join partner and is excluded.
+pub fn joined_walls(record: &PartitionElementRecord, wall_ids: &BTreeSet<u32>) -> BTreeSet<u32> {
+    record
+        .references
+        .iter()
+        .filter(|slot| **slot <= u64::from(u32::MAX))
+        .map(|slot| *slot as u32)
+        .filter(|id| *id != record.element_id && wall_ids.contains(id))
+        .collect()
+}
+
+/// The wall set plus the join partners each record names, which is
+/// everything the solver reads.
+struct Solver<'a> {
+    runs: &'a [WallRun],
+    joined: &'a BTreeMap<u32, BTreeSet<u32>>,
+}
+
+impl<'a> Solver<'a> {
+    fn names(&self, wall: &WallRun, other: &WallRun) -> bool {
+        self.joined
+            .get(&wall.element_id)
+            .is_some_and(|set| set.contains(&other.element_id))
     }
-    Some(thickness.map_or(0.0, |value| value * 0.5))
+
+    /// Every wall that is perpendicular to `wall`, named by it, whose
+    /// centreline lands on `coord`, whose own run spans `wall`'s
+    /// centreline and whose elevation range overlaps it.
+    ///
+    /// `skip_centre` drops candidates sitting on that plan line; it is
+    /// how a candidate's own reduction ignores the joins it makes with
+    /// the line currently being resolved.
+    fn candidates(&self, wall: &WallRun, coord: f64, skip_centre: Option<f64>) -> Vec<&'a WallRun> {
+        self.runs
+            .iter()
+            .filter(|other| other.element_id != wall.element_id && other.axis != wall.axis)
+            .filter(|other| (other.centre_feet - coord).abs() <= JOIN_EPS_FEET)
+            .filter(|other| self.names(wall, other))
+            .filter(|other| {
+                skip_centre.is_none_or(|line| (other.centre_feet - line).abs() > JOIN_EPS_FEET)
+            })
+            .filter(|other| {
+                wall.centre_feet >= other.start_feet - JOIN_EPS_FEET
+                    && wall.centre_feet <= other.end_feet + JOIN_EPS_FEET
+            })
+            .filter(|other| {
+                wall.top_feet.min(other.top_feet) - wall.base_feet.max(other.base_feet)
+                    > JOIN_EPS_FEET
+            })
+            .collect()
+    }
+
+    /// Half the one thickness the candidates agree on, `Some(0.0)`
+    /// when there are none, `None` when they disagree.
+    fn half_thickness(candidates: &[&WallRun]) -> Option<f64> {
+        let mut thickness: Option<f64> = None;
+        for other in candidates {
+            match thickness {
+                None => thickness = Some(other.thickness_feet),
+                Some(held) if (held - other.thickness_feet).abs() <= JOIN_EPS_FEET => {}
+                Some(_) => return None,
+            }
+        }
+        Some(thickness.map_or(0.0, |value| value * 0.5))
+    }
+
+    /// `candidate`'s own run, cut back by the joins it makes with
+    /// walls that are **not** on `line` — the plan line whose trim is
+    /// being resolved. Disagreeing candidates reduce nothing, which
+    /// keeps the run at its recorded length rather than inventing one.
+    fn reduced_run(&self, candidate: &WallRun, line: f64) -> (f64, f64) {
+        let start =
+            Self::half_thickness(&self.candidates(candidate, candidate.start_feet, Some(line)))
+                .unwrap_or(0.0);
+        let end = Self::half_thickness(&self.candidates(candidate, candidate.end_feet, Some(line)))
+            .unwrap_or(0.0);
+        (candidate.start_feet + start, candidate.end_feet - end)
+    }
+
+    /// The trim `wall` takes at `coord`, or `None` when the candidates
+    /// there disagree about their thickness.
+    fn trim_at(&self, wall: &WallRun, coord: f64) -> Option<f64> {
+        let reaching: Vec<&WallRun> = self
+            .candidates(wall, coord, None)
+            .into_iter()
+            .filter(|candidate| {
+                let (start, end) = self.reduced_run(candidate, wall.centre_feet);
+                wall.centre_feet >= start - JOIN_EPS_FEET && wall.centre_feet <= end + JOIN_EPS_FEET
+            })
+            .collect();
+        Self::half_thickness(&reaching)
+    }
 }
 
 /// The join trim of every wall in `records`, keyed by ElementId.
@@ -183,12 +272,21 @@ fn trim_at(runs: &[WallRun], wall: &WallRun, coord: f64) -> Option<f64> {
 /// trim that would collapse the run — are simply absent from the map
 /// and keep their record box.
 pub fn join_trims(records: &[PartitionElementRecord]) -> BTreeMap<u32, WallJoinTrim> {
+    let wall_ids: BTreeSet<u32> = records.iter().map(|record| record.element_id).collect();
+    let joined: BTreeMap<u32, BTreeSet<u32>> = records
+        .iter()
+        .map(|record| (record.element_id, joined_walls(record, &wall_ids)))
+        .collect();
     let runs: Vec<WallRun> = records.iter().filter_map(wall_run).collect();
+    let solver = Solver {
+        runs: &runs,
+        joined: &joined,
+    };
     let mut out = BTreeMap::new();
     for wall in &runs {
         let (Some(start), Some(end)) = (
-            trim_at(&runs, wall, wall.start_feet),
-            trim_at(&runs, wall, wall.end_feet),
+            solver.trim_at(wall, wall.start_feet),
+            solver.trim_at(wall, wall.end_feet),
         ) else {
             continue;
         };
@@ -213,7 +311,15 @@ mod tests {
     use super::*;
     use crate::partition_element_records as per;
 
-    fn wall(element_id: u32, bbox_feet: [f64; 6]) -> PartitionElementRecord {
+    /// A wall record shaped like the ones on the recorded edge: the
+    /// counted list at `+0x88` holds the leading `3`, the type, the
+    /// two Levels, the joined walls and the record's own id, all in
+    /// ascending order.
+    fn wall(element_id: u32, bbox_feet: [f64; 6], joins: &[u32]) -> PartitionElementRecord {
+        let mut references: Vec<u64> = vec![3, 17328, 20307, 20308];
+        references.extend(joins.iter().map(|id| u64::from(*id)));
+        references.push(u64::from(element_id));
+        references.sort_unstable();
         PartitionElementRecord {
             stream: "Partitions/59".into(),
             offset: element_id as usize,
@@ -225,7 +331,7 @@ mod tests {
             bbox_feet,
             preceding_reference: None,
             owner_reference: None,
-            references: Vec::new(),
+            references,
         }
     }
 
@@ -236,9 +342,17 @@ mod tests {
     /// back to 80.6667. Neither is cut at its other end.
     fn core_interior_corner() -> Vec<PartitionElementRecord> {
         vec![
-            wall(20796, [47.75, 80.66667, 76.0, 75.0, 81.33333, 91.0]),
-            wall(20797, [47.75, 57.66667, 76.0, 48.25, 81.0, 91.0]),
-            wall(20799, [74.66667, 58.0, 76.0, 75.33333, 81.33333, 91.0]),
+            wall(
+                20796,
+                [47.75, 80.66667, 76.0, 75.0, 81.33333, 91.0],
+                &[20797, 20799],
+            ),
+            wall(20797, [47.75, 57.66667, 76.0, 48.25, 81.0, 91.0], &[20796]),
+            wall(
+                20799,
+                [74.66667, 58.0, 76.0, 75.33333, 81.33333, 91.0],
+                &[20796],
+            ),
         ]
     }
 
@@ -285,7 +399,13 @@ mod tests {
     fn candidates_that_disagree_on_thickness_decline_the_element() {
         let mut records = core_interior_corner();
         // A second wall on the same centreline, different thickness.
-        records.push(wall(21000, [74.75, 58.0, 76.0, 75.25, 81.33333, 91.0]));
+        records.push(wall(
+            21000,
+            [74.75, 58.0, 76.0, 75.25, 81.33333, 91.0],
+            &[20796],
+        ));
+        records[0].references.push(21000);
+        records[0].references.sort_unstable();
         let trims = join_trims(&records);
         assert!(!trims.contains_key(&20796), "ambiguous join declines");
         assert!(trims.contains_key(&20797), "other walls are unaffected");
@@ -293,7 +413,7 @@ mod tests {
 
     #[test]
     fn a_square_plan_box_has_no_wall_axis() {
-        let records = vec![wall(30000, [0.0, 0.0, 0.0, 2.0, 2.0, 10.0])];
+        let records = vec![wall(30000, [0.0, 0.0, 0.0, 2.0, 2.0, 10.0], &[])];
         assert!(join_trims(&records).is_empty());
     }
 
@@ -302,11 +422,140 @@ mod tests {
         // A 1 ft stub between two 2 ft walls: each end would be cut
         // back a full foot, which leaves nothing.
         let records = vec![
-            wall(31000, [0.0, 9.66667, 0.0, 1.0, 10.33333, 10.0]),
-            wall(31001, [-1.0, 0.0, 0.0, 1.0, 20.0, 10.0]),
-            wall(31002, [0.0, 0.0, 0.0, 2.0, 20.0, 10.0]),
+            wall(
+                31000,
+                [0.0, 9.66667, 0.0, 1.0, 10.33333, 10.0],
+                &[31001, 31002],
+            ),
+            wall(31001, [-1.0, 0.0, 0.0, 1.0, 20.0, 10.0], &[31000]),
+            wall(31002, [0.0, 0.0, 0.0, 2.0, 20.0, 10.0], &[31000]),
         ];
         let trims = join_trims(&records);
         assert!(!trims.contains_key(&31000));
+    }
+
+    /// Wall 20826 of the recorded edge: an 8" wall whose two ends sit
+    /// exactly on the centrelines of two 8" walls that pass through
+    /// them, and which Revit leaves at full length. Its record names
+    /// no other wall at all, and that is the only thing in the file
+    /// that says so (#238, RE-28 §2).
+    fn unjoined_span() -> Vec<PartitionElementRecord> {
+        vec![
+            wall(20826, [119.5, 67.41667, 76.0, 129.0, 68.08333, 91.0], &[]),
+            wall(20825, [119.16667, 58.0, 76.0, 119.83333, 81.0, 91.0], &[]),
+            wall(20804, [128.66667, 58.0, 76.0, 129.33333, 81.0, 91.0], &[]),
+        ]
+    }
+
+    #[test]
+    fn a_wall_that_names_no_join_partner_is_not_trimmed() {
+        let trims = join_trims(&unjoined_span());
+        let t = trims[&20826];
+        assert!((t.start_feet - 0.0).abs() < 1e-9, "119.5 is not cut");
+        assert!((t.end_feet - 0.0).abs() < 1e-9, "129.0 is not cut");
+    }
+
+    #[test]
+    fn naming_the_same_two_walls_restores_the_trim() {
+        let mut records = unjoined_span();
+        records[0] = wall(
+            20826,
+            [119.5, 67.41667, 76.0, 129.0, 68.08333, 91.0],
+            &[20804, 20825],
+        );
+        let t = join_trims(&records)[&20826];
+        assert!((t.start_feet - 0.33333).abs() < 1e-4);
+        assert!((t.end_feet - 0.33333).abs() < 1e-4);
+    }
+
+    /// The recorded edge's `x = 137` cluster. 20800 runs in x at
+    /// y = 81 and its high end is cut back to 136.9167 by 20816; that
+    /// cut puts 20803's centreline (137.1667) past the end of 20800,
+    /// so 20803 has nothing to butt into and Revit leaves it at 81.0
+    /// (#238, RE-28 §3).
+    fn cut_back_candidate() -> Vec<PartitionElementRecord> {
+        vec![
+            wall(
+                20800,
+                [85.5, 80.66667, 76.0, 137.25, 81.33333, 91.0],
+                &[20803, 20805, 20816],
+            ),
+            wall(
+                20805,
+                [85.16667, 58.0, 76.0, 85.83333, 81.33333, 91.0],
+                &[20800],
+            ),
+            wall(
+                20816,
+                [136.91667, 58.0, 76.0, 137.58333, 81.0, 91.0],
+                &[20800],
+            ),
+            wall(20803, [136.83333, 81.0, 76.0, 137.5, 87.5, 91.0], &[20800]),
+        ]
+    }
+
+    #[test]
+    fn a_candidate_cut_back_short_of_the_line_does_not_trim() {
+        let trims = join_trims(&cut_back_candidate());
+        assert!(
+            (trims[&20800].end_feet - 0.33333).abs() < 1e-4,
+            "20800 is still cut by 20816"
+        );
+        assert!(
+            (trims[&20803].start_feet - 0.0).abs() < 1e-9,
+            "20800 no longer reaches 137.1667"
+        );
+    }
+
+    /// The same fixture records the one thing the solver still gets
+    /// wrong: 20800 and 20816 form a true L corner and Revit cuts
+    /// only 20800. Nothing in the file says which side survives, so
+    /// the solver cuts both and this test pins the residual rather
+    /// than hiding it (#238, RE-28 §4).
+    #[test]
+    fn the_surviving_side_of_a_true_l_corner_is_still_over_trimmed() {
+        let trims = join_trims(&cut_back_candidate());
+        assert!(
+            (trims[&20816].end_feet - 0.33333).abs() < 1e-4,
+            "Revit leaves 20816 at 81.0; the solver cuts it"
+        );
+    }
+
+    /// Where the line being resolved is itself what cut the candidate
+    /// back, the cut must not disqualify it: 20798's low end is cut
+    /// by the `x = 48` wall line, and 20817 — part of that same line —
+    /// is still trimmed by 20798 (RE-28 §3).
+    #[test]
+    fn a_cut_the_resolved_line_imposed_does_not_disqualify_the_candidate() {
+        let records = vec![
+            wall(
+                20798,
+                [48.0, 57.66667, 76.0, 100.25, 58.33333, 91.0],
+                &[20797, 20817],
+            ),
+            wall(20817, [47.75, 51.5, 76.0, 48.25, 58.0, 91.0], &[20798]),
+            wall(20797, [47.75, 57.66667, 76.0, 48.25, 81.0, 91.0], &[20798]),
+        ];
+        let trims = join_trims(&records);
+        assert!(
+            (trims[&20798].start_feet - 0.25).abs() < 1e-4,
+            "20798 is cut by the x = 48 line"
+        );
+        assert!(
+            (trims[&20817].end_feet - 0.33333).abs() < 1e-4,
+            "and 20817 is still cut by 20798"
+        );
+    }
+
+    #[test]
+    fn joined_walls_keeps_only_recovered_wall_ids() {
+        let record = wall(
+            20796,
+            [47.75, 80.66667, 76.0, 75.0, 81.33333, 91.0],
+            &[20797],
+        );
+        let ids = [20796u32, 20797].into_iter().collect();
+        let joined = joined_walls(&record, &ids);
+        assert_eq!(joined.iter().copied().collect::<Vec<u32>>(), vec![20797]);
     }
 }

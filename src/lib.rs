@@ -119,6 +119,7 @@ pub mod compression;
 pub mod control;
 pub mod corpus;
 pub mod elem_table;
+pub mod element_record_column_cuts;
 pub mod element_record_level_refs;
 pub mod element_record_plan_profiles;
 pub mod element_record_storeys;
