@@ -62,7 +62,7 @@ minor release; incompatible changes must increment this number.
 | `warnings` | array | User-facing caveats for this specific export. |
 | `confidence` | object | Coarse export-readiness level and booleans for metadata/elements/geometry. |
 | `source_coverage` | object (optional) | A10 measured coverage from export/decode counts. `status` is `measured` when at least one fraction has a trustworthy denominator; otherwise `unset` with null fractions. Never invents ratios. |
-| `formats_latest_integrity` | object (optional) | `Formats/Latest` page-boundary integrity under the Finding 1 narrow gate (strip stays **disabled**). Multipage streams report `integrity_status: uncertain` and `diagnostic_code: RVT_FORMATS_MULTIPAGE_UNVERIFIED` without claiming completeness. |
+| `formats_latest_integrity` | object (optional) | `Formats/Latest` page-boundary integrity under the Finding 1 narrow gate (strip stays **disabled**). Multipage streams report `integrity_status: uncertain` and `diagnostic_code: RVT_FORMATS_MULTIPAGE_UNVERIFIED` without claiming completeness. `schema_scan_truncated` / `schema_scanned_bytes` report whether schema parsing stopped at the 65536-byte scan limit — a "we stopped looking" signal, not a claim about the unscanned tail. |
 `skipped.reason` is stable enough for automation. Geometry-related reasons use
 the `unsupported_geometry_*` prefix and currently include
 `unsupported_geometry_curve`, `unsupported_geometry_profile`,
