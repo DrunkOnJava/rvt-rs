@@ -803,7 +803,30 @@ jobs:
         run: npm ci
       - name: Audit viewer npm dependencies
         working-directory: viewer
-        run: npm audit --audit-level=high
+        shell: bash
+        # The registry advisory endpoint (POST /-/npm/v1/security/advisories/bulk)
+        # answers 503 during npm maintenance windows, and `npm audit` then exits
+        # non-zero without having measured anything. Retry with backoff, and if
+        # the endpoint is still unreachable record the audit as NOT MEASURED
+        # instead of failing the job on infrastructure. A measured high or
+        # critical advisory still fails it: a measured run always prints valid
+        # JSON with a `vulnerabilities` key, an endpoint failure does not.
+        run: |
+          for attempt in 1 2 3 4; do
+            if npm audit --audit-level=high --json > audit.json 2> audit.err; then
+              echo "npm audit: no high or critical advisories"
+              exit 0
+            fi
+            if python3 -c 'import json, sys; sys.exit(0 if "vulnerabilities" in json.load(open("audit.json")) else 1)' 2>/dev/null; then
+              npm audit --audit-level=high || true
+              echo "::error::viewer dependency audit found high or critical advisories"
+              exit 1
+            fi
+            echo "npm audit endpoint unavailable (attempt ${attempt}/4): $(head -c 300 audit.err)"
+            sleep $((attempt * 20))
+          done
+          echo "::warning::viewer dependency audit NOT MEASURED: the npm advisory endpoint was unreachable after 4 attempts"
+          exit 0
       - name: Save npm cache
         if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
