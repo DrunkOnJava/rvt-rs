@@ -120,6 +120,18 @@ pub const OST_FLOORS: i64 = -2_000_032;
 /// category instead (#212, RE-22).
 pub const OST_BUILDING_PAD: i64 = -2_001_263;
 
+/// Autodesk `BuiltInCategory.OST_Rooms` — Revit room elements, which
+/// Revit's own exporter emits as `IfcSpace`.
+///
+/// The category was not assumed: a brute scan of all 23 470 decodable
+/// element records on `2024_Core_Interior.rvt` histogrammed every
+/// `BuiltInCategory` present and scored each one's instance-rule
+/// selection against the 116 room ElementIds the reference export
+/// carries in `IfcSpaceType.Tag`. `OST_Rooms` selects **116, exactly
+/// that set** — no false positive, no miss — and no other category
+/// intersects it at all (#90, RE-29).
+pub const OST_ROOMS: i64 = -2_000_160;
+
 /// Autodesk `BuiltInCategory.OST_SketchLines` — the lines of a
 /// sketch (floor / roof / ceiling boundary, extrusion profile).
 ///

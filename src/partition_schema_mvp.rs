@@ -195,7 +195,113 @@ pub fn recover_partition_schema_mvp(
         out.floors.clear();
     }
 
+    // --- 2024 room instances from element records (#90, RE-29) ---
+    //
+    // Same trade as the slabs above: a record-backed room carries an
+    // ElementId, a model bounding box that is exactly the reference
+    // export's plan envelope and floor-to-ceiling extent, a number, a
+    // name and a host Level — none of which a partition *string* can
+    // supply. The string-only rooms stand down whenever records were
+    // recovered, and stay the only room path where they do not.
+    let record_rooms = rooms_from_partition_category_records(rf, revit_version, &level_ids)?;
+    if !record_rooms.is_empty() {
+        out.rooms = record_rooms;
+    }
+
     Ok(out)
+}
+
+/// Recover room instances from partition element records (#90, RE-29).
+///
+/// `OST_Rooms` under the #211 instance rule reproduces the exported
+/// room ElementId set exactly; the number, name and host Level come
+/// from the room's own parameter block
+/// ([`crate::partition_room_parameters`]), joined by ElementId only.
+///
+/// The parameter join is attached, never required: a room whose block
+/// does not decode, or whose blocks disagree, still emits with its
+/// record body and keeps the identity the record gives it.
+pub fn rooms_from_partition_category_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    level_ids: &BTreeSet<u32>,
+) -> Result<Vec<DecodedElement>> {
+    let Some(records) = category_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_ROOMS,
+    )?
+    else {
+        return Ok(Vec::new());
+    };
+    let room_ids: BTreeSet<u32> = records
+        .iter()
+        .filter(|record| record.is_exported_instance())
+        .map(|record| record.element_id)
+        .collect();
+    let parameters =
+        crate::partition_room_parameters::scan_room_parameters(rf, revit_version, &room_ids)
+            .unwrap_or_default();
+    Ok(room_instances_from_records(records, &parameters, level_ids))
+}
+
+/// Field carrying a recovered room number.
+pub const ROOM_NUMBER_FIELD: &str = "m_number";
+/// Field recording where the room number / name came from.
+pub const ROOM_PARAMETER_SOURCE_FIELD: &str = "m_room_parameter_source";
+
+/// Room instance selection with the number / name / Level join
+/// attached (#90, RE-29).
+///
+/// The Level the parameter block names is used only when the record's
+/// own counted reference list did **not** already name one, so the
+/// RE-27 carrier stays the primary. On `2024_Core_Interior.rvt` both
+/// carriers answer for all 116 rooms and they agree 116 of 116.
+pub fn room_instances_from_records(
+    records: Vec<crate::partition_element_records::PartitionElementRecord>,
+    parameters: &std::collections::BTreeMap<u32, crate::partition_room_parameters::RoomParameters>,
+    level_ids: &BTreeSet<u32>,
+) -> Vec<DecodedElement> {
+    select_instance_records(records)
+        .values()
+        .map(|record| {
+            let mut decoded = element_record_decoded(record, "Room", level_ids);
+            if let Some(block) = parameters.get(&record.element_id) {
+                decoded
+                    .fields
+                    .push(("m_name".into(), InstanceField::String(block.name.clone())));
+                decoded.fields.push((
+                    ROOM_NUMBER_FIELD.into(),
+                    InstanceField::String(block.number.clone()),
+                ));
+                decoded.fields.push((
+                    ROOM_PARAMETER_SOURCE_FIELD.into(),
+                    InstanceField::String(
+                        crate::partition_room_parameters::ROOM_PARAMETER_SOURCE.into(),
+                    ),
+                ));
+                let already_bound = decoded.fields.iter().any(|(name, _)| {
+                    name == crate::element_record_level_refs::LEVEL_REFERENCE_FIELD
+                });
+                if !already_bound {
+                    if let Some(id) = block.level_element_id(level_ids) {
+                        decoded.fields.push((
+                            crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),
+                            InstanceField::ElementId { tag: 0, id },
+                        ));
+                        if let Some(slot) = decoded
+                            .fields
+                            .iter_mut()
+                            .find(|(name, _)| name == "m_level_bound")
+                        {
+                            slot.1 = InstanceField::Bool(true);
+                        }
+                    }
+                }
+            }
+            decoded
+        })
+        .collect()
 }
 
 /// Recover architectural column instances from partition element

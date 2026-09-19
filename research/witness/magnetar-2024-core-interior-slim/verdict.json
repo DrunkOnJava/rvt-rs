@@ -3,13 +3,6 @@
   "diffs": [],
   "excluded": [
     {
-      "category": "rooms_spaces",
-      "field": "entity_counts.IFCSPACE",
-      "reason": "known_gap",
-      "tracking_issue": 33,
-      "unsupported_feature": "partial_element_geometry"
-    },
-    {
       "category": "materials",
       "field": "entity_counts.IFCMATERIAL",
       "reason": "known_gap",
@@ -64,6 +57,7 @@
     "entity_counts.IFCROOF",
     "entity_counts.IFCDOOR",
     "entity_counts.IFCWINDOW",
+    "entity_counts.IFCSPACE",
     "entity_counts.IFCCOLUMN",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
@@ -73,7 +67,7 @@
     "storeys.IFCBUILDINGSTOREY"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "cd171b3167c602d0882dd8a0d38c99791012a9fe693043e43e2d43b028554325",
+  "verdict_hash_sha256": "aa3e30261bc7af517fd214257d580ddf04e07428997a901b95365fd4498037f9",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

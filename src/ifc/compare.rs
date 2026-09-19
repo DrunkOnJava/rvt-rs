@@ -400,7 +400,7 @@ fn catalogued_divergence_notes(deltas: &BTreeMap<String, CountDelta>) -> Vec<Str
         ),
         (
             "IFCSPACE",
-            "Spaces are name-only with a placeholder body; real space boundaries are tracked in #90 (RE-15-10).",
+            "Revit 2024 room set, names, numbers and storeys are exact (RE-29); the body is the record's bounding box, and the real boundary polygon is tracked in #90.",
         ),
         (
             "IFCWINDOW",

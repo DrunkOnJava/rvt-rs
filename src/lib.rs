@@ -141,6 +141,7 @@ pub mod partition_element_records;
 pub mod partition_ifc_export_overrides;
 pub mod partition_level_records;
 pub mod partition_name_candidates;
+pub mod partition_room_parameters;
 pub mod partition_scanner;
 pub mod partition_schema_mvp;
 pub mod partition_type_records;

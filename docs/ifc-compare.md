@@ -42,7 +42,7 @@ issue that tracks the remainder:
 | `IFCWALL` | Revit 2024 set exact (RE-21); run cut back by the joins the record names (RE-26, RE-29), 351 of 360 world-exact | #238 (9 over-trimmed ends at two true L corners), #23 (2024 ArcWall records) |
 | `IFCDOOR` | Revit 2024 set and host binding exact (RE-21, RE-23) | #227 (opening cut from the wall curve) |
 | `IFCSLAB` | Revit 2024 set with sketch-line profiles, 80 of 80 (RE-22, RE-25); all 80 storey-bound (RE-27), as are the 20 IFCSHADINGDEVICE plates | nothing slab-specific; #219's plate containment is closed |
-| `IFCSPACE` | name-only, placeholder body; the 18 spaces are 18 of the 19 elements with no storey evidence | #90 RE-15-10 (boundary polygon), #219 (storey containment) |
+| `IFCSPACE` | Revit 2024 room set 116 of 116 with real names, numbers and storeys; body is the record box, equal to the reference envelope on all 116 (RE-29) | #90 (boundary polygon: the record carries no sketch, measured negative) |
 | `IFCWINDOW` | Revit 2024 set and host binding exact (RE-21, RE-23); all 6 storey-bound (RE-27) | nothing window-specific; #219's window containment is closed |
 | `IFCMATERIALLAYERSETUSAGE` | nothing emitted — layer thicknesses are not near the wall-type record and the reference export is a `ReferenceView_V1.2` file with zero `IfcMaterialLayerSet`, so there is no oracle on this corpus (RE-28) | #88 RE-15-08 |
 | `IFCOPENINGELEMENT` | opening, void and fill chain per host (RE-23) | #227 (true opening cut) |

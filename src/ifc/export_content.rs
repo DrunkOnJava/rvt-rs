@@ -84,6 +84,15 @@ pub const SLAB_THICKNESS_CLASSES: &[&str] = &["Floor", "BuildingPad"];
 /// Value of the `ThicknessSource` property on a record-backed plate.
 pub const RECORD_BBOX_THICKNESS_SOURCE: &str = "partition_element_record_bbox_z_extent";
 
+/// Property carrying a recovered room number (#90, RE-29).
+pub const ROOM_NUMBER_PROPERTY: &str = "RoomNumber";
+
+/// Property carrying a recovered room name (#90, RE-29).
+///
+/// The STEP writer reads this back to fill `IfcSpace.LongName`, the
+/// slot Revit's own exporter puts the room name in.
+pub const ROOM_NAME_PROPERTY: &str = "RoomName";
+
 /// Classes that must never appear as production building elements.
 pub fn is_misleading_proxy_class(class_name: &str) -> bool {
     matches!(
@@ -524,8 +533,14 @@ fn element_record_geometry_from_decoded(
     let mut type_symbol_id = None;
     let mut type_profile = (None, None);
     let mut level_id = None;
+    let mut room_name = None;
+    let mut room_number = None;
     for (name, value) in &decoded.fields {
         match (name.as_str(), value) {
+            ("m_name", InstanceField::String(v)) => room_name = Some(v.clone()),
+            (crate::partition_schema_mvp::ROOM_NUMBER_FIELD, InstanceField::String(v)) => {
+                room_number = Some(v.clone());
+            }
             (
                 crate::element_record_wall_joins::WALL_BODY_SOURCE_FIELD,
                 InstanceField::String(v),
@@ -750,9 +765,26 @@ fn element_record_geometry_from_decoded(
             value: PropertyValue::LengthFeet(end),
         });
     }
+    // A room's number and name, when its own parameter block carried
+    // them (#90, RE-29). `RoomName` is what the writer puts in
+    // `IfcSpace.LongName`, which is the slot Revit's own exporter uses
+    // for it; the element `Name` keeps the `Room-<ElementId>` identity
+    // every other class uses, because `IfcSpace` declares no `Tag`.
+    if let Some(number) = room_number {
+        properties.push(Property {
+            name: ROOM_NUMBER_PROPERTY.into(),
+            value: PropertyValue::Text(number),
+        });
+    }
+    if let Some(name) = room_name {
+        properties.push(Property {
+            name: ROOM_NAME_PROPERTY.into(),
+            value: PropertyValue::Text(name),
+        });
+    }
     // A column whose joined walls cut it reports how many took part
-    // (#239, RE-29 §5). The section above is the family's; this is
-    // what is left of the prism after the walls are subtracted.
+    // (#239, RE-29 section 5). The section above is the family's; this
+    // is what is left of the prism after the walls are subtracted.
     if let Some(walls) = column_cut_walls {
         properties.push(Property {
             name: "JoinCutWallCount".into(),

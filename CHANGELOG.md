@@ -13,6 +13,49 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Rooms come from `OST_Rooms` element records, with their real Revit name,
+  number, storey and envelope (#90, RE-29).** Revit rooms are carried by the
+  same partition element record every other category uses —
+  `BuiltInCategory` `OST_Rooms` (-2000160) — under the unchanged #211
+  instance rule. The category was **measured, not assumed**: a brute scan of
+  all 23 470 decodable element records on `2024_Core_Interior.rvt`
+  histogrammed every `BuiltInCategory` present and scored each one's
+  selection against the 116 room ElementIds Revit's own full-project export
+  carries in `IfcSpaceType.Tag`; `OST_Rooms` selects **116 and they are
+  exactly that set** (FP 0, FN 0, tolerance 0), and no other category
+  intersects it at all. The number, the name and the host Level come from the
+  room's own parameter block, anchored on the owning ElementId with a
+  confirmation copy at `+0x3c`, the Level at `+0x44`, the number's UTF-16LE
+  length prefix at `+0x1f5` and the name's 8 bytes past the end of the number
+  — the same owner-at-a-fixed-offset framing RE-22 found for the per-instance
+  `IFC Export As` override, read forward instead of backward. It accepts
+  **116 of the 26 425 ids `Global/ElemTable` declares** and they are exactly
+  the rooms; every room is framed twice and no pair disagrees; recovery is
+  all-or-nothing per room. Measured against the reference export: **116 of
+  116** names equal `IfcSpace.LongName` and **116 of 116** numbers equal
+  `IfcSpace.Name`. Storey containment is exact too — all 116 bind through the
+  RE-27 Level reference, each of the ten Levels named maps to exactly one
+  `IfcBuildingStorey`, and it is the storey that export aggregates the room
+  into. Emitted `IFCSPACE` goes **18 → 116**, storey containment **853 → 969
+  of 970**, and `entity_counts.IFCSPACE` joins the full-project OctetProof
+  claimed surface (13 → 14 fields), where rvt-rs, IfcOpenShell 0.8.5 and
+  IFClite 7.1.1 agree exactly.
+
+- **A room's body is its record's bounding box, and that box is the
+  reference export's plan envelope and floor-to-ceiling extent (#90,
+  RE-29).** The "placeholder 10×10×8 ft bounding box" #90 describes — in
+  practice 18 rows named `Room-unnamed` with no body at all — is replaced by
+  a measured one. Scored on the emitted IFC against Revit's own swept areas
+  in world coordinates: the plan envelope is exact on **116 of 116** (worst
+  1.640e-06 ft, the writer's six-decimal metre rounding) and the vertical
+  extent is exact on **116 of 116** (worst 1.421e-14 ft), the base sitting on
+  the storey elevation and the top 8 ft above it. The RE-26 newest-frame
+  tie-break is load-bearing here: 111 of the 116 rooms carry frames that
+  disagree about the plan box, and the first frame by `(stream, offset)` is
+  exact on only 5 of 116. `partial_element_geometry` disappears from the
+  diagnostics: every one of the 970 emitted building elements now carries a
+  body.
+
 - **Storey containment from the Level ElementId the element record names
   (#219, RE-27).** A partition element record's counted reference list at
   `+0x88` — the same list RE-23 reads for a door's host wall — carries the
@@ -31,9 +74,37 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   4.73 ft sill height are exactly what a named Level reaches and an inferred
   elevation cannot. `LevelBindResolved` is now `true` on those elements, with
   `LevelElementId` and `LevelBindSource` beside it; `StoreyBindSource` gains
-  `record_level_reference`. Reference side **NOT MEASURED** — the paired
-  Revit export is not in this checkout, so none of the 853 is scored against
-  Revit's own `IfcRelContainedInSpatialStructure`.
+  `record_level_reference`. Reference side **NOT MEASURED** at the time —
+  #90 / RE-29 has since scored the 116 rooms against Revit's own
+  `IfcRelContainedInSpatialStructure` (116 of 116 on the right storey) and
+  taken containment to 969 of 970; the other 853 bindings stay unmeasured.
+
+### Changed
+
+- **`IfcSpace.LongName` now carries the room's Revit name (#90, RE-29).**
+  The STEP writer wrote the element `Name` into both `IfcSpace.Name` and
+  `IfcSpace.LongName`; `LongName` is now the recovered `RoomName` property
+  when a room has one, which is the slot Revit's own exporter puts the room
+  name in. `Name` keeps the `Room-<ElementId>` identity every other class
+  uses, because `IfcSpace` declares no `Tag` and the STEP line would
+  otherwise carry no source id at all; the number is a `RoomNumber` property
+  beside it. A space with no recovered name is unchanged.
+
+- **The string-derived rooms stand down where element records decode (#90,
+  RE-29).** `partition_schema_mvp` kept the `partition_name_candidates` room
+  scan as the only room path; it is now superseded by the record-backed
+  rooms on any file where they decode, the same trade the plan-loop floors
+  take against record-backed slabs. On releases and files with no decodable
+  element record — the 2023 Einhoven sample, every Tier-1 synthetic — the
+  string scan is still the only room path and nothing changes.
+
+- **`rooms_spaces` moves from `known_gap` to `known` on the full-project
+  manifest (#90).** `tests/fixtures/project-counts/2024-core-interior-slim.json`
+  now gates `diagnostics.exported.by_ifc_type.IFCSPACE` at **116, tolerance
+  0** against the reference export's 116, and
+  `2024-core-interior.json`'s row drops to `decoder_baseline` because its
+  paired element fixture exports no spaces at all. Both manifests' committed
+  `property_sets` decoder baseline moves 854 → 970.
 
 ### Fixed
 
@@ -44,10 +115,10 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   `IfcBuildingStorey` `Basement 2` at −40 ft, indistinguishable from the 5
   that belong there. Elements with no recovered storey are now contained in
   the `IfcBuilding`, which states what rvt-rs actually knows. On that file
-  `Basement 2` drops 76 → 6 contained elements and the 19 that stay unbound —
-  18 name-only `IFCSPACE` rows recovered from partition strings with no
-  element record at all, and one wall whose record names no single Level —
-  are visibly unplaced instead of silently placed.
+  `Basement 2` drops 76 → 6 contained elements and what stays unbound is
+  visibly unplaced instead of silently placed. That set was 19 when this
+  landed — 18 name-only `IFCSPACE` rows and one wall — and is **one** wall
+  after #90 / RE-29 replaced the spaces with record-backed rooms.
 
 - **Wall bodies are cut back by their joins, and the column profile comes
   from the family type (#215, RE-26).** With #232's double translation gone,
