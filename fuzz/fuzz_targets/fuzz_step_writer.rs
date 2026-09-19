@@ -15,6 +15,7 @@
 //!   supplementary-plane Unicode, ASCII control bytes) via all the
 //!   `Option<String>` and `String` slots of `IfcModel`,
 //!   `Storey.name`, `MaterialInfo.name`, `IfcEntity::BuildingElement.name`,
+//!   `IfcEntity::BuildingElement.predefined_type`,
 //!   `PropertySet.name`, `Property.name`, `PropertyValue::Text(..)`,
 //!   `ClassificationItem.code`, `ClassificationItem.name`, and
 //!   `Classification.edition`.
@@ -196,6 +197,7 @@ struct FuzzElement {
     tag: ElementTag,
     name: String,
     type_guid: Option<String>,
+    predefined_type: Option<String>,
     storey_hint: Option<u8>,
     material_hint: Option<u8>,
     property_set: Option<FuzzPropertySet>,
@@ -348,6 +350,7 @@ fuzz_target!(|input: FuzzInput| {
             ifc_type: fe.tag.as_str(),
             name: truncate_string(fe.name, MAX_STRING),
             type_guid: fe.type_guid.map(|g| truncate_string(g, MAX_STRING)),
+            predefined_type: fe.predefined_type.map(|p| truncate_string(p, MAX_STRING)),
             storey_index,
             material_index,
             property_set,
