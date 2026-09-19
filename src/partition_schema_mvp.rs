@@ -274,17 +274,19 @@ pub fn room_instances_from_records(
                 let already_bound = decoded.fields.iter().any(|(name, _)| {
                     name == crate::element_record_level_refs::LEVEL_REFERENCE_FIELD
                 });
-                if !already_bound && let Some(id) = block.level_element_id(level_ids) {
-                    decoded.fields.push((
-                        crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),
-                        InstanceField::ElementId { tag: 0, id },
-                    ));
-                    if let Some(slot) = decoded
-                        .fields
-                        .iter_mut()
-                        .find(|(name, _)| name == "m_level_bound")
-                    {
-                        slot.1 = InstanceField::Bool(true);
+                if !already_bound {
+                    if let Some(id) = block.level_element_id(level_ids) {
+                        decoded.fields.push((
+                            crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),
+                            InstanceField::ElementId { tag: 0, id },
+                        ));
+                        if let Some(slot) = decoded
+                            .fields
+                            .iter_mut()
+                            .find(|(name, _)| name == "m_level_bound")
+                        {
+                            slot.1 = InstanceField::Bool(true);
+                        }
                     }
                 }
             }

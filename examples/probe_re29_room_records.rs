@@ -251,10 +251,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if record.is_container_member() {
                 entry.member_ids.insert(record.element_id);
             }
-            if record.builtin_category == per::OST_SKETCH_LINES
-                && let Some(owner) = record.owner_reference
-            {
-                sketch_owners.insert(owner);
+            if record.builtin_category == per::OST_SKETCH_LINES {
+                if let Some(owner) = record.owner_reference {
+                    sketch_owners.insert(owner);
+                }
             }
             if wanted.contains(&record.element_id) {
                 let refs2 = second_list(&concat, offset);
@@ -291,15 +291,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut index = 0usize;
             while index + 8 <= concat.len() {
                 let raw = u64::from_le_bytes(concat[index..index + 8].try_into().expect("8"));
-                if raw != 0
-                    && raw <= u64::from(u32::MAX)
-                    && declared.contains(&(raw as u32))
-                    && let Some(block) = room_parameter_block(&concat, index, raw as u32)
-                {
-                    if wanted.contains(&(raw as u32)) {
-                        room_params.entry(raw as u32).or_default().insert(block);
-                    } else {
-                        other_param_ids.insert(raw as u32);
+                if raw != 0 && raw <= u64::from(u32::MAX) && declared.contains(&(raw as u32)) {
+                    if let Some(block) = room_parameter_block(&concat, index, raw as u32) {
+                        if wanted.contains(&(raw as u32)) {
+                            room_params.entry(raw as u32).or_default().insert(block);
+                        } else {
+                            other_param_ids.insert(raw as u32);
+                        }
                     }
                 }
                 index += 1;
@@ -315,11 +313,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut index = 0usize;
             while index + 8 <= concat.len() {
                 let raw = u64::from_le_bytes(concat[index..index + 8].try_into().expect("8"));
-                if raw <= u64::from(u32::MAX)
-                    && wanted.contains(&(raw as u32))
-                    && let Some(text) = owner_framed_string(&concat, index, raw as u32)
-                {
-                    param_strings.entry(raw as u32).or_default().insert(text);
+                if raw <= u64::from(u32::MAX) && wanted.contains(&(raw as u32)) {
+                    if let Some(text) = owner_framed_string(&concat, index, raw as u32) {
+                        param_strings.entry(raw as u32).or_default().insert(text);
+                    }
                 }
                 index += 1;
             }
@@ -368,16 +365,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         let n = u32::from_le_bytes(concat[probe..probe + 4].try_into().expect("4"))
                             as usize;
-                        if (1..=64).contains(&n)
-                            && probe + 4 + n * 2 <= concat.len()
-                            && let Some(s) = utf16_at(&concat, probe + 4, n)
-                            && s.chars().all(|c| !c.is_control())
-                            && s.chars().any(|c| c.is_alphanumeric())
-                        {
-                            println!(
-                                "      {:>5}  u32 len {n} -> {s:?}",
-                                probe as i64 - at as i64
-                            );
+                        if (1..=64).contains(&n) && probe + 4 + n * 2 <= concat.len() {
+                            if let Some(s) = utf16_at(&concat, probe + 4, n) {
+                                if s.chars().all(|c| !c.is_control())
+                                    && s.chars().any(|c| c.is_alphanumeric())
+                                {
+                                    println!(
+                                        "      {:>5}  u32 len {n} -> {s:?}",
+                                        probe as i64 - at as i64
+                                    );
+                                }
+                            }
                         }
                         probe += 1;
                     }
@@ -456,38 +454,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // frame is still found.
                 if let (Some(v0), Some(v1)) =
                     (read_pair(&concat, index), read_pair(&concat, index + 16))
-                    && v0.0.abs() < 1.0e6
-                    && v1.0.abs() < 1.0e6
                 {
-                    let key = (quantise(v1.0 - v0.0), quantise(v1.1 - v0.1));
-                    if key != (0, 0)
-                        && let Some(starts) = edge_index.get(&key)
-                    {
-                        for (pi, vi, dir) in starts {
-                            let pts = &polygons[*pi].1;
-                            let n = pts.len();
-                            let mut run = 2usize;
-                            while run < n {
-                                let Some(v) = read_pair(&concat, index + run * 16) else {
-                                    break;
-                                };
-                                let step = if *dir == 1 {
-                                    (vi + run) % n
-                                } else {
-                                    (vi + n * n - run) % n
-                                };
-                                if quantise(v.0 - v0.0) != quantise(pts[step].0 - pts[*vi].0)
-                                    || quantise(v.1 - v0.1) != quantise(pts[step].1 - pts[*vi].1)
-                                {
-                                    break;
+                    if v0.0.abs() < 1.0e6 && v1.0.abs() < 1.0e6 {
+                        let key = (quantise(v1.0 - v0.0), quantise(v1.1 - v0.1));
+                        if key != (0, 0) {
+                            if let Some(starts) = edge_index.get(&key) {
+                                for (pi, vi, dir) in starts {
+                                    let pts = &polygons[*pi].1;
+                                    let n = pts.len();
+                                    let mut run = 2usize;
+                                    while run < n {
+                                        let Some(v) = read_pair(&concat, index + run * 16) else {
+                                            break;
+                                        };
+                                        let step = if *dir == 1 {
+                                            (vi + run) % n
+                                        } else {
+                                            (vi + n * n - run) % n
+                                        };
+                                        if quantise(v.0 - v0.0)
+                                            != quantise(pts[step].0 - pts[*vi].0)
+                                            || quantise(v.1 - v0.1)
+                                                != quantise(pts[step].1 - pts[*vi].1)
+                                        {
+                                            break;
+                                        }
+                                        run += 1;
+                                    }
+                                    let id = polygons[*pi].0;
+                                    let entry = best_delta_run.entry(id).or_insert((
+                                        0,
+                                        String::new(),
+                                        0,
+                                        0,
+                                    ));
+                                    if run > entry.0 {
+                                        *entry = (run, stream.clone(), index, *pi);
+                                    }
                                 }
-                                run += 1;
-                            }
-                            let id = polygons[*pi].0;
-                            let entry =
-                                best_delta_run.entry(id).or_insert((0, String::new(), 0, 0));
-                            if run > entry.0 {
-                                *entry = (run, stream.clone(), index, *pi);
                             }
                         }
                     }
@@ -708,11 +712,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         let mut name_ok = 0usize;
         for (id, expected) in &names {
-            if let Some(blocks) = room_params.get(id)
-                && blocks.len() == 1
-                && blocks.iter().next().map(|b| b.1.as_str()) == Some(expected.as_str())
-            {
-                name_ok += 1;
+            if let Some(blocks) = room_params.get(id) {
+                if blocks.len() == 1
+                    && blocks.iter().next().map(|b| b.1.as_str()) == Some(expected.as_str())
+                {
+                    name_ok += 1;
+                }
             }
         }
         println!(
