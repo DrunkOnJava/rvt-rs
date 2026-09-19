@@ -9,6 +9,10 @@ const projectSampleTest = projectSamplePath === null ? test.skip : test;
 const stagedDemoPath = resolveStagedDemoPath();
 const stagedDemoId = stagedDemoPath?.id ?? 'architectural-2024';
 const stagedDemoTest = stagedDemoPath === null ? test.skip : test;
+const realProjectDemoPath = path.resolve(__dirname, '../public/demos/Revit_IFC5_Einhoven.rvt');
+const realProjectDemoTest = fs.existsSync(realProjectDemoPath) ? test : test.skip;
+const largeProjectDemoPath = path.resolve(__dirname, '../public/demos/2024_Core_Interior.rvt');
+const largeProjectDemoTest = fs.existsSync(largeProjectDemoPath) ? test : test.skip;
 
 test('loads the viewer shell with disabled export actions and demo gallery', async ({ page }) => {
   await page.goto('/');
@@ -124,6 +128,57 @@ stagedDemoTest(
     expect(ifcTitle ?? '').toMatch(/Scaffold|Typed|Geometry|Diagnostic|Proxy|Unknown/i);
     expect(ifcTitle ?? '').toMatch(/elements/i);
     await expect(page.locator('#export-quality')).toContainText(/Scaffold/);
+  },
+);
+
+realProjectDemoTest(
+  'real-project demo card opens Einhoven with storeys and visible geometry',
+  async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/ready/);
+
+    const card = page.locator('[data-demo-id="einhoven-2023"]');
+    await expect(card).toBeEnabled();
+    await expect(card).toContainText(/expected:\s*Geometry/i);
+    await expect(card).toContainText(/MIT/);
+    await expect(page.locator('#demo-list [data-demo-id]').first()).toHaveAttribute(
+      'data-demo-id',
+      'einhoven-2023',
+    );
+
+    await card.click();
+    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#dropzone')).toBeHidden();
+    await expect(page.locator('#file-meta')).toContainText(/Revit_IFC5_Einhoven\.rvt/);
+    await expect(page.locator('#export-quality')).toContainText(/Geometry/);
+    await expect(page.locator('#status-panel')).toContainText(/storey/i);
+    await expect(page.locator('.tree-node.tree-storey').first()).toBeVisible();
+
+    await page.locator('#diagnostics-details summary').click();
+    await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
+    expect(await viewportScreenshotHasVisibleContent(page)).toBe(true);
+  },
+);
+
+largeProjectDemoTest(
+  'large real-project demo card opens Core Interior inside wasm32 memory',
+  async ({ page }) => {
+    // 33.7 MB, dozens of gzip members in one stream. Before the bounded
+    // inflate reservation this trapped at the 4 GiB wasm32 ceiling in
+    // ~2 s; the decode itself takes tens of seconds, hence slow().
+    test.slow();
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/ready/);
+
+    const card = page.locator('[data-demo-id="core-interior-2024"]');
+    await expect(card).toBeEnabled();
+    await card.click();
+    await expect(page.locator('#status')).toHaveText(/loaded/, { timeout: 300_000 });
+    await expect(page.locator('#status')).not.toContainText(/error|unreachable/i);
+    await expect(page.locator('#file-meta')).toContainText(/2024_Core_Interior\.rvt/);
+    await expect(page.locator('#export-quality')).toContainText(/Geometry/);
+    await expect(page.locator('.tree-node.tree-storey').first()).toBeVisible();
+    expect(await viewportScreenshotHasVisibleContent(page)).toBe(true);
   },
 );
 

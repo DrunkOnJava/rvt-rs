@@ -45,8 +45,10 @@ jobs:
 
       # Tier-1 + synthetic demos stage from in-repo corpus/tier1/ and
       # gen-fixture — no Autodesk LFS needed for Playwright MVP coverage.
-      # Magnetar project sample powers the optional real-project viewer
-      # regression (RVT_VIEWER_SAMPLE / projectSampleTest).
+      # The MIT magnetar project samples (Einhoven 2023, Core Interior
+      # 2024) are staged from this checkout as real-project gallery demos
+      # (sha256-pinned in docs/viewer-demos.json) and power the
+      # real-project viewer regression (RVT_VIEWER_SAMPLE / projectSampleTest).
       - name: Checkout public project corpus
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
