@@ -898,8 +898,15 @@ fn export_rvt_doc(
     // guard keeps the recovered set, and before
     // `apply_element_record_storeys`, whose replacement half is a
     // no-op once the storeys carry real, distinct elevations.
+    let mut level_storey_bind = crate::level_bind::LevelStoreyBind::new();
     if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
-        apply_partition_level_storeys(rf, revit_version, &mut entities, &mut building_storeys);
+        apply_partition_level_storeys(
+            rf,
+            revit_version,
+            &mut entities,
+            &mut building_storeys,
+            &mut level_storey_bind,
+        );
     }
 
     // RE-14.3 / RE-15 — shared partition ArcWall path. Production
@@ -975,6 +982,13 @@ fn export_rvt_doc(
             }
         }
     }
+
+    // #219 / RE-27 — every element whose record named exactly one
+    // Revit `Level` is contained in that Level's storey. Runs before
+    // the #213 elevation join because the file *states* this binding
+    // where the elevation join infers one, and the elevation join
+    // leaves an already-bound element alone.
+    apply_record_level_reference_storeys(&mut entities, &building_storeys, &level_storey_bind);
 
     // #213 — element-record base elevations become storey elevations,
     // then bind. Runs after every element source has contributed so it
@@ -1182,6 +1196,7 @@ fn apply_partition_level_storeys(
     revit_version: u32,
     entities: &mut [entities::IfcEntity],
     building_storeys: &mut Vec<Storey>,
+    level_storey_bind: &mut crate::level_bind::LevelStoreyBind,
 ) {
     let Ok(levels) = crate::partition_level_records::recover_partition_levels(rf, revit_version)
     else {
@@ -1197,11 +1212,117 @@ fn apply_partition_level_storeys(
     }
     *building_storeys = levels
         .into_iter()
-        .map(|level| Storey {
-            name: level.name,
-            elevation_feet: level.elevation_feet,
+        .enumerate()
+        .map(|(index, level)| {
+            // The Level's own ElementId is what a building element's
+            // record names (#219, RE-27), so the storey it became is
+            // reachable by id rather than by rank or elevation.
+            level_storey_bind.record_level(Some(level.element_id), index);
+            Storey {
+                name: level.name,
+                elevation_feet: level.elevation_feet,
+            }
         })
         .collect();
+}
+
+/// Value of [`STOREY_BIND_SOURCE_PROPERTY`] for the #219 join.
+pub(crate) const STOREY_BIND_RECORD_LEVEL_REFERENCE: &str = "record_level_reference";
+
+/// #219 / RE-27: contain each element in the storey of the Revit
+/// `Level` its partition element record names.
+///
+/// The record's counted reference list at `+0x88` carries the host
+/// Level as a plain ElementId slot;
+/// [`crate::element_record_level_refs::unique_level_reference`] accepts
+/// it only when exactly one recovered Level is named, so a column or
+/// wall that carries both a base and a top constraint resolves to
+/// nothing and keeps whatever the elevation join gives it.
+///
+/// Fail closed twice more here:
+///
+/// - a named Level that is not in `level_storey_bind` — which holds
+///   only the fifteen Levels #218's recovery validated — binds nothing;
+/// - an index outside `building_storeys` binds nothing.
+///
+/// Measured on `2024_Core_Interior.rvt` against the #213 / #212
+/// elevation join, over every element both joins answer: 537 of 537
+/// agree, 0 disagree. See
+/// `reports/element-framing/RE-27-level-reference-storey-bind.md`.
+fn apply_record_level_reference_storeys(
+    entities: &mut [entities::IfcEntity],
+    building_storeys: &[Storey],
+    level_storey_bind: &crate::level_bind::LevelStoreyBind,
+) {
+    if level_storey_bind.is_empty() {
+        return;
+    }
+    for entity in entities.iter_mut() {
+        let Some(level_id) = record_level_element_id(entity) else {
+            continue;
+        };
+        let Some(index) = level_storey_bind.storey_index_for_level_id(level_id) else {
+            continue;
+        };
+        if index >= building_storeys.len() {
+            continue;
+        }
+        if let entities::IfcEntity::BuildingElement {
+            storey_index,
+            property_set,
+            ..
+        } = entity
+        {
+            *storey_index = Some(index);
+            if let Some(set) = property_set.as_mut() {
+                set.properties.push(entities::Property {
+                    name: STOREY_BIND_SOURCE_PROPERTY.into(),
+                    value: entities::PropertyValue::Text(STOREY_BIND_RECORD_LEVEL_REFERENCE.into()),
+                });
+            }
+        }
+    }
+}
+
+/// How an emitted element reached its storey, when it reached one.
+fn storey_bind_source(entity: &entities::IfcEntity) -> Option<&str> {
+    let entities::IfcEntity::BuildingElement { property_set, .. } = entity else {
+        return None;
+    };
+    property_set
+        .as_ref()?
+        .properties
+        .iter()
+        .find_map(|property| {
+            if property.name != STOREY_BIND_SOURCE_PROPERTY {
+                return None;
+            }
+            match &property.value {
+                entities::PropertyValue::Text(text) => Some(text.as_str()),
+                _ => None,
+            }
+        })
+}
+
+/// The host `Level` ElementId an emitted element carries, when its
+/// record named exactly one (#219, RE-27).
+fn record_level_element_id(entity: &entities::IfcEntity) -> Option<u32> {
+    let entities::IfcEntity::BuildingElement { property_set, .. } = entity else {
+        return None;
+    };
+    property_set
+        .as_ref()?
+        .properties
+        .iter()
+        .find_map(|property| {
+            if property.name != crate::element_record_level_refs::LEVEL_ELEMENT_ID_PROPERTY {
+                return None;
+            }
+            match property.value {
+                entities::PropertyValue::Integer(value) => u32::try_from(value).ok(),
+                _ => None,
+            }
+        })
 }
 
 /// #213: derive storey elevations from the element-record bounding-box
@@ -1260,6 +1381,17 @@ fn apply_element_record_storeys(
     }
 
     for entity in entities.iter_mut() {
+        // An element the #219 reference join already placed keeps that
+        // storey: the file states it, this join infers it.
+        if matches!(
+            entity,
+            entities::IfcEntity::BuildingElement {
+                storey_index: Some(_),
+                ..
+            }
+        ) {
+            continue;
+        }
         let Some((elevation, bind_source)) = record_storey_bind_elevation_feet(entity) else {
             continue;
         };
@@ -1855,9 +1987,21 @@ pub fn build_export_diagnostics_with_limits(
             .filter(|storey| storey.name.starts_with("Elevation "))
             .count();
         let named = model.building_storeys.len() - elevation_fallback;
-        if named > 0 {
+        // #219 / RE-27: how many elements reached their storey through
+        // the Level ElementId their record names, rather than through
+        // an inferred elevation match.
+        let level_reference_bound = model
+            .entities
+            .iter()
+            .filter(|entity| storey_bind_source(entity) == Some(STOREY_BIND_RECORD_LEVEL_REFERENCE))
+            .count();
+        if named > 0 && level_reference_bound == 0 {
             warnings.push(format!(
                 "{named} building storey name(s) came from partition Level-like strings (RE-15/#86 via PR #117); ElementId↔Level binding is still pending."
+            ));
+        } else if named > 0 {
+            warnings.push(format!(
+                "{named} building storey name(s) came from partition Level records; {level_reference_bound} building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27), the rest through a measured elevation match."
             ));
         }
         if elevation_fallback > 0 {
@@ -2625,6 +2769,166 @@ mod tests {
             }
             _ => panic!("expected building element"),
         }
+    }
+
+    /// #219 / RE-27: a record that names exactly one recovered Level
+    /// is contained in that Level's storey, even when no face of its
+    /// bounding box is a storey elevation — which is the whole point,
+    /// because a floor plate hangs 2 in below its level and a window
+    /// sits at its sill height above it.
+    #[test]
+    fn a_named_level_reference_binds_an_element_no_elevation_join_reaches() {
+        let mut slab = record_element_of_class(3, "Floor", 30.6667);
+        slab.fields.retain(|(n, _)| n != "m_bboxHeight");
+        slab.fields.push((
+            "m_bboxHeight".into(),
+            crate::walker::InstanceField::Float {
+                value: 0.1667,
+                size: 8,
+            },
+        ));
+        // Top face 30.8333 ft — 2 in below Level 3 at 31 ft, so the
+        // #212 top-face join cannot reach it.
+        slab.fields.push((
+            crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),
+            crate::walker::InstanceField::ElementId { tag: 0, id: 20274 },
+        ));
+        let mut window = record_element_of_class(4, "Window", 35.73);
+        window.fields.push((
+            crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),
+            crate::walker::InstanceField::ElementId { tag: 0, id: 20274 },
+        ));
+
+        let mut entities = append_columns(vec![slab, window]);
+        let storeys = vec![
+            Storey {
+                name: "Level 1".into(),
+                elevation_feet: 0.0,
+            },
+            Storey {
+                name: "Level 3".into(),
+                elevation_feet: 31.0,
+            },
+        ];
+        let mut bind = crate::level_bind::LevelStoreyBind::new();
+        bind.record_level(Some(20268), 0);
+        bind.record_level(Some(20274), 1);
+        apply_record_level_reference_storeys(&mut entities, &storeys, &bind);
+
+        let bound: Vec<Option<usize>> = entities
+            .iter()
+            .map(|entity| match entity {
+                entities::IfcEntity::BuildingElement { storey_index, .. } => *storey_index,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(bound, vec![Some(1), Some(1)]);
+
+        let entities::IfcEntity::BuildingElement { property_set, .. } = &entities[0] else {
+            panic!("expected a building element");
+        };
+        assert!(
+            property_set
+                .as_ref()
+                .expect("record element carries RvtElementRecordGeometry")
+                .properties
+                .iter()
+                .any(|p| p.name == STOREY_BIND_SOURCE_PROPERTY
+                    && matches!(&p.value, entities::PropertyValue::Text(text)
+                        if text == STOREY_BIND_RECORD_LEVEL_REFERENCE)),
+            "a level-reference bind must say so rather than claim the elevation join"
+        );
+    }
+
+    /// An element that names a Level the storey set does not carry
+    /// stays unbound — the reference is never turned into an index by
+    /// rank or by proximity.
+    #[test]
+    fn an_unknown_level_reference_stays_unbound() {
+        let mut slab = record_element_of_class(3, "Floor", 30.6667);
+        slab.fields.push((
+            crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),
+            crate::walker::InstanceField::ElementId { tag: 0, id: 99_999 },
+        ));
+        let mut entities = append_columns(vec![slab]);
+        let storeys = vec![Storey {
+            name: "Level 1".into(),
+            elevation_feet: 0.0,
+        }];
+        let mut bind = crate::level_bind::LevelStoreyBind::new();
+        bind.record_level(Some(20268), 0);
+        apply_record_level_reference_storeys(&mut entities, &storeys, &bind);
+
+        match &entities[0] {
+            entities::IfcEntity::BuildingElement { storey_index, .. } => {
+                assert_eq!(*storey_index, None);
+            }
+            _ => panic!("expected building element"),
+        }
+    }
+
+    /// The level-reference join runs before the elevation join and
+    /// must not be undone by it: an element the reference placed keeps
+    /// that storey and that bind source.
+    #[test]
+    fn the_elevation_join_leaves_a_level_reference_bind_alone() {
+        let mut slab = record_element_of_class(3, "Floor", 30.6667);
+        slab.fields.retain(|(n, _)| n != "m_bboxHeight");
+        slab.fields.push((
+            "m_bboxHeight".into(),
+            crate::walker::InstanceField::Float {
+                value: 0.1667,
+                size: 8,
+            },
+        ));
+        slab.fields.push((
+            crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),
+            crate::walker::InstanceField::ElementId { tag: 0, id: 20274 },
+        ));
+
+        let mut entities = append_columns(vec![
+            column_record_element(1, (10.0, 10.0), 0.0),
+            column_record_element(2, (30.0, 10.0), 31.0),
+            slab,
+        ]);
+        let mut storeys = vec![
+            Storey {
+                name: "Level 1".into(),
+                elevation_feet: 0.0,
+            },
+            Storey {
+                name: "Level 3".into(),
+                elevation_feet: 31.0,
+            },
+        ];
+        let mut bind = crate::level_bind::LevelStoreyBind::new();
+        bind.record_level(Some(20274), 1);
+        apply_record_level_reference_storeys(&mut entities, &storeys, &bind);
+        apply_element_record_storeys(&mut entities, &mut storeys);
+
+        let bound: Vec<Option<usize>> = entities
+            .iter()
+            .map(|entity| match entity {
+                entities::IfcEntity::BuildingElement { storey_index, .. } => *storey_index,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(bound, vec![Some(0), Some(1), Some(1)]);
+        let entities::IfcEntity::BuildingElement { property_set, .. } = &entities[2] else {
+            panic!("expected a building element");
+        };
+        let sources: Vec<&str> = property_set
+            .as_ref()
+            .expect("record element carries RvtElementRecordGeometry")
+            .properties
+            .iter()
+            .filter(|p| p.name == STOREY_BIND_SOURCE_PROPERTY)
+            .filter_map(|p| match &p.value {
+                entities::PropertyValue::Text(text) => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sources, vec![STOREY_BIND_RECORD_LEVEL_REFERENCE]);
     }
 
     /// The #213 join reads the record base elevation back off an
