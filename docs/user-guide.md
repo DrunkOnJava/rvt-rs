@@ -48,6 +48,11 @@ the hosted or self-hosted static viewer; see
 1. Open <https://drunkonjava.github.io/rvt-rs/>.
 2. Drop a `.rvt`, `.rfa`, `.rte`, or `.rft` file onto the page, choose a file
    with the file picker, or open a redistributable entry from the demo gallery.
+   The gallery leads with two MIT-licensed real Revit projects:
+   `Revit_IFC5_Einhoven.rvt` (2023, 913 KB, opens in about half a second) and
+   `2024_Core_Interior.rvt` (2024, 33.7 MB, about 28 seconds to decode in a
+   headless browser — the tab is not stuck, it is parsing). Everything below
+   them is a 20 KB synthetic that decodes to a scaffold only.
 3. Read the File status panel and export-quality label before exporting anything.
 4. Use Diagnostics details or Download diagnostics when the status panel reports
    warnings, partial decode, unsupported model layout, or scaffold-only export.
@@ -73,6 +78,9 @@ schema-field Walls, typed Door/Window host binding, Level ElementId storey
 assignment for Rooms, door and window bodies, the profile of the 20 rotated
 shading plates, and compound-layer geometry — see
 [status.md](status.md) and [supported-profile.md](supported-profile.md).
+Storey containment reaches 801 of 872 building elements; the 71 that bind to
+nothing are 46 record-backed plates, 18 spaces, 6 windows and 1 wall (#33,
+#219).
 
 The viewer can show a scene, categories, element info, schedule summary, export
 quality, a demo gallery with license/provenance, and a supported-profile matrix.
