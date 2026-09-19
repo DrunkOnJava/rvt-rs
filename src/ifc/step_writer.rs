@@ -1525,6 +1525,12 @@ impl StepWriter {
         }
 
         let mut per_storey_elements: Vec<Vec<usize>> = vec![Vec::new(); storeys.len()];
+        // #219: elements no storey join reached. They are contained in
+        // the `IfcBuilding` rather than in whichever storey happens to
+        // be first — "somewhere in this building" is the honest claim,
+        // and putting them on a named storey would state a containment
+        // nothing measured.
+        let mut unplaced_elements: Vec<usize> = Vec::new();
         // Track (element_id, material_index) pairs so we can emit
         // IfcRelAssociatesMaterial per material after the element
         // loop completes.
@@ -1563,13 +1569,14 @@ impl StepWriter {
                 representation_map_index,
             } = entity
             {
-                // Clamp out-of-range indices to storey[0] rather than
-                // silently dropping the element. Out-of-range is a
-                // caller bug; losing the element would be worse.
-                let idx = storey_index
-                    .unwrap_or(0)
-                    .min(storeys.len().saturating_sub(1));
-                let placement_parent = storey_placements[idx];
+                // An out-of-range index is a caller bug; treat it as
+                // unbound rather than silently dropping the element or
+                // pinning it to an unrelated storey.
+                let idx = storey_index.filter(|index| *index < storeys.len());
+                let placement_parent = match idx {
+                    Some(index) => storey_placements[index],
+                    None => building_placement,
+                };
                 // Decide whether to emit a per-element axis placement
                 // (with real origin + rotation) or share the project-
                 // level identity placement. Sharing keeps byte counts
@@ -1787,7 +1794,10 @@ impl StepWriter {
                     make_guid(el_id),
                 );
                 self.emit_entity(el_id, line);
-                per_storey_elements[idx].push(el_id);
+                match idx {
+                    Some(index) => per_storey_elements[index].push(el_id),
+                    None => unplaced_elements.push(el_id),
+                }
                 entity_index_to_el_id[entity_idx] = Some(el_id);
                 // IFC-30 / IFC-28: precedence order for material
                 // association is profile_set > layer_set > single
@@ -2072,11 +2082,19 @@ impl StepWriter {
         // storey_placements[idx] instead of this scalar binding.
         let _ = storey_placement;
 
-        for (idx, element_ids) in per_storey_elements.iter().enumerate() {
+        for (idx, element_ids) in per_storey_elements
+            .iter()
+            .enumerate()
+            .map(|(idx, ids)| (Some(idx), ids))
+            .chain(std::iter::once((None, &unplaced_elements)))
+        {
             if element_ids.is_empty() {
                 continue;
             }
-            let target_storey = storey_ids[idx];
+            let target_storey = match idx {
+                Some(index) => storey_ids[index],
+                None => building_id,
+            };
             let rel_id = self.id();
             let refs_list = element_ids
                 .iter()

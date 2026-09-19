@@ -333,15 +333,28 @@ fn synthetic_project_emits_valid_ifc4() {
     );
 
     // --- Containment rels group elements by storey ---
-    // 9 elements on Ground (storey 0, incl. the None → default),
-    // 1 element on Second Floor (storey 1, the East Wall),
-    // 0 on Roof Deck → 2 IfcRelContainedInSpatialStructure
-    // entities. If you move an element between storeys, update
-    // this count.
+    // 8 elements on Ground (storey 0), 1 on Second Floor (storey 1,
+    // the East Wall), 0 on Roof Deck, and 1 element with no storey at
+    // all — which is contained in the IfcBuilding rather than dropped
+    // into Ground (#219). That is 3 IfcRelContainedInSpatialStructure
+    // entities. If you move an element between storeys, update this.
     assert_eq!(
         step.matches("IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(),
-        2,
-        "expect 2 containment rels (Ground + Second)"
+        3,
+        "expect 3 containment rels (Ground + Second + the unplaced element on the building)"
+    );
+    let building_id = step
+        .lines()
+        .find_map(|line| {
+            line.split_once("=IFCBUILDING(")
+                .map(|(id, _)| id.trim_start_matches('#').to_string())
+        })
+        .expect("an IfcBuilding is emitted");
+    assert!(
+        step.lines()
+            .any(|line| line.contains("IFCRELCONTAINEDINSPATIALSTRUCTURE(")
+                && line.contains(&format!(",#{building_id});"))),
+        "the storey-less element must be contained in the building, not in a named storey"
     );
 
     // --- Named entities round-trip ---
