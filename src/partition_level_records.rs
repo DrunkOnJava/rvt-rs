@@ -527,19 +527,13 @@ pub fn scan_partition_level_ids(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(BTreeSet::new());
     }
-    let streams: Vec<String> = rf
-        .stream_names()
-        .into_iter()
-        .filter(|s| s.starts_with("Partitions/"))
-        .collect();
+    let streams = rf.partition_stream_names();
     let mut ids = BTreeSet::new();
     for stream in streams {
-        let Ok(raw) = rf.read_stream(&stream) else {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
-        let concat: Vec<u8> = chunks.into_iter().flatten().collect();
-        for record in find_level_records(&stream, &concat, declared_ids) {
+        for record in find_level_records(&stream, inflated.bytes(), declared_ids) {
             if record.is_level_element() {
                 ids.insert(record.element_id);
             }
