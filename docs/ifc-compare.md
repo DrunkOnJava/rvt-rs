@@ -33,18 +33,19 @@ Dimensions compared:
 
 ## Known divergences
 
-When a delta touches a type that is still below the RE-15 / CLASS recall
-targets, the JSON/human report attaches a note linking the open issue:
+When a delta touches a type whose recovery still has a known gap, the
+JSON/human report attaches a note naming what is recovered and the open
+issue that tracks the remainder:
 
-| IFC type | Tracking |
-|---|---|
-| `IFCWALL` | #81 RE-15-01 |
-| `IFCDOOR` | #82 RE-15-02 |
-| `IFCSLAB` | #83 RE-15-03, #87 RE-15-07 |
-| `IFCSPACE` | #84 RE-15-04, #90 RE-15-10 |
-| `IFCWINDOW` | #91 CLASS-11 |
-| `IFCMATERIALLAYERSETUSAGE` | #88 RE-15-08 |
-| `IFCOPENINGELEMENT` | #89 RE-15-09 |
+| IFC type | Recovered | Remaining gap tracked in |
+|---|---|---|
+| `IFCWALL` | Revit 2024 set exact (RE-21), joins cut back (RE-26) | #238 (31 over-trimmed ends), #23 (2024 ArcWall records) |
+| `IFCDOOR` | Revit 2024 set and host binding exact (RE-21, RE-23) | #227 (opening cut from the wall curve) |
+| `IFCSLAB` | Revit 2024 set with sketch-line profiles (RE-22, RE-25) | #219 (plate storey containment) |
+| `IFCSPACE` | name-only, placeholder body | #90 RE-15-10 |
+| `IFCWINDOW` | Revit 2024 set and host binding exact (RE-21, RE-23) | #219 (storey containment) |
+| `IFCMATERIALLAYERSETUSAGE` | nominal type thickness only | #88 RE-15-08 |
+| `IFCOPENINGELEMENT` | opening, void and fill chain per host (RE-23) | #227 (true opening cut) |
 
 Scaffold-only `rvt-ifc` exports (no typed products) will report large
 object/entity gaps versus real Revit IFCs — that is expected until the
