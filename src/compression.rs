@@ -1,8 +1,9 @@
 //! Truncated-gzip decompression for Revit streams.
 //!
 //! Revit writes standard gzip file headers (magic `1F 8B 08` + 10-byte
-//! minimum header) but omits the trailing 8-byte CRC32 + ISIZE that
-//! RFC 1952 requires. `flate2::read::GzDecoder` validates those trailing
+//! minimum header). Some streams omit the trailing CRC32 + ISIZE that
+//! RFC 1952 requires; other project streams retain both and can be verified.
+//! `flate2::read::GzDecoder` validates those trailing
 //! bytes and refuses truncated streams, so we skip the gzip header manually
 //! and pump the raw DEFLATE body through `flate2::read::DeflateDecoder`.
 
@@ -88,6 +89,10 @@ fn clean_stream_path(path: &str) -> &str {
 /// `ProjectInformation`, `PartAtom`, `BasicFileInfo`, and preview streams are
 /// never gated — they are not routed through the paged gzip reader.
 ///
+/// `Formats/Latest` has a separate content-verified recovery: normalization is
+/// accepted only when its gzip CRC32 and ISIZE validate and raw bytes do not.
+/// The path-only gate remains false for Formats.
+///
 /// Raw [`inflate_at`] / [`inflate_all_chunks`] never strip; only
 /// [`prepare_stream_for_inflate`] / [`inflate_stream_at`] /
 /// [`inflate_stream_auto`] / [`inflate_all_chunks_for_stream`] consult this gate.
@@ -145,7 +150,7 @@ pub fn strip_revit_page_checksums(data: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Return checksum-clean bytes ready for inflate when `stream_name` is gated.
+/// Return checksum-clean bytes for gated streams or checksum-verified Formats recovery.
 ///
 /// Does **not** mutate writer identity copies: [`crate::reader::RevitFile::read_stream`]
 /// still returns stored CFB bytes unchanged. Decode-path only.
@@ -155,9 +160,49 @@ pub fn prepare_stream_for_inflate<'a>(
 ) -> std::borrow::Cow<'a, [u8]> {
     if is_checksum_paged_stream(stream_name) {
         std::borrow::Cow::Owned(strip_revit_page_checksums(stored))
+    } else if clean_stream_path(stream_name) == "Formats/Latest" {
+        verified_formats_page_recovery(stored)
+            .map(std::borrow::Cow::Owned)
+            .unwrap_or(std::borrow::Cow::Borrowed(stored))
     } else {
         std::borrow::Cow::Borrowed(stored)
     }
+}
+
+/// Validate a complete gzip member, including its CRC32 and ISIZE trailer.
+/// This intentionally rejects truncated members: permissive recovery remains
+/// available through [`inflate_at`], but cannot prove page normalization.
+fn validated_gzip(data: &[u8]) -> Result<Vec<u8>> {
+    let mut decoder = flate2::read::GzDecoder::new(data);
+    let mut out = Vec::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = decoder
+            .read(&mut buf)
+            .map_err(|error| Error::Decompress(format!("gzip integrity verification: {error}")))?;
+        if n == 0 {
+            return Ok(out);
+        }
+        if out.len().saturating_add(n) > DEFAULT_MAX_INFLATE_BYTES {
+            return Err(Error::DecompressLimitExceeded(
+                "gzip integrity verification exceeded output limit".into(),
+            ));
+        }
+        out.extend_from_slice(&buf[..n]);
+    }
+}
+
+/// Recover Formats pages only when original gzip validation fails and the
+/// normalized candidate passes both checksum and uncompressed-length checks.
+/// This is a content-verified exception to the name-only strip gate, not an
+/// assumption that every large Formats stream uses the same framing.
+fn verified_formats_page_recovery(stored: &[u8]) -> Option<Vec<u8>> {
+    if stored.len() < REVIT_STORED_PAGE_BYTES || validated_gzip(stored).is_ok() {
+        return None;
+    }
+    let candidate = strip_revit_page_checksums(stored);
+    validated_gzip(&candidate).ok()?;
+    Some(candidate)
 }
 
 /// Inflate a named stored stream, stripping page checksums when
@@ -189,20 +234,21 @@ pub fn inflate_all_chunks_for_stream(stream_name: &str, stored: &[u8]) -> Vec<Ve
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChecksumTailStripping {
-    /// Finding 1 **narrow** gate: Formats/Latest never strips by default.
+    /// No name-only or checksum-verified normalization was applied.
     Disabled,
     Enabled,
 }
 
 /// Coarse integrity verdict for `Formats/Latest` after production inflate.
 ///
-/// Multipage streams stay [`FormatsIntegrityStatus::Uncertain`] while strip
-/// remains disabled — do **not** treat inflate success as completeness proof
-/// (Discussion #112 / #151 residual).
+/// Multipage streams stay [`FormatsIntegrityStatus::Uncertain`] unless a full
+/// gzip member verifies. Permissive inflate success alone is not proof.
+/// Gzip integrity does not imply complete schema or element interpretation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FormatsIntegrityStatus {
-    /// Stored length is under one full checksum page and inflate succeeded.
+    /// Single-page inflate succeeded, or a multipage gzip member's CRC and
+    /// ISIZE verified (possibly after checksum-page normalization).
     Ok,
     /// At least one full page boundary is present; completeness unverified.
     Uncertain,
@@ -233,8 +279,13 @@ impl FormatsLatestIntegrity {
     pub fn summary_line(&self) -> String {
         match self.integrity_status {
             FormatsIntegrityStatus::Ok => format!(
-                "Formats/Latest · {} stored · inflate ok · single-page",
-                self.stored_bytes
+                "Formats/Latest · {} stored · {}",
+                self.stored_bytes,
+                if self.page_boundary_detected {
+                    "gzip CRC/size verified"
+                } else {
+                    "inflate ok · single-page"
+                }
             ),
             FormatsIntegrityStatus::Uncertain => format!(
                 "Formats/Latest · {} stored · multipage integrity uncertain (strip disabled)",
@@ -248,11 +299,9 @@ impl FormatsLatestIntegrity {
     }
 }
 
-/// Diagnose `Formats/Latest` stored bytes without enabling strip.
-///
-/// Reuses [`inflate_stream_at`] / page-size helpers. Respects the narrow
-/// Finding 1 gate: [`FormatsLatestIntegrity::checksum_tail_stripping`] is
-/// always [`ChecksumTailStripping::Disabled`].
+/// Diagnose `Formats/Latest` using the same checksum-verified recovery as
+/// production reads. Streams without a validating full gzip trailer keep
+/// their prior uncertain status; the path-only gate remains disabled.
 pub fn diagnose_formats_latest_integrity(stored: &[u8]) -> FormatsLatestIntegrity {
     debug_assert!(
         !is_checksum_paged_stream(crate::streams::FORMATS_LATEST),
@@ -260,12 +309,16 @@ pub fn diagnose_formats_latest_integrity(stored: &[u8]) -> FormatsLatestIntegrit
     );
     let stored_bytes = stored.len();
     let page_boundary_detected = stored_bytes >= REVIT_STORED_PAGE_BYTES;
-    let inflate = inflate_stream_at(crate::streams::FORMATS_LATEST, stored, 0);
+    let recovered = verified_formats_page_recovery(stored);
+    let prepared = recovered.as_deref().unwrap_or(stored);
+    let inflate = inflate_at(prepared, 0);
     let inflated_bytes = inflate.as_ref().ok().map(|b| b.len());
 
-    // Multipage: completeness is unverified while strip stays disabled — even
-    // when bare inflate returns Ok (silent drift risk; #151 residual).
-    let (integrity_status, diagnostic_code) = if page_boundary_detected {
+    // A successful permissive inflate is insufficient; require the complete
+    // gzip trailer before declaring integrity for a multipage stream.
+    let verified =
+        recovered.is_some() || (page_boundary_detected && validated_gzip(stored).is_ok());
+    let (integrity_status, diagnostic_code) = if page_boundary_detected && !verified {
         (
             FormatsIntegrityStatus::Uncertain,
             Some(RVT_FORMATS_MULTIPAGE_UNVERIFIED.to_string()),
@@ -281,7 +334,11 @@ pub fn diagnose_formats_latest_integrity(stored: &[u8]) -> FormatsLatestIntegrit
         stored_bytes,
         inflated_bytes,
         page_boundary_detected,
-        checksum_tail_stripping: ChecksumTailStripping::Disabled,
+        checksum_tail_stripping: if recovered.is_some() {
+            ChecksumTailStripping::Enabled
+        } else {
+            ChecksumTailStripping::Disabled
+        },
         integrity_status,
         diagnostic_code,
     }
@@ -989,6 +1046,52 @@ mod tests {
         assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Ok);
         assert!(diag.diagnostic_code.is_none());
         assert!(!is_checksum_paged_stream("Formats/Latest"));
+    }
+
+    #[test]
+    fn formats_pages_recover_only_with_verified_gzip_trailer() {
+        let mut state = 0x1234_5678u32;
+        let payload: Vec<u8> = (0..180_000)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 16) as u8
+            })
+            .collect();
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(&payload).unwrap();
+        let gzip = encoder.finish().unwrap();
+        let paged = inject_page_checksums(&gzip);
+        assert!(validated_gzip(&paged).is_err());
+        assert_eq!(
+            inflate_stream_at("Formats/Latest", &paged, 0).unwrap(),
+            payload
+        );
+        let diag = diagnose_formats_latest_integrity(&paged);
+        assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Ok);
+        assert_eq!(diag.checksum_tail_stripping, ChecksumTailStripping::Enabled);
+        assert_eq!(diag.inflated_bytes, Some(payload.len()));
+        assert!(diag.diagnostic_code.is_none());
+
+        // A large ordinary gzip must not have arbitrary page bytes removed.
+        assert_eq!(
+            prepare_stream_for_inflate("Formats/Latest", &gzip).as_ref(),
+            gzip
+        );
+        assert_eq!(
+            diagnose_formats_latest_integrity(&gzip).integrity_status,
+            FormatsIntegrityStatus::Ok
+        );
+
+        // A damaged normalized trailer cannot authorize recovery.
+        let mut damaged = gzip;
+        let crc = damaged.len() - 8;
+        damaged[crc] ^= 1;
+        let paged = inject_page_checksums(&damaged);
+        assert!(verified_formats_page_recovery(&paged).is_none());
+        assert_eq!(
+            diagnose_formats_latest_integrity(&paged).integrity_status,
+            FormatsIntegrityStatus::Uncertain
+        );
     }
 
     #[test]

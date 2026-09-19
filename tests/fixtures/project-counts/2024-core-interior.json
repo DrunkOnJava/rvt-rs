@@ -90,11 +90,11 @@
       "source_ifc_type": "IFCSPACE",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSPACE",
-      "decoder_expected": 18,
-      "decoder_tolerance": 4,
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
       "tracking_issue": 33,
-      "unsupported_feature": "partial_element_geometry",
-      "notes": "Strict partition space-name recovers emit IFCSPACE; paired IFC has 0 spaces."
+      "unsupported_feature_absence_reason": "Production omits unbound room-name candidates before IFC export, so no room-specific unsupported feature is emitted.",
+      "notes": "Production intentionally excludes unbound partition space-name candidates; the decoder emits 0 spaces and the paired IFC witness also has 0 spaces."
     },
     "columns": {
       "status": "decoder_baseline",
@@ -135,11 +135,11 @@
       "source_ifc_type": "IFCMATERIAL",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.material_count",
-      "decoder_expected": 102,
-      "decoder_tolerance": 5,
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "Partition display-name Materials recover into IfcMaterial; compound assemblies / WallType widths remain open. Paired IFC expects only 1. Decoder baseline 102 after Finding 1 gated Partitions/Global strip (was 92±5)."
+      "notes": "Production intentionally excludes unbound partition display-name material candidates; the decoder emits 0 materials. Compound assemblies / WallType widths remain open. The independent paired IFC witness expects 1."
     },
     "units": {
       "status": "known",

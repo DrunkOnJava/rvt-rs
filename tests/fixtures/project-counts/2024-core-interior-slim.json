@@ -90,11 +90,11 @@
       "source_ifc_type": "IFCSPACE",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSPACE",
-      "decoder_expected": 18,
-      "decoder_tolerance": 4,
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
       "tracking_issue": 33,
-      "unsupported_feature": "partial_element_geometry",
-      "notes": "Strict partition space-name recovery emits 18 IFCSPACE against 116 exported spaces; recall tracked in #84 (which records 50/116 from a different export path). The named feature moved from real_file_element_geometry to partial_element_geometry on 2026-08-30: #204 gave IFCCOLUMN real bodies, so the export is no longer geometry-free, but spaces are still name-only."
+      "unsupported_feature_absence_reason": "Production omits unbound room-name candidates before IFC export, so no room-specific unsupported feature is emitted.",
+      "notes": "Production intentionally excludes unbound partition space-name candidates, so the decoder emits 0 spaces against 116 exported spaces. Recall remains tracked in #84 (which records 50/116 from a different export path). The named feature moved from real_file_element_geometry to partial_element_geometry on 2026-08-30: #204 gave IFCCOLUMN real bodies."
     },
     "columns": {
       "status": "known",
@@ -135,11 +135,11 @@
       "source_ifc_type": "IFCMATERIAL",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.material_count",
-      "decoder_expected": 102,
-      "decoder_tolerance": 5,
+      "decoder_expected": 0,
+      "decoder_tolerance": 0,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "Over-count, not under-count: partition display-name recovery yields 102 IfcMaterial against the export's 10 IfcMaterial plus 150 IfcMaterialConstituentSet / 309 IfcMaterialConstituent, which rvt-rs does not model."
+      "notes": "Production intentionally excludes unbound partition display-name material candidates; the decoder emits 0 materials. The independent export witness remains 10 IfcMaterial plus 150 IfcMaterialConstituentSet / 309 IfcMaterialConstituent, which rvt-rs does not model."
     },
     "units": {
       "status": "known",

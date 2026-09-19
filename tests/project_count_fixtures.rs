@@ -266,7 +266,24 @@ fn project_count_manifests_are_complete_and_explicit() {
                     int_field(count, "decoder_expected", &count_context);
                     int_field(count, "decoder_tolerance", &count_context);
                     int_field(count, "tracking_issue", &count_context);
-                    str_field(count, "unsupported_feature", &count_context);
+                    let feature = opt_str_field(count, "unsupported_feature");
+                    let absence_reason = opt_str_field(count, "unsupported_feature_absence_reason");
+                    match (feature, absence_reason) {
+                        (Some(feature), None) => assert!(
+                            !feature.trim().is_empty(),
+                            "{count_context}.unsupported_feature must not be empty"
+                        ),
+                        (None, Some(reason)) => assert!(
+                            !reason.trim().is_empty(),
+                            "{count_context}.unsupported_feature_absence_reason must not be empty"
+                        ),
+                        (Some(_), Some(_)) => panic!(
+                            "{count_context} must provide unsupported_feature or unsupported_feature_absence_reason, not both"
+                        ),
+                        (None, None) => panic!(
+                            "{count_context} must provide unsupported_feature or unsupported_feature_absence_reason"
+                        ),
+                    }
                 }
                 "decoder_baseline" => {
                     int_field(count, "expected", &count_context);
@@ -470,11 +487,12 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
             }
 
             if status == "known_gap" {
-                let feature = str_field(count, "unsupported_feature", &format!("{id}.{category}"));
-                assert!(
-                    unsupported.contains(feature),
-                    "{id}.{category}: expected diagnostics.unsupported_features to contain {feature}"
-                );
+                if let Some(feature) = opt_str_field(count, "unsupported_feature") {
+                    assert!(
+                        unsupported.contains(feature),
+                        "{id}.{category}: expected diagnostics.unsupported_features to contain {feature}"
+                    );
+                }
             }
         }
 

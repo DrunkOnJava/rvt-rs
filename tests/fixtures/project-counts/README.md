@@ -22,8 +22,11 @@ Count statuses are intentionally explicit:
 - `known` means the count comes from a redistributable source such as a
   gen-fixture recipe, a paired Revit IFC export, or an owner-supplied schedule.
 - `known_gap` means the source count is known, but the current decoder is
-  expected to miss it. The manifest must name the tracking issue and, when
-  applicable, the unsupported feature surfaced by export diagnostics.
+  expected to miss it. The manifest must name the tracking issue and either
+  the unsupported feature surfaced by export diagnostics or a nonempty
+  `unsupported_feature_absence_reason` when the decoder omits the candidate
+  before an unsupported feature can be emitted. These fields are mutually
+  exclusive.
 - `decoder_baseline` means the count is not an authoritative model count; it
   pins current decoder output so regressions are visible until an authoritative
   schedule or reference export is available.

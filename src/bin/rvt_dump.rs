@@ -58,7 +58,7 @@ fn run() -> anyhow::Result<()> {
         let raw = rf.read_stream(name)?;
 
         // Always write decompressed if we can
-        if let Some(decomp) = try_decompress(&raw) {
+        if let Some(decomp) = try_decompress(name, &raw) {
             let path = cli.out.join(format!("{safe}.decomp"));
             fs::write(&path, &decomp)?;
             println!(
@@ -85,7 +85,9 @@ fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn try_decompress(data: &[u8]) -> Option<Vec<u8>> {
+fn try_decompress(stream_name: &str, stored: &[u8]) -> Option<Vec<u8>> {
+    let prepared = compression::prepare_stream_for_inflate(stream_name, stored);
+    let data = prepared.as_ref();
     for off in [0, 4, 8, 16] {
         if compression::has_gzip_magic(data, off) {
             if let Ok(out) = compression::inflate_at(data, off) {
@@ -115,4 +117,27 @@ fn short_path(p: &Path) -> String {
     p.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| p.display().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flate2::{Compression, write::GzEncoder};
+    use std::io::Write;
+
+    #[test]
+    fn decompresses_partition_member_across_checksum_page() {
+        let payload = vec![0x35; compression::REVIT_PAGE_PAYLOAD_BYTES + 100];
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::none());
+        encoder.write_all(&payload).unwrap();
+        let encoded = encoder.finish().unwrap();
+        let mut stored = Vec::new();
+        for page in encoded.chunks(compression::REVIT_PAGE_PAYLOAD_BYTES) {
+            stored.extend_from_slice(page);
+            if page.len() == compression::REVIT_PAGE_PAYLOAD_BYTES {
+                stored.extend_from_slice(&[0x5a; compression::REVIT_PAGE_CHECKSUM_BYTES]);
+            }
+        }
+        assert_eq!(try_decompress("Partitions/0", &stored), Some(payload));
+    }
 }

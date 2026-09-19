@@ -1,16 +1,42 @@
 # rvt-rs
 
-**Apache-2.0 clean-room Rust/Python toolkit for inspecting Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) without a Revit installation.** Opens the OLE/CFB container, decodes Revit's truncated-gzip streams, extracts metadata and previews, parses the embedded `Formats/Latest` schema, and classifies all observed schema field encodings across an 11-release 2016–2026 reference corpus.
+**Apache-2.0 Rust/Python toolkit for inspecting Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) without a Revit installation.** Opens the OLE/CFB container, decodes Revit's truncated-gzip streams, extracts metadata and previews, parses the embedded `Formats/Latest` schema, and classifies all observed schema field encodings across an 11-release 2016–2026 reference corpus.
+
+This distribution also includes an opt-in native saved-record/world-model path
+alongside the legacy walker/exporter. The native commands are
+`rvt-native-document`, `rvt-native-scene`, `rvt-native-equipment`,
+`rvt-native-world-model`, `rvt-native-revision-diff`,
+`rvt-native-saved-scene`, and `rvt-native-network`.
+
+The native path provides bounded JSON and GLB projections for supported saved
+records, spatial context, relationships, parameters, materials, lifecycle
+state, revisions, and graphics. Unsupported records, relationships, versions,
+and geometry remain diagnostics or explicit refusals. It does not claim
+universal typed-model recovery or drop-in IFC conversion. Legacy glTF output
+omits unsupported geometry with diagnostics instead of fabricating placeholder
+meshes.
+
+See the [native format reference](docs/research/native-format-reference.md),
+[native projection status](docs/native-provenance.md), and [native world-model
+capability](docs/native-world-model-research.md). Multi-loop/non-rectangular
+curved trims, full regeneration, visibility parity, and render parity remain
+unproven.
+
+We have generated and analyzed many Revit files to discern the file structure and variation.
 
 **This is not yet a full Revit model reader.** Schema-directed instance walking has a verified `ADocument` beachhead on Revit 2024–2026 (document-level metadata only — not per-element), and `Formats/Latest` schema classification covers 100% of observed field encodings. IFC4 STEP emission produces a valid spatial tree with typed elements **when fed synthesized `DecodedElement` inputs from the test fixtures** — see `tests/fixtures/synthetic-project.ifc`.
 
 **Generic real-project typed element extraction is mostly unsolved**, with narrow partition MVP exceptions. Production `walker::iter_elements` prefers typed MVP decoders on `Global/Latest` (fail closed), merges version-gated 2023 ArcWall partition recovers, and merges fail-closed partition MVP recovers for Level / Material / Room / Floor plan-loops plus 2024 ArcWallRectOpening index rows (corpus-proven on magnetar Einhoven / Core Interior). Opening related ids are ElemTable-confirmed (still not typed Door/Window). On Revit 2024 it additionally merges partition *element records*, whose header names the element's `BuiltInCategory` outright: `OST_Walls` / `OST_Doors` / `OST_Windows` / `OST_Columns` records that carry no container reference and are marked placed instances reproduce Revit's own exported ElementId sets exactly — 360 `IfcWall`, 132 `IfcDoor`, 6 `IfcWindow`, 256 `IfcColumn` on `2024_Core_Interior.rvt`, tolerance 0, cross-witness gated (#204 / #211, `reports/element-framing/RE-21-partition-element-record-instance-rule.md`). Bodies are the record's bounding box, except for the plan profile of a slab, which is the sketch boundary its `OST_SketchLines` records close (#31, `reports/element-framing/RE-25-slab-plan-profiles.md`), and the plan run of a wall, which is the box cut back by its joins — 336 of 360 walls then match Revit's world envelope exactly, up from 27, and every column carries the section its family type declares (#215, `reports/element-framing/RE-26-world-coordinate-residuals.md`). Doors and windows are bound to their host wall (#222, RE-23); schema-field Walls remain open — diagnostic scans still find `HostObjAttr`-style candidates on `Global/Latest` for those classes. **81** per-class decoder structs ship in `elements::all_decoders()`; `MVP_TYPED_CLASSES` are consulted by `iter_elements`, while the broader registry remains a library building block. Root-cause investigation (`reports/element-framing/RE-01-synthesis.md`) found that element instance data lives in `Partitions/*` streams with a wire envelope that has only been reverse-engineered for ArcWall (2023) and opening-index (2024) subsets. Q-01 community-corpus open/scaffold validation has been run (`docs/corpus-hunt-2026-04-21.md`: 222/223 real files pass open → schema → scaffold IFC); that is not full typed model recovery. See [What does not work yet](#what-does-not-work-yet) below.
 
+The Level, Material, Room, and Floor plan-loop observations described above
+are historical diagnostic findings; unbound candidates are not promoted by the
+current production walker.
+
 **A zero-upload, client-side browser viewer ships alongside the library**, live at <https://drunkonjava.github.io/rvt-rs/>. Drop a `.rvt` / `.rfa` file onto the page — the WebAssembly build parses it in-tab, renders 3D via Three.js with orbit controls + element picking + scene tree, and offers one-click **Export glTF** / **Export IFC** / **Export plan SVG**. No upload, no account, no telemetry. CI asserts the compiled `.wasm` has zero `fetch` / `XMLHttpRequest` / `WebSocket` imports.
 
 For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). Installation paths live in [`docs/install.md`](docs/install.md). For the short support boundary, read [`docs/status.md`](docs/status.md), the supported MVP input profile in [`docs/supported-profile.md`](docs/supported-profile.md), and the executable capability matrix in [`docs/support-matrix.json`](docs/support-matrix.json) (statuses are honest ceilings, not converter-grade claims). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
 
-Rust 2024 edition (MSRV 1.85). **Eighteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.85). **Twenty-five CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `gen-fixture`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-native-scene`, `rvt-native-document`, `rvt-native-equipment`, `rvt-native-world-model`, `rvt-native-revision-diff`, `rvt-native-saved-scene`, `rvt-native-network`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -51,6 +77,10 @@ Rust 2024 edition (MSRV 1.85). **Eighteen CLIs ship** (`rvt-analyze`, `rvt-info`
 | Partition-stream wire format | not reverse-engineered | 12 RE probes in `examples/probe_*` tested five hypotheses; all refuted. `Global/ContentDocuments` identified as a structured index but its id space does not match `ElemTable`'s (6/30705 overlap). Blocker on element extraction. |
 | Scalar-Container wire format on real bytes | assumption only | L5B-09 fix assumes Vector-equivalent layout for kinds 0x01/0x02/0x04/0x05/0x07/0x0b/0x0d. Round-trip tests use synthesized bytes; no real-.rvt round-trip has been exercised. Tracked as WF-01..03. |
 | Patched CFB roundtrip for grow/shrink cases | covered | Family corpus tests cover identity, grow, shrink, multi-stream, and missing-stream patches; project-corpus tests cover identity/grow/shrink/multi while preserving unpatched streams plus GUID/history. |
+
+The Level, Material, Room, and Floor plan-loop entries in this historical table
+are diagnostic-only observations; current production output requires ownership
+evidence.
 
 ## Why the schema matters
 

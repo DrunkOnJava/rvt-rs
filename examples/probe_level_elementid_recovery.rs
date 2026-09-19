@@ -18,7 +18,7 @@ use rvt::partition_arc_walls::{
     recover_storeys_from_arc_walls, scan_partition_arc_walls_with_limits,
 };
 use rvt::partition_name_candidates::building_storey_name_candidates;
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::partition_schema_mvp::recover_partition_schema_candidates;
 use rvt::walker::WalkerLimits;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -51,7 +51,7 @@ fn main() -> rvt::Result<()> {
         println!("  storey name={:?} elev={:.4}", s.name, s.elevation_feet);
     }
 
-    let mvp = recover_partition_schema_mvp(&mut rf, bfi.version, limits)?;
+    let mvp = recover_partition_schema_candidates(&mut rf, bfi.version, limits)?;
     println!(
         "mvp levels={} floors={} rooms={}",
         mvp.levels.len(),
