@@ -77,6 +77,18 @@ for Rust crates, viewer npm dependencies, advisory ignores, and GitHub Actions
 pinning are documented in
 [`docs/supply-chain-policy.md`](docs/supply-chain-policy.md).
 
+Two CI behaviours are worth knowing before you read a red or amber check.
+The `viewer dependency audit` job retries `npm audit --audit-level=high` and
+reports `NOT MEASURED` as a warning, passing the job, when the npm advisory
+endpoint is unreachable — a measured high or critical advisory still fails it
+(#258). And CI on a pull request is deliberately narrower than on `main`: the
+bench compile-check builds with `--profile ci`, the macOS and Windows test jobs
+build `--lib --bins --tests` rather than `--all-targets`, and only the Linux
+Python wheel builds, with the full platform matrix reserved for pushes to
+`main` (pull request
+[#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
+2026-09-19).
+
 ## What's welcome
 
 - **Bug reports** with a minimal reproducer (the smallest `.rfa`
@@ -166,6 +178,14 @@ feeds it into one parser surface, and libFuzzer mutates a corpus
 looking for any input that makes the target panic, abort, time
 out, or OOM. The fuzz crate is a standalone workspace so that the
 main `cargo build` does not need nightly Rust.
+
+That isolation has a cost: `tools/check-local.sh` and the pull-request gate
+never compile `fuzz/`, so a new field on a public type the targets construct
+breaks them silently and the break only surfaces on the nightly Fuzz run. That
+is what happened when `IfcEntity::BuildingElement` gained `predefined_type` in
+#236 and `fuzz_step_writer` failed with E0063 until #259. If you add or remove
+a field on a type a fuzz target builds, run
+`cargo +nightly check --manifest-path fuzz/Cargo.toml` before pushing.
 
 To add a new fuzz target:
 

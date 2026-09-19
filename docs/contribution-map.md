@@ -13,6 +13,23 @@ AEC users without overstating current capability.
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
+## Open Remainders (as of 2026-09-19)
+
+Six roadmap issues closed on 2026-09-19 against measured evidence: wall
+geometry (#30), floor and slab geometry (#31), the IFCSLAB recall lift
+(#83), the real slab boundary profiles that replaced the rectangle (#87),
+wall instance recovery (#81), and the end-to-end MVP workflow (#66). What
+is left is narrower and each remainder is named, so pick one rather than
+re-opening a solved carrier:
+
+| Issue | Named remainder |
+|---|---|
+| [#32](https://github.com/DrunkOnJava/rvt-rs/issues/32) | Doors and windows are bound to their host wall and the void/fill chain is exact (#222); the viewer does not yet display the host relationship. The opening cut itself is [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227). |
+| [#33](https://github.com/DrunkOnJava/rvt-rs/issues/33) / [#219](https://github.com/DrunkOnJava/rvt-rs/issues/219) | Storey containment binds 801 of 872 building elements. The 71 unbound are 46 record-backed plates (a 0.1667 ft structural-slab / architectural-topping offset), 18 spaces, 6 windows (a window's base is its sill height) and 1 wall. |
+| [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) | The Revit 2024 ArcWall envelope is still undecoded; RE-21's partition element record is a different carrier and does not close it. |
+| [#86](https://github.com/DrunkOnJava/rvt-rs/issues/86) | Partition names are partial and the Level ElementId bind stays blocked by the RE-20 negative. |
+| [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | The reported sketch-to-solid pipeline is untouched for sweeps and revolves; only the closed-loop plan profile of a slab is recovered (RE-25). |
+
 ## Work That Needs Design Discussion
 
 Open or comment on an issue before starting:

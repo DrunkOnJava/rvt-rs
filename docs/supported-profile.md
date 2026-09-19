@@ -31,12 +31,18 @@ The first real-model conversion profile is intentionally narrow:
 - Schema-field Walls; typed Door vs Window host IFC (RE-19 negative — no
   reliable discriminator in the opening-index bytes / no schema-field envelope
   on current magnetar corpora). The Revit 2024 partition element-record path
-  (#211) recovers Wall / Door / Window *instances* from a different carrier;
-  their host-wall binding is still unsupported.
-- The recovered floor **boundary polygon**: record-backed slabs carry the
-  exported ElementId set, the model bounding box and a measured extrusion
-  thickness (#212, RE-22), but their plan profile is the bounding-box
-  rectangle, not the floor's real outline (#31).
+  (#211) recovers Wall / Door / Window *instances* from a different carrier,
+  and their host-wall binding is closed on that carrier (#222, RE-23: the
+  `(host wall, filling element)` pair set equals Revit's export on 138 of
+  138). What stays unsupported is a Door/Window host claim from the
+  opening-index rows themselves.
+- The plan profile of the **20 rotated shading plates**: their
+  `OST_SketchLines` boxes are axis-aligned envelopes of diagonal segments, the
+  closure declines them, and they keep the record box rectangle with
+  `ProfileResolved: false`. All 80 exported slabs do carry the boundary
+  polygon their sketch lines close (#31, RE-25, closed 2026-09-19), on top of
+  the exported ElementId set, the model bounding box and a measured extrusion
+  thickness (#212, RE-22).
 - Floor/Room storey assignment via Level ElementIds (RE-20 negative — `Level`
   absent from Formats; bind plumbing stays fail-closed / idle).
 - Compound wall-layer thicknesses, and slab extrusion depth on any path
