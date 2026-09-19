@@ -73,7 +73,11 @@ exported slabs, the plan profile their `OST_SketchLines` records close
 (#31, RE-25). Wall bodies carry the wall's real thickness and the length
 its joins leave it — 336 of 360 match Revit's own export exactly in world
 coordinates — and every column carries the section its family type declares
-(#215, RE-26). Still blocked (RE-19 / RE-20 negative on magnetar corpora):
+(#215, RE-26). Those elements land on the Revit Level their own element
+record names, so 853 of 872 exported elements on Core Interior are contained
+in a specific storey; the 19 that are not — 18 name-only spaces and one wall
+— are contained in the building rather than filed under an arbitrary storey
+(#219, RE-27). Still blocked (RE-19 / RE-20 negative on magnetar corpora):
 schema-field Walls, typed Door/Window host binding, Level ElementId storey
 assignment for Rooms, door and window bodies, the profile of the 20 rotated
 shading plates, and compound-layer geometry — see

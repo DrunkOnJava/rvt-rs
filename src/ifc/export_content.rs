@@ -521,6 +521,7 @@ fn element_record_geometry_from_decoded(
     let mut wall_trim_end = None;
     let mut type_symbol_id = None;
     let mut type_profile = (None, None);
+    let mut level_id = None;
     for (name, value) in &decoded.fields {
         match (name.as_str(), value) {
             (
@@ -551,6 +552,10 @@ fn element_record_geometry_from_decoded(
                 crate::partition_schema_mvp::TYPE_SYMBOL_FIELD,
                 InstanceField::ElementId { id, .. },
             ) => type_symbol_id = Some(*id),
+            (
+                crate::element_record_level_refs::LEVEL_REFERENCE_FIELD,
+                InstanceField::ElementId { id, .. },
+            ) => level_id = Some(*id),
             (
                 crate::partition_schema_mvp::TYPE_PROFILE_WIDTH_FIELD,
                 InstanceField::Float { value, .. },
@@ -634,13 +639,28 @@ fn element_record_geometry_from_decoded(
         },
         Property {
             name: "LevelBindResolved".into(),
-            value: PropertyValue::Boolean(false),
+            value: PropertyValue::Boolean(level_id.is_some()),
         },
         Property {
             name: "BoundingBoxHeight".into(),
             value: PropertyValue::LengthFeet(height),
         },
     ];
+    // #219 / RE-27: the host Level the record's counted reference list
+    // names. `ifc::apply_record_level_reference_storeys` reads it back
+    // off the emitted element, so the two sides share one carrier.
+    if let Some(id) = level_id {
+        properties.push(Property {
+            name: crate::element_record_level_refs::LEVEL_ELEMENT_ID_PROPERTY.into(),
+            value: PropertyValue::Integer(i64::from(id)),
+        });
+        properties.push(Property {
+            name: "LevelBindSource".into(),
+            value: PropertyValue::Text(
+                crate::element_record_level_refs::LEVEL_REFERENCE_SOURCE.into(),
+            ),
+        });
+    }
     if let Some(profile) = profile.as_ref() {
         properties.push(Property {
             name: "ProfileSource".into(),

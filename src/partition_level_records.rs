@@ -511,6 +511,43 @@ pub fn recovered_levels_are_a_storey_set(
         .all(|level| seen.insert(level.elevation_feet.to_bits()))
 }
 
+/// Every ElementId that frames a standalone Revit `Level` record.
+///
+/// Cheaper than [`scan_partition_levels`] — it skips the name /
+/// elevation blocks — and deliberately *broader*: it is the id set the
+/// #219 reference-list join tests for uniqueness, so a Level that the
+/// full recovery would drop still counts as a second named Level and
+/// keeps the join fail-closed rather than turning an ambiguous record
+/// into a confident one.
+pub fn scan_partition_level_ids(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared_ids: &BTreeSet<u32>,
+) -> Result<BTreeSet<u32>> {
+    if !supports_revit_version(revit_version) || declared_ids.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+    let streams: Vec<String> = rf
+        .stream_names()
+        .into_iter()
+        .filter(|s| s.starts_with("Partitions/"))
+        .collect();
+    let mut ids = BTreeSet::new();
+    for stream in streams {
+        let Ok(raw) = rf.read_stream(&stream) else {
+            continue;
+        };
+        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
+        let concat: Vec<u8> = chunks.into_iter().flatten().collect();
+        for record in find_level_records(&stream, &concat, declared_ids) {
+            if record.is_level_element() {
+                ids.insert(record.element_id);
+            }
+        }
+    }
+    Ok(ids)
+}
+
 /// Scan every `Partitions/*` stream for Revit `Level` elements.
 ///
 /// Returns an empty vector for unsupported releases, and an empty

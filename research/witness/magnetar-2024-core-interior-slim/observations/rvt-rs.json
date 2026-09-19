@@ -34,10 +34,10 @@
       "IFCPRODUCTDEFINITIONSHAPE": 992,
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 854,
-      "IFCPROPERTYSINGLEVALUE": 8435,
+      "IFCPROPERTYSINGLEVALUE": 9231,
       "IFCRECTANGLEPROFILEDEF": 912,
       "IFCRELAGGREGATES": 3,
-      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 13,
+      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 14,
       "IFCRELDEFINESBYPROPERTIES": 854,
       "IFCRELFILLSELEMENT": 138,
       "IFCRELVOIDSELEMENT": 138,
@@ -683,7 +683,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "3c210a6f13192c2fb25b78140e5e0950b4b28bd2d136b21cfebc4d5f5d4b9993",
+  "observation_hash_sha256": "d7821c07692450051dc6d1a7bc737f82edac24e8e50d1525be28a4f160222d84",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
@@ -698,9 +698,9 @@
     "revit_element_parameters_to_ifc_property_sets"
   ],
   "warnings": [
-    "Unsupported or incomplete geometry was reported: unsupported_geometry_curve=18, unsupported_geometry_missing_level=71, unsupported_geometry_missing_dimensions=18.",
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_curve=18, unsupported_geometry_missing_level=19, unsupported_geometry_missing_dimensions=18.",
     "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
-    "15 building storey name(s) came from partition Level-like strings (RE-15/#86 via PR #117); ElementId↔Level binding is still pending.",
+    "15 building storey name(s) came from partition Level records; 372 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27), the rest through a measured elevation match.",
     "Suppressed 18 low-confidence schema scan candidates from default export.",
     "Formats/Latest multipage integrity uncertain (checksum-page strip disabled; RVT_FORMATS_MULTIPAGE_UNVERIFIED)."
   ],

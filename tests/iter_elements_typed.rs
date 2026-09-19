@@ -500,6 +500,101 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
     }
 }
 
+/// #219 / RE-27: every emitted building element that the file gives
+/// storey evidence for is contained in a specific `IfcBuildingStorey`,
+/// and the ones it gives none for are contained in the `IfcBuilding`
+/// rather than dropped into whichever storey happens to be first.
+///
+/// Measured on `2024_Core_Interior.rvt`: 853 of 872 elements reach a
+/// storey — 372 through the `Level` ElementId their own partition
+/// element record names, 481 through the #212 / #213 elevation match.
+/// The 19 that do not are the 18 name-only `IFCSPACE` rows, which come
+/// from a partition string and carry no record at all, and one wall
+/// whose record names no single Level.
+#[test]
+fn core_interior_2024_storey_containment_is_evidence_backed() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} missing", path.display());
+        return;
+    }
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let result = rvt::ifc::RvtDocExporter
+        .export_with_diagnostics_mode_and_limits(
+            &mut rf,
+            rvt::ifc::ExportQualityMode::Geometry,
+            walker::WalkerLimits::default(),
+        )
+        .expect("geometry export");
+
+    assert_eq!(result.diagnostics.exported.building_elements, 872);
+    assert_eq!(
+        result.diagnostics.exported.storey_bound_elements, 853,
+        "storey containment regressed; re-measure before moving this number"
+    );
+
+    let mut by_source: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    let mut unbound_types: std::collections::BTreeMap<&str, usize> =
+        std::collections::BTreeMap::new();
+    for entity in &result.model.entities {
+        let rvt::ifc::entities::IfcEntity::BuildingElement {
+            ifc_type,
+            storey_index,
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if storey_index.is_none() {
+            *unbound_types.entry(ifc_type.as_str()).or_default() += 1;
+            continue;
+        }
+        let source = property_set
+            .as_ref()
+            .and_then(|set| {
+                set.properties
+                    .iter()
+                    .find(|p| p.name == "StoreyBindSource")
+                    .and_then(|p| match &p.value {
+                        rvt::ifc::entities::PropertyValue::Text(text) => Some(text.as_str()),
+                        _ => None,
+                    })
+            })
+            .expect("a bound element records how it reached its storey");
+        *by_source.entry(source).or_default() += 1;
+    }
+    assert_eq!(by_source.get("record_level_reference").copied(), Some(372));
+    assert_eq!(by_source.values().sum::<usize>(), 853);
+    assert_eq!(
+        unbound_types,
+        [("IFCSPACE", 18), ("IFCWALL", 1)].into_iter().collect(),
+        "only the name-only spaces and the one wall naming no single Level stay unbound"
+    );
+
+    // The unbound elements are contained in the IfcBuilding, never in a
+    // named storey (#219).
+    let step = rvt::ifc::write_step(&result.model);
+    let building_id = step
+        .lines()
+        .find_map(|line| {
+            line.split_once("=IFCBUILDING(")
+                .map(|(id, _)| id.trim_start_matches('#').to_string())
+        })
+        .expect("an IfcBuilding is emitted");
+    let on_building = step
+        .lines()
+        .filter(|line| line.contains("IFCRELCONTAINEDINSPATIALSTRUCTURE("))
+        .filter(|line| line.ends_with(&format!(",#{building_id});")))
+        .count();
+    assert_eq!(on_building, 1, "one containment relation holds the unbound");
+}
+
 /// #31 / RE-25: every recovered slab carries the plan profile its
 /// `OST_SketchLines` records close, and the plates whose sketch does
 /// not close carry none.
@@ -819,9 +914,11 @@ fn core_interior_2024_column_type_symbol_join() {
 
     let mut rf = RevitFile::open(&path).expect("open 2024");
     let version = rf.basic_file_info().unwrap().version;
-    let columns =
-        rvt::partition_schema_mvp::columns_from_partition_category_records(&mut rf, version)
-            .expect("columns");
+    let level_ids = rvt::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
+    let columns = rvt::partition_schema_mvp::columns_from_partition_category_records(
+        &mut rf, version, &level_ids,
+    )
+    .expect("columns");
     assert_eq!(
         columns.len(),
         256,
@@ -907,8 +1004,11 @@ fn core_interior_2024_wall_join_trimmed_bodies() {
 
     let mut rf = RevitFile::open(&path).expect("open 2024");
     let version = rf.basic_file_info().unwrap().version;
-    let walls = rvt::partition_schema_mvp::walls_from_partition_category_records(&mut rf, version)
-        .expect("walls");
+    let level_ids = rvt::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
+    let walls = rvt::partition_schema_mvp::walls_from_partition_category_records(
+        &mut rf, version, &level_ids,
+    )
+    .expect("walls");
     assert_eq!(walls.len(), 360, "the #211 instance rule still selects 360");
 
     let mut resolved = 0usize;

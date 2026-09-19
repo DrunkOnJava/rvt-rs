@@ -13,6 +13,42 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Storey containment from the Level ElementId the element record names
+  (#219, RE-27).** A partition element record's counted reference list at
+  `+0x88` — the same list RE-23 reads for a door's host wall — carries the
+  Revit `Level` that hosts the element as a plain ElementId slot. Accepted
+  only when the list names **exactly one** of the recovered Levels: a Revit
+  column or wall carries a base *and* a top constraint and both are in the
+  list, so all 344 `OST_Columns` records that name a Level name two of them
+  and resolve to nothing, keeping the elevation join they already bind
+  exactly on. Measured on `2024_Core_Interior.rvt`: where both joins answer
+  the same element they agree **537 of 537**, 0 disagreements, so the stated
+  join runs first and the inferred one fills in behind it. Containment moves
+  **801 → 853 of 872** emitted building elements — all 256 columns, 132
+  doors, 6 windows, 100 record-backed plates and 359 of 360 walls. The 46
+  plates that sat 0.1667 ft below their level at the structural-slab /
+  architectural-topping interface and the 6 windows whose record base is a
+  4.73 ft sill height are exactly what a named Level reaches and an inferred
+  elevation cannot. `LevelBindResolved` is now `true` on those elements, with
+  `LevelElementId` and `LevelBindSource` beside it; `StoreyBindSource` gains
+  `record_level_reference`. Reference side **NOT MEASURED** — the paired
+  Revit export is not in this checkout, so none of the 853 is scored against
+  Revit's own `IfcRelContainedInSpatialStructure`.
+
+### Fixed
+
+- **A storey-less element is no longer written into the first storey
+  (#219).** The STEP writer clamped a missing storey index to
+  `storey_index.unwrap_or(0)`, so on `2024_Core_Interior.rvt` 71 elements —
+  some of them plates at 185 ft — were emitted as contained in
+  `IfcBuildingStorey` `Basement 2` at −40 ft, indistinguishable from the 5
+  that belong there. Elements with no recovered storey are now contained in
+  the `IfcBuilding`, which states what rvt-rs actually knows. On that file
+  `Basement 2` drops 76 → 6 contained elements and the 19 that stay unbound —
+  18 name-only `IFCSPACE` rows recovered from partition strings with no
+  element record at all, and one wall whose record names no single Level —
+  are visibly unplaced instead of silently placed.
+
 - **Wall bodies are cut back by their joins, and the column profile comes
   from the family type (#215, RE-26).** With #232's double translation gone,
   the world-coordinate gap against Revit's own export was finally readable.
