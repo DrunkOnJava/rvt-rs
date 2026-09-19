@@ -86,6 +86,25 @@ pub struct Node {
     pub matrix: Option<[f32; 16]>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<usize>,
+    /// Application-specific payload. glTF loaders surface this as
+    /// the object's `userData`, which is how the viewer maps a
+    /// picked mesh back to its entity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extras: Option<NodeExtras>,
+}
+
+/// Identity the viewer needs on every drawable node: the
+/// `model.entities` index behind it and its IFC type. The viewer
+/// reads these as `userData.entityIndex` / `userData.ifcType` to
+/// drive picking, selection highlight, and category visibility —
+/// all three of which were inert while the nodes carried no
+/// extras at all.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NodeExtras {
+    #[serde(rename = "entityIndex")]
+    pub entity_index: usize,
+    #[serde(rename = "ifcType")]
+    pub ifc_type: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -319,8 +338,9 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
     // Per-element: one Mesh with one Primitive referencing the
     // shared accessors + the element's material index.
     let mut scene_nodes: Vec<usize> = Vec::new();
-    for ent in &model.entities {
+    for (entity_index, ent) in model.entities.iter().enumerate() {
         if let IfcEntity::BuildingElement {
+            ifc_type,
             name,
             material_index,
             location_feet,
@@ -373,6 +393,10 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
                 mesh: Some(mesh_idx),
                 matrix: Some(matrix),
                 children: Vec::new(),
+                extras: Some(NodeExtras {
+                    entity_index,
+                    ifc_type: ifc_type.clone(),
+                }),
             };
             let node_idx = doc.nodes.len();
             doc.nodes.push(node);
@@ -475,6 +499,50 @@ mod tests {
             solid_shape: None,
             representation_map_index: None,
         }
+    }
+
+    #[test]
+    fn every_element_node_carries_its_entity_index_and_ifc_type() {
+        // The viewer maps a picked mesh back to its entity through
+        // glTF node extras. Without them, picking, highlight and
+        // category visibility have nothing to match on.
+        let model = IfcModel {
+            entities: vec![
+                mk_wall("W1", Some([0.0, 0.0, 0.0]), None),
+                IfcEntity::Project {
+                    name: Some("P".into()),
+                    description: None,
+                    long_name: None,
+                },
+                mk_wall("W2", Some([5.0, 0.0, 0.0]), None),
+            ],
+            ..Default::default()
+        };
+        let (doc, _) = build_gltf(&model);
+        let extras: Vec<(usize, &str)> = doc
+            .nodes
+            .iter()
+            .map(|n| {
+                let e = n.extras.as_ref().expect("node carries extras");
+                (e.entity_index, e.ifc_type.as_str())
+            })
+            .collect();
+        // Indices are into model.entities, so the skipped Project
+        // entity at index 1 leaves a gap rather than renumbering.
+        assert_eq!(extras, vec![(0, "IFCWALL"), (2, "IFCWALL")]);
+    }
+
+    #[test]
+    fn node_extras_serialize_as_the_camel_case_keys_the_viewer_reads() {
+        let model = IfcModel {
+            entities: vec![mk_wall("W1", None, None)],
+            ..Default::default()
+        };
+        let (doc, _) = build_gltf(&model);
+        let json = serde_json::to_string(&doc).unwrap();
+        assert!(json.contains("\"extras\""));
+        assert!(json.contains("\"entityIndex\""));
+        assert!(json.contains("\"ifcType\""));
     }
 
     #[test]
