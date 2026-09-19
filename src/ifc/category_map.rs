@@ -310,12 +310,16 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// carry it are exactly the twenty `IFCSHADINGDEVICE` rows in
 /// Revit's own export, and the remaining seventy-nine plus the one
 /// `OST_BuildingPad` instance are exactly its eighty `IFCSLAB` rows.
-/// `IfcShadingDevice` declares no `PredefinedType` value rvt-rs can
-/// decode, so none is written (`$`, not an invented `.NOTDEFINED.`).
+/// `PredefinedType` follows the authoring witness (#220 rule, #235):
+/// Revit writes `.NOTDEFINED.` on all twenty `IFCSHADINGDEVICE` rows of
+/// `IFC Exports/2024_Core_Interior_slim.ifc`, the same recorded choice
+/// that moved `IFCWALL` off `.STANDARD.`. Before #235 this slot was `$`
+/// on the grounds that rvt-rs decodes no value for it; the witness is
+/// the value.
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[Mapping {
     revit_class: "IfcShadingDevice",
     ifc_type: "IFCSHADINGDEVICE",
-    predefined_type: None,
+    predefined_type: Some("NOTDEFINED"),
 }];
 
 /// Look up the IFC entity type a "IFC Export As" override value names.
@@ -355,7 +359,8 @@ mod tests {
     fn export_override_maps_the_one_proven_value() {
         let m = lookup_export_override("IfcShadingDevice").unwrap();
         assert_eq!(m.ifc_type, "IFCSHADINGDEVICE");
-        assert_eq!(m.predefined_type, None);
+        // The witness's own value on all 20 rows (#235).
+        assert_eq!(m.predefined_type, Some("NOTDEFINED"));
         // The parameter value is user-entered text.
         assert!(lookup_export_override("  ifcshadingdevice  ").is_some());
     }

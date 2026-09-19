@@ -837,7 +837,8 @@ mod tests {
                 ..
             } => {
                 assert_eq!(ifc_type, "IFCSHADINGDEVICE");
-                assert_eq!(predefined_type.as_deref(), None);
+                // The witness writes `.NOTDEFINED.` on every shading device (#235).
+                assert_eq!(predefined_type.as_deref(), Some("NOTDEFINED"));
             }
             _ => panic!("expected building element"),
         }
