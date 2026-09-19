@@ -305,31 +305,20 @@ pub fn scan_partitions_with_control(
     }
 
     let tag_to_name = load_schema_tag_map(rf).unwrap_or_default();
-    let partition_streams: Vec<String> = rf
-        .stream_names()
-        .into_iter()
-        .filter(|s| s.starts_with("Partitions/"))
-        .collect();
+    let partition_streams = rf.partition_stream_names();
 
     let mut candidates = Vec::new();
     let stream_count = partition_streams.len() as u64;
     for (index, stream) in partition_streams.into_iter().enumerate() {
         control.check()?;
         control.report(Stage::PartitionScan, index as u64, Some(stream_count));
-        let Ok(raw) = rf.read_stream(&stream) else {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
-        let mut chunk_ends = Vec::with_capacity(chunks.len());
-        let mut concat = Vec::new();
-        for chunk in &chunks {
-            concat.extend_from_slice(chunk);
-            chunk_ends.push(concat.len());
-        }
         let mut found = scan_partition_buffer(
             &stream,
-            &concat,
-            &chunk_ends,
+            inflated.bytes(),
+            inflated.chunk_ends(),
             revit_version,
             &tag_to_name,
             options,

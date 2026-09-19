@@ -196,6 +196,60 @@ pub fn inflate_all_chunks_for_stream(stream_name: &str, stored: &[u8]) -> Vec<Ve
     inflate_all_chunks(prepared.as_ref())
 }
 
+/// Every gzip member of one stored stream, inflated and concatenated.
+///
+/// Built once per stream by [`crate::reader::RevitFile::inflated_partition`]
+/// and shared by every partition consumer. Holding the concatenation
+/// (rather than the member vector) is what the scanners actually want:
+/// each of them re-joined the members itself, and the byte-at-a-time
+/// `chunks.into_iter().flatten().collect()` those sites used cost more
+/// than the inflate on a project file.
+#[derive(Debug, Default)]
+pub struct InflatedStream {
+    concat: Vec<u8>,
+    chunk_ends: Vec<usize>,
+}
+
+impl InflatedStream {
+    /// Inflate every member of `stored` and concatenate them in order.
+    pub fn from_stored(stream_name: &str, stored: &[u8]) -> Self {
+        let chunks = inflate_all_chunks_for_stream(stream_name, stored);
+        let total: usize = chunks.iter().map(|chunk| chunk.len()).sum();
+        let mut concat = Vec::with_capacity(total);
+        let mut chunk_ends = Vec::with_capacity(chunks.len());
+        for chunk in &chunks {
+            concat.extend_from_slice(chunk);
+            chunk_ends.push(concat.len());
+        }
+        Self { concat, chunk_ends }
+    }
+
+    /// The inflated members, concatenated in stored order.
+    pub fn bytes(&self) -> &[u8] {
+        &self.concat
+    }
+
+    /// End offset of each member within [`Self::bytes`].
+    pub fn chunk_ends(&self) -> &[usize] {
+        &self.chunk_ends
+    }
+
+    /// Number of inflated members.
+    pub fn chunk_count(&self) -> usize {
+        self.chunk_ends.len()
+    }
+
+    /// Iterate the members as slices of [`Self::bytes`].
+    pub fn chunks(&self) -> impl Iterator<Item = &[u8]> {
+        let mut start = 0usize;
+        self.chunk_ends.iter().map(move |end| {
+            let slice = &self.concat[start..*end];
+            start = *end;
+            slice
+        })
+    }
+}
+
 /// Whether production inflate strips checksum-page trailers for a stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]

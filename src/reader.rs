@@ -19,6 +19,7 @@ use std::{
     fs::File,
     io::{Cursor, Read},
     path::Path,
+    sync::Arc,
 };
 
 /// Default maximum file size accepted by [`RevitFile::open`].
@@ -79,6 +80,20 @@ pub struct RevitFile {
     /// `OpenLimits` passed at construction; defaults to
     /// `OpenLimits::default()` for back-compat `open`/`open_bytes`.
     limits: OpenLimits,
+    /// Memoised inflate of multi-member streams, keyed by stream path.
+    /// Every `Partitions/*` consumer (element records, arc walls, plan
+    /// loops, level records, IFC export overrides, the partition
+    /// scanner) used to read and inflate the same streams again, and a
+    /// geometry export runs a dozen of those passes over ~180 MiB of
+    /// inflated bytes. The streams are immutable for the lifetime of
+    /// the handle — `RevitFile` never writes — so one inflate serves
+    /// all of them.
+    inflated: std::collections::HashMap<String, Arc<compression::InflatedStream>>,
+    /// Memoised `Partitions/NN` string-record extraction. The UTF-16
+    /// decode over the whole partition is the single most expensive
+    /// step after inflate, and unit recovery, storey names and the
+    /// partition MVP each asked for it independently.
+    partition_strings: Option<Arc<Vec<crate::object_graph::StringRecord>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,7 +196,12 @@ impl RevitFile {
             return Err(Error::NotACfbFile);
         }
         let cfb = CompoundFile::open(Cursor::new(bytes)).map_err(|e| Error::Cfb(e.to_string()))?;
-        Ok(Self { cfb, limits })
+        Ok(Self {
+            cfb,
+            limits,
+            inflated: std::collections::HashMap::new(),
+            partition_strings: None,
+        })
     }
 
     /// Resource limits this file was opened under. Use to match
@@ -189,6 +209,49 @@ impl RevitFile {
     /// bytes.
     pub fn limits(&self) -> OpenLimits {
         self.limits
+    }
+
+    /// Read and inflate every gzip member of `name`, memoised.
+    ///
+    /// Repeat calls return the same shared buffer instead of reading
+    /// the CFB stream and inflating it again. Use this for any
+    /// multi-member stream a pipeline touches more than once —
+    /// `Partitions/*` above all, where a geometry export otherwise
+    /// inflates the same ~180 MiB a dozen times over.
+    pub fn inflated_partition(&mut self, name: &str) -> Result<Arc<compression::InflatedStream>> {
+        if let Some(cached) = self.inflated.get(name) {
+            return Ok(Arc::clone(cached));
+        }
+        let raw = self.read_stream(name)?;
+        let inflated = Arc::new(compression::InflatedStream::from_stored(name, &raw));
+        self.inflated
+            .insert(name.to_string(), Arc::clone(&inflated));
+        Ok(inflated)
+    }
+
+    /// Sorted `Partitions/*` stream paths.
+    pub fn partition_stream_names(&self) -> Vec<String> {
+        self.stream_names()
+            .into_iter()
+            .filter(|name| name.starts_with("Partitions/"))
+            .collect()
+    }
+
+    /// String records extracted from the `Partitions/NN` stream, memoised.
+    ///
+    /// See [`crate::object_graph::string_records_from_partitions`] for
+    /// what the extraction does; this is the shared-result entry point
+    /// that avoids re-running the UTF-16 decode over the whole
+    /// partition for every consumer.
+    pub fn partition_string_records(
+        &mut self,
+    ) -> Result<Arc<Vec<crate::object_graph::StringRecord>>> {
+        if let Some(cached) = &self.partition_strings {
+            return Ok(Arc::clone(cached));
+        }
+        let records = Arc::new(crate::object_graph::extract_partition_string_records(self)?);
+        self.partition_strings = Some(Arc::clone(&records));
+        Ok(records)
     }
 
     /// List all OLE stream paths (sorted). Paths are always returned

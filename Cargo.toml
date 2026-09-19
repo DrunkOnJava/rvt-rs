@@ -70,6 +70,13 @@ flate2 = "1.0"
 # UTF-16LE decoder — robust enough to recover from Revit's malformed
 # surrogate pairs (encoding_rs doesn't panic where stdlib does).
 encoding_rs = "0.8"
+# Vectorised substring search. The partition element-record sweep scans
+# every inflated `Partitions/*` byte once per BuiltInCategory — ~1 GiB
+# per project-file export — and the hand-rolled first-byte loop it
+# replaces was the second-largest cost in a geometry export. Adds no
+# crate to the build graph: `memchr` is already a normal (non-dev)
+# transitive dependency through both quick-xml and serde_json.
+memchr = "2"
 # PartAtom XML parser.
 quick-xml = { version = "0.41", features = ["serialize"] }
 # Serialisation for JSON output + test fixtures.

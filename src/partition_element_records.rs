@@ -94,7 +94,7 @@
 //! - Category membership alone is **not** an instance claim: a
 //!   family symbol carries the same category as its instances.
 
-use crate::{Result, RevitFile, compression};
+use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -530,22 +530,17 @@ pub fn find_category_records(
     out
 }
 
+/// First occurrence of `needle` in `haystack`.
+///
+/// The category sweep runs this over every inflated `Partitions/*` byte
+/// once per category, so on a project file it is ~1 GiB of searching per
+/// export. `memchr::memmem` is the vectorised form of exactly the
+/// first-byte-then-compare loop this used to spell out by hand.
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
     }
-    let first = needle[0];
-    let last = haystack.len() - needle.len();
-    let mut index = 0usize;
-    while index <= last {
-        let delta = haystack[index..=last].iter().position(|b| *b == first)?;
-        let start = index + delta;
-        if &haystack[start..start + needle.len()] == needle {
-            return Some(start);
-        }
-        index = start + 1;
-    }
-    None
+    memchr::memmem::find(haystack, needle)
 }
 
 /// Scan every `Partitions/*` stream for records in `builtin_category`.
@@ -580,23 +575,17 @@ pub fn scan_category_records_multi(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let streams: Vec<String> = rf
-        .stream_names()
-        .into_iter()
-        .filter(|s| s.starts_with("Partitions/"))
-        .collect();
+    let streams = rf.partition_stream_names();
     let mut per_category: Vec<Vec<PartitionElementRecord>> =
         vec![Vec::new(); builtin_categories.len()];
     for stream in streams {
-        let Ok(raw) = rf.read_stream(&stream) else {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let chunks = compression::inflate_all_chunks_for_stream(&stream, &raw);
-        let concat: Vec<u8> = chunks.into_iter().flatten().collect();
         for (index, category) in builtin_categories.iter().enumerate() {
             per_category[index].extend(find_category_records(
                 &stream,
-                &concat,
+                inflated.bytes(),
                 *category,
                 declared_ids,
             ));

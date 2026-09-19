@@ -1424,7 +1424,7 @@ fn apply_element_record_storeys(
 pub(crate) const UNRESOLVED_ARCWALL_THICKNESS_FEET: f64 = 8.0 / 12.0;
 
 fn collect_partition_building_storey_names(rf: &mut crate::RevitFile) -> Vec<String> {
-    let Ok(records) = crate::object_graph::string_records_from_partitions(rf) else {
+    let Ok(records) = rf.partition_string_records() else {
         return Vec::new();
     };
     crate::partition_name_candidates::building_storey_name_candidates(
@@ -1537,14 +1537,11 @@ struct UnitCandidate {
 }
 
 fn recover_project_units(rf: &mut crate::RevitFile) -> RecoveredProjectUnits {
-    let mut identifiers = Vec::new();
     // `Global/Latest` includes Forge vocabulary tables in newer files;
     // those are catalog entries, not project-selected display units.
     // The observed project unit/spec records live in `Partitions/NN`.
-    if let Ok(records) = crate::object_graph::string_records_from_partitions(rf) {
-        identifiers.extend(records.into_iter().map(|record| record.value));
-    }
-    recover_project_units_from_identifiers(identifiers)
+    let records = rf.partition_string_records().unwrap_or_default();
+    recover_project_units_from_identifiers(records.iter().map(|record| record.value.as_str()))
 }
 
 fn recover_project_units_from_identifiers<I, S>(identifiers: I) -> RecoveredProjectUnits
