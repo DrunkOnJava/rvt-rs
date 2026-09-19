@@ -291,12 +291,22 @@ pub struct FormatsLatestIntegrity {
     pub integrity_status: FormatsIntegrityStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostic_code: Option<String>,
+    /// `true` when the inflated stream is larger than
+    /// [`crate::formats::SCHEMA_SCAN_LIMIT`], so schema parsing stops before
+    /// the end of the stream. A "we stopped looking" signal — it does not
+    /// claim the unscanned tail is parseable schema.
+    #[serde(default)]
+    pub schema_scan_truncated: bool,
+    /// Bytes schema parsing would scan — `min(inflated_bytes,
+    /// SCHEMA_SCAN_LIMIT)`, or `None` when inflate failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_scanned_bytes: Option<usize>,
 }
 
 impl FormatsLatestIntegrity {
     /// Short user-facing summary for CLI / File Status rows.
     pub fn summary_line(&self) -> String {
-        match self.integrity_status {
+        let mut line = match self.integrity_status {
             FormatsIntegrityStatus::Ok => format!(
                 "Formats/Latest · {} stored · inflate ok · single-page",
                 self.stored_bytes
@@ -309,7 +319,17 @@ impl FormatsLatestIntegrity {
                 "Formats/Latest · {} stored · inflate incomplete",
                 self.stored_bytes
             ),
+        };
+        if self.schema_scan_truncated {
+            let scanned = self
+                .schema_scanned_bytes
+                .unwrap_or(crate::formats::SCHEMA_SCAN_LIMIT);
+            let total = self.inflated_bytes.unwrap_or(scanned);
+            line.push_str(&format!(
+                " · schema scan truncated ({scanned} of {total} inflated bytes scanned)"
+            ));
         }
+        line
     }
 }
 
@@ -341,6 +361,12 @@ pub fn diagnose_formats_latest_integrity(stored: &[u8]) -> FormatsLatestIntegrit
         (FormatsIntegrityStatus::Incomplete, None)
     };
 
+    // Schema parsing caps its scan at SCHEMA_SCAN_LIMIT (#188); record that the
+    // cap will apply so callers can tell "the schema fit" from "we stopped".
+    let schema_scanned_bytes = inflated_bytes.map(|n| n.min(crate::formats::SCHEMA_SCAN_LIMIT));
+    let schema_scan_truncated =
+        inflated_bytes.is_some_and(|n| n > crate::formats::SCHEMA_SCAN_LIMIT);
+
     FormatsLatestIntegrity {
         stream: crate::streams::FORMATS_LATEST.to_string(),
         stored_bytes,
@@ -349,6 +375,8 @@ pub fn diagnose_formats_latest_integrity(stored: &[u8]) -> FormatsLatestIntegrit
         checksum_tail_stripping: ChecksumTailStripping::Disabled,
         integrity_status,
         diagnostic_code,
+        schema_scan_truncated,
+        schema_scanned_bytes,
     }
 }
 
@@ -1083,6 +1111,12 @@ mod tests {
         );
         assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Ok);
         assert!(diag.diagnostic_code.is_none());
+        assert!(!diag.schema_scan_truncated);
+        assert_eq!(
+            diag.schema_scanned_bytes,
+            Some(b"formats-single-page".len())
+        );
+        assert!(!diag.summary_line().contains("schema scan truncated"));
         assert!(!is_checksum_paged_stream("Formats/Latest"));
     }
 
@@ -1127,12 +1161,33 @@ mod tests {
     }
 
     #[test]
+    fn formats_integrity_reports_schema_scan_truncation_past_limit() {
+        // Highly compressible payload: stored stays under one page while the
+        // inflated stream runs past the schema scan limit (#188).
+        let payload = vec![0u8; crate::formats::SCHEMA_SCAN_LIMIT + 4096];
+        let gzip = truncated_gzip_encode(&payload).unwrap();
+        assert!(gzip.len() < REVIT_STORED_PAGE_BYTES);
+
+        let diag = diagnose_formats_latest_integrity(&gzip);
+        assert_eq!(diag.inflated_bytes, Some(payload.len()));
+        assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Ok);
+        assert!(diag.schema_scan_truncated);
+        assert_eq!(
+            diag.schema_scanned_bytes,
+            Some(crate::formats::SCHEMA_SCAN_LIMIT)
+        );
+        assert!(diag.summary_line().contains("schema scan truncated"));
+    }
+
+    #[test]
     fn formats_integrity_garbage_under_one_page_is_incomplete() {
         let garbage = vec![0u8; 64];
         let diag = diagnose_formats_latest_integrity(&garbage);
         assert!(!diag.page_boundary_detected);
         assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Incomplete);
         assert!(diag.inflated_bytes.is_none());
+        assert!(!diag.schema_scan_truncated);
+        assert!(diag.schema_scanned_bytes.is_none());
         assert_eq!(
             diag.checksum_tail_stripping,
             ChecksumTailStripping::Disabled

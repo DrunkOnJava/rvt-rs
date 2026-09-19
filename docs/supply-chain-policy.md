@@ -39,6 +39,17 @@ High and critical npm advisories fail CI. If npm reports a lower-severity
 advisory that still affects the zero-upload/privacy posture, treat it as
 release-blocking even if `npm audit --audit-level=high` does not fail.
 
+The registry's bulk advisory endpoint answers 503 during npm maintenance
+windows, and `npm audit` then exits non-zero without having measured
+anything. The `viewer dependency audit` job retries up to four times with
+increasing backoff and, if the endpoint is still unreachable, emits a
+`NOT MEASURED` workflow warning and passes rather than failing on
+infrastructure (#258). The two cases are told apart by the output, not by the
+exit code: a measured run prints JSON containing a `vulnerabilities` key, an
+endpoint failure does not, so a measured high or critical advisory still
+fails the job. A `NOT MEASURED` run is not evidence that the dependencies are
+clean — re-run the job once the registry recovers before cutting a release.
+
 Dependabot checks `/viewer` weekly for npm updates.
 
 ## GitHub Actions

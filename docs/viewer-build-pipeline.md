@@ -2,8 +2,22 @@
 
 The Rust-side viewer data model is complete (see
 [`docs/viewer-api.md`](viewer-api.md)). This document spells out
-the remaining WASM + JavaScript + deployment work so any
-contributor picking up the frontend work has a concrete recipe.
+the WASM + JavaScript + deployment work so any contributor picking
+up the frontend work has a concrete recipe.
+
+VW1-01 through VW1-24 have shipped; the viewer is live at
+<https://drunkonjava.github.io/rvt-rs/> and the workflow below is
+`.github/workflows/deploy-viewer.yml` as built, not as proposed.
+Read the recipe as the reason each piece is shaped the way it is.
+Two later changes are not reflected in the snippets: the deploy
+workflow additionally checks out `magnetar-io/revit-test-datasets`
+with LFS into `_project_corpus/` and stages the two hash-verified
+real-project demos from it (#257), and the workflow-level concurrency
+group is proposed to become per-ref — leaving only the deploy job on
+the shared `pages` group, so two queued pull-request builds stop
+cancelling each other
+([#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
+2026-09-19).
 
 ## VW1-01 — WASM build of `rvt-core`
 
@@ -239,6 +253,21 @@ First pass: show a progress bar backed by `read_stream`'s
 per-chunk inflate; second pass needs a new
 `scene_graph::build_scene_graph_chunked` that yields
 `SceneNode`s incrementally.
+
+### wasm32 linear memory is the real ceiling
+
+Before optimising decode time here, respect the memory budget.
+wasm32 commits every page it grows and traps at 4 GiB, where a
+native allocator would back untouched capacity lazily — the same
+`2024_Core_Interior.rvt` (33.7 MB) call that peaks at 427 MB RSS
+natively grew the module to 4057 MB in 139 ms and trapped, because
+each gzip member reserved `min(4 x remaining input, 256 MiB)` and
+`inflate_all_chunks_with_limits` retains every member's buffer. The
+reservation is now capped at 1 MiB per member and the retained
+buffer trimmed (#256), which puts that file at 419 MB of linear
+memory and a 28 s browser load. Any future chunked path must keep
+the same property: bound what a member reserves, and do not hold
+more inflated buffers alive than the scene needs.
 
 ## VW1-23 — Drag-and-drop user RVT support
 

@@ -140,7 +140,12 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-release
       - name: Build
-        run: cargo build --profile ci --all-targets
+        # Linux owns the shared `ci-release` cache and compiles every
+        # target so benches and examples stay green. macOS and Windows
+        # never run benches or examples in this job, so they skip them:
+        # on windows-latest the all-targets build was 181 s of a 4.1 min
+        # job.
+        run: cargo build --profile ci ${{ runner.os == 'Linux' && '--all-targets' || '--lib --bins --tests' }}
       - name: Unit tests
         run: cargo test --profile ci --lib --bins
       - name: Doc tests
@@ -653,7 +658,11 @@ jobs:
       # function signatures, missing traits on types used in
       # benches) that `cargo test` doesn't, since benches live in
       # their own `[[bench]]` targets.
-      - run: cargo bench --no-run
+      # `--profile ci` so the shared cache, populated by the Linux test
+      # job's `--all-targets` build, serves every dependency. The default
+      # `bench` profile inherits release LTO and rebuilt the whole graph
+      # from scratch: 207 s per pull request for a compile-only check.
+      - run: cargo bench --no-run --profile ci
 
   # Q-12: reproduce the docs.rs build locally in CI.
   # docs.rs runs `cargo doc` on nightly with `--all-features` and the
@@ -689,7 +698,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Pull requests build the Linux wheel only; the full platform
+        # matrix runs on pushes to main, where the wheels are consumed.
+        # Frees two scarce macOS/Windows runners per PR without loosening
+        # the merge gate, which never required the wheel jobs.
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     steps:
       # Windows CFB stream names need the same autocrlf=false guard
       # we use for the Rust Windows integration job, or LFS-bound

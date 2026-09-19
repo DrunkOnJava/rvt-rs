@@ -17,6 +17,38 @@
       :root {
         color-scheme: dark;
         font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+        /* Surfaces and rules, lifted from the values already in use so the
+           instrument keeps its existing identity. */
+        --bg: #0b0e13;
+        --panel: #0f141b;
+        --chrome: #11161d;
+        --line: #1d2430;
+        --line-soft: #1a1f28;
+
+        /* Text */
+        --text: #d7dce3;
+        --muted: #a8b0bc;
+        --dim: #6b7584;
+
+        /* Accent and state */
+        --accent: #6bb7ff;
+        --accent-line: #2a4a6f;
+        --accent-fill: #1a3a5f;
+        --accent-fill-hi: #264f7a;
+        --ok: #45b37a;
+        --warn: #d4a24c;
+        --bad: #cc5f5f;
+        /* Real-project marker, matching the gallery thumbnail accent. */
+        --real: #7a3b1e;
+        --real-text: #e0a37d;
+
+        /* Motion: everything decelerates into place, nothing overshoots. */
+        --t-fast: 90ms;
+        --t-base: 150ms;
+        --t-slow: 260ms;
+        --ease: cubic-bezier(0.2, 0, 0.1, 1);
+        --sweep: 1.4s;
       }
       body {
         margin: 0;
@@ -451,12 +483,25 @@
       .skip-link:focus {
         top: 8px;
       }
+      /* One focus treatment for every interactive surface: a 2 px accent
+         ring, offset so it clears the element's own border. */
       :focus-visible {
-        outline: 2px solid #6bb7ff;
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 2px;
+      }
+      #diagnostics-details summary:focus-visible,
+      .category-toggle input:focus-visible,
+      .note-btn:focus-visible,
+      .support-link:focus-visible,
+      .skip-link:focus-visible {
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
       button:focus:not(:focus-visible),
       a:focus:not(:focus-visible),
+      summary:focus:not(:focus-visible),
+      input:focus:not(:focus-visible),
       .tree-node:focus:not(:focus-visible),
       .demo-card:focus:not(:focus-visible),
       select:focus:not(:focus-visible) {
@@ -491,6 +536,382 @@
       #sidebar-right h2 {
         color: #a8b0bc;
       }
+      /* ----------------------------------------------------------------
+         Microinteractions. One motif: a scan sweep marks the places the
+         machine is actually working (viewport load, busy demo card, busy
+         status line). Everything else is a 90-150 ms settle with no
+         travel beyond 2 px. All of it collapses to instant under
+         prefers-reduced-motion.
+         ---------------------------------------------------------------- */
+      @keyframes rvt-sweep {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(300%);
+        }
+      }
+      @keyframes rvt-rise {
+        from {
+          opacity: 0;
+          transform: translateY(2px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @keyframes rvt-toast-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @keyframes rvt-toast-out {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+      }
+      @keyframes rvt-pill-settle {
+        from {
+          box-shadow: 0 0 0 0 rgba(107, 183, 255, 0.4);
+        }
+        to {
+          box-shadow: 0 0 0 6px rgba(107, 183, 255, 0);
+        }
+      }
+      @keyframes rvt-flag {
+        0%,
+        100% {
+          box-shadow: inset 0 0 0 0 rgba(107, 183, 255, 0);
+        }
+        40% {
+          box-shadow: inset 0 0 0 1px var(--accent);
+        }
+      }
+
+      .sweep-rail {
+        position: relative;
+        height: 2px;
+        overflow: hidden;
+        background: var(--line);
+      }
+      .sweep-rail::after {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 33%;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        animation: rvt-sweep var(--sweep) var(--ease) infinite;
+      }
+
+      /* Viewport loading treatment — indeterminate sweep plus elapsed
+         seconds and a size-derived expectation, so a 30 s decode of a
+         33 MB project never reads as hung. */
+      #load-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 11;
+        display: grid;
+        place-items: center;
+        background: rgba(11, 14, 19, 0.93);
+      }
+      #load-overlay.hidden {
+        display: none;
+      }
+      .load-card {
+        width: min(420px, 84%);
+        padding: 14px 16px 12px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        animation: rvt-rise var(--t-slow) var(--ease) both;
+      }
+      #load-step {
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--text);
+      }
+      .load-card .sweep-rail {
+        margin: 11px 0 9px;
+      }
+      #load-metrics {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .load-privacy {
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid var(--line-soft);
+        font-size: 11px;
+        color: var(--dim);
+      }
+
+      /* Scaffold-only result: say why the canvas is bare and point at the
+         real projects, instead of letting an empty grid speak for itself. */
+      #scaffold-note {
+        position: absolute;
+        inset: 0;
+        z-index: 8;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        animation: rvt-rise var(--t-slow) var(--ease) both;
+      }
+      #scaffold-note.hidden {
+        display: none;
+      }
+      .note-card {
+        pointer-events: auto;
+        width: min(460px, 86%);
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-left: 2px solid var(--warn);
+        background: rgba(15, 20, 27, 0.95);
+      }
+      .note-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .note-card p {
+        margin: 8px 0 0;
+        max-width: 58ch;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+      .note-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .note-btn {
+        padding: 6px 12px;
+        border: 1px solid var(--accent-line);
+        border-radius: 4px;
+        background: var(--accent-fill);
+        color: var(--text);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        transition:
+          background-color var(--t-fast) var(--ease),
+          border-color var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease);
+      }
+      .note-btn:hover {
+        background: var(--accent-fill-hi);
+      }
+      .note-btn:active {
+        transform: translateY(1px);
+      }
+      .note-btn.quiet {
+        background: transparent;
+        border-color: var(--line);
+        color: var(--muted);
+      }
+      .note-btn.quiet:hover {
+        border-color: var(--accent-line);
+        color: var(--text);
+      }
+
+      /* Transient confirmations. #status keeps the running commentary;
+         toasts mark the three moments worth interrupting for. */
+      #toast-region {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        z-index: 12;
+        display: grid;
+        gap: 6px;
+        justify-items: end;
+        pointer-events: none;
+      }
+      .toast {
+        max-width: min(340px, 62%);
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-left: 2px solid var(--dim);
+        background: rgba(17, 22, 29, 0.97);
+        color: var(--text);
+        font-size: 11px;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+        animation: rvt-toast-in var(--t-slow) var(--ease) both;
+      }
+      .toast.ok {
+        border-left-color: var(--ok);
+      }
+      .toast.bad {
+        border-left-color: var(--bad);
+      }
+      .toast.leaving {
+        animation: rvt-toast-out var(--t-base) var(--ease) both;
+      }
+
+      /* Demo cards: hover / press / busy / disabled, plus a left rule and
+         badge so a real project never reads like a synthetic fixture. */
+      .demo-card {
+        position: relative;
+        border-left: 2px solid var(--line);
+        transition:
+          border-color var(--t-base) var(--ease),
+          background-color var(--t-base) var(--ease),
+          transform var(--t-fast) var(--ease);
+      }
+      .demo-card:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+      .demo-card:active:not(:disabled) {
+        transform: translateY(1px);
+        background: rgba(26, 58, 95, 0.5);
+      }
+      .demo-card:focus-visible {
+        border-color: var(--accent);
+      }
+      .demo-card[data-demo-real='true'] {
+        border-left-color: var(--real);
+      }
+      .demo-card[aria-busy='true'] {
+        cursor: progress;
+        border-color: var(--accent-line);
+      }
+      .demo-card[aria-busy='true'] .demo-title {
+        color: var(--muted);
+      }
+      .demo-card[aria-busy='true']::before {
+        content: '';
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 2px;
+        background: var(--line);
+      }
+      .demo-card[aria-busy='true']::after {
+        content: '';
+        position: absolute;
+        inset: auto auto 0 0;
+        width: 33%;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        animation: rvt-sweep var(--sweep) var(--ease) infinite;
+      }
+      .demo-card.is-flagged {
+        animation: rvt-flag 1.1s var(--ease) 2;
+      }
+      .demo-badge {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 0 5px;
+        border: 1px solid var(--real);
+        color: var(--real-text);
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        vertical-align: 1px;
+      }
+      .demo-card img {
+        transition: opacity var(--t-base) var(--ease);
+      }
+      .demo-card:disabled img,
+      .demo-card[aria-busy='true'] img {
+        opacity: 0.5;
+      }
+
+      /* Settle transitions on the panels that change on every load. */
+      .tree-node {
+        border-left: 2px solid transparent;
+        transition:
+          background-color var(--t-fast) var(--ease),
+          border-color var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease);
+      }
+      .tree-node.selected {
+        border-left-color: var(--accent);
+      }
+      .category-toggle {
+        border-radius: 2px;
+        transition:
+          background-color var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease);
+      }
+      .category-toggle:hover {
+        background: var(--line);
+      }
+      .category-toggle:focus-within {
+        background: var(--accent-fill);
+        color: #fff;
+      }
+      .category-toggle input {
+        accent-color: var(--accent);
+      }
+      .status-row {
+        animation: rvt-rise var(--t-base) var(--ease) both;
+        animation-delay: calc(var(--row-i, 0) * 22ms);
+      }
+      .status-dot {
+        transition: background-color var(--t-slow) var(--ease);
+      }
+      header .quality-pill {
+        transition:
+          border-color var(--t-slow) var(--ease),
+          background-color var(--t-slow) var(--ease),
+          color var(--t-slow) var(--ease);
+      }
+      header .quality-pill.is-updated {
+        animation: rvt-pill-settle var(--t-slow) var(--ease);
+      }
+      header .export-btn,
+      .side-btn,
+      #pick-file,
+      .support-link {
+        transition:
+          background-color var(--t-fast) var(--ease),
+          border-color var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease),
+          opacity var(--t-base) var(--ease),
+          transform var(--t-fast) var(--ease);
+      }
+      header .export-btn:active:not(:disabled),
+      .side-btn:active:not(:disabled),
+      #pick-file:active {
+        transform: translateY(1px);
+      }
+      .side-btn:hover:not(:disabled) {
+        background: var(--accent-fill-hi);
+      }
+      #status {
+        transition:
+          border-color var(--t-base) var(--ease),
+          color var(--t-base) var(--ease);
+      }
+      #status.is-busy {
+        border-color: var(--accent-line);
+        color: var(--text);
+      }
+      #status.is-busy::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 40%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        animation: rvt-sweep var(--sweep) var(--ease) infinite;
+      }
+
       @media (max-width: 960px) {
         body {
           overflow: auto;
@@ -549,9 +970,37 @@
           gap: 2px;
         }
       }
+      /* Reduced motion: every transition and animation collapses to
+         instant. The sweep rails stay as static filled bars so "working"
+         is still legible without any movement. */
       @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 1ms !important;
+          animation-delay: 0ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 1ms !important;
+          transition-delay: 0ms !important;
+        }
         #dropzone {
           transition: none;
+        }
+        .demo-card:hover:not(:disabled),
+        .demo-card:active:not(:disabled),
+        header .export-btn:active:not(:disabled),
+        .side-btn:active:not(:disabled),
+        .note-btn:active,
+        #pick-file:active {
+          transform: none;
+        }
+        .sweep-rail::after,
+        .demo-card[aria-busy='true']::after,
+        #status.is-busy::after {
+          animation: none;
+          transform: none;
+          width: 100%;
+          background: var(--accent-line);
         }
       }
     </style>
@@ -612,6 +1061,39 @@
             <div id="demo-list" role="list"></div>
           </section>
         </div>
+        <!--
+          Loading treatment. Visually indeterminate (no fake percentage —
+          the decoder cannot report one), but it carries elapsed seconds
+          and a size-derived expectation so a long decode reads as work,
+          not as a hang. aria-hidden because #status already announces
+          every worker step on the same polite channel.
+        -->
+        <div id="load-overlay" class="hidden" aria-hidden="true">
+          <div class="load-card">
+            <div id="load-step">Opening file</div>
+            <div class="sweep-rail"></div>
+            <div id="load-metrics">
+              <span id="load-elapsed">0 s elapsed</span>
+              <span id="load-hint"></span>
+            </div>
+            <div class="load-privacy">Parsed in this tab. Nothing is uploaded.</div>
+          </div>
+        </div>
+        <div id="scaffold-note" class="hidden">
+          <div class="note-card" role="note">
+            <div class="note-title">Nothing to draw</div>
+            <p id="scaffold-note-body"></p>
+            <div class="note-actions">
+              <button class="note-btn" id="show-real-projects" type="button">
+                Show real projects
+              </button>
+              <button class="note-btn quiet" id="dismiss-scaffold-note" type="button">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="toast-region" aria-live="polite" aria-atomic="false"></div>
         <div id="status" role="status" aria-live="polite">idle</div>
       </main>
       <aside id="sidebar-right" aria-label="File status and element details">

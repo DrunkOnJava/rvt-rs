@@ -151,6 +151,42 @@ use rvt::ifc::share::{ViewerState, encode_to_fragment, decode_from_fragment};
 - `decode_from_fragment(fragment) -> Option<ViewerState>` —
   strips `#`, `v=`, `#v=` prefixes.
 
+## Panic reporting and wasm32 memory
+
+Two behaviours matter only in the browser build and are easy to
+mistake for viewer bugs.
+
+**Panics reach the console.** All seven byte-opening bindings
+(`openRvtBytes`, `openRvtBytesWithLimits`,
+`openRvtBytesWithDiagnostics`,
+`openRvtBytesWithDiagnosticsAndLimits`,
+`openRvtBytesWithDiagnosticsMode`,
+`openRvtBytesWithDiagnosticsModeAndLimits`, `quickSummary`) install a
+`std::panic::set_hook` once, guarded by a `std::sync::Once`, that
+writes `rvt-rs wasm panic: <info>` through `console.error` (#256).
+The hook reports the panic message and its source location; without
+it a panic surfaced only as `RuntimeError: unreachable`. Ordinary
+parse failures are unaffected: they still return `Err(JsValue)`, which
+wasm-bindgen throws as a JS error with the `rvt::Error` text.
+
+**Decompression reserves at most 1 MiB per gzip member.**
+`inflate_at_with_limits` used to reserve
+`min(4 x remaining input, 256 MiB)` per member, and
+`inflate_all_chunks_with_limits` keeps every member's buffer alive
+in its result list, so a stream with dozens of members reserved
+O(members x stream) bytes. Native allocators back untouched capacity
+lazily — `rvt-ifc` peaked at 427 MB RSS on `2024_Core_Interior.rvt`
+(33.7 MB) — but wasm32 linear memory commits every grown page, so the
+same call grew the module to 4057 MB in 139 ms and trapped at the
+4 GiB ceiling. The reservation is now capped by
+`INITIAL_INFLATE_CAPACITY_BYTES` (1 MiB) as well as by the caller's
+output limit, and the retained buffer is `shrink_to_fit`. Measured
+after the change: Core Interior decodes under Node in 29 s at 419 MB
+of linear memory, and the viewer loads it in headless Chromium in
+28 s with 889 entities and 854 elements carrying geometry;
+`Revit_IFC5_Einhoven.rvt` dropped from 43 MB to 20 MB. Decoded bytes
+are unchanged — only the allocation strategy moved.
+
 ## Full frontend pipeline
 
 ```rust

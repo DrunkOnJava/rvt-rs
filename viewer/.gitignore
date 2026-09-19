@@ -3,4 +3,5 @@ dist/
 pkg/
 playwright-report/
 test-results/
+screenshots/
 .DS_Store

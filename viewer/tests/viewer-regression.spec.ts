@@ -131,6 +131,66 @@ stagedDemoTest(
   },
 );
 
+stagedDemoTest(
+  'scaffold-only result explains the empty viewport instead of leaving a bare grid',
+  async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#scaffold-note')).toBeHidden();
+
+    await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
+    await expect(page.locator('#status')).toHaveText(/loaded/);
+
+    // Synthetic tier1 fixtures decode with no drawable geometry; the
+    // overlay has to say so rather than leaving an empty grid to speak.
+    const note = page.locator('#scaffold-note');
+    await expect(note).toBeVisible();
+    await expect(note).toContainText(/Nothing to draw/i);
+    await expect(note).toContainText(/no element geometry/i);
+    await expect(note).toContainText(/expected result/i);
+
+    // The loading treatment tears down once the decode lands.
+    await expect(page.locator('#load-overlay')).toBeHidden();
+
+    await page.getByRole('button', { name: /^Dismiss$/ }).click();
+    await expect(note).toBeHidden();
+  },
+);
+
+stagedDemoTest('a completed load raises a toast that dismisses itself', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#status')).toHaveText(/ready/);
+
+  const region = page.locator('#toast-region');
+  await expect(region).toHaveAttribute('aria-live', 'polite');
+  await expect(region.locator('.toast')).toHaveCount(0);
+
+  await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
+  await expect(page.locator('#status')).toHaveText(/loaded/);
+
+  const toast = region.locator('.toast.ok');
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText(/Loaded/i);
+
+  // Non-blocking: it clears on its own without any user action.
+  await expect(region.locator('.toast')).toHaveCount(0, { timeout: 15_000 });
+});
+
+stagedDemoTest(
+  'reduced motion keeps the loading, toast and empty-state behaviour intact',
+  async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/ready/);
+
+    await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
+    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#load-overlay')).toBeHidden();
+    await expect(page.locator('#scaffold-note')).toBeVisible();
+    await expect(page.locator('#toast-region .toast')).toContainText(/Loaded/i);
+  },
+);
+
 realProjectDemoTest(
   'real-project demo card opens Einhoven with storeys and visible geometry',
   async ({ page }) => {
@@ -141,6 +201,13 @@ realProjectDemoTest(
     await expect(card).toBeEnabled();
     await expect(card).toContainText(/expected:\s*Geometry/i);
     await expect(card).toContainText(/MIT/);
+    // Real projects are marked so they do not read as synthetic fixtures.
+    await expect(card).toHaveAttribute('data-demo-real', 'true');
+    await expect(card.locator('.demo-badge')).toHaveText('real project');
+    await expect(page.locator('[data-demo-id="architectural-2024"]')).not.toHaveAttribute(
+      'data-demo-real',
+      'true',
+    );
     await expect(page.locator('#demo-list [data-demo-id]').first()).toHaveAttribute(
       'data-demo-id',
       'einhoven-2023',
@@ -156,7 +223,27 @@ realProjectDemoTest(
 
     await page.locator('#diagnostics-details summary').click();
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
+    // Geometry decoded, so the scaffold explainer must stay out of the way.
+    await expect(page.locator('#scaffold-note')).toBeHidden();
     expect(await viewportScreenshotHasVisibleContent(page)).toBe(true);
+  },
+);
+
+realProjectDemoTest(
+  'the scaffold explainer routes back to the real-project cards',
+  async ({ page }) => {
+    test.skip(stagedDemoPath === null, 'needs a staged synthetic demo to produce a scaffold');
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/ready/);
+
+    await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
+    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#scaffold-note')).toBeVisible();
+
+    await page.getByRole('button', { name: /Show real projects/i }).click();
+    await expect(page.locator('#scaffold-note')).toBeHidden();
+    await expect(page.locator('#dropzone')).toBeVisible();
+    await expect(page.locator('[data-demo-id="einhoven-2023"]')).toBeFocused();
   },
 );
 
@@ -173,7 +260,23 @@ largeProjectDemoTest(
     const card = page.locator('[data-demo-id="core-interior-2024"]');
     await expect(card).toBeEnabled();
     await card.click();
+
+    // A 30 s decode with a static status line reads as a hang. The
+    // overlay has to show motion, elapsed seconds and a size-derived
+    // expectation for the whole wait.
+    await expect(page.locator('#load-overlay')).toBeVisible();
+    await expect(page.locator('#load-hint')).toHaveText(/MB, about \d+ s/);
+    await expect(page.locator('#load-elapsed')).toHaveText(/^\d+ s elapsed$/);
+    await expect(card).toHaveAttribute('aria-busy', 'true');
+    await expect(page.locator('#status')).toHaveClass(/is-busy/);
+    // Elapsed actually advances rather than sitting at zero.
+    await expect(page.locator('#load-elapsed')).toHaveText(/^[1-9]\d* s elapsed$/, {
+      timeout: 15_000,
+    });
+
     await expect(page.locator('#status')).toHaveText(/loaded/, { timeout: 300_000 });
+    await expect(page.locator('#load-overlay')).toBeHidden();
+    await expect(card).not.toHaveAttribute('aria-busy', 'true');
     await expect(page.locator('#status')).not.toContainText(/error|unreachable/i);
     await expect(page.locator('#file-meta')).toContainText(/2024_Core_Interior\.rvt/);
     await expect(page.locator('#export-quality')).toContainText(/Geometry/);
