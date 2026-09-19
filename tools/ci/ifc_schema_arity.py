@@ -85,6 +85,7 @@ PREDEFINED_TYPE_REQUIRED = {
 #     IfcSpace   SPACE       116/116
 #     IfcDoor    DOOR        132/132
 #     IfcWindow  WINDOW        6/6
+#     IfcShadingDevice NOTDEFINED 20/20
 #
 # `IfcSlab` carries both values because Revit splits 78 floors from 2
 # roofs per element; rvt-rs cannot make that call yet and writes
@@ -97,6 +98,7 @@ WITNESS_PREDEFINED_TYPES = {
     "IfcSpace": {"SPACE"},
     "IfcDoor": {"DOOR"},
     "IfcWindow": {"WINDOW"},
+    "IfcShadingDevice": {"NOTDEFINED"},
 }
 
 
