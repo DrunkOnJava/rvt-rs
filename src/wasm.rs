@@ -51,11 +51,31 @@ fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
     JsValue::from_str(&e.to_string())
 }
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console, js_name = error)]
+    fn console_error(s: &str);
+}
+
+/// Route Rust panics to `console.error` so the viewer reports the
+/// panic message and source location instead of a bare
+/// `RuntimeError: unreachable` trap. Installed once, on the first
+/// byte-opening call.
+fn install_panic_hook() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        std::panic::set_hook(Box::new(|info| {
+            console_error(&format!("rvt-rs wasm panic: {info}"));
+        }));
+    });
+}
+
 /// Open an RVT / RFA byte slice and return the raw `IfcModel` as
 /// a JS object. The viewer passes this around and then calls the
 /// other bindings to derive scene graph / glTF / schedule / etc.
 #[wasm_bindgen(js_name = openRvtBytes)]
 pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let model = RvtDocExporter
         .export_with_limits(&mut rf, crate::walker::WalkerLimits::default())
@@ -66,6 +86,7 @@ pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsValue> {
 /// Open an RVT / RFA byte slice with explicit walker scan limits.
 #[wasm_bindgen(js_name = openRvtBytesWithLimits)]
 pub fn open_rvt_bytes_with_limits(bytes: &[u8], limits: JsValue) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let model = RvtDocExporter
         .export_with_limits(&mut rf, walker_limits_from_js(limits)?)
@@ -79,6 +100,7 @@ pub fn open_rvt_bytes_with_limits(bytes: &[u8], limits: JsValue) -> Result<JsVal
 /// intended for viewer bug reports and export-readiness messaging.
 #[wasm_bindgen(js_name = openRvtBytesWithDiagnostics)]
 pub fn open_rvt_bytes_with_diagnostics(bytes: &[u8]) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let result = RvtDocExporter
         .export_with_diagnostics_and_limits(&mut rf, crate::walker::WalkerLimits::default())
@@ -93,6 +115,7 @@ pub fn open_rvt_bytes_with_diagnostics_and_limits(
     bytes: &[u8],
     limits: JsValue,
 ) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let result = RvtDocExporter
         .export_with_diagnostics_and_limits(&mut rf, walker_limits_from_js(limits)?)
@@ -109,6 +132,7 @@ pub fn open_rvt_bytes_with_diagnostics_and_limits(
 /// surface honest confidence rather than over-claiming geometry.
 #[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsMode)]
 pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let result = RvtDocExporter
@@ -129,6 +153,7 @@ pub fn open_rvt_bytes_with_diagnostics_mode_and_limits(
     mode: &str,
     limits: JsValue,
 ) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let result = RvtDocExporter
@@ -148,6 +173,7 @@ pub fn open_rvt_bytes_with_diagnostics_mode_and_limits(
 /// completes. Returns a [`crate::reader::Summary`] as a JS object.
 #[wasm_bindgen(js_name = quickSummary)]
 pub fn quick_summary(bytes: &[u8]) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let summary = rf.summarize_lossy().map_err(err_str)?.value;
     serde_wasm_bindgen::to_value(&summary).map_err(err_str)
