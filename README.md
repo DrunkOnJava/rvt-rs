@@ -94,7 +94,7 @@ install/smoke-test paths.
 
 Drop a `.rvt` / `.rfa` / `.rte` / `.rft` at <https://drunkonjava.github.io/rvt-rs/> — nothing leaves the tab. The viewer compiles the core library to WebAssembly (`wasm-pack build --target web --features wasm`), runs the parse in a dedicated worker, and renders 3D via Three.js. One-click buttons export the model as **glTF 2.0 binary**, **IFC4 STEP**, or **plan-view SVG**. URL state (camera pose + category filters) is shareable via the hash fragment.
 
-The landing dropzone also includes a **demo gallery** staged from [`docs/viewer-demos.json`](docs/viewer-demos.json) (license/provenance + expected quality labels). Demo bytes are same-origin static assets only.
+The landing dropzone also includes a **demo gallery** staged from [`docs/viewer-demos.json`](docs/viewer-demos.json) (license/provenance + expected quality labels). It opens two real projects, `Revit_IFC5_Einhoven.rvt` (2023) and `2024_Core_Interior.rvt` (2024) from the MIT-licensed [magnetar-io/revit-test-datasets](https://github.com/magnetar-io/revit-test-datasets), hash-verified at staging time, alongside the tier1 synthetics. Demo bytes are same-origin static assets only.
 
 Privacy posture is CI-enforced: the deploy workflow (`.github/workflows/deploy-viewer.yml`) runs `wasm-objdump -j Import` on every build and fails if the compiled `.wasm` imports `fetch`, `XMLHttpRequest`, or `WebSocket`. See [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md).
 
