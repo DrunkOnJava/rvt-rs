@@ -16,7 +16,7 @@ real-project demos from it (#257), and the workflow-level concurrency
 group is proposed to become per-ref — leaving only the deploy job on
 the shared `pages` group, so two queued pull-request builds stop
 cancelling each other
-([#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), open as of
+([#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
 2026-09-19).
 
 ## VW1-01 — WASM build of `rvt-core`

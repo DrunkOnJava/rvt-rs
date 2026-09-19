@@ -86,7 +86,7 @@ bench compile-check builds with `--profile ci`, the macOS and Windows test jobs
 build `--lib --bins --tests` rather than `--all-targets`, and only the Linux
 Python wheel builds, with the full platform matrix reserved for pushes to
 `main` (pull request
-[#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), open as of
+[#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
 2026-09-19).
 
 ## What's welcome
