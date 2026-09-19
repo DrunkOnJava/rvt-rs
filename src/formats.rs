@@ -35,7 +35,17 @@
 use crate::Result;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Maximum number of decompressed `Formats/Latest` bytes [`parse_schema`]
+/// will scan.
+///
+/// Beyond this offset the stream carries binary object data whose bit
+/// patterns incidentally trip the class-name heuristic, so scanning further
+/// emits false-positive classes. When a stream is larger than this the parse
+/// is a "we stopped here" result, not a complete schema — see
+/// [`SchemaTable::scan_truncated`].
+pub const SCHEMA_SCAN_LIMIT: usize = 64 * 1024;
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SchemaTable {
     pub classes: Vec<ClassEntry>,
     /// Every unique C++ type signature seen in the schema (e.g.
@@ -43,6 +53,19 @@ pub struct SchemaTable {
     pub cpp_types: Vec<String>,
     /// Raw count of parse-candidates skipped for validation reasons.
     pub skipped_records: usize,
+    /// Bytes of the decompressed stream the parser actually scanned —
+    /// `min(total_bytes, SCHEMA_SCAN_LIMIT)`.
+    #[serde(default)]
+    pub scanned_bytes: usize,
+    /// Total decompressed bytes handed to [`parse_schema`].
+    #[serde(default)]
+    pub total_bytes: usize,
+    /// `true` when the scan stopped at [`SCHEMA_SCAN_LIMIT`] with bytes left
+    /// over. This records that the cap applied — it makes no claim that the
+    /// unscanned tail holds parseable schema (multi-page `Formats/Latest`
+    /// stays tracked under #151 / #154).
+    #[serde(default)]
+    pub scan_truncated: bool,
 }
 
 /// Derived diagnostic counters for a parsed [`SchemaTable`] (API-10).
@@ -532,7 +555,10 @@ fn extract_container(kind: u8, body: &[u8]) -> FieldType {
 /// The real schema lives in the first ~64 KB of the decompressed stream.
 /// Beyond that, `Formats/Latest` contains binary object data whose bit
 /// patterns incidentally trip our class-name heuristic. We cap scanning at
-/// 64 KB to avoid emitting false-positive garbage classes.
+/// [`SCHEMA_SCAN_LIMIT`] to avoid emitting false-positive garbage classes.
+/// When the cap applies, [`SchemaTable::scan_truncated`] is set along with
+/// [`SchemaTable::scanned_bytes`] / [`SchemaTable::total_bytes`] so callers
+/// can tell "the schema fit" from "we stopped looking".
 pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
     let mut classes = Vec::new();
     let mut cpp_types = std::collections::BTreeSet::new();
@@ -541,8 +567,8 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
     // Schema section is in the early portion of the stream. Scanning
     // beyond this produces false-positive class records from compressed
     // binary noise.
-    const SCHEMA_SCAN_LIMIT: usize = 64 * 1024;
-    let data = if decompressed.len() > SCHEMA_SCAN_LIMIT {
+    let scan_truncated = decompressed.len() > SCHEMA_SCAN_LIMIT;
+    let data = if scan_truncated {
         &decompressed[..SCHEMA_SCAN_LIMIT]
     } else {
         decompressed
@@ -695,6 +721,9 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
         classes,
         cpp_types: cpp_types.into_iter().collect(),
         skipped_records: skipped,
+        scanned_bytes: data.len(),
+        total_bytes: decompressed.len(),
+        scan_truncated,
     })
 }
 
@@ -949,6 +978,7 @@ mod tests {
             classes: vec![mk_class("ArcWall", Some(0x0191), Some("Wall"))],
             cpp_types: vec![],
             skipped_records: 0,
+            ..Default::default()
         };
         let (anc, tag) = schema.tagged_ancestor("ArcWall").unwrap();
         assert_eq!(anc, "ArcWall");
@@ -967,6 +997,7 @@ mod tests {
             ],
             cpp_types: vec![],
             skipped_records: 0,
+            ..Default::default()
         };
         let (anc, tag) = schema.tagged_ancestor("Wall").unwrap();
         assert_eq!(anc, "HostObjAttr");
@@ -984,6 +1015,7 @@ mod tests {
             ],
             cpp_types: vec![],
             skipped_records: 0,
+            ..Default::default()
         };
         assert!(schema.tagged_ancestor("Abstract").is_none());
     }
@@ -998,6 +1030,7 @@ mod tests {
             ],
             cpp_types: vec![],
             skipped_records: 0,
+            ..Default::default()
         };
         assert!(schema.tagged_ancestor("A").is_none());
     }
@@ -1008,6 +1041,7 @@ mod tests {
             classes: vec![mk_class("Known", Some(0x0001), None)],
             cpp_types: vec![],
             skipped_records: 0,
+            ..Default::default()
         };
         assert!(schema.tagged_ancestor("Nonexistent").is_none());
     }
@@ -1023,6 +1057,7 @@ mod tests {
             ],
             cpp_types: vec![],
             skipped_records: 0,
+            ..Default::default()
         };
         let m = schema.tagged_ancestor_map();
         assert_eq!(m.get("Wall").unwrap(), &("HostObjAttr".to_string(), 0x006b));
@@ -1036,6 +1071,49 @@ mod tests {
         );
         assert!(!m.contains_key("Unreachable"));
         assert_eq!(m.len(), 3);
+    }
+
+    /// Minimal valid schema prefix: one class with one field (#188).
+    fn tiny_schema_prefix() -> Vec<u8> {
+        let mut buf = Vec::<u8>::new();
+        buf.extend_from_slice(&[0x0d, 0x00]); // u16 len=13
+        buf.extend_from_slice(b"ACDPtrWrapper");
+        buf.extend_from_slice(&[0x00, 0x00]); // class tag
+        buf.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]); // field count u32
+        buf.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]); // index u32
+        buf.extend_from_slice(&[0x06, 0x00, 0x00, 0x00]); // field name len u32
+        buf.extend_from_slice(b"m_pACD");
+        buf
+    }
+
+    #[test]
+    fn scan_truncation_flag_unset_for_small_buffer() {
+        let buf = tiny_schema_prefix();
+        assert!(buf.len() < SCHEMA_SCAN_LIMIT);
+        let schema = parse_schema(&buf).unwrap();
+        assert!(!schema.scan_truncated);
+        assert_eq!(schema.scanned_bytes, buf.len());
+        assert_eq!(schema.total_bytes, buf.len());
+    }
+
+    #[test]
+    fn scan_truncation_flag_set_past_limit_without_changing_parse() {
+        let prefix = tiny_schema_prefix();
+        let baseline = parse_schema(&prefix).unwrap();
+
+        let mut buf = prefix.clone();
+        buf.resize(SCHEMA_SCAN_LIMIT + 4096, 0);
+        let schema = parse_schema(&buf).unwrap();
+
+        assert!(schema.scan_truncated);
+        assert_eq!(schema.scanned_bytes, SCHEMA_SCAN_LIMIT);
+        assert_eq!(schema.total_bytes, buf.len());
+        // Parsing results must not change — zero padding yields no classes.
+        assert_eq!(
+            schema.classes.iter().map(|c| &c.name).collect::<Vec<_>>(),
+            baseline.classes.iter().map(|c| &c.name).collect::<Vec<_>>()
+        );
+        assert_eq!(schema.cpp_types, baseline.cpp_types);
     }
 
     #[test]
@@ -1421,6 +1499,7 @@ mod tests {
             ],
             cpp_types: vec!["ElementId".into(), "double".into()],
             skipped_records: 7,
+            ..Default::default()
         };
         let d = table.diagnostics();
         assert_eq!(d.class_count, 3);
@@ -1440,6 +1519,7 @@ mod tests {
             classes: vec![],
             cpp_types: vec![],
             skipped_records: 0,
+            ..Default::default()
         };
         let d = table.diagnostics();
         assert_eq!(d.class_count, 0);

@@ -113,6 +113,9 @@ fn run() -> anyhow::Result<()> {
                 classes: classes.iter().map(|c| (*c).clone()).collect(),
                 cpp_types: schema.cpp_types.clone(),
                 skipped_records: schema.skipped_records,
+                scanned_bytes: schema.scanned_bytes,
+                total_bytes: schema.total_bytes,
+                scan_truncated: schema.scan_truncated,
             };
             println!("{}", serde_json::to_string_pretty(&filtered)?);
         }
@@ -128,6 +131,14 @@ fn run() -> anyhow::Result<()> {
                 println!(
                     "          ({} records skipped during parse)",
                     schema.skipped_records
+                );
+            }
+            if schema.scan_truncated {
+                println!(
+                    "          scan truncated: {} of {} decompressed bytes scanned (cap {})",
+                    schema.scanned_bytes,
+                    schema.total_bytes,
+                    rvt::formats::SCHEMA_SCAN_LIMIT
                 );
             }
             println!();
