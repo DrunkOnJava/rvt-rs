@@ -75,17 +75,21 @@ its joins leave it — the element record names the walls a wall is joined
 to, which takes 351 of 360 walls to an exact match against Revit's own
 export in world coordinates, and every column is the record prism minus
 the walls that cut it, exact on 256 of 256 (#215 / #238 / #239, RE-26 and
-RE-29). Those elements land on the Revit Level their own element record
-names, so 853 of 872 exported elements on Core Interior are contained in a
-specific storey; the 19 that are not — 18 name-only spaces and one wall —
-are contained in the building rather than filed under an arbitrary storey
-(#219, RE-27). Every wall also joins to its `IfcWallType` exactly, 360 of
-360, though that join is library-side today and is not yet written onto
-the exported wall (#88, RE-28). Still blocked (RE-19 / RE-20 negative on
-magnetar corpora): schema-field Walls, typed Door/Window host binding,
-Level ElementId storey assignment for Rooms, door and window bodies, the
-profile of the 20 rotated shading plates, and compound-layer thicknesses —
-which this corpus cannot even witness, because the reference export is a
+RE-29). Rooms come out as 116 `IFCSPACE` carrying their real Revit name,
+number and storey, with a body that is the record's bounding box — exactly
+the reference export's plan envelope and floor-to-ceiling extent on all
+116 (#90, RE-29). Those elements land on the Revit Level their own element
+record names, so 969 of 970 exported elements on Core Interior are
+contained in a specific storey; the one that is not — a wall whose record
+names no single Level — is contained in the building rather than filed
+under an arbitrary storey (#219, RE-27). Every wall also joins to its
+`IfcWallType` exactly, 360 of 360, though that join is library-side today
+and is not yet written onto the exported wall (#88, RE-28). Still blocked
+(RE-19 / RE-20 negative on magnetar corpora): schema-field Walls, typed
+Door/Window host binding, room boundary polygons — RE-29 measured that
+negative, a room record carries no sketch — door and window bodies, the
+profile of the 20 rotated shading plates, and compound-layer thicknesses,
+which this corpus cannot even witness because the reference export is a
 `ReferenceView_V1.2` file with no `IfcMaterialLayerSet` in it at all
 (#88, RE-28). See [status.md](status.md) and
 [supported-profile.md](supported-profile.md).
