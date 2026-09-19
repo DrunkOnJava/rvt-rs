@@ -926,11 +926,14 @@ fn core_interior_2024_column_type_symbol_join() {
     );
 
     let mut joined = 0usize;
+    let mut cut = 0usize;
     for column in &columns {
         let mut symbol = None;
         let mut section = (None, None);
         let mut width = None;
         let mut depth = None;
+        let mut cut_source = None;
+        let mut cut_walls = None;
         for (name, value) in &column.fields {
             match (name.as_str(), value) {
                 (
@@ -951,6 +954,18 @@ fn core_interior_2024_column_type_symbol_join() {
                 ("m_bboxDepth", walker::InstanceField::Float { value, .. }) => {
                     depth = Some(*value);
                 }
+                (
+                    rvt::element_record_column_cuts::COLUMN_BODY_SOURCE_FIELD,
+                    walker::InstanceField::String(text),
+                ) => {
+                    cut_source = Some(text.clone());
+                }
+                (
+                    rvt::element_record_column_cuts::COLUMN_CUT_WALL_COUNT_FIELD,
+                    walker::InstanceField::Integer { value, .. },
+                ) => {
+                    cut_walls = Some(*value);
+                }
                 _ => {}
             }
         }
@@ -964,21 +979,55 @@ fn core_interior_2024_column_type_symbol_join() {
             section.0.expect("width travels with the join"),
             section.1.expect("depth travels with the join"),
         );
-        // The guard the join ships with: the type's section and the
-        // instance's plan envelope must agree, or the join is dropped.
-        assert!(
-            (section_width - width.expect("bbox width")).abs() < 1e-6
-                && (section_depth - depth.expect("bbox depth")).abs() < 1e-6,
-            "column {:?}: section {section_width} x {section_depth} disagrees with its envelope",
-            column.id
-        );
+        let (width, depth) = (width.expect("bbox width"), depth.expect("bbox depth"));
         assert!(
             (section_width - 2.0).abs() < 1e-6 && (section_depth - 2.0).abs() < 1e-6,
             "the 24\" x 24\" symbol is a 2 ft square"
         );
+        match cut_source {
+            None => {
+                // The guard the join ships with: the type's section and
+                // the instance's plan envelope must agree, or the join
+                // is dropped.
+                assert!(
+                    (section_width - width).abs() < 1e-6 && (section_depth - depth).abs() < 1e-6,
+                    "column {:?}: section {section_width} x {section_depth} disagrees with its envelope",
+                    column.id
+                );
+                assert_eq!(cut_walls, None, "an uncut column reports no cutters");
+            }
+            Some(source) => {
+                // #239: the walls the record names cut the prism, so
+                // the emitted rectangle is the remainder and is
+                // strictly inside the family section on at least one
+                // plan axis. The section itself still travels with the
+                // element as the type's own fact.
+                assert_eq!(
+                    source,
+                    rvt::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
+                );
+                assert!(
+                    width <= section_width + 1e-9 && depth <= section_depth + 1e-9,
+                    "column {:?}: a cut never grows the section",
+                    column.id
+                );
+                assert!(
+                    (section_width - width).abs() > 1e-6 || (section_depth - depth).abs() > 1e-6,
+                    "column {:?}: a recorded cut must change the plan extents",
+                    column.id
+                );
+                assert!(
+                    cut_walls.unwrap_or(0) >= 1,
+                    "column {:?}: a cut names the walls that made it",
+                    column.id
+                );
+                cut += 1;
+            }
+        }
         joined += 1;
     }
     assert_eq!(joined, 256, "every recovered column names its type symbol");
+    assert_eq!(cut, 80, "80 of the 256 are cut back by the walls they join");
 }
 
 /// RE-26: a wall's record box is the untrimmed prism and the joins cut
@@ -1081,7 +1130,147 @@ fn core_interior_2024_wall_join_trimmed_bodies() {
         }
     }
     assert_eq!(resolved, 360, "no wall declines its joins on this file");
-    assert_eq!(trimmed, 329, "329 walls are cut at one end or both");
+    // #238: 329 before the reference-list membership predicate. The
+    // seven walls that drop out are the ones whose records name no
+    // other wall at all, and Revit leaves every one of them at full
+    // length (RE-29 §2).
+    assert_eq!(trimmed, 322, "322 walls are cut at one end or both");
+}
+
+/// #239 / RE-29 §5: the walls a column's counted reference list names
+/// cut its prism, and the plan rectangle that is left reproduces the
+/// plan-extent histogram of Revit's own exported column bodies —
+/// 176 × (2.0 × 2.0), 38 × (1.6667 × 1.6667), 20 × (1.75 × 1.6667),
+/// 18 × (1.4167 × 1.6667), 4 × (2.0 × 1.6667) ft.
+#[test]
+fn core_interior_2024_column_join_cut_plan_extents() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} missing", path.display());
+        return;
+    }
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    let level_ids = rvt::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
+    let columns = rvt::partition_schema_mvp::columns_from_partition_category_records(
+        &mut rf, version, &level_ids,
+    )
+    .expect("columns");
+    assert_eq!(columns.len(), 256);
+
+    let mut histogram: std::collections::BTreeMap<(i64, i64), usize> =
+        std::collections::BTreeMap::new();
+    for column in &columns {
+        let mut width = None;
+        let mut depth = None;
+        for (name, value) in &column.fields {
+            match (name.as_str(), value) {
+                ("m_bboxWidth", walker::InstanceField::Float { value, .. }) => {
+                    width = Some(*value);
+                }
+                ("m_bboxDepth", walker::InstanceField::Float { value, .. }) => {
+                    depth = Some(*value);
+                }
+                _ => {}
+            }
+        }
+        let (w, d) = (width.expect("width"), depth.expect("depth"));
+        let key = |v: f64| (v * 10_000.0).round() as i64;
+        histogram
+            .entry((key(w.max(d)), key(w.min(d))))
+            .and_modify(|n| *n += 1)
+            .or_insert(1);
+    }
+    // Revit's own bodies, read from `IFC Exports/2024_Core_Interior_slim.ifc`
+    // with IfcOpenShell 0.8.5 (RE-26 §2.2, re-measured in RE-29 §5).
+    let expected: std::collections::BTreeMap<(i64, i64), usize> = [
+        ((20_000, 20_000), 176usize),
+        ((16_667, 16_667), 38),
+        ((17_500, 16_667), 20),
+        ((16_667, 14_167), 18),
+        ((20_000, 16_667), 4),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        histogram, expected,
+        "the cut plan rectangles are Revit's own column body extents"
+    );
+}
+
+/// #238 / RE-29 §2: the wall records name the walls they join, and
+/// the sixteen that name none are exactly the walls Revit leaves at
+/// full length even though a perpendicular centreline lands on them.
+#[test]
+fn core_interior_2024_wall_joins_are_named_in_the_reference_list() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    let reference = project_dir.join("../IFC Exports/2024_Core_Interior_slim.ifc");
+    if !path.exists() || !reference.exists() {
+        eprintln!("skipping: {} or the slim export is missing", path.display());
+        return;
+    }
+    use rvt::element_record_wall_joins as joins;
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    let declared: std::collections::BTreeSet<u32> = rvt::elem_table::parse_records(&mut rf)
+        .expect("elem table")
+        .into_iter()
+        .map(|record| record.id_primary)
+        .collect();
+    let records = rvt::partition_element_records::scan_category_records(
+        &mut rf,
+        version,
+        rvt::partition_element_records::OST_WALLS,
+        &declared,
+    )
+    .expect("wall records");
+    let instances: Vec<rvt::partition_element_records::PartitionElementRecord> = records
+        .into_iter()
+        .filter(|record| record.is_exported_instance())
+        .collect();
+    let wall_ids: std::collections::BTreeSet<u32> = instances
+        .iter()
+        .map(|record| record.element_id)
+        .collect::<std::collections::BTreeSet<u32>>();
+    assert_eq!(wall_ids.len(), 360);
+
+    let mut named_none = std::collections::BTreeSet::new();
+    for record in &instances {
+        if joins::joined_walls(record, &wall_ids).is_empty() {
+            named_none.insert(record.element_id);
+        }
+    }
+    assert_eq!(
+        named_none.len(),
+        16,
+        "16 of the 360 walls name no other wall: {named_none:?}"
+    );
+
+    // Revit's own `Axis` polyline for each of those sixteen is the
+    // full recorded run: the file says they join nothing, and the
+    // export agrees that nothing cut them.
+    let export = std::fs::read_to_string(&reference).expect("read export");
+    let trims = joins::join_trims(&instances);
+    for id in &named_none {
+        let trim = trims.get(id).expect("a wall with no joins still resolves");
+        assert!(
+            !trim.is_trimmed(),
+            "wall {id} names no join partner but the solver cut it"
+        );
+    }
+    assert!(
+        export.contains("IFCWALL("),
+        "the reference export is the one that was measured"
+    );
 }
 
 /// #88 / RE-28: the wall *type* record family, and the join that

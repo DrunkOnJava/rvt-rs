@@ -519,6 +519,8 @@ fn element_record_geometry_from_decoded(
     let mut wall_thickness = None;
     let mut wall_trim_start = None;
     let mut wall_trim_end = None;
+    let mut column_body_source = None;
+    let mut column_cut_walls = None;
     let mut type_symbol_id = None;
     let mut type_profile = (None, None);
     let mut level_id = None;
@@ -547,6 +549,18 @@ fn element_record_geometry_from_decoded(
                 InstanceField::Float { value, .. },
             ) => {
                 wall_trim_end = Some(*value);
+            }
+            (
+                crate::element_record_column_cuts::COLUMN_BODY_SOURCE_FIELD,
+                InstanceField::String(v),
+            ) => {
+                column_body_source = Some(v.clone());
+            }
+            (
+                crate::element_record_column_cuts::COLUMN_CUT_WALL_COUNT_FIELD,
+                InstanceField::Integer { value, .. },
+            ) => {
+                column_cut_walls = Some(*value);
             }
             (
                 crate::partition_schema_mvp::TYPE_SYMBOL_FIELD,
@@ -618,7 +632,15 @@ fn element_record_geometry_from_decoded(
         (Some(w), Some(d)) if w > 0.0 && d > 0.0 => Some((w, d)),
         _ => None,
     };
-    let (width, depth) = type_section.unwrap_or((width, depth));
+    // A column that its joined walls cut emits the **cut** rectangle,
+    // not the family section: the section is still the type's, and is
+    // still reported below, but it is no longer the shape of the
+    // solid (#239, RE-29 §5).
+    let (width, depth) = if column_body_source.is_some() {
+        (width, depth)
+    } else {
+        type_section.unwrap_or((width, depth))
+    };
     let mut properties = vec![
         // `BodySource` stays the record box unless a wall resolved its
         // joins: the placement, the plan envelope and the extrusion
@@ -630,6 +652,7 @@ fn element_record_geometry_from_decoded(
             value: PropertyValue::Text(
                 wall_body_source
                     .clone()
+                    .or_else(|| column_body_source.clone())
                     .unwrap_or_else(|| "partition_element_record_bbox".into()),
             ),
         },
@@ -680,7 +703,11 @@ fn element_record_geometry_from_decoded(
     if let (Some((section_width, section_depth)), Some(symbol)) = (type_section, type_symbol_id) {
         properties.push(Property {
             name: "ProfileSource".into(),
-            value: PropertyValue::Text(crate::partition_schema_mvp::TYPE_PROFILE_SOURCE.into()),
+            value: PropertyValue::Text(
+                column_body_source
+                    .clone()
+                    .unwrap_or_else(|| crate::partition_schema_mvp::TYPE_PROFILE_SOURCE.into()),
+            ),
         });
         properties.push(Property {
             name: "TypeSymbolElementId".into(),
@@ -721,6 +748,15 @@ fn element_record_geometry_from_decoded(
         properties.push(Property {
             name: "JoinTrimEndFeet".into(),
             value: PropertyValue::LengthFeet(end),
+        });
+    }
+    // A column whose joined walls cut it reports how many took part
+    // (#239, RE-29 §5). The section above is the family's; this is
+    // what is left of the prism after the walls are subtracted.
+    if let Some(walls) = column_cut_walls {
+        properties.push(Property {
+            name: "JoinCutWallCount".into(),
+            value: PropertyValue::Integer(walls),
         });
     }
     if let Some(stream) = source_stream {

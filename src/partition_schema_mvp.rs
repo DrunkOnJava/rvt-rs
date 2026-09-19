@@ -149,8 +149,17 @@ pub fn recover_partition_schema_mvp(
     // binds to the Level its counted reference list names, when it
     // names exactly one (#219, RE-27).
     let level_ids = level_element_ids(rf, revit_version)?;
-    out.columns = columns_from_partition_category_records(rf, revit_version, &level_ids)?;
-    out.walls = walls_from_partition_category_records(rf, revit_version, &level_ids)?;
+    // Columns and walls come out of one sweep: Revit cuts a column
+    // with the walls it is joined to, so the column body needs the
+    // wall boxes (#239, RE-29 §5), and inflating the partitions twice
+    // to get them would dominate the cost.
+    let (column_records, wall_records) = column_and_wall_records(rf, revit_version)?;
+    let wall_instances: Vec<crate::partition_element_records::PartitionElementRecord> =
+        select_instance_records(wall_records.clone())
+            .into_values()
+            .collect();
+    out.walls = wall_instances_from_records(wall_records, &level_ids);
+    out.columns = column_instances_from_records(column_records, &level_ids, &wall_instances);
     // Doors and windows bind to a host wall (#222, RE-23). The
     // candidate set is exactly the wall instances recovered above —
     // a recovered host that is not itself an exported wall is
@@ -200,15 +209,54 @@ pub fn columns_from_partition_category_records(
     revit_version: u32,
     level_ids: &BTreeSet<u32>,
 ) -> Result<Vec<DecodedElement>> {
-    let Some(records) = category_records(
+    let (column_records, wall_records) = column_and_wall_records(rf, revit_version)?;
+    let wall_instances: Vec<crate::partition_element_records::PartitionElementRecord> =
+        select_instance_records(wall_records)
+            .into_values()
+            .collect();
+    Ok(column_instances_from_records(
+        column_records,
+        level_ids,
+        &wall_instances,
+    ))
+}
+
+/// The `OST_Columns` and `OST_Walls` records of one file, from a
+/// single partition sweep.
+///
+/// The two categories travel together because the column body is the
+/// column's prism minus the prisms of the walls it names
+/// ([`crate::element_record_column_cuts`]), and
+/// [`crate::partition_element_records::scan_category_records_multi`]
+/// reads both out of one pass over the inflated streams.
+fn column_and_wall_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> Result<(
+    Vec<crate::partition_element_records::PartitionElementRecord>,
+    Vec<crate::partition_element_records::PartitionElementRecord>,
+)> {
+    use crate::partition_element_records as per;
+
+    if !per::supports_revit_version(revit_version) {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => return Ok((Vec::new(), Vec::new())),
+    };
+    if declared.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let records = per::scan_category_records_multi(
         rf,
         revit_version,
-        crate::partition_element_records::OST_COLUMNS,
-    )?
-    else {
-        return Ok(Vec::new());
-    };
-    Ok(column_instances_from_records(records, level_ids))
+        &[per::OST_COLUMNS, per::OST_WALLS],
+        &declared,
+    )?;
+    Ok(records
+        .into_iter()
+        .partition(|record| record.builtin_category == per::OST_COLUMNS))
 }
 
 /// Recover wall instances from partition element records (#211), with
@@ -591,7 +639,7 @@ pub fn columns_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
     level_ids: &BTreeSet<u32>,
 ) -> Vec<DecodedElement> {
-    column_instances_from_records(records, level_ids)
+    column_instances_from_records(records, level_ids, &[])
 }
 
 /// Field carrying the ElementId of the family/type symbol a placed
@@ -636,6 +684,7 @@ pub const TYPE_PROFILE_EPS_FEET: f64 = 1e-6;
 pub fn column_instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
     level_ids: &BTreeSet<u32>,
+    wall_records: &[crate::partition_element_records::PartitionElementRecord],
 ) -> Vec<DecodedElement> {
     use crate::partition_element_records::PartitionElementRecord;
     use std::collections::BTreeMap;
@@ -646,7 +695,10 @@ pub fn column_instances_from_records(
         .map(|record| (record.element_id, record.bbox_feet))
         .collect();
     let symbol_ids: BTreeSet<u32> = symbols.keys().copied().collect();
-    select_instance_records(records)
+    let selected = select_instance_records(records);
+    let instances: Vec<PartitionElementRecord> = selected.values().cloned().collect();
+    let cuts = crate::element_record_column_cuts::column_cut_boxes(&instances, wall_records);
+    selected
         .values()
         .map(|record: &PartitionElementRecord| {
             let mut decoded = element_record_decoded(record, "Column", level_ids);
@@ -656,9 +708,59 @@ pub fn column_instances_from_records(
             {
                 attach_type_symbol_profile(&mut decoded, record, symbol.0, &symbol.1);
             }
+            if let Some(cut) = cuts.get(&record.element_id) {
+                apply_column_join_cut(&mut decoded, cut);
+            }
             decoded
         })
         .collect()
+}
+
+/// Rewrite a column's placement and extents to the cut body, and say
+/// where that body came from (#239, RE-29 §5).
+///
+/// The type section recovered by [`attach_type_symbol_profile`] is
+/// the *uncut* family section and stays on the element as the type's
+/// own fact; what changes is the emitted solid, which is the record
+/// prism minus the walls the record names.
+fn apply_column_join_cut(
+    decoded: &mut DecodedElement,
+    cut: &crate::element_record_column_cuts::ColumnCut,
+) {
+    use crate::element_record_column_cuts as cuts;
+
+    let bbox = cut.bbox_feet;
+    let replacements: [(&str, f64); 6] = [
+        ("m_locationX", (bbox[0] + bbox[3]) * 0.5),
+        ("m_locationY", (bbox[1] + bbox[4]) * 0.5),
+        ("m_locationZ", bbox[2]),
+        ("m_bboxWidth", bbox[3] - bbox[0]),
+        ("m_bboxDepth", bbox[4] - bbox[1]),
+        ("m_bboxHeight", bbox[5] - bbox[2]),
+    ];
+    for (name, value) in decoded.fields.iter_mut() {
+        if let Some((_, replacement)) = replacements
+            .iter()
+            .find(|(field, _)| *field == name.as_str())
+        {
+            *value = InstanceField::Float {
+                value: *replacement,
+                size: 8,
+            };
+        }
+    }
+    decoded.fields.push((
+        cuts::COLUMN_BODY_SOURCE_FIELD.into(),
+        InstanceField::String(cuts::COLUMN_BODY_JOIN_CUT.into()),
+    ));
+    decoded.fields.push((
+        cuts::COLUMN_CUT_WALL_COUNT_FIELD.into(),
+        InstanceField::Integer {
+            value: cut.wall_count as i64,
+            signed: false,
+            size: 8,
+        },
+    ));
 }
 
 /// Attach the type symbol's section to a placed instance, when the
