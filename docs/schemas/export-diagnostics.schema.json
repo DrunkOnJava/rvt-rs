@@ -405,6 +405,18 @@
             "null"
           ],
           "description": "RVT_FORMATS_MULTIPAGE_UNVERIFIED when multipage completeness is unverified."
+        },
+        "schema_scan_truncated": {
+          "type": "boolean",
+          "description": "true when the inflated stream exceeds the 65536-byte schema scan limit, so schema parsing stopped before the end of the stream. A \"we stopped looking\" signal; it does not claim the unscanned tail is parseable schema."
+        },
+        "schema_scanned_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Bytes schema parsing would scan: min(inflated_bytes, 65536), or null when inflate failed."
         }
       }
     }
