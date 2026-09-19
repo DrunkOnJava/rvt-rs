@@ -42,7 +42,7 @@ issue that tracks the remainder:
 | `IFCWALL` | Revit 2024 set exact (RE-21), joins cut back (RE-26) | #238 (31 over-trimmed ends), #23 (2024 ArcWall records) |
 | `IFCDOOR` | Revit 2024 set and host binding exact (RE-21, RE-23) | #227 (opening cut from the wall curve) |
 | `IFCSLAB` | Revit 2024 set with sketch-line profiles (RE-22, RE-25) | #219 (plate storey containment) |
-| `IFCSPACE` | name-only, placeholder body | #90 RE-15-10 |
+| `IFCSPACE` | Revit 2024 room set, names, numbers and storeys exact; record-box body (RE-29) | #90 (boundary polygon) |
 | `IFCWINDOW` | Revit 2024 set and host binding exact (RE-21, RE-23) | #219 (storey containment) |
 | `IFCMATERIALLAYERSETUSAGE` | nominal type thickness only | #88 RE-15-08 |
 | `IFCOPENINGELEMENT` | opening, void and fill chain per host (RE-23) | #227 (true opening cut) |

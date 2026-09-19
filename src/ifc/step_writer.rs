@@ -171,7 +171,7 @@ fn element_attribute_tail(
     ifc_upper: &str,
     tag_quoted: &str,
     predefined: Option<&str>,
-    name_quoted: &str,
+    long_name_quoted: &str,
 ) -> String {
     let pt = match predefined.and_then(step_enum_token) {
         Some(token) => format!(".{token}."),
@@ -189,7 +189,13 @@ fn element_attribute_tail(
         // label but meant the wrong thing; the element's own Name
         // carries the identity instead. CompositionType `.ELEMENT.`
         // matches what Revit's exporter writes for a room.
-        ElementTail::Space => format!("{name_quoted},.ELEMENT.,{pt},$"),
+        //
+        // Since #90 / RE-29 a record-backed room carries its real
+        // Revit name in the `RoomName` property, and `long_name_quoted`
+        // is that value — the slot Revit's own exporter puts it in. It
+        // falls back to `name_quoted` when no name was recovered, which
+        // is what every space did before.
+        ElementTail::Space => format!("{long_name_quoted},.ELEMENT.,{pt},$"),
         ElementTail::ReinforcingBar => format!("{tag_quoted},$,$,$,$,{pt},$"),
         ElementTail::StairFlight => format!("{tag_quoted},$,$,$,$,{pt}"),
     }
@@ -1764,6 +1770,25 @@ impl StepWriter {
 
                 let el_id = self.id();
                 let name_quoted = quoted_or_dollar(&escape(name));
+                // `IfcSpace.LongName` is the room's own Revit name when
+                // one was recovered (#90, RE-29), and the element Name
+                // otherwise — the shape every space had before.
+                let long_name_quoted = property_set
+                    .as_ref()
+                    .and_then(|set| {
+                        set.properties
+                            .iter()
+                            .find(|p| p.name == super::export_content::ROOM_NAME_PROPERTY)
+                            .and_then(|p| match &p.value {
+                                super::entities::PropertyValue::Text(text)
+                                    if !text.trim().is_empty() =>
+                                {
+                                    Some(quoted_or_dollar(&escape(text)))
+                                }
+                                _ => None,
+                            })
+                    })
+                    .unwrap_or_else(|| name_quoted.clone());
                 let tag_quoted = type_guid
                     .as_deref()
                     .map(escape)
@@ -1787,7 +1812,7 @@ impl StepWriter {
                     &ifc_upper,
                     &tag_quoted,
                     predefined_type.as_deref(),
-                    &name_quoted,
+                    &long_name_quoted,
                 );
                 let line = format!(
                     "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},{rep_slot},{tail})",
@@ -2821,6 +2846,73 @@ mod tests {
                 args.ends_with(tail),
                 "{ifc_type} with {predefined:?} should end in {tail}, got {args}"
             );
+        }
+    }
+
+    /// #90 / RE-29: `IfcSpace.LongName` is the room's recovered Revit
+    /// name when its property set carries one, and the element `Name`
+    /// otherwise — which is what every space emitted before.
+    #[test]
+    fn space_long_name_comes_from_the_room_name_property() {
+        use super::super::entities::{IfcEntity, Property, PropertySet, PropertyValue};
+
+        let space = |properties: Vec<Property>| {
+            let model = IfcModel {
+                entities: vec![IfcEntity::BuildingElement {
+                    ifc_type: "IFCSPACE".into(),
+                    name: "Room-20822".into(),
+                    type_guid: Some("20822".into()),
+                    predefined_type: Some("SPACE".into()),
+                    storey_index: None,
+                    material_index: None,
+                    property_set: (!properties.is_empty()).then(|| PropertySet {
+                        name: "RvtElementRecordGeometry".into(),
+                        properties,
+                    }),
+                    location_feet: None,
+                    rotation_radians: None,
+                    extrusion: None,
+                    host_element_index: None,
+                    material_layer_set_index: None,
+                    material_profile_set_index: None,
+                    solid_shape: None,
+                    representation_map_index: None,
+                }],
+                ..IfcModel::default()
+            };
+            let step = write_step(&model);
+            element_args(&step, "IFCSPACE").to_string()
+        };
+
+        let named = space(vec![Property {
+            name: super::super::export_content::ROOM_NAME_PROPERTY.into(),
+            value: PropertyValue::Text("Stair 2".into()),
+        }]);
+        assert!(
+            named.contains(",'Room-20822',") && named.ends_with(",'Stair 2',.ELEMENT.,.SPACE.,$"),
+            "Name must stay the identity and LongName must be the room name, got {named}"
+        );
+
+        // No property set at all: the pre-RE-29 shape.
+        let bare = space(Vec::new());
+        assert!(
+            bare.ends_with(",'Room-20822',.ELEMENT.,.SPACE.,$"),
+            "a space with no recovered name keeps its Name in LongName, got {bare}"
+        );
+
+        // A blank value is not a name, and must not blank the slot.
+        let blank = space(vec![Property {
+            name: super::super::export_content::ROOM_NAME_PROPERTY.into(),
+            value: PropertyValue::Text("   ".into()),
+        }]);
+        assert!(
+            blank.ends_with(",'Room-20822',.ELEMENT.,.SPACE.,$"),
+            "a blank RoomName falls back to the element Name, got {blank}"
+        );
+
+        // Still eleven attributes, whichever branch ran.
+        for args in [named, bare, blank] {
+            assert_eq!(step_argument_count(&args), 11);
         }
     }
 

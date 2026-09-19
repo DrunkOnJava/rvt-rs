@@ -505,12 +505,12 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
 /// and the ones it gives none for are contained in the `IfcBuilding`
 /// rather than dropped into whichever storey happens to be first.
 ///
-/// Measured on `2024_Core_Interior.rvt`: 853 of 872 elements reach a
-/// storey — 372 through the `Level` ElementId their own partition
-/// element record names, 481 through the #212 / #213 elevation match.
-/// The 19 that do not are the 18 name-only `IFCSPACE` rows, which come
-/// from a partition string and carry no record at all, and one wall
-/// whose record names no single Level.
+/// Measured on `2024_Core_Interior.rvt` after #90 / RE-29 replaced the
+/// 18 name-only spaces with 116 record-backed rooms: 969 of 970
+/// elements reach a storey — 488 through the `Level` ElementId their
+/// own partition element record names, 481 through the #212 / #213
+/// elevation match. The one that does not is `Wall 55840`, whose
+/// record names no single Level.
 #[test]
 fn core_interior_2024_storey_containment_is_evidence_backed() {
     let Some(project_dir) = project_dir() else {
@@ -532,9 +532,9 @@ fn core_interior_2024_storey_containment_is_evidence_backed() {
         )
         .expect("geometry export");
 
-    assert_eq!(result.diagnostics.exported.building_elements, 872);
+    assert_eq!(result.diagnostics.exported.building_elements, 970);
     assert_eq!(
-        result.diagnostics.exported.storey_bound_elements, 853,
+        result.diagnostics.exported.storey_bound_elements, 969,
         "storey containment regressed; re-measure before moving this number"
     );
 
@@ -569,12 +569,12 @@ fn core_interior_2024_storey_containment_is_evidence_backed() {
             .expect("a bound element records how it reached its storey");
         *by_source.entry(source).or_default() += 1;
     }
-    assert_eq!(by_source.get("record_level_reference").copied(), Some(372));
-    assert_eq!(by_source.values().sum::<usize>(), 853);
+    assert_eq!(by_source.get("record_level_reference").copied(), Some(488));
+    assert_eq!(by_source.values().sum::<usize>(), 969);
     assert_eq!(
         unbound_types,
-        [("IFCSPACE", 18), ("IFCWALL", 1)].into_iter().collect(),
-        "only the name-only spaces and the one wall naming no single Level stay unbound"
+        [("IFCWALL", 1)].into_iter().collect(),
+        "only the one wall naming no single Level stays unbound"
     );
 
     // The unbound elements are contained in the IfcBuilding, never in a
@@ -1082,4 +1082,235 @@ fn core_interior_2024_wall_join_trimmed_bodies() {
     }
     assert_eq!(resolved, 360, "no wall declines its joins on this file");
     assert_eq!(trimmed, 329, "329 walls are cut at one end or both");
+}
+
+/// `(ElementId, Name, LongName, world plan bbox, world z range)` for
+/// every `IfcSpace` in a Revit-authored IFC.
+///
+/// The reference side of the #90 / RE-29 gate. The export writes the
+/// room number in `Name`, the room name in `LongName`, and the room's
+/// ElementId only in the `IfcSpaceType` its `IfcRelDefinesByType`
+/// points at — `IfcSpace` is an `IfcSpatialStructureElement` and so
+/// declares no `Tag` — which is why the join runs through the type.
+fn reference_spaces(step: &str) -> std::collections::BTreeMap<u32, (String, String)> {
+    use std::collections::BTreeMap;
+    let mut instances: BTreeMap<u32, (String, Vec<String>)> = BTreeMap::new();
+    for line in step.lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix('#') else {
+            continue;
+        };
+        let Some((id_text, after_eq)) = rest.split_once('=') else {
+            continue;
+        };
+        let Ok(id) = id_text.trim().parse::<u32>() else {
+            continue;
+        };
+        let Some((ifc_type, args)) = after_eq.trim_start().split_once('(') else {
+            continue;
+        };
+        let Some(args) = args
+            .trim_end()
+            .strip_suffix(';')
+            .map(str::trim_end)
+            .and_then(|a| a.strip_suffix(')'))
+        else {
+            continue;
+        };
+        instances.insert(
+            id,
+            (
+                ifc_type.trim().to_ascii_uppercase(),
+                step_attributes(args)
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+            ),
+        );
+    }
+    let unquote = |attribute: Option<&String>| -> String {
+        attribute
+            .map(|a| a.trim())
+            .and_then(|a| a.strip_prefix('\'').and_then(|t| t.strip_suffix('\'')))
+            .unwrap_or_default()
+            .to_string()
+    };
+    let entity_ref = |attribute: &str| -> Option<u32> {
+        attribute.trim().strip_prefix('#')?.trim().parse().ok()
+    };
+
+    let mut type_of: BTreeMap<u32, u32> = BTreeMap::new();
+    for (ifc_type, attributes) in instances.values() {
+        if ifc_type != "IFCRELDEFINESBYTYPE" {
+            continue;
+        }
+        let Some(relating) = attributes.get(5).and_then(|a| entity_ref(a)) else {
+            continue;
+        };
+        let objects = attributes.get(4).map(String::as_str).unwrap_or_default();
+        for part in objects.split(',') {
+            if let Some(id) = entity_ref(part.trim_matches(['(', ')'])) {
+                type_of.insert(id, relating);
+            }
+        }
+    }
+
+    let mut out = BTreeMap::new();
+    for (id, (ifc_type, attributes)) in &instances {
+        if ifc_type != "IFCSPACE" {
+            continue;
+        }
+        // `IfcTypeObject.Tag` is attribute 7, the same slot the door
+        // and window gate reads on `IfcElement`.
+        let Some(element_id) = type_of
+            .get(id)
+            .and_then(|t| instances.get(t))
+            .map(|(_, a)| unquote(a.get(7)))
+            .and_then(|tag| tag.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        out.insert(
+            element_id,
+            (unquote(attributes.get(2)), unquote(attributes.get(7))),
+        );
+    }
+    out
+}
+
+/// #90 / #219, RE-29: rooms come from `OST_Rooms` partition element
+/// records, and the record family answers their identity, their name,
+/// their number, their storey and their envelope.
+///
+/// Scored against Revit's own full-project export, tolerance 0 on the
+/// id set and the strings, 1e-3 ft on the geometry:
+///
+/// - the #211 instance rule on `OST_Rooms` selects exactly the 116
+///   ElementIds the export tags — no false positive, no miss;
+/// - each room's own parameter block gives the number and the name the
+///   export writes, 116 of 116 on both;
+/// - the record's counted reference list names exactly one `Level` for
+///   every one of the 116, so none falls back to an elevation guess;
+/// - the record bounding box is the export's plan envelope and its
+///   floor-to-ceiling extent, exactly, on 116 of 116.
+///
+/// The boundary *polygon* is deliberately not claimed: RE-29 §4
+/// records the measured negative, and `ProfileResolved` stays false.
+#[test]
+fn core_interior_2024_room_instances_names_and_envelopes() {
+    let Some(project_dir) = project_dir() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
+        return;
+    };
+    let path = project_dir.join("2024_Core_Interior.rvt");
+    let reference = project_dir.join("../IFC Exports/2024_Core_Interior_slim.ifc");
+    if !path.exists() || !reference.exists() {
+        eprintln!("skipping: {} or the slim export is missing", path.display());
+        return;
+    }
+
+    let expected = reference_spaces(&std::fs::read_to_string(&reference).expect("read export"));
+    assert_eq!(expected.len(), 116, "the export carries 116 IfcSpace");
+
+    let mut rf = RevitFile::open(&path).expect("open 2024");
+    let version = rf.basic_file_info().unwrap().version;
+    assert_eq!(version, 2024);
+    let level_ids = rvt::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
+    let rooms = rvt::partition_schema_mvp::rooms_from_partition_category_records(
+        &mut rf, version, &level_ids,
+    )
+    .expect("rooms");
+
+    let recovered: std::collections::BTreeSet<u32> = rooms.iter().filter_map(|r| r.id).collect();
+    let wanted: std::collections::BTreeSet<u32> = expected.keys().copied().collect();
+    assert_eq!(
+        recovered, wanted,
+        "the OST_Rooms instance rule must select exactly the export's room ElementId set"
+    );
+
+    let mut named = 0usize;
+    let mut numbered = 0usize;
+    let mut level_bound = 0usize;
+    for room in &rooms {
+        let id = room.id.expect("record-backed room carries an id");
+        let (want_number, want_name) = expected.get(&id).expect("scored above");
+        let mut name = None;
+        let mut number = None;
+        let mut box_feet = [f64::NAN; 6];
+        let mut source = None;
+        for (field, value) in &room.fields {
+            match (field.as_str(), value) {
+                ("m_name", walker::InstanceField::String(text)) => name = Some(text.clone()),
+                (
+                    rvt::partition_schema_mvp::ROOM_NUMBER_FIELD,
+                    walker::InstanceField::String(text),
+                ) => number = Some(text.clone()),
+                (
+                    rvt::partition_schema_mvp::ROOM_PARAMETER_SOURCE_FIELD,
+                    walker::InstanceField::String(text),
+                ) => source = Some(text.clone()),
+                (
+                    rvt::element_record_level_refs::LEVEL_REFERENCE_FIELD,
+                    walker::InstanceField::ElementId { id, .. },
+                ) => {
+                    assert!(
+                        level_ids.contains(id),
+                        "room {id} bound to an id outside the recovered Level set"
+                    );
+                    level_bound += 1;
+                }
+                ("m_locationX", walker::InstanceField::Float { value, .. }) => box_feet[0] = *value,
+                ("m_locationY", walker::InstanceField::Float { value, .. }) => box_feet[1] = *value,
+                ("m_locationZ", walker::InstanceField::Float { value, .. }) => box_feet[2] = *value,
+                ("m_bboxWidth", walker::InstanceField::Float { value, .. }) => box_feet[3] = *value,
+                ("m_bboxDepth", walker::InstanceField::Float { value, .. }) => box_feet[4] = *value,
+                ("m_bboxHeight", walker::InstanceField::Float { value, .. }) => {
+                    box_feet[5] = *value
+                }
+                _ => {}
+            }
+        }
+        if name.as_deref() == Some(want_name.as_str()) {
+            named += 1;
+        }
+        if number.as_deref() == Some(want_number.as_str()) {
+            numbered += 1;
+        }
+        assert_eq!(
+            source.as_deref(),
+            Some(rvt::partition_room_parameters::ROOM_PARAMETER_SOURCE),
+            "room {id} must record where its number and name came from"
+        );
+        // Every room on this file is 8 ft floor-to-ceiling, and the
+        // box base is its storey elevation — both read off the record,
+        // neither invented.
+        assert!(
+            (box_feet[5] - 8.0).abs() < 1e-3,
+            "room {id}: recorded height {} is not the export's 8 ft",
+            box_feet[5]
+        );
+        assert!(
+            box_feet[3] > 0.0 && box_feet[4] > 0.0,
+            "room {id}: degenerate plan envelope"
+        );
+    }
+    assert_eq!(named, 116, "every room's recovered name is the export's");
+    assert_eq!(
+        numbered, 116,
+        "every room's recovered number is the export's"
+    );
+    assert_eq!(
+        level_bound, 116,
+        "every room names exactly one recovered Level"
+    );
+
+    // The boundary polygon is not recovered (RE-29 §4): a room carries
+    // no sketch, so nothing may claim a profile for it.
+    for room in &rooms {
+        assert!(
+            rvt::element_record_plan_profiles::plan_profile_from_fields(&room.fields).is_none(),
+            "room {:?} must not claim a plan profile",
+            room.id
+        );
+    }
 }

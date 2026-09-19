@@ -25,7 +25,7 @@ re-opening a solved carrier:
 | Issue | Named remainder |
 |---|---|
 | [#32](https://github.com/DrunkOnJava/rvt-rs/issues/32) | Doors and windows are bound to their host wall and the void/fill chain is exact (#222); the viewer does not yet display the host relationship. The opening cut itself is [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227). |
-| [#33](https://github.com/DrunkOnJava/rvt-rs/issues/33) / [#219](https://github.com/DrunkOnJava/rvt-rs/issues/219) | Storey containment binds 801 of 872 building elements. The 71 unbound are 46 record-backed plates (a 0.1667 ft structural-slab / architectural-topping offset), 18 spaces, 6 windows (a window's base is its sill height) and 1 wall. |
+| [#33](https://github.com/DrunkOnJava/rvt-rs/issues/33) / [#219](https://github.com/DrunkOnJava/rvt-rs/issues/219) | Storey containment binds 969 of 970 building elements after #267 (RE-27) and #90 (RE-29). The one unbound element is a wall whose record names no single Level and whose base sits mid-storey. |
 | [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) | The Revit 2024 ArcWall envelope is still undecoded; RE-21's partition element record is a different carrier and does not close it. |
 | [#86](https://github.com/DrunkOnJava/rvt-rs/issues/86) | Partition names are partial and the Level ElementId bind stays blocked by the RE-20 negative. |
 | [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | The reported sketch-to-solid pipeline is untouched for sweeps and revolves; only the closed-loop plan profile of a slab is recovered (RE-25). |

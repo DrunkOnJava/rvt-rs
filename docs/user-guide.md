@@ -73,18 +73,21 @@ exported slabs, the plan profile their `OST_SketchLines` records close
 (#31, RE-25). Wall bodies carry the wall's real thickness and the length
 its joins leave it — 336 of 360 match Revit's own export exactly in world
 coordinates — and every column carries the section its family type declares
-(#215, RE-26). Those elements land on the Revit Level their own element
-record names, so 853 of 872 exported elements on Core Interior are contained
-in a specific storey; the 19 that are not — 18 name-only spaces and one wall
-— are contained in the building rather than filed under an arbitrary storey
-(#219, RE-27). Still blocked (RE-19 / RE-20 negative on magnetar corpora):
-schema-field Walls, typed Door/Window host binding, Level ElementId storey
-assignment for Rooms, door and window bodies, the profile of the 20 rotated
-shading plates, and compound-layer geometry — see
+(#215, RE-26). Rooms come out as 116 `IFCSPACE` with their real
+Revit name, number and storey, and a body that is the record's bounding box
+— exactly the reference export's plan envelope and 8 ft floor-to-ceiling
+extent on all 116 (#90, RE-29). Those elements land on the Revit Level their
+own element record names, so 969 of 970 exported elements on Core Interior
+are contained in a specific storey; the one that is not — a wall whose record
+names no single Level — is contained in the building rather than filed under
+an arbitrary storey (#219, RE-27). Still blocked (RE-19 / RE-20 negative on magnetar corpora):
+schema-field Walls, typed Door/Window host binding, room boundary polygons
+(RE-29 measured the negative: a room carries no sketch), door and window
+bodies, the profile of the 20 rotated shading plates, and compound-layer
+geometry — see
 [status.md](status.md) and [supported-profile.md](supported-profile.md).
-Storey containment reaches 801 of 872 building elements; the 71 that bind to
-nothing are 46 record-backed plates, 18 spaces, 6 windows and 1 wall (#33,
-#219).
+Storey containment reaches 969 of 970 building elements; the one that binds to
+nothing is a wall whose record names no single Level (#219).
 
 The viewer can show a scene, categories, element info, schedule summary, export
 quality, a demo gallery with license/provenance, and a supported-profile matrix.

@@ -84,17 +84,16 @@
       "notes": "The paired 20 KB element fixture carries none of this type; the same .rvt carries 6, scored against the full export in the sibling manifest magnetar-2024-core-interior-slim (#211). Recorded as a decoder baseline here so the reference side stays the element fixture and the count is not double-claimed."
     },
     "rooms_spaces": {
-      "status": "known_gap",
+      "status": "decoder_baseline",
       "expected": 0,
       "source": "paired Revit IFC export",
       "source_ifc_type": "IFCSPACE",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.by_ifc_type.IFCSPACE",
-      "decoder_expected": 18,
-      "decoder_tolerance": 4,
-      "tracking_issue": 33,
-      "unsupported_feature": "partial_element_geometry",
-      "notes": "Strict partition space-name recovers emit IFCSPACE; paired IFC has 0 spaces."
+      "decoder_expected": 116,
+      "decoder_tolerance": 0,
+      "tracking_issue": 90,
+      "notes": "Updated 2026-09-19 (#90, RE-29). The decoder now emits 116 record-backed IFCSPACE instead of 18 name-only rows, so partial_element_geometry no longer fires anywhere on this file - every one of the 970 emitted building elements now carries a body - and this row drops from known_gap to decoder_baseline. The recall claim is scored on the magnetar-2024-core-interior-slim manifest, whose reference side is the full-project export that actually contains the 116 spaces; this paired element fixture exports 0, so its 0 is the fixture's scope, not the decoder's recall."
     },
     "columns": {
       "status": "decoder_baseline",
@@ -158,11 +157,11 @@
       "source_ifc_type": "IFCPROPERTYSET",
       "tolerance": 0,
       "decoder_metric": "step.IFCPROPERTYSET",
-      "decoder_expected": 854,
+      "decoder_expected": 970,
       "decoder_tolerance": 8,
       "tracking_issue": 35,
       "unsupported_feature": "revit_element_parameters_to_ifc_property_sets",
-      "notes": "Current decoder emits 854 RvtElementRecordGeometry sets, one per element recovered from a partition element record - 256 columns, 360 walls, 132 doors, 6 windows, 80 slabs and 20 shading devices (#204/#211/#212). The 64 RvtFloorGeometry sets the plan-loop path used to emit went away with the plan-loop slabs on 2026-08-30. Not a match for the paired IFC property-set inventory, and no set carries a Revit element parameter yet (#35)."
+      "notes": "Current decoder emits 970 RvtElementRecordGeometry sets, one per element recovered from a partition element record - 256 columns, 360 walls, 132 doors, 6 windows, 80 slabs, 20 shading devices and, since 2026-09-19 (#90, RE-29), 116 rooms. The 64 RvtFloorGeometry sets the plan-loop path used to emit went away with the plan-loop slabs on 2026-08-30. Not a match for the paired IFC property-set inventory, and no set carries a Revit element parameter yet (#35), though a room's set now carries its recovered RoomNumber and RoomName."
     },
     "shading_devices": {
       "status": "decoder_baseline",

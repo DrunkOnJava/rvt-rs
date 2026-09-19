@@ -33,9 +33,9 @@
     {
       "category": "rooms_spaces",
       "field": "entity_counts.IFCSPACE",
-      "reason": "known_gap",
-      "tracking_issue": 33,
-      "unsupported_feature": "partial_element_geometry"
+      "reason": "decoder_baseline",
+      "tracking_issue": 90,
+      "unsupported_feature": null
     },
     {
       "category": "columns",
@@ -115,7 +115,7 @@
     "storeys.IFCBUILDINGSTOREY"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "c615cc6c4606c3486be2a82af7566b4e6a5002623ffd39227f591b9df5182efa",
+  "verdict_hash_sha256": "c372780bd5e3ac986e799a87030c20519991cb94e1296ed101ae039f7e502234",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",
