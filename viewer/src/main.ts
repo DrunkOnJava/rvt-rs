@@ -42,6 +42,21 @@ const exportQualityEl = $('export-quality');
 const exportModeEl = $('export-mode') as HTMLSelectElement;
 const demoListEl = $('demo-list');
 const demoAttributionEl = $('demo-attribution');
+const loadOverlayEl = $('load-overlay');
+const loadStepEl = $('load-step');
+const loadElapsedEl = $('load-elapsed');
+const loadHintEl = $('load-hint');
+const scaffoldNoteEl = $('scaffold-note');
+const scaffoldNoteBodyEl = $('scaffold-note-body');
+const showRealProjectsBtn = $('show-real-projects') as HTMLButtonElement;
+const dismissScaffoldNoteBtn = $('dismiss-scaffold-note') as HTMLButtonElement;
+const toastRegionEl = $('toast-region');
+
+// ---------- Motion ----------
+const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+function prefersReducedMotion(): boolean {
+  return reducedMotionQuery.matches;
+}
 
 // ---------- Three.js scene ----------
 const scene = new THREE.Scene();
@@ -77,7 +92,35 @@ function resize(): void {
 window.addEventListener('resize', resize);
 resize();
 
-function tick(): void {
+// A fitted camera that snaps into place reads as a glitch; one short
+// decelerating move reads as the instrument finding the model. Orbit
+// control is suspended for the duration so damping does not fight it.
+interface CameraTween {
+  fromPos: THREE.Vector3;
+  toPos: THREE.Vector3;
+  fromTarget: THREE.Vector3;
+  toTarget: THREE.Vector3;
+  startedAt: number;
+  durationMs: number;
+}
+let cameraTween: CameraTween | null = null;
+
+function advanceCameraTween(now: number): void {
+  if (!cameraTween) return;
+  const raw = (now - cameraTween.startedAt) / cameraTween.durationMs;
+  const t = raw >= 1 ? 1 : raw;
+  // Ease-out cubic — fast departure, long settle, no overshoot.
+  const eased = 1 - Math.pow(1 - t, 3);
+  camera.position.lerpVectors(cameraTween.fromPos, cameraTween.toPos, eased);
+  controls.target.lerpVectors(cameraTween.fromTarget, cameraTween.toTarget, eased);
+  if (t === 1) {
+    cameraTween = null;
+    controls.enabled = true;
+  }
+}
+
+function tick(now: number = performance.now()): void {
+  advanceCameraTween(now);
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -106,6 +149,134 @@ renderer.domElement.addEventListener('pointerdown', (ev) => {
 function setStatus(text: string): void {
   statusEl.textContent = text;
 }
+
+/** Marks the status line as actively working (drives the sweep hairline). */
+function setStatusBusy(busy: boolean): void {
+  statusEl.classList.toggle('is-busy', busy);
+}
+
+// ---------- Transient confirmations ----------
+type ToastKind = 'ok' | 'bad' | 'info';
+
+/**
+ * Non-blocking confirmation for the three moments worth interrupting
+ * for: a load finished, an export downloaded, a load failed. #status
+ * keeps the running commentary; this marks the transitions.
+ */
+function toast(message: string, kind: ToastKind = 'info'): void {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.textContent = message;
+  toastRegionEl.appendChild(el);
+
+  const lifetimeMs = kind === 'bad' ? 7000 : 4500;
+  window.setTimeout(() => {
+    el.classList.add('leaving');
+    window.setTimeout(() => el.remove(), prefersReducedMotion() ? 0 : 200);
+  }, lifetimeMs);
+}
+
+// ---------- Viewport loading treatment ----------
+/**
+ * Observed decode throughput across the staged demos (a 33.7 MB project
+ * lands in roughly 30 s). Only ever used to set an expectation — the
+ * decoder cannot report real progress, so the bar stays indeterminate
+ * rather than faking a percentage.
+ */
+const DECODE_BYTES_PER_SECOND = 1.15e6;
+
+function loadExpectation(bytes: number): string {
+  const size = formatBytes(bytes);
+  if (bytes < 256 * 1024) return `${size}, usually instant`;
+  const raw = bytes / DECODE_BYTES_PER_SECOND;
+  const seconds = raw < 10 ? Math.max(1, Math.round(raw)) : Math.round(raw / 5) * 5;
+  return `${size}, about ${seconds} s`;
+}
+
+let loadStartedAt = 0;
+let loadTimer: number | null = null;
+
+function startLoadOverlay(file: File): void {
+  loadStartedAt = performance.now();
+  loadStepEl.textContent = `Opening ${file.name}`;
+  loadHintEl.textContent = loadExpectation(file.size);
+  loadElapsedEl.textContent = '0 s elapsed';
+  loadOverlayEl.classList.remove('hidden');
+  setStatusBusy(true);
+  if (loadTimer !== null) window.clearInterval(loadTimer);
+  loadTimer = window.setInterval(() => {
+    const seconds = Math.floor((performance.now() - loadStartedAt) / 1000);
+    loadElapsedEl.textContent = `${seconds} s elapsed`;
+  }, 250);
+}
+
+function setLoadStep(step: string): void {
+  loadStepEl.textContent = step;
+}
+
+function stopLoadOverlay(): void {
+  if (loadTimer !== null) {
+    window.clearInterval(loadTimer);
+    loadTimer = null;
+  }
+  loadOverlayEl.classList.add('hidden');
+  setStatusBusy(false);
+}
+
+// ---------- Scaffold-only empty state ----------
+function hideScaffoldNote(): void {
+  scaffoldNoteEl.classList.add('hidden');
+}
+
+/**
+ * A scaffold decode produces a legal scene graph with no drawable
+ * geometry. Without this the viewport is a bare grid and the result
+ * looks broken rather than expected.
+ */
+function maybeShowScaffoldNote(diagnostics: ExportDiagnostics): void {
+  const geometry = diagnostics.exported?.building_elements_with_geometry ?? 0;
+  if (geometry > 0) {
+    hideScaffoldNote();
+    return;
+  }
+  const level = diagnostics.confidence?.level ?? 'unknown';
+  const score = diagnostics.confidence?.score;
+  const pct = typeof score === 'number' ? ` at ${Math.round(score * 100)}% confidence` : '';
+  const lines = [
+    `This file decoded as ${exportQualityLabel(level).toLowerCase()}${pct} — schema, project metadata and a spatial scaffold, but no element geometry to draw.`,
+  ];
+  if (level === 'scaffold' || level === 'proxy_only') {
+    lines.push(
+      'A scaffold decode is the expected result for the synthetic tier1 demos, not a failure. The status panel, diagnostics and export bars all still work on it.',
+    );
+  }
+  scaffoldNoteBodyEl.textContent = lines.join(' ');
+  scaffoldNoteEl.classList.remove('hidden');
+}
+
+/** Reopens the gallery and puts the keyboard on the first real project. */
+function revealRealProjects(): void {
+  hideScaffoldNote();
+  dropzone.classList.remove('hidden');
+  const card = demoListEl.querySelector<HTMLElement>('[data-demo-real="true"]');
+  if (!card) {
+    setStatus('real-project demos are not staged in this build');
+    return;
+  }
+  card.scrollIntoView({
+    block: 'nearest',
+    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+  });
+  card.focus();
+  card.classList.add('is-flagged');
+  window.setTimeout(() => card.classList.remove('is-flagged'), 2400);
+}
+
+showRealProjectsBtn.addEventListener('click', revealRealProjects);
+dismissScaffoldNoteBtn.addEventListener('click', () => {
+  hideScaffoldNote();
+  viewport.focus();
+});
 
 // ---------- Worker ----------
 type Worker_ = Worker & {
@@ -212,6 +383,8 @@ function selectedExportMode(): string {
 // ---------- Load flow ----------
 async function loadBytes(file: File): Promise<void> {
   setStatus(`reading ${formatBytes(file.size)}…`);
+  startLoadOverlay(file);
+  hideScaffoldNote();
   model = null;
   sceneGraph = null;
   distinctTypes = [];
@@ -225,7 +398,19 @@ async function loadBytes(file: File): Promise<void> {
   exportQualityEl.className = 'quality-pill';
   diagnosticsJsonEl.textContent = '';
   renderLoadingStatusPanel(file.name);
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+  } catch (err) {
+    const message = (err as Error).message ?? String(err);
+    stopLoadOverlay();
+    clearDemoCardBusy();
+    setStatus(`error: ${message}`);
+    renderErrorStatusPanel(message);
+    dropzone.classList.remove('hidden');
+    toast(`Could not read ${file.name}. ${message}`, 'bad');
+    return;
+  }
   const qualityMode = selectedExportMode();
 
   const w = resetWorker();
@@ -248,6 +433,7 @@ async function loadBytes(file: File): Promise<void> {
       | { type: 'error'; message: string };
     if (msg.type === 'progress') {
       setStatus(msg.step);
+      setLoadStep(msg.step);
       return;
     }
     if (msg.type === 'summary') {
@@ -267,9 +453,13 @@ async function loadBytes(file: File): Promise<void> {
       return;
     }
     if (msg.type === 'error') {
+      stopLoadOverlay();
+      clearDemoCardBusy();
       setStatus(`error: ${msg.message}`);
       renderErrorStatusPanel(msg.message);
+      hideScaffoldNote();
       dropzone.classList.remove('hidden');
+      toast(`Could not open ${file.name}. ${msg.message}`, 'bad');
       return;
     }
     model = msg.model;
@@ -291,12 +481,18 @@ async function loadBytes(file: File): Promise<void> {
     exportSvgBtn.disabled = false;
     downloadDiagnosticsBtn.disabled = false;
     setStatus(`loaded · ${msg.types.length} categories · IFC bar ${qualityMode}`);
+    stopLoadOverlay();
+    clearDemoCardBusy();
+    maybeShowScaffoldNote(msg.diagnostics);
+    const elapsed = Math.max(1, Math.round((performance.now() - loadStartedAt) / 1000));
+    toast(`Loaded ${file.name} · ${msg.types.length} categories · ${elapsed} s`, 'ok');
   });
   w.postMessage({ type: 'parse', bytes, mode: qualityMode }, [bytes.buffer]);
 }
 
 function renderEmptyStatusPanel(): void {
   statusPanelEl.innerHTML = '';
+  resetStatusRowStagger();
   statusPanelEl.appendChild(statusRow('File', 'warn', 'No file opened'));
   statusPanelEl.appendChild(statusRow('Mode', 'warn', 'Waiting for file'));
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Waiting for file'));
@@ -311,6 +507,7 @@ function renderEmptyStatusPanel(): void {
 
 function renderLoadingStatusPanel(filename: string): void {
   statusPanelEl.innerHTML = '';
+  resetStatusRowStagger();
   statusPanelEl.appendChild(statusRow('File', 'warn', `Reading ${filename}`));
   statusPanelEl.appendChild(statusRow('Mode', 'warn', 'Evaluating file'));
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Not parsed yet'));
@@ -324,6 +521,7 @@ function renderLoadingStatusPanel(filename: string): void {
 
 function renderErrorStatusPanel(message: string): void {
   statusPanelEl.innerHTML = '';
+  resetStatusRowStagger();
   statusPanelEl.appendChild(statusRow('File', 'bad', 'Could not open file'));
   statusPanelEl.appendChild(
     statusRow(
@@ -383,11 +581,32 @@ function frameCamera(obj: THREE.Object3D): void {
   const maxDim = Math.max(size.x, size.y, size.z);
   const fov = camera.fov * (Math.PI / 180);
   const dist = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
-  camera.position.copy(center).add(new THREE.Vector3(1, 0.8, 1).normalize().multiplyScalar(dist));
-  controls.target.copy(center);
+  const toPos = center
+    .clone()
+    .add(new THREE.Vector3(1, 0.8, 1).normalize().multiplyScalar(dist));
+  // Clip planes jump immediately: interpolating them causes visible
+  // z-fighting mid-move and carries no information.
   camera.near = maxDim / 100;
   camera.far = dist * 10;
   camera.updateProjectionMatrix();
+
+  if (prefersReducedMotion()) {
+    cameraTween = null;
+    controls.enabled = true;
+    camera.position.copy(toPos);
+    controls.target.copy(center);
+    return;
+  }
+
+  controls.enabled = false;
+  cameraTween = {
+    fromPos: camera.position.clone(),
+    toPos,
+    fromTarget: controls.target.clone(),
+    toTarget: center,
+    startedAt: performance.now(),
+    durationMs: 420,
+  };
 }
 
 // ---------- Panels ----------
@@ -585,8 +804,16 @@ function renderExportQuality(diagnostics: ExportDiagnostics): void {
   const label = exportQualityLabel(level);
   const score = diagnostics.confidence?.score;
   const suffix = typeof score === 'number' ? ` · ${Math.round(score * 100)}%` : '';
-  exportQualityEl.textContent = `${label}${suffix}`;
+  const nextText = `${label}${suffix}`;
+  const changed = exportQualityEl.textContent !== nextText;
+  exportQualityEl.textContent = nextText;
   exportQualityEl.className = `quality-pill ${exportQualityClass(level)}`;
+  if (changed && !prefersReducedMotion()) {
+    // className was just rewritten, so re-apply on the next frame to
+    // restart the animation rather than inherit a stale one.
+    requestAnimationFrame(() => exportQualityEl.classList.add('is-updated'));
+    window.setTimeout(() => exportQualityEl.classList.remove('is-updated'), 400);
+  }
 
   const elements = diagnostics.exported?.building_elements ?? 0;
   const geometry = diagnostics.exported?.building_elements_with_geometry ?? 0;
@@ -598,6 +825,7 @@ function renderExportQuality(diagnostics: ExportDiagnostics): void {
 
 function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   statusPanelEl.innerHTML = '';
+  resetStatusRowStagger();
   diagnosticsJsonEl.textContent = JSON.stringify(diagnostics, null, 2);
 
   const input = diagnostics.input ?? {};
@@ -866,9 +1094,18 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
   };
 }
 
+/** Row counter for the entrance stagger; reset whenever a panel rebuilds. */
+let statusRowIndex = 0;
+function resetStatusRowStagger(): void {
+  statusRowIndex = 0;
+}
+
 function statusRow(label: string, kind: StatusKind, value: string): HTMLElement {
   const row = document.createElement('div');
   row.className = 'status-row';
+  // Capped so a long panel does not turn into a slow cascade.
+  row.style.setProperty('--row-i', String(Math.min(statusRowIndex, 8)));
+  statusRowIndex += 1;
   const dot = document.createElement('span');
   dot.className = `status-dot ${kind}`;
   const labelEl = document.createElement('div');
@@ -1022,6 +1259,9 @@ fileInput.addEventListener('change', () => {
 // Keyboard: Escape clears tree selection / returns focus toward file open.
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape') return;
+  // The scaffold explainer is ambient, not modal — Escape clears it
+  // alongside the tree selection rather than swallowing the keypress.
+  hideScaffoldNote();
   const selected = treeEl.querySelector('.tree-node.selected');
   if (selected) {
     selected.classList.remove('selected');
@@ -1051,6 +1291,7 @@ document.body.addEventListener('drop', (ev) => {
   if (!f) return;
   if (!/\.(rvt|rfa|rte|rft)$/i.test(f.name)) {
     setStatus(`ignored: ${f.name} — not a Revit file`);
+    toast(`${f.name} is not a Revit file. Drop a .rvt, .rfa, .rte or .rft.`, 'bad');
     return;
   }
   void loadBytes(f);
@@ -1076,6 +1317,8 @@ exportGlbBtn.addEventListener('click', () => {
     type: 'model/gltf-binary',
   });
   download(`${lastFileStem}.glb`, blob);
+  setStatus(`exported ${lastFileStem}.glb`);
+  toast(`Exported ${lastFileStem}.glb`, 'ok');
 });
 
 exportIfcBtn.addEventListener('click', () => {
@@ -1103,8 +1346,11 @@ exportIfcBtn.addEventListener('click', () => {
       const blob = new Blob([text], { type: 'application/x-step' });
       download(`${lastFileStem}.ifc`, blob);
       setStatus(`exported ${lastFileStem}.ifc`);
+      toast(`Exported ${lastFileStem}.ifc · ${quality}`, 'ok');
     } catch (err) {
-      setStatus(`IFC export failed: ${(err as Error).message ?? err}`);
+      const message = (err as Error).message ?? String(err);
+      setStatus(`IFC export failed: ${message}`);
+      toast(`IFC export failed. ${message}`, 'bad');
     }
   })();
 });
@@ -1135,8 +1381,11 @@ exportSvgBtn.addEventListener('click', () => {
       const blob = new Blob([svg], { type: 'image/svg+xml' });
       download(`${lastFileStem}.svg`, blob);
       setStatus(`exported ${lastFileStem}.svg`);
+      toast(`Exported ${lastFileStem}.svg`, 'ok');
     } catch (err) {
-      setStatus(`plan export failed: ${(err as Error).message ?? err}`);
+      const message = (err as Error).message ?? String(err);
+      setStatus(`plan export failed: ${message}`);
+      toast(`Plan export failed. ${message}`, 'bad');
     }
   })();
 });
@@ -1147,6 +1396,7 @@ downloadDiagnosticsBtn.addEventListener('click', () => {
   const blob = new Blob([json], { type: 'application/json' });
   download(`${lastFileStem}.diagnostics.json`, blob);
   setStatus(`exported ${lastFileStem}.diagnostics.json`);
+  toast(`Downloaded ${lastFileStem}.diagnostics.json`, 'ok');
 });
 
 // ---------- Demo gallery (VW1-22 / M6-03) ----------
@@ -1180,12 +1430,46 @@ function demoAssetUrl(relPath: string): string {
   return new URL(cleaned, new URL('./', window.location.href)).toString();
 }
 
-async function loadDemoFile(demo: DemoEntry): Promise<void> {
+/**
+ * The card that started the in-flight load. Held at module scope because
+ * the busy state has to survive until the worker reports back, which is
+ * long after loadBytes() resolves.
+ */
+let busyDemoCard: HTMLElement | null = null;
+
+function setDemoCardBusy(card: HTMLElement): void {
+  clearDemoCardBusy();
+  busyDemoCard = card;
+  card.setAttribute('aria-busy', 'true');
+  demoListEl.querySelectorAll<HTMLButtonElement>('button.demo-card').forEach((other) => {
+    if (other !== card && !other.disabled) {
+      other.disabled = true;
+      other.setAttribute('data-demo-requeued', 'true');
+    }
+  });
+}
+
+function clearDemoCardBusy(): void {
+  if (busyDemoCard) {
+    busyDemoCard.removeAttribute('aria-busy');
+    busyDemoCard = null;
+  }
+  demoListEl
+    .querySelectorAll<HTMLButtonElement>('button.demo-card[data-demo-requeued]')
+    .forEach((other) => {
+      other.disabled = false;
+      other.removeAttribute('data-demo-requeued');
+    });
+}
+
+async function loadDemoFile(demo: DemoEntry, card?: HTMLElement): Promise<void> {
   if (!demo.loadable || !demo.available) {
     setStatus(`demo ${demo.id} is reference-only — use download link in gallery`);
     return;
   }
+  if (card) setDemoCardBusy(card);
   setStatus(`loading demo ${demo.name}…`);
+  setStatusBusy(true);
   try {
     const response = await fetch(demoAssetUrl(demo.file));
     if (!response.ok) {
@@ -1198,7 +1482,11 @@ async function loadDemoFile(demo: DemoEntry): Promise<void> {
     });
     await loadBytes(file);
   } catch (err) {
-    setStatus(`demo load failed: ${(err as Error).message ?? err}`);
+    const message = (err as Error).message ?? String(err);
+    stopLoadOverlay();
+    clearDemoCardBusy();
+    setStatus(`demo load failed: ${message}`);
+    toast(`Could not open ${demo.name}. ${message}`, 'bad');
   }
 }
 
@@ -1253,7 +1541,7 @@ function renderDemoGallery(catalog: DemoCatalog): void {
       card.disabled = true;
     } else {
       card.addEventListener('click', () => {
-        void loadDemoFile(demo);
+        void loadDemoFile(demo, card);
       });
     }
     fillDemoCard(card, demo, canOpen);
@@ -1261,7 +1549,13 @@ function renderDemoGallery(catalog: DemoCatalog): void {
   }
 }
 
+function isRealProject(demo: DemoEntry): boolean {
+  return (demo.tags ?? []).includes('real-project');
+}
+
 function fillDemoCard(card: HTMLElement, demo: DemoEntry, loadable: boolean): void {
+  const real = isRealProject(demo);
+  if (real) card.setAttribute('data-demo-real', 'true');
   if (demo.thumbnail) {
     const img = document.createElement('img');
     img.src = demoAssetUrl(demo.thumbnail);
@@ -1274,6 +1568,14 @@ function fillDemoCard(card: HTMLElement, demo: DemoEntry, loadable: boolean): vo
   const title = document.createElement('div');
   title.className = 'demo-title';
   title.textContent = demo.name;
+  if (real) {
+    // Distinguishes an actual Revit project from a synthetic fixture at a
+    // glance — the two decode to very different results.
+    const badge = document.createElement('span');
+    badge.className = 'demo-badge';
+    badge.textContent = 'real project';
+    title.appendChild(badge);
+  }
   const meta = document.createElement('div');
   meta.className = 'demo-meta';
   const bits = [
