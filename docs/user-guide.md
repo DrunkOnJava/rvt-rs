@@ -50,9 +50,9 @@ the hosted or self-hosted static viewer; see
    with the file picker, or open a redistributable entry from the demo gallery.
    The gallery leads with two MIT-licensed real Revit projects:
    `Revit_IFC5_Einhoven.rvt` (2023, 913 KB, opens in about half a second) and
-   `2024_Core_Interior.rvt` (2024, 33.7 MB, about 28 seconds to decode in a
-   headless browser — the tab is not stuck, it is parsing). Everything below
-   them is a 20 KB synthetic that decodes to a scaffold only.
+   `2024_Core_Interior.rvt` (2024, 33.7 MB, about 3 seconds to decode —
+   measured on the deployed site, about 7 seconds including the download).
+   Everything below them is a 20 KB synthetic that decodes to a scaffold only.
 3. Read the File status panel and export-quality label before exporting anything.
 4. Use Diagnostics details or Download diagnostics when the status panel reports
    warnings, partial decode, unsupported model layout, or scaffold-only export.
@@ -71,24 +71,50 @@ Wall / Door / Window / Column / Floor / BuildingPad instances from partition
 element records, with a measured slab thickness (#212) and, for all 80
 exported slabs, the plan profile their `OST_SketchLines` records close
 (#31, RE-25). Wall bodies carry the wall's real thickness and the length
-its joins leave it — 336 of 360 match Revit's own export exactly in world
-coordinates — and every column carries the section its family type declares
-(#215, RE-26). Those elements land on the Revit Level their own element
-record names, so 853 of 872 exported elements on Core Interior are contained
-in a specific storey; the 19 that are not — 18 name-only spaces and one wall
-— are contained in the building rather than filed under an arbitrary storey
-(#219, RE-27). Still blocked (RE-19 / RE-20 negative on magnetar corpora):
-schema-field Walls, typed Door/Window host binding, Level ElementId storey
-assignment for Rooms, door and window bodies, the profile of the 20 rotated
-shading plates, and compound-layer geometry — see
-[status.md](status.md) and [supported-profile.md](supported-profile.md).
-Storey containment reaches 801 of 872 building elements; the 71 that bind to
-nothing are 46 record-backed plates, 18 spaces, 6 windows and 1 wall (#33,
-#219).
+its joins leave it — the element record names the walls a wall is joined
+to, which takes 351 of 360 walls to an exact match against Revit's own
+export in world coordinates, and every column is the record prism minus
+the walls that cut it, exact on 256 of 256 (#215 / #238 / #239, RE-26 and
+RE-29). Those elements land on the Revit Level their own element record
+names, so 853 of 872 exported elements on Core Interior are contained in a
+specific storey; the 19 that are not — 18 name-only spaces and one wall —
+are contained in the building rather than filed under an arbitrary storey
+(#219, RE-27). Every wall also joins to its `IfcWallType` exactly, 360 of
+360, though that join is library-side today and is not yet written onto
+the exported wall (#88, RE-28). Still blocked (RE-19 / RE-20 negative on
+magnetar corpora): schema-field Walls, typed Door/Window host binding,
+Level ElementId storey assignment for Rooms, door and window bodies, the
+profile of the 20 rotated shading plates, and compound-layer thicknesses —
+which this corpus cannot even witness, because the reference export is a
+`ReferenceView_V1.2` file with no `IfcMaterialLayerSet` in it at all
+(#88, RE-28). See [status.md](status.md) and
+[supported-profile.md](supported-profile.md).
 
 The viewer can show a scene, categories, element info, schedule summary, export
 quality, a demo gallery with license/provenance, and a supported-profile matrix.
 Geometry shown in the viewer is limited to what rvt-rs actually decoded.
+
+Selecting an element fills the info panel with typed rows rather than raw
+record fields: name, IFC type and predefined type, GUID, the storey it sits
+on (clickable — it selects that storey in the tree), placement and extents
+in feet, and each property set as labelled rows carrying their units. Host
+and hosted rows let you jump from a door or window to its wall and back.
+The schedule groups the elements by IFC type with a count per type, and each
+row toggles a tint over every mesh of that type in the 3-D scene. Where a
+field is simply absent it is omitted; a one-line "Not recovered" note names
+a field only where the export diagnostics confirm it as a known decode gap,
+so an omission is never mistaken for a failure (#272).
+
+### Performance
+
+Opening a large project is fast since #266, which inflates each partition
+stream once per file instead of once per consumer. `rvt-ifc --mode geometry`
+on the 33.7 MB `2024_Core_Interior.rvt` went from 26.07 s and 2641.4 MiB of
+peak RSS to **1.69 s and 490.1 MiB** (Apple Silicon, `/usr/bin/time -l`,
+best of three), and the exported IFC is byte-identical. In the browser the
+same file decodes in **about 3 seconds**, measured on the deployed site,
+where it used to take about 28. Nothing about the decode changed — only how
+many times the same bytes were decompressed.
 
 ## Inspect A File From The Command Line
 

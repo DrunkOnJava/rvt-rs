@@ -10,8 +10,8 @@ diagnostics, and support triage. It is not yet a general Revit model converter.
 | File extensions | `.rvt`, `.rfa`, `.rte`, `.rft` containers that use the standard Revit OLE/CFB layout. |
 | Revit versions | Metadata/schema inspection is regression-tested against the 2016-2026 family corpus. |
 | Safe workflows | `rvt-inspect`, `rvt-info`, `rvt-schema`, previews, stream inventory, document metadata, class schema, and diagnostics sidecars (`Formats/Latest` multipage integrity uncertain while strip stays disabled). |
-| IFC output | Spec-valid IFC4 scaffold with project/spatial framework; partition MVP Level storeys / Room spaces / Material names when recovered (Floor boundary-loop slabs only where no element records decode); typed wall geometry limited to the version-gated 2023 ArcWall path; on Revit 2024, `IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` / `IfcShadingDevice` instances from partition element records with bounding-box envelope bodies and a measured slab thickness (#204 / #211 / #212) — exact against Revit's own export on the one recorded edge, not a general converter. |
-| Browser viewer | Zero-upload inspection, File Status (storey names + material samples), scene tree storey grouping when elevations allow, and explicit export-readiness labels before download. |
+| IFC output | Spec-valid IFC4 scaffold with project/spatial framework; partition MVP Level storeys / Room spaces / Material names when recovered (Floor boundary-loop slabs only where no element records decode); typed wall geometry limited to the version-gated 2023 ArcWall path; on Revit 2024, `IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` / `IfcShadingDevice` instances from partition element records with a measured slab thickness (#204 / #211 / #212), slab plan profiles from their sketch lines (#31), wall runs cut back by the joins the record names (351 of 360 world-exact) and column bodies cut by the walls that cut them (256 of 256 world-exact, #239 / RE-29) — exact against Revit's own export on the one recorded edge, not a general converter. |
+| Browser viewer | Zero-upload inspection, File Status (storey names + material samples), scene tree storey grouping when elevations allow, a typed element info panel (name, type, GUID, clickable storey, placement and extents in feet, property sets as unit-carrying rows, host and hosted rows), a schedule grouped by IFC type with per-type scene highlight, and explicit export-readiness labels before download. |
 
 ## Experimental MVP Target
 
@@ -46,9 +46,22 @@ The first real-model conversion profile is intentionally narrow:
 - Floor/Room storey assignment via Level ElementIds (RE-20 negative — `Level`
   absent from Formats; bind plumbing stays fail-closed / idle).
 - Compound wall-layer thicknesses, and slab extrusion depth on any path
-  other than the Revit 2024 element records.
+  other than the Revit 2024 element records. The wall *type* itself is
+  recovered — a bbox-less record with placement kind `0xffff8080`, which
+  every one of the 360 exported wall instances names exactly once, giving
+  the `IfcWallType` Revit assigns on 360 of 360 (#88, RE-28) — but that
+  join is library-side and is not yet a property on the emitted wall, and
+  the layer thicknesses are not near the record. They are also not
+  witnessable on this corpus: the paired reference export is a
+  `ReferenceView_V1.2` file with zero `IfcMaterialLayerSet`, zero
+  `IfcMaterialLayer` and zero `IfcMaterialLayerSetUsage`, so no layer is
+  emitted and none is invented.
 - Recovered family profiles / wall location curves for the Revit 2024
-  element-record path: bodies there are the record's own bounding box.
+  element-record path: bodies there are the record's own bounding box,
+  except for a slab's plan profile (#31, RE-25), a wall's join-trimmed run
+  and a column's join-cut prism (#238 / #239, RE-29). Nine wall ends at
+  true L corners are still over-trimmed, recorded as a measured negative
+  with no identified carrier.
 - Reliable geometry for walls/floors/doors/windows outside the narrow
   research profile.
 - Semantic Revit editing through the stream writer.
