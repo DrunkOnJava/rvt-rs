@@ -233,12 +233,14 @@ function toast(message: string, kind: ToastKind = 'info'): void {
 
 // ---------- Viewport loading treatment ----------
 /**
- * Observed decode throughput across the staged demos (a 33.7 MB project
- * lands in roughly 30 s). Only ever used to set an expectation — the
- * decoder cannot report real progress, so the bar stays indeterminate
- * rather than faking a percentage.
+ * Observed decode throughput across the staged demos: since the
+ * partition streams are inflated once per file (#266) the 33.7 MB
+ * project decodes in about 3 s in the browser, measured on the deployed
+ * site. Only ever used to set an expectation — the decoder cannot report
+ * real progress, so the bar stays indeterminate rather than faking a
+ * percentage.
  */
-const DECODE_BYTES_PER_SECOND = 1.15e6;
+const DECODE_BYTES_PER_SECOND = 11e6;
 
 function loadExpectation(bytes: number): string {
   const size = formatBytes(bytes);
