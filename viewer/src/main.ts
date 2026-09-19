@@ -32,6 +32,8 @@ const treeEl = $('tree');
 const categoriesEl = $('categories');
 const infoEl = $('info');
 const scheduleEl = $('schedule-summary');
+const scheduleTotalEl = $('schedule-total');
+const scheduleGroupsEl = $('schedule-groups');
 const statusPanelEl = $('status-panel');
 const diagnosticsJsonEl = $('diagnostics-json');
 const downloadDiagnosticsBtn = $('download-diagnostics') as HTMLButtonElement;
@@ -159,19 +161,83 @@ let highlighted: Array<{
 function clearHighlight(): void {
   for (const entry of highlighted) entry.mesh.material = entry.material;
   highlighted = [];
+  activeTypeHighlight = null;
+  activeMaterialHighlight = null;
 }
 
-/** Tint every mesh carrying `entityIndex` so the scene agrees with the tree. */
-function highlightEntity(idx: number): void {
+/**
+ * Tint every mesh the predicate accepts. The highlight set has
+ * always been a list, so lighting a whole IFC type or a whole
+ * material costs nothing beyond a wider predicate.
+ */
+function highlightWhere(match: (data: MeshIdentity) => boolean): number {
   clearHighlight();
-  if (!currentModel) return;
+  if (!currentModel) return 0;
   currentModel.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
-    if ((obj.userData as { entityIndex?: number }).entityIndex !== idx) return;
+    if (!match(obj.userData as MeshIdentity)) return;
     highlighted.push({ mesh, material: mesh.material });
     mesh.material = highlightMaterial;
   });
+  return highlighted.length;
+}
+
+interface MeshIdentity {
+  entityIndex?: number;
+  ifcType?: string;
+}
+
+/** Which IFC type the schedule is currently lighting up, if any. */
+let activeTypeHighlight: string | null = null;
+/** Which material index the info panel is currently lighting up. */
+let activeMaterialHighlight: number | null = null;
+
+/** Tint every mesh carrying `entityIndex` so the scene agrees with the tree. */
+function highlightEntity(idx: number): void {
+  highlightWhere((data) => data.entityIndex === idx);
+}
+
+/** Tint every mesh of one IFC type — the schedule's "show in view". */
+function highlightIfcType(ifcType: string): number {
+  const lit = highlightWhere((data) => data.ifcType === ifcType);
+  activeTypeHighlight = lit > 0 ? ifcType : null;
+  return lit;
+}
+
+/** Tint every element sharing a material — the info panel material row. */
+function highlightByMaterial(materialIndex: number): number {
+  const indices = entityIndicesWithMaterial(materialIndex);
+  const lit = highlightWhere(
+    (data) => data.entityIndex !== undefined && indices.has(data.entityIndex),
+  );
+  activeMaterialHighlight = lit > 0 ? materialIndex : null;
+  return lit;
+}
+
+/**
+ * Entities associated with a material. The model is already in
+ * memory on this thread, so the lookup needs no worker round-trip.
+ */
+function entityIndicesWithMaterial(materialIndex: number): Set<number> {
+  const out = new Set<number>();
+  const entities = model?.entities ?? [];
+  for (let i = 0; i < entities.length; i += 1) {
+    if (entities[i]?.material_index === materialIndex) out.add(i);
+  }
+  return out;
+}
+
+/** `true` once the scene carries pickable, tintable element meshes. */
+function sceneSupportsHighlight(): boolean {
+  if (!currentModel) return false;
+  let found = false;
+  currentModel.traverse((obj) => {
+    if (found) return;
+    if (!(obj as THREE.Mesh).isMesh) return;
+    if ((obj.userData as MeshIdentity).entityIndex !== undefined) found = true;
+  });
+  return found;
 }
 
 /**
@@ -181,6 +247,7 @@ function highlightEntity(idx: number): void {
  * relationship.
  */
 function selectEntity(idx: number): void {
+  clearScheduleHighlightState();
   selectTreeRow(idx);
   highlightEntity(idx);
   showElementInfo(idx);
@@ -233,12 +300,14 @@ function toast(message: string, kind: ToastKind = 'info'): void {
 
 // ---------- Viewport loading treatment ----------
 /**
- * Observed decode throughput across the staged demos (a 33.7 MB project
- * lands in roughly 30 s). Only ever used to set an expectation — the
- * decoder cannot report real progress, so the bar stays indeterminate
- * rather than faking a percentage.
+ * Observed decode throughput across the staged demos: since the
+ * partition streams are inflated once per file (#266) the 33.7 MB
+ * project decodes in about 3 s in the browser, measured on the deployed
+ * site. Only ever used to set an expectation — the decoder cannot report
+ * real progress, so the bar stays indeterminate rather than faking a
+ * percentage.
  */
-const DECODE_BYTES_PER_SECOND = 1.15e6;
+const DECODE_BYTES_PER_SECOND = 11e6;
 
 function loadExpectation(bytes: number): string {
   const size = formatBytes(bytes);
@@ -353,18 +422,66 @@ interface IfcModel {
   description?: string;
   building_storeys?: Array<{ name: string; elevation_feet?: number }>;
   materials?: Array<{ name: string; color_packed?: number; transparency?: number }>;
-  entities?: Array<{ name: string; ifc_type: string; guid?: string }>;
+  entities?: Array<{
+    name: string;
+    ifc_type: string;
+    guid?: string;
+    material_index?: number | null;
+  }>;
 }
 interface RelatedElement {
   entity_index: number;
   name: string;
   ifc_type: string;
 }
+interface PanelRow {
+  label: string;
+  value: string;
+}
+interface PanelProperty {
+  name: string;
+  value: string;
+  kind: string;
+  numeric: boolean;
+}
+interface PanelPropertyGroup {
+  name: string;
+  properties: PanelProperty[];
+}
+interface PanelStorey {
+  index: number;
+  name: string;
+  elevation_feet: number;
+  elevation_label: string;
+}
+interface PanelMaterial {
+  index: number;
+  name: string;
+  element_count: number;
+}
 interface ElementInfoPanel {
   name: string;
   ifc_type: string;
+  type_guid?: string | null;
+  predefined_type?: string | null;
+  storey?: PanelStorey | null;
+  placement_rows?: PanelRow[];
+  extent_rows?: PanelRow[];
+  material?: PanelMaterial | null;
+  property_group?: PanelPropertyGroup | null;
   host?: RelatedElement | null;
   hosted?: RelatedElement[];
+  missing?: string[];
+}
+interface ScheduleTypeGroup {
+  ifc_type: string;
+  count: number;
+  entity_indices: number[];
+  storeys: string[];
+}
+interface Schedule {
+  rows?: unknown[];
+  groups?: ScheduleTypeGroup[];
 }
 interface SceneNode {
   name: string;
@@ -438,6 +555,8 @@ let model: IfcModel | null = null;
 let sceneGraph: SceneNode | null = null;
 let distinctTypes: string[] = [];
 let lastGlb: Uint8Array | null = null;
+/** Retained so the schedule can re-render once the GLB is in the scene. */
+let lastSchedule: Schedule | null = null;
 let lastFileStem = 'model';
 let currentDiagnostics: ExportDiagnostics | null = null;
 const hiddenTypes = new Set<string>();
@@ -455,6 +574,7 @@ async function loadBytes(file: File): Promise<void> {
   sceneGraph = null;
   distinctTypes = [];
   lastGlb = null;
+  lastSchedule = null;
   currentDiagnostics = null;
   exportGlbBtn.disabled = true;
   exportIfcBtn.disabled = true;
@@ -463,6 +583,15 @@ async function loadBytes(file: File): Promise<void> {
   exportQualityEl.textContent = 'quality: pending';
   exportQualityEl.className = 'quality-pill';
   diagnosticsJsonEl.textContent = '';
+  // A new file invalidates the panel and the schedule; leaving the
+  // previous file's numbers up would read as if they still applied.
+  pendingInfoIndex = null;
+  infoEl.removeAttribute('aria-busy');
+  infoEl.textContent =
+    'Select an element in the 3-D view or scene tree (Enter / Space on a tree row).';
+  scheduleTotalEl.textContent = 'Reading the file…';
+  scheduleGroupsEl.innerHTML = '';
+  clearHighlight();
   renderLoadingStatusPanel(file.name);
   let bytes: Uint8Array;
   try {
@@ -493,7 +622,7 @@ async function loadBytes(file: File): Promise<void> {
           scene: SceneNode;
           types: string[];
           glb: Uint8Array;
-          schedule: unknown;
+          schedule: Schedule;
           diagnostics: ExportDiagnostics;
         }
       | { type: 'info'; index: number; panel: ElementInfoPanel | null }
@@ -501,7 +630,8 @@ async function loadBytes(file: File): Promise<void> {
     if (msg.type === 'info') {
       // Stale reply for an element the user already clicked past.
       if (msg.index !== pendingInfoIndex) return;
-      renderRelations(msg.panel);
+      if (msg.panel) renderElementPanel(msg.panel);
+      else renderScaffoldPanel(msg.index);
       return;
     }
     if (msg.type === 'progress') {
@@ -539,6 +669,7 @@ async function loadBytes(file: File): Promise<void> {
     sceneGraph = msg.scene;
     distinctTypes = msg.types;
     lastGlb = msg.glb;
+    lastSchedule = msg.schedule;
     currentDiagnostics = msg.diagnostics;
     lastFileStem = file.name.replace(/\.(rvt|rfa|rte|rft)$/i, '');
     renderScene(msg.glb);
@@ -638,6 +769,10 @@ function renderScene(glb: Uint8Array): void {
       scene.add(currentModel);
       frameCamera(currentModel);
       URL.revokeObjectURL(url);
+      // The schedule renders before the loader resolves, so the
+      // per-type highlight affordance only becomes honest here —
+      // once there are meshes to tint.
+      if (lastSchedule) renderScheduleSummary(lastSchedule);
     },
     undefined,
     (err) => {
@@ -733,6 +868,11 @@ function buildTreeNode(node: SceneNode): HTMLElement {
   if (node.entity_index !== null) {
     row.dataset.entityIndex = String(node.entity_index);
   }
+  // Storey nodes are synthetic — they carry no entity index, so the
+  // panel's storey jump addresses them by storey index instead.
+  if (node.ifc_type === 'IFCBUILDINGSTOREY' && node.storey_index != null) {
+    row.dataset.storeyIndex = String(node.storey_index);
+  }
   row.textContent =
     node.ifc_type === 'IFCBUILDINGSTOREY'
       ? storeyNodeLabel(node)
@@ -743,6 +883,7 @@ function buildTreeNode(node: SceneNode): HTMLElement {
         : `${node.name} · ${node.ifc_type}`;
   const activate = (ev: Event) => {
     ev.stopPropagation();
+    clearScheduleHighlightState();
     document
       .querySelectorAll('.tree-node.selected')
       .forEach((el) => el.classList.remove('selected'));
@@ -750,7 +891,13 @@ function buildTreeNode(node: SceneNode): HTMLElement {
     if (node.entity_index !== null) {
       highlightEntity(node.entity_index);
       showElementInfo(node.entity_index);
+      return;
     }
+    // Project and storey rows are synthetic — they have no entity to
+    // inspect. Describe the node itself rather than leaving whatever
+    // element was selected before sitting there as if it applied.
+    clearHighlight();
+    showContainerInfo(node);
   };
   row.addEventListener('click', activate);
   row.addEventListener('keydown', (ev) => {
@@ -810,13 +957,76 @@ function applyCategoryVisibility(): void {
   });
 }
 
-/** Index whose relationship payload we are waiting on from the worker. */
+/** Index whose panel payload we are waiting on from the worker. */
 let pendingInfoIndex: number | null = null;
 
-function requestRelations(idx: number): void {
+function requestElementPanel(idx: number): void {
   pendingInfoIndex = idx;
-  document.getElementById('info-relations')?.remove();
   worker?.postMessage({ type: 'info', index: idx });
+}
+
+// ---------- Element info panel ----------
+
+/** One `label / value` line in the panel's key gutter. */
+function infoRow(label: string, value: string, numeric = false): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'info-row';
+  const k = document.createElement('div');
+  k.className = 'k';
+  k.textContent = label;
+  const v = document.createElement('div');
+  v.className = numeric ? 'v num' : 'v';
+  v.textContent = value;
+  row.appendChild(k);
+  row.appendChild(v);
+  return row;
+}
+
+/**
+ * A band of the panel. Groups carry their kind on the left rule:
+ * inert data reads grey, anything you can navigate to reads blue,
+ * a decode gap reads amber — the same rule the status panel and
+ * the scaffold note already use.
+ */
+function infoGroup(kind: string, title?: string): HTMLElement {
+  const box = document.createElement('div');
+  box.className = `info-group info-group-${kind}`;
+  box.dataset.group = kind;
+  if (title) {
+    const heading = document.createElement('div');
+    heading.className = 'info-group-title';
+    heading.textContent = title;
+    box.appendChild(heading);
+  }
+  return box;
+}
+
+/** A row you can activate to move the selection somewhere else. */
+function jumpButton(label: string, ariaLabel: string, onActivate: () => void): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'info-relation';
+  btn.setAttribute('aria-label', ariaLabel);
+  btn.textContent = label;
+  btn.addEventListener('click', onActivate);
+  return btn;
+}
+
+function relationHeading(text: string): HTMLElement {
+  const heading = document.createElement('div');
+  heading.className = 'info-relations-title';
+  heading.textContent = text;
+  return heading;
+}
+
+function relationRow(rel: RelatedElement): HTMLElement {
+  const btn = jumpButton(
+    `${rel.name} · ${rel.ifc_type}`,
+    `Select ${rel.name} (${rel.ifc_type})`,
+    () => selectEntity(rel.entity_index),
+  );
+  btn.dataset.entityIndex = String(rel.entity_index);
+  return btn;
 }
 
 /**
@@ -824,11 +1034,10 @@ function requestRelations(idx: number): void {
  * Rust: the wall a door or window sits in, and the openings a wall
  * carries. Each row re-selects its element — mouse or keyboard.
  */
-function renderRelations(panel: ElementInfoPanel | null): void {
-  document.getElementById('info-relations')?.remove();
-  const host = panel?.host ?? null;
-  const hosted = panel?.hosted ?? [];
-  if (!host && hosted.length === 0) return;
+function relationsBox(panel: ElementInfoPanel): HTMLElement | null {
+  const host = panel.host ?? null;
+  const hosted = panel.hosted ?? [];
+  if (!host && hosted.length === 0) return null;
   const box = document.createElement('div');
   box.id = 'info-relations';
   box.className = 'info-relations';
@@ -842,76 +1051,264 @@ function renderRelations(panel: ElementInfoPanel | null): void {
     );
     for (const rel of hosted) box.appendChild(relationRow(rel));
   }
+  return box;
+}
+
+/** Storey band — the level in words, and a jump to it in the tree. */
+function storeyGroup(storey: PanelStorey): HTMLElement {
+  const box = infoGroup('storey', 'Storey');
+  const btn = jumpButton(
+    `${storey.name} · ${storey.elevation_label}`,
+    `Select storey ${storey.name} in the scene tree`,
+    () => selectStorey(storey.index),
+  );
+  btn.dataset.storeyIndex = String(storey.index);
+  box.appendChild(btn);
+  return box;
+}
+
+/**
+ * Material band — the material in words, plus how many elements
+ * share it and a toggle that lights all of them in the 3-D view.
+ * The affordance only appears when the scene has tintable meshes.
+ */
+function materialGroup(material: PanelMaterial): HTMLElement {
+  const box = infoGroup('material', 'Material');
+  const shared = `${material.element_count} element${material.element_count === 1 ? '' : 's'}`;
+  if (!sceneSupportsHighlight()) {
+    box.appendChild(infoRow(material.name, shared));
+    return box;
+  }
+  const btn = jumpButton(
+    `${material.name} · ${shared}`,
+    `Highlight the ${shared} using ${material.name} in the 3-D view`,
+    () => {
+      if (activeMaterialHighlight === material.index) {
+        clearHighlight();
+        btn.setAttribute('aria-pressed', 'false');
+        return;
+      }
+      const lit = highlightByMaterial(material.index);
+      btn.setAttribute('aria-pressed', lit > 0 ? 'true' : 'false');
+    },
+  );
+  btn.dataset.materialIndex = String(material.index);
+  btn.setAttribute('aria-pressed', 'false');
+  box.appendChild(btn);
+  return box;
+}
+
+/**
+ * The element's property set as a titled group with one row per
+ * property. Long sets collapse behind a native `<details>` so the
+ * bands below them stay reachable without a scroll marathon.
+ */
+const PROPERTY_COLLAPSE_THRESHOLD = 8;
+
+function propertyGroup(group: PanelPropertyGroup): HTMLElement | null {
+  if (group.properties.length === 0) return null;
+  const rows = document.createElement('div');
+  rows.className = 'info-properties';
+  for (const p of group.properties) {
+    const row = infoRow(p.name, p.value, p.numeric);
+    row.dataset.propertyKind = p.kind;
+    rows.appendChild(row);
+  }
+  const count = group.properties.length;
+  if (count <= PROPERTY_COLLAPSE_THRESHOLD) {
+    const box = infoGroup('properties', group.name);
+    box.appendChild(rows);
+    return box;
+  }
+  const box = infoGroup('properties');
+  const details = document.createElement('details');
+  details.className = 'info-details';
+  details.id = 'info-properties-details';
+  const summary = document.createElement('summary');
+  summary.className = 'info-group-title';
+  summary.textContent = `${group.name} · ${count} properties`;
+  details.appendChild(summary);
+  details.appendChild(rows);
+  box.appendChild(details);
+  return box;
+}
+
+/**
+ * The one honest line about what is absent. A field is only
+ * called out when the export diagnostics name it as a known
+ * decode gap; everything else absent is simply omitted.
+ */
+const GAP_LABELS: Record<string, string> = {
+  storey: 'level binding',
+  material: 'material',
+  properties: 'Revit parameters',
+  placement: 'placement',
+  extents: 'geometry extents',
+};
+
+function knownGaps(missing: string[], diagnostics: ExportDiagnostics | null): string[] {
+  if (!diagnostics) return [];
+  const warnings = (diagnostics.warnings ?? []).join(' ');
+  const unsupported = diagnostics.unsupported_features ?? [];
+  const partialGeometry = unsupported.includes('partial_element_geometry');
+  const confirmed: Record<string, boolean> = {
+    storey: warnings.includes('unsupported_geometry_missing_level'),
+    material: (diagnostics.exported?.material_count ?? 0) === 0,
+    properties:
+      unsupported.includes('revit_element_parameters_to_ifc_property_sets') ||
+      (diagnostics.decoded?.parameter_value_count ?? 0) === 0,
+    placement: partialGeometry,
+    extents: partialGeometry || warnings.includes('unsupported_geometry_missing_dimensions'),
+  };
+  return missing.filter((m) => confirmed[m]).map((m) => GAP_LABELS[m] ?? m);
+}
+
+function gapNote(missing: string[]): HTMLElement | null {
+  const gaps = knownGaps(missing, currentDiagnostics);
+  if (gaps.length === 0) return null;
+  const box = infoGroup('gap');
+  box.id = 'info-gaps';
+  const line = document.createElement('div');
+  line.className = 'info-gap-note';
+  line.textContent = `Not recovered: ${gaps.join(', ')}`;
+  box.appendChild(line);
+  return box;
+}
+
+/** Render the whole panel from the Rust payload. */
+function renderElementPanel(panel: ElementInfoPanel): void {
+  infoEl.innerHTML = '';
+  infoEl.removeAttribute('aria-busy');
+
+  const identity = infoGroup('identity');
+  identity.appendChild(infoRow('Name', panel.name));
+  identity.appendChild(
+    infoRow(
+      'Type',
+      panel.predefined_type ? `${panel.ifc_type} · ${panel.predefined_type}` : panel.ifc_type,
+    ),
+  );
+  if (panel.type_guid) identity.appendChild(infoRow('GUID', panel.type_guid));
+  infoEl.appendChild(identity);
+
+  if (panel.storey) infoEl.appendChild(storeyGroup(panel.storey));
+  if (panel.material) infoEl.appendChild(materialGroup(panel.material));
+
+  const placement = panel.placement_rows ?? [];
+  if (placement.length > 0) {
+    const box = infoGroup('placement', 'Placement');
+    for (const row of placement) box.appendChild(infoRow(row.label, row.value, true));
+    infoEl.appendChild(box);
+  }
+
+  const extents = panel.extent_rows ?? [];
+  if (extents.length > 0) {
+    const box = infoGroup('extents', 'Extents');
+    for (const row of extents) {
+      box.appendChild(infoRow(row.label, row.value, row.label !== 'Profile'));
+    }
+    infoEl.appendChild(box);
+  }
+
+  if (panel.property_group) {
+    const box = propertyGroup(panel.property_group);
+    if (box) infoEl.appendChild(box);
+  }
+
+  const relations = relationsBox(panel);
+  if (relations) infoEl.appendChild(relations);
+
+  const gaps = gapNote(panel.missing ?? []);
+  if (gaps) infoEl.appendChild(gaps);
+}
+
+/**
+ * Fallback for an index the typed exporter could not describe —
+ * scaffold and partial exports reach the scene graph without a
+ * populated `entities[]` row. Says so rather than showing blanks.
+ */
+function renderScaffoldPanel(idx: number): void {
+  const node = findSceneNodeByIndex(sceneGraph, idx);
+  infoEl.innerHTML = '';
+  infoEl.removeAttribute('aria-busy');
+  if (!node) {
+    infoEl.textContent = 'That element is no longer in the scene.';
+    return;
+  }
+  const identity = infoGroup('identity');
+  identity.appendChild(infoRow('Name', node.name));
+  identity.appendChild(infoRow('Type', node.ifc_type));
+  infoEl.appendChild(identity);
+  const box = infoGroup('gap');
+  box.id = 'info-gaps';
+  const line = document.createElement('div');
+  line.className = 'info-gap-note';
+  line.textContent = 'Partial decode — no typed element fields were recovered for this node.';
+  box.appendChild(line);
   infoEl.appendChild(box);
 }
 
-function relationHeading(text: string): HTMLElement {
-  const heading = document.createElement('div');
-  heading.className = 'info-relations-title';
-  heading.textContent = text;
-  return heading;
-}
-
-function relationRow(rel: RelatedElement): HTMLElement {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'info-relation';
-  btn.dataset.entityIndex = String(rel.entity_index);
-  btn.setAttribute('aria-label', `Select ${rel.name} (${rel.ifc_type})`);
-  btn.textContent = `${rel.name} · ${rel.ifc_type}`;
-  btn.addEventListener('click', () => selectEntity(rel.entity_index));
-  return btn;
-}
-
+/**
+ * Selection entry point for the panel. The payload comes back
+ * from the worker, so show the identity we already hold rather
+ * than blanking the panel for the round-trip.
+ */
 function showElementInfo(idx: number): void {
-  requestRelations(idx);
-  if (!model) return;
-  const e = model.entities?.[idx];
-  if (e) {
-    infoEl.innerHTML = '';
-    for (const [k, v] of Object.entries(e)) {
-      const row = document.createElement('div');
-      row.className = 'info-row';
-      const kE = document.createElement('div');
-      kE.className = 'k';
-      kE.textContent = k;
-      const vE = document.createElement('div');
-      vE.className = 'v';
-      vE.textContent = v === null || v === undefined ? '—' : JSON.stringify(v);
-      row.appendChild(kE);
-      row.appendChild(vE);
-      infoEl.appendChild(row);
-    }
-    return;
-  }
-
-  // Scaffold / partial exports may expose a scene-graph index without a
-  // populated entities[] row. Fall back to the tree node so inspect still
-  // surfaces something honest for the MVP workflow shell.
-  const node = findSceneNodeByIndex(sceneGraph, idx);
-  if (!node) {
-    infoEl.textContent = 'not found';
-    return;
-  }
+  requestElementPanel(idx);
+  const e = model?.entities?.[idx];
+  const node = e ? null : findSceneNodeByIndex(sceneGraph, idx);
+  const name = e?.name ?? node?.name;
+  const ifcType = e?.ifc_type ?? node?.ifc_type;
+  if (name === undefined || ifcType === undefined) return;
   infoEl.innerHTML = '';
-  for (const [k, v] of Object.entries({
-    name: node.name,
-    ifc_type: node.ifc_type,
-    entity_index: node.entity_index,
-    note: 'Partial decode — typed element fields were not recovered for this node.',
-  })) {
-    const row = document.createElement('div');
-    row.className = 'info-row';
-    const kE = document.createElement('div');
-    kE.className = 'k';
-    kE.textContent = k;
-    const vE = document.createElement('div');
-    vE.className = 'v';
-    vE.textContent = v === null || v === undefined ? '—' : JSON.stringify(v);
-    row.appendChild(kE);
-    row.appendChild(vE);
-    infoEl.appendChild(row);
+  infoEl.setAttribute('aria-busy', 'true');
+  const identity = infoGroup('identity');
+  identity.appendChild(infoRow('Name', name));
+  identity.appendChild(infoRow('Type', ifcType));
+  infoEl.appendChild(identity);
+}
+
+/**
+ * Panel for a synthetic container node — the project root or a
+ * storey. These carry no entity, so the panel reports what the
+ * node itself is and how much it holds.
+ */
+function showContainerInfo(node: SceneNode): void {
+  pendingInfoIndex = null;
+  infoEl.innerHTML = '';
+  infoEl.removeAttribute('aria-busy');
+  const identity = infoGroup('identity');
+  identity.appendChild(infoRow('Name', node.name));
+  identity.appendChild(infoRow('Type', node.ifc_type));
+  const kids = node.children.length;
+  if (node.ifc_type === 'IFCBUILDINGSTOREY') {
+    identity.appendChild(
+      infoRow('Contains', `${kids} element${kids === 1 ? '' : 's'}`, true),
+    );
+    const storeys = model?.building_storeys ?? [];
+    const idx = node.storey_index;
+    const elev = idx != null ? storeys[idx]?.elevation_feet : undefined;
+    if (typeof elev === 'number') {
+      identity.appendChild(infoRow('Elevation', `${elev.toFixed(3)} ft`, true));
+    }
+  } else {
+    identity.appendChild(infoRow('Contains', `${kids} storey${kids === 1 ? '' : 's'}`, true));
   }
+  infoEl.appendChild(identity);
+}
+
+/** Select a storey node in the tree — the panel's storey jump. */
+function selectStorey(storeyIndex: number): void {
+  const row = treeEl.querySelector<HTMLElement>(`.tree-node[data-storey-index="${storeyIndex}"]`);
+  if (!row) return;
+  document.querySelectorAll('.tree-node.selected').forEach((el) => el.classList.remove('selected'));
+  row.classList.add('selected');
+  row.scrollIntoView({
+    block: 'nearest',
+    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+  });
+  row.focus();
+  clearHighlight();
 }
 
 function findSceneNodeByIndex(node: SceneNode | null, idx: number): SceneNode | null {
@@ -924,13 +1321,95 @@ function findSceneNodeByIndex(node: SceneNode | null, idx: number): SceneNode | 
   return null;
 }
 
+/**
+ * The schedule as a per-type breakdown rather than a bare
+ * total. Each row carries its count, and — when the scene has
+ * tintable meshes — a toggle that lights the whole type at once.
+ */
 function renderScheduleSummary(schedule: unknown): void {
-  const s = schedule as { rows?: unknown[] } | null;
-  if (!s || !s.rows) {
-    scheduleEl.textContent = '(empty)';
+  const s = schedule as Schedule | null;
+  // Both children are in the markup so the live region survives a
+  // re-render — replacing it would silence the announcement.
+  const total = scheduleTotalEl;
+  const list = scheduleGroupsEl;
+  list.innerHTML = '';
+  const rowCount = s?.rows?.length ?? 0;
+  if (!s || rowCount === 0) {
+    total.textContent = 'No scheduled elements in this export.';
     return;
   }
-  scheduleEl.textContent = `${s.rows.length} scheduled elements`;
+  const groups = s.groups ?? [];
+  total.textContent =
+    groups.length > 0
+      ? `${rowCount} scheduled elements · ${groups.length} type${groups.length === 1 ? '' : 's'}`
+      : `${rowCount} scheduled elements`;
+
+  const canHighlight = sceneSupportsHighlight();
+  for (const group of groups) {
+    list.appendChild(scheduleGroupRow(group, canHighlight));
+  }
+}
+
+function scheduleGroupRow(group: ScheduleTypeGroup, canHighlight: boolean): HTMLElement {
+  const countLabel = String(group.count);
+  const storeyNote =
+    group.storeys.length > 0
+      ? ` across ${group.storeys.length} storey${group.storeys.length === 1 ? '' : 's'}`
+      : '';
+
+  if (!canHighlight) {
+    const row = document.createElement('div');
+    row.className = 'schedule-row';
+    row.dataset.ifcType = group.ifc_type;
+    row.appendChild(scheduleCell('schedule-type', group.ifc_type));
+    row.appendChild(scheduleCell('schedule-count', countLabel));
+    return row;
+  }
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'schedule-row schedule-action';
+  btn.dataset.ifcType = group.ifc_type;
+  btn.setAttribute('aria-pressed', 'false');
+  btn.setAttribute(
+    'aria-label',
+    `Highlight ${group.count} ${group.ifc_type} elements${storeyNote} in the 3-D view`,
+  );
+  btn.appendChild(scheduleCell('schedule-type', group.ifc_type));
+  btn.appendChild(scheduleCell('schedule-count', countLabel));
+  const verb = scheduleCell('schedule-verb', 'Highlight');
+  btn.appendChild(verb);
+  btn.addEventListener('click', () => {
+    const wasActive = activeTypeHighlight === group.ifc_type;
+    clearScheduleHighlightState();
+    if (wasActive) return;
+    const lit = highlightIfcType(group.ifc_type);
+    if (lit === 0) {
+      toast(`No ${group.ifc_type} geometry to highlight.`, 'info');
+      return;
+    }
+    btn.setAttribute('aria-pressed', 'true');
+    verb.textContent = 'Clear';
+    setStatus(`highlighted ${lit} ${group.ifc_type} mesh${lit === 1 ? '' : 'es'}`);
+  });
+  return btn;
+}
+
+function scheduleCell(className: string, text: string): HTMLElement {
+  const cell = document.createElement('span');
+  cell.className = className;
+  cell.textContent = text;
+  return cell;
+}
+
+/** Return every schedule row to its resting state. */
+function clearScheduleHighlightState(): void {
+  clearHighlight();
+  scheduleEl.querySelectorAll<HTMLElement>('.schedule-action').forEach((el) => {
+    el.setAttribute('aria-pressed', 'false');
+    const verb = el.querySelector('.schedule-verb');
+    if (verb) verb.textContent = 'Highlight';
+  });
 }
 
 function renderExportQuality(diagnostics: ExportDiagnostics): void {

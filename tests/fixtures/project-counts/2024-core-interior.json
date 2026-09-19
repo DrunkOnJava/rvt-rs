@@ -138,7 +138,7 @@
       "decoder_tolerance": 5,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "Partition display-name Materials recover into IfcMaterial; compound assemblies / WallType widths remain open. Paired IFC expects only 1. Decoder baseline 102 after Finding 1 gated Partitions/Global strip (was 92±5)."
+      "notes": "Partition display-name Materials recover into IfcMaterial; compound assemblies / WallType widths remain open. Paired IFC expects only 1. Decoder baseline 102 after Finding 1 gated Partitions/Global strip (was 92±5). Bounded 2026-09-19 (#34/#88, RE-28): 86 records on this .rvt carry BuiltInCategory OST_Materials (-2000700) in the bbox-less type-record shape (rvt::partition_type_records), a closed byte-derived set that replaces the string filter as the upper bound - but the records carry no name and the element -> material join is incomplete, so nothing is recovered from them yet. Compound layers stay unsupported: they are not within 64 KiB of the wall-type record, and the sibling slim manifest's ReferenceView_V1.2 reference export carries no IfcMaterialLayerSet to witness them against. See reports/element-framing/RE-28-wall-type-records.md."
     },
     "units": {
       "status": "known",

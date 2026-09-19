@@ -263,6 +263,70 @@
         font-family: ui-monospace, 'SF Mono', monospace;
         word-break: break-all;
       }
+      /* Measurements align on their decimal without switching to a
+         second family: tabular figures in the panel's own face. */
+      .info-row .v.num {
+        font-family: inherit;
+        font-variant-numeric: tabular-nums;
+        word-break: normal;
+      }
+
+      /* --- Element info bands ------------------------------
+         One motif runs the whole panel: a 2px left rule whose colour
+         says what kind of band this is. Grey = inert data, accent =
+         somewhere you can navigate to, amber = a decode gap. Nothing
+         else is added — no cards, no shadows, no second radius. */
+      .info-group {
+        margin-top: 10px;
+        padding-left: 8px;
+        border-left: 2px solid var(--line);
+      }
+      .info-group:first-child {
+        margin-top: 0;
+      }
+      .info-group-storey,
+      .info-group-material {
+        border-left-color: var(--accent-line);
+      }
+      .info-group-gap {
+        border-left-color: var(--warn);
+      }
+      .info-group-title {
+        font-size: 11px;
+        color: var(--muted);
+        padding-bottom: 3px;
+      }
+      .info-group .info-row:last-child {
+        border-bottom: none;
+      }
+      .info-gap-note {
+        font-size: 11px;
+        color: var(--warn);
+        line-height: 1.4;
+      }
+      .info-details > summary {
+        cursor: pointer;
+        list-style: none;
+      }
+      .info-details > summary::-webkit-details-marker {
+        display: none;
+      }
+      /* The disclosure state is the arrow, so it turns rather than
+         swapping glyphs — the one place this panel animates. */
+      .info-details > summary::before {
+        content: '▸';
+        display: inline-block;
+        width: 12px;
+        color: var(--dim);
+        transition: transform var(--t-fast) var(--ease);
+      }
+      .info-details[open] > summary::before {
+        transform: rotate(90deg);
+      }
+      .info-details > summary:hover {
+        color: var(--text);
+      }
+
       .info-relations {
         display: grid;
         gap: 4px;
@@ -286,9 +350,87 @@
         border-radius: 3px;
         padding: 4px 6px;
         cursor: pointer;
+        transition:
+          background-color var(--t-fast) var(--ease),
+          border-color var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease);
       }
       .info-relation:hover {
         background: #1d2430;
+        color: #fff;
+      }
+      .info-relation[aria-pressed='true'] {
+        background: var(--accent-fill);
+        border-color: var(--accent-line);
+        color: #fff;
+      }
+
+      /* --- Schedule breakdown ------------------------------
+         Type, count, action. Counts use tabular figures so the
+         column reads as a column at a glance. */
+      .schedule-total {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      /* The rule separates the total from the breakdown, so it belongs
+         to the breakdown — an empty schedule gets no stray hairline. */
+      .schedule-groups {
+        display: grid;
+        gap: 2px;
+      }
+      .schedule-groups:not(:empty) {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid var(--line);
+      }
+      .schedule-row {
+        display: grid;
+        grid-template-columns: 1fr auto 54px;
+        align-items: baseline;
+        gap: 8px;
+        width: 100%;
+        font: inherit;
+        font-size: 11px;
+        text-align: left;
+        color: var(--text);
+        background: transparent;
+        border: none;
+        border-left: 2px solid var(--line);
+        padding: 3px 6px;
+      }
+      .schedule-row .schedule-type {
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .schedule-row .schedule-count {
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .schedule-row .schedule-verb {
+        color: var(--dim);
+        text-align: right;
+      }
+      button.schedule-row {
+        cursor: pointer;
+        transition:
+          background-color var(--t-fast) var(--ease),
+          border-color var(--t-fast) var(--ease);
+      }
+      button.schedule-row:hover {
+        background: var(--line-soft);
+        border-left-color: var(--accent-line);
+      }
+      button.schedule-row:hover .schedule-verb {
+        color: var(--accent);
+      }
+      button.schedule-row[aria-pressed='true'] {
+        background: var(--accent-fill);
+        border-left-color: var(--accent);
+      }
+      button.schedule-row[aria-pressed='true'] .schedule-count,
+      button.schedule-row[aria-pressed='true'] .schedule-verb {
         color: #fff;
       }
       .category-toggle {
@@ -997,6 +1139,14 @@
           grid-template-columns: 1fr;
           gap: 2px;
         }
+        /* The schedule keeps its columns — type and count belong on
+           one line at any width — but the action word drops off. */
+        .schedule-row {
+          grid-template-columns: 1fr auto;
+        }
+        .schedule-row .schedule-verb {
+          display: none;
+        }
       }
       /* Reduced motion: every transition and animation collapses to
          instant. The sweep rails stay as static filled bars so "working"
@@ -1181,7 +1331,18 @@
         <h2>Element info</h2>
         <div id="info">Select an element in the 3-D view or scene tree (Enter / Space on a tree row).</div>
         <h2>Schedule</h2>
-        <div id="schedule-summary" aria-live="polite"></div>
+        <div id="schedule-summary">
+          <!--
+            Only the total line announces. The per-type rows below it
+            are navigable content, not a status: reading the whole
+            breakdown aloud on every load would bury the one sentence
+            that actually changed.
+          -->
+          <div id="schedule-total" class="schedule-total" aria-live="polite">
+            Open a file to see the element breakdown.
+          </div>
+          <div id="schedule-groups" class="schedule-groups"></div>
+        </div>
       </aside>
     </div>
     <script type="module" src="/src/main.ts"></script>

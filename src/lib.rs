@@ -143,6 +143,7 @@ pub mod partition_name_candidates;
 pub mod partition_room_parameters;
 pub mod partition_scanner;
 pub mod partition_schema_mvp;
+pub mod partition_type_records;
 pub mod partitions;
 pub mod reader;
 pub mod rect_opening_index;
