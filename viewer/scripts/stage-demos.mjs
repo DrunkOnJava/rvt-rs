@@ -6,12 +6,15 @@
  * writes catalog.json + SVG thumbnails. Safe to run without the LFS
  * corpus — loadable RFAs are skipped with a warning; tier1 fixtures
  * copy from corpus/tier1/; the synthetic MVP fixture is generated when
- * gen-fixture is on PATH / in target/.
+ * gen-fixture is on PATH / in target/; real-project samples copy from the
+ * magnetar-io/revit-test-datasets checkout (_project_corpus/) and are
+ * refused when their bytes do not match the sha256 pinned in the catalog.
  *
  * Privacy: only redistributable files are staged. Nothing is uploaded.
  */
 
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +28,8 @@ const thumbDir = path.join(publicDemos, 'thumbnails');
 
 /** Known in-repo tier1 fixtures (Lane Three / M6-03). */
 const TIER1_IDS = new Set(['architectural-2024', 'structural-2023', 'mep-2024']);
+/** Catalog tag for MIT real-project samples (magnetar-io/revit-test-datasets). */
+const REAL_PROJECT_TAG = 'real-project';
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -155,7 +160,58 @@ function stageTier1(demo, destAbs) {
   };
 }
 
+function sha256File(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function stageRealProject(demo, destAbs) {
+  const base = path.basename(demo.file);
+  const envSample = process.env.RVT_VIEWER_SAMPLE;
+  const candidates = [
+    ...(demo.source_candidates ?? []),
+    ...(envSample && path.basename(envSample) === base ? [envSample] : []),
+    path.join('_project_corpus', 'Revit', base),
+  ];
+  const src = resolveExisting(candidates);
+  if (!src) {
+    return {
+      ok: false,
+      note: `real-project source missing for ${demo.id} (checkout magnetar-io/revit-test-datasets with LFS into _project_corpus/)`,
+    };
+  }
+  if (demo.sha256) {
+    const actual = sha256File(src);
+    if (actual !== demo.sha256) {
+      return {
+        ok: false,
+        note: `sha256 mismatch for ${demo.id}: catalog pins ${demo.sha256.slice(0, 12)}…, ${path.relative(repoRoot, src)} is ${actual.slice(0, 12)}… — not staged`,
+      };
+    }
+  }
+  const size = copyFile(src, destAbs);
+  const licenseDest = destAbs.replace(/\.rvt$/i, '.license.json');
+  const sidecar = {
+    source_url: 'https://github.com/magnetar-io/revit-test-datasets',
+    source_repo: 'magnetar-io/revit-test-datasets',
+    source_path: `Revit/${base}`,
+    license: 'MIT',
+    sha256: demo.sha256 ?? sha256File(src),
+    bytes: size,
+    revit_release: demo.revit_version ? String(demo.revit_version) : null,
+    file_type: path.extname(base).toLowerCase(),
+    redistribution: 'public',
+    notes: demo.description,
+  };
+  fs.writeFileSync(licenseDest, `${JSON.stringify(sidecar, null, 2)}\n`);
+  return {
+    ok: true,
+    size,
+    note: `copied from ${path.relative(repoRoot, src)} (sha256 verified)`,
+  };
+}
+
 function thumbAccent(demo) {
+  if ((demo.tags ?? []).includes(REAL_PROJECT_TAG)) return '#7a3b1e';
   if (demo.format === 'ifc') return '#2e684b';
   if (TIER1_IDS.has(demo.id)) return '#2a4a6f';
   if (demo.id === 'synthetic-mvp') return '#3c5f86';
@@ -183,7 +239,13 @@ function main() {
     let sizeBytes = demo.size_bytes ?? null;
     let stageNote = 'not staged';
 
-    if (TIER1_IDS.has(demo.id)) {
+    if ((demo.tags ?? []).includes(REAL_PROJECT_TAG)) {
+      const result = stageRealProject(demo, destAbs);
+      available = result.ok;
+      sizeBytes = result.size ?? sizeBytes;
+      stageNote = result.note;
+      if (!result.ok) warnings.push(`${demo.id}: ${result.note}`);
+    } else if (TIER1_IDS.has(demo.id)) {
       const result = stageTier1(demo, destAbs);
       available = result.ok;
       sizeBytes = result.size ?? sizeBytes;
