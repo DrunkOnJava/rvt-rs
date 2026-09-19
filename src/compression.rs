@@ -23,6 +23,17 @@ pub const GZIP_MAGIC: [u8; 3] = [0x1F, 0x8B, 0x08];
 /// [`InflateLimits`] to [`inflate_at_with_limits`].
 pub const DEFAULT_MAX_INFLATE_BYTES: usize = 256 * 1024 * 1024;
 
+/// Upper bound on the capacity reserved before a DEFLATE member is
+/// decoded. The reservation must not scale with the input that follows
+/// the member: [`inflate_all_chunks_with_limits`] decodes every member
+/// of a stream with the whole remainder as `data`, keeps each result
+/// alive, and a 33 MB Revit 2024 project holds dozens of members, so a
+/// `4 x remaining` hint reserved gigabytes. Native allocators back
+/// untouched capacity lazily; wasm32 linear memory commits every grown
+/// page and trapped at the 4 GiB ceiling in ~140 ms (viewer demo
+/// core-interior-2024). Amortised `Vec` growth covers larger outputs.
+const INITIAL_INFLATE_CAPACITY_BYTES: usize = 1024 * 1024;
+
 /// Caps for bounded decompression. Passed explicitly to
 /// [`inflate_at_with_limits`] or pulled from
 /// [`InflateLimits::default`] by the back-compat [`inflate_at`]
@@ -390,9 +401,15 @@ pub fn inflate_at_with_limits(
     let body = data
         .get(body_start..)
         .ok_or_else(|| Error::Decompress("gzip header extends past input".into()))?;
-    // Clamp initial capacity. `body.len() * 4` was the historical hint
-    // but without an upper bound it's a memory-amplification vector.
-    let cap = body.len().saturating_mul(4).min(limits.max_output_bytes);
+    // Clamp initial capacity. `body.len() * 4` was the historical hint,
+    // but `body` is the whole remainder of the stream, so it is bounded
+    // by [`INITIAL_INFLATE_CAPACITY_BYTES`] (see that constant) as well
+    // as by the caller's output limit.
+    let cap = body
+        .len()
+        .saturating_mul(4)
+        .min(INITIAL_INFLATE_CAPACITY_BYTES)
+        .min(limits.max_output_bytes);
     let mut out = Vec::with_capacity(cap);
     // Chunked read loop so we can enforce the cap deterministically.
     let mut decoder = DeflateDecoder::new(body);
@@ -415,6 +432,9 @@ pub fn inflate_at_with_limits(
         }
         out.extend_from_slice(&buf[..n]);
     }
+    // Results are retained per member by the chunk collectors; trim the
+    // amortised-growth slack so retained buffers cost what they hold.
+    out.shrink_to_fit();
     Ok(out)
 }
 
@@ -662,6 +682,27 @@ mod tests {
             0x1F, 0x8B, 0x08, 0x08, 0, 0, 0, 0, 0, 0x0B, b'f', b'o', b'o', 0,
         ];
         assert_eq!(gzip_header_len(&hdr, 0), Some(14));
+    }
+
+    #[test]
+    fn inflate_capacity_hint_does_not_scale_with_remaining_input() {
+        // `inflate_all_chunks_with_limits` hands every gzip member the
+        // whole stream from that member's offset, and every member's
+        // buffer stays alive in the collected results. A per-member
+        // reservation of `4 x remaining` therefore reserves
+        // O(members x stream) bytes: native allocators never commit
+        // untouched capacity, but wasm32 linear memory commits every
+        // page, and a 33 MB Revit 2024 project trapped at the 4 GiB
+        // ceiling in ~140 ms (viewer demo core-interior-2024).
+        let mut data = truncated_gzip_encode(b"tiny payload").unwrap();
+        data.resize(data.len() + 8 * 1024 * 1024, 0);
+        let out = inflate_at_with_limits(&data, 0, InflateLimits::default()).unwrap();
+        assert_eq!(out, b"tiny payload");
+        assert!(
+            out.capacity() <= 1024 * 1024,
+            "capacity {} scales with the 8 MiB of trailing input",
+            out.capacity()
+        );
     }
 
     #[test]
