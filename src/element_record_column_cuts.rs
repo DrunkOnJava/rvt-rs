@@ -21,7 +21,7 @@
 //! Measured on `2024_Core_Interior.rvt` against Revit's own export,
 //! world axis-aligned bounding box matched by `Tag`: **256 of 256**
 //! exact, worst corner residual **9.4e-13 ft**, up from 176 of 256
-//! for the uncut prism (RE-28 §5). The cutters are the walls'
+//! for the uncut prism (RE-29 §5). The cutters are the walls'
 //! *untrimmed* record boxes — using the join-trimmed runs of
 //! `element_record_wall_joins` instead scores 190 of 256, so a wall
 //! runs its full recorded length into a column it cuts.

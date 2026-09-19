@@ -1,4 +1,4 @@
-//! Research probe (#238 / #239 / #240, RE-28): what the `+0x88`
+//! Research probe (#238 / #239 / #240, RE-29): what the `+0x88`
 //! reference list says about joins.
 //!
 //! Three questions, one sweep of `OST_Walls` + `OST_Columns`:
@@ -8,7 +8,9 @@
 //! 2. Which walls does a column record name, and what is left of the
 //!    column prism once those walls are subtracted (#239)?
 //! 3. What does the 18" Basement wall record hold in the slot RE-26
-//!    read as the type (#240)?
+//!    read as the type (#240)? The list is dumped verbatim, which is
+//!    what shows that `1851` and `3897` are both in it; the wall-type
+//!    join itself is RE-28's (`probe_re28_walltype_layers`).
 //!
 //! The emitted JSON carries the recovered geometry so it can be
 //! scored against a reference IFC export offline

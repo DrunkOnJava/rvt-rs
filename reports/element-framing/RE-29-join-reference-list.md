@@ -1,11 +1,11 @@
-# RE-28 — the reference list names the joins: walls, and the walls that cut columns
+# RE-29 — the reference list names the joins: walls, and the walls that cut columns
 
 Status: **positive result on columns**, exact on 256 of 256;
 **positive result on walls**, exact on 351 of 360, with a narrowed
-residual of 9 ends; **measured negative on the 18" Basement type
-slot** — the id-space hypothesis is rejected, the artifact is the
-index. Closes #239. Refs #238, #240, #228.
-Date: 2026-09-19.
+residual of 9 ends; **#240's id-space hypothesis rejected**, and the
+question itself answered next door by RE-28 (#273) while this was in
+flight — §6 is a pointer and a correction. Closes #239. Refs #238,
+#240, #228. Date: 2026-09-19.
 Artifact: `2024_Core_Interior.rvt`
 (sha256 `c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014`,
 Revit 2024, magnetar-io/revit-test-datasets, MIT).
@@ -20,7 +20,8 @@ by "the cutting element/relation … not the profile"; and a wall type
 slot reading `1851` where the export writes `3897`. All three turn out
 to be about the same bytes — the counted reference list at `+0x88`
 that RE-23 read for a door's host wall and RE-27 read for an element's
-Level.
+Level. RE-28 reached the third one first, from the type record's side;
+§6 records what this investigation adds to it and what it got wrong.
 
 **The list names what the element is joined to.** Besides the type and
 the Levels, a wall record holds the ElementIds of the walls it joins,
@@ -236,58 +237,57 @@ type's own fact (`TypeSectionWidthFeet` / `TypeSectionDepthFeet`), but
 it is no longer the shape of the solid on a cut column: the emitted
 rectangle is the remainder, and `ProfileSource` says so.
 
-## 6. The 18" Basement type slot: the id space is not the problem (#240)
+## 6. The 18" Basement type slot: answered next door (#240)
 
-#240 read the four 18" Basement walls as "two id spaces for the same
-type … or a type-graph indirection `1851 -> 3897`". Both halves are
-**rejected by measurement**. The two ids sit in the *same* list of the
-*same* record:
+This section is a pointer and a correction. #240 was answered while
+this work was in flight, by RE-28 (`RE-28-wall-type-records.md`, #273),
+and answered better than the reading below: a wall **type** has a
+partition record of its own, in the bbox-less shape RE-24 found for
+Levels, with a third placement-kind value `0xffff8080` at `+0x42`.
+Eight `OST_Walls` records carry it on this file, and every one of the
+360 exported wall instances names exactly one of them in the same
+`+0x88` list this report is about. That is a set test, it needs no
+tie-break, and it reads the correct `IfcWallType.Tag` on **360 of
+360**.
+
+What survives from the investigation here is the diagnosis of *why*
+the old reading missed, which RE-28's §"What was proven" also states:
 
 ```text
 22771  refs1 = [3, 1851, 3897, 20268, 20273, 22771, 22773, 22777]
                    ^^^^  ^^^^
                     |     the IfcWallType.Tag Revit's export writes
-                    a lower id that four walls and two floors carry
+                    a lower id that displaces the type from slot 1
 ```
 
-RE-26 §3 measured `refs1[1]` as the type on 356 of 360 walls. That
-reading is an **index artifact of an ascending list**: on every other
-wall the type is the lowest slot after the leading `3`, and on these
-four a lower id displaces it. There is no indirection to follow — the
-type is already there, one slot along.
+The list is ascending, so RE-26 §3's `refs1[1]` is an **index
+artifact**: on every other wall the type happens to be the lowest slot
+after the leading `3`, and on these four a smaller id gets there
+first. #240's own framing — "two id spaces for the same type … or a
+type-graph indirection `1851 -> 3897`" — is **rejected by
+measurement**: both ids are in the same list of the same record, so
+there is nothing to follow.
 
-What `1851` is remains unclaimed, and it is measurably not a wall
-type:
+**A correction to a claim this report made before the merge.** An
+earlier draft said a brute scan of all 23 470 decodable records finds
+no record for `1851`, `3897`, `17328`, `17337` or `17341`, and
+concluded that wall types are not framed as records at all. That scan
+(`probe_element_record_owner_lookup`) only accepts the **element**
+record shape, which requires the bbox marker at `+0x50`; the type
+records are bbox-less and it cannot see them. RE-28 finds all of them.
+`1851` likewise does have a record — of category `-2009014`, which is
+what disqualifies it as a wall type.
 
-- **No element record.** A brute scan of all 23 470 decodable records
-  on this file (`probe_element_record_owner_lookup`) finds none for
-  `1851`, and none for `3897`, `17328`, `17337` or `17341` either —
-  wall types are not framed as element records at all.
-- **It crosses categories.** `1851` is named by 8 `OST_Walls` records
-  (the four exported basement walls and their four container-member
-  twins, RE-21 §4) and by 2 `OST_Floors` records, one of them the
-  exported slab `22756`. `3897` is named by the 8 wall records only.
-  On the floor records `1851` sits in the same position — immediately
-  before that element's own type id `3634`.
-- **Revit never writes it.** The string `'1851'` does not occur
-  anywhere in the reference export; `'3897'` is the
-  `IfcWallType.Tag` of `Basic Wall:18" Basement`.
-- **`Global/ElemTable` groups it with the constants.** The three
-  version words of the 40-byte 2024 row are `(0, 0, 0)` for `1851`,
-  the same as for the constant leading slots `3` and `113`, while
-  `3897` carries `(5, 5, 5)` and the other three wall types
-  `(19, 19, 19)`.
-
-Replacing the index with a predicate — *the type is the lowest slot
-after the leading `3` that is named only by wall, door and window
-records* — reads the correct `IfcWallType.Tag` on **360 of 360**
-walls, FP 0 / FN 0. That is reported, not shipped: the only evidence
-separating `1851` from `3897` is two `OST_Floors` records on one file,
-and nothing in rvt-rs consumes a wall type yet. The measurement is
-pinned by
-`tests/iter_elements_typed.rs::core_interior_2024_basement_wall_type_slot_is_an_index_artifact`
-so a future wall-type decode starts from the corrected reading rather
-than the index.
+Two further measurements from this side are consistent with that and
+are recorded rather than used: `1851` is named by 8 `OST_Walls`
+records (the four exported basement walls and their four
+container-member twins, RE-21 §4) and by 2 `OST_Floors` records, one
+of them the exported slab `22756`, where it sits immediately before
+that element's own type id `3634`; and its three `Global/ElemTable`
+version words are `(0, 0, 0)`, the same as the constant slots `3` and
+`113`, while `3897` carries `(5, 5, 5)` and the other three wall types
+`(19, 19, 19)`. The string `'1851'` occurs nowhere in Revit's own
+export.
 
 ## 7. Measured before / after on `2024_Core_Interior.rvt`
 
@@ -361,8 +361,10 @@ interior, so it keeps its prism), `IfcSlab 20345`, and
 
 - **The true-L-corner survivor** (§4), 9 ends on 9 walls. Two distinct
   corners; no feature in the record orders the two sides.
-- **What `1851` is** (§6). Measurably not a wall type, carried by
-  walls and floors alike, with no element record of its own.
+- **What `1851` is** (§6). Not a wall type — RE-28 identifies its
+  record as category `-2009014` — but what that category *is*, and
+  why the four basement walls and two floors all name it, is not
+  claimed.
 - **Doors and windows** still carry the record envelope where Revit
   exports a panel (#227), unchanged here.
 - **The remaining `+0x88` slots** (#228). This report attributes two
@@ -372,8 +374,8 @@ interior, so it keeps its prism), `IfcSlab 20345`, and
 ## 11. Reproduction
 
 ```bash
-cargo build --profile ci --example probe_re28_join_carriers
-./target/ci/examples/probe_re28_join_carriers \
+cargo build --profile ci --example probe_re29_join_carriers
+./target/ci/examples/probe_re29_join_carriers \
   "$RVT_PROJECT_CORPUS_DIR/2024_Core_Interior.rvt" > joins.json
 
 # reference side, no IfcOpenShell required
@@ -388,8 +390,10 @@ python3 tools/re/ifc_world_aabb.py out.ifc --type IFCCOLUMN \
 The corpus gates are
 `tests/iter_elements_typed.rs::core_interior_2024_column_join_cut_plan_extents`,
 `::core_interior_2024_wall_joins_are_named_in_the_reference_list`,
-`::core_interior_2024_basement_wall_type_slot_is_an_index_artifact`,
 `::core_interior_2024_column_type_symbol_join` and
-`::core_interior_2024_wall_join_trimmed_bodies`; the unit gates are
+`::core_interior_2024_wall_join_trimmed_bodies`; §6 adds no gate of
+its own because
+`::core_interior_2024_wall_type_record_join` (RE-28) already pins the
+four basement walls; the unit gates are
 `src/element_record_wall_joins.rs::tests` and
 `src/element_record_column_cuts.rs::tests`.

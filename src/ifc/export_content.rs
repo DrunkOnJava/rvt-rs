@@ -635,7 +635,7 @@ fn element_record_geometry_from_decoded(
     // A column that its joined walls cut emits the **cut** rectangle,
     // not the family section: the section is still the type's, and is
     // still reported below, but it is no longer the shape of the
-    // solid (#239, RE-28 §5).
+    // solid (#239, RE-29 §5).
     let (width, depth) = if column_body_source.is_some() {
         (width, depth)
     } else {
@@ -751,7 +751,7 @@ fn element_record_geometry_from_decoded(
         });
     }
     // A column whose joined walls cut it reports how many took part
-    // (#239, RE-28 §5). The section above is the family's; this is
+    // (#239, RE-29 §5). The section above is the family's; this is
     // what is left of the prism after the walls are subtracted.
     if let Some(walls) = column_cut_walls {
         properties.push(Property {

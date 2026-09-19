@@ -151,7 +151,7 @@ pub fn recover_partition_schema_mvp(
     let level_ids = level_element_ids(rf, revit_version)?;
     // Columns and walls come out of one sweep: Revit cuts a column
     // with the walls it is joined to, so the column body needs the
-    // wall boxes (#239, RE-28 §5), and inflating the partitions twice
+    // wall boxes (#239, RE-29 §5), and inflating the partitions twice
     // to get them would dominate the cost.
     let (column_records, wall_records) = column_and_wall_records(rf, revit_version)?;
     let wall_instances: Vec<crate::partition_element_records::PartitionElementRecord> =
@@ -717,7 +717,7 @@ pub fn column_instances_from_records(
 }
 
 /// Rewrite a column's placement and extents to the cut body, and say
-/// where that body came from (#239, RE-28 §5).
+/// where that body came from (#239, RE-29 §5).
 ///
 /// The type section recovered by [`attach_type_symbol_profile`] is
 /// the *uncut* family section and stays on the element as the type's

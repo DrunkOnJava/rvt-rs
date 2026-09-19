@@ -29,7 +29,7 @@
 //!    a candidate to be named there removes 14 over-trims on the
 //!    recorded edge and costs nothing: 16 of the 360 walls name no
 //!    other wall at all, and every one of them is a wall Revit leaves
-//!    untrimmed (#238, RE-28 §2).
+//!    untrimmed (#238, RE-29 §2).
 //!
 //! 4. **A candidate only cuts where its own cut-back run reaches.**
 //!    A wall whose end has itself been cut back no longer covers the
@@ -37,7 +37,7 @@
 //!    there. The candidate's run is therefore reduced by its own
 //!    trims before the span test — ignoring the trims imposed by
 //!    walls on the line being resolved, which are the joins this very
-//!    end makes and cannot pre-empt itself (RE-28 §3).
+//!    end makes and cannot pre-empt itself (RE-29 §3).
 //!
 //! [`join_trims`] applies (2)–(4) to the wall set recovered from the
 //! records. It is a solver over recorded boxes, not a fit: a
@@ -69,7 +69,7 @@
 //!   the two distinct corners on the recorded edge the survivor is
 //!   the thicker wall once and the thinner wall once, the lower
 //!   ElementId once and the higher once. They are recorded, not
-//!   papered over (#238, RE-28 §4).
+//!   papered over (#238, RE-29 §4).
 //! - Only axis-parallel walls are resolved. Every wall on the
 //!   recorded edge is axis-parallel; a wall whose box is square in
 //!   plan has no identifiable thin axis and is declined.
@@ -167,7 +167,7 @@ pub fn wall_run(record: &PartitionElementRecord) -> Option<WallRun> {
 }
 
 /// The other recovered walls a record names in its counted reference
-/// list at `+0x88` (#238, RE-28 §2).
+/// list at `+0x88` (#238, RE-29 §2).
 ///
 /// `wall_ids` is the ElementId set of the recovered wall instances,
 /// so a slot that names a type, a Level, a column or an id this
@@ -438,7 +438,7 @@ mod tests {
     /// exactly on the centrelines of two 8" walls that pass through
     /// them, and which Revit leaves at full length. Its record names
     /// no other wall at all, and that is the only thing in the file
-    /// that says so (#238, RE-28 §2).
+    /// that says so (#238, RE-29 §2).
     fn unjoined_span() -> Vec<PartitionElementRecord> {
         vec![
             wall(20826, [119.5, 67.41667, 76.0, 129.0, 68.08333, 91.0], &[]),
@@ -472,7 +472,7 @@ mod tests {
     /// y = 81 and its high end is cut back to 136.9167 by 20816; that
     /// cut puts 20803's centreline (137.1667) past the end of 20800,
     /// so 20803 has nothing to butt into and Revit leaves it at 81.0
-    /// (#238, RE-28 §3).
+    /// (#238, RE-29 §3).
     fn cut_back_candidate() -> Vec<PartitionElementRecord> {
         vec![
             wall(
@@ -511,7 +511,7 @@ mod tests {
     /// wrong: 20800 and 20816 form a true L corner and Revit cuts
     /// only 20800. Nothing in the file says which side survives, so
     /// the solver cuts both and this test pins the residual rather
-    /// than hiding it (#238, RE-28 §4).
+    /// than hiding it (#238, RE-29 §4).
     #[test]
     fn the_surviving_side_of_a_true_l_corner_is_still_over_trimmed() {
         let trims = join_trims(&cut_back_candidate());
@@ -524,7 +524,7 @@ mod tests {
     /// Where the line being resolved is itself what cut the candidate
     /// back, the cut must not disqualify it: 20798's low end is cut
     /// by the `x = 48` wall line, and 20817 — part of that same line —
-    /// is still trimmed by 20798 (RE-28 §3).
+    /// is still trimmed by 20798 (RE-29 §3).
     #[test]
     fn a_cut_the_resolved_line_imposed_does_not_disqualify_the_candidate() {
         let records = vec![

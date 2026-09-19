@@ -1133,11 +1133,11 @@ fn core_interior_2024_wall_join_trimmed_bodies() {
     // #238: 329 before the reference-list membership predicate. The
     // seven walls that drop out are the ones whose records name no
     // other wall at all, and Revit leaves every one of them at full
-    // length (RE-28 §2).
+    // length (RE-29 §2).
     assert_eq!(trimmed, 322, "322 walls are cut at one end or both");
 }
 
-/// #239 / RE-28 §5: the walls a column's counted reference list names
+/// #239 / RE-29 §5: the walls a column's counted reference list names
 /// cut its prism, and the plan rectangle that is left reproduces the
 /// plan-extent histogram of Revit's own exported column bodies —
 /// 176 × (2.0 × 2.0), 38 × (1.6667 × 1.6667), 20 × (1.75 × 1.6667),
@@ -1186,7 +1186,7 @@ fn core_interior_2024_column_join_cut_plan_extents() {
             .or_insert(1);
     }
     // Revit's own bodies, read from `IFC Exports/2024_Core_Interior_slim.ifc`
-    // with IfcOpenShell 0.8.5 (RE-26 §2.2, re-measured in RE-28 §5).
+    // with IfcOpenShell 0.8.5 (RE-26 §2.2, re-measured in RE-29 §5).
     let expected: std::collections::BTreeMap<(i64, i64), usize> = [
         ((20_000, 20_000), 176usize),
         ((16_667, 16_667), 38),
@@ -1202,7 +1202,7 @@ fn core_interior_2024_column_join_cut_plan_extents() {
     );
 }
 
-/// #238 / RE-28 §2: the wall records name the walls they join, and
+/// #238 / RE-29 §2: the wall records name the walls they join, and
 /// the sixteen that name none are exactly the walls Revit leaves at
 /// full length even though a perpendicular centreline lands on them.
 #[test]
@@ -1270,80 +1270,6 @@ fn core_interior_2024_wall_joins_are_named_in_the_reference_list() {
     assert!(
         export.contains("IFCWALL("),
         "the reference export is the one that was measured"
-    );
-}
-
-/// #240 / RE-28 §6: the four 18" Basement walls name **both** `1851`
-/// and `3897` in one ascending reference list. `refs1[1]` reads
-/// `1851` there only because `1851 < 3897`; there is no second id
-/// space and no `1851 -> 3897` indirection to follow.
-#[test]
-fn core_interior_2024_basement_wall_type_slot_is_an_index_artifact() {
-    let Some(project_dir) = project_dir() else {
-        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
-        return;
-    };
-    let path = project_dir.join("2024_Core_Interior.rvt");
-    let reference = project_dir.join("../IFC Exports/2024_Core_Interior_slim.ifc");
-    if !path.exists() || !reference.exists() {
-        eprintln!("skipping: {} or the slim export is missing", path.display());
-        return;
-    }
-    const BASEMENT_WALLS: [u32; 4] = [22771, 22773, 22775, 22777];
-    const SLOT_BEFORE_THE_TYPE: u64 = 1851;
-    const BASEMENT_WALL_TYPE: u64 = 3897;
-
-    let mut rf = RevitFile::open(&path).expect("open 2024");
-    let version = rf.basic_file_info().unwrap().version;
-    let declared: std::collections::BTreeSet<u32> = rvt::elem_table::parse_records(&mut rf)
-        .expect("elem table")
-        .into_iter()
-        .map(|record| record.id_primary)
-        .collect();
-    let records = rvt::partition_element_records::scan_category_records(
-        &mut rf,
-        version,
-        rvt::partition_element_records::OST_WALLS,
-        &declared,
-    )
-    .expect("wall records");
-
-    let mut seen = 0usize;
-    for record in &records {
-        if !record.is_exported_instance() || !BASEMENT_WALLS.contains(&record.element_id) {
-            continue;
-        }
-        seen += 1;
-        let refs = &record.references;
-        assert!(
-            refs.windows(2).all(|pair| pair[0] <= pair[1]),
-            "wall {}: the counted reference list is ascending",
-            record.element_id
-        );
-        assert_eq!(refs[1], SLOT_BEFORE_THE_TYPE, "the slot RE-26 read");
-        assert!(
-            refs.contains(&BASEMENT_WALL_TYPE),
-            "wall {}: the IfcWallType Tag is in the same list",
-            record.element_id
-        );
-        assert!(
-            refs.iter().position(|slot| *slot == SLOT_BEFORE_THE_TYPE)
-                < refs.iter().position(|slot| *slot == BASEMENT_WALL_TYPE),
-            "1851 precedes 3897 because it is smaller, not because it points at it"
-        );
-    }
-    assert_eq!(seen, 4, "the four 18\" Basement walls");
-
-    // Revit's own export assigns `3897` — the id that is already in
-    // the list — as the `IfcWallType` Tag of that type.
-    let export = std::fs::read_to_string(&reference).expect("read export");
-    assert!(
-        export.contains("Basic Wall:18\" Basement") && export.contains("'3897'"),
-        "the export names the 18\" Basement type by Tag 3897"
-    );
-    assert!(
-        !export.contains("'1851'"),
-        "1851 appears nowhere in Revit's own export"
     );
 }
 

@@ -1152,7 +1152,7 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
         return None;
     };
     // A wall whose joins resolved (RE-26) and a column its joined
-    // walls cut (#239, RE-28) carry a different `BodySource`, and
+    // walls cut (#239, RE-29) carry a different `BodySource`, and
     // both are still record-backed bodies: the wall solver only moves
     // the two plan ends of the run, and on the recorded edge no
     // column cut moves the box's `z` at either end — all 256 agree
