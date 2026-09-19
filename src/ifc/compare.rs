@@ -388,7 +388,7 @@ fn catalogued_divergence_notes(deltas: &BTreeMap<String, CountDelta>) -> Vec<Str
     const CATALOGUE: &[(&str, &str)] = &[
         (
             "IFCWALL",
-            "Revit 2024 wall set is exact (RE-21); 31 over-trimmed wall ends tracked in #238 (RE-26). Earlier releases: 2023 ArcWall only, 2024 ArcWall records tracked in #23.",
+            "Revit 2024 wall set is exact (RE-21); bodies match Revit on 351 of 360 after the join reference list (RE-29), and the 9 remaining over-trimmed ends at true L corners are tracked in #238. Earlier releases: 2023 ArcWall only, 2024 ArcWall records tracked in #23.",
         ),
         (
             "IFCDOOR",
