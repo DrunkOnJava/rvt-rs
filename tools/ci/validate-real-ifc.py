@@ -132,14 +132,33 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
     # One IfcRelContainedInSpatialStructure per non-empty storey is correct
     # IFC4 practice (see docs/launch/buildingsmart-forum.md). Elevation-derived
     # ArcWall storeys may produce several; the previous exact-1 check was a
-    # single-fallback-storey baseline, not a hard contract.
+    # single-fallback-storey baseline, not a hard contract. Elements with no
+    # storey evidence are contained in the IfcBuilding itself (RE-27, #267)
+    # instead of being placed in a storey they were never bound to, so at
+    # most one further relation may relate to the building.
     storey_count = count(model, "IfcBuildingStorey")
     contained = model.by_type("IfcRelContainedInSpatialStructure")
-    if len(contained) < 1 or len(contained) > storey_count:
+    storey_rels = [
+        rel for rel in contained if rel.RelatingStructure.is_a("IfcBuildingStorey")
+    ]
+    building_rels = [
+        rel for rel in contained if rel.RelatingStructure.is_a("IfcBuilding")
+    ]
+    if len(storey_rels) + len(building_rels) != len(contained):
         fail(
-            "IfcRelContainedInSpatialStructure count regressed: "
-            f"got {len(contained)}, expected between 1 and {storey_count} "
+            "IfcRelContainedInSpatialStructure relates to something other than "
+            "an IfcBuildingStorey or the IfcBuilding"
+        )
+    if len(storey_rels) < 1 or len(storey_rels) > storey_count:
+        fail(
+            "IfcRelContainedInSpatialStructure storey count regressed: "
+            f"got {len(storey_rels)}, expected between 1 and {storey_count} "
             f"(one per non-empty storey)"
+        )
+    if len(building_rels) > 1:
+        fail(
+            "IfcRelContainedInSpatialStructure building count regressed: "
+            f"got {len(building_rels)}, expected at most 1 (unbound elements)"
         )
     related_count = sum(len(rel.RelatedElements) for rel in contained)
     building_elements = int(exported.get("building_elements", 0))
@@ -186,8 +205,9 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
     )
     print(f"  exported.by_ifc_type: {by_ifc_type}")
     print(
-        f"  spatial containment: {len(contained)} rel(s), "
-        f"{related_count} related element(s) across {storey_count} storey(s)"
+        f"  spatial containment: {len(storey_rels)} storey rel(s) + "
+        f"{len(building_rels)} building rel(s), {related_count} related "
+        f"element(s) across {storey_count} storey(s)"
     )
     print(f"  geometry-backed elements: {with_geometry}")
     print(f"  material count: {material_count}")
