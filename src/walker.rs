@@ -2477,6 +2477,7 @@ mod tests {
             classes: Vec::new(),
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         let out = scan_candidates(&schema, &[0u8; 100], 0);
         assert!(out.is_empty());
@@ -2488,6 +2489,7 @@ mod tests {
             classes: Vec::new(),
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         let out = scan_candidates(&schema, &[], i64::MIN);
         assert!(out.is_empty());
@@ -2528,6 +2530,7 @@ mod tests {
             classes: vec![cls],
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         let mut buf = vec![0u8; 80];
         buf[64] = 0xfe;
@@ -2579,6 +2582,7 @@ mod tests {
             classes: vec![cls],
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         let mut buf = vec![0u8; 96];
         for offset in [0usize, 34] {
@@ -2636,6 +2640,7 @@ mod tests {
             classes: vec![cls],
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         let mut buf = vec![0u8; 64];
         buf[0] = 0xcd;
@@ -2681,6 +2686,7 @@ mod tests {
             classes: vec![cls],
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         let mut buf = Vec::new();
         buf.extend_from_slice(&0xB00Bu16.to_le_bytes());
@@ -2772,6 +2778,7 @@ mod tests {
             classes: vec![simple_cls],
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         // Build a buffer with the tag at offset 0, then 24 bytes
         // of synthetic (tag, id) pairs: (0, 1), (0, 2), (0, 3)
@@ -2804,6 +2811,7 @@ mod tests {
             classes: Vec::new(),
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         let idx = build_handle_index(&schema, &[0u8; 100], 0);
         assert!(idx.is_empty());
@@ -2845,6 +2853,7 @@ mod tests {
             classes: vec![cls],
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         // Instance 1 at offset 0 (tag=0xBEEF):
         //   - m_id:    (tag=0, id=42)  — self-id, becomes the key
@@ -2907,6 +2916,7 @@ mod tests {
             classes: vec![cls],
             cpp_types: Vec::new(),
             skipped_records: 0,
+            ..Default::default()
         };
         // Buffer with the class tag but no id — should insert nothing.
         let mut buf = vec![0u8; 64];
