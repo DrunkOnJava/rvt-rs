@@ -172,11 +172,11 @@ element. Measured against Revit's export in world coordinates
 (IfcOpenShell 0.8.5, axis-aligned bounding box, tolerance 1e-3 ft):
 **336 of 360 walls exact, up from 27**, worst residual 0.75 → 0.3333 ft,
 mean 0.2701 → 0.0220 ft, 309 improved and 16 regressed. The 31 wall ends
-the rule gets wrong are all over-trims, and they sit inside feature
-classes that also produce a real trim 125 and 22 times — Revit stores
-that decision per wall pair and it is in neither wall's box nor in 4 KiB
-past its record. This models Revit's join cleanup rather than reading it,
-which is why the capability is `partial`.
+that rule got wrong were all over-trims, and RE-26 could not separate
+them from the 125 and 22 real trims in the same feature classes. #274
+(RE-29) found the byte that does — see below — and the residual is now
+9 ends. The solver still models Revit's join cleanup rather than reading
+the cleanup itself, which is why the capability stays `partial`.
 **Every recovered column names its family type** (#215, RE-26): the last
 slot before the record's own ElementId in the `+0x88` list that is
 itself an `OST_Columns` type-symbol record is `5755`
@@ -188,9 +188,10 @@ the same 2 ft square the instance envelope already had — the two agree to
 now means the type said so. The column residual is **unchanged and was
 never what #236 reported**: measured as a world bounding box rather than
 a vertex-mean centroid, all 256 columns match Revit's z extent exactly at
-both ends, 176 of 256 match on every corner, and the 80 that do not have
-a body Revit *cuts* inset from the full prism (62 exported as
-`IfcPolygonalFaceSet`), which no section can produce.
+both ends, 176 of 256 matched on every corner at RE-26, and the 80 that
+did not have a body Revit *cuts* inset from the full prism (62 exported
+as `IfcPolygonalFaceSet`), which no section can produce. What does
+produce it is #274 (RE-29), below: all **256 of 256** are exact now.
 **Doors and windows are bound to their host wall** (#222, RE-23): the
 element record's counted reference list at `+0x88` names the host in
 the slot immediately before the record's own ElementId, accepted only
@@ -261,6 +262,73 @@ The #213 column-derived path (`STOREY_ELEVATION_SOURCE_TYPES` =
 records; its measurement stands unchanged, including the RE-22 finding
 that admitting slab tops as an elevation source would buy −40 ft and
 185.5 ft at the cost of 13 false elevations.
+**The reference list also names the joins** (#238 / #239, RE-29). The
+same counted list at `+0x88` that carries the type and the Levels holds
+the ElementIds of the walls a wall is joined to, and of the walls that
+cut a column. Two predicates on RE-26's solver — the trim candidate must
+be named in this record's list, and it is tested for reach against its
+*own* cut-back run rather than its recorded one — take wall ends from
+**689 to 711 of 720** and wall bodies from **336 to 351 of 360** exact,
+with 15 walls improved, 345 unchanged and **0 regressed**. The 9 ends
+that remain are a **measured negative, narrowed**: one side of each of
+two *true L corners* (one repeated on eight storeys) where neither run
+continues past the meeting point and Revit cuts exactly one of the pair.
+Nothing in the file orders the two sides — the survivor is the thicker
+wall once and an equal-thickness wall once, the higher ElementId once
+and the lower once — so the solver keeps cutting both rather than
+guessing, and the over-trim is pinned by
+`element_record_wall_joins::tests::the_surviving_side_of_a_true_l_corner_is_still_over_trimmed`
+instead of being hidden. On columns the same list closes #239 outright:
+the exported body is the record prism minus the untrimmed record prisms
+of the walls it names, which is **256 of 256** exact at a worst residual
+of 9.4e-13 ft (from 176 of 256 at 0.5833 ft). `difference_box` is
+fail-closed — it answers only when the surviving material fills its own
+bounding box exactly by volume, which is true on all 80 columns whose box
+shrinks and false on all 69 interior slots, Ls and crosses — so a decline
+never removes material Revit kept. The cut plan rectangles reproduce
+Revit's own body-extent histogram exactly. Emitted product counts,
+relations, storeys and the diagnostics sidecar are unchanged; the one
+moving count is `IFCPROPERTYSINGLEVALUE` 9231 → 9311, the new
+`JoinCutWallCount` provenance row per cut column. Substituting the
+join-trimmed wall runs for the untrimmed ones scores 190 of 256, so a
+wall runs its full recorded length into a column it cuts.
+**A wall type is a record of its own, and every wall names exactly one**
+(#88, RE-28). A `WallType` has the bbox-less RE-24 shape with a third
+placement-kind value at `+0x42`, `0xffff8080`; eight `OST_Walls` records
+carry it on Core Interior, of which Revit's export writes four as
+`IfcWallType` and never places the other four. Replacing RE-26's
+positional `references[1]` read with a *set* test — the single slot of
+the reference list that is a wall-type record — is exact on **360 of
+360** (against 356 of 360 positionally), needs no tie-break and declines
+nothing, and the recovered distribution equals the export's own
+`IfcRelDefinesByType` distribution exactly: 129 / 127 / 100 / 4. That
+also closes #240 — the `18" Basement` slot reading `1851` where the
+export's `IfcWallType.Tag` is `3897` was an **index artifact**, not a
+second id space: the list is ascending and both ids are in it, with
+`1851` a record of category −2009014 that is not a wall type at all.
+**The join is library-side only.** It ships as
+`rvt::partition_type_records::unique_type_reference` with the corpus gate
+`tests/iter_elements_typed.rs::core_interior_2024_wall_type_record_join`;
+it is **not** yet a property on the emitted wall, no emitted entity,
+property or relation changes, and both count manifests record that.
+**Compound layer thicknesses stay unrecovered, and this corpus cannot
+witness them** (#88, RE-28 §4–§5). A 128 KiB sweep centred on each of the
+four exported wall-type records finds **0** runs of consecutive `f64`
+summing to that type's nominal width, and the two 6″ types have no
+`0.5` ft hit anywhere in their span. More decisively, the reference
+export is a **`ReferenceView_V1.2`** file carrying **0**
+`IfcMaterialLayerSet`, **0** `IfcMaterialLayer` and **0**
+`IfcMaterialLayerSetUsage`; all 360 walls associate to a single
+`IfcMaterial` rather than a constituent set. #88's layer-thickness
+criterion therefore has **no oracle on this artifact** — it can be
+neither met nor refuted here — and closing it needs a layer-set-carrying
+export of the same `.rvt` or an owner-supplied wall-type schedule. Until
+one exists nothing emits a layer. The same work bounds materials: the
+real carrier is a record family, **86** `OST_Materials` records in the
+same bbox-less shape, a closed byte-derived set against the 102 the
+string heuristic yields — but the records carry no recovered name and
+the element → material join is incomplete, so nothing is recovered from
+them yet and the manifest row stays `known_gap` (#34, #86).
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
@@ -297,6 +365,47 @@ shading plates, which the closure declines and which carry
 `ProfileResolved: false`. Eighty-one per-class
 decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 `iter_elements`.
+
+## Performance
+
+Opening a large project is no longer a minutes-long wait. Every partition
+consumer used to open the CFB stream and inflate all its gzip members for
+itself — once per `BuiltInCategory`, once per sweep, and again for the
+diagnostics pass — which on `2024_Core_Interior.rvt` meant re-inflating
+178.9 MiB of `Partitions/*` more than twenty times per export. #266
+memoises the inflate on the `RevitFile` handle, screens string candidates
+on the raw UTF-16 code units before decoding rather than after, and uses
+`memchr::memmem` for the category substring sweep.
+
+Measured on Apple Silicon / macOS with `/usr/bin/time -l`, best of three,
+against `main` at `8425a3f` (that is, *after* #267, #268 and #269):
+
+| `rvt-ifc --mode geometry` on `2024_Core_Interior.rvt` | before | after |
+|---|---:|---:|
+| wall clock | 26.07 s | **1.69 s** |
+| peak RSS | 2641.4 MiB | **490.1 MiB** |
+
+`Revit_IFC5_Einhoven.rvt` (913 KB) is the control: 0.44 s / 25.1 MiB to
+0.12 s / 20.7 MiB. Under `tools/perf_budget.py --require-category medium`
+the three heavy rows go `element_decode` 6116 ms / 1858.0 MiB to 919 ms /
+478.5 MiB, `ifc_export` 17880 ms / 2642.0 MiB to 1454 ms / 516.2 MiB and
+`viewer_parse_render` 18014 ms / 2642.6 MiB to 1469 ms / 498.8 MiB; every
+budget passes afterwards where all three failed on peak RSS before. No
+budget was changed to make that true.
+
+**The IFC output is byte-identical.** Both emitted STEP files match the
+pre-change binary once the two wall-clock stamps the writer emits are
+normalised (`FILE_NAME` and the `IFCOWNERHISTORY` epoch); there is no
+`SOURCE_DATE_EPOCH` switch, so those two fields cannot be pinned without
+a behaviour change.
+
+In the browser the same change takes the 33.7 MB Core Interior demo from
+about 28 s to **about 3 s** of decode, measured live on the deployed
+site (6.7 s including the 32 MB download). The viewer's loading card
+derives its "about N s" hint from that measurement —
+`DECODE_BYTES_PER_SECOND` is 11 MB/s since #271, up from the 1.15 MB/s
+the pre-#266 figure implied — and the progress bar stays indeterminate
+because the decoder cannot report real progress.
 
 ## Capability Matrix
 
