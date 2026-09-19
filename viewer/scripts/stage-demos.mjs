@@ -6,8 +6,9 @@
  * writes catalog.json + SVG thumbnails. Safe to run without the LFS
  * corpus — loadable RFAs are skipped with a warning; tier1 fixtures
  * copy from corpus/tier1/; the synthetic MVP fixture is generated when
- * gen-fixture is on PATH / in target/; real-project samples copy from the
- * magnetar-io/revit-test-datasets checkout (_project_corpus/) and are
+ * gen-fixture is on PATH / in target/, falling back to a local
+ * `cargo build --release --bin gen-fixture`; real-project samples copy from
+ * the magnetar-io/revit-test-datasets checkout (_project_corpus/) and are
  * refused when their bytes do not match the sha256 pinned in the catalog.
  *
  * Privacy: only redistributable files are staged. Nothing is uploaded.
@@ -66,6 +67,29 @@ function findGenFixture() {
   return null;
 }
 
+/**
+ * Last-resort local build of gen-fixture (#187). Runs the repo's own
+ * `cargo build --release --bin gen-fixture`; fetches nothing itself. Returns
+ * the binary path, or null when cargo is unavailable or the build fails.
+ */
+function buildGenFixture() {
+  const pathCmd = process.platform === 'win32' ? 'where' : 'which';
+  const hasCargo = spawnSync(pathCmd, ['cargo'], {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  if (hasCargo.status !== 0) return null;
+  console.log(
+    'synthetic-mvp: gen-fixture not found, running cargo build --release --bin gen-fixture',
+  );
+  const build = spawnSync('cargo', ['build', '--release', '--bin', 'gen-fixture'], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+  });
+  if (build.status !== 0) return null;
+  return findGenFixture();
+}
+
 function writeThumbnail(filePath, label, accent) {
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180" role="img">
@@ -104,7 +128,7 @@ function stageSyntheticMvp(destRel) {
   if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
     return { ok: true, size: fs.statSync(dest).size, note: 'already present' };
   }
-  const bin = findGenFixture();
+  const bin = findGenFixture() ?? buildGenFixture();
   if (!bin) {
     return {
       ok: false,

@@ -32,7 +32,7 @@ Install and local build paths are documented in
 
 ```bash
 # 1. Build the WASM into viewer/pkg/
-(cd .. && wasm-pack build --target web --features wasm --no-default-features --out-dir viewer/pkg)
+(cd .. && wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features)
 
 # 2. Install node deps
 cd viewer
@@ -59,6 +59,19 @@ Tier1 redistributable demos (`architectural-2024`, `structural-2023`,
 They open cleanly but report scaffold ~25% confidence — that is expected.
 Reliable typed levels/doors/windows from arbitrary projects still depend on
 Rust decoder / partition-stream work outside this viewer shell.
+
+The `synthetic-mvp` demo is not checked in — it is generated at staging time
+by the `gen-fixture` binary, so build it from the repo root first:
+
+```bash
+cargo build --release --bin gen-fixture
+```
+
+`npm run stage:demos` (also run by `predev` / `prebuild`) looks for the
+binary on `PATH`, in `target/release/`, and in `target/debug/`. If it finds
+none it runs that cargo build itself; when cargo is unavailable it warns
+`synthetic-mvp: missing (gen-fixture not found …)` and the gallery marks the
+demo unavailable. Nothing is downloaded either way.
 
 ## Architecture
 
