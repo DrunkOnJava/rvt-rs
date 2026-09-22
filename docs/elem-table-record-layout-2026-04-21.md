@@ -232,7 +232,7 @@ structurally well-formed 40-byte record that ends flush with the stream.
 So the marker is a **sentinel-valued field inside** record 0, not record
 0's first byte. `detect_layout` took the first `0xFF` run as the origin,
 which shifted every record window forward by four bytes and ran the walk
-four bytes short of the last record. `elem_table::record_origin` now
+four bytes short of the last record. `elem_table::flush_origin` now
 recovers the origin as `len − record_count × stride` whenever that lands a
 whole number of `u32` fields (and less than one stride) ahead of the
 marker, and `ElemTableLayout::marker_offset` records the difference so
@@ -245,7 +245,7 @@ field extraction stays anchored to the marker. Every id value on records
 The same end-anchoring on `Revit_IFC5_Einhoven.rvt` would put the origin
 at `73,245 − 2615 × 28 = 25 = 0x19`, i.e. **five** bytes ahead of the
 marker at `0x1E`. A record field cannot begin at a non-`u32` boundary
-inside the record, so the `% 4` guard in `record_origin` rejects it and
+inside the record, so the `% 4` guard in `flush_origin` rejects it and
 the 28-byte variant keeps the marker as its origin. That file therefore
 still walks 2,614 of 2,615 records and leaves a 23-byte tail — an open
 question (a short trailer record? a differently-framed final entry?), not
@@ -259,3 +259,44 @@ in the array, **including** trailer/terminator records with `id_primary
 == 0`; it is not a count of distinct ElementIds — that is
 `element_count` (1,411 here, against 26,425 records). `declared_element_ids`
 therefore includes `0` for this file after dedup.
+
+## The sentinel field is not always `0xFF` (2026-09-22)
+
+`detect_layout` measured the stride as the distance between the first two
+`0xFF` sentinel runs. On Autodesk's Snowdon Towers 2024 architectural
+sample (`Snowdon Towers Sample Architectural.rvt`, sha256 `33271010…`,
+build `20230405_1134_fb02163c5b4b`) that distance is 120 bytes, not 40:
+records 1 and 2 hold `0x10` in the field that is `FF`×8 on every other
+record, so the first two runs are records 0 and 3. The stream is
+1,889,350 bytes with `record_count` 47,233, and
+`(1,889,350 − 30) / 40 = 47,233` exactly; the runs after record 3 are
+40 bytes apart.
+
+At 120 bytes the flush check failed, the marker became the origin, and the
+walk read 15,744 windows whose `id_primary` was 0 on every one. The
+declared ElementId set was `{0}`, so no partition element record could
+join and the IFC export fell back to the 64-floor cap of the plan-loop
+heuristic.
+
+The detector now keeps the measured spacing when it tiles the stream flush
+against `record_count`, and otherwise tries the known explicit strides (40,
+then 28) that divide the spacing and do tile it. On that file this gives
+stride 40, origin `0x1E`, marker offset 4 and 47,233 records (47,232
+distinct non-zero ids plus the zero-id terminator). Every other corpus file
+tiles at its measured spacing and detects exactly as before.
+
+What the "sentinel" is: read as a `u64` at record `+4`, the field is an
+ElementId whenever it is not `-1`. On `2024_Core_Interior.rvt` it is set on
+22,368 of 26,425 records and every one of those values is an ElementId the
+same table declares (20,522 of them lower than the record's own id); on the
+Snowdon sample it is set on 29,177 of 47,233 and 29,131 are declared. The
+`FF`×8 run the detector anchors on is therefore this field's *unset* value,
+and a file whose first records all reference another element would have no
+run in the scan window at all. What the referenced element is (owner,
+group, host) is not claimed.
+
+`record_count` is still read as a `u16`. No corpus file has more than
+65,535 records, so whether bytes 4–5 hold the high half (that is, whether
+the field is really a `u32`) is unmeasured. A file past that bound would
+fail the flush check and keep the marker-spacing layout rather than parse
+a wrong count.

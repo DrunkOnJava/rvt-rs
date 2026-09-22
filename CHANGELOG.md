@@ -183,6 +183,28 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   library's page-aware decoders, `Partitions_NN.decomp` is byte-identical to
   `RevitFile::inflated_partition` (with the member count printed), and
   empty, uncompressed and failed streams are reported as such.
+||||||| parent of 4028efa (fix(elem-table): detect the 40-byte layout when a record's sentinel field is set)
+- **`Global/ElemTable` no longer reads every ElementId as 0 when a record's
+  sentinel field is set.** The layout detector took the record size from
+  the spacing between the first two `0xFF` sentinel runs. On Autodesk's
+  Snowdon Towers 2024 architectural sample, records 1 and 2 hold `0x10`
+  there instead of `0xFF`×8, so the first two runs are 120 bytes apart, not
+  40, and all 15,744 rows parsed at that stride read ElementId 0. Because
+  element recovery keeps only records whose ElementId is declared in
+  ElemTable, no partition element record could match, and the export fell
+  back to 64 plan-loop floor guesses (the heuristic's cap) that had no
+  ElementId and no geometry. When the measured spacing does not tile the
+  stream flush against the declared record count, the detector now tries
+  the known 40- and 28-byte strides that do. That file now declares all
+  47,233 records (47,232 distinct ElementIds), and its IFC export carries
+  5 walls and 1 floor with their Revit ElementIds and bodies in place of
+  the guesses. `2024_Core_Interior.rvt`, `Revit_IFC5_Einhoven.rvt`, the
+  Snowdon structural sample and every family file detect exactly as
+  before. `reports/element-framing/RE-30-snowdon-generalisation.md` records
+  what the same two files show beyond the table: most of their element
+  records use a second prologue whose ElementId is not located, so wall,
+  door, window and room recovery does not yet generalise past
+  `2024_Core_Interior.rvt`, and the support matrix now says so.
 - **The browser viewer's Export IFC and Export plan SVG buttons work.**
   Both had failed on every click since they shipped (commit 7d54d3f, 2026-04-20)
   — confirmed on the deployed site before this fix — for two stacked
