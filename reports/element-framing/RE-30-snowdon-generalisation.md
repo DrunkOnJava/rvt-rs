@@ -273,6 +273,8 @@ partition is as long as possible, preferring smaller ids.
 |---|---:|---:|---:|
 | Core Interior hold-out (ids at `+0x00` hidden, then scored) | 15,520 | 123 | 7,827 |
 | same, keeping a pick only when it is the one candidate strictly between its neighbours' picks | 15,502 | 47 | 7,921 |
+| same guard, also dropping the leading slot (`3` on every record) | 15,508 | 42 | 7,920 |
+| same, also dropping ids named by ≥ 120 frames (levels, types, phases) | 15,523 | 32 | 7,915 |
 | Snowdon class-A walls vs the IFC `Tag` | 1,009 | 74 | 16 |
 | Snowdon class-A doors / windows / columns | 130 / 68 / 105 | 4 / 2 / 9 | 0 / 0 / 4 |
 | Snowdon class-A floors | 0 | 128 | 0 |
@@ -283,8 +285,8 @@ chain prefers the smaller id. Frames go unassigned mostly because an
 element framed more than once (RE-26) cannot sit twice in a strictly
 increasing chain.
 
-Nothing ships from this. Even the guarded variant names a wrong ElementId
-on 47 of 15,549 hold-out picks (0.3 %), and a wrong id is worse than none
-under the fail-closed rule. The two invariants are the basis for the next
+Nothing ships from this. The best guarded variant still names a wrong
+ElementId on 32 of 15,555 hold-out picks (0.2 %), always one smaller than
+the truth, and a wrong id is worse than none under the fail-closed rule. The two invariants are the basis for the next
 attempt. What is needed is a guard that reaches zero wrong on the hold-out
 and on the Snowdon oracle before any decode relies on it.
