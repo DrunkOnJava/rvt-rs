@@ -405,6 +405,16 @@ fn project_count_manifests_match_available_corpus() -> Result<(), Box<dyn std::e
 
         let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
         let step = write_step(&result.model);
+        // RE-30: every manifest project's element records carry their
+        // ElementId. A file whose records use the second, unattributed
+        // prologue exports a fraction of its model, and its counts belong
+        // in a manifest only once that prologue is decoded.
+        let unattributed = result
+            .diagnostics
+            .skipped
+            .iter()
+            .find(|item| item.reason == "element_record_without_element_id");
+        assert!(unattributed.is_none(), "{id}: {unattributed:?}");
         let unsupported: BTreeSet<&str> = result
             .diagnostics
             .unsupported_features

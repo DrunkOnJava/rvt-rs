@@ -71,6 +71,16 @@ and `unsupported_geometry_missing_dimensions`. A single element can appear in
 more than one geometry bucket because these are condition counts, not a
 deduplicated element total.
 
+`element_record_without_element_id` counts the wall, door, window, column,
+floor, building-pad and room element records whose frame is in place (the
+`BuiltInCategory` at `+0x12` and the bounding-box marker at `+0x50`) but whose
+`+0x00` holds no ElementId, keyed by class in `classes`. The fail-closed
+decode cannot attribute them, so none is exported, and a matching warning says
+the model is incomplete. It is absent on `2024_Core_Interior.rvt` and on every
+project-count fixture. On Autodesk's Snowdon Towers 2024 architectural sample
+it is 2,043 against 7 decodable records (see
+`reports/element-framing/RE-30-snowdon-generalisation.md`).
+
 `unsupported_features` carries exactly one geometry-coverage code:
 `real_file_element_geometry` when **no** exported building element has a
 recovered body, and `partial_element_geometry` when some do and some do not

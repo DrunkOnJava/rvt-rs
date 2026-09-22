@@ -1939,6 +1939,25 @@ pub fn build_export_diagnostics_with_limits(
     }
     let geometry_gaps = geometry_gap_skipped_items(model);
     skipped.extend(geometry_gaps.iter().cloned());
+    // RE-30: element frames of a recovered category that carry no
+    // attributable ElementId are rejected by the fail-closed decode, so a
+    // file made mostly of them exports a fraction of its model while
+    // looking complete. Count them so the sidecar says so.
+    let unattributed_frames = bfi
+        .as_ref()
+        .and_then(|b| {
+            crate::partition_element_records::scan_unattributed_frames(rf, b.version).ok()
+        })
+        .unwrap_or_default();
+    let unattributed_total: usize = unattributed_frames.values().sum();
+    if unattributed_total > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_without_element_id".into(),
+            count: unattributed_total,
+            classes: unattributed_frames,
+            sample_names: Vec::new(),
+        });
+    }
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
@@ -2053,11 +2072,24 @@ pub fn build_export_diagnostics_with_limits(
             "{unresolved_thickness} ArcWall records lack recovered thickness; RE-15/#88 falsified exact inch widths in the standard trailer, so IFC depth uses an unresolved placeholder pending WallType width join."
         ));
     }
-    if mode == ExportDiagnosticsMode::Default && !skipped.is_empty() {
+    if let Some(item) = skipped
+        .iter()
+        .find(|item| item.reason == "low_confidence_schema_scan_candidate")
+    {
         warnings.push(format!(
             "Suppressed {} low-confidence schema scan candidates from default export.",
-            skipped[0].count
+            item.count
         ));
+    }
+    if unattributed_total > 0 {
+        // First, because it is the one that changes what the output is
+        // good for, and the viewer shows only the first warning inline.
+        warnings.insert(
+            0,
+            format!(
+                "{unattributed_total} wall, door, window, column, floor or room record(s) in this file use an element-record layout whose ElementId this release cannot locate, so they are not exported and the model is incomplete (RE-30)."
+            ),
+        );
     }
     if mode == ExportDiagnosticsMode::DiagnosticProxies && diagnostic_proxy_elements > 0 {
         warnings.push(
