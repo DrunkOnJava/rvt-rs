@@ -68,40 +68,47 @@ guesses; the 37 spaces are unchanged (still string-scanned, §4).
 
 Every offset of every inflated `Partitions/*` stream where the 8-byte
 little-endian `BuiltInCategory` id sits at `+0x12` was classified by the
-RE-21 fail-closed tests (`partition_element_records::decode_at`):
+RE-21 fail-closed tests (`partition_element_records::decode_at`). The
+streams are the bytes `RevitFile::inflated_partition` returns, which is
+what `rvt-dump` writes since #291; the dump before it lost every gzip
+member that straddled a checksum page (10.5 MB of `Partitions/68` here),
+and counts taken from it undercount every row below.
 
 - **OK** — bbox marker `46 01 ff ff ff ff ab 05` at `+0x50` and a
   `u64` ElementId at `+0x00` declared in `Global/ElemTable`: decodes.
 - **A** — the marker is at `+0x50` but `+0x00` is not an ElementId
-  (`ffffffff_ffffffff` on 505 of the 1,124 architectural walls,
-  `ffffffff_00000006` on 611).
-- **undeclared** — the Core Interior shape (`0x059f` at `+0x0c`) with an
-  ElementId that `Global/ElemTable` does not declare. RE-26 already found
+  (`ffffffff_ffffffff` on 555 of the 1,216 architectural walls,
+  `ffffffff_00000006` on 661).
+- **undeclared** — a `u64` in ElementId range at `+0x00` that
+  `Global/ElemTable` does not declare. RE-26 already found
   Revit leaving superseded frames in place; these are consistent with
   that, and rejecting them is the join doing its job.
 - **no marker** — the category bytes occur but no record frame follows.
 
 | file | category | OK | A | undeclared |
 |---|---|---:|---:|---:|
-| architectural | `OST_Walls` | 6 | 1,124 | 34 |
-| architectural | `OST_Floors` | 0 | 177 | 1 |
-| architectural | `OST_Doors` | 0 | 225 | 48 |
-| architectural | `OST_Windows` | 0 | 144 | 15 |
+| architectural | `OST_Walls` | 6 | 1,216 | 37 |
+| architectural | `OST_Floors` | 1 | 198 | 1 |
+| architectural | `OST_Doors` | 0 | 245 | 49 |
+| architectural | `OST_Windows` | 0 | 150 | 17 |
 | architectural | `OST_Rooms` | 0 | 54 | 0 |
-| architectural | `OST_Columns` | 0 | 172 | 11 |
-| structural | `OST_Walls` | 8 | 46 | 4 |
-| structural | `OST_Floors` | 3 | 21 | 0 |
+| architectural | `OST_Columns` | 0 | 180 | 17 |
+| structural | `OST_Walls` | 8 | 50 | 5 |
+| structural | `OST_Floors` | 3 | 24 | 0 |
 | structural | `OST_Doors` | 7 | 0 | 0 |
 | structural | `OST_Windows` | 8 | 1 | 0 |
-| structural | `OST_StructuralFraming` | 122 | 967 | 29 |
-| structural | `OST_StructuralColumns` | 0 | 94 | 0 |
-| structural | `OST_StructuralFoundation` | 0 | 84 | 3 |
+| structural | `OST_StructuralFraming` | 295 | 965 | 29 |
+| structural | `OST_StructuralColumns` | 30 | 87 | 0 |
+| structural | `OST_StructuralFoundation` | 3 | 95 | 3 |
+
+Across the six categories the exporter recovers, the architectural file
+has 7 decodable frames out of 2,171 and the structural file 26 of 106.
 
 The A records are elements, not noise. From `+0x12` to the end of the
 bbox they are byte-identical in shape to OK records (category, sentinel
 padding, placement kind `0xffffef7f`, `0x0e55` at `+0x4a`, marker), the
-1,124 architectural wall frames carry 1,122 distinct bounding boxes with
-wall proportions (for example 1.1 ft × 18.9 ft × 24.7 ft), and 1,097 of
+1,216 architectural wall frames carry 1,214 distinct bounding boxes with
+wall proportions (for example 1.1 ft × 18.9 ft × 24.7 ft), and 1,200 of
 them carry a counted reference list whose every slot is a declared
 ElementId.
 
@@ -113,14 +120,14 @@ Three places were tested and ruled out:
    runs and 16-bit words (`0x03c1`, `0x07eb`, `0x04fe`, `0x066f`) where
    OK records hold the ElementId, a flags word and `0x059f`.
 2. **The last reference slot.** On OK records the reference list ends
-   with the record's own ElementId (2454523, 2455133, 2455140 on the
-   first three architectural walls). On the 1,124 A walls the last slot
-   takes only 579 distinct values (2084165 on 105 of them), so it is not
-   a per-element id.
+   with the record's own ElementId — on all 6 architectural walls (the
+   first three are 2454523, 2455133, 2455140). On the 1,216 A walls the
+   last slot takes only 605 distinct values (2084165 on 109 of them), so
+   it is not a per-element id.
 3. **A fixed offset before the record.** Scanning `u32` values at every
-   even offset from `−512` to `+0x12` across 1,842 A records (walls,
+   even offset from `−512` to `+0x12` across 1,989 A records (walls,
    doors, windows, floors, columns), the best offset holds a declared id
-   on 127 of 1,842 — no offset is an ElementId slot.
+   on 128 of 1,989 — no offset is an ElementId slot.
 
 The 16-bit words also do not match save increments (the files report 71
 and 22; the words run to 0x08aa). ElemTable's own 40-byte rows carry
@@ -145,7 +152,7 @@ exactly as before.
   is that a random byte match cannot become an element.
 - Structural categories (`OST_StructuralFraming` → `IfcBeam`,
   `OST_StructuralColumns` → `IfcColumn`, `OST_StructuralFoundation` →
-  `IfcFooting`) stay unmapped. The 122 decodable framing records are the
+  `IfcFooting`) stay unmapped. The 295 decodable framing records are the
   only instances available and there is no reference export to hold the
   RE-21 instance rule to for that category.
 
