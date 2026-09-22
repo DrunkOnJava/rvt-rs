@@ -183,7 +183,6 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   library's page-aware decoders, `Partitions_NN.decomp` is byte-identical to
   `RevitFile::inflated_partition` (with the member count printed), and
   empty, uncompressed and failed streams are reported as such.
-||||||| parent of 4028efa (fix(elem-table): detect the 40-byte layout when a record's sentinel field is set)
 - **`Global/ElemTable` no longer reads every ElementId as 0 when a record's
   sentinel field is set.** The layout detector took the record size from
   the spacing between the first two `0xFF` sentinel runs. On Autodesk's
@@ -542,7 +541,6 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   with no remainder into 17 type symbols and 119 members of five such
   containers — which is precisely the split #216 described as "family-local"
   plus "exact co-locations".
-||||||| 6ad7f41
 - **Storey elevations recovered from element-record bounding boxes, and
   elevation-keyed spatial containment (#213).** `src/element_record_storeys.rs`
   turns the distinct base `z` of the partition element records into building
@@ -902,7 +900,6 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   `IfcPropertySet` is rvt-rs provenance about a recovered body rather than a
   Revit element parameter (#35) — the two manifest rows that previously
   borrowed the door/window feature name now use accurate ones.
-||||||| 6ad7f41
 - **`levels` moves from 12 name-derived storeys to 11 measured ones on Core
   Interior (#213).** Both project-count manifests move
   `diagnostics.exported.storey_count` from 12 to 11: the previous 12 came from
