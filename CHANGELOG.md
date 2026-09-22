@@ -6,7 +6,7 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
-## [0.2.0] — 2026-09-22
+## [0.2.0] — prepared, not yet released
 
 An **inspection-focused alpha** (see
 [`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md)). rvt-rs remains a

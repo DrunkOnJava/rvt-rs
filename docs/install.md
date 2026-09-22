@@ -4,18 +4,18 @@ This guide covers the supported ways to install or run rvt-rs on a fresh
 machine. Use [user-guide.md](user-guide.md) after installation to decide which
 workflow fits your file.
 
-**Publication status (as of 2026-09-22, release `0.2.0`):**
+**Publication status (as of 2026-09-22; the tree is at `0.2.0`, prepared but not yet released):**
 
 | Channel | Status |
 |---|---|
-| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.2.0** |
-| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — the [v0.2.0 release](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.2.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
-| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `0.2.0` and `latest`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
+| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.1.2**; 0.2.0 is not yet published |
+| **Prebuilt CLI binaries** (GitHub Releases) | **Not yet published** — the v0.2.0 release will carry archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
+| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Not yet published** — from the v0.2.0 release on, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
 | **crates.io** (`rvt`) | **Not published** — `cargo install rvt` will fail until a successful `cargo publish` |
 | **docs.rs** (`rvt`) | **Not available** (404) until the crate exists on crates.io |
 
-To use the Rust CLIs without a Rust toolchain, download the archive for your
-platform from the release; otherwise build from source.
+Until the v0.2.0 release is published, build the Rust CLIs from source, or
+download the archives from a **Release binaries** workflow run (see below).
 
 ## Browser Viewer
 
@@ -33,7 +33,7 @@ The viewer is client-side only. It does not upload model bytes.
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install "rvt==0.2.0"
+python -m pip install rvt
 python -c "import rvt; print(rvt.__version__)"
 ```
 

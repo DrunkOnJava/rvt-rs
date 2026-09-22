@@ -9,7 +9,8 @@ name: Release binaries
 #     full matrix without uploading, so a release never depends on an
 #     untested matrix.
 #   - `workflow_dispatch` builds any ref; the archives are downloadable from
-#     the run's artifacts.
+#     the run's artifacts. Its `tag` input names them for a release (for
+#     staging a draft GitHub Release) without uploading anything.
 #   - The `image` job packs the two static Linux builds into a distroless
 #     container (docker/Dockerfile) and smoke-tests it on every run; on a
 #     release it pushes linux/amd64 + linux/arm64 to ghcr.io.
@@ -31,6 +32,11 @@ on:
         type: string
         default: ""
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Name the archives and image for this tag (e.g. v0.2.0); nothing is uploaded or pushed"
+        type: string
+        default: ""
   pull_request:
     paths:
       - .github/workflows/release-binaries.yml
