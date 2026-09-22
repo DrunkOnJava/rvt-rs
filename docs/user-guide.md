@@ -158,6 +158,33 @@ Pass `--redact` before sharing the output: it replaces the last-saved-by
 user name everywhere it appears (Revit names a local copy
 `<central>_<user>.rvt`) and scrubs Windows user folders from paths.
 
+## Get A Schedule Into Excel
+
+`rvt-schedule` writes the decoded elements, or the rooms, as a CSV file that
+Excel, Google Sheets and LibreOffice open directly:
+
+```bash
+rvt-schedule model.rvt                          # model.elements.csv next to the model
+rvt-schedule model.rvt --schedule rooms         # model.rooms.csv: number, name, level
+rvt-schedule model.rvt --metric --excel         # metres, and a BOM so Excel reads non-ASCII names
+rvt-schedule model.rvt -o -                     # print the CSV instead of writing a file
+```
+
+The element schedule has one row per decoded building element: Revit
+ElementId, IFC type, level and its elevation, material, placement, body
+size, the host wall of each door and window, and where the body came from
+(`body_source`, `profile_resolved`). A value rvt-rs did not decode is an
+empty cell, never a guess. The room schedule has no area column: today a
+room's body is its bounding box, and the area of a box is not the area of
+a room.
+
+What the schedules contain is exactly what rvt-rs decodes, so check
+`rvt-inspect model.rvt` first: Revit 2024 project files with element
+records give walls, doors, windows, columns, slabs and rooms; other files
+give few or no rows. The browser viewer has the same two schedules as
+**Download element schedule (CSV)** and **Download room schedule (CSV)**
+under Schedule, built in the tab like every other export.
+
 ## Write Or Patch A File
 
 rvt-rs has a stream-level writer, not a semantic Revit editor.

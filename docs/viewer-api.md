@@ -38,6 +38,14 @@ byte slice, so the viewer worker sends it with the fast `summary` message
 and the File status panel shows the Saved and Worksharing rows before the
 model finishes parsing.
 
+## Schedules
+
+`scheduleCsv(model, kind, metric, excel)` returns a CSV schedule of an
+exported model (`rvt::ifc::schedule_csv`): `kind` is `"elements"` or
+`"rooms"`, `metric` switches lengths to metres, `excel` prefixes a UTF-8
+byte-order mark. The viewer's Schedule panel downloads both with
+`excel = true`, since most people open them in Excel.
+
 ## Scene graph
 
 ```rust

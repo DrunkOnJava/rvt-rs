@@ -85,6 +85,7 @@
 //! | [`share`] | ViewerState URL-fragment serialization (VW1-24) |
 //! | [`gltf`] | glTF 2.0 GLB binary exporter (VW1-04) |
 //! | [`sheet`] | 2D SVG plan view emission (VW1-11) |
+//! | [`schedule_csv`] | Element and room schedules as CSV (spreadsheets) |
 //!
 //! Typical viewer pipeline:
 //!
@@ -114,6 +115,7 @@ pub mod measure;
 pub mod pbr;
 pub mod pset_validate;
 pub mod scene_graph;
+pub mod schedule_csv;
 pub mod share;
 pub mod sheet;
 pub mod step_writer;

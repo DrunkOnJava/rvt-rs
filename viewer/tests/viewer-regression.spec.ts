@@ -395,6 +395,17 @@ projectSampleTest(
       /Saved\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC · save counter \d+/,
     );
     await expect(page.locator('#status-panel')).toContainText(/Worksharing\s*(Not enabled|\w+)/);
+    // Element schedule downloads as a spreadsheet-ready CSV built in the tab.
+    await expect(page.locator('#download-schedule')).toBeEnabled();
+    const [scheduleDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#download-schedule').click(),
+    ]);
+    expect(scheduleDownload.suggestedFilename()).toMatch(/\.elements\.csv$/);
+    const scheduleCsv = fs.readFileSync((await scheduleDownload.path())!, 'utf8');
+    const scheduleLines = scheduleCsv.split('\r\n').filter((line) => line.length > 0);
+    expect(scheduleLines[0]).toMatch(/^\uFEFFrevit_element_id,ifc_type,predefined_type,name,level,/);
+    expect(scheduleLines.length).toBeGreaterThan(1);
     // #33 leftover: File Status lists recovered storey names, not counts only.
     await expect(page.locator('#status-panel')).toContainText(/Level 1|Roof/i);
     await expect(page.locator('#status-panel')).toContainText(/Materials/i);

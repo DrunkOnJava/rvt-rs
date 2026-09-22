@@ -184,6 +184,19 @@ class RevitFile:
         can't be parsed.
         """
 
+    def schedule_csv(
+        self, kind: str = "elements", metric: bool = False, excel: bool = False
+    ) -> str:
+        """Spreadsheet schedule of the decoded model as CSV text.
+
+        ``kind="elements"``: every building element (Revit ElementId, IFC
+        type, level, material, placement, size, host of a door or window).
+        ``kind="rooms"``: every room (number, name, level). ``metric=True``
+        writes lengths in metres; ``excel=True`` prefixes a UTF-8 BOM for
+        Excel on Windows. Unknown values are empty cells. Raises
+        ``ValueError`` for another ``kind``.
+        """
+
     def metadata(self, redact: bool = False) -> FileMetadata:
         """Document identity: release, worksharing, central model path,
         last saved (time and user), document GUID and save counter.

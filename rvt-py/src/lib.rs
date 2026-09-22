@@ -645,6 +645,40 @@ impl PyRevitFile {
         write_ifc_with_quality_mode_and_limits(&mut self.inner, mode, self.walker_limits)
     }
 
+    /// Spreadsheet schedule of the decoded model as CSV text
+    /// (`rvt::ifc::schedule_csv`): `kind="elements"` (every building
+    /// element: type, level, material, placement, size, host) or
+    /// `kind="rooms"` (number, name, level). `metric=True` writes lengths in
+    /// metres; `excel=True` prefixes a UTF-8 byte-order mark for Excel on
+    /// Windows. Only decoded values are written; unknowns are empty cells.
+    #[pyo3(signature = (kind = "elements", metric = false, excel = false))]
+    fn schedule_csv(&mut self, kind: &str, metric: bool, excel: bool) -> PyResult<String> {
+        use rvt::ifc::schedule_csv::{CsvOptions, LengthUnit, elements_csv, rooms_csv};
+        let model = ifc::RvtDocExporter
+            .export_with_diagnostics_mode_and_limits(
+                &mut self.inner,
+                ifc::ExportQualityMode::Scaffold,
+                self.walker_limits,
+            )
+            .map_err(to_py_val)?
+            .model;
+        let options = CsvOptions {
+            unit: if metric {
+                LengthUnit::Metres
+            } else {
+                LengthUnit::Feet
+            },
+            excel_bom: excel,
+        };
+        match kind {
+            "elements" => Ok(elements_csv(&model, &options)),
+            "rooms" => Ok(rooms_csv(&model, &options)),
+            other => Err(PyValueError::new_err(format!(
+                "unknown schedule kind {other:?}; expected \"elements\" or \"rooms\""
+            ))),
+        }
+    }
+
     /// Produce the JSON diagnostics sidecar for the default IFC export.
     ///
     /// The returned string matches `rvt-ifc --diagnostics` and is intended

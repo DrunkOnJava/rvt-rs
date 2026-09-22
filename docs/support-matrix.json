@@ -252,6 +252,15 @@
       "user_impact": "Valid IFC scaffold and narrow typed subsets; not general RVT-to-IFC."
     },
     {
+      "id": "csv-schedules",
+      "area": "ifc",
+      "name": "Element and room schedules as CSV (rvt-schedule, viewer, Python)",
+      "status": "partial",
+      "evidence": "ifc::schedule_csv unit tests; tests/rvt_schedule_cli.rs (tier-1 shape; 2024_Core_Interior 970 elements / 360 walls / 132 hosted doors / 6 windows / 256 columns / 116 rooms); viewer Playwright download test",
+      "notes": "One row per decoded element or room, so coverage is exactly the decode coverage: typed rows on Revit 2024 project files with element records, scaffold-only elsewhere. Unknown values are empty cells. No room area: room bodies are record bounding boxes, not boundaries.",
+      "user_impact": "A spreadsheet of walls, doors, windows, columns, slabs and rooms without Revit, on files whose elements decode."
+    },
+    {
       "id": "converter-grade-rvt-ifc",
       "area": "ifc",
       "name": "Converter-grade production RVT-to-IFC",

@@ -207,6 +207,38 @@ pub fn file_metadata(bytes: &[u8]) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&metadata).map_err(err_str)
 }
 
+/// Spreadsheet schedule of an exported model as CSV
+/// ([`crate::ifc::schedule_csv`]): `kind` is `"elements"` (every building
+/// element) or `"rooms"`; `metric` switches lengths to metres; `excel`
+/// prefixes a UTF-8 byte-order mark so Excel on Windows reads non-ASCII
+/// names correctly.
+#[wasm_bindgen(js_name = scheduleCsv)]
+pub fn js_schedule_csv(
+    model: JsValue,
+    kind: &str,
+    metric: bool,
+    excel: bool,
+) -> Result<String, JsValue> {
+    install_panic_hook();
+    use crate::ifc::schedule_csv::{CsvOptions, LengthUnit, elements_csv, rooms_csv};
+    let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
+    let options = CsvOptions {
+        unit: if metric {
+            LengthUnit::Metres
+        } else {
+            LengthUnit::Feet
+        },
+        excel_bom: excel,
+    };
+    match kind {
+        "elements" => Ok(elements_csv(&model, &options)),
+        "rooms" => Ok(rooms_csv(&model, &options)),
+        other => Err(JsValue::from_str(&format!(
+            "unknown schedule kind {other:?}; expected \"elements\" or \"rooms\""
+        ))),
+    }
+}
+
 /// Build the scene-graph tree for a model.
 #[wasm_bindgen(js_name = buildSceneGraph)]
 pub fn js_build_scene_graph(model: JsValue) -> Result<JsValue, JsValue> {

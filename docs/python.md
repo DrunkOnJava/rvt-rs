@@ -187,6 +187,7 @@ Raises `IOError` on missing files, non-CFB input, file-size over
 | `build` | `str \| None` | Revit build tag, e.g. `"20230308_1635(x64)"` |
 | `guid` | `str \| None` | Document GUID from `BasicFileInfo`, if present |
 | `part_atom_title` | `str \| None` | Family document title from `PartAtom` XML |
+| `schedule_csv(kind="elements", metric=False, excel=False)` | `str` | Element (`kind="elements"`) or room (`kind="rooms"`) schedule as CSV text; same columns as `rvt-schedule` |
 | `metadata(redact=False)` | `dict` | Document identity: release, build, title, last saved, worksharing, central model path, last-saved-by user, document GUID, save counter, cloud flag, and every `BasicFileInfo` `Key: value` line (`docs/schemas/file-metadata.schema.json`) |
 
 Each getter calls into the Rust parser on access. All four

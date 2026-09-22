@@ -458,3 +458,20 @@ def test_read_metadata_rejects_a_non_revit_file(tmp_path):
     bogus.write_bytes(b"not a revit file")
     with pytest.raises(ValueError):
         rvt.read_metadata(str(bogus))
+
+
+# ---------------------------------------------------------------------
+# CSV schedules
+# ---------------------------------------------------------------------
+
+def test_schedule_csv_has_the_documented_header(sample_2024):
+    csv = sample_2024.schedule_csv()
+    header = csv.split("\r\n")[0]
+    assert header.startswith("revit_element_id,ifc_type,predefined_type,name,level,")
+    rooms = sample_2024.schedule_csv(kind="rooms", metric=True, excel=True)
+    assert rooms.startswith("\ufeffrevit_element_id,number,name,level,level_elevation_m")
+
+
+def test_schedule_csv_rejects_an_unknown_kind(sample_2024):
+    with pytest.raises(ValueError):
+        sample_2024.schedule_csv(kind="doors")
