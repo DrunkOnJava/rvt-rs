@@ -10,6 +10,7 @@ workflow fits your file.
 |---|---|
 | **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.2.0** |
 | **Prebuilt CLI binaries** (GitHub Releases) | **Published** — the [v0.2.0 release](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.2.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
+| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `0.2.0` and `latest`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
 | **crates.io** (`rvt`) | **Not published** — `cargo install rvt` will fail until a successful `cargo publish` |
 | **docs.rs** (`rvt`) | **Not available** (404) until the crate exists on crates.io |
 
@@ -114,7 +115,7 @@ archives are attached to that run as artifacts.
 
 ## Docker
 
-Every tagged release from the next one on also publishes a container image
+Every tagged release from v0.2.0 on also publishes a container image
 holding the same static Linux binaries, for `linux/amd64` and `linux/arm64`:
 `ghcr.io/drunkonjava/rvt-rs:<version>` and, for a final release,
 `ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
