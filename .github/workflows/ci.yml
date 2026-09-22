@@ -857,6 +857,17 @@ jobs:
             exit 1
           fi
           echo "PII guard: clean."
+      - name: Scan for committed merge-conflict markers
+        run: |
+          # A resolved rebase can still leave a diff3 base marker behind;
+          # three of them sat in CHANGELOG.md for weeks. `=======` alone is
+          # also a Markdown underline, so only the three unambiguous markers
+          # are matched.
+          if git grep -I -n -E '^(<<<<<<<|\|\|\|\|\|\|\||>>>>>>>)( |$)' -- .; then
+            echo "::error::merge-conflict marker committed"
+            exit 1
+          fi
+          echo "Conflict-marker guard: clean."
 
   # Guards the Cloud Agent development environment config itself: shellcheck
   # the install script and validate `.cursor/environment.json` against the
