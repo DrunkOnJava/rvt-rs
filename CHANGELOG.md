@@ -6,10 +6,14 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
-Post-`0.1.2` work toward an **inspection-focused `0.2.0` alpha** (see
+## [0.2.0] — prepared, not yet released
+
+An **inspection-focused alpha** (see
 [`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md)). rvt-rs remains a
 Revit inspection / reverse-engineering toolkit with experimental export —
-**not** a production Revit→IFC converter for arbitrary projects.
+**not** a production Revit→IFC converter for arbitrary projects. The first
+release with prebuilt CLI archives for Linux, macOS and Windows on the GitHub
+Release, and a multi-arch container image on ghcr.io.
 
 ### Added
 

@@ -4,18 +4,18 @@ This guide covers the supported ways to install or run rvt-rs on a fresh
 machine. Use [user-guide.md](user-guide.md) after installation to decide which
 workflow fits your file.
 
-**Publication status (as of 2026-08-29, tree at `0.1.2`):**
+**Publication status (as of 2026-09-22; the tree is at `0.2.0`, prepared but not yet released):**
 
 | Channel | Status |
 |---|---|
-| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.1.2** |
+| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.1.2**; 0.2.0 is not yet published |
+| **Prebuilt CLI binaries** (GitHub Releases) | **Not yet published** — the v0.2.0 release will carry archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
+| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Not yet published** — from the v0.2.0 release on, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
 | **crates.io** (`rvt`) | **Not published** — `cargo install rvt` will fail until a successful `cargo publish` |
 | **docs.rs** (`rvt`) | **Not available** (404) until the crate exists on crates.io |
-| **Prebuilt CLI binaries** (GitHub Releases) | **From the next tagged release** — the release workflow attaches archives for Linux, macOS and Windows; no release has shipped them yet |
 
-Until a release carries binaries, build the Rust CLIs from source. See
-[release-0.2.0-plan.md](release-0.2.0-plan.md) for the inspection-focused
-alpha cut that aims to close the crates.io gap.
+Until the v0.2.0 release is published, build the Rust CLIs from source, or
+download the archives from a **Release binaries** workflow run (see below).
 
 ## Browser Viewer
 
@@ -33,7 +33,7 @@ The viewer is client-side only. It does not upload model bytes.
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install "rvt==0.1.2"
+python -m pip install rvt
 python -c "import rvt; print(rvt.__version__)"
 ```
 
@@ -70,7 +70,7 @@ announcements.
 
 ## Prebuilt Binaries (GitHub Releases)
 
-Every tagged release from the next one on attaches ready-to-run archives of
+Every tagged release from v0.2.0 on attaches ready-to-run archives of
 all the CLIs (`rvt-info`, `rvt-inspect`, `rvt-ifc`, …) to its page under
 <https://github.com/DrunkOnJava/rvt-rs/releases>. No Rust toolchain is
 needed.
@@ -115,7 +115,7 @@ archives are attached to that run as artifacts.
 
 ## Docker
 
-Every tagged release from the next one on also publishes a container image
+Every tagged release from v0.2.0 on also publishes a container image
 holding the same static Linux binaries, for `linux/amd64` and `linux/arm64`:
 `ghcr.io/drunkonjava/rvt-rs:<version>` and, for a final release,
 `ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the

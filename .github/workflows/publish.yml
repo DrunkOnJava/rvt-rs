@@ -353,7 +353,18 @@ jobs:
         # users. The pyo3 bindings are in the separate `rvt-py`
         # member crate (SEC-12/13), which has `publish = false`
         # and ships via maturin to PyPI instead.
-        run: cargo publish -p rvt
+        #
+        # A missing token is a configuration gap, not a rejected crate:
+        # skip with a warning so PyPI and the release still ship, and the
+        # release notes record `crates.io: NOT PUBLISHED`
+        # (docs/release-0.2.0-plan.md). A crate the registry rejects still
+        # fails this job and keeps PyPI from publishing a mismatched version.
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
+            echo "::warning::CARGO_REGISTRY_TOKEN is not configured; crates.io publish skipped. Record 'crates.io: NOT PUBLISHED' in the release notes."
+            exit 0
+          fi
+          cargo publish -p rvt
 
   publish-testpypi:
     name: Publish to TestPyPI
