@@ -20,7 +20,10 @@ use std::path::PathBuf;
 #[command(
     name = "rvt-elements",
     version,
-    about = "Dump production decoded elements or class counts as JSON"
+    about = "Dump production decoded elements or class counts as JSON",
+    after_help = "Examples:\n  \
+        rvt-elements model.rvt --counts\n  \
+        rvt-elements model.rvt --min-confidence 0.55 > elements.json"
 )]
 struct Cli {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
@@ -73,8 +76,18 @@ struct CountsOut {
     by_class: BTreeMap<String, usize>,
 }
 
-fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+fn main() -> std::process::ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
+    match run(Cli::parse()) {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::ExitCode::from(1)
+        }
+    }
+}
+
+fn run(cli: Cli) -> anyhow::Result<()> {
     let mut rf = RevitFile::open(&cli.file)?;
     let control = if cli.progress {
         rvt::control::WalkerControl::new().with_progress(|event| {

@@ -43,7 +43,10 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-write",
     version,
-    about = "Apply stream-level patches to a Revit file and verify the round-trip"
+    about = "Apply stream-level patches to a Revit file and verify the round-trip",
+    after_help = "Examples:\n  \
+        rvt-write --src in.rvt --dst out.rvt --patches patches.json\n  \
+        rvt-write --src in.rvt --dst out.rvt --patches patches.json --dry-run"
 )]
 struct Cli {
     /// Source Revit file path.
@@ -188,6 +191,7 @@ fn manifest_to_patches(m: PatchManifest) -> Result<Vec<StreamPatch>, String> {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     let cli = Cli::parse();
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,

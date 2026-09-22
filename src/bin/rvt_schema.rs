@@ -15,7 +15,11 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-schema",
     version,
-    about = "Dump the embedded serialization schema from a Revit file"
+    about = "Dump the embedded serialization schema from a Revit file",
+    after_help = "Examples:\n  \
+        rvt-schema family.rfa --top 20\n  \
+        rvt-schema family.rfa --grep Wall --with-fields\n  \
+        rvt-schema family.rfa --json > schema.json"
 )]
 struct Cli {
     /// Path to a Revit file.
@@ -24,6 +28,10 @@ struct Cli {
     /// Output format.
     #[arg(short = 'f', long = "format", default_value = "text", value_enum)]
     format: Format,
+
+    /// Shorthand for `--format json`.
+    #[arg(long, conflicts_with = "format")]
+    json: bool,
 
     /// Filter to classes whose names contain this substring (case-sensitive).
     #[arg(long = "grep")]
@@ -49,6 +57,7 @@ enum Format {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -59,7 +68,10 @@ fn main() -> ExitCode {
 }
 
 fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    if cli.json {
+        cli.format = Format::Json;
+    }
     let mut rf = RevitFile::open(&cli.file)?;
     let schema = rf.schema()?;
 

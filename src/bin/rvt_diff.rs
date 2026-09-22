@@ -15,7 +15,9 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-diff",
     version,
-    about = "Compare Revit files stream-by-stream"
+    about = "Compare Revit files stream-by-stream",
+    after_help = "Examples:\n  \
+        rvt-diff before.rvt after.rvt --decompress"
 )]
 struct Cli {
     /// Two or more Revit files to compare.
@@ -32,6 +34,7 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     let cli = Cli::parse();
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,

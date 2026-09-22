@@ -24,7 +24,10 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-corpus",
     version,
-    about = "Corpus-wide delta analysis across multiple Revit files"
+    about = "Corpus-wide delta analysis across multiple Revit files",
+    after_help = "Examples:\n  \
+        rvt-corpus doctor projects/ --json\n  \
+        rvt-corpus 2022.rfa 2023.rfa 2024.rfa"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -37,6 +40,10 @@ struct Cli {
     /// Output format.
     #[arg(short = 'f', long = "format", default_value = "text", value_enum)]
     format: Format,
+
+    /// Shorthand for `--format json`.
+    #[arg(long, conflicts_with = "format")]
+    json: bool,
 
     /// Print up to N invariant runs per stream (each has offset/length/hex preview).
     #[arg(long = "runs", default_value_t = 5)]
@@ -58,6 +65,10 @@ struct DoctorArgs {
     /// Output format.
     #[arg(short = 'f', long = "format", default_value = "text", value_enum)]
     format: Format,
+
+    /// Shorthand for `--format json`.
+    #[arg(long, conflicts_with = "format")]
+    json: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -67,6 +78,7 @@ enum Format {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -77,7 +89,10 @@ fn main() -> ExitCode {
 }
 
 fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    if cli.json {
+        cli.format = Format::Json;
+    }
     if let Some(command) = cli.command {
         return match command {
             Command::Doctor(args) => run_doctor(args),
@@ -187,7 +202,10 @@ struct DoctorFileReport {
     suggested_labels: Vec<&'static str>,
 }
 
-fn run_doctor(args: DoctorArgs) -> anyhow::Result<()> {
+fn run_doctor(mut args: DoctorArgs) -> anyhow::Result<()> {
+    if args.json {
+        args.format = Format::Json;
+    }
     let files = collect_revit_files(&args.paths)?;
     let mut reports = Vec::with_capacity(files.len());
     for path in files {

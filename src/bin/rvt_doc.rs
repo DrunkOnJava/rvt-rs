@@ -16,7 +16,13 @@ use serde::Serialize;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(version, about = "Dump ADocument's instance fields from a Revit file")]
+#[command(
+    version,
+    about = "Dump ADocument's instance fields from a Revit file",
+    after_help = "Examples:\n  \
+        rvt-doc family.rfa\n  \
+        rvt-doc family.rfa --json --redact"
+)]
 struct Args {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
     path: PathBuf,
@@ -127,8 +133,18 @@ fn render(inst: &ADocumentInstance) -> Vec<OutField> {
         .collect()
 }
 
-fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+fn main() -> std::process::ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
+    match run(Args::parse()) {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::ExitCode::from(1)
+        }
+    }
+}
+
+fn run(args: Args) -> anyhow::Result<()> {
     let path_str = if args.redact {
         redact::redact_path_str(&args.path.display().to_string())
     } else {

@@ -16,7 +16,10 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-dump",
     version,
-    about = "Extract + decompress every OLE stream from a Revit file"
+    about = "Extract + decompress every OLE stream from a Revit file",
+    after_help = "Examples:\n  \
+        rvt-dump model.rvt -o streams/\n  \
+        rvt-dump model.rvt -o streams/ --raw"
 )]
 struct Cli {
     /// Path to a Revit file.
@@ -32,6 +35,7 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

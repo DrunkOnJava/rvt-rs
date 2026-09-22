@@ -12,12 +12,19 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-capabilities",
     version,
-    about = "Emit honest rvt-rs capability + relation-domain snapshot (no invented successes)"
+    about = "Emit honest rvt-rs capability + relation-domain snapshot (no invented successes)",
+    after_help = "Examples:\n  \
+        rvt-capabilities\n  \
+        rvt-capabilities -f text"
 )]
 struct Cli {
     /// Output format.
     #[arg(short = 'f', long = "format", default_value = "json", value_enum)]
     format: Format,
+
+    /// Shorthand for `--format json`.
+    #[arg(long, conflicts_with = "format")]
+    json: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -27,7 +34,11 @@ enum Format {
 }
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
+    rvt::cli::exit_quietly_on_broken_pipe();
+    let mut cli = Cli::parse();
+    if cli.json {
+        cli.format = Format::Json;
+    }
     let manifest = CapabilityManifest::honest_snapshot();
     match cli.format {
         Format::Json => match manifest.to_json_string() {
