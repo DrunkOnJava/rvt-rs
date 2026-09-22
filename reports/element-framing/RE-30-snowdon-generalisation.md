@@ -249,3 +249,44 @@ rule that says which of its references is itself. Until that rule is
 found and measured, the decode stays fail-closed: the Tags that locate the
 id here come from Revit's export, which a reader of an arbitrary file does
 not have. This result is tracked in #295.
+
+## 8. Addendum: frames are stored in ElementId order (2026-09-22)
+
+§7 left one question open: which slot of a class-A frame's reference
+list is the frame's own ElementId. A second structural fact narrows it.
+
+**Element record frames sit in each partition in ascending ElementId
+order.** This held on every measurement:
+
+- `2024_Core_Interior.rvt`: 23,454 of 23,462 consecutive framed records
+  (all categories) have increasing ids.
+- Snowdon architectural, records with the id at `+0x00`: 2,030 of 2,032.
+- Snowdon architectural, the 1,077 oracle-matched class-A wall frames:
+  1,064 of 1,076 steps increase, in 13 runs.
+
+**The order and the reference list together** give an assignment that
+uses no oracle. Choose one reference per frame (a declared id) so the
+chosen ids rise strictly with offset, and so the chain through the
+partition is as long as possible, preferring smaller ids.
+
+| measured on | correct | wrong | unassigned |
+|---|---:|---:|---:|
+| Core Interior hold-out (ids at `+0x00` hidden, then scored) | 15,520 | 123 | 7,827 |
+| same, keeping a pick only when it is the one candidate strictly between its neighbours' picks | 15,502 | 47 | 7,921 |
+| same guard, also dropping the leading slot (`3` on every record) | 15,508 | 42 | 7,920 |
+| same, also dropping ids named by ≥ 120 frames (levels, types, phases) | 15,523 | 32 | 7,915 |
+| Snowdon class-A walls vs the IFC `Tag` | 1,009 | 74 | 16 |
+| Snowdon class-A doors / windows / columns | 130 / 68 / 105 | 4 / 2 / 9 | 0 / 0 / 4 |
+| Snowdon class-A floors | 0 | 128 | 0 |
+
+Floors fail systematically, and the reason is recorded. The list names a
+sketch whose id is the floor's minus one (`[… 629118, 629119 …]`), and the
+chain prefers the smaller id. Frames go unassigned mostly because an
+element framed more than once (RE-26) cannot sit twice in a strictly
+increasing chain.
+
+Nothing ships from this. The best guarded variant still names a wrong
+ElementId on 32 of 15,555 hold-out picks (0.2 %), always smaller than
+the true id, and a wrong id is worse than none under the fail-closed rule. The two invariants are the basis for the next
+attempt. What is needed is a guard that reaches zero wrong on the hold-out
+and on the Snowdon oracle before any decode relies on it.
