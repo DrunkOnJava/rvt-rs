@@ -292,8 +292,13 @@ same table declares (20,522 of them lower than the record's own id); on the
 Snowdon sample it is set on 29,177 of 47,233 and 29,131 are declared. The
 `FF`×8 run the detector anchors on is therefore this field's *unset* value,
 and a file whose first records all reference another element would have no
-run in the scan window at all. What the referenced element is (owner,
-group, host) is not claimed.
+run in the scan window at all. RE-31
+(`reports/element-framing/RE-31-elemtable-owner-field.md`) measures what
+it names: 87 % of the set values on Core Interior also sit in the element's
+own partition reference list, and by category they are the curtain wall of
+a curtain panel, mullion or grid, the sketch of a sketch line, and the
+model group of a grouped element. The library reads it as
+`ElemRecord::owner_id`.
 
 `record_count` is still read as a `u16`. No corpus file has more than
 65,535 records, so whether bytes 4–5 hold the high half (that is, whether

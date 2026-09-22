@@ -30,6 +30,19 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   low-confidence schema scan candidates" warning also read the first
   skipped item whatever it was, so on a file with below-confidence elements
   it reported that count instead; it now reads its own item.
+- **Every `Global/ElemTable` record now says which element it belongs to
+  (#152, RE-31).** The run of `0xFF` bytes the layout detector anchors on is
+  an owner ElementId field, and `0xFF` is its unset value. It is a `u32` at
+  `+0` on 2023 projects and a `u64` at `+4` on 2024 projects.
+  `ElemRecord::owner_id` reads it. On `2024_Core_Interior.rvt` it is set on
+  22,368 of 26,425 records, every value is a declared ElementId, and 87 %
+  also appear in the element's own partition reference list. By category,
+  curtain panels, mullions and grids name their curtain wall, sketch lines
+  their sketch, and grouped elements their model group. `rvt-elem-table`
+  prints the detected layout instead of guessing it from the first record,
+  which went wrong whenever that record had an owner, along with how many
+  records name an owner. `--json` adds `layout`, `records_with_owner` and
+  `owner_id`. The IFC export does not use the field yet.
 - **Element and room schedules for Excel, from the CLI, the viewer and
   Python.** `rvt-schedule model.rvt` writes `model.elements.csv` — one row
   per decoded building element with its Revit ElementId, IFC type, level and
