@@ -194,6 +194,10 @@ path = "src/bin/rvt_elements.rs"
 name = "rvt-capabilities"
 path = "src/bin/rvt_capabilities.rs"
 
+[[bin]]
+name = "rvt-schedule"
+path = "src/bin/rvt_schedule.rs"
+
 # Criterion benchmark suite (Q-05). Run with `cargo bench` or
 # `cargo bench --bench compression`. See `docs/benchmarks.md`.
 [[bench]]

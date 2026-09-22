@@ -198,6 +198,7 @@ fn every_cli_help_shows_examples() {
         env!("CARGO_BIN_EXE_rvt-elem-table"),
         env!("CARGO_BIN_EXE_rvt-elements"),
         env!("CARGO_BIN_EXE_rvt-capabilities"),
+        env!("CARGO_BIN_EXE_rvt-schedule"),
     ] {
         let out = run(bin, &["--help".as_ref()]);
         assert!(out.status.success(), "{bin}");

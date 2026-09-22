@@ -684,7 +684,10 @@ impl Schedule {
     /// `ScheduleRow` with fields in the same order as the
     /// struct: entity_index, ifc_type, name, storey, material,
     /// guid. Values with commas or quotes are double-quote
-    /// wrapped + inner quotes doubled, per RFC 4180.
+    /// wrapped + inner quotes doubled, per RFC 4180, and a value a
+    /// spreadsheet would read as a formula is prefixed with `'`.
+    /// For spreadsheet schedules with placement, size, host and
+    /// room columns use [`super::schedule_csv`].
     pub fn to_csv(&self) -> String {
         let mut out = String::new();
         out.push_str("entity_index,ifc_type,name,storey,material,guid\n");
@@ -706,10 +709,17 @@ impl Schedule {
 }
 
 fn csv_field(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
-        format!("\"{}\"", s.replace('"', "\"\""))
+    // Names come from an untrusted file: neutralise formula triggers
+    // (OWASP CSV injection) before RFC 4180 quoting.
+    let s = if s.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        format!("'{s}")
     } else {
         s.to_string()
+    };
+    if s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s
     }
 }
 

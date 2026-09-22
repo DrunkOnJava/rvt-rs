@@ -13,6 +13,24 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Element and room schedules for Excel, from the CLI, the viewer and
+  Python.** `rvt-schedule model.rvt` writes `model.elements.csv` — one row
+  per decoded building element with its Revit ElementId, IFC type, level and
+  elevation, material, placement, body size, the host wall of each door and
+  window, and the body's provenance — and `--schedule rooms` writes the
+  room number, name and level. `--metric` switches lengths to metres,
+  `--excel` adds the byte-order mark Excel on Windows needs for non-ASCII
+  names, `-o -` prints to stdout. On `2024_Core_Interior.rvt` that is 970
+  element rows (360 walls, 132 doors all hosted, 6 windows, 256 columns, 80
+  slabs, 116 rooms) and 116 room rows, pinned by
+  `tests/rvt_schedule_cli.rs`. The same `rvt::ifc::schedule_csv` module
+  backs the viewer's new **Download element / room schedule (CSV)** buttons
+  (wasm `scheduleCsv`) and Python's `RevitFile.schedule_csv()`. Only decoded
+  values are written — unknowns are empty cells — and rooms carry no area,
+  because their bodies are record bounding boxes. Cells come from an
+  untrusted file, so a text cell a spreadsheet would read as a formula is
+  prefixed with `'` (OWASP CSV injection); the older
+  `scene_graph::Schedule::to_csv` gets the same guard.
 - **Every file now says who saved it, when, and whether it is workshared,
   and `rvt-info` inventories whole folders.** After its binary header,
   `BasicFileInfo` carries a block of `Key: value` lines on every release

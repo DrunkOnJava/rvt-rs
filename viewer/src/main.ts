@@ -37,6 +37,8 @@ const scheduleGroupsEl = $('schedule-groups');
 const statusPanelEl = $('status-panel');
 const diagnosticsJsonEl = $('diagnostics-json');
 const downloadDiagnosticsBtn = $('download-diagnostics') as HTMLButtonElement;
+const downloadScheduleBtn = $('download-schedule') as HTMLButtonElement;
+const downloadRoomsBtn = $('download-rooms') as HTMLButtonElement;
 const exportGlbBtn = $('export-glb') as HTMLButtonElement;
 const exportIfcBtn = $('export-ifc') as HTMLButtonElement;
 const exportSvgBtn = $('export-svg') as HTMLButtonElement;
@@ -580,6 +582,8 @@ async function loadBytes(file: File): Promise<void> {
   exportIfcBtn.disabled = true;
   exportSvgBtn.disabled = true;
   downloadDiagnosticsBtn.disabled = true;
+  downloadScheduleBtn.disabled = true;
+  downloadRoomsBtn.disabled = true;
   exportQualityEl.textContent = 'quality: pending';
   exportQualityEl.className = 'quality-pill';
   diagnosticsJsonEl.textContent = '';
@@ -687,6 +691,10 @@ async function loadBytes(file: File): Promise<void> {
     exportIfcBtn.disabled = false;
     exportSvgBtn.disabled = false;
     downloadDiagnosticsBtn.disabled = false;
+    // The schedules follow the model: an element schedule whenever any
+    // building element decoded, a room schedule only when rooms did.
+    downloadScheduleBtn.disabled = !scheduleHasType(msg.schedule, null);
+    downloadRoomsBtn.disabled = !scheduleHasType(msg.schedule, 'IFCSPACE');
     setStatus(`loaded · ${msg.types.length} categories · IFC bar ${qualityMode}`);
     stopLoadOverlay();
     clearDemoCardBusy();
@@ -2093,6 +2101,42 @@ downloadDiagnosticsBtn.addEventListener('click', () => {
   setStatus(`exported ${lastFileStem}.diagnostics.json`);
   toast(`Downloaded ${lastFileStem}.diagnostics.json`, 'ok');
 });
+
+/** Whether the schedule lists a building element of `ifcType` (any type for null). */
+function scheduleHasType(schedule: Schedule, ifcType: string | null): boolean {
+  return (schedule.groups ?? []).some(
+    (group) => group.count > 0 && (ifcType === null || group.ifc_type === ifcType),
+  );
+}
+
+/**
+ * CSV schedules (`rvt::ifc::schedule_csv` via the wasm `scheduleCsv`
+ * binding). Generated in the tab from the already-decoded model — no
+ * upload. Written with a UTF-8 byte-order mark: most people open these in
+ * Excel, which needs it to read non-ASCII room names.
+ */
+function downloadSchedule(kind: 'elements' | 'rooms'): void {
+  if (!model) return;
+  const label = kind === 'elements' ? 'element schedule' : 'room schedule';
+  void (async () => {
+    setStatus(`building ${label}…`);
+    try {
+      const { scheduleCsv } = await mainThreadWasm();
+      const csv = scheduleCsv(model as unknown as object, kind, false, true);
+      const rows = Math.max(0, csv.split('\r\n').filter((line) => line.length > 0).length - 1);
+      download(`${lastFileStem}.${kind}.csv`, new Blob([csv], { type: 'text/csv' }));
+      setStatus(`exported ${lastFileStem}.${kind}.csv · ${rows} rows`);
+      toast(`Exported ${label} · ${rows} rows`, 'ok');
+    } catch (err) {
+      const message = (err as Error).message ?? String(err);
+      setStatus(`${label} export failed: ${message}`);
+      toast(`Could not build the ${label}. ${message}`, 'bad');
+    }
+  })();
+}
+
+downloadScheduleBtn.addEventListener('click', () => downloadSchedule('elements'));
+downloadRoomsBtn.addEventListener('click', () => downloadSchedule('rooms'));
 
 // ---------- Demo gallery (VW1-22 / M6-03) ----------
 interface DemoEntry {

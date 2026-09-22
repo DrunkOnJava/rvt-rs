@@ -10,7 +10,7 @@
 
 For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). Installation paths live in [`docs/install.md`](docs/install.md). For the short support boundary, read [`docs/status.md`](docs/status.md), the supported MVP input profile in [`docs/supported-profile.md`](docs/supported-profile.md), and the executable capability matrix in [`docs/support-matrix.json`](docs/support-matrix.json) (statuses are honest ceilings, not converter-grade claims). The detailed roadmap tasks live in [`TODO.md`](TODO.md) and the matching GitHub milestones/issues.
 
-Rust 2024 edition (MSRV 1.85). **Eighteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.85). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -36,6 +36,7 @@ Rust 2024 edition (MSRV 1.85). **Eighteen CLIs ship** (`rvt-analyze`, `rvt-info`
 | IFC4 STEP export — openings | ✓ | `IfcOpeningElement` + `IfcRelVoidsElement` + `IfcRelFillsElement` — doors and windows cut actual holes in their host walls (BlenderBIM verified). |
 | Geometry extraction | partial | Extrusion helpers ship for walls/slabs/roofs/ceilings/columns/beams/stairs/doors/windows (GEO-27..35, IFC-16..26). Swept / revolved / BRep variants exist (IFC-17/18/19/20) but with `rvt` feature-flagged rectangular fallbacks in the default emission path. |
 | glTF 2.0 binary export | ✓ | `model_to_glb()` produces a valid `.glb` file that loads in Three.js's `GLTFLoader` (VW1-04). `rvt-gltf` CLI. |
+| CSV schedules | partial | `rvt-schedule`, the viewer's Schedule panel and `RevitFile.schedule_csv()` write element and room schedules for Excel / Sheets; rows are exactly what decodes (typed on Revit 2024 projects with element records). |
 | 2D plan-view SVG export | ✓ | `render_plan_svg()` produces per-category-coloured SVG (walls black, doors blue, columns red, …) (VW1-11). `rvt-sheet` CLI. |
 | Browser viewer | ✓ | Live at <https://drunkonjava.github.io/rvt-rs/>. WebAssembly build of the core library + Three.js + Vite. Zero-upload, in-tab parse, Export glTF/IFC/SVG buttons, URL-based share via `share::ViewerState`. (VW1-01 through VW1-24 shipped.) |
 | Fuzz-regression harness | ✓ | 9 libFuzzer targets + 38 synthetic adversarial regression cases under `tests/fuzz_regressions.rs`. Caught a real `gzip_header_len` bounds bug on 9-byte truncated headers (Q-04). |
@@ -205,7 +206,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-**Eighteen CLIs** ship in the box:
+**Nineteen CLIs** ship in the box:
 
 ```bash
 cargo build --release
@@ -219,6 +220,10 @@ cargo build --release
 
 # Machine-readable (JSON)
 ./target/release/rvt-info -f json my-project.rvt > meta.json
+
+# Element and room schedules for Excel / Sheets / LibreOffice
+./target/release/rvt-schedule my-project.rvt
+./target/release/rvt-schedule my-project.rvt --schedule rooms --metric --excel
 
 # Inventory every Revit file under a folder: release, worksharing, last saved
 ./target/release/rvt-info projects/
