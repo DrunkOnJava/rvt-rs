@@ -1,8 +1,10 @@
 # Release plan: 0.2.0 (inspection-focused alpha)
 
-Status: draft (audit A4 / RELEASE-001)  
-Baseline tag today: `v0.1.2` (PyPI `rvt==0.1.2` published; **crates.io
-crate `rvt` not published** as of 2026-08-29 — docs.rs therefore 404)
+Status: cut 2026-09-22 as `v0.2.0` (audit A4 / RELEASE-001)  
+Baseline before the cut: `v0.1.2` (PyPI `rvt==0.1.2` published; **crates.io
+crate `rvt` not published** — docs.rs therefore 404). The publish workflow
+skips crates.io with a warning when `CARGO_REGISTRY_TOKEN` is not configured,
+so PyPI and the release binaries ship either way.
 
 ## Positioning
 
