@@ -2209,11 +2209,22 @@ fn iso_timestamp_from(secs: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}")
 }
 
+/// Wall-clock Unix seconds for the header stamps. `std::time::SystemTime`
+/// panics on `wasm32-unknown-unknown` ("time not implemented on this
+/// platform"), which made the browser viewer's Export IFC fail on every
+/// click; the wasm build reads the JavaScript host clock instead.
 fn unix_seconds() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
+    #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+    {
+        (crate::wasm::host_now_millis() / 1000.0) as i64
+    }
+    #[cfg(not(all(target_arch = "wasm32", feature = "wasm")))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+    }
 }
 
 /// Gregorian breakdown without chrono. Good from 1970 through 2400.
