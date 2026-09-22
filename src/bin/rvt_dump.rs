@@ -1,6 +1,14 @@
 //! `rvt-dump` — extract every OLE stream from a Revit file, decompress what
 //! can be decompressed, and write each to its own file under an output dir.
 //!
+//! Decompression goes through the same decoders the library uses, so a
+//! `.decomp` file is byte-for-byte what the parsers see: checksum-paged
+//! streams (`Global/ElemTable`, `Global/Latest`, `Partitions/NN`, …) have
+//! their page trailers stripped before inflating, and `Partitions_NN.decomp`
+//! is every gzip member of the stream concatenated with nothing in between,
+//! identical to `RevitFile::inflated_partition` — offsets quoted in the
+//! `reports/` write-ups index it directly.
+//!
 //! Useful for:
 //!   - feeding decompressed streams to Ghidra / IDA / radare2
 //!   - diffing streams with `xxd` / `hexdump` between versions
@@ -61,23 +69,49 @@ fn run() -> anyhow::Result<()> {
         let safe = name.replace('/', "_");
         let raw = rf.read_stream(name)?;
 
-        // Always write decompressed if we can
-        if let Some(decomp) = try_decompress(&raw) {
-            let path = cli.out.join(format!("{safe}.decomp"));
-            fs::write(&path, &decomp)?;
-            println!(
-                "  {:<30}  raw={} bytes  decomp={} bytes  -> {}",
-                name,
-                raw.len(),
-                decomp.len(),
-                short_path(&path)
-            );
+        let decoded = if raw.is_empty() {
+            Err(Undecoded::Empty)
+        } else if name.starts_with("Partitions/") {
+            let inflated = rf.inflated_partition(name)?;
+            if inflated.chunk_count() > 0 {
+                Ok(Decoded::new(
+                    inflated.bytes().to_vec(),
+                    inflated.chunk_count(),
+                ))
+            } else {
+                Err(undecoded(name, &raw))
+            }
         } else {
-            println!(
-                "  {:<30}  raw={} bytes  (no gzip magic found)",
+            decompress(name, &raw)
+        };
+        match decoded {
+            Ok(decoded) => {
+                let path = cli.out.join(format!("{safe}.decomp"));
+                fs::write(&path, &decoded.bytes)?;
+                let members = if decoded.members > 1 {
+                    format!(" ({} gzip members)", decoded.members)
+                } else {
+                    String::new()
+                };
+                println!(
+                    "  {:<30}  raw={} bytes  decomp={} bytes{members}  -> {}",
+                    name,
+                    raw.len(),
+                    decoded.bytes.len(),
+                    short_path(&path)
+                );
+            }
+            Err(Undecoded::Empty) => println!("  {:<30}  raw=0 bytes  (empty)", name),
+            Err(Undecoded::NotCompressed) => println!(
+                "  {:<30}  raw={} bytes  (not gzip-compressed)",
                 name,
                 raw.len()
-            );
+            ),
+            Err(Undecoded::Failed) => println!(
+                "  {:<30}  raw={} bytes  (gzip header found, but it did not inflate)",
+                name,
+                raw.len()
+            ),
         }
 
         if cli.raw {
@@ -89,29 +123,52 @@ fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn try_decompress(data: &[u8]) -> Option<Vec<u8>> {
+struct Decoded {
+    bytes: Vec<u8>,
+    members: usize,
+}
+
+impl Decoded {
+    fn new(bytes: Vec<u8>, members: usize) -> Self {
+        Self { bytes, members }
+    }
+}
+
+enum Undecoded {
+    Empty,
+    NotCompressed,
+    Failed,
+}
+
+/// Inflate one non-partition stream the way the parsers do: page
+/// checksums stripped first when the stream is paged, then the gzip member
+/// at the usual prefix offsets, then every member in order.
+fn decompress(name: &str, stored: &[u8]) -> Result<Decoded, Undecoded> {
+    let prepared = compression::prepare_stream_for_inflate(name, stored);
+    let data = prepared.as_ref();
     for off in [0, 4, 8, 16] {
         if compression::has_gzip_magic(data, off) {
             if let Ok(out) = compression::inflate_at(data, off) {
-                return Some(out);
+                return Ok(Decoded::new(out, 1));
             }
         }
     }
-    // fallback: scan for first gzip magic
     let chunks = compression::inflate_all_chunks(data);
-    if chunks.is_empty() {
-        None
+    if !chunks.is_empty() {
+        let members = chunks.len();
+        return Ok(Decoded::new(chunks.concat(), members));
+    }
+    Err(undecoded(name, stored))
+}
+
+/// Why a stream produced no bytes: no gzip header at all, or one that
+/// did not inflate.
+fn undecoded(name: &str, stored: &[u8]) -> Undecoded {
+    let prepared = compression::prepare_stream_for_inflate(name, stored);
+    if compression::find_gzip_offsets(prepared.as_ref()).is_empty() {
+        Undecoded::NotCompressed
     } else {
-        // If multiple chunks (Partitions/NN), concatenate them with a
-        // 16-byte separator so offsets remain recognizable.
-        let mut out = Vec::new();
-        for (i, c) in chunks.iter().enumerate() {
-            if i > 0 {
-                out.extend_from_slice(&[0xFF; 16]);
-            }
-            out.extend_from_slice(c);
-        }
-        Some(out)
+        Undecoded::Failed
     }
 }
 

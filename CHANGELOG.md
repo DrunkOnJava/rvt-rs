@@ -172,6 +172,17 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Fixed
 
+- **`rvt-dump` writes exactly the bytes the parsers read.** It inflated
+  every stream without stripping Revit's per-page checksum trailers, so a
+  multi-page stream either failed outright — `Global/ElemTable` on
+  Autodesk's Snowdon Towers sample was reported as "no gzip magic found" —
+  or lost every gzip member that straddled a page boundary: that file's
+  `Partitions/68` came out 10.5 MB short. Partitions were also joined with
+  16-byte `0xFF` separators, so no offset in a dump matched the offsets the
+  scanners and the `reports/` write-ups use. Dumps now go through the
+  library's page-aware decoders, `Partitions_NN.decomp` is byte-identical to
+  `RevitFile::inflated_partition` (with the member count printed), and
+  empty, uncompressed and failed streams are reported as such.
 - **The browser viewer's Export IFC and Export plan SVG buttons work.**
   Both had failed on every click since they shipped (commit 7d54d3f, 2026-04-20)
   — confirmed on the deployed site before this fix — for two stacked
