@@ -160,21 +160,21 @@ jobs:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_REQUIRE_CORPUS: "1"
         run: cargo test --profile ci --test field_type_coverage -- --nocapture
-      # Broader integration suite (round-trips, part-atom parsing,
-      # history extraction, stream inventory, etc.). Kept on Windows
-      # as well as Ubuntu because CFB stream names historically came
-      # back with `\` instead of `/` on Windows (fixed in
-      # reader::stream_names).
-      - name: Integration tests (corpus-dependent)
-        if: matrix.with_corpus
+      # Every tests/*.rs file, on every OS. Until 2026-09-22 this job named
+      # its integration tests one at a time (`samples`, `ifc_roundtrip`),
+      # and 21 of the 37 files — the support-matrix and witness-registry
+      # honesty gates, the JSON schema contracts, the binary inventory,
+      # the fuzz regressions, the proptests, every CLI test — ran in no
+      # job at all, so a stale assertion in `rvt_ifc_diagnostics_cli`
+      # stayed red for months unseen. `--test '*'` cannot fall out of date
+      # the way a hand-kept list does. Corpus-gated tests read the family
+      # corpus where this runner fetched it and skip elsewhere; Windows
+      # stays in because CFB stream names historically came back with `\`
+      # there (fixed in reader::stream_names).
+      - name: Integration tests (every tests/*.rs)
         env:
-          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-        run: cargo test --profile ci --test samples
-      - name: IFC export integration tests
-        if: matrix.with_corpus
-        env:
-          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-        run: cargo test --profile ci --test ifc_roundtrip
+          RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
+        run: cargo test --profile ci --no-fail-fast --test '*'
       # #206: `elem_table_corpus` reads both corpora but was named by no CI
       # job, so it took its skip path on every run — for months, while the
       # 2024 project record walk was silently one record short. The family
@@ -281,41 +281,18 @@ jobs:
         with:
           save-if: false
           shared-key: ci-release
-      - name: Tier-two open / schema health
+      # #206: targets that read RVT_PROJECT_CORPUS_DIR used to be listed
+      # here by name, and any target left off the list took its skip path
+      # on every CI run — `elem_table_corpus` hid a real decoder bug that
+      # way (26424 of 26425 declared records on the 2024 project). Every
+      # tests/*.rs now runs against the project corpus, so a new
+      # corpus-reading target is gated the moment it exists.
+      - name: Tier-two gates (every tests/*.rs against the project corpus)
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
           RVT_CORPUS_TIER2_LIMIT: "8"
-        run: cargo test --profile ci --test corpus_tier2_health -- --nocapture
-      - name: Tier-two project corpus smoke
-        env:
-          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: cargo test --profile ci --test project_corpus_smoke -- --nocapture
-      - name: Tier-two known-count manifests
-        env:
-          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: cargo test --profile ci --test project_count_fixtures -- --nocapture
-      # #206: every target below reads RVT_PROJECT_CORPUS_DIR but was named
-      # by no corpus job, so all of them took their skip path on every CI
-      # run — the matrix jobs run them without the variable, and the corpus
-      # jobs name specific `--test` targets. `elem_table_corpus` hid a real
-      # decoder bug that way (26424 of 26425 declared records on the 2024
-      # project). A new corpus-reading target has to be added to this list
-      # to count as gated.
-      - name: Tier-two decoder gates (ElemTable, ArcWall, partitions, walker)
-        env:
-          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: |
-          cargo test --profile ci \
-            --test elem_table_corpus \
-            --test arc_wall_corpus \
-            --test partition_scanner \
-            --test iter_elements_typed \
-            --test re15_geometry_invariants \
-            --test re19_door_window_wall_negative \
-            --test walker_to_ifc_integration \
-            -- --nocapture
+        run: cargo test --profile ci --no-fail-fast --test '*'
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project
