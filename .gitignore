@@ -147,3 +147,6 @@ tools/oracle/out/
 
 # Any local cargo target dir (e.g. target-msrv/ used for MSRV checks) — never commit build output.
 /target*/
+
+# Docker build context staged by docker/stage.sh from release archives.
+/docker/context/

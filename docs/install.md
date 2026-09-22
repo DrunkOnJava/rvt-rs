@@ -113,6 +113,34 @@ Between releases, any commit can be built the same way from the **Release
 binaries** workflow (Actions tab → Release binaries → Run workflow); the
 archives are attached to that run as artifacts.
 
+## Docker
+
+Every tagged release from the next one on also publishes a container image
+holding the same static Linux binaries, for `linux/amd64` and `linux/arm64`:
+`ghcr.io/drunkonjava/rvt-rs:<version>` and, for a final release,
+`ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
+binaries' size, with no shell and no package manager. The working directory
+is `/data`, so mount the folder holding the model there:
+
+```bash
+docker run --rm -v "$PWD:/data" --user "$(id -u):$(id -g)" \
+  ghcr.io/drunkonjava/rvt-rs rvt-info model.rvt
+docker run --rm -v "$PWD:/data" --user "$(id -u):$(id -g)" \
+  ghcr.io/drunkonjava/rvt-rs rvt-ifc model.rvt -o model.ifc
+```
+
+`--user` makes files the tools write owned by you rather than by the image's
+default non-root user. Without a command the image prints `rvt-info --help`.
+
+To build the image yourself, stage the release's Linux archives and build
+from `docker/`:
+
+```bash
+gh release download <tag> --repo DrunkOnJava/rvt-rs -p '*linux-musl*' -p SHA256SUMS -D dist
+docker/stage.sh dist
+docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile docker/context
+```
+
 ## Build From Source
 
 Use the source path for Rust CLIs (and for testing unreleased commits).
