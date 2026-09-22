@@ -187,6 +187,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # build-push-action otherwise uploads a `.dockerbuild` build record as a
+      # run artifact, which `gh run download <run>` cannot fetch, so a bulk
+      # download of the archives fails.
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
