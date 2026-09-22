@@ -18,8 +18,9 @@ Both are Autodesk's published 2024 sample projects. Autodesk's help pages
 for Revit 2025, 2026 and 2027 link the same 2024 files; no public 2025+
 project sample was found. The recorded edge every RE-21…RE-29 result was
 measured on is `2024_Core_Interior.rvt` (magnetar-io, MIT, increments 66).
-**Reference:** none — Autodesk ships no IFC export of these files, so
-nothing here is compared element for element.
+**Reference:** none for §1–§6. §7 (added the same day) uses a Revit 2024
+IFC4 export of the identical architectural file, found in a public test-model
+repository.
 
 -----
 
@@ -163,3 +164,88 @@ a Revit 2024 project that has both A-shaped records and an IFC export
 from Revit with `Tag` populated, so that a bounding box can be matched
 to an ElementId and the matching bytes searched for. The Snowdon files
 have the first and not the second.
+
+## 7. Addendum: the ElementId is in the reference list (oracle, 2026-09-22)
+
+An oracle turned up after §1–§6 were written. `bldrs-ai/test-models`
+(`ifc/autodesk/snowdon/`) holds the architectural `.rvt`, byte-identical
+to the one above (sha256 `33271010…`), next to an IFC4 export of it:
+
+| file | sha256 | size | writer |
+|---|---|---:|---|
+| `Snowdon Towers Sample Architectural_IFC4.ifc` | `ecfcb04e3e818090cf818873fe76fba8b447742bbf4d19dad6d590f09cbb985a` | 83,153,231 | `Autodesk Revit 24.0.20.20 (ENG) - IFC 24.0.20.20`, `ReferenceView_V1.2` |
+
+That repository declares no licence, so the file is used for measurement
+only, kept beside the `.rvt` under the gitignored `_corpus_candidates/`, and
+never committed. Every exported element carries its Revit ElementId as
+`Tag`: 1,078 `IfcWall`, 132 `IfcDoor`, 68 `IfcWindow`, 227 `IfcSlab`,
+118 `IfcColumn`, 60 `IfcCurtainWall`, 462 `IfcPlate`, 1,625 `IfcMember`.
+
+**Placing the two in one frame.** The export uses shared coordinates.
+World boxes from IfcOpenShell 0.8.5 (`use-world-coords`, converted to
+feet) against the record boxes of the five decodable walls whose ElementId
+is also a `Tag` give a rigid transform: rotation 26.0156°, translation
+(1,370,151.83, 258,247.98) ft, and z + 780.5 ft. The five walls sit at two
+positions, so the fit is exact rather than over-determined. The match rate
+below is what validates it.
+
+**Matching.** Each class-A wall frame's box was transformed and compared
+with every `IfcWall` box, requiring a centre within 1 ft and bottom and
+top faces within 0.6 ft:
+
+| class-A wall frames | one match | ambiguous | none | distinct ElementIds |
+|---:|---:|---:|---:|---:|
+| 1,216 | 1,077 | 26 | 113 | 1,044 |
+
+A single element can own more than one frame (RE-26), which is why 1,077
+frames name 1,044 ids.
+
+**Where the id is.** In **1,044 of the 1,077** matched frames (97 %), the
+matched ElementId is one slot of the frame's own counted reference list at
+`+0x88`. It does not appear anywhere else within ±4 KB of the frame, nor in
+the second counted list. All 1,044 lists are strictly ascending, and every
+id after the own one is larger. So §4.2's "last slot" is the special case of
+an element that is the newest id in its own list, which is every decodable
+record on `2024_Core_Interior.rvt` and on these files. Across the 1,044,
+the own id sits 1 to 11+ slots from the end (2nd from the end 177 times,
+3rd 149, last 137).
+
+**Every recovered category, not only walls.** The same transform and
+match, with looser tolerances for doors and windows (centre within 2 ft,
+because their record box is not the exported panel, as found in RE-21):
+
+| category | class-A frames | one match | matched id in own reference list | of which last slot |
+|---|---:|---:|---:|---:|
+| doors (`IfcDoor`) | 245 | 134 | 132 | 9 |
+| windows (`IfcWindow`) | 150 | 70 | 68 | 0 |
+| floors (`IfcSlab`) | 198 | 128 | 121 | 10 |
+| columns (`IfcColumn`) | 180 | 118 | 118 | 19 |
+
+For doors, windows and columns, the ids found this way are every instance
+the export carries (132, 68, 118).
+
+**Which slot: ruled out so far.**
+
+1. A frame word equal to a field of the own id's `Global/ElemTable` row
+   (u32 slots at `+0x18`, `+0x1c`, `+0x20`). The best, the frame's u16 at
+   `−8` against slot `+0x20`, agrees on 388 of 1,028 and is unique within
+   the list on only 124.
+2. The frame's 16-bit words read as `Global/ElemTable` row indices, with
+   base 0 or 1: no hit at any offset from −64 to `+0x12`.
+3. "The first slot that is not a context id", where a context id is one
+   that appears in the lists of at least K frames: at most 196 of 1,044
+   correct, for K = 10.
+4. A byte or 16-bit word anywhere from −32 to `+0x88` holding the own
+   slot's index (0- or 1-based, from either end): the best offset agrees on
+   208 of 1,044, which is chance level for such small numbers. That covers
+   the unattributed `+0x46` / `+0x4a` fields (#223).
+5. RE-31's owner links: the slot that other slots in the same list name
+   as their `Global/ElemTable` owner. In 677 of 1,044 lists those links
+   point at a different slot, in 361 there are none, and in only 4 do
+   they point at the own id alone.
+
+So a class-A frame is not missing its ElementId. It is missing the byte
+rule that says which of its references is itself. Until that rule is
+found and measured, the decode stays fail-closed: the Tags that locate the
+id here come from Revit's export, which a reader of an arbitrary file does
+not have. This result is tracked in #295.
