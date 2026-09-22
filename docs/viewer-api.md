@@ -26,6 +26,18 @@ let model = RvtDocExporter.export(&mut rf)?;
 // `model: IfcModel` is the viewer's single source of truth.
 ```
 
+## File identity
+
+`fileMetadata(bytes)` returns the document identity
+(`rvt::metadata::FileMetadata`, schema
+[`file-metadata.schema.json`](schemas/file-metadata.schema.json)): release,
+build, title, last saved time, worksharing state, central model path,
+last-saved-by user, document GUID, save counter, and every `BasicFileInfo`
+`Key: value` line. It reads only the two identity streams straight from the
+byte slice, so the viewer worker sends it with the fast `summary` message
+and the File status panel shows the Saved and Worksharing rows before the
+model finishes parsing.
+
 ## Scene graph
 
 ```rust
@@ -189,12 +201,13 @@ use rvt::ifc::share::{ViewerState, encode_to_fragment, decode_from_fragment};
 Two behaviours matter only in the browser build and are easy to
 mistake for viewer bugs.
 
-**Panics reach the console.** All seven byte-opening bindings
+**Panics reach the console.** All eight byte-opening bindings
 (`openRvtBytes`, `openRvtBytesWithLimits`,
 `openRvtBytesWithDiagnostics`,
 `openRvtBytesWithDiagnosticsAndLimits`,
 `openRvtBytesWithDiagnosticsMode`,
-`openRvtBytesWithDiagnosticsModeAndLimits`, `quickSummary`) install a
+`openRvtBytesWithDiagnosticsModeAndLimits`, `quickSummary`,
+`fileMetadata`) install a
 `std::panic::set_hook` once, guarded by a `std::sync::Once`, that
 writes `rvt-rs wasm panic: <info>` through `console.error` (#256).
 The hook reports the panic message and its source location; without

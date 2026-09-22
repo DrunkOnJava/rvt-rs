@@ -11,6 +11,19 @@ from typing import Any, Final, Optional, Union
 
 __version__: Final[str]
 
+FileMetadata = dict[str, Any]
+"""Return shape of `RevitFile.metadata()` and `read_metadata()`.
+
+Keys (``None`` when the file does not record the value):
+``revit_version`` (int), ``build``, ``title``, ``last_saved`` (ISO 8601
+UTC), ``worksharing`` (e.g. ``"Not enabled"``), ``workshared`` (bool),
+``username``, ``central_model_path``, ``last_save_path``,
+``document_guid``, ``document_increments`` (int), ``locale``,
+``single_user_cloud_model`` (bool), and ``properties``: every
+``BasicFileInfo`` ``Key: value`` line as ``{"key": str, "value": str}``.
+See ``docs/schemas/file-metadata.schema.json``.
+"""
+
 TypedSchemaSummary = dict[str, int]
 """Return shape of `RevitFile.schema_summary()`.
 
@@ -171,6 +184,12 @@ class RevitFile:
         can't be parsed.
         """
 
+    def metadata(self, redact: bool = False) -> FileMetadata:
+        """Document identity: release, worksharing, central model path,
+        last saved (time and user), document GUID and save counter.
+        ``redact=True`` scrubs the user name and user paths.
+        """
+
     def part_atom_json(self) -> Optional[str]:
         """Full ``PartAtom`` as a JSON string (parseable via
         ``json.loads``). Superset of the ``part_atom_title`` getter —
@@ -269,6 +288,15 @@ class RevitFile:
         coverage validation — diff against the walker's ``HandleIndex``
         to find "declared but not located" elements.
         """
+
+
+def read_metadata(path: str, redact: bool = False) -> FileMetadata:
+    """Document identity for ``path`` without loading the whole file —
+    the fast path for inventories of large projects. Same dict as
+    ``RevitFile(path).metadata()``. Raises ``FileNotFoundError`` /
+    ``OSError`` on I/O failure and ``ValueError`` when the file is not a
+    readable Revit file.
+    """
 
 
 def rvt_to_ifc(path: str, mode: str = "scaffold") -> str:

@@ -7,7 +7,8 @@
  *   main → worker: { type: 'parse', bytes: Uint8Array, mode?: string }
  *   main → worker: { type: 'info', index: number }
  *   worker → main: { type: 'progress', step: string }
- *   worker → main: { type: 'summary', summary }   (VW1-20 partial)
+ *   worker → main: { type: 'summary', summary, document } (VW1-20 partial;
+ *                   `document` is the FileMetadata or null)
  *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics }
  *   worker → main: { type: 'info', index, panel }
  *   worker → main: { type: 'error', message: string }
@@ -20,6 +21,7 @@ import init, {
   modelToGlb,
   distinctIfcTypes,
   buildSchedule,
+  fileMetadata,
   quickSummary,
 } from '../pkg/rvt.js';
 
@@ -68,7 +70,15 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     // can populate the top bar while the expensive full-model
     // parse continues.
     send({ type: 'progress', step: 'reading file metadata' });
-    send({ type: 'summary', summary: quickSummary(msg.bytes) });
+    // Worksharing / last-saved identity is a nicety: a file whose
+    // BasicFileInfo text block is unreadable still parses.
+    let document: unknown = null;
+    try {
+      document = fileMetadata(msg.bytes);
+    } catch {
+      document = null;
+    }
+    send({ type: 'summary', summary: quickSummary(msg.bytes), document });
 
     const qualityMode = (msg.mode ?? 'scaffold').trim() || 'scaffold';
     send({ type: 'progress', step: `parsing container · IFC bar ${qualityMode}` });

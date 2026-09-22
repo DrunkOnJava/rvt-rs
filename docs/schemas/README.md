@@ -8,7 +8,9 @@ in the producing payload.
 
 | Schema | Producer |
 |---|---|
-| [`summary.schema.json`](summary.schema.json) | `rvt-info -f json`, `RevitFile.summarize()` |
+| [`summary.schema.json`](summary.schema.json) | `rvt-info -f json` on one file, `RevitFile.summarize()` |
+| [`file-metadata.schema.json`](file-metadata.schema.json) | `document` in `rvt-info -f json`, `rvt::metadata::FileMetadata`, Python `RevitFile.metadata()` / `rvt.read_metadata()` |
+| [`inventory-row.schema.json`](inventory-row.schema.json) | `rvt-info <folder or several files> -f json` (array) / `-f jsonl` (one row per line) |
 | [`schema-diagnostics.schema.json`](schema-diagnostics.schema.json) | `rvt-schema --diagnostics -f json`, `SchemaTable::diagnostics()` |
 | [`element-records.schema.json`](element-records.schema.json) | `rvt-doc --json`, Python `read_adocument()` field dictionaries |
 | [`decoded-elements.schema.json`](decoded-elements.schema.json) | `rvt-elements`, Python `RevitFile.decoded_elements()` |

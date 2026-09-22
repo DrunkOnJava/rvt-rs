@@ -18,7 +18,7 @@ Rust 2024 edition (MSRV 1.85). **Eighteen CLIs ship** (`rvt-analyze`, `rvt-info`
 |---|---|---|
 | OLE/CFB container open | ✓ | No Revit required |
 | Truncated-gzip stream decode | ✓ | |
-| `BasicFileInfo` metadata | ✓ | Version, build, GUID, original path |
+| `BasicFileInfo` metadata | ✓ | Version, build, GUID, original path, plus the `Key: value` block every release 2016-2026 writes: worksharing state, central model path, last-saved-by user, save counter, single-user-cloud flag (`rvt-info`, `rvt::metadata`) |
 | `PartAtom` XML | ✓ | Title, OmniClass code, taxonomies |
 | Stream preview extraction | ✓ | Clean PNG, wrapper stripped |
 | `Formats/Latest` schema parse | ✓ | 395 classes, 13,570 fields |
@@ -123,7 +123,8 @@ The `--redact` flag (on by default in every committed artifact) scrubs Windows u
 
 Running the shipped CLIs against one 400 KB RFA fixture:
 
-- **Metadata**: version, build tag, creator path, file GUID, locale (`rvt-info`)
+- **Metadata**: version, build tag, creator path, file GUID, locale, worksharing state, central model path, last saved (time and user), save counter (`rvt-info`)
+- **Folder inventory**: one row per Revit file under a folder — release, worksharing, last saved — as a table, CSV, JSON or JSON Lines, reading only each file's two identity streams (`rvt-info <folder> -f csv`)
 - **Atom XML**: title, OmniClass code, taxonomies (`rvt-info` parses `PartAtom`)
 - **Preview**: clean PNG thumbnail, 300-byte Revit wrapper stripped (`rvt-info --extract-preview`)
 - **Schema**: 395 classes + 1,114 fields + per-field typed encoding (`rvt-schema`)
@@ -203,7 +204,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of any `.rfa` / `.rvt` file
 - Run across the full 11-release corpus in < 500 ms per file (release build)
 
-**Seventeen CLIs** ship in the box:
+**Eighteen CLIs** ship in the box:
 
 ```bash
 cargo build --release
@@ -217,6 +218,10 @@ cargo build --release
 
 # Machine-readable (JSON)
 ./target/release/rvt-info -f json my-project.rvt > meta.json
+
+# Inventory every Revit file under a folder: release, worksharing, last saved
+./target/release/rvt-info projects/
+./target/release/rvt-info projects/ -f csv --redact > inventory.csv
 
 # Pull the embedded thumbnail
 ./target/release/rvt-info --extract-preview preview.png my-project.rvt

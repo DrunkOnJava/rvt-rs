@@ -133,6 +133,31 @@ The text output is intended for quick triage. The JSON output is intended for
 automation and GitHub issues. By default, paths are redacted so the report is
 safer to share.
 
+## Inventory A Folder Of Revit Files
+
+`rvt-info` answers "which Revit release saved this, is it workshared, and
+when was it last saved?" for one file or a whole folder tree:
+
+```bash
+rvt-info model.rvt                              # detailed report for one file
+rvt-info projects/                              # one row per .rvt/.rfa/.rte/.rft file
+rvt-info projects/ -f csv > inventory.csv       # open in Excel / Sheets
+rvt-info projects/ -f jsonl                     # one JSON object per line, for scripts
+rvt-info projects/ --no-recurse                 # top level only
+```
+
+The folder mode reads only the two small identity streams of each file, so
+a share full of large projects scans in seconds. Each row carries the Revit
+release, build, worksharing state (`Not enabled`, or the role of the saved
+copy in a workshared project), central model path, the user and time of the
+last save, the document GUID, and Revit's save counter. Revit backup copies
+(`name.0001.rvt`) are marked. A file that cannot be read gets a row with the
+reason, and the command exits with status 1 so scripts notice.
+
+Pass `--redact` before sharing the output: it replaces the last-saved-by
+user name everywhere it appears (Revit names a local copy
+`<central>_<user>.rvt`) and scrubs Windows user folders from paths.
+
 ## Write Or Patch A File
 
 rvt-rs has a stream-level writer, not a semantic Revit editor.

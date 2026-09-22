@@ -410,3 +410,51 @@ def test_every_release_produces_valid_ifc(year):
     assert ifc.startswith("ISO-10303-21;\n")
     assert "IFC4" in ifc
     assert ifc.count("IFCPROJECT(") == 1
+
+
+# ---------------------------------------------------------------------
+# Document metadata (BasicFileInfo text block + Atom entry)
+# ---------------------------------------------------------------------
+
+def test_metadata_reports_worksharing_and_save_counter(sample_2024):
+    m = sample_2024.metadata()
+    assert m["revit_version"] == 2024
+    assert m["worksharing"] == "Not enabled"
+    assert m["workshared"] is False
+    assert m["document_increments"] == 68
+    assert m["title"] == "racbasicsamplefamily"
+    assert m["last_saved"] == "2023-03-27T11:56:02Z"
+    assert m["single_user_cloud_model"] is False
+    keys = [p["key"] for p in m["properties"]]
+    assert keys[0] == "Worksharing"
+    assert "Unique Document GUID" in keys
+
+
+def test_read_metadata_matches_the_open_file(sample_2024):
+    fast = rvt.read_metadata(str(sample_for_year(2024)))
+    assert fast == sample_2024.metadata()
+
+
+def test_metadata_redact_scrubs_user_paths(sample_2024):
+    # The sample's save path sits under a Windows user folder; after
+    # redaction every `\Users\` segment must be followed by the marker.
+    def user_folders_redacted(value):
+        parts = (value or "").split("\\Users\\")[1:]
+        return all(part.startswith("<redacted>") for part in parts)
+
+    m = sample_2024.metadata(redact=True)
+    assert "\\Users\\" in m["last_save_path"]
+    assert user_folders_redacted(m["last_save_path"])
+    assert all(user_folders_redacted(p["value"]) for p in m["properties"])
+
+
+def test_read_metadata_raises_file_not_found():
+    with pytest.raises(FileNotFoundError):
+        rvt.read_metadata("definitely/not/here.rvt")
+
+
+def test_read_metadata_rejects_a_non_revit_file(tmp_path):
+    bogus = tmp_path / "bogus.rvt"
+    bogus.write_bytes(b"not a revit file")
+    with pytest.raises(ValueError):
+        rvt.read_metadata(str(bogus))
