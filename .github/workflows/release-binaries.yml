@@ -1,0 +1,200 @@
+name: Release binaries
+
+# Prebuilt, checksummed CLI archives for every supported platform, so people
+# who need to read a Revit file do not have to install Rust first.
+#
+#   - `publish.yml` calls this on a `v*` tag with `upload: true`, which
+#     attaches the archives and SHA256SUMS to that tag's GitHub Release.
+#   - Pull requests that touch this workflow or the Cargo manifests run the
+#     full matrix without uploading, so a release never depends on an
+#     untested matrix.
+#   - `workflow_dispatch` builds any ref; the archives are downloadable from
+#     the run's artifacts.
+#
+# Linux binaries are static musl builds (no glibc version floor), built on
+# native x86_64 and arm64 runners so both can be smoke-tested. Windows links
+# the C runtime statically so no Visual C++ redistributable is needed. The
+# x86_64 macOS build is cross-compiled on the arm64 runner.
+
+on:
+  workflow_call:
+    inputs:
+      upload:
+        description: "Attach the archives to the GitHub Release for `tag`"
+        type: boolean
+        default: false
+      tag:
+        description: "Release tag to upload to (e.g. v0.2.0)"
+        type: string
+        default: ""
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release-binaries.yml
+      - Cargo.toml
+      - Cargo.lock
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-binaries-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build / ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            smoke: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            smoke: true
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            smoke: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            smoke: false
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            smoke: true
+            rustflags: "-C target-feature=+crt-static"
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
+    steps:
+      - name: Disable autocrlf on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - name: Build release binaries
+        run: cargo build --release --locked --bins --target ${{ matrix.target }}
+      - name: Package
+        id: package
+        shell: bash
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${TAG_INPUT}" ]]; then
+            version="${TAG_INPUT}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="g${GITHUB_SHA::7}"
+          fi
+          target="${TARGET}"
+          name="rvt-rs-${version}-${target}"
+          ext=""
+          if [[ "${target}" == *windows* ]]; then ext=".exe"; fi
+          mkdir -p "dist/${name}"
+          # Every [[bin]] of the root crate, read from Cargo.toml so a new CLI
+          # ships without touching this workflow (awk: jq is not on every
+          # runner image).
+          awk '/^\[\[bin\]\]/ { in_bin = 1; next }
+               in_bin && /^name *=/ { gsub(/^name *= *"|"$/, ""); print; in_bin = 0 }' \
+            Cargo.toml > dist/bins.txt
+          test -s dist/bins.txt
+          while read -r bin; do
+            cp "target/${target}/release/${bin}${ext}" "dist/${name}/"
+          done < dist/bins.txt
+          cp README.md LICENSE NOTICE "dist/${name}/"
+          cd dist
+          if [[ "${target}" == *windows* ]]; then
+            7z a -tzip -bso0 "${name}.zip" "${name}"
+            archive="${name}.zip"
+          else
+            tar -czf "${name}.tar.gz" "${name}"
+            archive="${name}.tar.gz"
+          fi
+          {
+            echo "dir=dist/${name}"
+            echo "archive=dist/${archive}"
+            echo "bins=$(wc -l < bins.txt | tr -d ' ')"
+          } >> "$GITHUB_OUTPUT"
+      - name: Smoke test the packaged binaries
+        if: matrix.smoke
+        shell: bash
+        env:
+          DIR: ${{ steps.package.outputs.dir }}
+          BINS: ${{ steps.package.outputs.bins }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          dir="${DIR}"
+          ext=""
+          if [[ "${TARGET}" == *windows* ]]; then ext=".exe"; fi
+          "${dir}/rvt-info${ext}" --version
+          scratch="$(mktemp -d)"
+          "${dir}/gen-fixture${ext}" demo --classes Wall,Level,Project --element-count 5 \
+            --year 2024 --output "${scratch}/demo.rvt"
+          "${dir}/rvt-info${ext}" "${scratch}/demo.rvt"
+          "${dir}/rvt-inspect${ext}" "${scratch}/demo.rvt" --json > "${scratch}/inspect.json"
+          "${dir}/rvt-ifc${ext}" "${scratch}/demo.rvt" -o "${scratch}/demo.ifc"
+          test -s "${scratch}/demo.ifc"
+          echo "smoke OK: ${BINS} binaries"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rvt-rs-${{ matrix.target }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+
+  checksums:
+    name: SHA256SUMS
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: rvt-rs-*
+          path: dist
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: |
+          sha256sum rvt-rs-* > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: SHA256SUMS
+          path: dist/SHA256SUMS
+          if-no-files-found: error
+
+  upload:
+    name: Attach to the GitHub Release
+    if: inputs.upload
+    needs: checksums
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: "*"
+          path: dist
+          merge-multiple: true
+      - name: Create the release if needed and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${TAG}" ]]; then
+            echo "::error::upload requested without a tag"
+            exit 1
+          fi
+          if ! gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
+            gh release create "${TAG}" --repo "${GITHUB_REPOSITORY}" --verify-tag \
+              --title "${TAG}" --generate-notes
+          fi
+          gh release upload "${TAG}" --repo "${GITHUB_REPOSITORY}" --clobber dist/*

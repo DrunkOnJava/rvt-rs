@@ -114,6 +114,20 @@ cargo install rvt --version "$VERSION" --locked --root /tmp/rvt-crates-smoke
 /tmp/rvt-crates-smoke/bin/rvt-info "$SAMPLE"
 ```
 
+Verify the prebuilt binaries the **Release binaries** job attached to the
+GitHub Release (five archives plus `SHA256SUMS`; the job itself already
+smoke-tested four of them on native runners):
+
+```bash
+rm -rf /tmp/rvt-bin-smoke && mkdir -p /tmp/rvt-bin-smoke && cd /tmp/rvt-bin-smoke
+gh release download "v${VERSION}" --repo DrunkOnJava/rvt-rs
+test "$(ls rvt-rs-v${VERSION}-* | wc -l)" -eq 5
+shasum -a 256 -c SHA256SUMS
+tar -xzf "rvt-rs-v${VERSION}-aarch64-apple-darwin.tar.gz"   # or your platform's archive
+"./rvt-rs-v${VERSION}-aarch64-apple-darwin/rvt-info" "$SAMPLE"
+cd -
+```
+
 Verify PyPI on every supported OS family. On each machine (`0.1.2` is
 known-good on PyPI):
 

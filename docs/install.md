@@ -11,8 +11,9 @@ workflow fits your file.
 | **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.1.2** |
 | **crates.io** (`rvt`) | **Not published** — `cargo install rvt` will fail until a successful `cargo publish` |
 | **docs.rs** (`rvt`) | **Not available** (404) until the crate exists on crates.io |
+| **Prebuilt CLI binaries** (GitHub Releases) | **From the next tagged release** — the release workflow attaches archives for Linux, macOS and Windows; no release has shipped them yet |
 
-Prefer source builds for the Rust CLIs today. See
+Until a release carries binaries, build the Rust CLIs from source. See
 [release-0.2.0-plan.md](release-0.2.0-plan.md) for the inspection-focused
 alpha cut that aims to close the crates.io gap.
 
@@ -66,6 +67,51 @@ Until then, use [Build From Source](#build-from-source) below. After the
 first crates.io publish, docs.rs should populate automatically at
 <https://docs.rs/rvt> — verify with an HTTP 200 before linking it from
 announcements.
+
+## Prebuilt Binaries (GitHub Releases)
+
+Every tagged release from the next one on attaches ready-to-run archives of
+all the CLIs (`rvt-info`, `rvt-inspect`, `rvt-ifc`, …) to its page under
+<https://github.com/DrunkOnJava/rvt-rs/releases>. No Rust toolchain is
+needed.
+
+| Platform | Archive |
+|---|---|
+| Linux x86_64 (static, any distribution) | `rvt-rs-<version>-x86_64-unknown-linux-musl.tar.gz` |
+| Linux arm64 (static, any distribution) | `rvt-rs-<version>-aarch64-unknown-linux-musl.tar.gz` |
+| macOS Apple silicon | `rvt-rs-<version>-aarch64-apple-darwin.tar.gz` |
+| macOS Intel | `rvt-rs-<version>-x86_64-apple-darwin.tar.gz` |
+| Windows x86_64 | `rvt-rs-<version>-x86_64-pc-windows-msvc.zip` |
+
+Each archive holds the binaries plus `README.md`, `LICENSE` and `NOTICE`.
+Download `SHA256SUMS` from the same release and check the archive before
+unpacking:
+
+```bash
+# Linux / macOS
+shasum -a 256 -c SHA256SUMS --ignore-missing
+tar -xzf rvt-rs-<version>-<target>.tar.gz
+./rvt-rs-<version>-<target>/rvt-info --version
+```
+
+```powershell
+# Windows (PowerShell): compare with the line for your archive in SHA256SUMS
+Get-FileHash .\rvt-rs-<version>-x86_64-pc-windows-msvc.zip -Algorithm SHA256
+Expand-Archive .\rvt-rs-<version>-x86_64-pc-windows-msvc.zip -DestinationPath .
+.\rvt-rs-<version>-x86_64-pc-windows-msvc\rvt-info.exe --version
+```
+
+The binaries are not code-signed. On macOS, a browser download is
+quarantined by Gatekeeper; clear it for the unpacked folder with
+`xattr -dr com.apple.quarantine rvt-rs-<version>-<target>`. On Windows,
+SmartScreen may ask for confirmation the first time.
+
+To run the tools from anywhere, move the folder somewhere permanent and add
+it to your `PATH`.
+
+Between releases, any commit can be built the same way from the **Release
+binaries** workflow (Actions tab → Release binaries → Run workflow); the
+archives are attached to that run as artifacts.
 
 ## Build From Source
 
