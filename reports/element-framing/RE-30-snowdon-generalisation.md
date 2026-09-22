@@ -286,7 +286,7 @@ element framed more than once (RE-26) cannot sit twice in a strictly
 increasing chain.
 
 Nothing ships from this. The best guarded variant still names a wrong
-ElementId on 32 of 15,555 hold-out picks (0.2 %), always one smaller than
-the truth, and a wrong id is worse than none under the fail-closed rule. The two invariants are the basis for the next
+ElementId on 32 of 15,555 hold-out picks (0.2 %), always smaller than
+the true id, and a wrong id is worse than none under the fail-closed rule. The two invariants are the basis for the next
 attempt. What is needed is a guard that reaches zero wrong on the hold-out
 and on the Snowdon oracle before any decode relies on it.
