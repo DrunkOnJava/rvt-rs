@@ -17,14 +17,22 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-elem-table",
     version,
-    about = "Dump Global/ElemTable header + records from a Revit file"
+    about = "Dump Global/ElemTable header + records from a Revit file",
+    after_help = "Examples:\n  \
+        rvt-elem-table model.rvt --limit 50\n  \
+        rvt-elem-table model.rvt --json"
 )]
 struct Cli {
+    /// Path to a .rvt / .rfa / .rte / .rft file.
     file: PathBuf,
 
     /// Output format: `text` (human summary, default) or `json`.
     #[arg(short = 'f', long = "format", default_value = "text")]
     format: String,
+
+    /// Shorthand for `--format json`.
+    #[arg(long, conflicts_with = "format")]
+    json: bool,
 
     /// How many records to print in text mode. Ignored for JSON.
     #[arg(long = "limit", default_value_t = 20)]
@@ -37,6 +45,7 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -47,7 +56,10 @@ fn main() -> ExitCode {
 }
 
 fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    if cli.json {
+        cli.format = "json".to_string();
+    }
     let mut rf = RevitFile::open(&cli.file)?;
     let header = elem_table::parse_header(&mut rf)?;
     let records = elem_table::parse_records(&mut rf)?;

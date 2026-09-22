@@ -24,13 +24,21 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-history",
     version,
-    about = "Dump document upgrade history from a Revit file (UTF-16LE 'Revit ' scan of Global/Latest — not a full DocumentHistory object model)"
+    about = "Dump document upgrade history from a Revit file (UTF-16LE 'Revit ' scan of Global/Latest — not a full DocumentHistory object model)",
+    after_help = "Examples:\n  \
+        rvt-history model.rvt\n  \
+        rvt-history model.rvt --partitions --redact"
 )]
 struct Cli {
+    /// Path to a .rvt / .rfa / .rte / .rft file.
     file: PathBuf,
 
     #[arg(short = 'f', long = "format", default_value = "text")]
     format: String,
+
+    /// Shorthand for `--format json`.
+    #[arg(long, conflicts_with = "format")]
+    json: bool,
 
     /// Dump ALL length-prefixed UTF-16LE string records from Global/Latest,
     /// not just the Revit version-upgrade timeline. Includes level names,
@@ -53,6 +61,7 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -72,7 +81,10 @@ fn fmt_trunc(s: &str, n: usize) -> String {
 }
 
 fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    if cli.json {
+        cli.format = "json".to_string();
+    }
     let mut rf = RevitFile::open(&cli.file)?;
 
     if cli.all_strings || cli.partitions {

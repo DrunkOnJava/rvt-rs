@@ -41,7 +41,11 @@ impl From<CliExportQualityMode> for ExportQualityMode {
 #[derive(Parser)]
 #[command(
     version,
-    about = "Convert a Revit file to IFC4 (document-level export)"
+    about = "Convert a Revit file to IFC4 (document-level export)",
+    after_help = "Examples:\n  \
+        rvt-ifc model.rvt                     writes model.ifc next to the input\n  \
+        rvt-ifc model.rvt -o out.ifc --diagnostics out.diagnostics.json\n  \
+        rvt-ifc model.rvt --mode geometry"
 )]
 struct Args {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
@@ -108,8 +112,18 @@ struct Args {
     max_walker_container_records: Option<usize>,
 }
 
-fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+fn main() -> std::process::ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
+    match run(Args::parse()) {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::ExitCode::from(1)
+        }
+    }
+}
+
+fn run(args: Args) -> anyhow::Result<()> {
     let mut rf = RevitFile::open(&args.input)?;
     let quality_mode = ExportQualityMode::from(args.mode);
     let walker_limits = walker_limits_from_args(&args);

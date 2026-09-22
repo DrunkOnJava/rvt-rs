@@ -67,6 +67,7 @@
 //! - [`compound_framing`] — compound ArcWall `0x0821` marker tokenization (research; no opening decode)
 //! - [`writer`] — byte-preserving OLE round-trip
 //! - [`redact`] — shared PII scrubbers for all CLIs
+//! - [`cli`] — behaviour shared by the shipped CLIs (quiet exit on a closed pipe)
 //! - [`ifc`] — IFC export scaffold
 //! - [`error`] — [`Error`] + [`Result`] aliases
 //! - [`streams`] — named constants for every invariant OLE stream
@@ -116,6 +117,7 @@ pub mod basic_file_info;
 pub mod capability;
 pub mod class_index;
 pub mod class_tag_map;
+pub mod cli;
 pub mod compound_framing;
 pub mod compression;
 pub mod control;

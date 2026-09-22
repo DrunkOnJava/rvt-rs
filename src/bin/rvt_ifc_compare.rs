@@ -18,7 +18,9 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-ifc-compare",
     version,
-    about = "Compare two IFC4 STEP files (entity counts, storeys, bbox, objects, materials, properties)"
+    about = "Compare two IFC4 STEP files (entity counts, storeys, bbox, objects, materials, properties)",
+    after_help = "Examples:\n  \
+        rvt-ifc-compare ours.ifc revit-export.ifc --json compare.json"
 )]
 struct Cli {
     /// Left IFC path (typically the rvt-rs export).
@@ -38,6 +40,7 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     match run() {
         Ok(code) => code,
         Err(err) => {

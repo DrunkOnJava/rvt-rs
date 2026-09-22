@@ -75,6 +75,7 @@ enum Format {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     let cli = Cli::parse();
     match run(cli) {
         Ok(code) => code,
