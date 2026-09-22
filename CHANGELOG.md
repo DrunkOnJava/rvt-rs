@@ -13,6 +13,15 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **A container image of the CLIs.** Tagged releases push
+  `ghcr.io/drunkonjava/rvt-rs:<version>` (and `:latest` for a final release)
+  for `linux/amd64` and `linux/arm64`: a distroless static base holding the
+  release's own static musl binaries, so the image compiles nothing and the
+  arm64 build needs no emulation. `docker/stage.sh` checks the archives
+  against `SHA256SUMS` before they go in, the release-binaries workflow
+  smoke-tests the image on every run (including pull requests that touch
+  `docker/`), and `docs/install.md` gains a Docker section. Thanks to
+  @Simon-Weij, whose #283 proposed publishing to ghcr.io.
 - **An export now says when most of a file's elements could not be read.**
   On Autodesk's Snowdon Towers 2024 samples most wall, door, window, column,
   floor and room records use an element-record layout whose ElementId is
