@@ -239,6 +239,10 @@ the export carries (132, 68, 118).
    slot's index (0- or 1-based, from either end): the best offset agrees on
    208 of 1,044, which is chance level for such small numbers. That covers
    the unattributed `+0x46` / `+0x4a` fields (#223).
+5. RE-31's owner links: the slot that other slots in the same list name
+   as their `Global/ElemTable` owner. In 677 of 1,044 lists those links
+   point at a different slot, in 361 there are none, and in only 4 do
+   they point at the own id alone.
 
 So a class-A frame is not missing its ElementId. It is missing the byte
 rule that says which of its references is itself. Until that rule is
