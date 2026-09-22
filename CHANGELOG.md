@@ -13,7 +13,7 @@ An **inspection-focused alpha** (see
 Revit inspection / reverse-engineering toolkit with experimental export —
 **not** a production Revit→IFC converter for arbitrary projects. The first
 release with prebuilt CLI archives for Linux, macOS and Windows on the GitHub
-Release.
+Release, and a multi-arch container image on ghcr.io.
 
 ### Added
 
