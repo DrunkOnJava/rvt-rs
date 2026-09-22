@@ -1016,7 +1016,10 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   `rvt_ifc_diagnostics_cli` pinned the strict-mode rejection to confidence
   `scaffold` while the 2024 sample family has exported at
   `typed_no_geometry` since its typed elements began to export; it now
-  asserts any below-geometry level.
+  asserts any below-geometry level. The first Windows run of the CLI tests
+  showed a closed pipe reports `os error 109` ("The pipe has been ended")
+  there, which `rvt::cli::exit_quietly_on_broken_pipe` now recognises
+  alongside 32 and 232.
 
 ### Security
 
