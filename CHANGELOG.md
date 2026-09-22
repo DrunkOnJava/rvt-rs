@@ -13,6 +13,23 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **An export now says when most of a file's elements could not be read.**
+  On Autodesk's Snowdon Towers 2024 samples most wall, door, window, column,
+  floor and room records use an element-record layout whose ElementId is
+  not located (RE-30), so the fail-closed decode skips them and the IFC
+  carries a small fraction of the building while looking complete. The
+  export diagnostics now count those records per class as a
+  `skipped` item with reason `element_record_without_element_id`, and add a
+  warning, first in the list, that the model is incomplete — the one the
+  viewer's Warnings row shows inline, and which `rvt-inspect`, `rvt-ifc
+  --diagnostics` and Python's `export_diagnostics()` all carry. On the
+  architectural sample that is 2,043 records (1,216 walls, 245 doors,
+  198 floors, 180 columns, 150 windows, 54 rooms); on `2024_Core_Interior.rvt`
+  and every project-count fixture it is zero, which
+  `tests/project_count_fixtures.rs` now asserts. The "Suppressed N
+  low-confidence schema scan candidates" warning also read the first
+  skipped item whatever it was, so on a file with below-confidence elements
+  it reported that count instead; it now reads its own item.
 - **Element and room schedules for Excel, from the CLI, the viewer and
   Python.** `rvt-schedule model.rvt` writes `model.elements.csv` — one row
   per decoded building element with its Revit ElementId, IFC type, level and

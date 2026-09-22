@@ -96,7 +96,7 @@
 
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases where this record shape is corpus-proven.
 pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
@@ -555,6 +555,72 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     memchr::memmem::find(haystack, needle)
 }
 
+/// The categories the exporter recovers instances of, with the class name
+/// each is decoded as.
+pub const RECOVERED_CATEGORIES: [(i64, &str); 7] = [
+    (OST_WALLS, "Wall"),
+    (OST_DOORS, "Door"),
+    (OST_WINDOWS, "Window"),
+    (OST_COLUMNS, "Column"),
+    (OST_FLOORS, "Floor"),
+    (OST_BUILDING_PAD, "BuildingPad"),
+    (OST_ROOMS, "Room"),
+];
+
+/// Frames in `buf`, per category, that carry the bbox marker at `+0x50`
+/// and one of `categories` at `+0x12` but no ElementId at `+0x00` (a
+/// `u64` of 0 or above `u32::MAX`).
+///
+/// This is the second prologue RE-30 measured on Autodesk's Snowdon
+/// Towers samples: shaped like an element record from the category to
+/// the bounding box, with no attributable ElementId, so [`decode_at`]
+/// rejects it. Counting them is what lets an export say how much of a
+/// file it could not attribute instead of looking complete. None on
+/// `2024_Core_Interior.rvt`.
+pub fn count_unattributed_frames(buf: &[u8], categories: &[i64]) -> BTreeMap<i64, usize> {
+    let mut counts = BTreeMap::new();
+    for hit in memchr::memmem::find_iter(buf, &BBOX_MARKER) {
+        let Some(offset) = hit.checked_sub(BBOX_MARKER_OFFSET) else {
+            continue;
+        };
+        let Some(category) = read_u64(buf, offset + CATEGORY_OFFSET).map(|v| v as i64) else {
+            continue;
+        };
+        if !categories.contains(&category) {
+            continue;
+        }
+        if read_u64(buf, offset).is_some_and(|id| id == 0 || id > u64::from(u32::MAX)) {
+            *counts.entry(category).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+/// [`count_unattributed_frames`] over every `Partitions/*` stream for the
+/// [`RECOVERED_CATEGORIES`], keyed by class name. Empty on releases where
+/// the record shape is not proven.
+pub fn scan_unattributed_frames(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> Result<BTreeMap<String, usize>> {
+    let mut by_class = BTreeMap::new();
+    if !supports_revit_version(revit_version) {
+        return Ok(by_class);
+    }
+    let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        for (category, count) in count_unattributed_frames(inflated.bytes(), &categories) {
+            if let Some((_, class)) = RECOVERED_CATEGORIES.iter().find(|(c, _)| *c == category) {
+                *by_class.entry((*class).to_string()).or_insert(0) += count;
+            }
+        }
+    }
+    Ok(by_class)
+}
+
 /// Scan every `Partitions/*` stream for records in `builtin_category`.
 ///
 /// Returns an empty vector for unsupported releases (fail closed).
@@ -629,6 +695,26 @@ mod tests {
 
     fn declared(ids: &[u32]) -> BTreeSet<u32> {
         ids.iter().copied().collect()
+    }
+
+    /// RE-30: a frame with the category and bbox marker in place but no
+    /// ElementId at `+0x00` is counted under its category; an attributed
+    /// record and a category outside the set are not.
+    #[test]
+    fn unattributed_frames_are_counted_per_category() {
+        let bbox = [0.0, 0.0, 0.0, 1.0, 18.9, 24.7];
+        let attributed = synth_record(22805, OST_WALLS, bbox);
+        let mut all_ff = synth_record(1, OST_WALLS, bbox);
+        all_ff[0..8].fill(0xff);
+        let mut high_word = synth_record(1, OST_DOORS, bbox);
+        high_word[0..8].copy_from_slice(&0x0000_0006_ffff_ffff_u64.to_le_bytes());
+        let mut outside = synth_record(1, OST_SKETCH_LINES, bbox);
+        outside[0..8].fill(0xff);
+        let buf = [attributed, all_ff, high_word, outside].concat();
+
+        let counts = count_unattributed_frames(&buf, &[OST_WALLS, OST_DOORS]);
+        assert_eq!(counts, BTreeMap::from([(OST_WALLS, 1), (OST_DOORS, 1)]));
+        assert!(count_unattributed_frames(&buf[..RECORD_MIN_LEN], &[OST_WALLS]).is_empty());
     }
 
     /// Append the counted reference list a real record carries after

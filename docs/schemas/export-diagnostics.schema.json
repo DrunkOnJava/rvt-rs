@@ -223,7 +223,7 @@
         "properties": {
           "reason": {
             "type": "string",
-            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry."
+            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry and element_record_without_element_id for element records with no attributable ElementId (RE-30)."
           },
           "count": {
             "type": "integer",
