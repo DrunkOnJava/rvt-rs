@@ -210,6 +210,20 @@ record on `2024_Core_Interior.rvt` and on these files. Across the 1,044,
 the own id sits 1 to 11+ slots from the end (2nd from the end 177 times,
 3rd 149, last 137).
 
+**Every recovered category, not only walls.** The same transform and
+match, with looser tolerances for doors and windows (centre within 2 ft,
+because their record box is not the exported panel, as found in RE-21):
+
+| category | class-A frames | one match | matched id in own reference list | of which last slot |
+|---|---:|---:|---:|---:|
+| doors (`IfcDoor`) | 245 | 134 | 132 | 9 |
+| windows (`IfcWindow`) | 150 | 70 | 68 | 0 |
+| floors (`IfcSlab`) | 198 | 128 | 121 | 10 |
+| columns (`IfcColumn`) | 180 | 118 | 118 | 19 |
+
+For doors, windows and columns, the ids found this way are every instance
+the export carries (132, 68, 118).
+
 **Which slot: ruled out so far.**
 
 1. A frame word equal to a field of the own id's `Global/ElemTable` row
