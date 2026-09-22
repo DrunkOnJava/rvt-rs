@@ -107,6 +107,23 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   #90 / RE-29 has since scored the 116 rooms against Revit's own
   `IfcRelContainedInSpatialStructure` (116 of 116 on the right storey) and
   taken containment to 969 of 970; the other 853 bindings stay unmeasured.
+- **Tagged releases attach prebuilt CLI archives for Linux, macOS and
+  Windows.** Until now the only way to run `rvt-info`, `rvt-inspect` or
+  `rvt-ifc` was to install Rust and compile. The new reusable
+  `release-binaries.yml` builds every `[[bin]]` for
+  `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` (static, on
+  native x86_64 and arm64 runners), `aarch64-apple-darwin`,
+  `x86_64-apple-darwin` (cross-compiled) and `x86_64-pc-windows-msvc`
+  (static C runtime), packages each with `README.md`, `LICENSE` and
+  `NOTICE`, smoke-tests the four natively runnable archives (`gen-fixture`
+  → `rvt-info` → `rvt-inspect` → `rvt-ifc`), and writes `SHA256SUMS`.
+  `publish.yml` calls it on `v*` tags to attach everything to the GitHub
+  Release, gated only on the source smoke test so a registry failure never
+  withholds the binaries; pull requests touching the workflow or the Cargo
+  manifests run the whole matrix without uploading, and `workflow_dispatch`
+  builds any commit. `docs/install.md` gains a Prebuilt Binaries section
+  (checksum verification, macOS quarantine, Windows) and the release
+  checklist a post-publish check.
 
 ### Changed
 
