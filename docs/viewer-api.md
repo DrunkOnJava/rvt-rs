@@ -198,18 +198,23 @@ use rvt::ifc::share::{ViewerState, encode_to_fragment, decode_from_fragment};
 
 ## Panic reporting and wasm32 memory
 
-Two behaviours matter only in the browser build and are easy to
+Three behaviours matter only in the browser build and are easy to
 mistake for viewer bugs.
 
-**Panics reach the console.** All eight byte-opening bindings
-(`openRvtBytes`, `openRvtBytesWithLimits`,
-`openRvtBytesWithDiagnostics`,
-`openRvtBytesWithDiagnosticsAndLimits`,
-`openRvtBytesWithDiagnosticsMode`,
-`openRvtBytesWithDiagnosticsModeAndLimits`, `quickSummary`,
-`fileMetadata`) install a
-`std::panic::set_hook` once, guarded by a `std::sync::Once`, that
-writes `rvt-rs wasm panic: <info>` through `console.error` (#256).
+**Each thread initialises its own instance.** A `--target web` module has
+to be initialised (`await init()`) in every JavaScript realm that calls
+it. The worker parses; the main thread calls `modelToIfcStep` and
+`renderPlanSvg` for the export buttons and initialises its own instance
+first (`mainThreadWasm()` in `viewer/src/main.ts`). Calling an export
+without that fails with `Cannot read properties of undefined (reading
+'__wbindgen_add_to_stack_pointer')`.
+
+**Panics reach the console.** Every binding installs a
+`std::panic::set_hook` on its first call, guarded by a
+`std::sync::Once` per wasm instance, that writes
+`rvt-rs wasm panic: <info>` through `console.error` (#256). The worker
+and the main thread each run their own instance, so the main-thread
+export bindings (`modelToIfcStep`, `renderPlanSvg`) install it too.
 The hook reports the panic message and its source location; without
 it a panic surfaced only as `RuntimeError: unreachable`. Ordinary
 parse failures are unaffected: they still return `Err(JsValue)`, which

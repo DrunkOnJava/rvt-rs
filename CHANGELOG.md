@@ -154,6 +154,21 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Fixed
 
+- **The browser viewer's Export IFC and Export plan SVG buttons work.**
+  Both had failed on every click since they shipped (commit 7d54d3f, 2026-04-20)
+  — confirmed on the deployed site before this fix — for two stacked
+  reasons. The exports run wasm on the main thread, which never
+  initialised its own instance (the worker initialises only its own), so
+  every call died with `Cannot read properties of undefined (reading
+  '__wbindgen_add_to_stack_pointer')`; `viewer/src/main.ts` now
+  initialises one instance on first export and retries if that fails.
+  Behind that, the STEP writer stamped its header with
+  `SystemTime::now()`, which panics on `wasm32-unknown-unknown` ("time not
+  implemented on this platform"); the wasm build now reads `Date.now()`.
+  The panic hook, previously installed only by the byte-opening bindings,
+  is installed by every binding, so a main-thread panic reports its
+  message instead of a bare `unreachable`. The viewer suite now downloads
+  both exports and checks the STEP and SVG content.
 - **The CLIs behave the same way and say what went wrong.** `rvt-gltf` and
   `rvt-sheet` take the model as a positional argument and write
   `model.glb` / `model.svg` next to it unless `-o` says otherwise — the

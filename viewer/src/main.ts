@@ -1967,6 +1967,33 @@ document.body.addEventListener('drop', (ev) => {
 
 // ---------- Export buttons (VW1-16 / VW1-17 / VW1-11 surfaced) ----------
 
+/**
+ * The wasm module for main-thread exports (IFC STEP, plan SVG). Parsing
+ * runs in the worker, which initialises its own instance; a
+ * `--target web` module has to be initialised on this thread too before
+ * any export is called, or every call dies with "Cannot read properties
+ * of undefined (reading '__wbindgen_add_to_stack_pointer')" — which is
+ * what Export IFC and Export plan SVG did from their introduction until
+ * this was added. A failed initialisation is not cached, so the next
+ * click retries.
+ */
+type WasmModule = typeof import('../pkg/rvt.js');
+let mainThreadWasmReady: Promise<WasmModule> | null = null;
+function mainThreadWasm(): Promise<WasmModule> {
+  if (!mainThreadWasmReady) {
+    mainThreadWasmReady = import('../pkg/rvt.js')
+      .then(async (mod) => {
+        await mod.default();
+        return mod;
+      })
+      .catch((err: unknown) => {
+        mainThreadWasmReady = null;
+        throw err;
+      });
+  }
+  return mainThreadWasmReady;
+}
+
 function download(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2009,7 +2036,7 @@ exportIfcBtn.addEventListener('click', () => {
     }
     setStatus(`rendering IFC STEP · ${quality} · bar ${bar}`);
     try {
-      const { modelToIfcStep } = await import('../pkg/rvt.js');
+      const { modelToIfcStep } = await mainThreadWasm();
       const text = modelToIfcStep(model as unknown as object);
       const blob = new Blob([text], { type: 'application/x-step' });
       download(`${lastFileStem}.ifc`, blob);
@@ -2044,7 +2071,7 @@ exportSvgBtn.addEventListener('click', () => {
   void (async () => {
     setStatus('rendering plan SVG…');
     try {
-      const { renderPlanSvg } = await import('../pkg/rvt.js');
+      const { renderPlanSvg } = await mainThreadWasm();
       const svg = renderPlanSvg(model as unknown as object, null);
       const blob = new Blob([svg], { type: 'image/svg+xml' });
       download(`${lastFileStem}.svg`, blob);

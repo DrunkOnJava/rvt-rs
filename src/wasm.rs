@@ -55,12 +55,25 @@ fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
 extern "C" {
     #[wasm_bindgen(js_namespace = console, js_name = error)]
     fn console_error(s: &str);
+
+    #[wasm_bindgen(js_namespace = Date, js_name = now)]
+    fn date_now() -> f64;
+}
+
+/// Milliseconds since the Unix epoch from the JavaScript host
+/// (`Date.now()`). `std::time::SystemTime::now()` panics on
+/// `wasm32-unknown-unknown`, so wall-clock stamps in the wasm build (the
+/// IFC STEP header) come from here.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn host_now_millis() -> f64 {
+    date_now()
 }
 
 /// Route Rust panics to `console.error` so the viewer reports the
 /// panic message and source location instead of a bare
-/// `RuntimeError: unreachable` trap. Installed once, on the first
-/// byte-opening call.
+/// `RuntimeError: unreachable` trap. Installed once per wasm instance,
+/// on the first call into any binding: the worker and the main thread
+/// each run their own instance.
 fn install_panic_hook() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
@@ -197,6 +210,7 @@ pub fn file_metadata(bytes: &[u8]) -> Result<JsValue, JsValue> {
 /// Build the scene-graph tree for a model.
 #[wasm_bindgen(js_name = buildSceneGraph)]
 pub fn js_build_scene_graph(model: JsValue) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     let scene: SceneNode = build_scene_graph(&model);
     serde_wasm_bindgen::to_value(&scene).map_err(err_str)
@@ -206,6 +220,7 @@ pub fn js_build_scene_graph(model: JsValue) -> Result<JsValue, JsValue> {
 /// layer-toggle UI.
 #[wasm_bindgen(js_name = distinctIfcTypes)]
 pub fn js_distinct_ifc_types(scene: JsValue) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let scene: SceneNode = serde_wasm_bindgen::from_value(scene).map_err(err_str)?;
     let types = distinct_ifc_types(&scene);
     serde_wasm_bindgen::to_value(&types).map_err(err_str)
@@ -215,6 +230,7 @@ pub fn js_distinct_ifc_types(scene: JsValue) -> Result<JsValue, JsValue> {
 /// JSON value; returns the pruned scene tree.
 #[wasm_bindgen(js_name = applyCategoryFilter)]
 pub fn js_apply_category_filter(scene: JsValue, filter: JsValue) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let scene: SceneNode = serde_wasm_bindgen::from_value(scene).map_err(err_str)?;
     let filter: CategoryFilter = serde_wasm_bindgen::from_value(filter).map_err(err_str)?;
     let pruned = filter.apply(&scene);
@@ -224,6 +240,7 @@ pub fn js_apply_category_filter(scene: JsValue, filter: JsValue) -> Result<JsVal
 /// Populate the element info panel for a click target.
 #[wasm_bindgen(js_name = elementInfoPanel)]
 pub fn js_element_info_panel(model: JsValue, entity_index: usize) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     let panel: Option<ElementInfoPanel> = element_info_panel(&model, entity_index);
     serde_wasm_bindgen::to_value(&panel).map_err(err_str)
@@ -232,6 +249,7 @@ pub fn js_element_info_panel(model: JsValue, entity_index: usize) -> Result<JsVa
 /// Build a flat schedule table of every BuildingElement.
 #[wasm_bindgen(js_name = buildSchedule)]
 pub fn js_build_schedule(model: JsValue) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     let schedule: Schedule = build_schedule(&model);
     serde_wasm_bindgen::to_value(&schedule).map_err(err_str)
@@ -241,6 +259,7 @@ pub fn js_build_schedule(model: JsValue) -> Result<JsValue, JsValue> {
 /// the frontend feeds into Three.js's `GLTFLoader`.
 #[wasm_bindgen(js_name = modelToGlb)]
 pub fn js_model_to_glb(model: JsValue) -> Result<Vec<u8>, JsValue> {
+    install_panic_hook();
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     Ok(model_to_glb(&model))
 }
@@ -249,6 +268,7 @@ pub fn js_model_to_glb(model: JsValue) -> Result<Vec<u8>, JsValue> {
 /// text; callers wrap it in a Blob for download.
 #[wasm_bindgen(js_name = modelToIfcStep)]
 pub fn js_model_to_ifc_step(model: JsValue) -> Result<String, JsValue> {
+    install_panic_hook();
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     Ok(write_step(&model))
 }
@@ -257,6 +277,7 @@ pub fn js_model_to_ifc_step(model: JsValue) -> Result<String, JsValue> {
 /// dimensions + labels + background; pass `null` for defaults.
 #[wasm_bindgen(js_name = renderPlanSvg)]
 pub fn js_render_plan_svg(model: JsValue, options: JsValue) -> Result<String, JsValue> {
+    install_panic_hook();
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     let options: SheetOptions = if options.is_null() || options.is_undefined() {
         SheetOptions::default()
@@ -269,6 +290,7 @@ pub fn js_render_plan_svg(model: JsValue, options: JsValue) -> Result<String, Js
 /// Encode a ViewerState to a URL fragment string.
 #[wasm_bindgen(js_name = encodeToFragment)]
 pub fn js_encode_to_fragment(state: JsValue) -> Result<String, JsValue> {
+    install_panic_hook();
     let state: ViewerState = serde_wasm_bindgen::from_value(state).map_err(err_str)?;
     Ok(encode_to_fragment(&state))
 }
@@ -276,6 +298,7 @@ pub fn js_encode_to_fragment(state: JsValue) -> Result<String, JsValue> {
 /// Decode a URL fragment into a ViewerState (or `null`).
 #[wasm_bindgen(js_name = decodeFromFragment)]
 pub fn js_decode_from_fragment(fragment: &str) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let state = decode_from_fragment(fragment);
     serde_wasm_bindgen::to_value(&state).map_err(err_str)
 }
@@ -283,6 +306,7 @@ pub fn js_decode_from_fragment(fragment: &str) -> Result<JsValue, JsValue> {
 /// Compute the camera eye position for a given CameraState.
 #[wasm_bindgen(js_name = cameraEye)]
 pub fn js_camera_eye(state: JsValue) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let state: CameraState = serde_wasm_bindgen::from_value(state).map_err(err_str)?;
     serde_wasm_bindgen::to_value(&state.eye()).map_err(err_str)
 }
@@ -294,6 +318,7 @@ pub fn js_default_section_box(
     storey_elevation_feet: f64,
     model_bbox: JsValue,
 ) -> Result<JsValue, JsValue> {
+    install_panic_hook();
     let mode: ViewMode = serde_wasm_bindgen::from_value(mode).map_err(err_str)?;
     let bbox: SectionBox = serde_wasm_bindgen::from_value(model_bbox).map_err(err_str)?;
     let result = mode.default_section_box(storey_elevation_feet, bbox);
@@ -305,6 +330,7 @@ pub fn js_default_section_box(
 /// re-declaring the defaults.
 #[wasm_bindgen(js_name = defaultSheetOptions)]
 pub fn js_default_sheet_options() -> Result<JsValue, JsValue> {
+    install_panic_hook();
     serde_wasm_bindgen::to_value(&SheetOptions::default()).map_err(err_str)
 }
 
