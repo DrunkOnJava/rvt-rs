@@ -25,7 +25,11 @@ use std::process::ExitCode;
     name = "rvt-analyze",
     version,
     about = "Single-shot forensic analysis of a Revit file — identity, history, \
-             schema, Phase D link, content metadata, and disclosures."
+             schema, Phase D link, content metadata, and disclosures.",
+    after_help = "Examples:\n  \
+        rvt-analyze model.rvt --redact\n  \
+        rvt-analyze model.rvt --json --redact > report.json\n  \
+        rvt-analyze model.rvt --section identity"
 )]
 struct Cli {
     /// Path to a .rvt / .rfa / .rte / .rft file
@@ -203,6 +207,7 @@ impl Style {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

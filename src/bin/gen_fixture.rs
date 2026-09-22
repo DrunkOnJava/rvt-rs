@@ -63,7 +63,9 @@ use std::process::ExitCode;
 #[command(
     name = "gen-fixture",
     version,
-    about = "Synthesize a minimal Revit-file-alike CFB fixture for tests"
+    about = "Synthesize a minimal Revit-file-alike CFB fixture for tests",
+    after_help = "Examples:\n  \
+        gen-fixture demo --classes Wall,Level,Door --element-count 25 --output demo.rvt"
 )]
 struct Cli {
     /// Short fixture name (used in BasicFileInfo + log output).
@@ -98,6 +100,7 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     let cli = Cli::parse();
     match run(cli) {
         Ok(path) => {

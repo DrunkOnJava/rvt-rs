@@ -137,6 +137,21 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Fixed
 
+- **The CLIs behave the same way and say what went wrong.** `rvt-gltf` and
+  `rvt-sheet` take the model as a positional argument and write
+  `model.glb` / `model.svg` next to it unless `-o` says otherwise — the
+  form the README already showed but the binaries rejected (they required
+  `--src` / `--dst`, which still work). Both refuse to overwrite their
+  input. `rvt-ifc`, `rvt-doc` and `rvt-elements` stop printing anyhow's
+  `Error:` debug form; every CLI now reports `error: <message>` with the
+  file named once and exits 1. `rvt-schema`, `rvt-history`, `rvt-corpus`
+  (and `rvt-corpus doctor`), `rvt-elem-table` and `rvt-capabilities` accept
+  `--json` as shorthand for `--format json`. Piping any CLI into `head`
+  no longer ends in `failed printing to stdout: Broken pipe` and a panic
+  backtrace: `rvt::cli::exit_quietly_on_broken_pipe` exits with status
+  141, as a shell reports `SIGPIPE`, and leaves every other panic alone.
+  Every `--help` ends with worked examples, each one run against the
+  sample corpus before it was written down.
 - **A storey-less element is no longer written into the first storey
   (#219).** The STEP writer clamped a missing storey index to
   `storey_index.unwrap_or(0)`, so on `2024_Core_Interior.rvt` 71 elements —

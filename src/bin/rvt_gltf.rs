@@ -8,31 +8,43 @@
 //! Usage:
 //!
 //! ```bash
-//! rvt-gltf --src input.rfa --dst output.glb
-//! rvt-gltf --src input.rfa --dst output.glb --verbose
+//! rvt-gltf model.rvt                    # writes model.glb next to the input
+//! rvt-gltf model.rvt -o out/model.glb --verbose
+//! rvt-gltf --src model.rvt --dst model.glb   # older spelling, still accepted
 //! ```
 
 use clap::Parser;
 use rvt::RevitFile;
 use rvt::ifc::{Exporter, RvtDocExporter, gltf::model_to_glb};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 #[derive(Parser, Debug)]
 #[command(
     name = "rvt-gltf",
     version,
-    about = "Convert a Revit (.rvt, .rfa, .rte, .rft) file to a glTF 2.0 binary (.glb)"
+    about = "Convert a Revit (.rvt, .rfa, .rte, .rft) file to a glTF 2.0 binary (.glb)",
+    after_help = "Examples:\n  \
+        rvt-gltf model.rvt                      writes model.glb next to the input\n  \
+        rvt-gltf model.rvt -o viewer/model.glb --verbose"
 )]
 struct Cli {
-    /// Source Revit file path.
-    #[arg(short, long)]
-    src: PathBuf,
+    /// Revit file to convert (.rvt / .rfa / .rte / .rft).
+    #[arg(
+        value_name = "INPUT",
+        required_unless_present = "src",
+        conflicts_with = "src"
+    )]
+    input: Option<PathBuf>,
 
-    /// Destination .glb file path.
-    #[arg(short, long)]
-    dst: PathBuf,
+    /// Output .glb path. Default: the input path with a `.glb` extension.
+    #[arg(short = 'o', long = "output", alias = "dst", short_alias = 'd')]
+    output: Option<PathBuf>,
+
+    /// Older spelling of INPUT (`--src model.rvt`), kept for scripts.
+    #[arg(short = 's', long = "src", hide = true)]
+    src: Option<PathBuf>,
 
     /// Print element count + output size on success.
     #[arg(long)]
@@ -40,24 +52,52 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     let cli = Cli::parse();
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("rvt-gltf: {e}");
+            eprintln!("error: {e}");
             ExitCode::from(1)
         }
     }
 }
 
+/// Input from INPUT or the legacy `--src`; output from `-o` or the input
+/// path with `extension` swapped in. Refuses to overwrite the input.
+fn resolve_paths(
+    input: Option<&Path>,
+    src: Option<&Path>,
+    output: Option<&Path>,
+    extension: &str,
+) -> Result<(PathBuf, PathBuf), String> {
+    let input = input.or(src).ok_or("no input file given")?.to_path_buf();
+    let output = output
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| input.with_extension(extension));
+    if output == input {
+        return Err(format!(
+            "refusing to overwrite the input {}; pass -o <path>",
+            input.display()
+        ));
+    }
+    Ok((input, output))
+}
+
 fn run(cli: &Cli) -> Result<(), String> {
-    let mut rf =
-        RevitFile::open(&cli.src).map_err(|e| format!("open {}: {e}", cli.src.display()))?;
+    let (input, output) = resolve_paths(
+        cli.input.as_deref(),
+        cli.src.as_deref(),
+        cli.output.as_deref(),
+        "glb",
+    )?;
+    // Open errors from the library already name the file.
+    let mut rf = RevitFile::open(&input).map_err(|e| e.to_string())?;
     let model = RvtDocExporter
         .export(&mut rf)
-        .map_err(|e| format!("export: {e}"))?;
+        .map_err(|e| format!("export {}: {e}", input.display()))?;
     let glb = model_to_glb(&model);
-    fs::write(&cli.dst, &glb).map_err(|e| format!("write {}: {e}", cli.dst.display()))?;
+    fs::write(&output, &glb).map_err(|e| format!("write {}: {e}", output.display()))?;
     if cli.verbose {
         println!(
             "rvt-gltf: wrote {} bytes ({} building elements) to {}",
@@ -67,7 +107,7 @@ fn run(cli: &Cli) -> Result<(), String> {
                 .iter()
                 .filter(|e| matches!(e, rvt::ifc::entities::IfcEntity::BuildingElement { .. }))
                 .count(),
-            cli.dst.display()
+            output.display()
         );
     }
     Ok(())

@@ -16,7 +16,10 @@ const INSPECT_SCHEMA_VERSION: u32 = 1;
 #[command(
     name = "rvt-inspect",
     version,
-    about = "Summarize Revit file health, decoded model coverage, and IFC export readiness"
+    about = "Summarize Revit file health, decoded model coverage, and IFC export readiness",
+    after_help = "Examples:\n  \
+        rvt-inspect model.rvt\n  \
+        rvt-inspect model.rvt --json > model.inspect.json"
 )]
 struct Cli {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
@@ -108,6 +111,7 @@ struct ExportReadiness {
 }
 
 fn main() -> ExitCode {
+    rvt::cli::exit_quietly_on_broken_pipe();
     let cli = Cli::parse();
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
