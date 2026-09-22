@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://drunkonjava.github.io/rvt-rs/schemas/summary.schema.json",
   "title": "rvt summary JSON",
-  "description": "Stable file summary emitted by rvt-info -f json and exposed by reader summaries.",
+  "description": "Stable file summary emitted by rvt-info -f json (single file) and exposed by reader summaries. `document` carries worksharing, save history and document identity (file-metadata.schema.json).",
   "type": "object",
   "required": [
     "file_size",
@@ -127,6 +127,12 @@
         },
         "raw_xml": {
           "type": "string"
+        },
+        "entry_title": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
@@ -138,6 +144,123 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "document": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/file_metadata"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "file_metadata": {
+      "description": "Document identity from BasicFileInfo and the document Atom entry (rvt::metadata::FileMetadata): release, worksharing, last save, document GUID. Emitted as `document` by rvt-info -f json on one file.",
+      "type": "object",
+      "required": [
+        "revit_version",
+        "properties"
+      ],
+      "properties": {
+        "revit_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "build": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_saved": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "worksharing": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workshared": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "username": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "central_model_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_save_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "document_guid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "document_increments": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "locale": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "single_user_cloud_model": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "value"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     }
   }

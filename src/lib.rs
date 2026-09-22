@@ -46,8 +46,10 @@
 //! ## Module overview
 //!
 //! - [`reader`] — [`RevitFile`], the main entry point
-//! - [`basic_file_info`] — version, GUID, build tag, creator path
+//! - [`basic_file_info`] — version, GUID, build tag, creator path, worksharing text block
+//! - [`metadata`] — [`metadata::FileMetadata`]: document identity, readable without loading the whole file
 //! - [`part_atom`] — Atom XML with OmniClass + taxonomies
+//! - [`project_information`] — project-file `ProjectInformation` ZIP → Atom entry
 //! - [`formats`] — class schema with tags, parents, field types
 //! - [`object_graph`] — document history, string-record extraction
 //! - [`elem_table`] — `Global/ElemTable` parser
@@ -133,6 +135,7 @@ pub mod geometry;
 pub mod identity;
 pub mod ifc;
 pub mod level_bind;
+pub mod metadata;
 pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;
@@ -146,6 +149,7 @@ pub mod partition_scanner;
 pub mod partition_schema_mvp;
 pub mod partition_type_records;
 pub mod partitions;
+pub mod project_information;
 pub mod reader;
 pub mod rect_opening_index;
 pub mod redact;

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/file-metadata.schema.json",
+  "title": "rvt file metadata",
+  "description": "Document identity from BasicFileInfo and the document Atom entry (rvt::metadata::FileMetadata): release, worksharing, last save, document GUID. Emitted as `document` by rvt-info -f json on one file.",
+  "type": "object",
+  "required": [
+    "revit_version",
+    "properties"
+  ],
+  "properties": {
+    "revit_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "build": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "title": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_saved": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worksharing": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workshared": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "username": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "central_model_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_save_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "document_guid": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "document_increments": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "locale": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "single_user_cloud_model": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

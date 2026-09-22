@@ -186,6 +186,8 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         "support-matrix.schema.json",
         "es-observation.schema.json",
         "es-capability.schema.json",
+        "file-metadata.schema.json",
+        "inventory-row.schema.json",
     ] {
         let schema = load_schema(name);
         assert_eq!(
@@ -205,6 +207,59 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
     assert!(decoded["$id"].is_string());
     assert!(decoded["title"].is_string());
     assert_eq!(decoded["type"], "array");
+}
+
+/// `summary.schema.json` embeds the metadata definition (the in-test
+/// validator resolves only local refs); it must not drift from the
+/// standalone `file-metadata.schema.json`.
+#[test]
+fn summary_embeds_the_file_metadata_schema_verbatim() {
+    let summary = load_schema("summary.schema.json");
+    let metadata = load_schema("file-metadata.schema.json");
+    for key in ["type", "required", "properties"] {
+        assert_eq!(
+            summary["$defs"]["file_metadata"][key], metadata[key],
+            "summary.schema.json $defs.file_metadata.{key} drifted from file-metadata.schema.json"
+        );
+    }
+}
+
+/// `rvt-info` on one file and on a folder, against the tier-1 synthetic
+/// fixtures — runs with no Autodesk corpus present.
+#[test]
+fn tier1_info_cli_validates_summary_and_inventory_schemas() {
+    let tier1 = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("corpus")
+        .join("tier1");
+    let fixture = tier1
+        .join("architectural-2024")
+        .join("architectural-2024.rvt");
+    if !fixture.exists() {
+        eprintln!(
+            "skipping tier1 info schema test: missing {}",
+            fixture.display()
+        );
+        return;
+    }
+    let summary = command_json(
+        env!("CARGO_BIN_EXE_rvt-info"),
+        &[fixture.as_os_str(), std::ffi::OsStr::new("--json")],
+    );
+    validate(&load_schema("summary.schema.json"), &summary).expect("summary schema validation");
+
+    let rows = command_json(
+        env!("CARGO_BIN_EXE_rvt-info"),
+        &[tier1.as_os_str(), std::ffi::OsStr::new("--json")],
+    );
+    let rows = rows.as_array().expect("inventory is a JSON array");
+    assert!(
+        rows.len() >= 3,
+        "expected the three tier-1 fixtures, got {rows:?}"
+    );
+    let schema = load_schema("inventory-row.schema.json");
+    for row in rows {
+        validate(&schema, row).expect("inventory-row schema validation");
+    }
 }
 
 #[test]

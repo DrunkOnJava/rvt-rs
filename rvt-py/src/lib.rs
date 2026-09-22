@@ -37,7 +37,7 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::useless_conversion)]
 
-use pyo3::exceptions::{PyIOError, PyValueError};
+use pyo3::exceptions::{PyFileNotFoundError, PyIOError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyDict, PyList};
 
@@ -48,6 +48,26 @@ fn to_py_io<E: std::fmt::Display>(e: E) -> PyErr {
 }
 fn to_py_val<E: std::fmt::Display>(e: E) -> PyErr {
     PyValueError::new_err(e.to_string())
+}
+
+/// `FileNotFoundError` / `IOError` for I/O failures, `ValueError` for input
+/// that is not a readable Revit file.
+fn to_py_metadata_err(e: rvt::Error) -> PyErr {
+    match &e {
+        rvt::Error::Io(io) if io.kind() == std::io::ErrorKind::NotFound => {
+            PyFileNotFoundError::new_err(e.to_string())
+        }
+        rvt::Error::Io(_) => PyIOError::new_err(e.to_string()),
+        _ => PyValueError::new_err(e.to_string()),
+    }
+}
+
+fn metadata_to_py<'py>(
+    py: Python<'py>,
+    metadata: &rvt::metadata::FileMetadata,
+) -> PyResult<Bound<'py, PyAny>> {
+    let json = serde_json::to_string(metadata).map_err(to_py_val)?;
+    py.import("json")?.call_method1("loads", (json,))
 }
 
 fn parse_export_quality_mode(mode: &str) -> PyResult<ifc::ExportQualityMode> {
@@ -682,6 +702,22 @@ impl PyRevitFile {
         elem_table::declared_element_ids(&mut self.inner).map_err(to_py_val)
     }
 
+    /// Document identity as a dict: `revit_version`, `build`, `title`,
+    /// `last_saved` (ISO 8601 UTC), `worksharing` (e.g. `"Not enabled"`),
+    /// `workshared`, `username`, `central_model_path`, `last_save_path`,
+    /// `document_guid`, `document_increments`, `locale`,
+    /// `single_user_cloud_model`, and `properties` (every `BasicFileInfo`
+    /// `Key: value` line as `{"key", "value"}`). Pass `redact=True` to
+    /// scrub the user name and user paths before sharing.
+    #[pyo3(signature = (redact = false))]
+    fn metadata<'py>(&mut self, py: Python<'py>, redact: bool) -> PyResult<Bound<'py, PyAny>> {
+        let mut m = self.inner.metadata().map_err(to_py_val)?;
+        if redact {
+            m.redact();
+        }
+        metadata_to_py(py, &m)
+    }
+
     fn __repr__(&mut self) -> String {
         let v = self.inner.basic_file_info().ok().map(|b| b.version);
         match v {
@@ -700,6 +736,21 @@ fn rvt_to_ifc(path: &str, mode: &str) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
     let mode = parse_export_quality_mode(mode)?;
     write_ifc_with_quality_mode(&mut rf, mode)
+}
+
+/// Document identity for the file at `path` without loading the whole
+/// file — only the two small identity streams are read, so it is the fast
+/// path for inventories. Same dict as `RevitFile.metadata()`. Raises
+/// `FileNotFoundError` / `IOError` on I/O failure and `ValueError` when
+/// the file is not a readable Revit file.
+#[pyfunction]
+#[pyo3(signature = (path, redact = false))]
+fn read_metadata<'py>(py: Python<'py>, path: &str, redact: bool) -> PyResult<Bound<'py, PyAny>> {
+    let mut m = rvt::metadata::read_metadata(path).map_err(to_py_metadata_err)?;
+    if redact {
+        m.redact();
+    }
+    metadata_to_py(py, &m)
 }
 
 /// One-shot helper: open a Revit file, run the default IFC exporter,
@@ -723,6 +774,7 @@ fn _rvt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRevitFile>()?;
     m.add_function(wrap_pyfunction!(rvt_to_ifc, m)?)?;
     m.add_function(wrap_pyfunction!(rvt_to_ifc_diagnostics, m)?)?;
+    m.add_function(wrap_pyfunction!(read_metadata, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("MVP_TYPED_CLASSES", elements::MVP_TYPED_CLASSES.to_vec())?;
     Ok(())

@@ -43,6 +43,58 @@ fn opens_all_11_versions() {
     }
 }
 
+/// The `BasicFileInfo` `Key: value` block reads on every release, at both
+/// byte alignments (2016-2025 even, 2026 odd). `Unique Document Increments`
+/// grows by one per yearly re-save of the sample, 59 on 2016 to 70 on 2026.
+#[test]
+fn basic_file_info_properties_read_on_every_release() {
+    for year in all_years() {
+        let p = sample_for_year(year);
+        if !p.exists() {
+            continue;
+        }
+        let mut rf = RevitFile::open(&p).unwrap();
+        let bfi = rf.basic_file_info().unwrap();
+        assert_eq!(bfi.worksharing(), Some("Not enabled"), "{year}");
+        assert_eq!(bfi.is_workshared(), Some(false), "{year}");
+        assert_eq!(bfi.username(), None, "{year}");
+        assert_eq!(bfi.central_model_path(), None, "{year}");
+        assert_eq!(bfi.locale.as_deref(), Some("ENU"), "{year}");
+        assert_eq!(bfi.open_workset_default(), Some(3), "{year}");
+        assert_eq!(
+            bfi.all_local_changes_saved_to_central(),
+            Some(false),
+            "{year}"
+        );
+        let increments = if year == 2016 { 59 } else { year - 1956 };
+        assert_eq!(bfi.document_increments(), Some(increments), "{year}");
+        assert_eq!(bfi.document_guid(), bfi.guid.as_deref(), "{year}");
+        assert!(
+            bfi.last_save_path().is_some_and(|p| p.ends_with(".rfa")),
+            "{year}: last save path {:?}",
+            bfi.last_save_path()
+        );
+        if year <= 2018 {
+            let build = bfi.property("Revit Build").unwrap_or_default();
+            assert!(
+                build.starts_with(&format!("Autodesk Revit {year}")),
+                "{year}: {build}"
+            );
+        } else {
+            assert_eq!(
+                bfi.property("Format"),
+                Some(year.to_string().as_str()),
+                "{year}"
+            );
+            assert_eq!(bfi.is_single_user_cloud_model(), Some(false), "{year}");
+            assert_eq!(bfi.author(), Some("Autodesk Revit"), "{year}");
+        }
+        if year >= 2021 {
+            assert_eq!(bfi.client_app_name(), Some("RevitApplication"), "{year}");
+        }
+    }
+}
+
 #[test]
 fn partition_matches_year() {
     for year in all_years() {

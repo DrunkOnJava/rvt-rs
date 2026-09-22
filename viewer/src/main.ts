@@ -608,6 +608,7 @@ async function loadBytes(file: File): Promise<void> {
   }
   const qualityMode = selectedExportMode();
 
+  currentDocument = null;
   const w = resetWorker();
   w.addEventListener('message', (ev: MessageEvent<unknown>) => {
     const msg = ev.data as
@@ -615,6 +616,7 @@ async function loadBytes(file: File): Promise<void> {
       | {
           type: 'summary';
           summary: { version: number; build?: string; guid?: string; class_name_count?: number };
+          document: FileMetadata | null;
         }
       | {
           type: 'ready';
@@ -652,6 +654,7 @@ async function loadBytes(file: File): Promise<void> {
         bits.push(`${msg.summary.class_name_count} classes`);
       }
       fileMetaEl.textContent = bits.join(' · ');
+      currentDocument = msg.document ?? null;
       dropzone.classList.add('hidden');
       return;
     }
@@ -1466,6 +1469,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
         : `Opened · ${input.stream_count ?? 0} streams`,
     ),
   );
+  appendDocumentRows(currentDocument);
   const failureMode = classifyFailureMode(diagnostics);
   statusPanelEl.appendChild(
     statusRow('Mode', failureMode.kind, `${failureMode.title} · ${failureMode.summary}`),
@@ -1711,6 +1715,55 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
 let statusRowIndex = 0;
 function resetStatusRowStagger(): void {
   statusRowIndex = 0;
+}
+
+/**
+ * Document identity from the file's BasicFileInfo text block and Atom
+ * entry (Rust `FileMetadata`, via the wasm `fileMetadata` binding).
+ * Everything here is read verbatim from the file; nothing is inferred.
+ */
+interface FileMetadata {
+  revit_version: number;
+  build?: string | null;
+  title?: string | null;
+  last_saved?: string | null;
+  worksharing?: string | null;
+  workshared?: boolean | null;
+  username?: string | null;
+  central_model_path?: string | null;
+  last_save_path?: string | null;
+  document_guid?: string | null;
+  document_increments?: number | null;
+  locale?: string | null;
+  single_user_cloud_model?: boolean | null;
+  properties: { key: string; value: string }[];
+}
+
+/** Identity of the file currently open, or null before / without one. */
+let currentDocument: FileMetadata | null = null;
+
+/** `2023-09-07T12:50:35Z` → `2023-09-07 12:50 UTC`; anything else verbatim. */
+function formatSavedAt(iso: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(iso);
+  return m ? `${m[1]} ${m[2]} UTC` : iso;
+}
+
+/** "Saved" and "Worksharing" rows of the File status panel. */
+function appendDocumentRows(doc: FileMetadata | null): void {
+  if (!doc) return;
+  const saved: string[] = [];
+  if (doc.last_saved) saved.push(formatSavedAt(doc.last_saved));
+  if (doc.username) saved.push(`by ${doc.username}`);
+  if (typeof doc.document_increments === 'number') {
+    saved.push(`save counter ${doc.document_increments}`);
+  }
+  if (saved.length > 0) statusPanelEl.appendChild(statusRow('Saved', 'ok', saved.join(' · ')));
+  if (doc.worksharing) {
+    const parts = [doc.worksharing];
+    if (doc.central_model_path) parts.push(`central: ${doc.central_model_path}`);
+    if (doc.single_user_cloud_model) parts.push('single-user cloud model');
+    statusPanelEl.appendChild(statusRow('Worksharing', 'ok', parts.join(' · ')));
+  }
 }
 
 function statusRow(label: string, kind: StatusKind, value: string): HTMLElement {

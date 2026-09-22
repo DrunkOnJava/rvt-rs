@@ -74,11 +74,11 @@
     {
       "id": "metadata-partatom-preview",
       "area": "metadata",
-      "name": "Extract BasicFileInfo, PartAtom XML, preview PNG",
+      "name": "Extract BasicFileInfo (incl. worksharing text block), PartAtom / ProjectInformation Atom, preview PNG",
       "status": "verified",
-      "evidence": "basic_file_info; part_atom; preview tests",
-      "notes": "Identity, build, GUID, title, OmniClass, and stream preview extraction.",
-      "user_impact": "Users can identify and audit files."
+      "evidence": "basic_file_info; part_atom; project_information; metadata; tests/samples.rs basic_file_info_properties_read_on_every_release (2016-2026); rvt_info_cli; preview tests",
+      "notes": "Identity, build, GUID, title, OmniClass, stream preview, and the BasicFileInfo Key: value block (worksharing, central model path, last-saved-by user, save counter, cloud flag) on every release 2016-2026. Folder inventory via rvt-info. Workshared values other than 'Not enabled' are read verbatim; no workshared sample is in the redistributable corpus.",
+      "user_impact": "Users can identify and audit files, one at a time or a folder at once."
     },
     {
       "id": "formats-latest-schema",

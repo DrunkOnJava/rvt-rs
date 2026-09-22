@@ -924,6 +924,7 @@ mod tests {
             original_path: None,
             guid: Some("aabbccdd-1122-3344-5566-778899aabbcc".into()),
             locale: None,
+            properties: Vec::new(),
             raw_text: String::new(),
         };
         build_cfb_with_basic_file_info(&src, &info.encode()).unwrap();
@@ -955,6 +956,7 @@ mod tests {
             original_path: None,
             guid: Some("12345678-9abc-def0-1234-56789abcdef0".into()),
             locale: None,
+            properties: Vec::new(),
             raw_text: String::new(),
         };
         build_cfb_with_basic_file_info(&src, &info.encode()).unwrap();
@@ -977,6 +979,7 @@ mod tests {
             original_path: None,
             guid: Some("99999999-8888-7777-6666-555544443333".into()),
             locale: None,
+            properties: Vec::new(),
             raw_text: String::new(),
         };
         {
@@ -1019,6 +1022,7 @@ mod tests {
             original_path: None,
             guid: Some("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".into()),
             locale: None,
+            properties: Vec::new(),
             raw_text: String::new(),
         };
         let info_b = crate::basic_file_info::BasicFileInfo {

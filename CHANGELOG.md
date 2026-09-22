@@ -13,6 +13,35 @@ Revit inspection / reverse-engineering toolkit with experimental export —
 
 ### Added
 
+- **Every file now says who saved it, when, and whether it is workshared,
+  and `rvt-info` inventories whole folders.** After its binary header,
+  `BasicFileInfo` carries a block of `Key: value` lines on every release
+  2016-2026 — `Worksharing`, `Username`, `Central Model Path`,
+  `Last Save Path`, `Unique Document GUID`, `Unique Document Increments`,
+  `IsSingleUserCloudModel`, `Author`, `ClientAppName` and more — which a
+  plain UTF-16LE decode misses: the block starts at an odd byte offset on
+  2026 and both magnetar projects, and `IsSingleUserCloudModel` is a narrow
+  `"False\0"` packed into wide text. `BasicFileInfo::properties` keeps every
+  line verbatim, with typed accessors (`worksharing()`, `username()`,
+  `central_model_path()`, `document_increments()`, …), pinned on all 11
+  `phi-ag/rvt` releases by `tests/samples.rs`. Project files' `ProjectInformation`
+  stream — a one-entry ZIP holding an Atom `project.xml` — is now parsed
+  too, giving the save timestamp; the entry's own name embeds the saving
+  machine's user folder and is never surfaced. The new `rvt::metadata`
+  module combines both into `FileMetadata`, and `read_metadata(path)` reads
+  only those two streams from disk. `rvt-info` gains a Document section,
+  accepts several files and folders (recursive, `--no-recurse`), and prints
+  an inventory — release, worksharing, last saved, size — as a table,
+  `-f csv`, `-f json` or `-f jsonl`, marking Revit backup copies and giving
+  unreadable files an error row (exit status 1). `--redact` now also scrubs
+  the last-saved-by user inside local-copy file names (`<central>_<user>.rvt`).
+  Python gains `RevitFile.metadata()` and `rvt.read_metadata(path)`, the
+  wasm build `fileMetadata(bytes)`, and the viewer's File status panel
+  Saved and Worksharing rows. `PartAtom::entry_title` is the Atom entry's
+  own title (the document name); `title` keeps its old last-title-wins
+  value for compatibility. Open errors now name the file and say when the
+  path is a directory. New schemas: `file-metadata.schema.json`,
+  `inventory-row.schema.json`; `summary.schema.json` gains `document`.
 - **Rooms come from `OST_Rooms` element records, with their real Revit name,
   number, storey and envelope (#90, RE-29).** Revit rooms are carried by the
   same partition element record every other category uses —

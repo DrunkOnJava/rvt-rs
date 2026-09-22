@@ -100,7 +100,25 @@ rvt.__version__  # str — same as the Rust crate version (Cargo.toml)
 
 rvt.rvt_to_ifc(path: str, mode: str = "scaffold") -> str
 rvt.rvt_to_ifc_diagnostics(path: str) -> str
+rvt.read_metadata(path: str, redact: bool = False) -> dict
 ```
+
+`read_metadata(path)` returns the same document-identity dict as
+`RevitFile(path).metadata()` (release, worksharing, central model path,
+last saved time and user, document GUID, save counter) but reads only the
+file's two identity streams, so it is the fast path for inventories:
+
+```python
+import pathlib, rvt
+
+for path in pathlib.Path("projects").rglob("*.rvt"):
+    m = rvt.read_metadata(str(path))
+    print(m["revit_version"], m["worksharing"], m["last_saved"], path)
+```
+
+It raises `FileNotFoundError` / `OSError` on I/O failure and `ValueError`
+when the file is not a readable Revit file. `redact=True` scrubs the user
+name and Windows user folders.
 
 `rvt_to_ifc(path, mode="scaffold")` opens the file, runs the
 document-level IFC4 exporter (`ifc::RvtDocExporter`), and returns the
@@ -169,6 +187,7 @@ Raises `IOError` on missing files, non-CFB input, file-size over
 | `build` | `str \| None` | Revit build tag, e.g. `"20230308_1635(x64)"` |
 | `guid` | `str \| None` | Document GUID from `BasicFileInfo`, if present |
 | `part_atom_title` | `str \| None` | Family document title from `PartAtom` XML |
+| `metadata(redact=False)` | `dict` | Document identity: release, build, title, last saved, worksharing, central model path, last-saved-by user, document GUID, save counter, cloud flag, and every `BasicFileInfo` `Key: value` line (`docs/schemas/file-metadata.schema.json`) |
 
 Each getter calls into the Rust parser on access. All four
 `BasicFileInfo`-backed getters return `None` if the
