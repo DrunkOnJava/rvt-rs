@@ -372,6 +372,11 @@ projectSampleTest(
     // until Level ElementId bind (#33 leftover).
     await expect(page.locator('#status-panel')).toContainText('Partial decode');
     await expect(page.locator('#status-panel')).toContainText(/unit|thickness|storey/i);
+    // Document identity from the BasicFileInfo text block + Atom entry.
+    await expect(page.locator('#status-panel')).toContainText(
+      /Saved\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC · save counter \d+/,
+    );
+    await expect(page.locator('#status-panel')).toContainText(/Worksharing\s*(Not enabled|\w+)/);
     // #33 leftover: File Status lists recovered storey names, not counts only.
     await expect(page.locator('#status-panel')).toContainText(/Level 1|Roof/i);
     await expect(page.locator('#status-panel')).toContainText(/Materials/i);

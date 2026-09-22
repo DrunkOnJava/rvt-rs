@@ -9,7 +9,8 @@ use crate::{
     streams::{
         BASIC_FILE_INFO, CONTENTS, FORMATS_LATEST, GLOBAL_CONTENT_DOCUMENTS,
         GLOBAL_DOC_INCREMENT_TABLE, GLOBAL_ELEM_TABLE, GLOBAL_HISTORY, GLOBAL_LATEST,
-        GLOBAL_PARTITION_TABLE, PART_ATOM, REVIT_PREVIEW_4_0, TRANSMISSION_DATA,
+        GLOBAL_PARTITION_TABLE, PART_ATOM, PROJECT_INFORMATION, REVIT_PREVIEW_4_0,
+        TRANSMISSION_DATA,
     },
 };
 use cfb::CompoundFile;
@@ -151,7 +152,25 @@ impl RevitFile {
     /// ```
     pub fn open_with_limits(path: impl AsRef<Path>, limits: OpenLimits) -> Result<Self> {
         let path = path.as_ref();
-        let metadata = std::fs::metadata(path)?;
+        // Name the file in I/O errors: a batch run over a folder otherwise
+        // reports a bare "No such file or directory". The `ErrorKind` is kept
+        // so callers (and the Python bindings) can still match on it.
+        let with_path = |e: std::io::Error| {
+            Error::Io(std::io::Error::new(
+                e.kind(),
+                format!("{}: {e}", path.display()),
+            ))
+        };
+        let metadata = std::fs::metadata(path).map_err(with_path)?;
+        if metadata.is_dir() {
+            return Err(Error::Io(std::io::Error::new(
+                std::io::ErrorKind::IsADirectory,
+                format!(
+                    "{}: is a directory, not a .rvt / .rfa / .rte / .rft file",
+                    path.display()
+                ),
+            )));
+        }
         if metadata.len() > limits.max_file_bytes {
             return Err(Error::Cfb(format!(
                 "file size {} exceeds limit {}",
@@ -159,9 +178,9 @@ impl RevitFile {
                 limits.max_file_bytes
             )));
         }
-        let mut f = File::open(path)?;
+        let mut f = File::open(path).map_err(with_path)?;
         let mut bytes = Vec::with_capacity(metadata.len() as usize);
-        f.read_to_end(&mut bytes)?;
+        f.read_to_end(&mut bytes).map_err(with_path)?;
         Self::open_bytes_with_limits(bytes, limits)
     }
 
@@ -340,6 +359,28 @@ impl RevitFile {
     pub fn part_atom(&mut self) -> Result<PartAtom> {
         let bytes = self.read_stream(PART_ATOM)?;
         PartAtom::from_bytes(&bytes)
+    }
+
+    /// Parse the project-level Atom entry from the `ProjectInformation`
+    /// stream (see [`crate::project_information`]). `Ok(None)` when the file
+    /// has no such stream — families never do.
+    pub fn project_information(&mut self) -> Result<Option<PartAtom>> {
+        if !self.stream_names().iter().any(|n| n == PROJECT_INFORMATION) {
+            return Ok(None);
+        }
+        let bytes = self.read_stream(PROJECT_INFORMATION)?;
+        crate::project_information::parse(&bytes, self.limits.inflate_limits.max_output_bytes)
+            .map(Some)
+    }
+
+    /// The document's Atom entry, whichever stream carries it: `PartAtom`
+    /// on families and templates, `ProjectInformation` on project files.
+    /// `Ok(None)` when neither stream is present.
+    pub fn document_atom(&mut self) -> Result<Option<PartAtom>> {
+        if self.stream_names().iter().any(|n| n == PART_ATOM) {
+            return self.part_atom().map(Some);
+        }
+        self.project_information()
     }
 
     /// Extract the PNG thumbnail from `RevitPreview4.0`.

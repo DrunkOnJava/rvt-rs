@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/inventory-row.schema.json",
+  "title": "rvt-info inventory row",
+  "description": "One file of an rvt-info inventory (several files or a folder; -f json emits an array of these, -f jsonl one per line). Readable files carry the file-metadata fields flattened in; unreadable ones carry `error`.",
+  "type": "object",
+  "required": [
+    "path",
+    "file_type",
+    "backup",
+    "size_bytes",
+    "error"
+  ],
+  "properties": {
+    "path": {
+      "type": "string"
+    },
+    "file_type": {
+      "enum": [
+        "project",
+        "family",
+        "project template",
+        "family template",
+        "unknown"
+      ]
+    },
+    "backup": {
+      "type": "boolean"
+    },
+    "size_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revit_version": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

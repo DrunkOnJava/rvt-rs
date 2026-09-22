@@ -10,6 +10,9 @@ pub const GLOBAL_HISTORY: &str = "Global/History";
 pub const GLOBAL_LATEST: &str = "Global/Latest";
 pub const GLOBAL_PARTITION_TABLE: &str = "Global/PartitionTable";
 pub const PART_ATOM: &str = "PartAtom";
+/// Project files only: a one-entry ZIP holding a project-level Atom entry.
+/// Not one of the invariant family streams.
+pub const PROJECT_INFORMATION: &str = "ProjectInformation";
 pub const REVIT_PREVIEW_4_0: &str = "RevitPreview4.0";
 pub const TRANSMISSION_DATA: &str = "TransmissionData";
 

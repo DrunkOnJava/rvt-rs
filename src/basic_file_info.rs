@@ -11,6 +11,51 @@
 //!
 //! The regex-driven approach matches Apache Tika and chuongmep/revit-extractor
 //! (Python) — this is the "easy layer" that's been public since 2008.
+//!
+//! # The `Key: value` text block
+//!
+//! After the binary header, every release 2016-2026 appends a CRLF-separated
+//! block of `Key: value` lines — the same text Revit shows nowhere in its UI
+//! but writes on every save. On the 11-release `phi-ag/rvt` family corpus and
+//! both magnetar project files it carries, in order:
+//!
+//! ```text
+//! Worksharing: Not enabled
+//! Username:
+//! Central Model Path:
+//! Format: 2024                      (2019+; 2016-2018 write "Revit Build: Autodesk Revit 2016 (Build: …)")
+//! Build: 20230509_0315(x64)
+//! Last Save Path: B:\…\2024_Core_Interior.rvt
+//! Open Workset Default: 3
+//! Project Spark File: 0
+//! Central Model Identity: 00000000-0000-0000-0000-000000000000
+//! Locale when saved: ENU
+//! All Local Changes Saved To Central: 0
+//! Central model's version number corresponding to the last reload latest: 66
+//! Central model's episode GUID corresponding to the last reload latest: 2a619b2e-…
+//! Unique Document GUID: 2a619b2e-…
+//! Unique Document Increments: 66
+//! Model Identity: 00000000-0000-0000-0000-000000000000
+//! IsSingleUserCloudModel: False      (2019+)
+//! Author: Autodesk Revit             (2019+)
+//! ClientAppName: RevitApplication    (2021+)
+//! ```
+//!
+//! Two quirks make a plain UTF-16LE decode miss it:
+//!
+//! 1. The binary header before the block contains 1-byte fields, so the
+//!    block starts at an **odd** byte offset on some files (2026, both
+//!    project files) and an even one on others. [`parse_properties`] decodes
+//!    both alignments and keeps the one that yields the known keys.
+//! 2. `IsSingleUserCloudModel` is written as a *narrow* C string packed into
+//!    the wide text (`"False\0"` reads back as `慆獬e`), and a 5-byte
+//!    `"True\0"` would flip the alignment of everything after it. Values that
+//!    unpack to `True` / `False` are restored; lines after a flip are
+//!    recovered from the other alignment.
+//!
+//! [`BasicFileInfo::properties`] keeps every line verbatim; typed accessors
+//! such as [`BasicFileInfo::worksharing`] and [`BasicFileInfo::username`]
+//! read from it and return `None` for an absent or empty value.
 
 use crate::{Error, Result};
 use encoding_rs::UTF_16LE;
@@ -29,9 +74,47 @@ pub struct BasicFileInfo {
     pub guid: Option<String>,
     /// Locale code if present (e.g. `ENU`, `FRA`).
     pub locale: Option<String>,
+    /// Every `Key: value` line of the trailing text block, in file order,
+    /// values verbatim (see the module docs). Empty when the stream carries
+    /// no such block.
+    #[serde(default)]
+    pub properties: Vec<FileProperty>,
     /// Raw UTF-16LE decoded text for debugging.
     pub raw_text: String,
 }
+
+/// One `Key: value` line from the `BasicFileInfo` text block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileProperty {
+    pub key: String,
+    pub value: String,
+}
+
+/// Keys observed on every release of the reference corpora. Used to pick
+/// the byte alignment the text block was written at; unknown keys are still
+/// kept in [`BasicFileInfo::properties`].
+const KNOWN_KEYS: &[&str] = &[
+    "Worksharing",
+    "Username",
+    "Central Model Path",
+    "Format",
+    "Build",
+    "Revit Build",
+    "Last Save Path",
+    "Open Workset Default",
+    "Project Spark File",
+    "Central Model Identity",
+    "Locale when saved",
+    "All Local Changes Saved To Central",
+    "Central model's version number corresponding to the last reload latest",
+    "Central model's episode GUID corresponding to the last reload latest",
+    "Unique Document GUID",
+    "Unique Document Increments",
+    "Model Identity",
+    "IsSingleUserCloudModel",
+    "Author",
+    "ClientAppName",
+];
 
 impl BasicFileInfo {
     /// Parse the raw `BasicFileInfo` stream bytes.
@@ -42,13 +125,22 @@ impl BasicFileInfo {
             // We still extract from whatever decoded cleanly.
         }
         let raw = cow.into_owned();
+        let properties = parse_properties(data);
+        let prop = |key: &str| lookup(&properties, key);
 
         let version = extract_version(&raw)
+            .or_else(|| prop("Format").and_then(parse_release_year))
             .ok_or_else(|| Error::BasicFileInfo("no 4-digit Revit version found".into()))?;
-        let build = extract_build(&raw);
-        let original_path = extract_path(&raw);
-        let guid = extract_guid(&raw);
-        let locale = extract_locale(&raw);
+        let build = extract_build(&raw).or_else(|| prop("Build").map(str::to_string));
+        let original_path =
+            extract_path(&raw).or_else(|| prop("Last Save Path").map(str::to_string));
+        let guid = prop("Unique Document GUID")
+            .filter(|g| is_guid(g))
+            .map(str::to_string)
+            .or_else(|| extract_guid(&raw));
+        let locale = prop("Locale when saved")
+            .map(str::to_string)
+            .or_else(|| extract_locale(&raw));
 
         Ok(Self {
             version,
@@ -56,8 +148,87 @@ impl BasicFileInfo {
             original_path,
             guid,
             locale,
+            properties,
             raw_text: raw,
         })
+    }
+
+    /// Value of the text-block line `key` (exact, case-sensitive match),
+    /// or `None` when the line is absent or its value is empty.
+    pub fn property(&self, key: &str) -> Option<&str> {
+        lookup(&self.properties, key)
+    }
+
+    /// The `Worksharing` line verbatim: `Not enabled` on a file without
+    /// worksharing; other values (`Central`, `Local`, …) name the role the
+    /// saved copy had in a workshared project.
+    pub fn worksharing(&self) -> Option<&str> {
+        self.property("Worksharing")
+    }
+
+    /// `Some(false)` when `Worksharing` reads `Not enabled`, `Some(true)`
+    /// for any other recorded value, `None` when the line is missing.
+    pub fn is_workshared(&self) -> Option<bool> {
+        self.worksharing()
+            .map(|w| !w.eq_ignore_ascii_case("Not enabled"))
+    }
+
+    /// Windows / Autodesk account name recorded by the last save
+    /// (empty on non-workshared files, which yields `None`).
+    pub fn username(&self) -> Option<&str> {
+        self.property("Username")
+    }
+
+    /// Path of the central model a workshared file syncs with — a UNC or
+    /// drive path, an `RSN://` Revit Server path, or a cloud path.
+    pub fn central_model_path(&self) -> Option<&str> {
+        self.property("Central Model Path")
+    }
+
+    /// Full path the file was last saved to.
+    pub fn last_save_path(&self) -> Option<&str> {
+        self.property("Last Save Path")
+    }
+
+    /// `Unique Document GUID`: the document's identity, stable across saves.
+    pub fn document_guid(&self) -> Option<&str> {
+        self.property("Unique Document GUID")
+    }
+
+    /// `Unique Document Increments`: Revit's per-document counter. It grows
+    /// as the document is saved (59 → 70 across the eleven yearly re-saves
+    /// of the reference sample family); the exact increment rule is not
+    /// documented.
+    pub fn document_increments(&self) -> Option<u32> {
+        self.property("Unique Document Increments")
+            .and_then(|v| v.trim().parse().ok())
+    }
+
+    /// `IsSingleUserCloudModel` (Revit 2019+).
+    pub fn is_single_user_cloud_model(&self) -> Option<bool> {
+        self.property("IsSingleUserCloudModel").and_then(parse_bool)
+    }
+
+    /// `All Local Changes Saved To Central` (`0` / `1` on disk).
+    pub fn all_local_changes_saved_to_central(&self) -> Option<bool> {
+        self.property("All Local Changes Saved To Central")
+            .and_then(parse_bool)
+    }
+
+    /// `Open Workset Default`: the worksets-to-open choice stored with the file.
+    pub fn open_workset_default(&self) -> Option<u32> {
+        self.property("Open Workset Default")
+            .and_then(|v| v.trim().parse().ok())
+    }
+
+    /// `Author` (Revit 2019+; `Autodesk Revit` on every observed file).
+    pub fn author(&self) -> Option<&str> {
+        self.property("Author")
+    }
+
+    /// `ClientAppName` (Revit 2021+; `RevitApplication` on every observed file).
+    pub fn client_app_name(&self) -> Option<&str> {
+        self.property("ClientAppName")
     }
 
     /// Encode a `BasicFileInfo` back to UTF-16LE bytes (WRT-07).
@@ -144,6 +315,139 @@ fn utf16le(s: &str) -> Vec<u8> {
     out
 }
 
+fn lookup<'a>(properties: &'a [FileProperty], key: &str) -> Option<&'a str> {
+    properties
+        .iter()
+        .find(|p| p.key == key)
+        .map(|p| p.value.as_str())
+        .filter(|v| !v.is_empty())
+}
+
+/// Recover the `Key: value` text block (see the module docs).
+///
+/// Decodes the stream at both byte alignments. The alignment that yields
+/// more of the keys observed on the reference corpora supplies the lines in
+/// file order; known keys only the other alignment decodes (the tail after a
+/// narrow `True\0` flip) are appended.
+pub fn parse_properties(data: &[u8]) -> Vec<FileProperty> {
+    let decode = |align: usize| -> Vec<FileProperty> {
+        let Some(body) = data.get(align..) else {
+            return Vec::new();
+        };
+        let units = body
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]));
+        let text: String = char::decode_utf16(units)
+            .map(|unit| unit.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect();
+        text.split(['\r', '\n', '\u{0A0D}'])
+            .filter_map(parse_line)
+            .collect()
+    };
+    let score = |props: &[FileProperty]| {
+        props
+            .iter()
+            .filter(|p| KNOWN_KEYS.contains(&p.key.as_str()))
+            .count()
+    };
+    let even = decode(0);
+    let odd = decode(1);
+    let (mut primary, secondary) = if score(&odd) > score(&even) {
+        (odd, even)
+    } else {
+        (even, odd)
+    };
+    if score(&primary) == 0 {
+        return Vec::new();
+    }
+    for prop in secondary {
+        if KNOWN_KEYS.contains(&prop.key.as_str()) && !primary.iter().any(|p| p.key == prop.key) {
+            primary.push(prop);
+        }
+    }
+    primary
+}
+
+fn parse_line(line: &str) -> Option<FileProperty> {
+    let line = line.trim_matches(is_padding);
+    let colon = line.find(':')?;
+    let key = line[..colon].trim();
+    if !is_label(key) {
+        return None;
+    }
+    let rest = &line[colon + 1..];
+    let value = if rest.is_empty() {
+        ""
+    } else {
+        // `Key: value` — a colon glued to a non-space is a drive letter or a
+        // URL scheme inside some other string, not a label.
+        rest.strip_prefix(' ')?
+    };
+    Some(FileProperty {
+        key: key.to_string(),
+        value: clean_value(value),
+    })
+}
+
+fn is_padding(c: char) -> bool {
+    c == '\0' || c == char::REPLACEMENT_CHARACTER || c.is_whitespace()
+}
+
+fn is_label(key: &str) -> bool {
+    !key.is_empty()
+        && key.len() <= 96
+        && key.starts_with(|c: char| c.is_ascii_alphabetic())
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '\'' | '-' | '_'))
+}
+
+fn clean_value(value: &str) -> String {
+    let value = value.trim_matches(is_padding);
+    unpack_narrow_bool(value).unwrap_or_else(|| value.to_string())
+}
+
+/// Undo Revit writing a narrow `"True\0"` / `"False\0"` into the wide text:
+/// each UTF-16 unit then carries two ASCII bytes, read up to the NUL.
+fn unpack_narrow_bool(value: &str) -> Option<String> {
+    if value.is_ascii() {
+        return None;
+    }
+    let mut narrow = Vec::new();
+    'units: for unit in value.encode_utf16() {
+        for byte in unit.to_le_bytes() {
+            if byte == 0 {
+                break 'units;
+            }
+            narrow.push(byte);
+        }
+    }
+    let narrow = String::from_utf8(narrow).ok()?;
+    parse_bool(&narrow).map(|b| if b { "True" } else { "False" }.to_string())
+}
+
+fn parse_bool(value: &str) -> Option<bool> {
+    match value.trim() {
+        v if v.eq_ignore_ascii_case("true") || v == "1" => Some(true),
+        v if v.eq_ignore_ascii_case("false") || v == "0" => Some(false),
+        _ => None,
+    }
+}
+
+/// Plausible Revit release years. The lower bound is the one the version
+/// scan has always used; the upper bound leaves room for releases newer
+/// than the reference corpus (Revit 2027 shipped in 2026) without accepting
+/// arbitrary 4-digit numbers.
+const RELEASE_YEARS: std::ops::RangeInclusive<u32> = 2014..=2040;
+
+fn parse_release_year(value: &str) -> Option<u32> {
+    value
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|y| RELEASE_YEARS.contains(y))
+}
+
 fn extract_version(text: &str) -> Option<u32> {
     // Two patterns seen:
     //   "Autodesk Revit 2018 (Build: 20170130_1515(x64))"   <- 2016-2018
@@ -159,7 +463,7 @@ fn extract_version(text: &str) -> Option<u32> {
         let slice: String = text[start..].chars().take(4).collect();
         if slice.len() == 4 && slice.chars().all(|c| c.is_ascii_digit()) {
             if let Ok(n) = slice.parse::<u32>() {
-                if (2014..=2030).contains(&n) {
+                if RELEASE_YEARS.contains(&n) {
                     return Some(n);
                 }
             }
@@ -347,6 +651,143 @@ mod tests {
         assert!(!is_guid("not-a-guid"));
     }
 
+    // ---- `Key: value` text block ----
+
+    const DOC_GUID: &str = "d713e470-abcd-4321-9876-123456789012";
+
+    /// A stream shaped like the observed ones: a wide header, an optional
+    /// 1-byte field that shifts the text block to an odd offset, then the
+    /// block itself with `IsSingleUserCloudModel` written as a narrow string.
+    fn synth_stream(odd: bool, worksharing: &str, username: &str, cloud_narrow: &[u8]) -> Vec<u8> {
+        let mut bytes = utf16le("2024  20230509_0315(x64) ");
+        if odd {
+            bytes.push(0x01);
+        }
+        bytes.extend(utf16le("\u{0A0D}"));
+        bytes.extend(utf16le(&format!(
+            "Worksharing: {worksharing}\r\n\
+             Username: {username}\r\n\
+             Central Model Path: \\\\fileserver\\projects\\Tower_Central.rvt\r\n\
+             Format: 2024\r\n\
+             Build: 20230509_0315(x64)\r\n\
+             Last Save Path: C:\\Users\\testuser\\Documents\\Tower_testuser.rvt\r\n\
+             Open Workset Default: 3\r\n\
+             Locale when saved: ENU\r\n\
+             All Local Changes Saved To Central: 1\r\n\
+             Unique Document GUID: {DOC_GUID}\r\n\
+             Unique Document Increments: 66\r\n\
+             IsSingleUserCloudModel: "
+        )));
+        bytes.extend_from_slice(cloud_narrow);
+        bytes.extend(utf16le(
+            "\r\nAuthor: Autodesk Revit\r\nClientAppName: RevitApplication\u{0A0D}",
+        ));
+        bytes
+    }
+
+    fn assert_block(info: &BasicFileInfo) {
+        assert_eq!(info.version, 2024);
+        assert_eq!(info.property("Format"), Some("2024"));
+        assert_eq!(info.document_guid(), Some(DOC_GUID));
+        assert_eq!(info.guid.as_deref(), Some(DOC_GUID));
+        assert_eq!(info.document_increments(), Some(66));
+        assert_eq!(info.open_workset_default(), Some(3));
+        assert_eq!(info.locale.as_deref(), Some("ENU"));
+        assert_eq!(info.all_local_changes_saved_to_central(), Some(true));
+        assert_eq!(
+            info.last_save_path(),
+            Some("C:\\Users\\testuser\\Documents\\Tower_testuser.rvt")
+        );
+        assert_eq!(info.author(), Some("Autodesk Revit"));
+        assert_eq!(info.client_app_name(), Some("RevitApplication"));
+    }
+
+    #[test]
+    fn properties_parse_at_even_alignment() {
+        let info =
+            BasicFileInfo::from_bytes(&synth_stream(false, "Not enabled", "", b"False\0")).unwrap();
+        assert_block(&info);
+        assert_eq!(info.worksharing(), Some("Not enabled"));
+        assert_eq!(info.is_workshared(), Some(false));
+        assert_eq!(info.username(), None);
+        assert_eq!(info.is_single_user_cloud_model(), Some(false));
+    }
+
+    #[test]
+    fn properties_parse_at_odd_alignment() {
+        let info = BasicFileInfo::from_bytes(&synth_stream(true, "Local", "testuser", b"False\0"))
+            .unwrap();
+        assert_block(&info);
+        assert_eq!(info.worksharing(), Some("Local"));
+        assert_eq!(info.is_workshared(), Some(true));
+        assert_eq!(info.username(), Some("testuser"));
+        assert_eq!(
+            info.central_model_path(),
+            Some("\\\\fileserver\\projects\\Tower_Central.rvt")
+        );
+        assert_eq!(info.is_single_user_cloud_model(), Some(false));
+    }
+
+    #[test]
+    fn narrow_true_flips_alignment_and_the_tail_is_recovered() {
+        for odd in [false, true] {
+            let info =
+                BasicFileInfo::from_bytes(&synth_stream(odd, "Central", "testuser", b"True\0"))
+                    .unwrap();
+            assert_block(&info);
+            assert_eq!(info.is_single_user_cloud_model(), Some(true), "odd={odd}");
+            assert_eq!(info.worksharing(), Some("Central"));
+        }
+    }
+
+    #[test]
+    fn properties_keep_file_order_and_unknown_keys() {
+        let mut bytes = utf16le("2025  Development Build ");
+        bytes.extend(utf16le(
+            "\u{0A0D}Worksharing: Not enabled\r\nSome Future Key: 42\r\nFormat: 2025\u{0A0D}",
+        ));
+        let info = BasicFileInfo::from_bytes(&bytes).unwrap();
+        let keys: Vec<&str> = info.properties.iter().map(|p| p.key.as_str()).collect();
+        assert_eq!(keys, ["Worksharing", "Some Future Key", "Format"]);
+        assert_eq!(info.property("Some Future Key"), Some("42"));
+    }
+
+    #[test]
+    fn header_strings_are_not_mistaken_for_properties() {
+        // 2016-2018 headers carry `Autodesk Revit 2016 (Build: …)` and a
+        // drive-letter path before the block; neither is a `Key: value` line.
+        let mut bytes =
+            utf16le("Autodesk Revit 2016 (Build: 20150110_1515(x64))d C:\\Samples\\family.rfa ");
+        bytes.extend(utf16le(
+            "\u{0A0D}Worksharing: Not enabled\r\nRevit Build: Autodesk Revit 2016 (Build: 20150110_1515(x64))\u{0A0D}",
+        ));
+        let info = BasicFileInfo::from_bytes(&bytes).unwrap();
+        let keys: Vec<&str> = info.properties.iter().map(|p| p.key.as_str()).collect();
+        assert_eq!(keys, ["Worksharing", "Revit Build"]);
+        assert_eq!(
+            info.property("Revit Build"),
+            Some("Autodesk Revit 2016 (Build: 20150110_1515(x64))")
+        );
+        assert_eq!(info.version, 2016);
+    }
+
+    #[test]
+    fn stream_without_block_has_no_properties() {
+        let info = BasicFileInfo::from_bytes(&utf16le("2024  20230308_1635(x64) ")).unwrap();
+        assert!(info.properties.is_empty());
+        assert_eq!(info.worksharing(), None);
+        assert_eq!(info.document_increments(), None);
+    }
+
+    #[test]
+    fn parse_properties_never_panics_on_arbitrary_bytes() {
+        for len in 0..64 {
+            let bytes: Vec<u8> = (0..len).map(|i| (i * 37 + 11) as u8).collect();
+            let _ = parse_properties(&bytes);
+        }
+        let _ = parse_properties(&[0x3a, 0x00, 0x20, 0x00]);
+    }
+
     // ---- WRT-07: BasicFileInfo writer round-trip ----
 
     fn make_info() -> BasicFileInfo {
@@ -356,6 +797,7 @@ mod tests {
             original_path: Some("C:\\Users\\testuser\\Desktop\\sample.rfa".into()),
             guid: Some("d713e470-abcd-4321-9876-123456789012".into()),
             locale: Some("ENU".into()),
+            properties: Vec::new(),
             raw_text: String::new(),
         }
     }
@@ -390,6 +832,7 @@ mod tests {
             original_path: None,
             guid: None,
             locale: None,
+            properties: Vec::new(),
             raw_text: String::new(),
         };
         let bytes = info.encode_with_build_wrapper();
@@ -413,6 +856,7 @@ mod tests {
             original_path: None,
             guid: None,
             locale: None,
+            properties: Vec::new(),
             raw_text: String::new(),
         };
         let bytes = info.encode();
@@ -432,6 +876,7 @@ mod tests {
             original_path: None,
             guid: None,
             locale: None,
+            properties: Vec::new(),
             raw_text: String::new(),
         };
         let bytes = info.encode();

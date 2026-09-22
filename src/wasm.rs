@@ -179,6 +179,21 @@ pub fn quick_summary(bytes: &[u8]) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&summary).map_err(err_str)
 }
 
+/// Document identity — release, worksharing, central model, last saved
+/// (time and user), document GUID, save counter, and every
+/// `BasicFileInfo` `Key: value` line — as a
+/// [`crate::metadata::FileMetadata`] JS object. Reads only the two
+/// identity streams straight from `bytes` (no copy of the file), so it
+/// returns instantly on any file size. Errors when `bytes` is not a
+/// readable Revit file.
+#[wasm_bindgen(js_name = fileMetadata)]
+pub fn file_metadata(bytes: &[u8]) -> Result<JsValue, JsValue> {
+    install_panic_hook();
+    let metadata =
+        crate::metadata::read_metadata_from(std::io::Cursor::new(bytes)).map_err(err_str)?;
+    serde_wasm_bindgen::to_value(&metadata).map_err(err_str)
+}
+
 /// Build the scene-graph tree for a model.
 #[wasm_bindgen(js_name = buildSceneGraph)]
 pub fn js_build_scene_graph(model: JsValue) -> Result<JsValue, JsValue> {

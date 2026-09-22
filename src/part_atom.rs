@@ -12,7 +12,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PartAtom {
+    /// The last title-like element seen — on families the family type
+    /// name (`0610 x 0915mm` on the reference sample), on project files a
+    /// Project Information parameter-group name. Kept for compatibility;
+    /// prefer [`Self::entry_title`] for the document's name.
     pub title: Option<String>,
+    /// The Atom entry's own `<title>` (the first un-prefixed one): the
+    /// document name Revit recorded, e.g. `racbasicsamplefamily`.
+    #[serde(default)]
+    pub entry_title: Option<String>,
     pub id: Option<String>,
     pub updated: Option<String>,
     pub taxonomies: Vec<Taxonomy>,
@@ -54,6 +62,7 @@ impl PartAtom {
         enum State {
             Top,
             InTitle,
+            InEntryTitle,
             InId,
             InUpdated,
             InTaxonomyTerm,
@@ -83,6 +92,10 @@ impl PartAtom {
             let text = text.to_string();
             match state {
                 State::InTitle => atom.title = Some(text),
+                State::InEntryTitle => {
+                    atom.entry_title = Some(text.clone());
+                    atom.title = Some(text);
+                }
                 State::InId => atom.id = Some(text),
                 State::InUpdated => atom.updated = Some(text),
                 State::InTaxonomyTerm => {
@@ -109,8 +122,10 @@ impl PartAtom {
                         Some((p, l)) => (Some(p.to_string()), l.to_string()),
                         None => (None, name_owned.clone()),
                     };
-                    let _ = prefix; // prefix unused for our subset
                     match local.as_str() {
+                        "title" if prefix.is_none() && atom.entry_title.is_none() => {
+                            state = State::InEntryTitle
+                        }
                         "title" => state = State::InTitle,
                         "id" => state = State::InId,
                         "updated" => state = State::InUpdated,
@@ -321,6 +336,7 @@ mod tests {
     fn sample_atom() -> PartAtom {
         PartAtom {
             title: Some("racbasicsamplefamily".into()),
+            entry_title: Some("racbasicsamplefamily".into()),
             id: Some("Table-End-0000-CAN-ENU".into()),
             updated: Some("2023-03-27T11:56:02Z".into()),
             taxonomies: vec![Taxonomy {
