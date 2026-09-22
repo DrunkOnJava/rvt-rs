@@ -221,6 +221,10 @@ the own id sits 1 to 11+ slots from the end (2nd from the end 177 times,
 3. "The first slot that is not a context id", where a context id is one
    that appears in the lists of at least K frames: at most 196 of 1,044
    correct, for K = 10.
+4. A byte or 16-bit word anywhere from −32 to `+0x88` holding the own
+   slot's index (0- or 1-based, from either end): the best offset agrees on
+   208 of 1,044, which is chance level for such small numbers. That covers
+   the unattributed `+0x46` / `+0x4a` fields (#223).
 
 So a class-A frame is not missing its ElementId. It is missing the byte
 rule that says which of its references is itself. Until that rule is
