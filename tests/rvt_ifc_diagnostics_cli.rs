@@ -125,7 +125,22 @@ fn rvt_ifc_cli_strict_mode_fails_before_writing_ifc_but_keeps_diagnostics() {
     )
     .expect("parse strict diagnostics JSON");
     assert_eq!(json["schema_version"], 1);
-    assert_eq!(json["confidence"]["level"], "scaffold");
+    // Strict rejects this export because it carries no element geometry.
+    // Which below-geometry level it reports moves as decoders improve:
+    // `scaffold` when this test was written, `typed_no_geometry` once the
+    // sample family's typed elements began to export. The test pinned the
+    // old value for months unseen because no CI job ran this file.
+    let level = json["confidence"]["level"].as_str().unwrap_or_default();
+    assert!(
+        [
+            "scaffold",
+            "typed_no_geometry",
+            "diagnostic_partial",
+            "proxy_only"
+        ]
+        .contains(&level),
+        "strict rejected an export at confidence level {level:?}; expected a below-geometry level"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

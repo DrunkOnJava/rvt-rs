@@ -89,6 +89,12 @@ Python wheel builds, with the full platform matrix reserved for pushes to
 [#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
 2026-09-19).
 
+Every file under `tests/` runs in CI on every OS (`cargo test --test '*'`),
+with the family corpus on Linux and Windows and again against the magnetar
+project corpus in the tier-2 job, so a new integration test needs no
+workflow edit to be gated. Tests that read a corpus must skip cleanly when
+their environment variable is unset: the macOS and MSRV runs have no corpus.
+
 ## What's welcome
 
 - **Bug reports** with a minimal reproducer (the smallest `.rfa`

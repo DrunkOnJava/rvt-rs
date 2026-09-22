@@ -1018,6 +1018,23 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   Interior 102, Einhoven 42); `cargo-deny` path-dep version pins for
   `stream-evidence`; stream-evidence fails closed on explicit stream
   filter / `--all-paged` misses instead of silent first-stream fallback.
+- **CI runs every integration test, not a hand-kept list of them.** The
+  test matrix ran `--lib --bins` plus a few integration targets by name,
+  and the tier-2 job a second name list; 21 of the 37 `tests/*.rs` files
+  ran in no job at all — among them the `support_matrix` and
+  `witness_registry` honesty gates the docs describe as CI-enforced, the
+  JSON schema contracts, `binary_inventory`, `fuzz_regressions`,
+  `proptest_parsers` and every CLI test. Both jobs now run
+  `cargo test --test '*'` (matrix: every OS, family corpus where fetched;
+  tier 2: against the magnetar project corpus), so a new target is gated
+  the moment it exists. Running them surfaced one stale assertion:
+  `rvt_ifc_diagnostics_cli` pinned the strict-mode rejection to confidence
+  `scaffold` while the 2024 sample family has exported at
+  `typed_no_geometry` since its typed elements began to export; it now
+  asserts any below-geometry level. The first Windows run of the CLI tests
+  showed a closed pipe reports `os error 109` ("The pipe has been ended")
+  there, which `rvt::cli::exit_quietly_on_broken_pipe` now recognises
+  alongside 32 and 232.
 
 ### Security
 

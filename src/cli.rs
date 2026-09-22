@@ -25,12 +25,15 @@ pub fn exit_quietly_on_broken_pipe() {
 }
 
 /// `println!`'s panic message for a write into a closed pipe: `EPIPE`
-/// (`os error 32`) on Unix, `ERROR_NO_DATA` (`os error 232`, "The pipe is
-/// being closed") on Windows. Other stdout failures (a full disk behind a
-/// redirect) are not swallowed.
+/// (`os error 32`) on Unix; on Windows `ERROR_BROKEN_PIPE` (`os error 109`,
+/// "The pipe has been ended" — what the CI runner reports) or
+/// `ERROR_NO_DATA` (`os error 232`, "The pipe is being closed"). Other stdout
+/// failures (a full disk behind a redirect) are not swallowed.
 fn is_closed_stdout_pipe(message: &str) -> bool {
     message.starts_with("failed printing to stdout")
-        && (message.contains("os error 32)") || message.contains("os error 232)"))
+        && ["os error 32)", "os error 109)", "os error 232)"]
+            .iter()
+            .any(|code| message.contains(code))
 }
 
 #[cfg(test)]
@@ -41,6 +44,9 @@ mod tests {
     fn recognises_closed_pipes_on_unix_and_windows() {
         assert!(is_closed_stdout_pipe(
             "failed printing to stdout: Broken pipe (os error 32)"
+        ));
+        assert!(is_closed_stdout_pipe(
+            "failed printing to stdout: The pipe has been ended. (os error 109)"
         ));
         assert!(is_closed_stdout_pipe(
             "failed printing to stdout: The pipe is being closed. (os error 232)"
