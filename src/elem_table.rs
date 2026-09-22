@@ -88,6 +88,17 @@ pub struct ElemRecord {
     pub id_primary: u32,
     /// Second u32 (secondary id / version on project files).
     pub id_secondary: u32,
+    /// The element this record's element belongs to, read from the field
+    /// the layout detector anchors on (`u64` at `+4` on the 40-byte layout,
+    /// `u32` at `+0` on the 28-byte one); `None` when it holds its unset
+    /// value, all `0xFF`. On `2024_Core_Interior.rvt` it is set on 22,368
+    /// of 26,425 records, every value is a declared ElementId, and 87 % of
+    /// them also appear in the element's own partition reference list:
+    /// curtain panels, mullions and grids name their curtain wall, sketch
+    /// lines their sketch, grouped elements their model group (RE-31).
+    /// Always `None` on the implicit family layout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<u32>,
     /// Raw record bytes (including the marker on project files).
     pub raw: Vec<u8>,
 }
@@ -233,9 +244,7 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
 /// Parse only the header portion of Global/ElemTable. Sufficient for counts
 /// + invariants; full record decode is in `parse_records`.
 pub fn parse_header(rf: &mut RevitFile) -> Result<ElemTableHeader> {
-    let raw = rf.read_stream(GLOBAL_ELEM_TABLE)?;
-    let d = compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 8)
-        .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))?;
+    let d = inflate(rf)?;
     parse_header_bytes(&d)
 }
 
@@ -324,11 +333,18 @@ pub fn parse_records_from_bytes(
                 }
             }
         };
+        let owner_id = match layout.framing {
+            RecordFraming::Implicit => None,
+            RecordFraming::Explicit { marker_len } => {
+                owner_field(&d[i..record_end], layout.marker_offset, marker_len)
+            }
+        };
         let raw = d[i..record_end].to_vec();
         records.push(ElemRecord {
             offset: i,
             id_primary,
             id_secondary,
+            owner_id,
             raw,
         });
         i = record_end;
@@ -336,13 +352,38 @@ pub fn parse_records_from_bytes(
     records
 }
 
+/// The owner ElementId held in the field at `at` (`width` 4 or 8 bytes);
+/// `None` for its all-`0xFF` unset value or a value outside the `u32`
+/// ElementId range.
+fn owner_field(record: &[u8], at: usize, width: usize) -> Option<u32> {
+    let field = record.get(at..at.checked_add(width)?)?;
+    let value = match width {
+        4 => u64::from(u32::from_le_bytes(field.try_into().ok()?)),
+        8 => u64::from_le_bytes(field.try_into().ok()?),
+        _ => return None,
+    };
+    if field.iter().all(|&b| b == 0xFF) {
+        return None;
+    }
+    u32::try_from(value).ok()
+}
+
+/// Inflate `Global/ElemTable` and detect its record layout.
+pub fn read_layout(rf: &mut RevitFile) -> Result<ElemTableLayout> {
+    Ok(detect_layout(&inflate(rf)?))
+}
+
+fn inflate(rf: &mut RevitFile) -> Result<Vec<u8>> {
+    let raw = rf.read_stream(GLOBAL_ELEM_TABLE)?;
+    compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 8)
+        .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))
+}
+
 /// Parse all records from Global/ElemTable, bounded by the header's
 /// `record_count`. Uses `detect_layout` to pick the correct stride/start for
 /// each file variant, so works on both family and project files.
 pub fn parse_records(rf: &mut RevitFile) -> Result<Vec<ElemRecord>> {
-    let raw = rf.read_stream(GLOBAL_ELEM_TABLE)?;
-    let d = compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 8)
-        .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))?;
+    let d = inflate(rf)?;
     let header = parse_header_bytes(&d)?;
     let layout = detect_layout(&d);
     let limit = header.record_count as usize;
@@ -428,9 +469,7 @@ pub fn declared_element_ids(rf: &mut RevitFile) -> Result<Vec<u32>> {
 /// `max_records` or stream end. Prefer `parse_records` for new work — this
 /// wrapper is kept for backward-compat with pre-corpus-probe callers.
 pub fn parse_records_rough(rf: &mut RevitFile, max_records: usize) -> Result<Vec<ElemRecordRough>> {
-    let raw = rf.read_stream(GLOBAL_ELEM_TABLE)?;
-    let d = compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 8)
-        .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))?;
+    let d = inflate(rf)?;
     let layout = detect_layout(&d);
     let mut records = Vec::new();
     let mut i = layout.start;
@@ -548,6 +587,66 @@ mod tests {
             (0..RECORDS as u32)
                 .map(|r| 0x10_0000 + r)
                 .collect::<Vec<_>>()
+        );
+    }
+
+    /// RE-31: the field the detector anchors on is an owner ElementId,
+    /// unset when all `0xFF`. 40-byte layout: `u64` at `+4`.
+    #[test]
+    fn owner_id_reads_the_40_byte_marker_field() {
+        let mut buf = vec![0u8; 30 + 3 * 40];
+        buf[2..4].copy_from_slice(&3u16.to_le_bytes());
+        for r in 0..3usize {
+            let rec = 30 + r * 40;
+            if r == 1 {
+                buf[rec + 4..rec + 12].copy_from_slice(&786_352u64.to_le_bytes());
+            } else {
+                buf[rec + 4..rec + 12].fill(0xff);
+            }
+            buf[rec + 16] = r as u8 + 1;
+        }
+        let layout = detect_layout(&buf);
+        assert_eq!((layout.stride, layout.marker_offset), (40, 4));
+        let owners: Vec<Option<u32>> = parse_records_from_bytes(&buf, layout, 3)
+            .iter()
+            .map(|r| r.owner_id)
+            .collect();
+        assert_eq!(owners, [None, Some(786_352), None]);
+    }
+
+    /// 28-byte layout: `u32` at `+0`. Family files have no owner field.
+    #[test]
+    fn owner_id_reads_the_28_byte_marker_field_and_not_the_family_layout() {
+        let mut buf = vec![0u8; 0x1e + 3 * 28];
+        buf[2] = 3;
+        for r in 0..3usize {
+            let rec = 0x1e + r * 28;
+            if r == 2 {
+                buf[rec..rec + 4].copy_from_slice(&7u32.to_le_bytes());
+            } else {
+                buf[rec..rec + 4].fill(0xff);
+            }
+            buf[rec + 4] = r as u8 + 1;
+        }
+        let layout = detect_layout(&buf);
+        assert_eq!(layout.stride, 28);
+        let owners: Vec<Option<u32>> = parse_records_from_bytes(&buf, layout, 3)
+            .iter()
+            .map(|r| r.owner_id)
+            .collect();
+        assert_eq!(owners, [None, None, Some(7)]);
+
+        let family = ElemTableLayout {
+            start: 0x30,
+            stride: 12,
+            marker_offset: 0,
+            framing: RecordFraming::Implicit,
+        };
+        let buf = vec![0xffu8; 0x30 + 24];
+        assert!(
+            parse_records_from_bytes(&buf, family, 2)
+                .iter()
+                .all(|r| r.owner_id.is_none())
         );
     }
 
@@ -676,18 +775,21 @@ mod tests {
                 offset: 0,
                 id_primary: 7,
                 id_secondary: 7,
+                owner_id: None,
                 raw: vec![1],
             },
             ElemRecord {
                 offset: 28,
                 id_primary: 7,
                 id_secondary: 8,
+                owner_id: None,
                 raw: vec![2],
             },
             ElemRecord {
                 offset: 56,
                 id_primary: 9,
                 id_secondary: 9,
+                owner_id: None,
                 raw: vec![3],
             },
         ];

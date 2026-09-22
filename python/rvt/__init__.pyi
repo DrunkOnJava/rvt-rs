@@ -284,14 +284,17 @@ class RevitFile:
         ``decompressed_bytes``.
         """
 
-    def elem_table_records(self) -> list[dict[str, int]]:
+    def elem_table_records(self) -> list[dict[str, int | None]]:
         """Parse ``Global/ElemTable`` records. Returns a list of dicts
-        each with ``offset``, ``id_primary``, ``id_secondary``.
+        each with ``offset``, ``id_primary``, ``id_secondary`` and
+        ``owner_id``: the ElementId the record's element belongs to (a
+        curtain panel's curtain wall, a sketch line's sketch, a grouped
+        element's model group), or ``None`` (RE-31).
 
         Handles the three observed layout variants automatically:
-        family files (12 B implicit records), Revit 2023 projects
-        (28 B explicit with 4-byte FF marker), Revit 2024 projects
-        (40 B explicit with 8-byte FF marker). On a 34 MB project
+        family files (12 B implicit records, never an owner), Revit 2023
+        projects (28 B, owner ``u32`` at ``+0``), Revit 2024 projects
+        (40 B, owner ``u64`` at ``+4``). On a 34 MB project
         this returns all 26,425 declared records.
         """
 

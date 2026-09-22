@@ -44,3 +44,13 @@ at high rates (~88–92%). That is **not** treated as ownership confirmation
   non-zero ownership fields we do not have in-corpus.
 
 **No decoder changes** from this pass.
+
+## Update (2026-09-22, RE-31)
+
+The ownership hypothesis holds at a different field. The run of `0xFF`
+bytes the layout detector anchors on (`u32` at `+0` on 28-byte records,
+`u64` at `+4` on 40-byte records) is an ElementId whenever it is set. On
+`2024_Core_Interior.rvt`, 87 % of its values also appear in the element's
+own partition reference list, which is the independent oracle this pass
+lacked. The trailing-word result above stands. See
+`reports/element-framing/RE-31-elemtable-owner-field.md`.

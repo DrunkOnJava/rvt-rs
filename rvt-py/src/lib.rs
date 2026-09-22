@@ -711,7 +711,9 @@ impl PyRevitFile {
     }
 
     /// Parse Global/ElemTable records. Returns a list of dicts with
-    /// `{offset, id_primary, id_secondary}`. Handles the three layout
+    /// `{offset, id_primary, id_secondary, owner_id}`; `owner_id` is the
+    /// ElementId the record's element belongs to, or `None` (RE-31).
+    /// Handles the three layout
     /// variants automatically (family 12 B, project 2023 28 B,
     /// project 2024 40 B). On a 34 MB project this returns all
     /// 26,425 records; on a family file, all declared records.
@@ -723,6 +725,7 @@ impl PyRevitFile {
             d.set_item("offset", r.offset)?;
             d.set_item("id_primary", r.id_primary)?;
             d.set_item("id_secondary", r.id_secondary)?;
+            d.set_item("owner_id", r.owner_id)?;
             list.append(d)?;
         }
         Ok(list)

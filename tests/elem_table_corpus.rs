@@ -224,6 +224,32 @@ fn project_2024_file_parses_all_declared_records() {
     assert_eq!(records[2].id_secondary, 3);
 }
 
+/// RE-31: the field the layout detector anchors on is an owner ElementId
+/// (`u32` at `+0` on 2023, `u64` at `+4` on 2024), and every value set on
+/// these two files is an ElementId the same table declares.
+#[test]
+fn owner_ids_are_declared_element_ids() {
+    for (name, set, parsed) in [
+        ("Revit_IFC5_Einhoven.rvt", 338, 2614),
+        ("2024_Core_Interior.rvt", 22_368, 26_425),
+    ] {
+        let Some(p) = project_file(name) else {
+            return;
+        };
+        let mut rf = RevitFile::open(&p).expect("open project");
+        let records = elem_table::parse_records(&mut rf).expect("records");
+        assert_eq!(records.len(), parsed, "{name}");
+        let declared: std::collections::BTreeSet<u32> =
+            records.iter().map(|r| r.id_primary).collect();
+        let owners: Vec<u32> = records.iter().filter_map(|r| r.owner_id).collect();
+        assert_eq!(owners.len(), set, "{name}: records naming an owner");
+        assert!(
+            owners.iter().all(|id| declared.contains(id)),
+            "{name}: every owner is a declared ElementId"
+        );
+    }
+}
+
 #[test]
 fn declared_element_ids_returns_sorted_deduped_set() {
     // Project 2023 declares ~2615 ids; we expect at least 2000 unique

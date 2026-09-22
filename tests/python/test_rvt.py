@@ -346,6 +346,7 @@ def test_elem_table_records_are_well_formed(sample_2024):
         for key in ("offset", "id_primary", "id_secondary"):
             assert key in r, f"record missing key {key}: {r}"
             assert isinstance(r[key], int)
+        assert r["owner_id"] is None or isinstance(r["owner_id"], int)
     # Offsets should be strictly increasing (records live sequentially).
     offsets = [r["offset"] for r in recs]
     assert all(a < b for a, b in zip(offsets, offsets[1:])), (

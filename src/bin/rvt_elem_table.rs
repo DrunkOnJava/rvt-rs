@@ -62,7 +62,15 @@ fn run() -> anyhow::Result<()> {
     }
     let mut rf = RevitFile::open(&cli.file)?;
     let header = elem_table::parse_header(&mut rf)?;
+    let layout = elem_table::read_layout(&mut rf)?;
     let records = elem_table::parse_records(&mut rf)?;
+    let declared: std::collections::BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let with_owner = records.iter().filter(|r| r.owner_id.is_some()).count();
+    let owner_declared = records
+        .iter()
+        .filter_map(|r| r.owner_id)
+        .filter(|id| declared.contains(id))
+        .count();
 
     if cli.format == "json" {
         #[derive(serde::Serialize)]
@@ -71,7 +79,9 @@ fn run() -> anyhow::Result<()> {
             record_count: u16,
             header_flag: u16,
             decompressed_bytes: usize,
+            layout: elem_table::ElemTableLayout,
             parsed_records: usize,
+            records_with_owner: usize,
             records: &'a [elem_table::ElemRecord],
         }
         println!(
@@ -81,7 +91,9 @@ fn run() -> anyhow::Result<()> {
                 record_count: header.record_count,
                 header_flag: header.header_flag,
                 decompressed_bytes: header.decompressed_bytes,
+                layout,
                 parsed_records: records.len(),
+                records_with_owner: with_owner,
                 records: &records,
             })?
         );
@@ -107,38 +119,35 @@ fn run() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Infer layout from first record for a friendly summary. The FF marker
-    // is not always at the record's first byte — on the 40 B project variant
-    // one zero u32 precedes it — so locate it rather than sniffing byte 0.
-    let first = &records[0];
-    let raw = first.raw.as_slice();
-    let marker_at = (0..raw.len().saturating_sub(3)).find(|&i| raw[i..i + 4] == [0xFF; 4]);
-    let layout_label = match marker_at {
-        Some(off) => {
-            let marker_len = if raw.len() >= off + 8 && raw[off..off + 8] == [0xFF; 8] {
-                8
-            } else {
-                4
-            };
-            format!(
-                "Explicit ({} B stride, {marker_len}-byte FF marker at record +{off})",
-                raw.len()
-            )
+    let layout_label = match layout.framing {
+        elem_table::RecordFraming::Explicit { marker_len } => format!(
+            "Explicit ({} B stride, {marker_len}-byte owner field at record +{})",
+            layout.stride, layout.marker_offset
+        ),
+        elem_table::RecordFraming::Implicit => {
+            format!("Implicit ({} B stride, no owner field)", layout.stride)
         }
-        None => format!("Implicit ({} B stride, no marker)", raw.len()),
     };
     println!(
         "  layout: {layout_label}  first record offset: 0x{:x}",
-        first.offset
+        layout.start
     );
+    if matches!(layout.framing, elem_table::RecordFraming::Explicit { .. }) {
+        println!(
+            "  records naming an owner element: {with_owner} ({owner_declared} of them declared in this table)"
+        );
+    }
 
     let take = records.len().min(cli.limit);
     println!("\nFirst {take} records:");
     for r in records.iter().take(take) {
         if cli.raw {
             print!(
-                "  off=0x{:06x}  id={} id2={}  raw=",
-                r.offset, r.id_primary, r.id_secondary
+                "  off=0x{:06x}  id={} id2={}{}  raw=",
+                r.offset,
+                r.id_primary,
+                r.id_secondary,
+                owner_suffix(r.owner_id)
             );
             for b in &r.raw {
                 print!("{:02x}", b);
@@ -146,11 +155,18 @@ fn run() -> anyhow::Result<()> {
             println!();
         } else {
             println!(
-                "  off=0x{:06x}  id={} id2={}",
-                r.offset, r.id_primary, r.id_secondary
+                "  off=0x{:06x}  id={} id2={}{}",
+                r.offset,
+                r.id_primary,
+                r.id_secondary,
+                owner_suffix(r.owner_id)
             );
         }
     }
 
     Ok(())
+}
+
+fn owner_suffix(owner: Option<u32>) -> String {
+    owner.map(|id| format!("  owner={id}")).unwrap_or_default()
 }
