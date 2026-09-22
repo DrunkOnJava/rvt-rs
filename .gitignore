@@ -122,6 +122,8 @@ yarn-error.log*
 !corpus/
 !corpus/**
 !corpus/**/*.rvt
+# `!corpus/**` would otherwise re-include Finder metadata.
+corpus/**/.DS_Store
 !docs/**/*.rvt.md
 # Redistributable, license-documented fixtures committed under tests/
 !tests/fixtures/families/

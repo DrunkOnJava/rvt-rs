@@ -183,6 +183,27 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   library's page-aware decoders, `Partitions_NN.decomp` is byte-identical to
   `RevitFile::inflated_partition` (with the member count printed), and
   empty, uncompressed and failed streams are reported as such.
+- **`Global/ElemTable` no longer reads every ElementId as 0 when a record's
+  sentinel field is set.** The layout detector took the record size from
+  the spacing between the first two `0xFF` sentinel runs. On Autodesk's
+  Snowdon Towers 2024 architectural sample, records 1 and 2 hold `0x10`
+  there instead of `0xFF`×8, so the first two runs are 120 bytes apart, not
+  40, and all 15,744 rows parsed at that stride read ElementId 0. Because
+  element recovery keeps only records whose ElementId is declared in
+  ElemTable, no partition element record could match, and the export fell
+  back to 64 plan-loop floor guesses (the heuristic's cap) that had no
+  ElementId and no geometry. When the measured spacing does not tile the
+  stream flush against the declared record count, the detector now tries
+  the known 40- and 28-byte strides that do. That file now declares all
+  47,233 records (47,232 distinct ElementIds), and its IFC export carries
+  5 walls and 1 floor with their Revit ElementIds and bodies in place of
+  the guesses. `2024_Core_Interior.rvt`, `Revit_IFC5_Einhoven.rvt`, the
+  Snowdon structural sample and every family file detect exactly as
+  before. `reports/element-framing/RE-30-snowdon-generalisation.md` records
+  what the same two files show beyond the table: most of their element
+  records use a second prologue whose ElementId is not located, so wall,
+  door, window and room recovery does not yet generalise past
+  `2024_Core_Interior.rvt`, and the support matrix now says so.
 - **The browser viewer's Export IFC and Export plan SVG buttons work.**
   Both had failed on every click since they shipped (commit 7d54d3f, 2026-04-20)
   — confirmed on the deployed site before this fix — for two stacked
@@ -520,7 +541,6 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   with no remainder into 17 type symbols and 119 members of five such
   containers — which is precisely the split #216 described as "family-local"
   plus "exact co-locations".
-||||||| 6ad7f41
 - **Storey elevations recovered from element-record bounding boxes, and
   elevation-keyed spatial containment (#213).** `src/element_record_storeys.rs`
   turns the distinct base `z` of the partition element records into building
@@ -880,7 +900,6 @@ Revit inspection / reverse-engineering toolkit with experimental export —
   `IfcPropertySet` is rvt-rs provenance about a recovered body rather than a
   Revit element parameter (#35) — the two manifest rows that previously
   borrowed the door/window feature name now use accurate ones.
-||||||| 6ad7f41
 - **`levels` moves from 12 name-derived storeys to 11 measured ones on Core
   Interior (#213).** Both project-count manifests move
   `diagnostics.exported.storey_count` from 12 to 11: the previous 12 came from

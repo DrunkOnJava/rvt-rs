@@ -13,10 +13,12 @@
 //!
 //! The marker is a sentinel-valued field *inside* a record, not necessarily
 //! the record's first byte: on the 40-byte 2024 variant each record opens
-//! with one zero `u32` and the `FF`×8 run only starts at `+4`. The record
+//! with one zero `u32` and the `FF`×8 run only starts at `+4`. That field is
+//! an optional `u64` ElementId reference and `FF`×8 is its unset value, so
+//! not every record carries the run (see [`detect_layout`]). The record
 //! array is exactly `record_count × stride` bytes and ends flush with the
 //! end of the decompressed stream, which is what recovers the true origin
-//! (see `record_origin`).
+//! (see `flush_origin`).
 //!
 //! Header (bytes 0..0x10) is common across all variants:
 //!
@@ -135,36 +137,43 @@ fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
 /// whenever it lands a whole number of `u32` fields (and less than one
 /// stride) ahead of the marker. Anything else — a stream that is too short,
 /// a `record_count` of 0, a non-`u32`-aligned or out-of-range difference —
-/// keeps the marker itself as the origin.
-fn record_origin(d: &[u8], marker_start: usize, stride: usize) -> (usize, usize) {
+/// is `None`, and [`detect_layout`] keeps the marker itself as the origin.
+fn flush_origin(d: &[u8], marker_start: usize, stride: usize) -> Option<(usize, usize)> {
     if stride == 0 || d.len() < 4 {
-        return (marker_start, 0);
+        return None;
     }
     let record_count = u16::from_le_bytes([d[2], d[3]]) as usize;
     if record_count == 0 {
-        return (marker_start, 0);
+        return None;
     }
-    let Some(span) = record_count.checked_mul(stride) else {
-        return (marker_start, 0);
-    };
+    let span = record_count.checked_mul(stride)?;
     if span > d.len() {
-        return (marker_start, 0);
+        return None;
     }
     let origin = d.len() - span;
     if origin > marker_start {
-        return (marker_start, 0);
+        return None;
     }
     let marker_offset = marker_start - origin;
     if marker_offset >= stride || marker_offset % 4 != 0 {
-        return (marker_start, 0);
+        return None;
     }
-    (origin, marker_offset)
+    Some((origin, marker_offset))
 }
+
+/// Record sizes of the explicit project layouts (see the module table).
+const KNOWN_EXPLICIT_STRIDES: [usize; 2] = [40, 28];
 
 /// Detect the record layout by finding the first two per-record markers and
 /// taking their stride, then anchoring record 0's origin against the declared
-/// record count (see the module docs and `record_origin`). Falls back to the family-file
+/// record count (see the module docs and `flush_origin`). Falls back to the family-file
 /// implicit layout (12 B from `0x30`) when no markers are present.
+///
+/// The sentinel field is not `0xFF` on every record: on Autodesk's Snowdon
+/// Towers 2024 architectural sample records 1 and 2 hold `0x10` there, so
+/// the first two runs are three records apart. When the measured spacing
+/// cannot tile the stream flush against the declared record count, a known
+/// explicit stride that divides the spacing and does tile it is used instead.
 pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
     let scan_start = 0x10usize;
     let scan_end = d.len().min(512);
@@ -189,8 +198,22 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
     if markers.len() >= 2 {
         let (m0, marker_len) = markers[0];
         let (m1, _) = markers[1];
-        let stride = m1 - m0;
-        let (start, marker_offset) = record_origin(d, m0, stride);
+        let spacing = m1 - m0;
+        // The sentinel field is not `0xFF` in every record: on Autodesk's
+        // Snowdon Towers 2024 architectural sample, records 1 and 2 hold
+        // `0x10` there, so the first two runs sit three 40-byte records
+        // apart and the spacing alone reads as a 120-byte stride — 15744
+        // misframed records instead of 47233. When the spacing does not
+        // tile the stream flush against the declared record count, take the
+        // known stride that does and that divides the spacing evenly.
+        let (stride, start, marker_offset) = match flush_origin(d, m0, spacing) {
+            Some((start, offset)) => (spacing, start, offset),
+            None => KNOWN_EXPLICIT_STRIDES
+                .iter()
+                .filter(|&&s| s != spacing && spacing % s == 0)
+                .find_map(|&s| flush_origin(d, m0, s).map(|(start, offset)| (s, start, offset)))
+                .unwrap_or((spacing, m0, 0)),
+        };
         ElemTableLayout {
             start,
             stride,
@@ -494,6 +517,40 @@ mod tests {
         assert_eq!(layout.marker_offset, 0);
     }
 
+    /// Autodesk's Snowdon Towers 2024 architectural sample: a 40-byte
+    /// table whose sentinel field is `0x10`, not `0xFF`×8, in records 1
+    /// and 2, so the first two `0xFF` runs are 120 bytes apart. The
+    /// declared record count only tiles the stream at 40 bytes.
+    #[test]
+    fn sparse_sentinels_do_not_triple_the_2024_stride() {
+        const RECORDS: usize = 6;
+        let mut buf = vec![0u8; 30 + RECORDS * 40];
+        buf[2..4].copy_from_slice(&(RECORDS as u16).to_le_bytes());
+        for r in 0..RECORDS {
+            let rec = 30 + r * 40;
+            if r == 1 || r == 2 {
+                buf[rec + 4] = 0x10;
+            } else {
+                buf[rec + 4..rec + 12].fill(0xff);
+            }
+            let id = 0x10_0000 + r as u32;
+            buf[rec + 16..rec + 20].copy_from_slice(&id.to_le_bytes());
+            buf[rec + 36..rec + 40].copy_from_slice(&id.to_le_bytes());
+        }
+        let layout = detect_layout(&buf);
+        assert_eq!(layout.stride, 40);
+        assert_eq!(layout.start, 30);
+        assert_eq!(layout.marker_offset, 4);
+        let records = parse_records_from_bytes(&buf, layout, RECORDS);
+        let ids: Vec<u32> = records.iter().map(|r| r.id_primary).collect();
+        assert_eq!(
+            ids,
+            (0..RECORDS as u32)
+                .map(|r| 0x10_0000 + r)
+                .collect::<Vec<_>>()
+        );
+    }
+
     #[test]
     fn parse_records_honors_header_record_count_on_project_2023_layout() {
         let mut buf = vec![0u8; 0x200];
@@ -552,7 +609,7 @@ mod tests {
     }
 
     #[test]
-    fn record_origin_recovers_the_u32_ahead_of_the_marker() {
+    fn flush_origin_recovers_the_u32_ahead_of_the_marker() {
         // Exactly `record_count * 40` bytes past a 0x1e origin, with the
         // FF marker one u32 into each record — the real 2024 project shape.
         let mut buf = vec![0u8; 0x1e + 3 * 40];
@@ -579,7 +636,7 @@ mod tests {
     }
 
     #[test]
-    fn record_origin_rejects_a_non_u32_aligned_difference() {
+    fn flush_origin_rejects_a_non_u32_aligned_difference() {
         // 28-byte stride, marker at the record start, and a stream length
         // that would only "fit" record_count records at a 5-byte-earlier
         // origin. A record field cannot start 5 bytes before the marker, so
@@ -601,7 +658,7 @@ mod tests {
     }
 
     #[test]
-    fn record_origin_ignores_a_stream_shorter_than_the_declared_span() {
+    fn flush_origin_ignores_a_stream_shorter_than_the_declared_span() {
         let mut buf = vec![0u8; 0x200];
         buf[2] = 0xff; // record_count = 65_535 → span far exceeds the buffer
         buf[3] = 0xff;
