@@ -118,3 +118,14 @@ Nothing in the IFC export uses the field yet. Revit's slim export of
 Core Interior writes no `IfcCurtainWall`, `IfcPlate`, `IfcMember` or
 `IfcGroup`, so there is no reference output to hold a curtain-wall
 aggregation or a group assignment to.
+
+## 5. Addendum: records that name themselves (2026-09-22)
+
+Some records carry their own ElementId in the owner field: 304 of the
+22,368 set values on Core Interior, and 1,342 of 29,177 on Snowdon.
+Removing them leaves §2's oracle intact. On Core Interior, 18,723 of the
+21,532 framed records whose field names another element find that element
+in their own partition reference list (87.0 %). On Snowdon it is 1,509 of
+1,630 (92.6 %). What a self-reference means is not claimed.
+`ElemRecord::owner_id` reports it as read, so callers that want a different
+element should skip `owner_id == Some(id_primary)`.

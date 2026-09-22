@@ -96,7 +96,8 @@ pub struct ElemRecord {
     /// them also appear in the element's own partition reference list:
     /// curtain panels, mullions and grids name their curtain wall, sketch
     /// lines their sketch, grouped elements their model group (RE-31).
-    /// Always `None` on the implicit family layout.
+    /// A few records name themselves (304 on Core Interior); that value is
+    /// reported as read. Always `None` on the implicit family layout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_id: Option<u32>,
     /// Raw record bytes (including the marker on project files).
