@@ -130,6 +130,24 @@ stagedDemoTest(
     expect(ifcTitle ?? '').toMatch(/Scaffold|Typed|Geometry|Diagnostic|Proxy|Unknown/i);
     expect(ifcTitle ?? '').toMatch(/elements/i);
     await expect(page.locator('#export-quality')).toContainText(/Scaffold/);
+
+    // Export IFC and Export plan SVG run wasm on the main thread. Until the
+    // main thread initialised its own wasm instance both failed with
+    // "Cannot read properties of undefined (reading
+    // '__wbindgen_add_to_stack_pointer')" and nothing downloaded.
+    const [ifcDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#export-ifc').click(),
+    ]);
+    expect(ifcDownload.suggestedFilename()).toMatch(/\.ifc$/);
+    expect(fs.readFileSync((await ifcDownload.path())!, 'utf8')).toMatch(/^ISO-10303-21;/);
+    const [svgDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#export-svg').click(),
+    ]);
+    expect(svgDownload.suggestedFilename()).toMatch(/\.svg$/);
+    expect(fs.readFileSync((await svgDownload.path())!, 'utf8')).toContain('<svg');
+    await expect(page.locator('#status')).not.toContainText(/failed/i);
   },
 );
 
