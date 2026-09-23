@@ -194,6 +194,101 @@ fn re1_names_are_revits() {
     }
 }
 
+/// #322: every element whose type is a system-family type (walls, floors,
+/// ceilings, roofs, railings) carries the type name its type's own data
+/// gives, and it equals the type half of Revit's `ObjectType`
+/// (`Basic Wall:<type>`, `Floor:<type>`) for the same Tag. Returns how many
+/// were checked per class.
+fn check_system_type_names(rvt: &Path, reference: &Path, release: u32) -> Vec<(String, usize)> {
+    let theirs = names_by_tag(&std::fs::read_to_string(reference).expect("reference IFC"));
+    let mut rf = RevitFile::open(rvt).expect("open");
+    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+        &mut rf,
+        release,
+        rvt::walker::WalkerLimits::default(),
+    )
+    .expect("partition MVP");
+    let field = |element: &rvt::walker::DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            rvt::walker::InstanceField::String(v) if name == wanted => Some(v.clone()),
+            _ => None,
+        })
+    };
+    let mut checked = BTreeMap::new();
+    for element in mvp
+        .walls
+        .iter()
+        .chain(mvp.slabs.iter())
+        .chain(mvp.products.iter())
+    {
+        if field(element, rvt::partition_schema_mvp::FAMILY_NAME_FIELD).is_some() {
+            continue;
+        }
+        let Some(ours) = field(element, rvt::partition_schema_mvp::TYPE_NAME_FIELD) else {
+            continue;
+        };
+        let id = element.id.expect("record id");
+        let (_, object_type) = theirs.get(&u64::from(id)).expect("Revit exports it");
+        let want = object_type
+            .split_once(':')
+            .map(|(_, t)| t)
+            .expect("Family:Type");
+        assert_eq!(ours, want, "{} {id}", element.class);
+        *checked.entry(element.class.clone()).or_insert(0) += 1;
+    }
+    checked.into_iter().collect()
+}
+
+#[test]
+fn core_interior_system_type_names_are_revits() {
+    let Some(dir) = corpus() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
+        return;
+    };
+    let rvt = dir.join("2024_Core_Interior.rvt");
+    let reference = dir.join("../IFC Exports/2024_Core_Interior_slim.ifc");
+    if !rvt.exists() || !reference.exists() {
+        eprintln!("skipping: no Core Interior model and reference export");
+        return;
+    }
+    // All 360 walls, 99 floors (79 exported as IfcSlab, 20 as
+    // IfcShadingDevice) and the building pad.
+    assert_eq!(
+        check_system_type_names(&rvt, &reference, 2024),
+        [
+            ("BuildingPad".to_string(), 1),
+            ("Floor".to_string(), 99),
+            ("Wall".to_string(), 360),
+        ]
+    );
+}
+
+/// The same on Revit 2025, whose element data opens with `0x02ef` where
+/// 2024's opens with `0x02d3`. RE1's two floor types are named `-` and
+/// `--`, so a floor given the other type's name fails.
+#[test]
+fn re1_system_type_names_are_revits() {
+    let Some(dir) = corpus() else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
+        return;
+    };
+    let rvt = dir.join("RE1-Architecture.rvt");
+    let reference = dir.join("RE1-Architecture.ifc");
+    if !rvt.exists() || !reference.exists() {
+        eprintln!("skipping: no RE1 Architecture model and reference export");
+        return;
+    }
+    // Seven basic walls and the curtain wall, whose type is also `-`.
+    assert_eq!(
+        check_system_type_names(&rvt, &reference, 2025),
+        [
+            ("Ceiling".to_string(), 6),
+            ("Floor".to_string(), 2),
+            ("Wall".to_string(), 8),
+        ]
+    );
+}
+
 #[test]
 fn step_string_escapes_decode() {
     assert_eq!(decode_step_string("M_Folha \\X\\FAnica"), "M_Folha única");

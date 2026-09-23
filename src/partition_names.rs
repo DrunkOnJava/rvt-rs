@@ -219,6 +219,118 @@ pub fn compute_element_names(rf: &mut RevitFile) -> Result<ElementNames> {
     Ok(out)
 }
 
+/// The bytes that open an element's serialised data in a Revit 2024
+/// partition, followed by the element's `u64` ElementId (#322).
+pub const ELEMENT_DATA_HEADER: [u8; 10] =
+    [0xff, 0xff, 0xff, 0xff, 0xd3, 0x02, 0x01, 0x00, 0x00, 0x00];
+
+/// [`ELEMENT_DATA_HEADER`] on Revit 2025: the `u16` is `0x02ef`, measured
+/// on the RE1 projects (#322). It does not follow from the release
+/// constant the way the bbox marker does, so each release is listed.
+pub const ELEMENT_DATA_HEADER_2025: [u8; 10] =
+    [0xff, 0xff, 0xff, 0xff, 0xef, 0x02, 0x01, 0x00, 0x00, 0x00];
+
+/// The element-data header of `revit_version`, or `None` where it is not
+/// measured (fail closed).
+pub fn element_data_header(revit_version: u32) -> Option<[u8; 10]> {
+    match revit_version {
+        2024 => Some(ELEMENT_DATA_HEADER),
+        2025 => Some(ELEMENT_DATA_HEADER_2025),
+        _ => None,
+    }
+}
+
+/// How far past an element's data header its name is searched for.
+pub const ELEMENT_DATA_NAME_WINDOW: usize = 0x600;
+
+/// The names system-family types (wall, floor, roof, ceiling, railing
+/// types) give themselves in their serialised data, by ElementId (#322).
+///
+/// Such a type has no name entry (RE-38). Its data opens with `header`
+/// ([`element_data_header`]) and the type's ElementId, and its name is the
+/// first framed string after that: `ff ff ff ff`, a `u16` field tag (never
+/// `0xffff`), a `u32` length in UTF-16 code units and the name. On 2024
+/// wall types frame it with tag `0x1002` and floor and pad types with
+/// `0x0151`; on 2025 with `0x106a` and `0x015c`. Only ids in `wanted` are
+/// read, and an id whose occurrences give different names is dropped.
+pub fn find_element_data_names(
+    buf: &[u8],
+    header: &[u8; 10],
+    wanted: &BTreeSet<u32>,
+) -> BTreeMap<u32, String> {
+    let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for hit in memchr::memmem::find_iter(buf, header) {
+        let id_at = hit + header.len();
+        let Some(id) = read_u64(buf, id_at).and_then(|v| u32::try_from(v).ok()) else {
+            continue;
+        };
+        if !wanted.contains(&id) {
+            continue;
+        }
+        let Some(name) = first_framed_name(buf, id_at + 8) else {
+            continue;
+        };
+        match found.get_mut(&id) {
+            None => {
+                found.insert(id, Some(name));
+            }
+            Some(slot) => {
+                if slot.as_deref() != Some(name.as_str()) {
+                    *slot = None;
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, name)| name.map(|n| (id, n)))
+        .collect()
+}
+
+/// The first `ff ff ff ff · u16 tag · u32 n · n UTF-16 units` string that
+/// starts in `buf[start..start + ELEMENT_DATA_NAME_WINDOW]`.
+fn first_framed_name(buf: &[u8], start: usize) -> Option<String> {
+    let end = start
+        .saturating_add(ELEMENT_DATA_NAME_WINDOW)
+        .min(buf.len());
+    let window = buf.get(start..end)?;
+    for at in memchr::memmem::find_iter(window, &[0xff; 4]) {
+        let at = start + at;
+        let Some(tag) = buf.get(at + 4..at + 6) else {
+            continue;
+        };
+        if tag == [0xff, 0xff] {
+            continue;
+        }
+        let Some(units) = read_u32(buf, at + 6).map(|n| n as usize) else {
+            continue;
+        };
+        if !(1..=NAME_MAX_UNITS).contains(&units) {
+            continue;
+        }
+        let Some(bytes) = buf.get(at + 10..at + 10 + units * 2) else {
+            continue;
+        };
+        let code_units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        let Ok(name) = String::from_utf16(&code_units) else {
+            continue;
+        };
+        // U+FFFF / U+FFFE fill unset slots; they are never part of a name.
+        if name.trim().is_empty()
+            || name
+                .chars()
+                .any(|c| c.is_control() || matches!(c, '\u{fffd}' | '\u{fffe}' | '\u{ffff}'))
+        {
+            continue;
+        }
+        return Some(name);
+    }
+    None
+}
+
 /// The one id in `references`, other than `own`, that carries a name entry
 /// of `category`: the element's type. `None` when there is none or more
 /// than one.
@@ -294,6 +406,71 @@ mod tests {
     }
 
     const PANELS: i64 = -2_000_170;
+
+    /// #322: a wall type's name is the first framed string after its data
+    /// header; an id outside `wanted`, or whose copies disagree, gives none.
+    #[test]
+    fn a_2025_type_name_skips_frames_whose_length_is_unset() {
+        // Wall type 381192 on RE1-Architecture.rvt (Revit 2025): the id,
+        // 0xff padding, two frames whose length is 0xffffffff, then the
+        // name "-" framed with tag 0x106a.
+        let mut buf = ELEMENT_DATA_HEADER_2025.to_vec();
+        buf.extend_from_slice(&381_192u64.to_le_bytes());
+        buf.extend_from_slice(&[0xff; 58]);
+        buf.extend_from_slice(&[0x00, 0x00, 0x00]);
+        buf.extend_from_slice(&[0xff, 0xff, 0xff, 0xff, 0x3c, 0x10, 0xff, 0xff, 0xff, 0xff]);
+        buf.extend_from_slice(&[0xff; 4]);
+        buf.extend_from_slice(&[0x09, 0xd1, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        buf.extend_from_slice(&[0xff, 0xff, 0xff, 0xff, 0x43, 0x03, 0xff, 0xff, 0xff, 0xff]);
+        buf.extend_from_slice(&[0xff; 20]);
+        buf.extend_from_slice(&[0xff, 0xff, 0xff, 0xff, 0x6a, 0x10, 0x01, 0x00, 0x00, 0x00]);
+        buf.extend_from_slice(&[b'-', 0x00]);
+        let wanted = BTreeSet::from([381_192]);
+        let names = find_element_data_names(&buf, &ELEMENT_DATA_HEADER_2025, &wanted);
+        assert_eq!(names.get(&381_192).map(String::as_str), Some("-"));
+        assert!(find_element_data_names(&buf, &ELEMENT_DATA_HEADER, &wanted).is_empty());
+        assert_eq!(element_data_header(2025), Some(ELEMENT_DATA_HEADER_2025));
+        assert_eq!(element_data_header(2023), None);
+    }
+
+    #[test]
+    fn a_system_type_name_follows_its_element_data_header() {
+        let framed = |tag: u16, name: &str| {
+            let units: Vec<u16> = name.encode_utf16().collect();
+            let mut out = vec![0xff; 4];
+            out.extend_from_slice(&tag.to_le_bytes());
+            out.extend_from_slice(&(units.len() as u32).to_le_bytes());
+            for unit in units {
+                out.extend_from_slice(&unit.to_le_bytes());
+            }
+            out
+        };
+        let data = |id: u32, name: &str| {
+            let mut out = ELEMENT_DATA_HEADER.to_vec();
+            out.extend_from_slice(&u64::from(id).to_le_bytes());
+            // Unset slots and a field that is not a name come first.
+            out.extend_from_slice(&[0xff; 12]);
+            out.extend_from_slice(&[0x00, 0x10]);
+            out.extend(framed(0x1002, name));
+            out
+        };
+        let mut buf = vec![0u8; 7];
+        buf.extend(data(17328, "8\" Interior Partition 3 Hour"));
+        buf.extend(data(22757, "Basement Slab"));
+        let names =
+            find_element_data_names(&buf, &ELEMENT_DATA_HEADER, &BTreeSet::from([17328, 22757]));
+        assert_eq!(
+            names.get(&17328).map(String::as_str),
+            Some("8\" Interior Partition 3 Hour")
+        );
+        assert_eq!(names.get(&22757).map(String::as_str), Some("Basement Slab"));
+        assert!(
+            find_element_data_names(&buf, &ELEMENT_DATA_HEADER, &BTreeSet::from([1])).is_empty()
+        );
+        buf.extend(data(17328, "Another name"));
+        let names = find_element_data_names(&buf, &ELEMENT_DATA_HEADER, &BTreeSet::from([17328]));
+        assert!(names.is_empty(), "disagreeing copies give no name");
+    }
 
     #[test]
     fn a_name_entry_decodes_between_filler() {
