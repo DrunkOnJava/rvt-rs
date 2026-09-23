@@ -1304,16 +1304,12 @@ impl PropertyValue {
 /// full `escape()` is used for BuildingElement names; property
 /// values are typically numeric or short ASCII. Keeping the escape
 /// local to entities.rs avoids a cross-module dependency.
+/// A property's text written as an ISO 10303-21 string: the same
+/// encoding every other string in the file gets
+/// ([`super::step_writer::escape`]), so a non-ASCII character is a
+/// `\X2\…\X0\` escape rather than a raw UTF-8 byte.
 fn escape_step_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '\'' => out.push_str("''"),
-            '\\' => out.push_str("\\\\"),
-            c => out.push(c),
-        }
-    }
-    out
+    super::step_writer::escape(s)
 }
 
 #[cfg(test)]
@@ -1335,6 +1331,11 @@ mod tests {
         assert_eq!(
             PropertyValue::Text("it's".into()).to_step(),
             "IFCTEXT('it''s')"
+        );
+        // A Revit type name from a Portuguese model (`teste_export_2025`).
+        assert_eq!(
+            PropertyValue::Text("Genérico - 200 mm".into()).to_step(),
+            "IFCTEXT('Gen\\X2\\00E9\\X0\\rico - 200 mm')"
         );
     }
 

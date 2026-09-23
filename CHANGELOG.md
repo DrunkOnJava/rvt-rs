@@ -50,6 +50,13 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Property text with non-ASCII characters is written as ISO 10303-21
+  escapes.** `IfcPropertySingleValue` text, such as a type name from a
+  Portuguese model ("Genérico - 200 mm"), went into the STEP file as raw
+  UTF-8, while every other string used `\X2\…\X0\` escapes. It now uses
+  the same encoder. On `teste_export_2025` the export has no raw non-ASCII
+  bytes left, and IfcOpenShell reads the names back unchanged.
+
 - **Python wheels install on older and more Linux systems, and on Intel
   Macs.** 0.2.0's Linux wheel was built on the runner's own Ubuntu and came
   out `manylinux_2_35`. On RHEL 8 and 9, Amazon Linux 2023, Debian 11 and
