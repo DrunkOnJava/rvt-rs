@@ -8,6 +8,25 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Lighting fixtures, air terminals, food-service equipment, planting,
+  parking, entourage, hardscape, elevators and ramps from element records
+  (RE-37).** They export as the entities Revit's own IFC4 export writes for
+  them: `IfcLightFixture`, `IfcAirTerminal`, `IfcElectricAppliance`,
+  `IfcBuildingElementProxy`, `IfcTransportElement` and `IfcRamp`. Every
+  exported element is one Revit's export also holds, and each entity is
+  complete:
+  - Snowdon Towers: 447 lighting fixtures, 26 food-service items,
+    157 site elements, 2 ramps and 2 elevators (local only);
+  - RE1 Mechanical: 7 air terminals;
+  - RE1 Electrical: 12 lighting fixtures, the first elements it exports.
+  - CI tier 2 now also fetches RE1 Electrical, and
+    `tests/element_records_2025.rs` checks both models.
+  - Electrical fixtures, lighting devices and slab edges are measured but
+    not added: Revit's export leaves out some of them, the slab edges
+    because they sit in a non-primary design option (#319). Fire alarm and data
+    devices and electrical and mechanical equipment are also left out,
+    since their IFC4 entity is unmeasured.
+
 - **Structural framing, structural columns, structural foundations and
   generic models from element records (RE-36).** They decode under the same
   instance rule as walls and doors, with their ElementIds from the enclosing

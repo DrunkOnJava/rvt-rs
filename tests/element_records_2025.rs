@@ -198,6 +198,15 @@ fn revit_2025_ducts_and_pipes_are_revits_own() {
             tags(&reference, &["IFCFLOWFITTING"]),
             "{model} fitting ElementIds"
         );
+        // RE-37: air terminals are Revit's `IfcFlowTerminal`s on the
+        // Mechanical model, all 7 (IFC4 `IfcAirTerminal` here).
+        if model == "Mechanical" {
+            assert_eq!(
+                tags(&step, &["IFCAIRTERMINAL"]),
+                tags(&reference, &["IFCFLOWTERMINAL"]),
+                "air terminal ElementIds"
+            );
+        }
         if model == "Plumbing" {
             let terminals = tags(&reference, &["IFCFLOWTERMINAL"]);
             let fixtures = tags(&step, &["IFCSANITARYTERMINAL"]);
@@ -212,4 +221,40 @@ fn revit_2025_ducts_and_pipes_are_revits_own() {
     if checked == 0 {
         eprintln!("skipping: no RE1 MEP model under RVT_PROJECT_CORPUS_DIR");
     }
+}
+
+/// RE-37 on RE1 Electrical: its 12 lighting fixtures, the only elements
+/// rvt-rs recovers there, are exactly the lighting fixtures among Revit's
+/// 14 `IfcFlowTerminal`s (the other two are data devices, not recovered).
+#[test]
+fn revit_2025_lighting_fixtures_are_revits_own() {
+    let Some((rvt, ifc)) = re1("Electrical") else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR has no RE1-Electrical.rvt/.ifc");
+        return;
+    };
+    let (step, reference) = export_and_reference(&rvt, &ifc);
+    let fixtures = tags(&step, &["IFCLIGHTFIXTURE"]);
+    assert_eq!(fixtures.len(), 12);
+    let terminals = tags(&reference, &["IFCFLOWTERMINAL"]);
+    assert_eq!(terminals.len(), 14);
+    assert!(
+        fixtures.is_subset(&terminals),
+        "{:?} not in Revit's export",
+        fixtures.difference(&terminals).collect::<Vec<_>>()
+    );
+    // Every entity carrying a numeric `Tag` is one of those fixtures
+    // (IfcOwnerHistory's 8th attribute is its creation time, not a Tag).
+    let entities: Vec<&str> = step
+        .lines()
+        .filter_map(|line| {
+            line.split_once('=')?
+                .1
+                .split_once('(')
+                .map(|(e, _)| e.trim())
+        })
+        .filter(|entity| *entity != "IFCOWNERHISTORY")
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    assert_eq!(tags(&step, &entities), fixtures, "nothing else is exported");
 }

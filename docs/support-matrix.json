@@ -162,6 +162,15 @@
       "user_impact": "Revit 2024 and 2025 structural models export their beams, joists, girders, columns, footings and generic models as IFC elements under Revit's own ElementIds, with bounding-box bodies; rebar and connections are not exported."
     },
     {
+      "id": "element-records-fixture-site-categories",
+      "area": "elements",
+      "name": "Lighting fixtures, air terminals, food-service equipment, site elements, elevators and ramps from partition element records",
+      "status": "partial",
+      "evidence": "partition_element_records::PRODUCT_RECORD_CATEGORIES; tests/element_records_2025.rs against Drshelden/IFC-ECS RE1 Mechanical and Electrical (MIT, fetched by CI tier 2); reports/element-framing/RE-37-fixture-site-circulation-categories.md",
+      "notes": "Nine more BuiltInCategory values (OST_LightingFixtures, OST_DuctTerminal, OST_FoodServiceEquipment, OST_Planting, OST_Parking, OST_Entourage, OST_Hardscape, OST_VerticalCirculation, OST_Ramps) decode under the RE-21 instance rule with RE-35's enclosing-record ElementIds. Every exported element is a Tag of Revit's own export with none outside it, and each entity is complete: 447 lighting fixtures, 26 food-service items, 157 planting, parking, entourage and hardscape proxies, 2 ramps and 2 elevators on Snowdon Towers (local only); 7 air terminals on RE1 Mechanical; 12 lighting fixtures on RE1 Electrical. Entities follow Revit's IFC4 export on Snowdon (IfcLightFixture, IfcElectricAppliance, IfcBuildingElementProxy, IfcTransportElement, IfcRamp); air terminals use IfcAirTerminal, the IFC4 subtype of the IfcFlowTerminal Revit writes in IFC2x3. Electrical fixtures, lighting devices and slab edges are measured but not added because Revit's export omits some of them (the slab edges by non-primary design option); fire alarm and data devices and electrical and mechanical equipment wait for an IFC4 reference; stairs and roofs wait for aggregate export. Bodies are the record bounding box. Revit 2024 and 2025 only.",
+      "user_impact": "Revit 2024 and 2025 projects export their lighting fixtures, air terminals, kitchen equipment, planting, parking, entourage, hardscape, elevators and ramps as the IFC entities Revit itself uses, each one an element Revit's own export also holds."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",

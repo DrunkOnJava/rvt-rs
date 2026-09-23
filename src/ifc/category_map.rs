@@ -325,6 +325,44 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCBUILDINGELEMENTPROXY",
         predefined_type: None,
     },
+    // RE-37: the entities Revit's own IFC4 export writes for these
+    // categories on Snowdon Towers (air terminals from the IFC4 subtype of
+    // the IFC2x3 `IfcFlowTerminal` Revit writes on RE1 Mechanical).
+    Mapping {
+        revit_class: "DuctTerminal",
+        ifc_type: "IFCAIRTERMINAL",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "FoodServiceEquipment",
+        ifc_type: "IFCELECTRICAPPLIANCE",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "Planting",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "Parking",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "Entourage",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "Hardscape",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "VerticalCirculation",
+        ifc_type: "IFCTRANSPORTELEMENT",
+        predefined_type: None,
+    },
 ];
 
 /// Look up the IFC entity type for a Revit class name.
