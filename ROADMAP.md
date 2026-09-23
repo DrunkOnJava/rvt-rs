@@ -23,7 +23,8 @@ element-record **Wall** / **Door** / **Window** / **Column** /
 **Floor** / **BuildingPad** instances (#204 / #211 / #212), plus, on 2024
 and 2025, furniture, casework, plumbing fixtures, specialty equipment,
 ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts and
-pipes (RE-33). IFC export
+pipes (RE-33), and structural framing, structural columns, structural
+foundations and generic models (RE-36). IFC export
 wires partition **Level** → storeys, **Floor** / **BuildingPad** →
 `IFCSLAB` (or `IFCSHADINGDEVICE` under a per-element Revit export
 override), **Room** → `IFCSPACE`, and **Material** display names →

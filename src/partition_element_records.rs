@@ -176,6 +176,22 @@ pub const OST_PIPE_CURVES: i64 = -2_008_044;
 /// Autodesk `BuiltInCategory.OST_PipeFitting`.
 pub const OST_PIPE_FITTING: i64 = -2_008_049;
 
+// RE-36: structural categories. Nearly every frame of these uses the
+// second prologue, so their instances export through RE-34's inferred
+// ElementIds; the oracle is the VIM export of the same sample
+// (`reports/element-framing/RE-36-structural-categories.md`).
+
+/// Autodesk `BuiltInCategory.OST_StructuralFraming` — beams, joists,
+/// girders and purlins.
+pub const OST_STRUCTURAL_FRAMING: i64 = -2_001_320;
+/// Autodesk `BuiltInCategory.OST_StructuralColumns`.
+pub const OST_STRUCTURAL_COLUMNS: i64 = -2_001_330;
+/// Autodesk `BuiltInCategory.OST_StructuralFoundation` — isolated
+/// footings, wall foundations and foundation slabs.
+pub const OST_STRUCTURAL_FOUNDATION: i64 = -2_001_300;
+/// Autodesk `BuiltInCategory.OST_GenericModel`.
+pub const OST_GENERIC_MODEL: i64 = -2_000_151;
+
 /// Categories whose placed element records export directly as typed IFC
 /// products, with the class name each is decoded as (RE-33).
 ///
@@ -191,10 +207,15 @@ pub const OST_PIPE_FITTING: i64 = -2_008_049;
 /// - Snowdon Towers Architectural (Revit 2024, local only): wall sweeps
 ///   36, furniture 1.
 ///
-/// Recall is not complete. Most Snowdon frames use the second prologue
-/// (RE-30) and are counted by [`scan_unattributed_frames`], and most
-/// RE1 Plumbing pipes and fittings are not among these records at all.
-pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 13] = [
+/// RE-36 adds structural framing, structural columns, structural
+/// foundations and generic models. Nearly all of their frames use the
+/// second prologue, so their ids are the enclosing records' (RE-35). On
+/// Snowdon Towers Structural every one of them the VIM export of the model
+/// carries has the record's category there (914 framing members, 74
+/// columns, 90 foundations, 91 generic models, none under another
+/// category), and 260 of the 261 generic models on the architectural
+/// sample are in Revit's IFC4 export.
+pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 17] = [
     (OST_FURNITURE, "Furniture"),
     (OST_CASEWORK, "Casework"),
     (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
@@ -208,6 +229,10 @@ pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 13] = [
     (OST_DUCT_FITTING, "DuctFitting"),
     (OST_PIPE_CURVES, "Pipe"),
     (OST_PIPE_FITTING, "PipeFitting"),
+    (OST_STRUCTURAL_FRAMING, "StructuralFraming"),
+    (OST_STRUCTURAL_COLUMNS, "StructuralColumn"),
+    (OST_STRUCTURAL_FOUNDATION, "StructuralFoundation"),
+    (OST_GENERIC_MODEL, "GenericModel"),
 ];
 
 /// Smallest bounding-box extent, in feet, a placed instance needs on every
@@ -950,7 +975,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// The categories the exporter recovers instances of, with the class name
 /// each is decoded as: the architectural core plus
 /// [`PRODUCT_RECORD_CATEGORIES`].
-pub const RECOVERED_CATEGORIES: [(i64, &str); 20] = [
+pub const RECOVERED_CATEGORIES: [(i64, &str); 24] = [
     (OST_WALLS, "Wall"),
     (OST_DOORS, "Door"),
     (OST_WINDOWS, "Window"),
@@ -971,6 +996,10 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 20] = [
     (OST_DUCT_FITTING, "DuctFitting"),
     (OST_PIPE_CURVES, "Pipe"),
     (OST_PIPE_FITTING, "PipeFitting"),
+    (OST_STRUCTURAL_FRAMING, "StructuralFraming"),
+    (OST_STRUCTURAL_COLUMNS, "StructuralColumn"),
+    (OST_STRUCTURAL_FOUNDATION, "StructuralFoundation"),
+    (OST_GENERIC_MODEL, "GenericModel"),
 ];
 
 /// Placed-instance frames in `buf`, per category, that carry the bbox
