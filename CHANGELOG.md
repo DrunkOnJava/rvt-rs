@@ -8,6 +8,21 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Roofs carry their sketched outline, and sketch lines' exact ends close
+  more outlines (RE-50).** A roof's sketch lines name the roof, as a floor's
+  name the floor, and close into its outline. Each sketch line's own data
+  also carries its exact ends, in the line record RE-49 reads for beams.
+  Those ends now close outlines the box-based solve of RE-25 leaves
+  ambiguous, for floors and roofs alike.
+  - Snowdon Towers: 13 of the 20 roofs have an outline (none did), and 11
+    of them have the area of Revit's own roof. 15 more slabs have their
+    outline (132 of 199, from 117), and 11 of those have Revit's area.
+  - No outline that closed before changes: recorded ends are used only
+    where the boxes do not close, and only when every line of the sketch is
+    level and lies in its own record's box.
+  - A roof's slope is not read. A sloped roof stays a level plate as thick
+    as its record box, now with its real outline.
+  - `examples/probe_re50_roof_profiles.rs` lists which roofs close and why.
 - **Beams run along their location lines (RE-49).** A structural-framing
   element's data carries its location line as a bounded line record
   (`04 00 08 01`, two parameters, an origin and a unit direction). With the

@@ -205,6 +205,8 @@ pub fn recover_partition_schema_mvp(
     attach_stair_dimensions(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
+    // --- Roof outlines from their sketch lines (RE-50) ---
+    attach_roof_profiles(rf, revit_version, &mut out.products);
 
     // --- Family and type names (RE-38) ---
     for elements in [
@@ -713,7 +715,7 @@ fn attach_beam_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [Deco
     if beams.is_empty() {
         return;
     }
-    let Ok(lines) = pba::scan_beam_axes(rf, revit_version, &beams) else {
+    let Ok(lines) = pba::scan_bounded_lines(rf, revit_version, &beams) else {
         return;
     };
     for element in products
@@ -1362,8 +1364,15 @@ pub fn slabs_from_partition_category_records(
         .filter(|record| record.builtin_category == per::OST_SKETCH_LINES)
         .cloned()
         .collect();
-    let profiles =
-        crate::element_record_plan_profiles::plan_profiles_from_sketch_line_records(&sketch_lines);
+    let plates: BTreeSet<u32> = scanned
+        .iter()
+        .filter(|record| {
+            record.builtin_category == per::OST_FLOORS
+                || record.builtin_category == per::OST_BUILDING_PAD
+        })
+        .map(|record| record.element_id)
+        .collect();
+    let profiles = sketch_plan_profiles(rf, revit_version, &sketch_lines, &plates);
 
     let mut out = Vec::new();
     for (category, class) in [
@@ -1385,6 +1394,102 @@ pub fn slabs_from_partition_category_records(
         }
     }
     Ok(out)
+}
+
+/// Sketched plan profiles of the elements in `owners`, from their
+/// `OST_SketchLines` records: the RE-25 solve over the records' boxes and,
+/// where that does not close, the exact ends each sketch line's own data
+/// carries (RE-50, [`crate::partition_beam_axes::scan_bounded_lines`]). A
+/// line counts only when it is level and both its ends lie in its own
+/// record's box; an element any of whose lines does not count keeps no
+/// profile.
+fn sketch_plan_profiles(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
+    owners: &BTreeSet<u32>,
+) -> std::collections::BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
+    use crate::element_record_plan_profiles as erpp;
+    use std::collections::BTreeMap;
+    let mut profiles = erpp::plan_profiles_from_sketch_line_records(sketch_lines);
+    profiles.retain(|owner, _| owners.contains(owner));
+    let mut unsolved: BTreeMap<u32, BTreeMap<u32, [f64; 6]>> = BTreeMap::new();
+    for record in sketch_lines {
+        let Some(owner) = record.owner_reference else {
+            continue;
+        };
+        if owners.contains(&owner) && !profiles.contains_key(&owner) {
+            unsolved
+                .entry(owner)
+                .or_default()
+                .entry(record.element_id)
+                .or_insert(record.bbox_feet);
+        }
+    }
+    if unsolved.is_empty() {
+        return profiles;
+    }
+    let ids: BTreeSet<u32> = unsolved
+        .values()
+        .flat_map(|lines| lines.keys().copied())
+        .collect();
+    let Ok(lines) = crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &ids) else {
+        return profiles;
+    };
+    let eps = erpp::VERTEX_EPS_FEET;
+    for (owner, segments) in unsolved {
+        let exact: Option<Vec<[f64; 4]>> = segments
+            .iter()
+            .map(|(id, bbox)| {
+                let line = lines.get(id)?;
+                let (a, b) = (line.start(), line.end());
+                let inside = |p: [f64; 3]| {
+                    (0..3)
+                        .all(|axis| p[axis] >= bbox[axis] - eps && p[axis] <= bbox[axis + 3] + eps)
+                };
+                (inside(a) && inside(b) && (a[2] - b[2]).abs() <= eps)
+                    .then_some([a[0], a[1], b[0], b[1]])
+            })
+            .collect();
+        if let Some(mut profile) = exact.and_then(|exact| erpp::plan_profile_from_lines(&exact)) {
+            profile.segment_ids = segments.keys().copied().collect();
+            profiles.insert(owner, profile);
+        }
+    }
+    profiles
+}
+
+/// Give each roof the plan outline its sketch lines close (RE-50), as a
+/// floor has (RE-25). The body stays the record box's height: a sloped
+/// roof's slope is not read.
+fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_element_records as per;
+    let roofs: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "Roof")
+        .filter_map(|element| element.id)
+        .collect();
+    if roofs.is_empty() || !per::supports_revit_version(revit_version) {
+        return;
+    }
+    let declared = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let Ok(sketch_lines) =
+        per::scan_category_records_multi(rf, revit_version, &[per::OST_SKETCH_LINES], &declared)
+    else {
+        return;
+    };
+    let profiles = sketch_plan_profiles(rf, revit_version, &sketch_lines, &roofs);
+    for roof in products
+        .iter_mut()
+        .filter(|element| element.class == "Roof")
+    {
+        if let Some(profile) = roof.id.and_then(|id| profiles.get(&id)) {
+            roof.fields.extend(profile.fields());
+        }
+    }
 }
 
 /// Back-compat alias for the #204 entry point.

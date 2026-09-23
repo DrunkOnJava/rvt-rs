@@ -47,7 +47,10 @@
 //! # Honesty
 //!
 //! - Nothing here invents a vertex. Every coordinate emitted is a
-//!   corner of a recorded bounding box.
+//!   corner of a recorded bounding box, or (RE-50,
+//!   [`plan_profile_from_lines`]) an end of the line a sketch line's own
+//!   data records, used only where the boxes do not close and only when
+//!   that end lies in the sketch line's box.
 //! - The endpoint choice is a *closure* rule, not a fit: it accepts
 //!   only when the choice is forced, and rejects the element
 //!   otherwise. It is not scored against, or tuned to, the reference
@@ -341,7 +344,63 @@ pub fn plan_profiles_from_sketch_line_records(
 /// `[min_x, min_y, max_x, max_y]`, or `None` when the set does not
 /// close unambiguously.
 pub fn plan_profile_from_segments(segments: &[[f64; 4]]) -> Option<PlanProfile> {
-    let loops = solve_loops(segments)?;
+    profile_from_loops(solve_loops(segments)?)
+}
+
+/// Recover one plan profile from segments whose ends are known exactly,
+/// `[x0, y0, x1, y1]` (RE-50: the ends a sketch line's own data carries).
+/// Every end must be shared by exactly two segments, so the segments close
+/// into loops with no choice left; otherwise `None`.
+pub fn plan_profile_from_lines(lines: &[[f64; 4]]) -> Option<PlanProfile> {
+    if lines.len() < 3 {
+        return None;
+    }
+    let mut vertices = Vertices::default();
+    let mut edges: Vec<(usize, usize)> = Vec::with_capacity(lines.len());
+    for &[x0, y0, x1, y1] in lines {
+        if ![x0, y0, x1, y1].iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        let (a, b) = (vertices.intern((x0, y0)), vertices.intern((x1, y1)));
+        if a == b {
+            return None;
+        }
+        vertices.degree[a] += 1;
+        vertices.degree[b] += 1;
+        edges.push((a, b));
+    }
+    if vertices.degree.iter().any(|&d| d != 2) {
+        return None;
+    }
+    let mut at: Vec<Vec<usize>> = vec![Vec::new(); vertices.points.len()];
+    for (index, &(a, b)) in edges.iter().enumerate() {
+        at[a].push(index);
+        at[b].push(index);
+    }
+    let mut used = vec![false; edges.len()];
+    let mut loops = Vec::new();
+    for first in 0..edges.len() {
+        if used[first] {
+            continue;
+        }
+        used[first] = true;
+        let (start, mut current) = edges[first];
+        let mut ring = vec![vertices.points[start]];
+        while current != start {
+            ring.push(vertices.points[current]);
+            let next = at[current].iter().copied().find(|&e| !used[e])?;
+            used[next] = true;
+            let (a, b) = edges[next];
+            current = if a == current { b } else { a };
+        }
+        loops.push(ring);
+    }
+    profile_from_loops(loops)
+}
+
+/// Order loops into pieces and voids: each loop's depth is how many larger
+/// loops contain it.
+fn profile_from_loops(loops: Vec<Vec<(f64, f64)>>) -> Option<PlanProfile> {
     let mut merged: Vec<Vec<(f64, f64)>> = Vec::with_capacity(loops.len());
     for one in loops {
         let simplified = merge_collinear(&one);
@@ -647,6 +706,69 @@ fn signed_area(points: &[(f64, f64)]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_lines_close_a_diagonal_outline() {
+        // A quadrilateral with a diagonal edge, its lines in any order and
+        // direction: the box solve has to guess the diagonal, the ends do not.
+        let lines = [
+            [0.0, 0.0, 10.0, 0.0],
+            [10.0, 6.0, 10.0, 0.0],
+            [2.0, 8.0, 10.0, 6.0],
+            [0.0, 0.0, 2.0, 8.0],
+        ];
+        let profile = plan_profile_from_lines(&lines).expect("closes");
+        assert_eq!(profile.outer_xy.len(), 4);
+        assert!(signed_area(&profile.outer_xy) > 0.0, "counter-clockwise");
+        assert!((signed_area(&profile.outer_xy) - 64.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn exact_lines_keep_a_void_and_merge_split_runs() {
+        let mut lines = vec![
+            [0.0, 0.0, 5.0, 0.0],
+            [5.0, 0.0, 10.0, 0.0],
+            [10.0, 0.0, 10.0, 10.0],
+            [10.0, 10.0, 0.0, 10.0],
+            [0.0, 10.0, 0.0, 0.0],
+        ];
+        lines.extend([
+            [4.0, 4.0, 6.0, 4.0],
+            [6.0, 4.0, 6.0, 6.0],
+            [6.0, 6.0, 4.0, 6.0],
+            [4.0, 6.0, 4.0, 4.0],
+        ]);
+        let profile = plan_profile_from_lines(&lines).expect("closes");
+        assert_eq!(profile.outer_xy.len(), 4, "the split bottom edge merges");
+        assert_eq!(profile.inner_xy.len(), 1);
+        assert!(signed_area(&profile.inner_xy[0]) < 0.0, "clockwise void");
+    }
+
+    #[test]
+    fn exact_lines_that_do_not_close_are_declined() {
+        // An open chain, a dangling extra line, and a zero-length line.
+        let open = [
+            [0.0, 0.0, 1.0, 0.0],
+            [1.0, 0.0, 1.0, 1.0],
+            [1.0, 1.0, 0.0, 1.0],
+        ];
+        assert!(plan_profile_from_lines(&open).is_none());
+        let mut extra = vec![
+            [0.0, 0.0, 1.0, 0.0],
+            [1.0, 0.0, 1.0, 1.0],
+            [1.0, 1.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0, 0.0],
+        ];
+        extra.push([0.0, 0.0, 1.0, 1.0]);
+        assert!(plan_profile_from_lines(&extra).is_none());
+        let zero = [
+            [0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+        ];
+        assert!(plan_profile_from_lines(&zero).is_none());
+        assert!(plan_profile_from_lines(&[[f64::NAN, 0.0, 1.0, 0.0]; 3]).is_none());
+    }
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<[f64; 4]> {
         vec![
