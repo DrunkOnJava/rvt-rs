@@ -153,6 +153,7 @@ pub fn append_typed_production_elements(
 ) -> TypedProductionAppend {
     let mut out = TypedProductionAppend::default();
     let mut pending_hosts: Vec<(usize, u32)> = Vec::new();
+    let mut pending_parts: Vec<(usize, u32)> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
 
     for decoded in decoded_iter {
@@ -242,7 +243,13 @@ pub fn append_typed_production_elements(
             };
             if let Some((location, body, properties)) = element_record_geometry {
                 location_feet = Some(location);
-                extrusion = Some(body);
+                // #323: a stair is carried by its parts, as in Revit's
+                // export; its own record box would double their volume.
+                if !crate::partition_schema_mvp::AGGREGATE_WHOLE_CLASSES
+                    .contains(&decoded.class.as_str())
+                {
+                    extrusion = Some(body);
+                }
                 property_set = Some(properties);
             } else {
                 match decoded.class.as_str() {
@@ -293,6 +300,16 @@ pub fn append_typed_production_elements(
         if let Some(host_id) = pending_host_id {
             pending_hosts.push((entity_index, host_id));
         }
+        if let Some(whole) = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. }
+                if name == crate::partition_schema_mvp::AGGREGATE_WHOLE_FIELD =>
+            {
+                Some(*id)
+            }
+            _ => None,
+        }) {
+            pending_parts.push((entity_index, whole));
+        }
 
         // Floor/Room → storey via Level ElementId only when both sides
         // carry ids that match. Partition MVP Levels are id-less today,
@@ -319,6 +336,21 @@ pub fn append_typed_production_elements(
             solid_shape: None,
             representation_map_index: None,
         });
+    }
+
+    // #323: group each whole's parts into one aggregate.
+    let mut parts_by_whole: std::collections::BTreeMap<usize, Vec<usize>> =
+        std::collections::BTreeMap::new();
+    for (part_index, whole_id) in pending_parts {
+        if let Some(&whole_index) = out.id_to_entity.get(&whole_id) {
+            parts_by_whole
+                .entry(whole_index)
+                .or_default()
+                .push(part_index);
+        }
+    }
+    for (whole, parts) in parts_by_whole {
+        entities.push(entities::IfcEntity::Aggregate { whole, parts });
     }
 
     if policy.include_geometry {
@@ -924,6 +956,72 @@ mod tests {
             byte_range: 0..0,
             provenance: Default::default(),
         }
+    }
+
+    /// #323: a stair carries no body of its own and aggregates the run
+    /// that names it.
+    #[test]
+    fn a_stair_aggregates_its_run_and_has_no_body() {
+        use crate::partition_element_records::{
+            CONTAINER_NONE, OST_STAIRS, OST_STAIRS_RUNS, PLACEMENT_KIND_INSTANCE,
+            PartitionElementRecord,
+        };
+        let record = |element_id: u32, category: i64| PartitionElementRecord {
+            stream: "Partitions/68".into(),
+            offset: element_id as usize,
+            element_id,
+            flags: 0x0141,
+            builtin_category: category,
+            container: CONTAINER_NONE,
+            placement_kind: PLACEMENT_KIND_INSTANCE,
+            bbox_feet: [0.0, 0.0, 0.0, 10.0, 4.0, 9.0],
+            preceding_reference: None,
+            owner_reference: None,
+            references: Vec::new(),
+            id_from_enclosing_record: true,
+        };
+        let levels = std::collections::BTreeSet::new();
+        let mut elements = crate::partition_schema_mvp::instances_from_records(
+            vec![record(620883, OST_STAIRS)],
+            "Stair",
+            &levels,
+        );
+        let mut runs = crate::partition_schema_mvp::instances_from_records(
+            vec![record(621141, OST_STAIRS_RUNS)],
+            "StairsRun",
+            &levels,
+        );
+        runs[0].fields.push((
+            crate::partition_schema_mvp::AGGREGATE_WHOLE_FIELD.into(),
+            InstanceField::ElementId { tag: 0, id: 620883 },
+        ));
+        elements.extend(runs);
+        let mut entities = Vec::new();
+        let mut storeys = Vec::new();
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
+        append_typed_production_elements(elements.into_iter(), &mut entities, &mut storeys, policy);
+        let index_of = |tag: &str| {
+            entities.iter().position(|entity| {
+                matches!(entity, entities::IfcEntity::BuildingElement { type_guid, .. }
+                    if type_guid.as_deref() == Some(tag))
+            })
+        };
+        let stair = index_of("620883").expect("stair");
+        let run = index_of("621141").expect("run");
+        let body = |index: usize| match &entities[index] {
+            entities::IfcEntity::BuildingElement { extrusion, .. } => extrusion.is_some(),
+            _ => unreachable!(),
+        };
+        assert!(!body(stair), "the stair has no body");
+        assert!(body(run), "the run keeps its record box");
+        let aggregates: Vec<(usize, Vec<usize>)> = entities
+            .iter()
+            .filter_map(|entity| match entity {
+                entities::IfcEntity::Aggregate { whole, parts } => Some((*whole, parts.clone())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(aggregates, vec![(stair, vec![run])]);
     }
 
     #[test]

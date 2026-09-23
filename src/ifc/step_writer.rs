@@ -1556,6 +1556,33 @@ impl StepWriter {
         // contained in a storey — IFC4 treats them as "virtual"
         // elements that only live through IfcRelVoidsElement.
         let mut void_fill_triples: Vec<(usize, usize, usize)> = Vec::new();
+        // #323: parts of an aggregate whose whole is a building element
+        // reach the spatial structure through that whole, so they are left
+        // out of the storey containment below.
+        let is_building_element = |index: usize| {
+            matches!(
+                model.entities.get(index),
+                Some(super::entities::IfcEntity::BuildingElement { .. })
+            )
+        };
+        let aggregate_parts: std::collections::BTreeSet<usize> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::Aggregate { whole, parts }
+                    if is_building_element(*whole) =>
+                {
+                    Some(
+                        parts
+                            .iter()
+                            .copied()
+                            .filter(|part| *part != *whole && is_building_element(*part)),
+                    )
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect();
         for (entity_idx, entity) in model.entities.iter().enumerate() {
             if let super::entities::IfcEntity::BuildingElement {
                 ifc_type,
@@ -1840,9 +1867,11 @@ impl StepWriter {
                     make_guid(el_id),
                 );
                 self.emit_entity(el_id, line);
-                match idx {
-                    Some(index) => per_storey_elements[index].push(el_id),
-                    None => unplaced_elements.push(el_id),
+                if !aggregate_parts.contains(&entity_idx) {
+                    match idx {
+                        Some(index) => per_storey_elements[index].push(el_id),
+                        None => unplaced_elements.push(el_id),
+                    }
                 }
                 entity_index_to_el_id[entity_idx] = Some(el_id);
                 // IFC-30 / IFC-28: precedence order for material
@@ -2052,6 +2081,38 @@ impl StepWriter {
                 format!(
                     "IFCRELFILLSELEMENT('{}',#{owner_hist},$,$,#{opening_id},#{el_id})",
                     make_guid(fills_rel),
+                ),
+            );
+        }
+
+        // #323: one IfcRelAggregates per aggregate, whole to parts. Resolved
+        // after the element loop for the same reason as the void chain.
+        for entity in &model.entities {
+            let super::entities::IfcEntity::Aggregate { whole, parts } = entity else {
+                continue;
+            };
+            if !is_building_element(*whole) {
+                continue;
+            }
+            let Some(whole_el_id) = entity_index_to_el_id.get(*whole).and_then(|slot| *slot) else {
+                continue;
+            };
+            let part_refs: Vec<String> = parts
+                .iter()
+                .filter(|part| aggregate_parts.contains(part))
+                .filter_map(|part| entity_index_to_el_id.get(*part).and_then(|slot| *slot))
+                .map(|id| format!("#{id}"))
+                .collect();
+            if part_refs.is_empty() {
+                continue;
+            }
+            let rel_id = self.id();
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{whole_el_id},({}))",
+                    make_guid(rel_id),
+                    part_refs.join(","),
                 ),
             );
         }
@@ -2596,6 +2657,85 @@ mod tests {
             "expected ≥7 GUIDs (project+site+building+storey+3 rel-aggregates), got {}",
             guids.len()
         );
+    }
+
+    /// #323: a stair aggregates its parts; the parts leave the storey
+    /// containment and reach it through the stair.
+    #[test]
+    fn an_aggregate_relates_its_parts_to_the_whole() {
+        use super::super::entities::IfcEntity;
+        let element = |ifc_type: &str, tag: &str| IfcEntity::BuildingElement {
+            ifc_type: ifc_type.into(),
+            name: format!("{ifc_type}-{tag}"),
+            type_guid: Some(tag.into()),
+            predefined_type: None,
+            storey_index: None,
+            material_index: None,
+            property_set: None,
+            location_feet: None,
+            rotation_radians: None,
+            extrusion: None,
+            host_element_index: None,
+            material_layer_set_index: None,
+            material_profile_set_index: None,
+            solid_shape: None,
+            representation_map_index: None,
+        };
+        let entity_id = |step: &str, tag: &str| -> String {
+            step.lines()
+                .find(|line| line.contains(&format!(",'{tag}',")))
+                .and_then(|line| line.split('=').next())
+                .expect("element line")
+                .to_string()
+        };
+        let model = IfcModel {
+            entities: vec![
+                element("IfcStair", "620883"),
+                element("IfcStairFlight", "621141"),
+                element("IfcMember", "621150"),
+                element("IfcWall", "700000"),
+                IfcEntity::Aggregate {
+                    whole: 0,
+                    parts: vec![1, 2],
+                },
+                // A whole that is not a building element aggregates nothing.
+                IfcEntity::Aggregate {
+                    whole: 99,
+                    parts: vec![3],
+                },
+            ],
+            ..Default::default()
+        };
+        let step = write_step(&model);
+        let stair = entity_id(&step, "620883");
+        let flight = entity_id(&step, "621141");
+        let member = entity_id(&step, "621150");
+        let wall = entity_id(&step, "700000");
+        let aggregates: Vec<&str> = step
+            .lines()
+            .filter(|line| {
+                line.contains("IFCRELAGGREGATES(") && line.contains(&format!(",{stair},"))
+            })
+            .collect();
+        assert_eq!(aggregates.len(), 1);
+        assert!(aggregates[0].ends_with(&format!(",{stair},({flight},{member}));")));
+        let contained: String = step
+            .lines()
+            .filter(|line| line.contains("IFCRELCONTAINEDINSPATIALSTRUCTURE("))
+            .collect();
+        for part in [&flight, &member] {
+            assert!(
+                !contained.contains(&format!("{part},"))
+                    && !contained.contains(&format!("{part})"))
+            );
+        }
+        for standalone in [&stair, &wall] {
+            assert!(
+                contained.contains(&format!("{standalone},"))
+                    || contained.contains(&format!("{standalone})")),
+                "{standalone} contained"
+            );
+        }
     }
 
     #[test]
