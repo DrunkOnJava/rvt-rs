@@ -1803,4 +1803,18 @@ such a frame.
 
 Report: `reports/element-framing/RE-43-invalid-element-id.md`.
 
+## Addendum — RE-44 system-family type names (2026-09-23)
+
+A wall, floor, ceiling, roof or railing type has no RE-38 name entry, but its
+serialised element data opens with `ff ff ff ff · u16 · 01 00 00 00` and the
+type's `u64` ElementId, and the first framed string after that is its name.
+The `u16` is `0x02d3` on Revit 2024 and `0x02ef` on Revit 2025. Joined through
+the RE-28 type records, which hold on 2025 with the 2025 marker and prologue
+constant, every name equals Revit's for the same Tag on Core Interior,
+Snowdon Towers, RE1 and Projeto1. On `teste_export_2025` six of seven do; the
+seventh wall's frame, data and bounding box all describe the other type.
+
+Report: `reports/element-framing/RE-44-system-type-names.md`.
+Probe: `examples/probe_re44_system_type_names.rs`.
+
 **End of report.**

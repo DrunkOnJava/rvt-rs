@@ -6,6 +6,33 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Walls, floors, ceilings, roofs and railings carry their type's name
+  (#322, RE-44).** A system-family type has no RE-38 name entry, but its
+  serialised element data names it. The data opens with
+  `ff ff ff ff · u16 · 01 00 00 00` and the type's ElementId, and the first
+  framed string after that is the name.
+  - The element's type is the one RE-28 type record its reference list
+    names. The element-record property set gains `TypeName`.
+  - Every name written equals Revit's for the same `Tag`: 460 on Core
+    Interior, 1,545 on Snowdon Towers, 16 on RE1 Architecture and 1 on
+    Projeto1.
+  - On `teste_export_2025` six of seven are equal. The seventh wall's
+    frame, data and bounding box all describe the 200 mm type, so that export
+    was made after the wall was changed.
+  - The system family's own name ("Basic Wall") is not in the file, since
+    Revit writes it in the UI language. The IFC `Name` therefore stays
+    `Class-ElementId` and no `FamilyName` or `ObjectType` is written.
+  - `examples/probe_re44_system_type_names.rs` lists the names for any file,
+    and `tests/element_names.rs` checks Core Interior and RE1 against
+    Revit's exports.
+- **Type records are read on Revit 2025.** `partition_type_records` read
+  Revit 2024 only. The same records on 2025 carry the 2025 marker and
+  prologue constant, and most are second-prologue frames that take their
+  partition record's id (RE-35). `decode_at_with_marker` and
+  `find_type_records_with_marker` take the release's bbox marker.
+
 ### Fixed
 
 - **Python wheels install on older and more Linux systems, and on Intel

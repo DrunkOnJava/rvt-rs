@@ -107,8 +107,10 @@ use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-/// Releases where this record shape is corpus-proven.
-pub const PARTITION_TYPE_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+/// Releases where this record shape is corpus-proven: 2024 on Core
+/// Interior and the Snowdon Towers samples, 2025 on the RE1 projects,
+/// whose records carry the 2025 marker and prologue constant (#322).
+pub const PARTITION_TYPE_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Autodesk `BuiltInCategory.OST_Materials`.
 pub const OST_MATERIALS: i64 = -2_000_700;
@@ -119,7 +121,9 @@ pub const PLACEMENT_KIND_TYPE_DEFINITION: u32 = 0xffff_8080;
 /// Offset of the `0x0000059f` word every Revit 2024 prologue carries.
 pub const PROLOGUE_MAGIC_OFFSET: usize = 0x0c;
 
-/// The word itself.
+/// The word itself, on Revit 2024. Every release's is its
+/// [`crate::partition_element_records::record_prologue_constant`]
+/// (`0x05c7` on 2025).
 pub const PROLOGUE_MAGIC: u32 = 0x0000_059f;
 
 /// Offset of the bbox-less record marker.
@@ -129,8 +133,24 @@ pub const RECORD_MARKER_OFFSET: usize = 0x50;
 ///
 /// An element record carries `46 01` *before* these six bytes and
 /// then a bounding box, so testing this marker at
-/// [`RECORD_MARKER_OFFSET`] rejects the element shape outright.
+/// [`RECORD_MARKER_OFFSET`] rejects the element shape outright. This is
+/// the Revit 2024 marker; every release's is the last six bytes of its
+/// bbox marker ([`record_marker`]).
 pub const RECORD_MARKER: [u8; 6] = [0xff, 0xff, 0xff, 0xff, 0xab, 0x05];
+
+/// The bbox-less record marker of the release whose element-record bbox
+/// marker is `bbox_marker`: its last six bytes, `ff ff ff ff` and the
+/// release constant (`ab 05` on 2024, `d3 05` on 2025).
+pub fn record_marker(bbox_marker: &[u8; 8]) -> [u8; 6] {
+    [
+        bbox_marker[2],
+        bbox_marker[3],
+        bbox_marker[4],
+        bbox_marker[5],
+        bbox_marker[6],
+        bbox_marker[7],
+    ]
+}
 
 /// Offset of the slot-list `u32` length prefix.
 pub const SLOT_COUNT_OFFSET: usize = 0x56;
@@ -219,21 +239,78 @@ pub fn decode_at(
     offset: usize,
     declared_ids: &BTreeSet<u32>,
 ) -> Option<PartitionTypeRecord> {
-    use crate::partition_element_records as per;
+    decode_at_with_marker(
+        stream,
+        buf,
+        offset,
+        declared_ids,
+        &crate::partition_element_records::BBOX_MARKER,
+    )
+}
 
+/// [`decode_at`] for the release whose element-record bbox marker is
+/// `bbox_marker` ([`crate::partition_element_records::bbox_marker`]).
+pub fn decode_at_with_marker(
+    stream: &str,
+    buf: &[u8],
+    offset: usize,
+    declared_ids: &BTreeSet<u32>,
+    bbox_marker: &[u8; 8],
+) -> Option<PartitionTypeRecord> {
     if offset.checked_add(RECORD_MIN_LEN)? > buf.len() {
         return None;
     }
     let raw_id = read_u64(buf, offset)?;
-    if raw_id == 0 || raw_id > u64::from(u32::MAX) {
+    if crate::partition_element_records::carries_no_element_id(raw_id) {
         return None;
     }
     let element_id = raw_id as u32;
     if !declared_ids.contains(&element_id) {
         return None;
     }
-    if read_u32(buf, offset + PROLOGUE_MAGIC_OFFSET)? != PROLOGUE_MAGIC {
+    let magic = u32::from(crate::partition_element_records::record_prologue_constant(
+        bbox_marker,
+    ));
+    decode_frame_as(stream, buf, offset, element_id, Some(magic), bbox_marker)
+}
+
+/// A type record whose frame carries no ElementId at `+0x00` (the second
+/// prologue, RE-30), decoded as `element_id`: the id of the partition
+/// record it sits in (RE-35). Its slot list must name that id, as a
+/// first-prologue record's names its own (#322). The second prologue does
+/// not carry the `0x059f` magic at `+0x0c`, so it is not checked.
+/// `bbox_marker` is the release's element-record bbox marker.
+pub fn decode_second_prologue_at(
+    stream: &str,
+    buf: &[u8],
+    offset: usize,
+    element_id: u32,
+    bbox_marker: &[u8; 8],
+) -> Option<PartitionTypeRecord> {
+    if !crate::partition_element_records::carries_no_element_id(read_u64(buf, offset)?) {
         return None;
+    }
+    decode_frame_as(stream, buf, offset, element_id, None, bbox_marker)
+}
+
+fn decode_frame_as(
+    stream: &str,
+    buf: &[u8],
+    offset: usize,
+    element_id: u32,
+    magic: Option<u32>,
+    bbox_marker: &[u8; 8],
+) -> Option<PartitionTypeRecord> {
+    use crate::partition_element_records as per;
+
+    if offset.checked_add(RECORD_MIN_LEN)? > buf.len() {
+        return None;
+    }
+    let own = u64::from(element_id);
+    if let Some(magic) = magic {
+        if read_u32(buf, offset + PROLOGUE_MAGIC_OFFSET)? != magic {
+            return None;
+        }
     }
     if read_u16(buf, offset + 0x10)? != 0 {
         return None;
@@ -242,9 +319,9 @@ pub fn decode_at(
     if !(per::BUILTIN_CATEGORY_MIN..=per::BUILTIN_CATEGORY_MAX).contains(&builtin_category) {
         return None;
     }
-    if buf
-        .get(offset + RECORD_MARKER_OFFSET..offset + RECORD_MARKER_OFFSET + RECORD_MARKER.len())?
-        != RECORD_MARKER
+    let marker = record_marker(bbox_marker);
+    if buf.get(offset + RECORD_MARKER_OFFSET..offset + RECORD_MARKER_OFFSET + marker.len())?
+        != marker
     {
         return None;
     }
@@ -261,7 +338,7 @@ pub fn decode_at(
     for index in 0..count {
         slots.push(read_u64(buf, start + index * 8)?);
     }
-    if !slots.contains(&raw_id) {
+    if !slots.contains(&own) {
         return None;
     }
     Some(PartitionTypeRecord {
@@ -288,6 +365,24 @@ pub fn find_type_records(
     builtin_category: i64,
     declared_ids: &BTreeSet<u32>,
 ) -> Vec<PartitionTypeRecord> {
+    find_type_records_with_marker(
+        stream,
+        buf,
+        builtin_category,
+        declared_ids,
+        &crate::partition_element_records::BBOX_MARKER,
+    )
+}
+
+/// [`find_type_records`] for the release whose element-record bbox
+/// marker is `bbox_marker`.
+pub fn find_type_records_with_marker(
+    stream: &str,
+    buf: &[u8],
+    builtin_category: i64,
+    declared_ids: &BTreeSet<u32>,
+    bbox_marker: &[u8; 8],
+) -> Vec<PartitionTypeRecord> {
     use crate::partition_element_records as per;
 
     let needle = (builtin_category as u64).to_le_bytes();
@@ -295,6 +390,7 @@ pub fn find_type_records(
     if buf.len() < RECORD_MIN_LEN {
         return out;
     }
+    let mut chain: Option<Vec<per::PartitionRecordSpan>> = None;
     let mut cursor = 0usize;
     while cursor + needle.len() <= buf.len() {
         let Some(found) = memchr::memmem::find(&buf[cursor..], &needle) else {
@@ -305,7 +401,27 @@ pub fn find_type_records(
         if hit < per::CATEGORY_OFFSET {
             continue;
         }
-        if let Some(record) = decode_at(stream, buf, hit - per::CATEGORY_OFFSET, declared_ids) {
+        let offset = hit - per::CATEGORY_OFFSET;
+        if let Some(record) = decode_at_with_marker(stream, buf, offset, declared_ids, bbox_marker)
+        {
+            out.push(record);
+            continue;
+        }
+        // RE-35: a second-prologue type record takes the id of the
+        // partition record it sits in.
+        let chain = chain.get_or_insert_with(|| per::partition_record_chain(buf, bbox_marker));
+        let Some(span) = per::enclosing_record(chain, offset) else {
+            continue;
+        };
+        let Ok(element_id) = u32::try_from(span.element_id) else {
+            continue;
+        };
+        if !declared_ids.contains(&element_id) {
+            continue;
+        }
+        if let Some(record) =
+            decode_second_prologue_at(stream, buf, offset, element_id, bbox_marker)
+        {
             out.push(record);
         }
     }
@@ -325,16 +441,20 @@ pub fn scan_type_records(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
+    let Some(bbox_marker) = crate::partition_element_records::bbox_marker(revit_version) else {
+        return Ok(Vec::new());
+    };
     let mut out = Vec::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        out.extend(find_type_records(
+        out.extend(find_type_records_with_marker(
             &stream,
             inflated.bytes(),
             builtin_category,
             declared_ids,
+            &bbox_marker,
         ));
     }
     Ok(out)
@@ -596,6 +716,24 @@ mod tests {
     #[test]
     fn unsupported_release_scans_nothing() {
         assert!(supports_revit_version(2024));
+        assert!(supports_revit_version(2025));
         assert!(!supports_revit_version(2023));
+    }
+
+    #[test]
+    fn the_record_marker_and_magic_follow_the_release() {
+        assert_eq!(record_marker(&per::BBOX_MARKER), RECORD_MARKER);
+        assert_eq!(
+            u32::from(per::record_prologue_constant(&per::BBOX_MARKER)),
+            PROLOGUE_MAGIC
+        );
+        assert_eq!(
+            record_marker(&per::BBOX_MARKER_2025),
+            [0xff, 0xff, 0xff, 0xff, 0xd3, 0x05]
+        );
+        assert_eq!(
+            per::record_prologue_constant(&per::BBOX_MARKER_2025),
+            0x05c7
+        );
     }
 }

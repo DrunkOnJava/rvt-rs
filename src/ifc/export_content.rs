@@ -901,12 +901,16 @@ fn element_record_geometry_from_decoded(
         });
     }
     // RE-38: the family and type the partition name entries give this
-    // element, the two halves of the `Family:Type` Revit's export uses.
-    if let (Some(family), Some(type_name)) = (family_name, type_name) {
+    // element, the two halves of the `Family:Type` Revit's export uses. A
+    // system-family type (#322) has a name but no family in the file, so it
+    // writes only `TypeName`.
+    if let (Some(family), Some(_)) = (&family_name, &type_name) {
         properties.push(Property {
             name: FAMILY_NAME_PROPERTY.into(),
-            value: PropertyValue::Text(family),
+            value: PropertyValue::Text(family.clone()),
         });
+    }
+    if let Some(type_name) = type_name {
         properties.push(Property {
             name: TYPE_NAME_PROPERTY.into(),
             value: PropertyValue::Text(type_name),

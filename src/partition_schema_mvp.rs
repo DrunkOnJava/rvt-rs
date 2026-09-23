@@ -211,8 +211,105 @@ pub fn recover_partition_schema_mvp(
     ] {
         attach_family_and_type_names(rf, elements);
     }
+    // --- System-family type names (#322) ---
+    let mut unnamed: Vec<&mut DecodedElement> = [&mut out.walls, &mut out.slabs, &mut out.products]
+        .into_iter()
+        .flat_map(|elements| elements.iter_mut())
+        .filter(|element| {
+            !element
+                .fields
+                .iter()
+                .any(|(name, _)| name == TYPE_NAME_FIELD)
+        })
+        .collect();
+    attach_system_type_names(rf, revit_version, &mut unnamed);
 
     Ok(out)
+}
+
+/// Give elements of system families (walls, floors, roofs, ceilings,
+/// railings) their type's name (#322).
+///
+/// The type is the one type-definition record of the element's category
+/// that its reference list names (RE-28,
+/// [`crate::partition_type_records::unique_type_reference`]). Its name is
+/// read from its serialised data
+/// ([`crate::partition_names::find_element_data_names`]). Such a type has no
+/// family in the file, since Revit names the system family ("Basic Wall")
+/// in its own UI language, so only [`TYPE_ID_FIELD`] and [`TYPE_NAME_FIELD`]
+/// are set.
+fn attach_system_type_names(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: &mut [&mut DecodedElement],
+) {
+    use crate::partition_type_records as ptr;
+    if elements.is_empty() || !ptr::supports_revit_version(revit_version) {
+        return;
+    }
+    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+        return;
+    };
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let mut type_ids_by_category: std::collections::BTreeMap<i64, BTreeSet<u32>> =
+        std::collections::BTreeMap::new();
+    let mut picks: Vec<(usize, u32)> = Vec::new();
+    for (index, element) in elements.iter().enumerate() {
+        let Some((references, category)) = record_references(rf, element) else {
+            continue;
+        };
+        let type_ids = type_ids_by_category.entry(category).or_insert_with(|| {
+            let records =
+                ptr::scan_type_records(rf, revit_version, category, &declared).unwrap_or_default();
+            ptr::type_definition_ids(&records)
+        });
+        if let Some(type_id) = ptr::unique_type_reference(&references, type_ids) {
+            picks.push((index, type_id));
+        }
+    }
+    if picks.is_empty() {
+        return;
+    }
+    let wanted: BTreeSet<u32> = picks.iter().map(|(_, id)| *id).collect();
+    let mut names: std::collections::BTreeMap<u32, Option<String>> =
+        std::collections::BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        for (id, name) in
+            crate::partition_names::find_element_data_names(inflated.bytes(), &header, &wanted)
+        {
+            match names.get(&id) {
+                None => {
+                    names.insert(id, Some(name));
+                }
+                Some(held) if held.as_deref() != Some(name.as_str()) => {
+                    names.insert(id, None);
+                }
+                _ => {}
+            }
+        }
+    }
+    for (index, type_id) in picks {
+        let Some(Some(name)) = names.get(&type_id) else {
+            continue;
+        };
+        let element = &mut elements[index];
+        element.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: type_id,
+            },
+        ));
+        element
+            .fields
+            .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+    }
 }
 
 /// Field naming an element-record element's type, from the partition name
