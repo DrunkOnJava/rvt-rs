@@ -292,9 +292,9 @@ class RevitFile:
         element's model group), or ``None`` (RE-31).
 
         Handles the three observed layout variants automatically:
-        family files (12 B implicit records, never an owner), Revit 2023
-        projects (28 B, owner ``u32`` at ``+0``), Revit 2024 projects
-        (40 B, owner ``u64`` at ``+4``). On a 34 MB project
+        Revit 2016-2023 files, projects and families (28 B, owner ``u32``
+        at ``+0``), and Revit 2024-2026 files (40 B, owner ``u64`` at
+        ``+4``). On a 34 MB project
         this returns all 26,425 declared records.
         """
 

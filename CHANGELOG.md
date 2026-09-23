@@ -6,6 +6,33 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Family files' `Global/ElemTable` is read correctly on every release.**
+  It was parsed as 12-byte "implicit" records from `0x30`, which produced
+  meaningless ids (0, 4128768, 196608, …) on all 11 family releases.
+  Families actually use the project records: 28 bytes through 2023 and
+  40 bytes from 2024, starting at `0x1E`. They have no `0xFF` marker and
+  end in a trailer, so neither existing check found them. `detect_layout`
+  now recognises such a table by its ids, which rise from 1 and equal
+  their secondary copy.
+  - `parse_records` returns exactly `record_count` records, with real
+    ElementIds.
+  - An owner field of `0`, which families use for "none", reads as unset.
+  - The documented `header_flag = 0x0011` turned out to be record 0's
+    owner (ElementId 17).
+  - The header value named `element_count` is a per-release constant (1370,
+    1411, 1451 and 1481 for 2023–2026), not a count of elements.
+
+  The problem was found by cross-checking phi-ag/rvt's independent notes
+  on the 2026 family table, and it is now pinned for all 11 releases by
+  `tests/elem_table_corpus.rs`.
+- **`source_coverage.decoded_element_fraction` divides by a real count.**
+  Its denominator was that header constant, so on Snowdon Towers it
+  reported 0.689 (972 / 1411). It now divides by the distinct ElementIds
+  `Global/ElemTable` declares, and `rvt-elem-table` labels the header value
+  as the constant it is.
+
 ## [0.2.0] — prepared, not yet released
 
 An **inspection-focused alpha** (see

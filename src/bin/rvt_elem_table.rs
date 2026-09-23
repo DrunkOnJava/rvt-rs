@@ -102,7 +102,7 @@ fn run() -> anyhow::Result<()> {
 
     println!("Global/ElemTable · {}", cli.file.display());
     println!(
-        "  declared element_count={}  declared record_count={}",
+        "  header: element_count={} (a per-release constant, not a count)  record_count={}",
         header.element_count, header.record_count
     );
     println!(

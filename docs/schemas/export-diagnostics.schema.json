@@ -330,7 +330,7 @@
           ],
           "minimum": 0,
           "maximum": 1,
-          "description": "production_walker_elements / ElemTable header element_count when 0 < walker <= element_count; null when the header is missing, zero, or exceeded by partition recovers."
+          "description": "production_walker_elements / the distinct non-zero ElementIds Global/ElemTable declares, when 0 < walker <= that count; null when the table is missing, empty, or exceeded."
         },
         "exported_element_fraction": {
           "type": [

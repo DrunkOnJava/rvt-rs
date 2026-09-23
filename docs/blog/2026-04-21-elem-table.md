@@ -1,5 +1,7 @@
 # The ElemTable record layout shifts between family and project files
 
+> **Erratum (2026-09-22):** the family-file layout below is wrong. Family ElemTables use the same 28- and 40-byte records as projects. See "Family files use the project records" in `docs/elem-table-record-layout-2026-04-21.md`.
+
 **Draft — 2026-04-21.** Pending review before publication.
 
 One of the quieter milestones in reading a `.rvt` without Revit is
