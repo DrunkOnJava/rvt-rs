@@ -216,6 +216,15 @@
       "user_impact": "Walls, floors, ceilings, roofs and railings show the type name Revit gives them (for example 8\" Interior Partition 3 Hour or Basement Slab) in the IFC property set and the viewer."
     },
     {
+      "id": "ifc-export-overrides",
+      "area": "ifc",
+      "name": "Revit's IFC export overrides (Export to IFC As, IFC Predefined Type, and their type-level twins), from element data",
+      "status": "partial",
+      "evidence": "partition_ifc_export_overrides::find_export_parameters / scan_export_parameters / ExportParameters; ifc::category_map::lookup_export_override / predefined_type_for; tests/ifc_export_overrides.rs (CI tier 2); examples/probe_re45_ifc_export_parameters.rs; reports/element-framing/RE-45-ifc-export-parameters.md",
+      "notes": "Revit's four IFC export parameters are entries i64 BuiltInParameter, u32 n, UTF-16 value in an element's serialised data: IFC_EXPORT_ELEMENT_AS (-1019014), IFC_EXPORT_ELEMENT_TYPE_AS (-1019015), IFC_EXPORT_PREDEFINEDTYPE (-1019016) and IFC_EXPORT_PREDEFINEDTYPE_TYPE (-1019017), public BuiltInParameter values. An entry belongs to the declared element whose element-data header (RE-44) is the last one before it, at most 0x800 bytes back (0x1ac measured); a value must have the shape of an IFC entity name or an enumerator. An element exports as its own override, else its type's (IfcCoveringType naming IfcCovering), with its own predefined type, else its type's, written only when it is an IFC4 enumerator of that entity. Honoured entities are the ones a reference export demonstrates: IfcShadingDevice (RE-22), IfcSlab and IfcCovering. Measured: on Core Interior every element rvt-rs writes has Revit's entity, and floors 20912 and 70325, which carry ifcSlab with ROOF, are IFCSLAB .ROOF. as in Revit's export (previously .FLOOR.); on teste_export_2025 (local only) the three walls of type 402, which carries IfcCoveringType with CLADDING, are IFCCOVERING .CLADDING. as in Revit's (previously IFCWALL). RE1, Snowdon Towers, Einhoven and Projeto1 carry no export parameter. The owners of IfcShadingDevice equal RE-22's owner-offset read, which no longer feeds the export. IfcSpace and IfcFooting overrides exist on Core only on elements Revit does not export and stay unhonoured. Revit's own category-to-entity mapping table is not read, and no IfcSlabType or IfcCoveringType is written. Revit 2024 and 2025.",
+      "user_impact": "Elements a modeller set to export as another IFC entity or predefined type - a roof-like floor, a wall used as cladding - come out of rvt-rs as they do out of Revit."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",

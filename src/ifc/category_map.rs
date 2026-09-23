@@ -419,11 +419,104 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// that moved `IFCWALL` off `.STANDARD.`. Before #235 this slot was `$`
 /// on the grounds that rvt-rs decodes no value for it; the witness is
 /// the value.
-pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[Mapping {
-    revit_class: "IfcShadingDevice",
-    ifc_type: "IFCSHADINGDEVICE",
-    predefined_type: Some("NOTDEFINED"),
-}];
+///
+/// RE-45 adds two targets, each proven against a reference export:
+/// `IfcSlab`, which the two Core Interior floors carrying `ifcSlab` (with
+/// predefined type `ROOF`) are in Revit's export, and `IfcCovering`, which
+/// the three `teste_export_2025` walls whose type carries `IfcCoveringType`
+/// (with `CLADDING`) are. The override's own predefined type replaces the
+/// target's default when it is an enumerator of that entity
+/// ([`predefined_type_for`]).
+pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
+    Mapping {
+        revit_class: "IfcShadingDevice",
+        ifc_type: "IFCSHADINGDEVICE",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcSlab",
+        ifc_type: "IFCSLAB",
+        predefined_type: Some("FLOOR"),
+    },
+    Mapping {
+        revit_class: "IfcCovering",
+        ifc_type: "IFCCOVERING",
+        predefined_type: Some("NOTDEFINED"),
+    },
+];
+
+/// IFC4 `PredefinedType` enumerators of the entities an export override
+/// can name, as the IFC4 schema lists them (`IfcSlabTypeEnum`,
+/// `IfcCoveringTypeEnum`, `IfcShadingDeviceTypeEnum`, `IfcRoofTypeEnum`).
+const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
+    (
+        "IFCSLAB",
+        &[
+            "FLOOR",
+            "ROOF",
+            "LANDING",
+            "BASESLAB",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCCOVERING",
+        &[
+            "CEILING",
+            "FLOORING",
+            "CLADDING",
+            "ROOFING",
+            "MOLDING",
+            "SKIRTINGBOARD",
+            "INSULATION",
+            "MEMBRANE",
+            "SLEEVING",
+            "WRAPPING",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCSHADINGDEVICE",
+        &["JALOUSIE", "SHUTTER", "AWNING", "USERDEFINED", "NOTDEFINED"],
+    ),
+    (
+        "IFCROOF",
+        &[
+            "FLAT_ROOF",
+            "SHED_ROOF",
+            "GABLE_ROOF",
+            "HIP_ROOF",
+            "HIPPED_GABLE_ROOF",
+            "GAMBREL_ROOF",
+            "MANSARD_ROOF",
+            "BARREL_ROOF",
+            "RAINBOW_ROOF",
+            "BUTTERFLY_ROOF",
+            "PAVILION_ROOF",
+            "DOME_ROOF",
+            "FREEFORM",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+];
+
+/// The IFC4 enumerator `value` names for `ifc_type`'s `PredefinedType`
+/// (RE-45), compared case-insensitively because the Revit parameter is
+/// user-entered text. `None` when the entity is not listed or the value is
+/// not one of its enumerators, so the caller keeps its own default.
+pub fn predefined_type_for(ifc_type: &str, value: &str) -> Option<&'static str> {
+    let value = value.trim();
+    PREDEFINED_TYPE_ENUMERATORS
+        .iter()
+        .find(|(entity, _)| *entity == ifc_type)?
+        .1
+        .iter()
+        .copied()
+        .find(|enumerator| enumerator.eq_ignore_ascii_case(value))
+}
 
 /// Look up the IFC entity type a "IFC Export As" override value names.
 ///
@@ -469,11 +562,38 @@ mod tests {
     }
 
     #[test]
+    fn export_override_maps_the_re45_values() {
+        assert_eq!(
+            lookup_export_override("ifcSlab").unwrap().ifc_type,
+            "IFCSLAB"
+        );
+        assert_eq!(
+            lookup_export_override("IfcCovering").unwrap().ifc_type,
+            "IFCCOVERING"
+        );
+        assert!(lookup_export_override("IfcFooting").is_none());
+    }
+
+    #[test]
+    fn predefined_type_override_must_be_an_enumerator_of_the_entity() {
+        assert_eq!(predefined_type_for("IFCSLAB", "ROOF"), Some("ROOF"));
+        assert_eq!(
+            predefined_type_for("IFCCOVERING", "cladding"),
+            Some("CLADDING")
+        );
+        assert_eq!(predefined_type_for("IFCSLAB", "CLADDING"), None);
+        assert_eq!(predefined_type_for("IFCFOOTING", "PAD_FOOTING"), None);
+        assert_eq!(predefined_type_for("IFCSLAB", "Sample"), None);
+    }
+
+    #[test]
     fn unproven_export_override_values_are_not_honoured() {
         // A value the reference export never demonstrated must leave
         // the element on its class mapping rather than invent a type.
-        assert!(lookup_export_override("IfcCovering").is_none());
-        assert!(lookup_export_override("IfcSlab").is_none());
+        // Core Interior carries `IfcSpace` and `ifcFooting` overrides, but
+        // only on elements Revit does not export, so neither is proven.
+        assert!(lookup_export_override("IfcSpace").is_none());
+        assert!(lookup_export_override("ifcFooting").is_none());
         assert!(lookup_export_override("").is_none());
     }
 

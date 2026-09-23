@@ -27,6 +27,21 @@ All notable changes will be documented here. This project follows
   - `examples/probe_re44_system_type_names.rs` lists the names for any file,
     and `tests/element_names.rs` checks Core Interior and RE1 against
     Revit's exports.
+- **Revit's IFC export overrides are honoured, the element's own and its
+  type's (RE-45).** "Export to IFC As", "IFC Predefined Type" and their
+  type-level twins are parameter entries in the element's serialised data
+  (`i64 BuiltInParameter · u32 n · UTF-16`), read on Revit 2024 and 2025.
+  - An element exports as its own override, else its type's (`IfcCoveringType`
+    names `IfcCovering`). The predefined type is written when it is an IFC4
+    enumerator of that entity.
+  - On Core Interior two floors carrying `ifcSlab` / `ROOF` are now
+    `IFCSLAB … .ROOF.` as in Revit's export, and every element has Revit's
+    entity.
+  - On `teste_export_2025` the three walls of a type exported as
+    `IfcCoveringType` / `CLADDING` are `IFCCOVERING … .CLADDING.`.
+  - `IfcSlab` and `IfcCovering` join `IfcShadingDevice` as honoured targets.
+  - `examples/probe_re45_ifc_export_parameters.rs` lists a file's overrides,
+    and `tests/ifc_export_overrides.rs` checks Core.
 - **Type records are read on Revit 2025.** `partition_type_records` read
   Revit 2024 only. The same records on 2025 carry the 2025 marker and
   prologue constant, and most are second-prologue frames that take their

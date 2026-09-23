@@ -104,7 +104,14 @@ at 286, both required to agree and to be declared in
 naming 21 ids, of which the 20 that are also placed instances are
 exactly the export's `IFCSHADINGDEVICE` `Tag` set; only
 `IfcShadingDevice` is honoured as an override target, an unrecognised
-value leaves the element on its class mapping. Composed, the two rules
+value leaves the element on its class mapping. Since RE-45 the override is
+read as what it is, the `IFC_EXPORT_ELEMENT_AS` parameter entry of the
+element's serialised data, on Revit 2024 and 2025, together with its IFC
+predefined type and the pair a type sets for its elements: Core floors 20912
+and 70325 carry `ifcSlab` with `ROOF` and are Revit's two `IFCSLAB … .ROOF.`
+rows, and the three `teste_export_2025` walls whose type carries
+`IfcCoveringType` with `CLADDING` are its three `IFCCOVERING … .CLADDING.`
+rows (`reports/element-framing/RE-45-ifc-export-parameters.md`). Composed, the two rules
 give **80 of 80 `IfcSlab` and 20 of 20 `IfcShadingDevice`, exact
 ElementId sets at tolerance 0**, verified with IfcOpenShell 0.8.5 and
 IFClite 7.1.1. The record's bounding-box `z` extent is the slab's real
