@@ -1863,4 +1863,18 @@ Revit's export holds now has Revit's GlobalId (Core 854 of 854, RE1 281 of
 Report: `reports/element-framing/RE-48-revit-global-ids.md`.
 Probe: `examples/probe_re48_revit_global_ids.rs`.
 
+## Addendum — RE-49 beams along their location lines (2026-09-23)
+
+A structural-framing element's data carries its location line as a bounded
+line record (`04 00 08 01 · f64 · f64 · f64×3 origin · f64×3 unit
+direction`). With the record box it gives a box `length × width × depth`
+along the line, the section solved from the box with one plan extent left
+as a check (923 of 942 Snowdon beams pass it). Against a later edition's VIM
+meshes, the section is Revit's on 613 of the 839 beams that edition kept
+unchanged and Revit's less a floor join's cut on 179 more; ends are not
+trimmed at supports.
+
+Report: `reports/element-framing/RE-49-beam-axes.md`.
+Probe: `examples/probe_re49_beam_axes.rs`.
+
 **End of report.**

@@ -243,6 +243,15 @@
       "user_impact": "Stairs and flights carry the riser count, riser height and tread length Revit schedules them by, in the standard IFC property sets, and the viewer shows them."
     },
     {
+      "id": "element-record-beam-axes",
+      "area": "elements",
+      "name": "Beams along their location lines from Revit 2024 structural-framing element data",
+      "status": "partial",
+      "evidence": "partition_beam_axes::bounded_line_at / first_bounded_line / scan_beam_axes / beam_body; partition_schema_mvp::attach_beam_axes (BEAM_AXIS_* fields); ifc::export_content RecordGeometry and BEAM_AXIS_BODY_SOURCE; unit tests in partition_beam_axes and export_content; examples/probe_re49_beam_axes.rs; reports/element-framing/RE-49-beam-axes.md",
+      "notes": "A structural-framing element's data carries its location line as a bounded line record: 04 00 08 01, start and end parameters (f64 ft), an origin (3 f64, model ft) and a unit direction (3 f64), found in the data up to the next element-data header. With the element's record box, beam_body solves a box length x width x depth along the line: the length is the line's, the depth comes from the vertical extent, the width from one plan extent, and the other plan extent must come out to 0.01 ft. A level beam exports as Extrusion::rectangle(length, width, depth) rotated to the line's plan angle; a sloped one keeps its record box as the extrusion and sweeps its section along its centreline (SolidShape::SweptPath, IfcFixedReferenceSweptAreaSolid with +Z as the fixed reference). On Snowdon Towers Structural (local only) all 942 exported framing elements carry a line, 940 inside their box, and 923 solve (802 level on a model axis, 111 level rotated in plan, 10 sloped); IfcOpenShell meshes each exported solid to its record box (938 to 0.001 ft, 4 to 0.0016 ft). Against the meshes of the 2027 edition's VIM export, scored only where that edition kept the beam's Location, type and mesh consistent (839), the section across the line equals Revit's on 613 and Revit's less the top a floor join cuts on 179; the ends equal Revit's on 485 and Revit trims 352 at their supports (median 0.625 ft at the larger end), which is not read. Rotated beams' solids are 1.108 times Revit's own beam envelope at the median, against 8.406 times for the record box they replace. Status is partial: ends are not trimmed, floor-join cuts are not applied, the section is a rectangle envelope, 17 beams (15 oblique with skewed ends) keep their box, and no licensed CI file has structural framing. Revit 2024 only.",
+      "user_impact": "Beams, joists and girders export along their own axes instead of as boxes around them, so a diagonal beam is a beam, not a slab of the bay it crosses."
+    },
+    {
       "id": "revit-global-ids",
       "area": "ifc",
       "name": "Revit's own IFC GlobalIds for elements, rooms and storeys, rebuilt from Global/History and Global/ElemTable",

@@ -249,6 +249,7 @@ pub fn append_typed_production_elements(
         let mut pending_host_id = None;
         let mut piece_bodies: Vec<Extrusion> = Vec::new();
         let mut held_body = None;
+        let mut solid_shape = None;
 
         if policy.include_geometry {
             // Partition element records carry their own model bbox for
@@ -261,8 +262,18 @@ pub fn append_typed_production_elements(
             } else {
                 None
             };
-            if let Some((location, body, properties, pieces)) = element_record_geometry {
+            if let Some(RecordGeometry {
+                location,
+                rotation,
+                body,
+                solid,
+                properties,
+                pieces,
+            }) = element_record_geometry
+            {
                 location_feet = Some(location);
+                rotation_radians = rotation;
+                solid_shape = solid;
                 piece_bodies = pieces;
                 // #323 / RE-46: a stair or curtain wall is carried by its
                 // parts, as in Revit's export; its own record box would
@@ -360,7 +371,7 @@ pub fn append_typed_production_elements(
             host_element_index: None,
             material_layer_set_index: None,
             material_profile_set_index: None,
-            solid_shape: None,
+            solid_shape,
             representation_map_index: None,
         });
         // #331: each further piece of a sketch of separate loops is an
@@ -671,9 +682,43 @@ fn is_partition_element_record(decoded: &DecodedElement) -> bool {
 /// box itself — an envelope, not a recovered family profile or a
 /// wall location curve. The property set says so rather than letting
 /// a consumer read the rectangle as a modelled section.
-fn element_record_geometry_from_decoded(
-    decoded: &DecodedElement,
-) -> Option<([f64; 3], Extrusion, PropertySet, Vec<Extrusion>)> {
+/// What an element record gives an element: its placement, its body and
+/// the properties saying where they came from.
+struct RecordGeometry {
+    location: [f64; 3],
+    rotation: Option<f64>,
+    body: Extrusion,
+    /// A body the extrusion cannot express (a sloped beam, RE-49). `body`
+    /// stays the record box for consumers that read only extrusions.
+    solid: Option<entities::SolidShape>,
+    properties: PropertySet,
+    pieces: Vec<Extrusion>,
+}
+
+/// `BodySource` of a beam whose body runs along its location line (RE-49).
+pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
+
+/// A sloped beam's body: its section swept along its centreline, with the
+/// section's depth kept in the line's vertical plane. `location` is the
+/// element's placement, which the directrix is relative to.
+fn beam_swept_solid(
+    beam: &crate::partition_beam_axes::BeamBody,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    let (a, b) = beam.centreline();
+    let local = |p: [f64; 3]| [p[0] - location[0], p[1] - location[1], p[2] - location[2]];
+    entities::SolidShape::SweptPath {
+        // The fixed reference sets the profile's X axis, so X is the depth.
+        profile: entities::ProfileDef::Rectangle {
+            width_feet: beam.depth_feet,
+            depth_feet: beam.width_feet,
+        },
+        directrix_points_feet: vec![local(a), local(b)],
+        fixed_reference: [0.0, 0.0, 1.0],
+    }
+}
+
+fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecordGeometry> {
     let class = decoded.class.as_str();
     let mut width = None;
     let mut depth = None;
@@ -780,6 +825,25 @@ fn element_record_geometry_from_decoded(
     if width <= 0.0 || depth <= 0.0 || height <= 0.0 {
         return None;
     }
+    // RE-49: a beam whose location line the record box supports runs along
+    // that line instead of filling its box.
+    let beam = if class == "StructuralFraming" {
+        crate::partition_schema_mvp::beam_axis_from_fields(&decoded.fields).and_then(
+            |(start, end)| {
+                let bbox = [
+                    x - width / 2.0,
+                    y - depth / 2.0,
+                    z,
+                    x + width / 2.0,
+                    y + depth / 2.0,
+                    z + height,
+                ];
+                crate::partition_beam_axes::beam_body(bbox, start, end)
+            },
+        )
+    } else {
+        None
+    };
     // The sketched plan profile, when the element's `OST_SketchLines`
     // records closed one (#31, RE-25). It is recovered in project
     // plan coordinates and the body is placed at the record's plan
@@ -847,12 +911,15 @@ fn element_record_geometry_from_decoded(
                 wall_body_source
                     .clone()
                     .or_else(|| column_body_source.clone())
+                    .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .unwrap_or_else(|| "partition_element_record_bbox".into()),
             ),
         },
         Property {
             name: "ProfileResolved".into(),
-            value: PropertyValue::Boolean(profile.is_some() || type_section.is_some()),
+            value: PropertyValue::Boolean(
+                profile.is_some() || type_section.is_some() || beam.is_some(),
+            ),
         },
         Property {
             name: "LevelBindResolved".into(),
@@ -976,6 +1043,20 @@ fn element_record_geometry_from_decoded(
             value: PropertyValue::Integer(walls),
         });
     }
+    // RE-49: the beam's length along its location line and the section the
+    // record box leaves across it.
+    if let Some(beam) = beam {
+        for (name, value) in [
+            ("AxisLengthFeet", beam.length_feet),
+            ("SectionWidthFeet", beam.width_feet),
+            ("SectionDepthFeet", beam.depth_feet),
+        ] {
+            properties.push(Property {
+                name: name.into(),
+                value: PropertyValue::LengthFeet(value),
+            });
+        }
+    }
     if let Some(stream) = source_stream {
         properties.push(Property {
             name: "SourceStream".into(),
@@ -1024,20 +1105,34 @@ fn element_record_geometry_from_decoded(
             value: PropertyValue::Text(RECORD_BBOX_THICKNESS_SOURCE.into()),
         });
     }
-    Some((
-        [x, y, z],
-        Extrusion {
-            width_feet: width,
-            depth_feet: depth,
-            height_feet: height,
-            profile_override,
-        },
-        PropertySet {
+    let record_body = Extrusion {
+        width_feet: width,
+        depth_feet: depth,
+        height_feet: height,
+        profile_override,
+    };
+    let (rotation, body, solid) = match beam {
+        // A level beam is its section's plan rectangle along the line,
+        // extruded through its depth from the record box's base.
+        Some(beam) if beam.is_horizontal() => (
+            Some(beam.plan_angle_radians()),
+            Extrusion::rectangle(beam.length_feet, beam.width_feet, beam.depth_feet),
+            None,
+        ),
+        Some(beam) => (None, record_body, Some(beam_swept_solid(&beam, [x, y, z]))),
+        None => (None, record_body, None),
+    };
+    Some(RecordGeometry {
+        location: [x, y, z],
+        rotation,
+        body,
+        solid,
+        properties: PropertySet {
             name: ELEMENT_RECORD_PROPERTY_SET.into(),
             properties,
         },
-        piece_bodies,
-    ))
+        pieces: piece_bodies,
+    })
 }
 
 /// Document a recovered floor boundary without inventing slab thickness.
@@ -1490,8 +1585,12 @@ mod tests {
             "m_source".into(),
             InstanceField::String("partition_element_record".into()),
         ));
-        let (_, body, properties, pieces) =
-            element_record_geometry_from_decoded(&slab).expect("record geometry");
+        let RecordGeometry {
+            body,
+            properties,
+            pieces,
+            ..
+        } = element_record_geometry_from_decoded(&slab).expect("record geometry");
         assert!(pieces.is_empty());
         assert!((body.height_feet - 0.1667).abs() < 1e-6);
         assert!(properties.properties.iter().any(|p| {
@@ -1518,7 +1617,7 @@ mod tests {
                 .fields
                 .push((name.into(), InstanceField::Float { value, size: 8 }));
         }
-        let (_, _, properties, _) =
+        let RecordGeometry { properties, .. } =
             element_record_geometry_from_decoded(&column).expect("record geometry");
         assert!(
             !properties
@@ -1527,6 +1626,198 @@ mod tests {
                 .any(|p| p.name == "ThicknessResolved"),
             "an envelope height is not a thickness"
         );
+    }
+
+    /// A structural-framing element with its record box and, when given,
+    /// the location line RE-49 attaches.
+    fn beam(bbox: [f64; 6], line: Option<([f64; 3], [f64; 3])>) -> DecodedElement {
+        let mut element = decoded("StructuralFraming", Some(627866));
+        for (name, value) in [
+            ("m_locationX", (bbox[0] + bbox[3]) / 2.0),
+            ("m_locationY", (bbox[1] + bbox[4]) / 2.0),
+            ("m_locationZ", bbox[2]),
+            ("m_bboxWidth", bbox[3] - bbox[0]),
+            ("m_bboxDepth", bbox[4] - bbox[1]),
+            ("m_bboxHeight", bbox[5] - bbox[2]),
+        ] {
+            element
+                .fields
+                .push((name.into(), InstanceField::Float { value, size: 8 }));
+        }
+        element.fields.push((
+            "m_source".into(),
+            InstanceField::String("partition_element_record".into()),
+        ));
+        if let Some((start, end)) = line {
+            use crate::partition_schema_mvp::{BEAM_AXIS_END_FIELDS, BEAM_AXIS_START_FIELDS};
+            for (names, point) in [(BEAM_AXIS_START_FIELDS, start), (BEAM_AXIS_END_FIELDS, end)] {
+                for (name, value) in names.iter().zip(point) {
+                    element
+                        .fields
+                        .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+                }
+            }
+        }
+        element
+    }
+
+    fn body_source(properties: &PropertySet) -> Option<&str> {
+        properties
+            .properties
+            .iter()
+            .find_map(|p| match (&p.value, p.name.as_str()) {
+                (PropertyValue::Text(text), "BodySource") => Some(text.as_str()),
+                _ => None,
+            })
+    }
+
+    /// RE-49: a level beam rotated in plan exports as its section's plan
+    /// rectangle along its location line, not as the box around it.
+    #[test]
+    fn a_beam_runs_along_its_location_line() {
+        let angle = 30f64.to_radians();
+        let (length, width, depth) = (20.0, 0.5, 1.5);
+        let (c, s) = (angle.cos(), angle.sin());
+        // The line along the top of the beam, and the box of the beam.
+        let start = [0.0, 0.0, 10.0];
+        let end = [length * c, length * s, 10.0];
+        let half_x = width / 2.0 * s;
+        let half_y = width / 2.0 * c;
+        let bbox = [
+            -half_x,
+            -half_y,
+            10.0 - depth,
+            length * c + half_x,
+            length * s + half_y,
+            10.0,
+        ];
+        let element = beam(bbox, Some((start, end)));
+        let RecordGeometry {
+            location,
+            rotation,
+            body,
+            solid,
+            properties,
+            ..
+        } = element_record_geometry_from_decoded(&element).expect("record geometry");
+        assert!((rotation.expect("rotated") - angle).abs() < 1e-12);
+        assert!(solid.is_none());
+        assert!(body.profile_override.is_none());
+        assert!((body.width_feet - length).abs() < 1e-9);
+        assert!((body.depth_feet - width).abs() < 1e-9);
+        assert!((body.height_feet - depth).abs() < 1e-9);
+        assert!((location[0] - length * c / 2.0).abs() < 1e-9);
+        assert!((location[1] - length * s / 2.0).abs() < 1e-9);
+        assert_eq!(location[2], 10.0 - depth);
+        assert_eq!(body_source(&properties), Some(BEAM_AXIS_BODY_SOURCE));
+        assert!(properties.properties.iter().any(|p| {
+            p.name == "AxisLengthFeet"
+                && matches!(p.value, PropertyValue::LengthFeet(v) if (v - length).abs() < 1e-9)
+        }));
+
+        // The element the exporter writes carries the rotation.
+        let mut entities = Vec::new();
+        let mut storeys = Vec::new();
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
+        append_typed_production_elements(
+            std::iter::once(element),
+            &mut entities,
+            &mut storeys,
+            policy,
+        );
+        let rotations: Vec<f64> = entities
+            .iter()
+            .filter_map(|entity| match entity {
+                entities::IfcEntity::BuildingElement {
+                    rotation_radians, ..
+                } => *rotation_radians,
+                _ => None,
+            })
+            .collect();
+        assert!(matches!(rotations[..], [r] if (r - angle).abs() < 1e-12));
+    }
+
+    /// RE-49: a sloped beam sweeps its section along its centreline and
+    /// keeps its record box as the extrusion.
+    #[test]
+    fn a_sloped_beam_sweeps_its_section_along_its_centreline() {
+        let slope = 2f64.to_radians();
+        let (length, width, depth) = (20.0, 0.25, 0.3);
+        let d = [0.0, slope.cos(), -slope.sin()];
+        let start = [5.0, 1.0, 30.0];
+        let end = [5.0, 1.0 + length * d[1], 30.0 + length * d[2]];
+        let (ey, ez) = (
+            length * d[1] + depth * slope.sin(),
+            length * d[2].abs() + depth * slope.cos(),
+        );
+        let centre = [5.0, (start[1] + end[1]) / 2.0, (start[2] + end[2]) / 2.0];
+        let bbox = [
+            centre[0] - width / 2.0,
+            centre[1] - ey / 2.0,
+            centre[2] - ez / 2.0,
+            centre[0] + width / 2.0,
+            centre[1] + ey / 2.0,
+            centre[2] + ez / 2.0,
+        ];
+        let RecordGeometry {
+            location,
+            rotation,
+            body,
+            solid,
+            properties,
+            ..
+        } = element_record_geometry_from_decoded(&beam(bbox, Some((start, end))))
+            .expect("record geometry");
+        assert!(rotation.is_none());
+        assert!((body.height_feet - ez).abs() < 1e-9, "the record box stays");
+        let Some(entities::SolidShape::SweptPath {
+            profile:
+                entities::ProfileDef::Rectangle {
+                    width_feet,
+                    depth_feet,
+                },
+            directrix_points_feet,
+            fixed_reference,
+        }) = solid
+        else {
+            panic!("expected a swept solid");
+        };
+        assert!((width_feet - depth).abs() < 1e-9);
+        assert!((depth_feet - width).abs() < 1e-9);
+        assert_eq!(fixed_reference, [0.0, 0.0, 1.0]);
+        let [a, b] = directrix_points_feet[..] else {
+            panic!("two directrix points");
+        };
+        for axis in 0..3 {
+            // The directrix is the centreline, relative to the placement.
+            let mid = (a[axis] + b[axis]) / 2.0 + location[axis];
+            assert!((mid - centre[axis]).abs() < 1e-9);
+        }
+        let run = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt();
+        assert!((run - length).abs() < 1e-9);
+        assert_eq!(body_source(&properties), Some(BEAM_AXIS_BODY_SOURCE));
+    }
+
+    /// RE-49: without a line, or with one no box along it reproduces, a
+    /// beam keeps its record box.
+    #[test]
+    fn a_beam_without_a_solvable_line_keeps_its_box() {
+        let bbox = [0.0, 0.0, 0.0, 10.0, 6.0, 1.0];
+        for line in [None, Some(([0.0, 0.0, 1.0], [10.0, 6.0, 1.0]))] {
+            let RecordGeometry {
+                rotation,
+                body,
+                solid,
+                properties,
+                ..
+            } = element_record_geometry_from_decoded(&beam(bbox, line)).expect("record geometry");
+            assert!(rotation.is_none() && solid.is_none());
+            assert_eq!((body.width_feet, body.depth_feet), (10.0, 6.0));
+            assert_eq!(
+                body_source(&properties),
+                Some("partition_element_record_bbox")
+            );
+        }
     }
 
     #[test]
