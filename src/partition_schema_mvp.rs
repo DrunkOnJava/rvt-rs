@@ -198,7 +198,102 @@ pub fn recover_partition_schema_mvp(
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
 
+    // --- Family and type names (RE-38) ---
+    for elements in [
+        &mut out.walls,
+        &mut out.columns,
+        &mut out.doors,
+        &mut out.windows,
+        &mut out.slabs,
+        &mut out.products,
+    ] {
+        attach_family_and_type_names(rf, elements);
+    }
+
     Ok(out)
+}
+
+/// Field naming an element-record element's type, from the partition name
+/// entries (RE-38).
+pub const TYPE_NAME_FIELD: &str = "m_type_name";
+/// Field naming the family of that type (RE-38).
+pub const FAMILY_NAME_FIELD: &str = "m_family_name";
+/// Field carrying the type's ElementId (RE-38).
+pub const TYPE_ID_FIELD: &str = "m_type_id";
+
+/// Give each element-record element its family and type names (RE-38).
+///
+/// The record's reference list is read again at its source offset. Its type
+/// is the one reference with a name entry of the record's category, and
+/// the family is the one such id in the type's own partition record
+/// ([`crate::partition_names::resolve_type`] /
+/// [`crate::partition_names::resolve_family`]). An element gets the fields
+/// only when both joins are unique.
+fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
+    let names = rf.element_names();
+    if names.entries.is_empty() {
+        return;
+    }
+    for element in elements.iter_mut() {
+        let Some(own) = element.id else {
+            continue;
+        };
+        let mut stream = None;
+        let mut offset = None;
+        let mut category = None;
+        for (name, value) in &element.fields {
+            match (name.as_str(), value) {
+                ("m_source_stream", InstanceField::String(v)) => stream = Some(v.clone()),
+                ("m_source_offset", InstanceField::Integer { value, .. }) => {
+                    offset = usize::try_from(*value).ok();
+                }
+                ("m_builtinCategory", InstanceField::Integer { value, .. }) => {
+                    category = Some(*value);
+                }
+                _ => {}
+            }
+        }
+        let (Some(stream), Some(offset), Some(category)) = (stream, offset, category) else {
+            continue;
+        };
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let references = offset
+            .checked_add(crate::partition_element_records::REFERENCE_LIST_OFFSET)
+            .and_then(|at| {
+                crate::partition_element_records::decode_reference_list(inflated.bytes(), at)
+            })
+            .unwrap_or_default();
+        let Some(type_id) =
+            crate::partition_names::resolve_type(&names, &references, category, own)
+        else {
+            continue;
+        };
+        let Some(family_id) = crate::partition_names::resolve_family(&names, type_id) else {
+            continue;
+        };
+        let (Some(type_entry), Some(family_entry)) =
+            (names.entries.get(&type_id), names.entries.get(&family_id))
+        else {
+            continue;
+        };
+        element.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: type_id,
+            },
+        ));
+        element.fields.push((
+            TYPE_NAME_FIELD.into(),
+            InstanceField::String(type_entry.name.clone()),
+        ));
+        element.fields.push((
+            FAMILY_NAME_FIELD.into(),
+            InstanceField::String(family_entry.name.clone()),
+        ));
+    }
 }
 
 /// Placed instances of every

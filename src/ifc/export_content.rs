@@ -77,6 +77,26 @@ impl ExportContentPolicy {
 /// element record's bounding box (#204 / #211).
 pub const ELEMENT_RECORD_PROPERTY_SET: &str = "RvtElementRecordGeometry";
 
+/// Property naming an element-record element's family (RE-38).
+pub const FAMILY_NAME_PROPERTY: &str = "FamilyName";
+
+/// Property naming an element-record element's type (RE-38).
+pub const TYPE_NAME_PROPERTY: &str = "TypeName";
+
+/// The `(family, type)` names RE-38 attached to `decoded`, when both are.
+fn family_and_type(decoded: &DecodedElement) -> Option<(String, String)> {
+    let field = |key: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(v) if name == key => Some(v.clone()),
+            _ => None,
+        })
+    };
+    Some((
+        field(crate::partition_schema_mvp::FAMILY_NAME_FIELD)?,
+        field(crate::partition_schema_mvp::TYPE_NAME_FIELD)?,
+    ))
+}
+
 /// Decoded classes whose record bounding-box `z` extent is the
 /// element's own thickness rather than an envelope height (#212).
 pub const SLAB_THICKNESS_CLASSES: &[&str] = &["Floor", "BuildingPad"];
@@ -194,9 +214,12 @@ pub fn append_typed_production_elements(
         let effective = ifc_export_override(&decoded).unwrap_or(mapping);
         let ifc_type = effective.ifc_type.to_string();
 
-        let name = match decoded.id {
-            Some(id) => format!("{}-{}", decoded.class, id),
-            None => format!("{}-unnamed", decoded.class),
+        let name = match (decoded.id, family_and_type(&decoded)) {
+            // RE-38: `Family:Type:ElementId`, the name Revit's own export
+            // gives the element.
+            (Some(id), Some((family, type_name))) => format!("{family}:{type_name}:{id}"),
+            (Some(id), None) => format!("{}-{}", decoded.class, id),
+            (None, _) => format!("{}-unnamed", decoded.class),
         };
         let type_guid = decoded.id.map(|id| id.to_string());
 
@@ -535,9 +558,17 @@ fn element_record_geometry_from_decoded(
     let mut level_id = None;
     let mut room_name = None;
     let mut room_number = None;
+    let mut family_name = None;
+    let mut type_name = None;
     for (name, value) in &decoded.fields {
         match (name.as_str(), value) {
             ("m_name", InstanceField::String(v)) => room_name = Some(v.clone()),
+            (crate::partition_schema_mvp::FAMILY_NAME_FIELD, InstanceField::String(v)) => {
+                family_name = Some(v.clone());
+            }
+            (crate::partition_schema_mvp::TYPE_NAME_FIELD, InstanceField::String(v)) => {
+                type_name = Some(v.clone());
+            }
             (crate::partition_schema_mvp::ROOM_NUMBER_FIELD, InstanceField::String(v)) => {
                 room_number = Some(v.clone());
             }
@@ -795,6 +826,18 @@ fn element_record_geometry_from_decoded(
         properties.push(Property {
             name: "SourceStream".into(),
             value: PropertyValue::Text(stream),
+        });
+    }
+    // RE-38: the family and type the partition name entries give this
+    // element, the two halves of the `Family:Type` Revit's export uses.
+    if let (Some(family), Some(type_name)) = (family_name, type_name) {
+        properties.push(Property {
+            name: FAMILY_NAME_PROPERTY.into(),
+            value: PropertyValue::Text(family),
+        });
+        properties.push(Property {
+            name: TYPE_NAME_PROPERTY.into(),
+            value: PropertyValue::Text(type_name),
         });
     }
     // For a plate the recorded vertical extent *is* the element's

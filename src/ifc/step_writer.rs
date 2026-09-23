@@ -1789,6 +1789,27 @@ impl StepWriter {
                             })
                     })
                     .unwrap_or_else(|| name_quoted.clone());
+                // `ObjectType` is `Family:Type` when RE-38 named the
+                // element's family and type, as in Revit's own export.
+                let property_text = |key: &str| {
+                    property_set.as_ref().and_then(|set| {
+                        set.properties.iter().find_map(|p| match &p.value {
+                            super::entities::PropertyValue::Text(text) if p.name == key => {
+                                Some(text.clone())
+                            }
+                            _ => None,
+                        })
+                    })
+                };
+                let object_type_quoted = match (
+                    property_text(super::export_content::FAMILY_NAME_PROPERTY),
+                    property_text(super::export_content::TYPE_NAME_PROPERTY),
+                ) {
+                    (Some(family), Some(type_name)) => {
+                        quoted_or_dollar(&escape(&format!("{family}:{type_name}")))
+                    }
+                    _ => "$".into(),
+                };
                 let tag_quoted = type_guid
                     .as_deref()
                     .map(escape)
@@ -1815,7 +1836,7 @@ impl StepWriter {
                     &long_name_quoted,
                 );
                 let line = format!(
-                    "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,$,#{placement_id},{rep_slot},{tail})",
+                    "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,{object_type_quoted},#{placement_id},{rep_slot},{tail})",
                     make_guid(el_id),
                 );
                 self.emit_entity(el_id, line);
