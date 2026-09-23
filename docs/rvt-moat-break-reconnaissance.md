@@ -1904,4 +1904,23 @@ included.
 Report: `reports/element-framing/RE-51-level-names.md`.
 Probe: `examples/probe_re51_level_names.rs`.
 
+## Addendum — RE-52 stair runs' treads and risers (2026-09-23)
+
+A straight stair run's data carries its plan sketch as bounded line records
+at its base elevation: two boundary lines from the first riser to the last,
+then a line across the run at each riser. The run type its reference list
+names has its own serialised object (`01 00 00 00 · u64 id`, tag `db 0f`
+at +0x47) with structural depth, tread thickness, riser thickness and
+nosing length (f64 ft at +0x59, +0x69, +0x71, +0x79), one-byte flags
+(monolithic, treads, risers, slanted risers at +0xbd..=+0xc0; +0xb5 set on
+the one type whose treads run on under the riser above) and the type's
+name. With RE-47's riser height they give each run's side view. On Snowdon
+Towers 34 of 43 runs are drawn: the 30 steel-pan runs equal Revit's own
+geometry to 1e-5 ft, and the 4 with upright risers square the nosing that
+Revit profiles. Every run type name equals the type part of Revit's
+ObjectType on all 49 exported flights.
+
+Report: `reports/element-framing/RE-52-stair-treads.md`.
+Probe: `examples/probe_re52_stair_treads.rs`.
+
 **End of report.**

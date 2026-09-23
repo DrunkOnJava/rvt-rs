@@ -649,6 +649,36 @@ fn swept_mesh(
     (!mesh.is_empty()).then_some(mesh)
 }
 
+/// A profile extruded along the Z axis of its own placement, as
+/// `IfcExtrudedAreaSolid` with an `IfcAxis2Placement3D` does: X is the
+/// reference direction projected off the axis, Y is the axis crossed with
+/// X.
+fn placed_extrusion_mesh(
+    profile: &ProfileDef,
+    origin: [f64; 3],
+    axis: [f64; 3],
+    reference: [f64; 3],
+    depth: f64,
+) -> Option<Mesh> {
+    if !(depth.is_finite() && depth > 0.0) {
+        return None;
+    }
+    let (outer, holes) = profile_rings(profile)?;
+    let section = section(&outer, &holes)?;
+    let z = unit(axis)?;
+    let along = dot(reference, z);
+    let x = unit(sub(reference, [z[0] * along, z[1] * along, z[2] * along]))?;
+    let y = cross3(z, x);
+    let mesh = prism(&section, |(u, v), t| {
+        [
+            origin[0] + u * x[0] + v * y[0] + t * depth * z[0],
+            origin[1] + u * x[1] + v * y[1] + t * depth * z[1],
+            origin[2] + u * x[2] + v * y[2] + t * depth * z[2],
+        ]
+    });
+    (!mesh.is_empty()).then_some(mesh)
+}
+
 /// `p` turned `angle` about the axis through `origin` along the unit `axis`.
 fn rotate(p: [f64; 3], origin: [f64; 3], axis: [f64; 3], angle: f64) -> [f64; 3] {
     let v = sub(p, origin);
@@ -744,6 +774,13 @@ pub fn solid_mesh(shape: &SolidShape) -> Option<Mesh> {
             directrix_points_feet,
             fixed_reference,
         } => swept_mesh(profile, directrix_points_feet, *fixed_reference),
+        SolidShape::PlacedExtrusion {
+            profile,
+            origin_feet,
+            axis,
+            ref_direction,
+            depth_feet,
+        } => placed_extrusion_mesh(profile, *origin_feet, *axis, *ref_direction, *depth_feet),
         SolidShape::RevolvedArea {
             profile,
             axis_origin_feet,
@@ -1023,6 +1060,62 @@ mod tests {
         assert!((across([1.0, 0.0, 0.0]) - 0.25).abs() < 1e-9);
         assert!((across([0.0, slope.sin(), slope.cos()]) - 0.3).abs() < 1e-9);
         assert!((across(d) - 20.0).abs() < 1e-9);
+    }
+
+    /// RE-52: a placed extrusion stands its profile in the plane its axis
+    /// is normal to, X along the reference, Y the axis crossed with X.
+    #[test]
+    fn a_placed_extrusion_stands_its_profile_up() {
+        // An L-shaped step, X up and Y along, extruded 4 ft along -X.
+        let points = vec![
+            (0.0, 0.0),
+            (0.5, 0.0),
+            (0.5, 1.0),
+            (0.25, 1.0),
+            (0.25, 0.5),
+            (0.0, 0.5),
+        ];
+        let shape = SolidShape::PlacedExtrusion {
+            profile: ProfileDef::ArbitraryClosed { points },
+            origin_feet: [1.0, 2.0, 3.0],
+            axis: [-1.0, 0.0, 0.0],
+            ref_direction: [0.0, 0.0, 1.0],
+            depth_feet: 4.0,
+        };
+        let mesh = solid_mesh(&shape).expect("mesh");
+        assert!((volume(&mesh).abs() - 4.0 * 0.375).abs() < 1e-9);
+        // Y is (-1, 0, 0) × (0, 0, 1) = (0, 1, 0): profile (x, y) lands at
+        // origin + x up + y along +Y, swept to x = 1 - 4.
+        for (x, y) in [(0.5, 1.0), (0.25, 0.5)] {
+            for along in [1.0, -3.0] {
+                let want = [along, 2.0 + y, 3.0 + x];
+                assert!(
+                    mesh.vertices
+                        .iter()
+                        .any(|p| (0..3).all(|i| (p[i] - want[i]).abs() < 1e-12)),
+                    "missing {want:?}"
+                );
+            }
+        }
+        // A zero depth draws nothing.
+        let SolidShape::PlacedExtrusion {
+            profile,
+            origin_feet,
+            axis,
+            ref_direction,
+            ..
+        } = shape
+        else {
+            unreachable!()
+        };
+        let flat = SolidShape::PlacedExtrusion {
+            profile,
+            origin_feet,
+            axis,
+            ref_direction,
+            depth_feet: 0.0,
+        };
+        assert!(solid_mesh(&flat).is_none());
     }
 
     #[test]

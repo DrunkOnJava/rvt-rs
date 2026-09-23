@@ -8,6 +8,23 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Stair flights are drawn as their treads and risers (RE-52).** A straight
+  run's data carries its plan sketch: its two sides and a line at each
+  riser. The run type it names carries its tread, riser and nosing sizes and
+  which parts it has. With the stair's riser height, rvt-rs draws each run
+  as its steps, in IFC, glTF and the plan, instead of a box the height of
+  the whole stair.
+  - Snowdon Towers: 34 of 43 flights are drawn. The 30 steel-pan flights
+    equal Revit's own geometry to 1e-5 ft.
+  - The 4 with upright risers square the nosing, which Revit shapes with the
+    type's nosing profile.
+  - Monolithic, riserless and spiral flights keep their box.
+  - Each flight also carries its run type's name, equal to the type part of
+    Revit's own name on all 49 flights Revit exports.
+  - A stair run's body is an `IfcExtrudedAreaSolid` whose `Position` sets
+    its plane (`SolidShape::PlacedExtrusion`).
+  - `examples/probe_re52_stair_treads.rs` lists each run type and each
+    run's outcome.
 - **The viewer colours elements by category.** Record-backed elements carry
   no material yet, so the 3D view was one grey mass. An element with no
   material of its own now takes its category's colour, in the plan's hues

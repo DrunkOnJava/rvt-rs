@@ -203,6 +203,8 @@ pub fn recover_partition_schema_mvp(
     attach_curtain_walls(rf, &mut out.walls, &mut out.products);
     // --- Stair and flight riser and tread dimensions (RE-47) ---
     attach_stair_dimensions(rf, revit_version, &mut out.products);
+    // --- Stair runs' treads and risers, and their run type (RE-52) ---
+    attach_stair_run_bodies(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
     // --- Roof outlines from their sketch lines (RE-50) ---
@@ -637,6 +639,204 @@ fn attach_stair_dimensions(
             let found = *found;
             push(element, &found, flight_counts.get(&id).copied());
         }
+    }
+}
+
+/// Fields holding where a stair run's sketch starts, model feet (RE-52).
+pub const STAIR_RUN_ORIGIN_FIELDS: [&str; 3] = [
+    "m_stair_run_origin_x",
+    "m_stair_run_origin_y",
+    "m_stair_run_origin_z",
+];
+/// Fields holding the unit plan direction a stair run climbs in (RE-52).
+pub const STAIR_RUN_CLIMB_FIELDS: [&str; 2] = ["m_stair_run_climb_x", "m_stair_run_climb_y"];
+/// Fields holding the unit plan direction across a stair run (RE-52).
+pub const STAIR_RUN_ACROSS_FIELDS: [&str; 2] = ["m_stair_run_across_x", "m_stair_run_across_y"];
+/// Field holding a stair run's width, feet (RE-52).
+pub const STAIR_RUN_WIDTH_FIELD: &str = "m_stair_run_width";
+/// Field holding a stair run's side view, `[along, up]` feet from its
+/// sketch origin (RE-52).
+pub const STAIR_RUN_PROFILE_FIELD: &str = "m_stair_run_profile";
+
+/// A stair run's treads and risers as [`STAIR_RUN_PROFILE_FIELD`] and its
+/// companions record them (RE-52).
+#[derive(Debug, Clone, PartialEq)]
+pub struct StairRunBody {
+    /// Where the run's sketch starts, model feet.
+    pub origin: [f64; 3],
+    /// Unit plan direction the run climbs in.
+    pub climb: [f64; 2],
+    /// Unit plan direction across the run.
+    pub across: [f64; 2],
+    /// Feet.
+    pub width_feet: f64,
+    /// Side view, `[along, up]` feet from `origin`, counter-clockwise.
+    pub profile: Vec<[f64; 2]>,
+}
+
+/// The run body recorded in `fields`, when every part of it is.
+pub fn stair_run_body_from_fields(fields: &[(String, InstanceField)]) -> Option<StairRunBody> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let profile = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(points) if name == STAIR_RUN_PROFILE_FIELD => points
+            .iter()
+            .map(|point| match point {
+                InstanceField::Vector(pair) => match pair.as_slice() {
+                    [
+                        InstanceField::Float { value: u, .. },
+                        InstanceField::Float { value: z, .. },
+                    ] => Some([*u, *z]),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect::<Option<Vec<[f64; 2]>>>(),
+        _ => None,
+    })?;
+    let [ox, oy, oz] = STAIR_RUN_ORIGIN_FIELDS.map(float);
+    let [cx, cy] = STAIR_RUN_CLIMB_FIELDS.map(float);
+    let [ax, ay] = STAIR_RUN_ACROSS_FIELDS.map(float);
+    Some(StairRunBody {
+        origin: [ox?, oy?, oz?],
+        climb: [cx?, cy?],
+        across: [ax?, ay?],
+        width_feet: float(STAIR_RUN_WIDTH_FIELD)?,
+        profile: (profile.len() >= 3).then_some(profile)?,
+    })
+}
+
+/// Give each straight stair run with separate treads and risers its side
+/// view, from the plan sketch in its own data, its run type and its
+/// stair's riser height (RE-52, [`crate::partition_stairs`]), and each run
+/// whose run type reads that type's id and name. A run whose riser lines
+/// do not number its risers is left to its record box.
+fn attach_stair_run_bodies(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_stairs as ps;
+    use crate::partition_type_records as ptr;
+    if !ps::supports_revit_version(revit_version) {
+        return;
+    }
+    let float = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let integer = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Integer { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let run_indices: Vec<usize> = products
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| element.class == "StairsRun" && element.id.is_some())
+        .map(|(index, _)| index)
+        .collect();
+    if run_indices.is_empty() {
+        return;
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let type_records = ptr::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_STAIRS_RUNS,
+        &declared,
+    )
+    .unwrap_or_default();
+    let run_types = ptr::type_definition_ids(&type_records);
+    let mut type_of: std::collections::BTreeMap<usize, u32> = std::collections::BTreeMap::new();
+    for &index in &run_indices {
+        if let Some((references, _)) = record_references(rf, &products[index]) {
+            if let Some(type_id) = ptr::unique_type_reference(&references, &run_types) {
+                type_of.insert(index, type_id);
+            }
+        }
+    }
+    let run_ids: BTreeSet<u32> = run_indices
+        .iter()
+        .filter_map(|&index| products[index].id)
+        .collect();
+    let type_ids: BTreeSet<u32> = type_of.values().copied().collect();
+    let (Ok(lines), Ok(types)) = (
+        ps::scan_run_lines(rf, revit_version, &run_ids),
+        ps::scan_run_types(rf, revit_version, &type_ids),
+    ) else {
+        return;
+    };
+    for index in run_indices {
+        let element = &mut products[index];
+        let Some(run_type) = type_of.get(&index).and_then(|id| types.get(id)) else {
+            continue;
+        };
+        let has_type_name = element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_NAME_FIELD);
+        if let (Some(name), false) = (&run_type.name, has_type_name) {
+            element.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: type_of[&index],
+                },
+            ));
+            element
+                .fields
+                .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+        }
+        let (Some(riser_height), Some(risers)) = (
+            float(element, STAIR_RISER_HEIGHT_FIELD),
+            integer(element, STAIR_RISER_COUNT_FIELD),
+        ) else {
+            continue;
+        };
+        let Some(sketch) = element
+            .id
+            .and_then(|id| lines.get(&id))
+            .and_then(|lines| ps::run_sketch(lines))
+            .filter(|sketch| i64::try_from(sketch.risers.len()) == Ok(risers))
+        else {
+            continue;
+        };
+        let Some(profile) = ps::run_side_profile(&sketch, run_type, riser_height) else {
+            continue;
+        };
+        let scalar = |value: f64| InstanceField::Float { value, size: 8 };
+        for (name, value) in STAIR_RUN_ORIGIN_FIELDS.iter().zip(sketch.origin) {
+            element.fields.push(((*name).into(), scalar(value)));
+        }
+        for (name, value) in STAIR_RUN_CLIMB_FIELDS.iter().zip(sketch.climb) {
+            element.fields.push(((*name).into(), scalar(value)));
+        }
+        for (name, value) in STAIR_RUN_ACROSS_FIELDS.iter().zip(sketch.across) {
+            element.fields.push(((*name).into(), scalar(value)));
+        }
+        element
+            .fields
+            .push((STAIR_RUN_WIDTH_FIELD.into(), scalar(sketch.width_feet)));
+        element.fields.push((
+            STAIR_RUN_PROFILE_FIELD.into(),
+            InstanceField::Vector(
+                profile
+                    .iter()
+                    .map(|&[u, z]| InstanceField::Vector(vec![scalar(u), scalar(z)]))
+                    .collect(),
+            ),
+        ));
     }
 }
 

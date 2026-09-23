@@ -718,6 +718,47 @@ fn beam_swept_solid(
     }
 }
 
+/// `BodySource` of a stair run drawn as its treads and risers (RE-52).
+pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
+
+/// A stair run's treads and risers: its side view extruded across the run.
+/// `location` is the element's placement, which the solid's own placement
+/// is relative to. That placement's Z axis runs across the run and its X
+/// axis is up, so the profile's Y axis is the one crossed with the other:
+/// the climb direction or its reverse, by which side of the run the sketch
+/// starts on.
+fn stair_run_solid(
+    run: &crate::partition_schema_mvp::StairRunBody,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    let y_axis = [run.across[1], -run.across[0]];
+    let along = if y_axis[0] * run.climb[0] + y_axis[1] * run.climb[1] >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    let mut points: Vec<(f64, f64)> = run.profile.iter().map(|&[u, z]| (z, along * u)).collect();
+    let area: f64 = points
+        .iter()
+        .zip(points.iter().cycle().skip(1))
+        .map(|(p, q)| p.0 * q.1 - q.0 * p.1)
+        .sum();
+    if area < 0.0 {
+        points.reverse();
+    }
+    entities::SolidShape::PlacedExtrusion {
+        profile: entities::ProfileDef::ArbitraryClosed { points },
+        origin_feet: [
+            run.origin[0] - location[0],
+            run.origin[1] - location[1],
+            run.origin[2] - location[2],
+        ],
+        axis: [run.across[0], run.across[1], 0.0],
+        ref_direction: [0.0, 0.0, 1.0],
+        depth_feet: run.width_feet,
+    }
+}
+
 fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecordGeometry> {
     let class = decoded.class.as_str();
     let mut width = None;
@@ -844,6 +885,13 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // RE-52: a straight run with separate treads and risers is drawn as
+    // them.
+    let stair_run = if class == "StairsRun" {
+        crate::partition_schema_mvp::stair_run_body_from_fields(&decoded.fields)
+    } else {
+        None
+    };
     // The sketched plan profile, when the element's `OST_SketchLines`
     // records closed one (#31, RE-25). It is recovered in project
     // plan coordinates and the body is placed at the record's plan
@@ -912,13 +960,17 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .clone()
                     .or_else(|| column_body_source.clone())
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
+                    .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .unwrap_or_else(|| "partition_element_record_bbox".into()),
             ),
         },
         Property {
             name: "ProfileResolved".into(),
             value: PropertyValue::Boolean(
-                profile.is_some() || type_section.is_some() || beam.is_some(),
+                profile.is_some()
+                    || type_section.is_some()
+                    || beam.is_some()
+                    || stair_run.is_some(),
             ),
         },
         Property {
@@ -1120,7 +1172,12 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             None,
         ),
         Some(beam) => (None, record_body, Some(beam_swept_solid(&beam, [x, y, z]))),
-        None => (None, record_body, None),
+        None => {
+            let solid = stair_run
+                .as_ref()
+                .map(|run| stair_run_solid(run, [x, y, z]));
+            (None, record_body, solid)
+        }
     };
     Some(RecordGeometry {
         location: [x, y, z],
@@ -1796,6 +1853,88 @@ mod tests {
         let run = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt();
         assert!((run - length).abs() < 1e-9);
         assert_eq!(body_source(&properties), Some(BEAM_AXIS_BODY_SOURCE));
+    }
+
+    /// RE-52: a run with a recorded side view is drawn as it, extruded
+    /// across the run from the side its sketch starts on. The run climbs
+    /// -Y and its sketch starts on its +X side, so the extrusion runs -X.
+    #[test]
+    fn a_stair_run_is_drawn_as_its_treads_and_risers() {
+        use crate::partition_schema_mvp::{
+            STAIR_RUN_ACROSS_FIELDS, STAIR_RUN_CLIMB_FIELDS, STAIR_RUN_ORIGIN_FIELDS,
+            STAIR_RUN_PROFILE_FIELD, STAIR_RUN_WIDTH_FIELD,
+        };
+        // One step: a riser 0.5 ft high and a tread 1 ft deep, as a plain
+        // L so every corner is easy to name.
+        let profile = [[0.0, 0.0], [1.0, 0.0], [1.0, 0.5], [0.0, 0.5]];
+        let origin = [10.0, 20.0, 3.0];
+        let (climb, across, width) = ([0.0, -1.0], [-1.0, 0.0], 4.0);
+        let bbox = [6.0, 19.0, 3.0, 10.0, 20.0, 3.5];
+        let mut element = beam(bbox, None);
+        element.class = "StairsRun".into();
+        let float = |value: f64| InstanceField::Float { value, size: 8 };
+        for (name, value) in STAIR_RUN_ORIGIN_FIELDS.iter().zip(origin) {
+            element.fields.push(((*name).into(), float(value)));
+        }
+        for (name, value) in STAIR_RUN_CLIMB_FIELDS.iter().zip(climb) {
+            element.fields.push(((*name).into(), float(value)));
+        }
+        for (name, value) in STAIR_RUN_ACROSS_FIELDS.iter().zip(across) {
+            element.fields.push(((*name).into(), float(value)));
+        }
+        element
+            .fields
+            .push((STAIR_RUN_WIDTH_FIELD.into(), float(width)));
+        element.fields.push((
+            STAIR_RUN_PROFILE_FIELD.into(),
+            InstanceField::Vector(
+                profile
+                    .iter()
+                    .map(|&[u, z]| InstanceField::Vector(vec![float(u), float(z)]))
+                    .collect(),
+            ),
+        ));
+        let RecordGeometry {
+            location,
+            solid,
+            properties,
+            ..
+        } = element_record_geometry_from_decoded(&element).expect("record geometry");
+        assert_eq!(body_source(&properties), Some(STAIR_RUN_BODY_SOURCE));
+        let solid = solid.expect("a solid");
+        assert!(matches!(
+            solid,
+            entities::SolidShape::PlacedExtrusion {
+                axis: [-1.0, 0.0, 0.0],
+                ..
+            }
+        ));
+        let mesh = super::super::body_geometry::body_mesh(
+            super::super::body_geometry::Body::Solid(&solid),
+        )
+        .expect("mesh");
+        // Every corner of the step, at both sides of the run.
+        for [u, z] in profile {
+            for v in [0.0, width] {
+                let want = [
+                    origin[0] + u * climb[0] + v * across[0] - location[0],
+                    origin[1] + u * climb[1] + v * across[1] - location[1],
+                    origin[2] + z - location[2],
+                ];
+                assert!(
+                    mesh.vertices
+                        .iter()
+                        .any(|p| (0..3).all(|i| (p[i] - want[i]).abs() < 1e-9)),
+                    "missing {want:?}"
+                );
+            }
+        }
+        assert!(
+            mesh.vertices
+                .iter()
+                .all(|p| p[1] + location[1] <= origin[1] + 1e-9),
+            "the run climbs -Y from its origin"
+        );
     }
 
     /// RE-49: without a line, or with one no box along it reproduces, a

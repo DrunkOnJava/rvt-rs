@@ -759,6 +759,65 @@ impl StepWriter {
                 );
                 (solid_id, "SweptSolid")
             }
+            SolidShape::PlacedExtrusion {
+                profile,
+                origin_feet,
+                axis,
+                ref_direction,
+                depth_feet,
+            } => {
+                // RE-52: IfcExtrudedAreaSolid with its own Position, so the
+                // profile's plane is stated rather than implied.
+                let profile_origin = self.id();
+                self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                let profile_x_axis = self.id();
+                self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
+                let profile_placement = self.id();
+                self.emit_entity(
+                    profile_placement,
+                    format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
+                );
+                let wrap_ex = Extrusion {
+                    width_feet: 0.0,
+                    depth_feet: 0.0,
+                    height_feet: 0.0,
+                    profile_override: Some(profile.clone()),
+                };
+                let profile_id = self.emit_profile_def(&wrap_ex, profile_placement);
+                let unit = |v: [f64; 3]| {
+                    let mag = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-12);
+                    (v[0] / mag, v[1] / mag, v[2] / mag)
+                };
+                let [ox, oy, oz] = *origin_feet;
+                let origin_id = self.id();
+                self.emit_entity(
+                    origin_id,
+                    format!(
+                        "IFCCARTESIANPOINT(({:.6},{:.6},{:.6}))",
+                        ox * 0.3048,
+                        oy * 0.3048,
+                        oz * 0.3048
+                    ),
+                );
+                let (ax, ay, az) = unit(*axis);
+                let axis_id = self.id();
+                self.emit_entity(axis_id, format!("IFCDIRECTION(({ax:.9},{ay:.9},{az:.9}))"));
+                let (rx, ry, rz) = unit(*ref_direction);
+                let ref_id = self.id();
+                self.emit_entity(ref_id, format!("IFCDIRECTION(({rx:.9},{ry:.9},{rz:.9}))"));
+                let position = self.id();
+                self.emit_entity(
+                    position,
+                    format!("IFCAXIS2PLACEMENT3D(#{origin_id},#{axis_id},#{ref_id})"),
+                );
+                let depth = depth_feet * 0.3048;
+                let solid_id = self.id();
+                self.emit_entity(
+                    solid_id,
+                    format!("IFCEXTRUDEDAREASOLID(#{profile_id},#{position},#{z_axis},{depth:.6})"),
+                );
+                (solid_id, "SweptSolid")
+            }
         }
     }
 
@@ -3777,6 +3836,55 @@ mod tests {
             !s.contains("IFCEXTRUDEDAREASOLID("),
             "extrusion path must not fire when solid_shape is set"
         );
+    }
+
+    /// RE-52: a placed extrusion is an IfcExtrudedAreaSolid whose Position
+    /// carries its own origin, axis and reference direction.
+    #[test]
+    fn placed_extrusion_states_its_position() {
+        use super::super::entities::ProfileDef;
+        let shape = SolidShape::PlacedExtrusion {
+            profile: ProfileDef::ArbitraryClosed {
+                points: vec![(0.0, 0.0), (0.5, 0.0), (0.5, 1.0), (0.0, 1.0)],
+            },
+            origin_feet: [10.0, 0.0, 0.0],
+            axis: [-1.0, 0.0, 0.0],
+            ref_direction: [0.0, 0.0, 1.0],
+            depth_feet: 4.0,
+        };
+        let s = write_step(&model_with_solid_shape(shape));
+        let solid = s
+            .lines()
+            .find(|line| line.contains("IFCEXTRUDEDAREASOLID("))
+            .expect("an extruded solid");
+        assert!(solid.ends_with(",1.219200);"), "{solid}");
+        let position = solid
+            .split(',')
+            .nth(1)
+            .and_then(|p| p.strip_prefix('#'))
+            .expect("position ref");
+        let placement = s
+            .lines()
+            .find(|line| line.starts_with(&format!("#{position}=IFCAXIS2PLACEMENT3D(")))
+            .expect("the solid's own placement");
+        let refs: Vec<&str> = placement
+            .trim_end_matches(");")
+            .split('(')
+            .nth(1)
+            .expect("arguments")
+            .split(',')
+            .map(|r| r.trim_start_matches('#'))
+            .collect();
+        let line_of = |id: &str| {
+            s.lines()
+                .find(|line| line.starts_with(&format!("#{id}=")))
+                .expect("referenced entity")
+                .to_string()
+        };
+        assert!(line_of(refs[0]).contains("((3.048000,0.000000,0.000000))"));
+        assert!(line_of(refs[1]).contains("((-1.000000000,0.000000000,0.000000000))"));
+        assert!(line_of(refs[2]).contains("((0.000000000,0.000000000,1.000000000))"));
+        assert!(s.contains("IFCARBITRARYCLOSEDPROFILEDEF("));
     }
 
     #[test]

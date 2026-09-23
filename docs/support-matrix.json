@@ -261,6 +261,15 @@
       "user_impact": "Roofs and more floors export with the shape of their sketch instead of the rectangle around it."
     },
     {
+      "id": "element-record-stair-treads",
+      "area": "elements",
+      "name": "Stair runs drawn as their treads and risers, from the run's sketch and its run type (Revit 2024)",
+      "status": "partial",
+      "evidence": "partition_stairs::run_sketch / run_type_at / scan_run_types / scan_run_lines / run_side_profile; partition_schema_mvp::attach_stair_run_bodies (STAIR_RUN_* fields) and stair_run_body_from_fields; ifc::export_content STAIR_RUN_BODY_SOURCE; ifc::entities::SolidShape::PlacedExtrusion in step_writer and body_geometry; unit tests in partition_stairs, export_content, body_geometry and step_writer; examples/probe_re52_stair_treads.rs; reports/element-framing/RE-52-stair-treads.md",
+      "notes": "A straight run's element data holds its plan sketch as bounded line records (04 00 08 01) at its base elevation: two boundary lines from the first riser to the last, then a line across the run at each riser. The run type its reference list names (OST_StairsRuns type definition) has a serialised object 01 00 00 00 + u64 id with tag db 0f at +0x47, structural depth, tread thickness, riser thickness and nosing length as f64 ft at +0x59, +0x69, +0x71, +0x79, flags monolithic / treads / risers / slanted risers at +0xbd..+0xc0, a flag at +0xb5 set on the one type whose treads run under the riser above, then its name. With the stair's riser height (RE-47) the run's side view is extruded across it as an IfcExtrudedAreaSolid with a stated Position. Measured on Snowdon Towers (local only) against Revit's IFC4 and a VIM: 34 of 43 runs drawn; the 30 steel-pan runs equal Revit's geometry to 1e-5 ft; the 4 with upright risers square the nosing Revit shapes with a nosing profile, and one runs its first riser short of Revit's below a landing. Monolithic, riserless, spiral runs and runs whose riser lines outnumber their risers keep their record box. Run type names equal the type part of Revit's ObjectType on all 49 exported flights. 2024 only.",
+      "user_impact": "Stairs export and display as steps instead of a box the height of the whole stair."
+    },
+    {
       "id": "revit-global-ids",
       "area": "ifc",
       "name": "Revit's own IFC GlobalIds for elements, rooms and storeys, rebuilt from Global/History and Global/ElemTable",
