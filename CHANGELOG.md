@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Slabs sketched as separate pieces export one element per piece
+  (#331).** A plan profile now holds every separate loop of a sketch as its
+  own piece, with the voids inside it. The exporter writes each further
+  piece as another element with the element's `Tag`, named `…:2`, `…:3`,
+  as Revit's own export does.
+  - On Snowdon Towers the five such slabs match Revit's pieces. Four match
+    piece for piece by area (2 × 1.60, 2 × 1.99, 2 × 0.38 and 9.02 + 9.76
+    m²). The fifth has three pieces, which Revit writes as one slab with
+    three tessellated bodies.
+  - A sketch whose loops cross each other still gives no profile.
+
 - **`rvt-ifc` says what it wrote.** After the IFC is written, it prints the
   number of building elements, how many have geometry and on how many
   storeys; the six largest IFC types; what it left out on purpose, as Revit's
@@ -153,10 +164,9 @@ All notable changes will be documented here. This project follows
 - **A sketch of separate pieces no longer yields voids outside the outer
   loop (RE-43).** `plan_profile_from_segments` took every loop but the
   largest as a void, even one outside it, which gave five Snowdon slabs an
-  invalid `IfcArbitraryProfileDefWithVoids` with near-zero area. A loop not
-  inside the outer one now means no profile, and the slab keeps its record
-  box (`ProfileResolved` false). Revit writes such slabs as one `IfcSlab`
-  per piece (#331).
+  invalid `IfcArbitraryProfileDefWithVoids` with near-zero area. A loop
+  outside the outer one is now a piece of its own (#331, above), and a loop
+  that crosses another means no profile.
 
 - **Second-prologue ElementIds are read from the partition record, not
   inferred (RE-35).** Every `Partitions/*` stream opens with a chain of

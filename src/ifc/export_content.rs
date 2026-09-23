@@ -229,6 +229,7 @@ pub fn append_typed_production_elements(
         let mut extrusion = None;
         let mut property_set = None;
         let mut pending_host_id = None;
+        let mut piece_bodies: Vec<Extrusion> = Vec::new();
 
         if policy.include_geometry {
             // Partition element records carry their own model bbox for
@@ -241,8 +242,9 @@ pub fn append_typed_production_elements(
             } else {
                 None
             };
-            if let Some((location, body, properties)) = element_record_geometry {
+            if let Some((location, body, properties, pieces)) = element_record_geometry {
                 location_feet = Some(location);
+                piece_bodies = pieces;
                 // #323: a stair is carried by its parts, as in Revit's
                 // export; its own record box would double their volume.
                 if !crate::partition_schema_mvp::AGGREGATE_WHOLE_CLASSES
@@ -336,6 +338,25 @@ pub fn append_typed_production_elements(
             solid_shape: None,
             representation_map_index: None,
         });
+        // #331: each further piece of a sketch of separate loops is an
+        // element of its own with the element's `Tag`, named `…:2`, `…:3`,
+        // as in Revit's export.
+        if !piece_bodies.is_empty() {
+            if let Some(entities::IfcEntity::BuildingElement { .. }) = entities.last() {
+                let first = entities.last().cloned().expect("just pushed");
+                for (index, body) in piece_bodies.into_iter().enumerate() {
+                    let mut piece = first.clone();
+                    if let entities::IfcEntity::BuildingElement {
+                        name, extrusion, ..
+                    } = &mut piece
+                    {
+                        *name = format!("{name}:{}", index + 2);
+                        *extrusion = Some(body);
+                    }
+                    entities.push(piece);
+                }
+            }
+        }
     }
 
     // #323: group each whole's parts into one aggregate.
@@ -570,7 +591,7 @@ fn is_partition_element_record(decoded: &DecodedElement) -> bool {
 /// a consumer read the rectangle as a modelled section.
 fn element_record_geometry_from_decoded(
     decoded: &DecodedElement,
-) -> Option<([f64; 3], Extrusion, PropertySet)> {
+) -> Option<([f64; 3], Extrusion, PropertySet, Vec<Extrusion>)> {
     let class = decoded.class.as_str();
     let mut width = None;
     let mut depth = None;
@@ -682,26 +703,39 @@ fn element_record_geometry_from_decoded(
     // plan coordinates and the body is placed at the record's plan
     // centre, so the profile is expressed relative to that centre.
     let profile = crate::element_record_plan_profiles::plan_profile_from_fields(&decoded.fields);
-    let profile_override = profile.as_ref().map(|profile| {
-        let outer: Vec<(f64, f64)> = profile
-            .outer_xy
-            .iter()
-            .map(|(px, py)| (px - x, py - y))
-            .collect();
-        let voids: Vec<Vec<(f64, f64)>> = profile
-            .inner_xy
+    let relative = |outer: &[(f64, f64)], inner: &[Vec<(f64, f64)>]| {
+        let points: Vec<(f64, f64)> = outer.iter().map(|(px, py)| (px - x, py - y)).collect();
+        let voids: Vec<Vec<(f64, f64)>> = inner
             .iter()
             .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
             .collect();
         if voids.is_empty() {
-            entities::ProfileDef::ArbitraryClosed { points: outer }
+            entities::ProfileDef::ArbitraryClosed { points }
         } else {
-            entities::ProfileDef::ArbitraryWithVoids {
-                points: outer,
-                voids,
-            }
+            entities::ProfileDef::ArbitraryWithVoids { points, voids }
         }
-    });
+    };
+    let profile_override = profile
+        .as_ref()
+        .map(|profile| relative(&profile.outer_xy, &profile.inner_xy));
+    // #331: the further pieces of a sketch of separate loops, each its own
+    // body at the element's placement, as Revit exports one element per
+    // piece.
+    let piece_bodies: Vec<Extrusion> = profile
+        .as_ref()
+        .map(|profile| {
+            profile
+                .pieces
+                .iter()
+                .map(|piece| Extrusion {
+                    width_feet: width,
+                    depth_feet: depth,
+                    height_feet: height,
+                    profile_override: Some(relative(&piece.outer_xy, &piece.inner_xy)),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     // The family/type symbol's section, when the instance joined to
     // one and the section agrees with the instance envelope (#215,
     // RE-26). The rectangle it gives is the same shape the envelope
@@ -777,6 +811,12 @@ fn element_record_geometry_from_decoded(
             name: "ProfileVoidCount".into(),
             value: PropertyValue::Integer(profile.inner_xy.len() as i64),
         });
+        if !profile.pieces.is_empty() {
+            properties.push(Property {
+                name: "ProfilePieceCount".into(),
+                value: PropertyValue::Integer(1 + profile.pieces.len() as i64),
+            });
+        }
     }
     if let (Some((section_width, section_depth)), Some(symbol)) = (type_section, type_symbol_id) {
         properties.push(Property {
@@ -910,6 +950,7 @@ fn element_record_geometry_from_decoded(
             name: ELEMENT_RECORD_PROPERTY_SET.into(),
             properties,
         },
+        piece_bodies,
     ))
 }
 
@@ -960,6 +1001,77 @@ mod tests {
 
     /// #323: a stair carries no body of its own and aggregates the run
     /// that names it.
+    /// #331: a floor sketched as two separate rectangles exports as two
+    /// slabs with the element's `Tag`, the second named `…:2`, each with
+    /// its own piece as the profile.
+    #[test]
+    fn a_floor_of_two_separate_pieces_exports_one_slab_per_piece() {
+        use crate::partition_element_records::{
+            CONTAINER_NONE, OST_FLOORS, PLACEMENT_KIND_INSTANCE, PartitionElementRecord,
+        };
+        let record = PartitionElementRecord {
+            stream: "Partitions/68".into(),
+            offset: 0,
+            element_id: 1402063,
+            flags: 0x0141,
+            builtin_category: OST_FLOORS,
+            container: CONTAINER_NONE,
+            placement_kind: PLACEMENT_KIND_INSTANCE,
+            bbox_feet: [-11.15, -0.97, 58.0, 11.15, 0.97, 58.42],
+            preceding_reference: None,
+            owner_reference: None,
+            references: Vec::new(),
+            id_from_enclosing_record: true,
+            design_option: None,
+        };
+        let levels = std::collections::BTreeSet::new();
+        let mut elements =
+            crate::partition_schema_mvp::instances_from_records(vec![record], "Floor", &levels);
+        let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
+            vec![
+                [x0, y0, x1, y0],
+                [x1, y0, x1, y1],
+                [x0, y1, x1, y1],
+                [x0, y0, x0, y1],
+            ]
+        };
+        let mut segments = rect(9.06, -0.97, 11.15, 0.97);
+        segments.extend(rect(-11.15, -0.97, -9.06, 0.97));
+        let profile = crate::element_record_plan_profiles::plan_profile_from_segments(&segments)
+            .expect("closes");
+        elements[0].fields.extend(profile.fields());
+        let mut entities = Vec::new();
+        let mut storeys = Vec::new();
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
+        append_typed_production_elements(elements.into_iter(), &mut entities, &mut storeys, policy);
+        let slabs: Vec<(String, Option<String>, bool)> = entities
+            .iter()
+            .filter_map(|entity| match entity {
+                entities::IfcEntity::BuildingElement {
+                    name,
+                    type_guid,
+                    extrusion,
+                    ..
+                } => Some((
+                    name.clone(),
+                    type_guid.clone(),
+                    matches!(
+                        extrusion.as_ref().and_then(|e| e.profile_override.as_ref()),
+                        Some(entities::ProfileDef::ArbitraryClosed { .. })
+                    ),
+                )),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            slabs,
+            vec![
+                ("Floor-1402063".into(), Some("1402063".into()), true),
+                ("Floor-1402063:2".into(), Some("1402063".into()), true),
+            ]
+        );
+    }
+
     #[test]
     fn a_stair_aggregates_its_run_and_has_no_body() {
         use crate::partition_element_records::{
@@ -1100,8 +1212,9 @@ mod tests {
             "m_source".into(),
             InstanceField::String("partition_element_record".into()),
         ));
-        let (_, body, properties) =
+        let (_, body, properties, pieces) =
             element_record_geometry_from_decoded(&slab).expect("record geometry");
+        assert!(pieces.is_empty());
         assert!((body.height_feet - 0.1667).abs() < 1e-6);
         assert!(properties.properties.iter().any(|p| {
             p.name == "ThicknessResolved" && matches!(p.value, PropertyValue::Boolean(true))
@@ -1127,7 +1240,7 @@ mod tests {
                 .fields
                 .push((name.into(), InstanceField::Float { value, size: 8 }));
         }
-        let (_, _, properties) =
+        let (_, _, properties, _) =
             element_record_geometry_from_decoded(&column).expect("record geometry");
         assert!(
             !properties

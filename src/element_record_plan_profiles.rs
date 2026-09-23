@@ -85,6 +85,19 @@ pub const PLAN_PROFILE_INNER_FIELD: &str = "m_plan_profile_inner";
 pub const PLAN_PROFILE_SOURCE_FIELD: &str = "m_plan_profile_source";
 /// Field recording how many sketch-line records the profile used.
 pub const PLAN_PROFILE_SEGMENTS_FIELD: &str = "m_plan_profile_segments";
+/// Field carrying the further pieces of a sketch made of separate loops
+/// (#331): each piece an outer loop followed by its voids.
+pub const PLAN_PROFILE_PIECES_FIELD: &str = "m_plan_profile_pieces";
+
+/// One further piece of a plan profile whose sketch is several separate
+/// loops (#331): an outer loop and the voids inside it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlanPiece {
+    /// Outer boundary loop, counter-clockwise.
+    pub outer_xy: Vec<(f64, f64)>,
+    /// Inner boundary loops (voids), clockwise, largest first.
+    pub inner_xy: Vec<Vec<(f64, f64)>>,
+}
 
 /// A recovered plan profile: one outer loop and zero or more voids.
 ///
@@ -100,12 +113,25 @@ pub struct PlanProfile {
     /// ElementIds of the sketch-line records the loops were built
     /// from, ascending.
     pub segment_ids: Vec<u32>,
+    /// Further pieces, largest first, when the sketch is several separate
+    /// loops rather than one outer loop with voids (#331). Revit's own
+    /// export writes each piece as its own element with the element's
+    /// `Tag`. Empty for a single-piece sketch.
+    pub pieces: Vec<PlanPiece>,
 }
 
 impl PlanProfile {
-    /// Total vertex count across every loop.
+    /// Total vertex count across every loop of every piece.
     pub fn vertex_count(&self) -> usize {
-        self.outer_xy.len() + self.inner_xy.iter().map(Vec::len).sum::<usize>()
+        let loops = |outer: &[(f64, f64)], inner: &[Vec<(f64, f64)>]| {
+            outer.len() + inner.iter().map(Vec::len).sum::<usize>()
+        };
+        loops(&self.outer_xy, &self.inner_xy)
+            + self
+                .pieces
+                .iter()
+                .map(|piece| loops(&piece.outer_xy, &piece.inner_xy))
+                .sum::<usize>()
     }
 
     /// The profile's plan bounding box `[min_x, min_y, max_x, max_y]`.
@@ -140,6 +166,22 @@ impl PlanProfile {
                     size: 8,
                 },
             ),
+            (
+                PLAN_PROFILE_PIECES_FIELD.into(),
+                InstanceField::Vector(
+                    self.pieces
+                        .iter()
+                        .map(|piece| {
+                            InstanceField::Vector(vec![
+                                loop_field(&piece.outer_xy),
+                                InstanceField::Vector(
+                                    piece.inner_xy.iter().map(|l| loop_field(l)).collect(),
+                                ),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
         ]
     }
 }
@@ -155,6 +197,7 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
     let mut outer = None;
     let mut inner = Vec::new();
     let mut segments = 0usize;
+    let mut pieces = Vec::new();
     for (name, value) in fields {
         match (name.as_str(), value) {
             (PLAN_PROFILE_SOURCE_FIELD, InstanceField::String(text)) => {
@@ -166,6 +209,9 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
             }
             (PLAN_PROFILE_SEGMENTS_FIELD, InstanceField::Integer { value, .. }) => {
                 segments = (*value).max(0) as usize;
+            }
+            (PLAN_PROFILE_PIECES_FIELD, InstanceField::Vector(items)) => {
+                pieces = items.iter().filter_map(piece_from_field).collect();
             }
             _ => {}
         }
@@ -181,6 +227,24 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
         outer_xy: outer,
         inner_xy: inner,
         segment_ids: vec![0; segments],
+        pieces,
+    })
+}
+
+fn piece_from_field(field: &InstanceField) -> Option<PlanPiece> {
+    let InstanceField::Vector(parts) = field else {
+        return None;
+    };
+    let [outer, InstanceField::Vector(inner)] = parts.as_slice() else {
+        return None;
+    };
+    let outer_xy = points_from_field(outer)?;
+    if outer_xy.len() < 3 {
+        return None;
+    }
+    Some(PlanPiece {
+        outer_xy,
+        inner_xy: inner.iter().filter_map(points_from_field).collect(),
     })
 }
 
@@ -292,28 +356,52 @@ pub fn plan_profile_from_segments(segments: &[[f64; 4]]) -> Option<PlanProfile> 
             .partial_cmp(&signed_area(a).abs())
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    let mut iter = merged.into_iter();
-    let mut outer = iter.next()?;
-    if signed_area(&outer) < 0.0 {
-        outer.reverse();
-    }
-    let mut inner = Vec::new();
-    for mut one in iter {
-        // A loop outside the largest one is a second piece of the element,
-        // not a void of it (a slab sketched as two separate rectangles,
-        // RE-43). One outer loop cannot describe that, so give no profile.
-        if !one.iter().all(|point| inside(&outer, *point)) {
-            return None;
+    // Each loop's depth is how many larger loops contain it. An even depth
+    // starts a piece; an odd depth is a void of the loop it sits in. A loop
+    // that is partly inside another is not a region at all.
+    let mut container: Vec<Option<usize>> = Vec::with_capacity(merged.len());
+    let mut depth: Vec<usize> = Vec::with_capacity(merged.len());
+    for (index, one) in merged.iter().enumerate() {
+        let mut parent = None;
+        for (earlier, candidate) in merged[..index].iter().enumerate() {
+            let within = one.iter().filter(|p| inside(candidate, **p)).count();
+            if within == one.len() {
+                parent = Some(earlier);
+            } else if within > 0 {
+                return None;
+            }
         }
-        if signed_area(&one) > 0.0 {
-            one.reverse();
-        }
-        inner.push(one);
+        depth.push(parent.map_or(0, |p| depth[p] + 1));
+        container.push(parent);
     }
+    let mut pieces: Vec<PlanPiece> = Vec::new();
+    let mut piece_of: Vec<Option<usize>> = vec![None; merged.len()];
+    for (index, one) in merged.iter().enumerate() {
+        let mut ring = one.clone();
+        if depth[index] % 2 == 0 {
+            if signed_area(&ring) < 0.0 {
+                ring.reverse();
+            }
+            piece_of[index] = Some(pieces.len());
+            pieces.push(PlanPiece {
+                outer_xy: ring,
+                inner_xy: Vec::new(),
+            });
+        } else {
+            if signed_area(&ring) > 0.0 {
+                ring.reverse();
+            }
+            let piece = container[index].and_then(|c| piece_of[c])?;
+            pieces[piece].inner_xy.push(ring);
+        }
+    }
+    let mut pieces = pieces.into_iter();
+    let first = pieces.next()?;
     Some(PlanProfile {
-        outer_xy: outer,
-        inner_xy: inner,
+        outer_xy: first.outer_xy,
+        inner_xy: first.inner_xy,
         segment_ids: Vec::new(),
+        pieces: pieces.collect(),
     })
 }
 
@@ -629,12 +717,40 @@ mod tests {
         assert!(signed_area(&profile.inner_xy[0]) < 0.0, "void is CW");
     }
 
-    /// RE-43: two separate loops are two pieces, not an outer loop and a
-    /// void, so no single profile describes them.
+    /// #331: two separate loops are two pieces, not an outer loop and a
+    /// void (slab 1402063 on Snowdon Towers).
     #[test]
-    fn two_separate_loops_are_not_an_outer_and_a_void() {
+    fn two_separate_loops_are_two_pieces() {
         let mut segments = rect(9.06, -0.97, 11.15, 0.97);
         segments.extend(rect(-11.15, -0.97, -9.06, 0.97));
+        let profile = plan_profile_from_segments(&segments).expect("closes");
+        assert!(profile.inner_xy.is_empty());
+        assert_eq!(profile.pieces.len(), 1);
+        assert!(profile.pieces[0].inner_xy.is_empty());
+        assert!(signed_area(&profile.pieces[0].outer_xy) > 0.0);
+        // The pieces round-trip through the element fields.
+        let back = plan_profile_from_fields(&profile.fields()).expect("reads back");
+        assert_eq!(back.pieces, profile.pieces);
+    }
+
+    /// #331: a piece standing inside another's void is a piece of its own,
+    /// and the void stays with the loop around it.
+    #[test]
+    fn an_island_in_a_void_is_a_third_region() {
+        let mut segments = rect(0.0, 0.0, 100.0, 100.0);
+        segments.extend(rect(20.0, 20.0, 80.0, 80.0));
+        segments.extend(rect(40.0, 40.0, 60.0, 60.0));
+        let profile = plan_profile_from_segments(&segments).expect("closes");
+        assert_eq!(profile.inner_xy.len(), 1);
+        assert_eq!(profile.pieces.len(), 1);
+        assert_eq!(profile.plan_bounds_feet(), Some([0.0, 0.0, 100.0, 100.0]));
+    }
+
+    /// Two loops that cross are not regions: no profile.
+    #[test]
+    fn overlapping_loops_are_rejected() {
+        let mut segments = rect(0.0, 0.0, 10.0, 10.0);
+        segments.extend(rect(5.0, 5.0, 15.0, 15.0));
         assert!(plan_profile_from_segments(&segments).is_none());
     }
 
