@@ -6,6 +6,15 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+## [0.2.0] — prepared, not yet released
+
+An **inspection-focused alpha** (see
+[`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md)). rvt-rs remains a
+Revit inspection / reverse-engineering toolkit with experimental export —
+**not** a production Revit→IFC converter for arbitrary projects. The first
+release with prebuilt CLI archives for Linux, macOS and Windows on the GitHub
+Release, and a multi-arch container image on ghcr.io.
+
 ### Added
 
 - **The IFC says which ElementIds were inferred.** An element whose
@@ -84,113 +93,6 @@ All notable changes will be documented here. This project follows
   - `gh attestation verify oci://ghcr.io/drunkonjava/rvt-rs:<version> -R DrunkOnJava/rvt-rs`
 
   PyPI wheels already carry PEP 740 attestations through trusted publishing.
-
-### Removed
-
-- `PartitionSchemaMvp::floors` and `partition_schema_mvp::is_strict_room_name`,
-  which only served the plan-loop floors and name-only rooms described
-  under Fixed. Floors are in `PartitionSchemaMvp::slabs`.
-
-### Fixed
-
-- **Boolean property values are valid STEP.** The writer emitted
-  `IFCBOOLEAN(.T)` / `IFCBOOLEAN(.F)`, missing the closing dot of an ISO
-  10303-21 enumeration. Every export that carried a boolean property was
-  therefore invalid IFC: the element-record property sets (`ProfileResolved`,
-  `LevelBindResolved`, `ThicknessResolved`) put 2,400 of them in the Core
-  Interior export alone. IfcOpenShell's validator now reports no issue on the
-  Einhoven and Core Interior exports. CI validates both in full, because the
-  committed fixtures carry no boolean and never exercised the path.
-
-- **The "incomplete model" count covers missing elements, not every
-  unreadable frame.** Frames with no ElementId at `+0x00` keep the
-  container and placement fields of the instance rule (RE-33), so
-  `element_record_without_element_id` and
-  `confidence.unexported_element_records` now count only placed instances.
-  On the MIT RE1 models the count now equals the elements Revit exported
-  and rvt-rs did not, exactly for pipes (60), pipe fittings (48), duct
-  fittings (18) and duct and pipe segments (15). On Snowdon Towers it does
-  the same for mullions (1,425), columns (118), railings (131), ceilings
-  (68) and furniture (344), and falls from 6,019 frames to 4,886.
-- `SpecialtyEquipment`, `FurnitureSystem` and `Mass` no longer map to a
-  `USERDEFINED` PredefinedType with no `ObjectType`, which IFC4 forbids.
-
-- **Export readiness no longer reads 100% on an incomplete model.** When
-  the partition scan finds wall, door, window, column, floor or room records
-  with no attributable ElementId (RE-30), the export skips them. The score
-  still counted the export as complete, e.g. "geometry · 100%" on Snowdon
-  Towers with 43 elements exported and 2,043 left out.
-  - `confidence.unexported_element_records` in the diagnostics sidecar
-    carries that count, and the score's element terms (elements, typed
-    elements, geometry) now count only for the exported share. Metadata and
-    units still count in full.
-  - Measured: Snowdon Towers Architectural 100% -> 36%, Snowdon Structural
-    -> 52%, RE1 Architecture (Revit 2025) -> 95% (its 5 doors and 1 curtain
-    wall are left out). Core Interior and Einhoven, which leave nothing out,
-    stay at 100%.
-  - `rvt-inspect` reports a new `incomplete_model` failure mode, names the
-    count in its readiness summary and next steps, and `rvt-ifc` prints a
-    warning to stderr. The viewer's status panel shows "Incomplete model"
-    and no longer marks decode confidence green while records are missing.
-- **Rooms and floors come from element records only; the partition MVP no
-  longer invents them.** Its name-only rooms (space-like display strings)
-  and plan-loop floors (closed runs of f64 pairs that miss the ArcWall
-  centrelines) matched nothing in Revit's own exports:
-  - every family file, on every release, gained a room named "Office
-    Equipment";
-  - the Revit 2025 RE1 Electrical, Mechanical and Plumbing models
-    (`Drshelden/IFC-ECS`, MIT) exported 38 slabs and 71 spaces, named after
-    space-type strings such as "Banking Activity Area - Office", while
-    Revit's exports of them hold no `IfcSlab` or `IfcSpace`;
-  - on two Revit 2023 projects with paired Revit exports, the name-only
-    path found none of the 9 real rooms of one and invented "Office
-    Equipment" in both, and none of the 17 plan loops (mostly triangles)
-    comes within 10% of the plan area of any exported slab;
-  - Snowdon Towers gained 37 and 15 name-only rooms, including a view name
-    ("Enlarged Residential Lobby Plan"), and RE-25 had already found no
-    plan loop with the bounds of any Core Interior plate.
-
-  Record-backed walls, doors, windows, columns, slabs and rooms on 2024 and
-  2025 are unchanged (Core Interior and RE1 Architecture export exactly as
-  before). A 2023 file now exports its ArcWalls without invented floors or
-  rooms, and a family file exports no building elements.
-  `tests/rooms_floors_from_records_only.rs` checks all 11 family releases.
-
-- **Family files' `Global/ElemTable` is read correctly on every release.**
-  It was parsed as 12-byte "implicit" records from `0x30`, which produced
-  meaningless ids (0, 4128768, 196608, …) on all 11 family releases.
-  Families actually use the project records: 28 bytes through 2023 and
-  40 bytes from 2024, starting at `0x1E`. They have no `0xFF` marker and
-  end in a trailer, so neither existing check found them. `detect_layout`
-  now recognises such a table by its ids, which rise from 1 and equal
-  their secondary copy.
-  - `parse_records` returns exactly `record_count` records, with real
-    ElementIds.
-  - An owner field of `0`, which families use for "none", reads as unset.
-  - The documented `header_flag = 0x0011` turned out to be record 0's
-    owner (ElementId 17).
-  - The header value named `element_count` is a per-release constant (1370,
-    1411, 1451 and 1481 for 2023–2026), not a count of elements.
-
-  The problem was found by cross-checking phi-ag/rvt's independent notes
-  on the 2026 family table, and it is now pinned for all 11 releases by
-  `tests/elem_table_corpus.rs`.
-- **`source_coverage.decoded_element_fraction` divides by a real count.**
-  Its denominator was that header constant, so on Snowdon Towers it
-  reported 0.689 (972 / 1411). It now divides by the distinct ElementIds
-  `Global/ElemTable` declares, and `rvt-elem-table` labels the header value
-  as the constant it is.
-
-## [0.2.0] — prepared, not yet released
-
-An **inspection-focused alpha** (see
-[`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md)). rvt-rs remains a
-Revit inspection / reverse-engineering toolkit with experimental export —
-**not** a production Revit→IFC converter for arbitrary projects. The first
-release with prebuilt CLI archives for Linux, macOS and Windows on the GitHub
-Release, and a multi-arch container image on ghcr.io.
-
-### Added
 
 - **A container image of the CLIs.** Tagged releases push
   `ghcr.io/drunkonjava/rvt-rs:<version>` (and `:latest` for a final release)
@@ -388,7 +290,101 @@ Release, and a multi-arch container image on ghcr.io.
   paired element fixture exports no spaces at all. Both manifests' committed
   `property_sets` decoder baseline moves 854 → 970.
 
+### Removed
+
+- `PartitionSchemaMvp::floors` and `partition_schema_mvp::is_strict_room_name`,
+  which only served the plan-loop floors and name-only rooms described
+  under Fixed. Floors are in `PartitionSchemaMvp::slabs`.
+
 ### Fixed
+
+- **Boolean property values are valid STEP.** The writer emitted
+  `IFCBOOLEAN(.T)` / `IFCBOOLEAN(.F)`, missing the closing dot of an ISO
+  10303-21 enumeration. Every export that carried a boolean property was
+  therefore invalid IFC: the element-record property sets (`ProfileResolved`,
+  `LevelBindResolved`, `ThicknessResolved`) put 2,400 of them in the Core
+  Interior export alone. IfcOpenShell's validator now reports no issue on the
+  Einhoven and Core Interior exports. CI validates both in full, because the
+  committed fixtures carry no boolean and never exercised the path.
+
+- **The "incomplete model" count covers missing elements, not every
+  unreadable frame.** Frames with no ElementId at `+0x00` keep the
+  container and placement fields of the instance rule (RE-33), so
+  `element_record_without_element_id` and
+  `confidence.unexported_element_records` now count only placed instances.
+  On the MIT RE1 models the count now equals the elements Revit exported
+  and rvt-rs did not, exactly for pipes (60), pipe fittings (48), duct
+  fittings (18) and duct and pipe segments (15). On Snowdon Towers it does
+  the same for mullions (1,425), columns (118), railings (131), ceilings
+  (68) and furniture (344), and falls from 6,019 frames to 4,886.
+- `SpecialtyEquipment`, `FurnitureSystem` and `Mass` no longer map to a
+  `USERDEFINED` PredefinedType with no `ObjectType`, which IFC4 forbids.
+
+- **Export readiness no longer reads 100% on an incomplete model.** When
+  the partition scan finds wall, door, window, column, floor or room records
+  with no attributable ElementId (RE-30), the export skips them. The score
+  still counted the export as complete, e.g. "geometry · 100%" on Snowdon
+  Towers with 43 elements exported and 2,043 left out.
+  - `confidence.unexported_element_records` in the diagnostics sidecar
+    carries that count, and the score's element terms (elements, typed
+    elements, geometry) now count only for the exported share. Metadata and
+    units still count in full.
+  - Measured: Snowdon Towers Architectural 100% -> 36%, Snowdon Structural
+    -> 52%, RE1 Architecture (Revit 2025) -> 95% (its 5 doors and 1 curtain
+    wall are left out). Core Interior and Einhoven, which leave nothing out,
+    stay at 100%.
+  - `rvt-inspect` reports a new `incomplete_model` failure mode, names the
+    count in its readiness summary and next steps, and `rvt-ifc` prints a
+    warning to stderr. The viewer's status panel shows "Incomplete model"
+    and no longer marks decode confidence green while records are missing.
+- **Rooms and floors come from element records only; the partition MVP no
+  longer invents them.** Its name-only rooms (space-like display strings)
+  and plan-loop floors (closed runs of f64 pairs that miss the ArcWall
+  centrelines) matched nothing in Revit's own exports:
+  - every family file, on every release, gained a room named "Office
+    Equipment";
+  - the Revit 2025 RE1 Electrical, Mechanical and Plumbing models
+    (`Drshelden/IFC-ECS`, MIT) exported 38 slabs and 71 spaces, named after
+    space-type strings such as "Banking Activity Area - Office", while
+    Revit's exports of them hold no `IfcSlab` or `IfcSpace`;
+  - on two Revit 2023 projects with paired Revit exports, the name-only
+    path found none of the 9 real rooms of one and invented "Office
+    Equipment" in both, and none of the 17 plan loops (mostly triangles)
+    comes within 10% of the plan area of any exported slab;
+  - Snowdon Towers gained 37 and 15 name-only rooms, including a view name
+    ("Enlarged Residential Lobby Plan"), and RE-25 had already found no
+    plan loop with the bounds of any Core Interior plate.
+
+  Record-backed walls, doors, windows, columns, slabs and rooms on 2024 and
+  2025 are unchanged (Core Interior and RE1 Architecture export exactly as
+  before). A 2023 file now exports its ArcWalls without invented floors or
+  rooms, and a family file exports no building elements.
+  `tests/rooms_floors_from_records_only.rs` checks all 11 family releases.
+
+- **Family files' `Global/ElemTable` is read correctly on every release.**
+  It was parsed as 12-byte "implicit" records from `0x30`, which produced
+  meaningless ids (0, 4128768, 196608, …) on all 11 family releases.
+  Families actually use the project records: 28 bytes through 2023 and
+  40 bytes from 2024, starting at `0x1E`. They have no `0xFF` marker and
+  end in a trailer, so neither existing check found them. `detect_layout`
+  now recognises such a table by its ids, which rise from 1 and equal
+  their secondary copy.
+  - `parse_records` returns exactly `record_count` records, with real
+    ElementIds.
+  - An owner field of `0`, which families use for "none", reads as unset.
+  - The documented `header_flag = 0x0011` turned out to be record 0's
+    owner (ElementId 17).
+  - The header value named `element_count` is a per-release constant (1370,
+    1411, 1451 and 1481 for 2023–2026), not a count of elements.
+
+  The problem was found by cross-checking phi-ag/rvt's independent notes
+  on the 2026 family table, and it is now pinned for all 11 releases by
+  `tests/elem_table_corpus.rs`.
+- **`source_coverage.decoded_element_fraction` divides by a real count.**
+  Its denominator was that header constant, so on Snowdon Towers it
+  reported 0.689 (972 / 1411). It now divides by the distinct ElementIds
+  `Global/ElemTable` declares, and `rvt-elem-table` labels the header value
+  as the constant it is.
 
 - **`rvt-dump` writes exactly the bytes the parsers read.** It inflated
   every stream without stripping Revit's per-page checksum trailers, so a
