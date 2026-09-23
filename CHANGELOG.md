@@ -6,6 +6,24 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Revit 2025 projects export walls, slabs and rooms (RE-32).** Element
+  records in 2025 files have the 2024 shape, but the 8-byte marker in front
+  of the bounding box changes with each release. Its tail is the release's
+  `Global/ElemTable` header constant + 40 (`0x05ab` on 2024, `0x05d3` on
+  2025), and a prediction for 2023 made from that rule checked out.
+  - `partition_element_records::bbox_marker(release)` supplies the marker,
+    and 2025 joins the supported releases.
+  - Against Revit's own exports of six 2025 files, the decode makes no false
+    positives. On the MIT-licensed `Drshelden/IFC-ECS` RE1 architecture model
+    it reproduces the export's 7 wall and 2 slab ElementIds and 11 rooms.
+  - Doors and windows mostly use the second record prologue (RE-30), so they
+    are counted as unattributed rather than exported.
+  - Room names, storeys and wall types remain 2024-only.
+  - `tools/fetch-corpus.sh` fetches the RE1 models, and
+    `tests/element_records_2025.rs` checks them.
+
 ### Fixed
 
 - **Family files' `Global/ElemTable` is read correctly on every release.**
