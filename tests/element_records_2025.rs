@@ -91,14 +91,18 @@ fn revit_2025_walls_slabs_and_rooms_match_revits_export() {
         .expect("export");
     let step = write_step(&result.model);
 
-    // The curtain wall is `IfcCurtainWall` in Revit's export; rvt-rs
-    // writes every wall as `IfcWall`.
-    let walls = tags(
-        &reference,
-        &["IFCWALL", "IFCWALLSTANDARDCASE", "IFCCURTAINWALL"],
-    );
-    assert_eq!(walls.len(), 8);
+    // Seven walls, and a curtain wall that is `IfcCurtainWall` in both
+    // exports since RE-46.
+    let walls = tags(&reference, &["IFCWALL", "IFCWALLSTANDARDCASE"]);
+    assert_eq!(walls.len(), 7);
     assert_eq!(tags(&step, &["IFCWALL"]), walls, "wall ElementIds");
+    let curtain_walls = tags(&reference, &["IFCCURTAINWALL"]);
+    assert_eq!(curtain_walls.len(), 1);
+    assert_eq!(
+        tags(&step, &["IFCCURTAINWALL"]),
+        curtain_walls,
+        "curtain wall ElementIds"
+    );
 
     let slabs = tags(&reference, &["IFCSLAB"]);
     assert_eq!(slabs.len(), 2);
