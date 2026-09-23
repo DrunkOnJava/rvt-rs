@@ -479,6 +479,7 @@ interface ElementInfoPanel {
   extent_rows?: PanelRow[];
   material?: PanelMaterial | null;
   property_group?: PanelPropertyGroup | null;
+  further_property_groups?: PanelPropertyGroup[];
   host?: RelatedElement | null;
   hosted?: RelatedElement[];
   missing?: string[];
@@ -1233,6 +1234,10 @@ function renderElementPanel(panel: ElementInfoPanel): void {
 
   if (panel.property_group) {
     const box = propertyGroup(panel.property_group);
+    if (box) infoEl.appendChild(box);
+  }
+  for (const group of panel.further_property_groups ?? []) {
+    const box = propertyGroup(group);
     if (box) infoEl.appendChild(box);
   }
 

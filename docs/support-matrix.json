@@ -234,6 +234,15 @@
       "user_impact": "Curtain walls and storefronts come out as IfcCurtainWall with their glazing panels and mullions grouped under them, as in Revit's export, instead of a solid wall box drawn over the glass."
     },
     {
+      "id": "element-record-stair-dimensions",
+      "area": "elements",
+      "name": "Stair and flight riser count, riser height and tread length from Revit 2024 element data, as Pset_StairCommon / Pset_StairFlightCommon",
+      "status": "partial",
+      "evidence": "partition_stairs::stair_dimensions_at / run_riser_count_at / scan_stair_dimensions / flight_riser_counts; partition_schema_mvp (STAIR_* fields); ifc::entities::IfcEntity::ElementPropertySet and PropertyValue::PositiveLengthFeet; unit tests in partition_stairs, export_content and step_writer; examples/probe_re47_stair_dimensions.rs; reports/element-framing/RE-47-stair-dimensions.md",
+      "notes": "A stair's element data carries, past ff ff ff ff fb 03 ff ff ff ff fb 03 00 00 00 00 (found within its first 0x100 bytes, at 0x63 or 0x6b on Snowdon), its riser height (f64 ft, +16), tread depth (f64 ft, +24) and number of risers (u32, +88); a run's data carries its number of risers after fc ff ff ff ff ff ff ff 00 00 00 02 00 00 00. A flight's count is the stair's for a single run, else its own when the runs add up to the stair's. They are written as Pset_StairCommon / Pset_StairFlightCommon NumberOfRiser (IfcCountMeasure), RiserHeight and TreadLength (IfcPositiveLengthMeasure), the sets and types Revit's export uses, through a new IfcEntity::ElementPropertySet. Measured on Snowdon Towers (local only) against Revit's own values for the same Tags: stairs 26 of 26 on all three; flights RiserHeight and TreadLength 43 of 43, NumberOfRiser 37 of 43, the other 6 being both flights of the three stairs Revit's export splits into two IfcRelAggregates, where it writes the stair total (24) on each flight and rvt-rs the runs' 13 and 11. NumberOfTreads is not written (risers minus runs on 23 of 26 stairs; the other 3 depend on an unread begin/end-with-riser setting), no stair geometry changes, and no licensed CI file has a stair. Revit 2024 only.",
+      "user_impact": "Stairs and flights carry the riser count, riser height and tread length Revit schedules them by, in the standard IFC property sets, and the viewer shows them."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",

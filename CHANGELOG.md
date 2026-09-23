@@ -59,6 +59,20 @@ All notable changes will be documented here. This project follows
   - The export diagnostics count `building_elements_carried_by_parts`, and
     `rvt-ifc` prints it ("6037 with geometry and 68 carried by their
     parts"), so aggregate wholes no longer read as missing geometry.
+- **Stairs and flights carry their riser count, riser height and tread
+  length (RE-47).** A stair's element data holds its riser height, tread
+  depth and number of risers, and a run's data holds its number of risers.
+  - They are written as `Pset_StairCommon` / `Pset_StairFlightCommon`, with
+    `NumberOfRiser` as `IfcCountMeasure` and `RiserHeight` / `TreadLength`
+    as `IfcPositiveLengthMeasure`, as in Revit's export.
+  - On Snowdon Towers every stair's values equal Revit's (26 of 26), and
+    flights' on 37 of 43. On the other 6, Revit writes the stair's total on
+    each flight of a stair it splits in two, and rvt-rs writes each run's own
+    count.
+  - The IFC model gains `IfcEntity::ElementPropertySet` for an element's
+    further property sets and `PropertyValue::PositiveLengthFeet`. The viewer
+    panel payload gains `further_property_groups`, which the viewer shows.
+  - `examples/probe_re47_stair_dimensions.rs` lists them.
 - **Type records are read on Revit 2025.** `partition_type_records` read
   Revit 2024 only. The same records on 2025 carry the 2025 marker and
   prologue constant, and most are second-prologue frames that take their

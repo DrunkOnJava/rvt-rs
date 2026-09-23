@@ -1840,4 +1840,15 @@ aggregated parts; 1,798 of Revit's 1,906 on Snowdon.
 Report: `reports/element-framing/RE-46-curtain-walls.md`.
 Probe: `examples/probe_re46_curtain_walls.rs`.
 
+## Addendum — RE-47 stair dimensions (2026-09-23)
+
+A stair's element data carries its riser height, tread depth and number of
+risers after a fixed anchor, and each run's data its own number of risers.
+Written as `Pset_StairCommon` / `Pset_StairFlightCommon`, every Snowdon
+stair's values equal Revit's (26 of 26), and flights' on 37 of 43; Revit
+writes the stair total on both flights of the three stairs it splits.
+
+Report: `reports/element-framing/RE-47-stair-dimensions.md`.
+Probe: `examples/probe_re47_stair_dimensions.rs`.
+
 **End of report.**
