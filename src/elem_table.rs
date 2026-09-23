@@ -7,9 +7,15 @@
 //!
 //! | Variant               | Record start | Marker per record      | Record size |
 //! | ---                   | ---          | ---                    | ---         |
-//! | Family (.rfa, 2016-2026) | `0x30`     | none (implicit)        | 12 B        |
-//! | Project 2023 (.rvt)   | `0x1E`       | `FF FF FF FF` at `+0`  | 28 B        |
-//! | Project 2024 (.rvt)   | `0x1E`       | `FF`×8 at `+4`         | 40 B        |
+//! | Revit 2016-2023 (.rvt, .rfa) | `0x1E` | `FF FF FF FF` at `+0`  | 28 B        |
+//! | Revit 2024-2026 (.rvt, .rfa) | `0x1E` | `FF`×8 at `+4`         | 40 B        |
+//!
+//! Family files use the same records as projects. They leave the marker
+//! field at `0` instead of `0xFF`, and the record array is followed by a
+//! trailer, so neither the marker scan nor the flush check finds them;
+//! [`detect_layout`] recognises them by their ascending ids instead. A
+//! 12-byte implicit layout from `0x30` remains only as the fallback for a
+//! table nothing else recognises.
 //!
 //! The marker is a sentinel-valued field *inside* a record, not necessarily
 //! the record's first byte: on the 40-byte 2024 variant each record opens
@@ -28,10 +34,10 @@
 //! [12 bytes zero-padding]
 //! ```
 //!
-//! The `header_flag = 0x0011` at `0x22` is present only on family files.
-//! Project files have either zeros or the record-0 marker at that offset,
-//! so `parse_header` returns 0 for the flag on those variants — not a
-//! parser bug, the flag genuinely isn't there.
+//! What `parse_header` reports as `header_flag = 0x0011` (at `0x1E` on
+//! 28-byte tables, `0x22` on 40-byte ones) is not a header field: it is
+//! record 0's owner field, which names ElementId 17 on family files and is
+//! unset on project files. The name is kept for compatibility.
 
 use crate::{Error, Result, RevitFile, compression, streams::GLOBAL_ELEM_TABLE};
 use serde::{Deserialize, Serialize};
@@ -39,13 +45,16 @@ use serde::{Deserialize, Serialize};
 /// Header extracted from the first 32 bytes of decompressed Global/ElemTable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElemTableHeader {
-    /// Declared number of distinct ElementIds in this file.
+    /// Named for what it was assumed to be, but not a count of elements:
+    /// the same value on every file of a release, project or family (1370
+    /// on 2023, 1411 on 2024, 1451 on 2025, 1481 on 2026). For the declared
+    /// ElementIds use [`declared_element_ids`].
     pub element_count: u16,
     /// Declared number of records (may differ if some elements have multiple
     /// records, e.g. versioned entries).
     pub record_count: u16,
-    /// Invariant magic word that appears at byte offset 0x1e on family files
-    /// across every Revit release we've inspected. 0 on project files.
+    /// The `0x0011` found at `0x1E` / `0x22` on family files, 0 elsewhere.
+    /// It is record 0's owner field (ElementId 17), not a header field.
     pub header_flag: u16,
     /// Decompressed stream size, for diagnostics.
     pub decompressed_bytes: usize,
@@ -54,7 +63,8 @@ pub struct ElemTableHeader {
 /// How records are framed in this ElemTable stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RecordFraming {
-    /// Family files: 12-byte homogeneous records, no per-record marker.
+    /// 12-byte records from `0x30`, no marker: the fallback for a table no
+    /// other layout recognises. No corpus file uses it.
     Implicit,
     /// Project files: each record begins with N FF bytes (4 on 2023, 8 on 2024).
     Explicit { marker_len: usize },
@@ -75,9 +85,9 @@ pub struct ElemTableLayout {
 
 /// A fully-parsed record from ElemTable.
 ///
-/// On family files, `id_primary`/`id_secondary` are the first two `u32`s of
-/// the 12-byte record (semantics still exploratory — on observed samples both
-/// are 0x0000003F). On project files, these are the monotonic element-id pair
+/// On the implicit fallback layout, `id_primary`/`id_secondary` are the first
+/// two `u32`s of the 12-byte record. On the explicit layouts, which project
+/// and family files both use, these are the monotonic element-id pair
 /// that starts each record past the marker; observations show `id_secondary`
 /// matches `id_primary` on most rows.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,7 +107,9 @@ pub struct ElemRecord {
     /// curtain panels, mullions and grids name their curtain wall, sketch
     /// lines their sketch, grouped elements their model group (RE-31).
     /// A few records name themselves (304 on Core Interior); that value is
-    /// reported as read. Always `None` on the implicit family layout.
+    /// reported as read. `0` is treated as unset too: family files leave the
+    /// field at `0` where project files write `0xFF`. Always `None` on the
+    /// implicit fallback layout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_id: Option<u32>,
     /// Raw record bytes (including the marker on project files).
@@ -179,7 +191,8 @@ const KNOWN_EXPLICIT_STRIDES: [usize; 2] = [40, 28];
 /// Detect the record layout by finding the first two per-record markers and
 /// taking their stride, then anchoring record 0's origin against the declared
 /// record count (see the module docs and `flush_origin`). Falls back to the family-file
-/// implicit layout (12 B from `0x30`) when no markers are present.
+/// implicit layout (12 B from `0x30`) when no markers are present and the
+/// ids do not reveal an explicit layout (family files: see the module docs).
 ///
 /// The sentinel field is not `0xFF` on every record: on Autodesk's Snowdon
 /// Towers 2024 architectural sample records 1 and 2 hold `0x10` there, so
@@ -233,13 +246,65 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
             framing: RecordFraming::Explicit { marker_len },
         }
     } else {
-        ElemTableLayout {
+        id_progression_layout(d).unwrap_or(ElemTableLayout {
             start: 0x30,
             stride: 12,
             marker_offset: 0,
             framing: RecordFraming::Implicit,
+        })
+    }
+}
+
+/// Record 0's offset on both explicit layouts.
+const EXPLICIT_ORIGIN: usize = 0x1E;
+
+/// Recognise an explicit layout without a marker run, from its ids.
+///
+/// Family files leave the marker field at `0` and end the record array in a
+/// trailer, so neither the marker scan nor [`flush_origin`] applies. What
+/// does hold on every release (2016-2026) is the id pair: from `0x1E`, the
+/// first records' `id_primary` values rise strictly from a non-zero start
+/// and equal their `id_secondary`. The 40-byte layout is tried first, and
+/// both must fit `record_count` records inside the stream.
+fn id_progression_layout(d: &[u8]) -> Option<ElemTableLayout> {
+    const SAMPLE: usize = 64;
+    let record_count = usize::from(u16::from_le_bytes([*d.get(2)?, *d.get(3)?]));
+    let sample = record_count.min(SAMPLE);
+    if sample < 8 {
+        return None;
+    }
+    let read_u32 = |at: usize| {
+        d.get(at..at.checked_add(4)?)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    };
+    // (stride, id_primary at, id_secondary at, marker offset, marker length)
+    for (stride, id_at, id2_at, marker_offset, marker_len) in [(40, 16, 36, 4, 8), (28, 4, 8, 0, 4)]
+    {
+        let span = stride * record_count;
+        if EXPLICIT_ORIGIN.checked_add(span)? > d.len() {
+            continue;
+        }
+        let pairs: Option<Vec<(u32, u32)>> = (0..sample)
+            .map(|k| {
+                let record = EXPLICIT_ORIGIN + k * stride;
+                Some((read_u32(record + id_at)?, read_u32(record + id2_at)?))
+            })
+            .collect();
+        let Some(pairs) = pairs else {
+            continue;
+        };
+        let ascending = pairs.windows(2).all(|w| w[1].0 > w[0].0);
+        let paired = pairs.iter().all(|(a, b)| a == b);
+        if pairs[0].0 != 0 && ascending && paired {
+            return Some(ElemTableLayout {
+                start: EXPLICIT_ORIGIN,
+                stride,
+                marker_offset,
+                framing: RecordFraming::Explicit { marker_len },
+            });
         }
     }
+    None
 }
 
 /// Parse only the header portion of Global/ElemTable. Sufficient for counts
@@ -363,7 +428,7 @@ fn owner_field(record: &[u8], at: usize, width: usize) -> Option<u32> {
         8 => u64::from_le_bytes(field.try_into().ok()?),
         _ => return None,
     };
-    if field.iter().all(|&b| b == 0xFF) {
+    if field.iter().all(|&b| b == 0xFF) || value == 0 {
         return None;
     }
     u32::try_from(value).ok()
@@ -505,9 +570,42 @@ mod tests {
         assert_eq!(u16::from_le_bytes([buf[0x1e], buf[0x1f]]), 0x0011);
     }
 
+    /// A family table: record 0's owner is 17, every other owner field is
+    /// `0` (no `0xFF` run), ids rise from 1, and a trailer follows the
+    /// records. The ids reveal the layout; owners of `0` read as unset.
     #[test]
-    fn detect_family_layout_falls_back_to_implicit_12b() {
-        // Family-file header: no FF markers in first 512 bytes.
+    fn family_tables_are_recognised_by_their_ids() {
+        for (stride, id_at, id2_at, owner_at) in
+            [(40usize, 16usize, 36usize, 4usize), (28, 4, 8, 0)]
+        {
+            const RECORDS: usize = 20;
+            let mut buf = vec![0u8; 0x1e + RECORDS * stride + 96];
+            buf[2..4].copy_from_slice(&(RECORDS as u16).to_le_bytes());
+            buf[0x1e + owner_at] = 0x11;
+            let mut id = 1u32;
+            for k in 0..RECORDS {
+                let rec = 0x1e + k * stride;
+                buf[rec + id_at..rec + id_at + 4].copy_from_slice(&id.to_le_bytes());
+                buf[rec + id2_at..rec + id2_at + 4].copy_from_slice(&id.to_le_bytes());
+                id += if k == 0 { 2 } else { 1 };
+            }
+            buf[0x1e + RECORDS * stride..].fill(0x5a);
+            let layout = detect_layout(&buf);
+            assert_eq!(layout.stride, stride);
+            assert_eq!(layout.start, 0x1e);
+            assert!(matches!(layout.framing, RecordFraming::Explicit { .. }));
+            let records = parse_records_from_bytes(&buf, layout, RECORDS);
+            assert_eq!(records.len(), RECORDS);
+            assert_eq!(records[0].id_primary, 1);
+            assert_eq!(records[1].id_primary, 3);
+            assert_eq!(records[0].owner_id, Some(17));
+            assert!(records[1..].iter().all(|r| r.owner_id.is_none()));
+        }
+    }
+
+    #[test]
+    fn unrecognised_table_falls_back_to_implicit_12b() {
+        // No FF markers, and too short for the declared record count.
         let mut buf = vec![0u8; 0x80];
         buf[0] = 0x83;
         buf[1] = 0x05;

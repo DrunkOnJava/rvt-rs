@@ -12,7 +12,7 @@ per-record FF-marker prefixes.
 
 | Variant | Decompressed size | Record start | Marker per record | Record size |
 |---|---|---|---|---|
-| Family (RAC 2024 sample) | 79,606 B | `0x30` | none (implicit) | **12 B** (current parser works) |
+| Family (RAC 2024 sample) | 79,606 B | `0x30` | none (implicit) | **12 B** (current parser works) — *superseded 2026-09-22: families use the 40-byte project records; see the last section* |
 | Project 2023 (Einhoven) | 73,245 B | `0x1E` | `FF FF FF FF` (4 B) | **28 B** |
 | Project 2024 (Core Interior) | 1,059,812 B | `0x22` | `FF FF FF FF FF FF FF FF` (8 B) | **40 B** |
 
@@ -305,3 +305,30 @@ model group of a grouped element. The library reads it as
 the field is really a `u32`) is unmeasured. A file past that bound would
 fail the flush check and keep the marker-spacing layout rather than parse
 a wrong count.
+
+## Family files use the project records (2026-09-22)
+
+The "12-byte implicit layout from `0x30`" in the table above was wrong for
+every family release. The parser read ids of 0, 4128768, 196608 and so on
+from the 2026 family, and nothing checked them. phi-ag/rvt's README, which
+reads a 2026 family ElemTable as 40-byte chunks after a 6-byte header,
+prompted a re-measurement on all 11 `phi-ag/rvt` family releases:
+
+- **Same records as projects.** Families use 28-byte records through
+  2023 and 40-byte records from 2024, with record 0 at `0x1E`. From
+  there, `id_primary` (at `+4` or `+16`) runs 1, 3, 4, 5, … and equals
+  `id_secondary` (at `+8` or `+36`) on every record except the final
+  zero-id terminator, which projects have too.
+- **Why neither anchor applied.** Families leave the owner field (RE-31)
+  at `0` where projects write `0xFF`, so there is no marker run to scan
+  for. The record array also ends in a trailer (576 bytes on 2026, 427 on
+  2016), so the flush check never applies. `detect_layout` now recognises
+  these tables by that id progression. `record_count` records are parsed,
+  and an owner of `0` reads as unset.
+- **"header_flag".** The `0x0011` at `0x1E` (28-byte) or `0x22` (40-byte)
+  is record 0's owner field, naming ElementId 17. It was never a header
+  field.
+- **"element_count".** The header `u16` read as `element_count` is not a
+  count of elements. It is the same value on every file of a release,
+  project or family: 1370 on 2023, 1411 on 2024, 1451 on 2025 and 1481 on
+  2026.

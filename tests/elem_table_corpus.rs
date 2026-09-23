@@ -117,7 +117,10 @@ fn elem_table_record_origin_is_flush_with_the_stream_end() {
 }
 
 #[test]
-fn family_files_use_implicit_12b_layout() {
+fn family_files_use_the_project_layouts() {
+    // Families use the project records: 28 bytes through 2023, 40 bytes
+    // from 2024, record 0 at 0x1E. Ids start at 1 (2 is never used), rise
+    // to the final zero-id terminator, and equal their secondary copy.
     let mut missing: Vec<u32> = Vec::new();
     for year in ALL_YEARS {
         let p = sample_for_year(year);
@@ -126,20 +129,30 @@ fn family_files_use_implicit_12b_layout() {
             continue;
         }
         let mut rf = RevitFile::open(&p).unwrap_or_else(|_| panic!("{year}: open"));
-        let records = elem_table::parse_records(&mut rf)
-            .unwrap_or_else(|e| panic!("{year}: parse_records: {e}"));
         let header = elem_table::parse_header(&mut rf)
             .unwrap_or_else(|e| panic!("{year}: parse_header: {e}"));
+        let layout = elem_table::read_layout(&mut rf).unwrap_or_else(|e| panic!("{year}: {e}"));
+        let records = elem_table::parse_records(&mut rf)
+            .unwrap_or_else(|e| panic!("{year}: parse_records: {e}"));
+        assert_eq!(layout.stride, if year >= 2024 { 40 } else { 28 }, "{year}");
+        assert_eq!(layout.start, 0x1e, "{year}");
+        assert_eq!(records.len(), header.record_count as usize, "{year}");
+        assert_eq!(
+            [records[0].id_primary, records[1].id_primary],
+            [1, 3],
+            "{year}"
+        );
+        let body = &records[..records.len() - 1];
         assert!(
-            !records.is_empty(),
-            "{year}: expected at least one record in family ElemTable"
+            body.windows(2).all(|w| w[1].id_primary > w[0].id_primary),
+            "{year}: ids rise"
         );
         assert!(
-            records.len() <= header.record_count as usize,
-            "{year}: parsed {} records > header record_count {}",
-            records.len(),
-            header.record_count
+            body.iter().all(|r| r.id_primary == r.id_secondary),
+            "{year}: id pairs agree"
         );
+        assert_eq!(records[0].owner_id, Some(17), "{year}: record 0's owner");
+        assert_eq!(header.header_flag, 0x0011, "{year}");
     }
     assert!(
         missing.is_empty() || !require_family_corpus(),

@@ -280,9 +280,9 @@ impl SourceCoverageDiagnostics {
     ///
     /// Definitions (fail closed when a denominator is zero or untrusted):
     /// - `decoded_element_fraction` = `production_walker_elements /
-    ///   elem_table_element_count` when the ElemTable header
-    ///   `element_count` parses and `0 < walker <= element_count`
-    ///   (partition MVP can exceed the u16 header — leave null then).
+    ///   elem_table_element_count` (the distinct ElementIds
+    ///   `Global/ElemTable` declares) when that parses and
+    ///   `0 < walker <= declared` (leave null otherwise).
     /// - `exported_element_fraction` = `building_elements /
     ///   production_walker_elements` when walker &gt; 0 (includes
     ///   non-building production classes such as Level/Material).
@@ -299,14 +299,14 @@ impl SourceCoverageDiagnostics {
         let decoded_element_fraction = match elem_table_element_count {
             None => {
                 notes.push(
-                    "decoded_element_fraction left null: Global/ElemTable element_count unavailable."
+                    "decoded_element_fraction left null: Global/ElemTable declared ElementIds unavailable."
                         .into(),
                 );
                 None
             }
             Some(0) => {
                 notes.push(
-                    "decoded_element_fraction left null: ElemTable header element_count is 0."
+                    "decoded_element_fraction left null: Global/ElemTable declares no ElementIds."
                         .into(),
                 );
                 None
@@ -321,7 +321,7 @@ impl SourceCoverageDiagnostics {
             }
             Some(declared) => {
                 notes.push(format!(
-                    "decoded_element_fraction left null: production walker recovered {production_walker_elements} elements but ElemTable header element_count is only {declared} (partition recovers can exceed the u16 header; do not invent a ratio)."
+                    "decoded_element_fraction left null: production walker recovered {production_walker_elements} elements but Global/ElemTable declares only {declared} ElementIds (do not invent a ratio)."
                 ));
                 None
             }
@@ -355,7 +355,7 @@ impl SourceCoverageDiagnostics {
 
         notes.insert(
             0,
-            "Measured from export diagnostics counts only (production walker, exported building elements, ElemTable header element_count when trusted). Not a converter-grade completeness claim.".into(),
+            "Measured from export diagnostics counts only (production walker, exported building elements, ElementIds declared by Global/ElemTable). Not a converter-grade completeness claim.".into(),
         );
 
         Self {
@@ -372,10 +372,13 @@ impl SourceCoverageDiagnostics {
 ///
 /// Returns `None` when the stream is missing or fails to parse — callers
 /// must leave `decoded_element_fraction` null rather than invent a total.
+/// Distinct non-zero ElementIds `Global/ElemTable` declares. The header's
+/// `element_count` is not this: it is the same value on every file of a
+/// release (1411 on all 2024 files).
 fn elem_table_declared_element_count(rf: &mut crate::RevitFile) -> Option<usize> {
-    crate::elem_table::parse_header(rf)
+    crate::elem_table::declared_element_ids(rf)
         .ok()
-        .map(|header| header.element_count as usize)
+        .map(|ids| ids.iter().filter(|&&id| id != 0).count())
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

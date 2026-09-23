@@ -245,7 +245,7 @@ Important `source_coverage` fields:
 
 | Field | Meaning when measured |
 |---|---|
-| `decoded_element_fraction` | `production_walker_elements / ElemTable.element_count` when walker ≤ declared count |
+| `decoded_element_fraction` | `production_walker_elements /` the distinct ElementIds `Global/ElemTable` declares, when walker ≤ that count. (Before 2026-09-22 the denominator was the header's `element_count`, which is a per-release constant, not a count.) |
 | `exported_element_fraction` | `building_elements / production_walker_elements` |
 | `geometry_element_fraction` | `building_elements_with_geometry / building_elements` |
 
