@@ -61,6 +61,12 @@ End to end, `rvt-ifc` on RE1 Architecture writes:
 ## 3. What does not carry over
 
 - **Room names and numbers, storeys, IFC export-type overrides, wall types.** These come from record families RE-22…RE-29 measured on 2024 only. Their modules keep their own 2024 gate, so on 2025 rooms are `Room-<id>` and elements are not storey-bound.
+
+  This was measured, not only assumed. With the level and type markers switched to the 2025 tail and all four gates opened to 2025, `rvt-ifc` on RE1 Architecture produced:
+  - **Rooms named "Wood" and "Concrete".** The room-parameter decode reads material names on 2025, so its block layout moved.
+  - **Wrong storeys.** Four storeys (Ground floor, Level 1, Level 2, Roof), all at elevation 0, against Revit's two (Level 1 at 0, Level 2 at 3,660 mm).
+
+  Both would have been wrong output, so the gates stay at 2024.
 - **Doors and windows.** On these files they are almost entirely second-prologue frames. The #295 selector question applies to 2025 exactly as it does to Snowdon.
 - **2023 and 2026.** Unsupported, as above.
 
