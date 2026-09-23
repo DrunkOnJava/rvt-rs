@@ -135,6 +135,15 @@
       "user_impact": "Revit 2025 projects export the walls, slabs and rooms whose records carry their ElementId, matching Revit's own export; doors and windows mostly do not decode yet, and the diagnostics say how many were skipped."
     },
     {
+      "id": "element-records-product-categories",
+      "area": "elements",
+      "name": "Furniture, casework, fixtures, equipment, ceilings, curtain-wall parts, railings, wall sweeps, ducts and pipes from partition element records",
+      "status": "partial",
+      "evidence": "partition_element_records::PRODUCT_RECORD_CATEGORIES; tests/element_records_2025.rs against Drshelden/IFC-ECS RE1 Architecture, Mechanical and Plumbing (MIT, fetched by CI tier 2); examples/probe_re33_category_census.rs; reports/element-framing/RE-33-product-categories.md",
+      "notes": "Thirteen more BuiltInCategory values decode under the unchanged RE-21 instance rule, and every ElementId they select is a Tag in Revit's own export of the same file: zero false positives on RE1 Architecture, Mechanical and Plumbing (Revit 2025) and on Snowdon Towers (Revit 2024, measured locally). On RE1 Architecture all 58 elements of these categories are recovered; on the MEP models 33 of 73 and 9 of 123, and on Snowdon 37, because most frames use the second prologue (RE-30). Second-prologue frames keep the container and placement fields, so the unattributed count covers placed instances only and matches the missing elements exactly for pipes, fittings, mullions, columns, railings, ceilings and furniture. Bodies are the record bounding box; entities are the IFC4 types (IfcFurniture, IfcSanitaryTerminal, IfcCovering, IfcMember, IfcPlate, IfcRailing, IfcBuildingElementProxy, IfcDuctSegment, IfcDuctFitting, IfcPipeSegment, IfcPipeFitting). Revit 2024 and 2025 only.",
+      "user_impact": "Revit 2024 and 2025 projects export furniture, casework, plumbing fixtures, specialty equipment, ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts and pipes whose records carry their ElementId, each one an element Revit's own export also holds; the diagnostics count the rest."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",

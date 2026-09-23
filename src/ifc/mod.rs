@@ -474,8 +474,9 @@ pub struct ExportConfidenceSummary {
     pub has_geometry: bool,
     pub has_diagnostic_proxies: bool,
     pub warning_count: usize,
-    /// Wall, door, window, column, floor or room records the partition
-    /// scan found but could not export because no ElementId is attributable
+    /// Element records of a recovered category
+    /// ([`crate::partition_element_records::RECOVERED_CATEGORIES`]) the
+    /// partition scan found but could not export because no ElementId is attributable
     /// to them (the `element_record_without_element_id` skipped item,
     /// RE-30). Non-zero means the model is incomplete, and `score` is
     /// scaled down by the exported share. Zero is not a completeness claim.
@@ -2097,7 +2098,7 @@ pub fn build_export_diagnostics_with_limits(
         warnings.insert(
             0,
             format!(
-                "{unattributed_total} wall, door, window, column, floor or room record(s) in this file use an element-record layout whose ElementId this release cannot locate, so they are not exported and the model is incomplete (RE-30)."
+                "{unattributed_total} model element record(s) in this file use an element-record layout whose ElementId this release cannot locate, so they are not exported and the model is incomplete (RE-30)."
             ),
         );
     }

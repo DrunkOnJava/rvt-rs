@@ -1712,7 +1712,7 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
     return {
       kind: 'warn',
       title: 'Incomplete model',
-      summary: `${unexported} wall, door, window, column, floor or room records could not be exported (RE-30)`,
+      summary: `${unexported} model element records could not be exported (RE-30)`,
     };
   }
   if (unsupported.length > 0 || warnings.length > 0 || geometryElements === 0) {

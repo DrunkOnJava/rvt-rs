@@ -262,7 +262,7 @@ fn classify_failure_mode(
             kind: "incomplete_model".into(),
             title: "Incomplete model".into(),
             summary: format!(
-                "Model elements were recovered, but {unexported} wall, door, window, column, floor or room record(s) use a layout whose ElementId this release cannot locate and are not exported."
+                "Model elements were recovered, but {unexported} model element record(s) use a layout whose ElementId this release cannot locate and are not exported."
             ),
             severity: "warning".into(),
         };
@@ -337,7 +337,7 @@ fn export_readiness(diagnostics: &ExportDiagnostics) -> ExportReadiness {
     let unexported = diagnostics.confidence.unexported_element_records;
     let summary = if unexported > 0 {
         format!(
-            "{summary} Incomplete: {unexported} wall, door, window, column, floor or room record(s) could not be exported (RE-30)."
+            "{summary} Incomplete: {unexported} model element record(s) could not be exported (RE-30)."
         )
     } else {
         summary
