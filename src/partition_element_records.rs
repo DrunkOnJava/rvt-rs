@@ -228,6 +228,11 @@ pub const OST_STAIRS_LANDINGS: i64 = -2_000_920;
 /// stringers.
 pub const OST_STAIRS_STRINGER_CARRIAGE: i64 = -2_000_123;
 
+/// Autodesk `BuiltInCategory.OST_Roofs`. Exported as `IfcRoof` with the
+/// record's box, the entity Revit's own export gives every Snowdon roof
+/// (#323).
+pub const OST_ROOFS: i64 = -2_000_035;
+
 /// Categories whose placed element records export directly as typed IFC
 /// products, with the class name each is decoded as (RE-33).
 ///
@@ -258,7 +263,7 @@ pub const OST_STAIRS_STRINGER_CARRIAGE: i64 = -2_000_123;
 /// outside it: 447 lighting fixtures, 26 food-service items, 157 site
 /// elements, 2 ramps and 2 elevators on Snowdon Towers; 7 air terminals on
 /// RE1 Mechanical; 12 lighting fixtures on RE1 Electrical.
-pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 30] = [
+pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 31] = [
     (OST_FURNITURE, "Furniture"),
     (OST_CASEWORK, "Casework"),
     (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
@@ -289,6 +294,7 @@ pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 30] = [
     (OST_STAIRS_RUNS, "StairsRun"),
     (OST_STAIRS_LANDINGS, "StairsLanding"),
     (OST_STAIRS_STRINGER_CARRIAGE, "StairsStringer"),
+    (OST_ROOFS, "Roof"),
 ];
 
 /// Smallest bounding-box extent, in feet, a placed instance needs on every
@@ -1031,7 +1037,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// The categories the exporter recovers instances of, with the class name
 /// each is decoded as: the architectural core plus
 /// [`PRODUCT_RECORD_CATEGORIES`].
-pub const RECOVERED_CATEGORIES: [(i64, &str); 37] = [
+pub const RECOVERED_CATEGORIES: [(i64, &str); 38] = [
     (OST_WALLS, "Wall"),
     (OST_DOORS, "Door"),
     (OST_WINDOWS, "Window"),
@@ -1069,6 +1075,7 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 37] = [
     (OST_STAIRS_RUNS, "StairsRun"),
     (OST_STAIRS_LANDINGS, "StairsLanding"),
     (OST_STAIRS_STRINGER_CARRIAGE, "StairsStringer"),
+    (OST_ROOFS, "Roof"),
 ];
 
 /// Placed-instance frames in `buf`, per category, that carry the bbox

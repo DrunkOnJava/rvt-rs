@@ -55,6 +55,15 @@ Railings therefore stay standalone `IfcRailing` elements, contained in their sto
 
 ## 4. What this does not claim
 
-- Roofs, which Revit also exports as aggregates of slabs, are not changed (#323 stays open for them).
+- Roofs are §5.
 - Stair bodies are their parts' record bounding boxes. A run's box is an envelope of its treads, not the treads.
 - Revit 2024 and 2025 only.
+
+## 5. Roofs
+
+The 20 placed `OST_Roofs` (−2000035) instances on Snowdon Towers are all `IfcRoof` `Tag`s in Revit's IFC4 export, which writes them in two shapes:
+- 13 are an `IfcRoof` with a body of its own;
+- 7 are a bodiless `IfcRoof` aggregating one `IfcSlab` `.ROOF.` with the same `Tag`.
+
+No decoded byte says which shape a roof gets. rvt-rs therefore writes each roof as one `IfcRoof` with the record's box. All 20 `Tag`s are Revit's. For the 7 decomposed roofs, the entity structure is simpler than Revit's. Core Interior, the RE1 models and the structural sample have no roof records, and their exports are unchanged.
+

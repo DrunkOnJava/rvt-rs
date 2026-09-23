@@ -8,6 +8,12 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Roofs export as `IfcRoof` (#323).** All 20 placed roofs on Snowdon Towers
+  are `IfcRoof`s in Revit's own IFC4 export. Revit decomposes 7 of them into
+  a same-`Tag` `IfcSlab` `.ROOF.` part. No decoded byte says which roofs
+  those are, so rvt-rs writes each roof as one `IfcRoof` with its record's
+  box. The other test files have no roof records and export unchanged.
+
 - **Stairs export as aggregates of their runs, landings and stringers
   (RE-39, #323).** Each stair is an `IfcStair` with no body of its own. Its
   runs (`IfcStairFlight`), landings (`IfcSlab` `.LANDING.`) and stringers
