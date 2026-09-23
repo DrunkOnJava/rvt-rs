@@ -89,6 +89,30 @@
 //! | 20302 | `Level 12` | 166 |
 //! | 65128 | `Level 13` | 185.5 |
 //!
+//! # RE-51: the same block on every 2024 and 2025 project
+//!
+//! On Snowdon Towers (2024) and the RE1 models (2025) the same block opens
+//! the Level's element data (RE-44), and RE-24's reading needed two
+//! corrections to find it there:
+//!
+//! - The marker is six bytes, `05 00 00 00` and a `u16` per release
+//!   ([`elevation_marker`]). Four plan extents follow it, and RE-24's last
+//!   two marker bytes were the first extent's low bytes, zero only on
+//!   Core Interior's round extents.
+//! - The confirming copy is found by the 24 bytes before it, which are the
+//!   first copy's too ([`ELEVATION_CONFIRM_LEAD_IN`]): 153 bytes on on Core
+//!   Interior, 161 on Snowdon, 246 and 181 on RE1.
+//!
+//! Levels in second-prologue frames take their id from their partition
+//! record ([`decode_record_at_with`]). A Level inside another element names
+//! that element after its own id ([`owned_level_ids`]) and is not a
+//! storey. With those, every storey equals one of Revit's own export, name,
+//! elevation and GlobalId: Snowdon 18 of 18, each RE1 model 2 of 2. See
+//! `reports/element-framing/RE-51-level-names.md`. On Snowdon's structural
+//! model 8 of 19 Levels carry `01` where the three bytes before the name
+//! length are zero on every Level measured; with no export of that model to
+//! read the byte against, its storey set is refused.
+//!
 //! Every name and every elevation equals the `Name` and `Elevation`
 //! of an `IfcBuildingStorey` in Revit's own export of the same file —
 //! all fifteen, exactly, including the four elevations (−40, −20, 15,
@@ -116,8 +140,9 @@ use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases where this framing is corpus-proven.
-pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+/// Releases where this framing is corpus-proven: 2024 on Core Interior
+/// (RE-24) and Snowdon Towers, 2025 on RE1 Architecture (RE-51).
+pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Autodesk `BuiltInCategory.OST_Levels`.
 pub const OST_LEVELS: i64 = -2_000_240;
@@ -147,13 +172,43 @@ pub const LENGTH_PREFIX_OFFSET_BEFORE_NAME: usize = 4;
 /// Longest name the scan will accept, in UTF-16 code units.
 pub const MAX_NAME_CHARS: usize = 128;
 
-/// Marker whose fixed distance to the elevation double is measured.
+/// Marker whose fixed distance to the elevation double is measured on
+/// `2024_Core_Interior.rvt`. Its last two bytes are data, not marker: they
+/// are the low bytes of the first plan extent that follows, zero on that
+/// file's round extents (RE-51); [`elevation_marker`] is the marker.
 pub const ELEVATION_MARKER: [u8; 8] = [0x05, 0x00, 0x00, 0x00, 0x48, 0x02, 0x00, 0x00];
+
+/// The elevation marker per release: `05 00 00 00` and a release's `u16`
+/// (RE-51). Four plan extents (`f64` feet) follow it, then, at
+/// [`ELEVATION_OFFSET_AFTER_MARKER`], the elevation.
+pub fn elevation_marker(revit_version: u32) -> Option<[u8; 6]> {
+    match revit_version {
+        2024 => Some([0x05, 0x00, 0x00, 0x00, 0x48, 0x02]),
+        2025 => Some([0x05, 0x00, 0x00, 0x00, 0x5d, 0x02]),
+        _ => None,
+    }
+}
+
+/// The Level record marker per release: the last six bytes of the
+/// element-record bbox marker ([`crate::partition_element_records::bbox_marker`]),
+/// [`RECORD_MARKER`] on 2024.
+pub fn record_marker(revit_version: u32) -> Option<[u8; 6]> {
+    let marker = crate::partition_element_records::bbox_marker(revit_version)?;
+    let mut out = [0u8; 6];
+    out.copy_from_slice(&marker[2..]);
+    Some(out)
+}
+
+/// Bytes before the elevation that recur, with it, in its confirming copy
+/// (RE-51).
+pub const ELEVATION_CONFIRM_LEAD_IN: usize = 24;
 
 /// Bytes from the elevation marker to the elevation double.
 pub const ELEVATION_OFFSET_AFTER_MARKER: usize = 55;
 
-/// Bytes from the first elevation copy to the confirmation copy.
+/// Bytes from the first elevation copy to the confirmation copy on
+/// `2024_Core_Interior.rvt`. The copy is found, not assumed (RE-51): it is
+/// 161 bytes on Snowdon Towers and 246 or 181 on RE1.
 pub const ELEVATION_CONFIRM_STRIDE: usize = 153;
 
 /// How far past the name the elevation marker may sit.
@@ -248,16 +303,31 @@ pub fn decode_record_at(
     offset: usize,
     declared_ids: &BTreeSet<u32>,
 ) -> Option<PartitionLevelRecord> {
+    decode_record_at_with(stream, buf, offset, declared_ids, &RECORD_MARKER, &[])
+}
+
+/// [`decode_record_at`] for a release's `marker` ([`record_marker`]). A
+/// frame with no ElementId at `+0x00` (RE-30's second prologue) takes the
+/// id of the `chain` record it sits in (RE-35), when that id is declared.
+pub fn decode_record_at_with(
+    stream: &str,
+    buf: &[u8],
+    offset: usize,
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8; 6],
+    chain: &[crate::partition_element_records::PartitionRecordSpan],
+) -> Option<PartitionLevelRecord> {
     use crate::partition_element_records as per;
     if offset.checked_add(RECORD_MIN_LEN)? > buf.len() {
         return None;
     }
     let raw_id = read_u64(buf, offset)?;
-    if raw_id == 0 || raw_id > u64::from(u32::MAX) {
-        return None;
-    }
-    let element_id = raw_id as u32;
-    if !declared_ids.contains(&element_id) {
+    let element_id = if per::carries_no_element_id(raw_id) {
+        u32::try_from(per::enclosing_record(chain, offset)?.element_id).ok()?
+    } else {
+        raw_id as u32
+    };
+    if element_id == 0 || !declared_ids.contains(&element_id) {
         return None;
     }
     if read_u16(buf, offset + 0x10)? != 0 {
@@ -266,9 +336,7 @@ pub fn decode_record_at(
     if read_u64(buf, offset + per::CATEGORY_OFFSET)? as i64 != OST_LEVELS {
         return None;
     }
-    if buf[offset + RECORD_MARKER_OFFSET..offset + RECORD_MARKER_OFFSET + RECORD_MARKER.len()]
-        != RECORD_MARKER
-    {
+    if buf[offset + RECORD_MARKER_OFFSET..offset + RECORD_MARKER_OFFSET + marker.len()] != *marker {
         return None;
     }
     let flags = read_u32(buf, offset + 0x08)?;
@@ -290,6 +358,19 @@ pub fn find_level_records(
     buf: &[u8],
     declared_ids: &BTreeSet<u32>,
 ) -> Vec<PartitionLevelRecord> {
+    find_level_records_with(stream, buf, declared_ids, &RECORD_MARKER, &[])
+}
+
+/// [`find_level_records`] for a release's record `marker`, with
+/// second-prologue frames attributed through the partition's record
+/// `chain` ([`decode_record_at_with`]).
+pub fn find_level_records_with(
+    stream: &str,
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8; 6],
+    chain: &[crate::partition_element_records::PartitionRecordSpan],
+) -> Vec<PartitionLevelRecord> {
     use crate::partition_element_records as per;
     let needle = (OST_LEVELS as u64).to_le_bytes();
     let mut out = Vec::new();
@@ -300,9 +381,14 @@ pub fn find_level_records(
         };
         let hit = cursor + found;
         if hit >= per::CATEGORY_OFFSET {
-            if let Some(record) =
-                decode_record_at(stream, buf, hit - per::CATEGORY_OFFSET, declared_ids)
-            {
+            if let Some(record) = decode_record_at_with(
+                stream,
+                buf,
+                hit - per::CATEGORY_OFFSET,
+                declared_ids,
+                marker,
+                chain,
+            ) {
                 out.push(record);
             }
         }
@@ -335,6 +421,21 @@ pub fn decode_name_block_at(
     buf: &[u8],
     run_start: usize,
     declared_ids: &BTreeSet<u32>,
+) -> Option<NameElevationBlock> {
+    decode_name_block_at_with(buf, run_start, declared_ids, &ELEVATION_MARKER[..6])
+}
+
+/// [`decode_name_block_at`] for a release's elevation `marker`
+/// ([`elevation_marker`]). The elevation is confirmed by a second copy
+/// anywhere in the next [`ELEVATION_MARKER_SEARCH_BYTES`] whose
+/// [`ELEVATION_CONFIRM_LEAD_IN`] bytes before it are also the first copy's
+/// (RE-51); on Core Interior that copy is [`ELEVATION_CONFIRM_STRIDE`]
+/// bytes on.
+pub fn decode_name_block_at_with(
+    buf: &[u8],
+    run_start: usize,
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8],
 ) -> Option<NameElevationBlock> {
     let value = run_start.checked_add(OWNER_OFFSET_BEFORE_NAME - 8)?;
     let owner_at = run_start.checked_sub(8)?;
@@ -371,18 +472,14 @@ pub fn decode_name_block_at(
         return None;
     }
     let window = buf.get(end..(end + ELEVATION_MARKER_SEARCH_BYTES).min(buf.len()))?;
-    let marker = end + find_subslice(window, &ELEVATION_MARKER)?;
-    let elevation_feet = read_f64(buf, marker + ELEVATION_OFFSET_AFTER_MARKER)?;
-    let confirm = read_f64(
-        buf,
-        marker + ELEVATION_OFFSET_AFTER_MARKER + ELEVATION_CONFIRM_STRIDE,
-    )?;
+    let at = end + find_subslice(window, marker)? + ELEVATION_OFFSET_AFTER_MARKER;
+    let elevation_feet = read_f64(buf, at)?;
     if !elevation_feet.is_finite() || elevation_feet.abs() > MAX_ELEVATION_FEET {
         return None;
     }
-    if elevation_feet.to_bits() != confirm.to_bits() {
-        return None;
-    }
+    let copy = buf.get(at.checked_sub(ELEVATION_CONFIRM_LEAD_IN)?..at + 8)?;
+    let after = buf.get(at + 8..(at + 8 + ELEVATION_MARKER_SEARCH_BYTES).min(buf.len()))?;
+    find_subslice(after, copy)?;
     Some(NameElevationBlock {
         element_id,
         name,
@@ -397,6 +494,15 @@ pub fn decode_name_block_at(
 /// whose high four bytes are zero, so the run can never start earlier
 /// than the framing says it does.
 pub fn find_name_blocks(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<NameElevationBlock> {
+    find_name_blocks_with(buf, declared_ids, &ELEVATION_MARKER[..6])
+}
+
+/// [`find_name_blocks`] for a release's elevation `marker`.
+pub fn find_name_blocks_with(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8],
+) -> Vec<NameElevationBlock> {
     let mut out = Vec::new();
     let mut index = 0usize;
     while index < buf.len() {
@@ -411,7 +517,7 @@ pub fn find_name_blocks(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<NameEle
         if index - run_start < OWNER_SENTINEL_RUN_LEN {
             continue;
         }
-        if let Some(block) = decode_name_block_at(buf, run_start, declared_ids) {
+        if let Some(block) = decode_name_block_at_with(buf, run_start, declared_ids, marker) {
             out.push(block);
         }
     }
@@ -434,6 +540,38 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         index = start + 1;
     }
     None
+}
+
+/// The Levels of `level_ids` whose name block names an owner: the
+/// ElementId at the block's owner slot is followed by eight `0xff` bytes and
+/// then another element's ElementId, where a project Level's block has an
+/// unbroken sentinel run (RE-51). On Snowdon Towers these are two Levels
+/// inside other elements, neither of them a storey of Revit's export.
+pub fn owned_level_ids(buf: &[u8], level_ids: &BTreeSet<u32>) -> BTreeSet<u32> {
+    let mut out = BTreeSet::new();
+    for &id in level_ids {
+        let mut needle = [0u8; 12];
+        needle[..4].copy_from_slice(&1u32.to_le_bytes());
+        needle[4..].copy_from_slice(&u64::from(id).to_le_bytes());
+        for hit in memchr::memmem::find_iter(buf, &needle) {
+            let owner_at = hit + 4;
+            let value = owner_at + OWNER_OFFSET_BEFORE_NAME;
+            let Some(chars) = read_u32(buf, value - LENGTH_PREFIX_OFFSET_BEFORE_NAME) else {
+                continue;
+            };
+            if !(1..=MAX_NAME_CHARS as u32).contains(&chars) {
+                continue;
+            }
+            let sentinel = buf.get(owner_at + 8..owner_at + 16);
+            let owner = read_u64(buf, owner_at + 16);
+            if sentinel.is_some_and(|run| run.iter().all(|b| *b == 0xff))
+                && owner.is_some_and(|o| o != 0 && o < u64::from(u32::MAX))
+            {
+                out.insert(id);
+            }
+        }
+    }
+    out
 }
 
 /// Join accepted blocks onto the Level element ids.
@@ -527,19 +665,42 @@ pub fn scan_partition_level_ids(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(BTreeSet::new());
     }
-    let streams = rf.partition_stream_names();
-    let mut ids = BTreeSet::new();
-    for stream in streams {
+    Ok(level_records(rf, revit_version, declared_ids)
+        .into_iter()
+        .filter(PartitionLevelRecord::is_level_element)
+        .map(|record| record.element_id)
+        .collect())
+}
+
+/// Every `OST_Levels` record of every partition, first- and
+/// second-prologue.
+fn level_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared_ids: &BTreeSet<u32>,
+) -> Vec<PartitionLevelRecord> {
+    let (Some(marker), Some(bbox_marker)) = (
+        record_marker(revit_version),
+        crate::partition_element_records::bbox_marker(revit_version),
+    ) else {
+        return Vec::new();
+    };
+    let mut records = Vec::new();
+    for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for record in find_level_records(&stream, inflated.bytes(), declared_ids) {
-            if record.is_level_element() {
-                ids.insert(record.element_id);
-            }
-        }
+        let buf = inflated.bytes();
+        let chain = crate::partition_element_records::partition_record_chain(buf, &bbox_marker);
+        records.extend(find_level_records_with(
+            &stream,
+            buf,
+            declared_ids,
+            &marker,
+            &chain,
+        ));
     }
-    Ok(ids)
+    records
 }
 
 /// Scan every `Partitions/*` stream for Revit `Level` elements.
@@ -555,17 +716,31 @@ pub fn scan_partition_levels(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let streams = rf.partition_stream_names();
-    let mut records = Vec::new();
+    let Some(marker) = elevation_marker(revit_version) else {
+        return Ok(Vec::new());
+    };
+    let records = level_records(rf, revit_version, declared_ids);
+    let level_ids: BTreeSet<u32> = records
+        .iter()
+        .filter(|record| record.is_level_element())
+        .map(|record| record.element_id)
+        .collect();
     let mut blocks = Vec::new();
-    for stream in streams {
+    let mut owned = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let concat = inflated.bytes();
-        records.extend(find_level_records(&stream, concat, declared_ids));
-        blocks.extend(find_name_blocks(concat, declared_ids));
+        let buf = inflated.bytes();
+        blocks.extend(find_name_blocks_with(buf, declared_ids, &marker));
+        owned.extend(owned_level_ids(buf, &level_ids));
     }
+    // A Level inside another element is not a storey: it neither joins
+    // the storey set nor counts against it.
+    let records: Vec<PartitionLevelRecord> = records
+        .into_iter()
+        .filter(|record| !owned.contains(&record.element_id))
+        .collect();
     let levels = levels_from_records_and_blocks(&records, blocks);
     if !recovered_levels_are_a_storey_set(&records, &levels) {
         return Ok(Vec::new());
@@ -828,5 +1003,128 @@ mod tests {
     fn unsupported_release_yields_nothing() {
         assert!(!supports_revit_version(2023));
         assert!(supports_revit_version(2024));
+        assert!(supports_revit_version(2025));
+        assert!(elevation_marker(2023).is_none() && record_marker(2023).is_none());
+    }
+
+    #[test]
+    fn markers_follow_the_release() {
+        assert_eq!(record_marker(2024), Some(RECORD_MARKER));
+        assert_eq!(
+            record_marker(2025),
+            Some([0xff, 0xff, 0xff, 0xff, 0xd3, 0x05])
+        );
+        assert_eq!(elevation_marker(2024).unwrap()[..], ELEVATION_MARKER[..6]);
+        assert_eq!(
+            elevation_marker(2025),
+            Some([0x05, 0x00, 0x00, 0x00, 0x5d, 0x02])
+        );
+    }
+
+    /// A Snowdon Towers style block: plan extents that are not round
+    /// after the marker, and the confirming copy 161 bytes on, behind the
+    /// same 24 bytes as the first.
+    fn snowdon_block(
+        owner: u64,
+        name: &str,
+        elevation: f64,
+        lead_in: [u8; 24],
+    ) -> (Vec<u8>, usize) {
+        let (mut buf, run_start) = synth_block(owner, name, elevation, 13);
+        let value = run_start + OWNER_OFFSET_BEFORE_NAME - 8;
+        let marker = value + name.encode_utf16().count() * 2 + 13;
+        buf.resize(marker + 400, 0);
+        buf[marker + 6..marker + 14].copy_from_slice(&(-90.00212f64).to_le_bytes());
+        let first = marker + ELEVATION_OFFSET_AFTER_MARKER;
+        buf[first - 24..first].copy_from_slice(&lead_in);
+        // Clear Core's copy, then write the copy where Snowdon has it.
+        let core_copy = first + ELEVATION_CONFIRM_STRIDE;
+        buf[core_copy..core_copy + 8].fill(0);
+        let copy = first + 161;
+        buf[copy - 24..copy].copy_from_slice(&lead_in);
+        buf[copy..copy + 8].copy_from_slice(&elevation.to_le_bytes());
+        (buf, run_start)
+    }
+
+    #[test]
+    fn the_confirming_copy_is_found_by_its_lead_in() {
+        let lead_in = [
+            0x79, 0x51, 0xe6, 0xcc, 0x7f, 0x5c, 0x40, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0x85, 0xc5,
+            0x2a, 0x15, 0xa0, 0xf7, 0x41, 0x3d,
+        ];
+        let (buf, run_start) = snowdon_block(593147, "L3", 18.833333333333, lead_in);
+        let marker = elevation_marker(2024).unwrap();
+        let block = decode_name_block_at_with(&buf, run_start, &declared(&[593147]), &marker)
+            .expect("decodes");
+        assert_eq!(block.name, "L3");
+        assert_eq!(block.elevation_feet, 18.833333333333);
+        // RE-24's eight-byte marker is not in this block: its last two
+        // bytes were the extents', zero only on round ones.
+        assert!(find_subslice(&buf, &ELEVATION_MARKER).is_none());
+        assert_eq!(
+            decode_name_block_at(&buf, run_start, &declared(&[593147])),
+            Some(block)
+        );
+    }
+
+    #[test]
+    fn a_copy_behind_other_bytes_does_not_confirm() {
+        let lead_in = [7u8; 24];
+        let (mut buf, run_start) = snowdon_block(593147, "L3", 18.833333333333, lead_in);
+        let value = run_start + OWNER_OFFSET_BEFORE_NAME - 8;
+        let copy = value + 4 + 13 + ELEVATION_OFFSET_AFTER_MARKER + 161;
+        buf[copy - 1] = 8;
+        let marker = elevation_marker(2024).unwrap();
+        assert!(
+            decode_name_block_at_with(&buf, run_start, &declared(&[593147]), &marker).is_none()
+        );
+    }
+
+    #[test]
+    fn a_level_whose_block_names_an_owner_is_owned() {
+        // Element data: `01 00 00 00`, the Level's id, eight 0xff bytes,
+        // then the id of the element it sits in, and the name as usual.
+        let name: Vec<u16> = "Ref. Level".encode_utf16().collect();
+        let mut buf = vec![0xffu8; 0x120];
+        let id_at = 0x20;
+        buf[id_at - 4..id_at].copy_from_slice(&1u32.to_le_bytes());
+        buf[id_at..id_at + 8].copy_from_slice(&1_982_117u64.to_le_bytes());
+        buf[id_at + 16..id_at + 24].copy_from_slice(&1_982_107u64.to_le_bytes());
+        let value = id_at + OWNER_OFFSET_BEFORE_NAME;
+        buf[value - 4..value].copy_from_slice(&(name.len() as u32).to_le_bytes());
+        for (i, unit) in name.iter().enumerate() {
+            buf[value + 2 * i..value + 2 * i + 2].copy_from_slice(&unit.to_le_bytes());
+        }
+        let levels = declared(&[1_982_117, 593_147]);
+        assert_eq!(owned_level_ids(&buf, &levels), declared(&[1_982_117]));
+        // An unbroken sentinel run is a project Level's.
+        buf[id_at + 16..id_at + 24].fill(0xff);
+        assert!(owned_level_ids(&buf, &levels).is_empty());
+    }
+
+    #[test]
+    fn a_second_prologue_level_takes_its_records_id() {
+        use crate::partition_element_records::PartitionRecordSpan;
+        let mut buf = vec![0u8; 0x40];
+        let frame = synth_record(1, CONTAINER_NONE, PLACEMENT_KIND_INSTANCE);
+        let at = buf.len();
+        buf.extend(frame);
+        buf[at..at + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+        let chain = [PartitionRecordSpan {
+            start: 0,
+            end: buf.len(),
+            element_id: 828_874,
+        }];
+        let record = decode_record_at_with(
+            "Partitions/1",
+            &buf,
+            at,
+            &declared(&[828_874]),
+            &RECORD_MARKER,
+            &chain,
+        )
+        .expect("decodes");
+        assert_eq!(record.element_id, 828_874);
+        assert!(decode_record_at("Partitions/1", &buf, at, &declared(&[828_874])).is_none());
     }
 }
