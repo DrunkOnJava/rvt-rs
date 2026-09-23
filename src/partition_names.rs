@@ -244,13 +244,38 @@ pub fn resolve_type(
     found.next().is_none().then_some(first)
 }
 
-/// The one named id of the type's category in the type's own partition
-/// record: its family. `None` when there is none or more than one.
+/// The type's family: the named id of the type's category in the type's
+/// own partition record.
+///
+/// A type of a family that nests other families of its category names
+/// those too (#324). Then the family is the one candidate whose own
+/// partition record names every other candidate, the families nested in it
+/// (RE-42). `None` when there is no candidate, or when no candidate, or
+/// more than one, names all the others.
+///
+/// A family type names its family the way a family names a nested one, so
+/// a type record that also named a sibling type would pick that type. No
+/// such record occurs on the files measured: every name the rule adds on
+/// RE1 Electrical and Snowdon Towers is Revit's own.
 pub fn resolve_family(names: &ElementNames, type_id: u32) -> Option<u32> {
     let candidates = names.type_family_candidates.get(&type_id)?;
     let mut iter = candidates.iter();
     let first = *iter.next()?;
-    iter.next().is_none().then_some(first)
+    if iter.next().is_none() {
+        return Some(first);
+    }
+    let mut hosts = candidates.iter().copied().filter(|family| {
+        names
+            .type_family_candidates
+            .get(family)
+            .is_some_and(|nested| {
+                candidates
+                    .iter()
+                    .all(|other| other == family || nested.contains(other))
+            })
+    });
+    let host = hosts.next()?;
+    hosts.next().is_none().then_some(host)
 }
 
 #[cfg(test)]
@@ -350,11 +375,13 @@ mod tests {
                 entry(100, "Single-Flush", -2_000_023),
                 entry(101, "36\" x 84\"", -2_000_023),
                 entry(102, "30\" x 84\"", -2_000_023),
+                entry(103, "Bi-Fold", -2_000_023),
                 entry(200, "Wall type", -2_000_011),
             ]),
             type_family_candidates: BTreeMap::from([
                 (101, BTreeSet::from([100])),
-                (102, BTreeSet::from([100, 101])),
+                // Two families, neither naming the other (RE-42).
+                (102, BTreeSet::from([100, 103])),
             ]),
         };
         // The door's list names its type 101 and a wall type; only the
@@ -370,6 +397,34 @@ mod tests {
         );
         assert_eq!(resolve_family(&names, 101), Some(100));
         assert_eq!(resolve_family(&names, 102), None);
+    }
+
+    /// RE-42: among several candidates, the family is the one whose own
+    /// record names every other candidate. No such candidate, or two, give
+    /// no family.
+    #[test]
+    fn a_nesting_family_is_told_from_the_families_nested_in_it() {
+        let mut names = ElementNames::default();
+        let set = |ids: &[u32]| ids.iter().copied().collect::<BTreeSet<u32>>();
+        // Type 444100 names its family 755868 and the nested 51892;
+        // 755868's own record names 51892.
+        names
+            .type_family_candidates
+            .insert(444_100, set(&[51_892, 755_868]));
+        names.type_family_candidates.insert(755_868, set(&[51_892]));
+        assert_eq!(resolve_family(&names, 444_100), Some(755_868));
+        // A single candidate needs no nesting evidence.
+        names.type_family_candidates.insert(21_944, set(&[21_943]));
+        assert_eq!(resolve_family(&names, 21_944), Some(21_943));
+        // Neither candidate names the other: no family.
+        names.type_family_candidates.insert(1, set(&[10, 20]));
+        names.type_family_candidates.insert(10, set(&[30]));
+        assert_eq!(resolve_family(&names, 1), None);
+        // Both name each other: ambiguous, no family.
+        names.type_family_candidates.insert(2, set(&[40, 50]));
+        names.type_family_candidates.insert(40, set(&[50]));
+        names.type_family_candidates.insert(50, set(&[40]));
+        assert_eq!(resolve_family(&names, 2), None);
     }
 
     #[test]
