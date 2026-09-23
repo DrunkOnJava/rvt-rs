@@ -565,6 +565,26 @@ pub enum SolidShape {
         /// normalises to a unit vector at emit.
         fixed_reference: [f64; 3],
     },
+    /// Profile extruded along the Z axis of its own placement. Emits
+    /// `IfcExtrudedAreaSolid` whose `Position` is an
+    /// `IfcAxis2Placement3D` with this origin, axis and reference
+    /// direction, so the profile can stand in any plane: a stair run's
+    /// side view extruded across the run (RE-52). The profile's X axis is
+    /// `ref_direction` projected onto the plane normal to `axis`, and its
+    /// Y axis is `axis` crossed with X, as IFC builds the placement.
+    PlacedExtrusion {
+        /// 2D cross-section (see [`ProfileDef`]), in the placement's XY
+        /// plane.
+        profile: ProfileDef,
+        /// Placement origin, feet, element-local.
+        origin_feet: [f64; 3],
+        /// Placement Z axis: the extrusion direction.
+        axis: [f64; 3],
+        /// Placement reference direction: the profile's X axis.
+        ref_direction: [f64; 3],
+        /// Extrusion depth along `axis`, feet.
+        depth_feet: f64,
+    },
 }
 
 /// Named cross-sections for an extrusion (IFC-24). Feeds one of
