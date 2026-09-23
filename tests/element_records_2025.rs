@@ -95,4 +95,9 @@ fn revit_2025_walls_slabs_and_rooms_match_revits_export() {
         .find(|item| item.reason == "element_record_without_element_id")
         .expect("second-prologue door records are counted");
     assert_eq!(unattributed.classes.get("Door"), Some(&17));
+
+    // The readiness score must not read as complete while records are missing.
+    let confidence = &result.diagnostics.confidence;
+    assert_eq!(confidence.unexported_element_records, unattributed.count);
+    assert!(confidence.score < 0.75, "score {}", confidence.score);
 }

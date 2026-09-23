@@ -256,6 +256,18 @@ fn classify_failure_mode(
         );
     }
 
+    let unexported = diagnostics.confidence.unexported_element_records;
+    if unexported > 0 {
+        return FailureMode {
+            kind: "incomplete_model".into(),
+            title: "Incomplete model".into(),
+            summary: format!(
+                "Model elements were recovered, but {unexported} wall, door, window, column, floor or room record(s) use a layout whose ElementId this release cannot locate and are not exported."
+            ),
+            severity: "warning".into(),
+        };
+    }
+
     if !diagnostics.unsupported_features.is_empty()
         || !diagnostics.warnings.is_empty()
         || export.building_elements_with_geometry == 0
@@ -322,6 +334,14 @@ fn export_readiness(diagnostics: &ExportDiagnostics) -> ExportReadiness {
         _ => "IFC export readiness is unknown.",
     }
     .to_string();
+    let unexported = diagnostics.confidence.unexported_element_records;
+    let summary = if unexported > 0 {
+        format!(
+            "{summary} Incomplete: {unexported} wall, door, window, column, floor or room record(s) could not be exported (RE-30)."
+        )
+    } else {
+        summary
+    };
 
     ExportReadiness {
         level,
@@ -350,6 +370,12 @@ fn next_steps(diagnostics: &ExportDiagnostics, schema_parsed: bool) -> Vec<Strin
             "No real-file element geometry was decoded. Use the output for metadata/status, not geometry handoff."
                 .into(),
         );
+    }
+    let unexported = diagnostics.confidence.unexported_element_records;
+    if unexported > 0 {
+        steps.push(format!(
+            "{unexported} element record(s) are missing from the export (RE-30). Do not use its element counts as a takeoff."
+        ));
     }
     if diagnostics.confidence.warning_count > 0 {
         steps

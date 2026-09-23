@@ -98,7 +98,7 @@ stagedDemoTest(
     );
 
     await expect(page.locator('#status-panel')).toContainText(
-      /Partial decode|Scaffold-only|Supported profile|unsupported model layout/i,
+      /Partial decode|Incomplete model|Scaffold-only|Supported profile|unsupported model layout/i,
     );
     await expect(page.locator('#status-panel')).toContainText(/Decode/i);
     await expect(page.locator('#status-panel')).toContainText(/Export/i);

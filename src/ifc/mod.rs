@@ -474,6 +474,13 @@ pub struct ExportConfidenceSummary {
     pub has_geometry: bool,
     pub has_diagnostic_proxies: bool,
     pub warning_count: usize,
+    /// Wall, door, window, column, floor or room records the partition
+    /// scan found but could not export because no ElementId is attributable
+    /// to them (the `element_record_without_element_id` skipped item,
+    /// RE-30). Non-zero means the model is incomplete, and `score` is
+    /// scaled down by the exported share. Zero is not a completeness claim.
+    #[serde(default)]
+    pub unexported_element_records: usize,
 }
 
 /// User-facing export quality requirement.
@@ -2127,6 +2134,7 @@ pub fn build_export_diagnostics_with_limits(
         has_project_metadata,
         diagnostic_proxy_elements,
         warnings.len(),
+        unattributed_total,
     );
 
     ExportDiagnostics {
@@ -2584,6 +2592,7 @@ fn export_confidence_summary(
     has_project_metadata: bool,
     diagnostic_proxy_elements: usize,
     warning_count: usize,
+    unexported_element_records: usize,
 ) -> ExportConfidenceSummary {
     let has_typed_elements = exported
         .by_ifc_type
@@ -2610,15 +2619,25 @@ fn export_confidence_summary(
     if exported.unit_assignment_count > 0 {
         score += 0.10;
     }
+    let mut element_score = 0.0f32;
     if exported.building_elements > 0 {
-        score += 0.20;
+        element_score += 0.20;
     }
     if has_typed_elements {
-        score += 0.20;
+        element_score += 0.20;
     }
     if has_geometry {
-        score += 0.25;
+        element_score += 0.25;
     }
+    // Records the scan found but could not export (RE-30) are elements the
+    // IFC is missing, so the element terms only count for the exported
+    // share. Metadata and units are recovered either way.
+    if unexported_element_records > 0 {
+        let exported_elements = exported.building_elements as f32;
+        element_score *=
+            exported_elements / (exported_elements + unexported_element_records as f32);
+    }
+    score += element_score;
     if has_diagnostic_proxies {
         score -= 0.05;
     }
@@ -2631,6 +2650,7 @@ fn export_confidence_summary(
         has_geometry,
         has_diagnostic_proxies,
         warning_count,
+        unexported_element_records,
     }
 }
 
@@ -3338,5 +3358,49 @@ mod tests {
         assert_eq!(cov.decoded_element_fraction, Some(0.0));
         assert_eq!(cov.exported_element_fraction, None);
         assert_eq!(cov.geometry_element_fraction, None);
+    }
+
+    fn walls_with_geometry(count: usize) -> ExportedModelDiagnostics {
+        ExportedModelDiagnostics {
+            total_entities: count,
+            building_elements: count,
+            building_elements_with_geometry: count,
+            by_ifc_type: [("IFCWALL".to_string(), count)].into_iter().collect(),
+            classification_count: 0,
+            unit_assignment_count: 1,
+            material_count: 0,
+            storey_count: 0,
+            storey_names: Vec::new(),
+            storey_elevations_feet: Vec::new(),
+            storey_bound_elements: 0,
+            material_names_sample: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn unexported_element_records_scale_the_element_terms_of_the_score() {
+        let exported = walls_with_geometry(20);
+        let complete =
+            export_confidence_summary(ExportDiagnosticsMode::Default, &exported, true, 0, 0, 0);
+        assert_eq!(complete.level, "geometry");
+        assert!((complete.score - 1.0).abs() < 1e-6);
+        assert_eq!(complete.unexported_element_records, 0);
+
+        // RE1 Architecture (Revit 2025): 20 exported, 18 doors unattributed.
+        let partial =
+            export_confidence_summary(ExportDiagnosticsMode::Default, &exported, true, 0, 1, 18);
+        assert_eq!(partial.level, "geometry");
+        assert_eq!(partial.unexported_element_records, 18);
+        let expected = 0.35 + 0.65 * 20.0 / 38.0;
+        assert!((partial.score - expected).abs() < 1e-6, "{}", partial.score);
+    }
+
+    #[test]
+    fn metadata_terms_survive_when_every_element_record_is_unexported() {
+        let exported = walls_with_geometry(0);
+        let summary =
+            export_confidence_summary(ExportDiagnosticsMode::Default, &exported, true, 0, 1, 50);
+        assert_eq!(summary.level, "scaffold");
+        assert!((summary.score - 0.35).abs() < 1e-6, "{}", summary.score);
     }
 }

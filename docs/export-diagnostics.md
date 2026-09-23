@@ -102,7 +102,8 @@ Important nested fields:
 | `exported.storey_elevations_feet` | array | Recovered storey elevations in feet, aligned with `storey_names`. An all-zero list means only Level *name* strings were recovered — no elevation evidence was found. |
 | `exported.storey_bound_elements` | integer | Building elements contained in a specific storey. The rest are contained in the `IfcBuilding`, never in a named storey. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
-| `confidence.score` | number | Heuristic 0..1 readiness score for UI sorting and dashboards. |
+| `confidence.score` | number | Heuristic 0..1 readiness score for UI sorting and dashboards. Its element terms (elements, typed elements, geometry) are scaled by the exported share when `unexported_element_records` is non-zero. |
+| `confidence.unexported_element_records` | integer | Wall, door, window, column, floor or room records the partition scan found but could not export because no ElementId is attributable (RE-30). Non-zero means the model is incomplete. Zero is not a completeness claim. |
 
 ## Storey provenance
 
@@ -232,7 +233,8 @@ export.
     "has_typed_elements": false,
     "has_geometry": false,
     "has_diagnostic_proxies": false,
-    "warning_count": 1
+    "warning_count": 1,
+    "unexported_element_records": 0
   },
   "source_coverage": {
     "status": "unset",

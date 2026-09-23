@@ -653,6 +653,13 @@ fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
              Re-run with `--diagnostics <path>` for a shareable readiness report."
         );
     }
+    let unexported = diagnostics.confidence.unexported_element_records;
+    if unexported > 0 {
+        eprintln!(
+            "warning: the IFC is incomplete: {unexported} wall, door, window, column, floor or room record(s) \
+             use a layout whose ElementId this release cannot locate and were not exported (RE-30)."
+        );
+    }
 }
 
 #[cfg(test)]

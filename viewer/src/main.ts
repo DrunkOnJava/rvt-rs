@@ -522,6 +522,8 @@ interface ExportDiagnostics {
     has_geometry?: boolean;
     has_diagnostic_proxies?: boolean;
     warning_count?: number;
+    /** RE-30 records found but not exported; non-zero means the model is incomplete. */
+    unexported_element_records?: number;
   };
   /** A10 — measured when denominators exist; fractions stay null when unknown. */
   source_coverage?: {
@@ -1705,6 +1707,14 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
       summary: 'no validated building elements were decoded',
     };
   }
+  const unexported = confidence.unexported_element_records ?? 0;
+  if (unexported > 0) {
+    return {
+      kind: 'warn',
+      title: 'Incomplete model',
+      summary: `${unexported} wall, door, window, column, floor or room records could not be exported (RE-30)`,
+    };
+  }
   if (unsupported.length > 0 || warnings.length > 0 || geometryElements === 0) {
     return {
       kind: 'warn',
@@ -1822,7 +1832,8 @@ function diagnosticsModeLabel(mode: string | undefined): string {
 function decodeConfidenceKind(
   confidence: NonNullable<ExportDiagnostics['confidence']>,
 ): StatusKind {
-  if (confidence.has_typed_elements && confidence.has_geometry) return 'ok';
+  const unexported = confidence.unexported_element_records ?? 0;
+  if (confidence.has_typed_elements && confidence.has_geometry && unexported === 0) return 'ok';
   if (confidence.has_typed_elements || confidence.has_project_metadata) return 'warn';
   return 'warn';
 }
@@ -1838,6 +1849,9 @@ function decodeConfidenceSummary(
     confidence.has_typed_elements ? 'typed elements' : 'no typed elements',
     confidence.has_geometry ? 'geometry recovered' : 'no element geometry',
     confidence.has_diagnostic_proxies ? 'diagnostic proxies present' : null,
+    confidence.unexported_element_records
+      ? `${confidence.unexported_element_records} element records not exported`
+      : null,
   ].filter(Boolean);
   if (!confidence.has_typed_elements && scorePct !== null && scorePct <= 30) {
     bits.push('scaffold ~25% expected for synthetics');

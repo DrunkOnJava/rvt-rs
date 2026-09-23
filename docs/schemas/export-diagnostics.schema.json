@@ -299,6 +299,11 @@
         "warning_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "unexported_element_records": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Wall, door, window, column, floor or room records found but not exported because no ElementId is attributable (element_record_without_element_id, RE-30). Non-zero means the model is incomplete and score is scaled by the exported share; zero is not a completeness claim."
         }
       }
     },

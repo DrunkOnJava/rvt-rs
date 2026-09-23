@@ -35,6 +35,23 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Export readiness no longer reads 100% on an incomplete model.** When
+  the partition scan finds wall, door, window, column, floor or room records
+  with no attributable ElementId (RE-30), the export skips them. The score
+  still counted the export as complete, e.g. "geometry · 100%" on Snowdon
+  Towers with 43 elements exported and 2,043 left out.
+  - `confidence.unexported_element_records` in the diagnostics sidecar
+    carries that count, and the score's element terms (elements, typed
+    elements, geometry) now count only for the exported share. Metadata and
+    units still count in full.
+  - Measured: Snowdon Towers Architectural 100% -> 36%, Snowdon Structural
+    -> 52%, RE1 Architecture (Revit 2025) -> 69%. Core Interior and
+    Einhoven, which leave nothing out, stay at 100%.
+  - `rvt-inspect` reports a new `incomplete_model` failure mode, names the
+    count in its readiness summary and next steps, and `rvt-ifc` prints a
+    warning to stderr. The viewer's status panel shows "Incomplete model"
+    and no longer marks decode confidence green while records are missing.
+
 - **Family files' `Global/ElemTable` is read correctly on every release.**
   It was parsed as 12-byte "implicit" records from `0x30`, which produced
   meaningless ids (0, 4128768, 196608, …) on all 11 family releases.
