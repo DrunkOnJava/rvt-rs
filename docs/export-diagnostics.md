@@ -80,7 +80,9 @@ categories: furniture, casework, plumbing fixtures, specialty equipment,
 ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts,
 duct fittings, pipes and pipe fittings, and the RE-36 structural categories:
 structural framing, structural columns, structural foundations and generic
-models. Only placed instances count (no
+models, and the RE-37 categories: lighting fixtures, air terminals,
+food-service equipment, planting, parking, entourage, hardscape, vertical
+circulation and ramps. Only placed instances count (no
 container reference, placement kind `0xffffef7f`), so container members and
 type symbols do not inflate it. Only frames inside the partition's leading
 record chain count: records after it belong to loaded families' own documents,

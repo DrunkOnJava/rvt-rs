@@ -2686,6 +2686,7 @@ mod tests {
     /// table cannot silently drift away from the spec — it exists so
     /// the Rust suite fails without a Python toolchain too (#214).
     const IFC4_ELEMENT_ARITY: &[(&str, usize)] = &[
+        ("IFCAIRTERMINAL", 9),
         ("IFCBEAM", 9),
         ("IFCBUILDINGELEMENTPROXY", 9),
         ("IFCCOLUMN", 9),
@@ -2716,6 +2717,7 @@ mod tests {
         ("IFCSPACE", 11),
         ("IFCSTAIR", 9),
         ("IFCSTAIRFLIGHT", 13),
+        ("IFCTRANSPORTELEMENT", 9),
         ("IFCWALL", 9),
         ("IFCWALLSTANDARDCASE", 9),
         ("IFCWINDOW", 13),

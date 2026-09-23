@@ -192,6 +192,28 @@ pub const OST_STRUCTURAL_FOUNDATION: i64 = -2_001_300;
 /// Autodesk `BuiltInCategory.OST_GenericModel`.
 pub const OST_GENERIC_MODEL: i64 = -2_000_151;
 
+// RE-37: fixtures, site and circulation categories. Scored like RE-33's,
+// against the `Tag` sets of Revit's own exports, with the ids of RE-35.
+
+/// Autodesk `BuiltInCategory.OST_LightingFixtures`.
+pub const OST_LIGHTING_FIXTURES: i64 = -2_001_120;
+/// Autodesk `BuiltInCategory.OST_DuctTerminal` — air terminals.
+pub const OST_DUCT_TERMINAL: i64 = -2_008_013;
+/// Autodesk `BuiltInCategory.OST_FoodServiceEquipment`.
+pub const OST_FOOD_SERVICE_EQUIPMENT: i64 = -2_001_043;
+/// Autodesk `BuiltInCategory.OST_Planting`.
+pub const OST_PLANTING: i64 = -2_001_360;
+/// Autodesk `BuiltInCategory.OST_Parking`.
+pub const OST_PARKING: i64 = -2_001_180;
+/// Autodesk `BuiltInCategory.OST_Entourage`.
+pub const OST_ENTOURAGE: i64 = -2_001_370;
+/// Autodesk `BuiltInCategory.OST_Hardscape`.
+pub const OST_HARDSCAPE: i64 = -2_001_036;
+/// Autodesk `BuiltInCategory.OST_VerticalCirculation` — elevators.
+pub const OST_VERTICAL_CIRCULATION: i64 = -2_001_052;
+/// Autodesk `BuiltInCategory.OST_Ramps`.
+pub const OST_RAMPS: i64 = -2_000_180;
+
 /// Categories whose placed element records export directly as typed IFC
 /// products, with the class name each is decoded as (RE-33).
 ///
@@ -215,7 +237,14 @@ pub const OST_GENERIC_MODEL: i64 = -2_000_151;
 /// columns, 90 foundations, 91 generic models, none under another
 /// category), and 260 of the 261 generic models on the architectural
 /// sample are in Revit's IFC4 export.
-pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 17] = [
+///
+/// RE-37 adds lighting fixtures, air terminals, food-service equipment,
+/// planting, parking, entourage, hardscape, vertical circulation and
+/// ramps, each exported element a `Tag` of Revit's own export with none
+/// outside it: 447 lighting fixtures, 26 food-service items, 157 site
+/// elements, 2 ramps and 2 elevators on Snowdon Towers; 7 air terminals on
+/// RE1 Mechanical; 12 lighting fixtures on RE1 Electrical.
+pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 26] = [
     (OST_FURNITURE, "Furniture"),
     (OST_CASEWORK, "Casework"),
     (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
@@ -233,6 +262,15 @@ pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 17] = [
     (OST_STRUCTURAL_COLUMNS, "StructuralColumn"),
     (OST_STRUCTURAL_FOUNDATION, "StructuralFoundation"),
     (OST_GENERIC_MODEL, "GenericModel"),
+    (OST_LIGHTING_FIXTURES, "LightingFixture"),
+    (OST_DUCT_TERMINAL, "DuctTerminal"),
+    (OST_FOOD_SERVICE_EQUIPMENT, "FoodServiceEquipment"),
+    (OST_PLANTING, "Planting"),
+    (OST_PARKING, "Parking"),
+    (OST_ENTOURAGE, "Entourage"),
+    (OST_HARDSCAPE, "Hardscape"),
+    (OST_VERTICAL_CIRCULATION, "VerticalCirculation"),
+    (OST_RAMPS, "Ramp"),
 ];
 
 /// Smallest bounding-box extent, in feet, a placed instance needs on every
@@ -975,7 +1013,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// The categories the exporter recovers instances of, with the class name
 /// each is decoded as: the architectural core plus
 /// [`PRODUCT_RECORD_CATEGORIES`].
-pub const RECOVERED_CATEGORIES: [(i64, &str); 24] = [
+pub const RECOVERED_CATEGORIES: [(i64, &str); 33] = [
     (OST_WALLS, "Wall"),
     (OST_DOORS, "Door"),
     (OST_WINDOWS, "Window"),
@@ -1000,6 +1038,15 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 24] = [
     (OST_STRUCTURAL_COLUMNS, "StructuralColumn"),
     (OST_STRUCTURAL_FOUNDATION, "StructuralFoundation"),
     (OST_GENERIC_MODEL, "GenericModel"),
+    (OST_LIGHTING_FIXTURES, "LightingFixture"),
+    (OST_DUCT_TERMINAL, "DuctTerminal"),
+    (OST_FOOD_SERVICE_EQUIPMENT, "FoodServiceEquipment"),
+    (OST_PLANTING, "Planting"),
+    (OST_PARKING, "Parking"),
+    (OST_ENTOURAGE, "Entourage"),
+    (OST_HARDSCAPE, "Hardscape"),
+    (OST_VERTICAL_CIRCULATION, "VerticalCirculation"),
+    (OST_RAMPS, "Ramp"),
 ];
 
 /// Placed-instance frames in `buf`, per category, that carry the bbox

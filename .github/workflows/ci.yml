@@ -293,6 +293,8 @@ jobs:
           RE1-Mechanical.ifc 9e56cf7246ce86ef73646dd588a1efb8a4756e5e102b30e28b3b58577a454db0
           RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
           RE1-Plumbing.ifc 294490b222632509779910345f27a4eeda3645956138a593298c241495f7b8b6
+          RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
+          RE1-Electrical.ifc c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16
           LIST
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
