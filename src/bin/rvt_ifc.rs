@@ -164,6 +164,9 @@ fn run(args: Args) -> anyhow::Result<()> {
         step.len(),
         out_path.display()
     );
+    for line in export_summary(&diagnostics, args.diagnostics.is_some()) {
+        eprintln!("{line}");
+    }
     if let Some(diagnostics_path) = &args.diagnostics {
         write_diagnostics_sidecar(diagnostics_path, &diagnostics)?;
     }
@@ -646,6 +649,106 @@ fn format_elevation_feet(feet: f64) -> String {
     rendered
 }
 
+/// How many IFC types the summary names before "and N more".
+const SUMMARY_TYPES: usize = 6;
+
+/// A few lines saying what the IFC holds: building elements by IFC type,
+/// what was left out on purpose, and the readiness level.
+fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<String> {
+    let mut lines = Vec::new();
+    let exported = &diagnostics.exported;
+    if exported.building_elements > 0 {
+        lines.push(format!(
+            "rvt-ifc: {} building element(s), {} with geometry, on {} storey(s)",
+            exported.building_elements,
+            exported.building_elements_with_geometry,
+            exported.storey_count
+        ));
+        let mut types: Vec<(&String, &usize)> = exported.by_ifc_type.iter().collect();
+        types.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        let mut named: Vec<String> = types
+            .iter()
+            .take(SUMMARY_TYPES)
+            .map(|(name, count)| format!("{count} {}", ifc_type_display(name)))
+            .collect();
+        if types.len() > SUMMARY_TYPES {
+            named.push(format!("and {} more type(s)", types.len() - SUMMARY_TYPES));
+        }
+        lines.push(format!("  {}", named.join(", ")));
+    }
+    let left_out: Vec<String> = diagnostics
+        .skipped
+        .iter()
+        .filter_map(|item| {
+            let what = match item.reason.as_str() {
+                "element_record_without_volume" => "without a 3D body",
+                "element_record_in_non_primary_design_option" => "in non-primary design options",
+                _ => return None,
+            };
+            Some(format!("{} {what}", item.count))
+        })
+        .collect();
+    if !left_out.is_empty() {
+        lines.push(format!(
+            "  left out as Revit's own export leaves them out: {}",
+            left_out.join(", ")
+        ));
+    }
+    // A scaffold-only export already warned with the same advice.
+    let hint = if has_sidecar || diagnostics.confidence.level == "scaffold" {
+        ""
+    } else {
+        ". Add --diagnostics <path> for the full report"
+    };
+    lines.push(format!(
+        "rvt-ifc: readiness {} (score {:.2}){hint}",
+        diagnostics.confidence.level, diagnostics.confidence.score
+    ));
+    lines
+}
+
+/// `IFCWALL` as `IfcWall`, the spelling IFC documentation and viewers use.
+/// A type outside the list keeps the STEP spelling.
+fn ifc_type_display(upper: &str) -> String {
+    const NAMES: &[&str] = &[
+        "IfcAirTerminal",
+        "IfcBeam",
+        "IfcBuildingElementProxy",
+        "IfcColumn",
+        "IfcCovering",
+        "IfcCurtainWall",
+        "IfcDoor",
+        "IfcDuctFitting",
+        "IfcDuctSegment",
+        "IfcElectricAppliance",
+        "IfcFlowController",
+        "IfcFooting",
+        "IfcFurniture",
+        "IfcLightFixture",
+        "IfcMember",
+        "IfcPipeFitting",
+        "IfcPipeSegment",
+        "IfcPlate",
+        "IfcRailing",
+        "IfcRamp",
+        "IfcReinforcingBar",
+        "IfcRoof",
+        "IfcSanitaryTerminal",
+        "IfcShadingDevice",
+        "IfcSlab",
+        "IfcSpace",
+        "IfcStair",
+        "IfcStairFlight",
+        "IfcTransportElement",
+        "IfcWall",
+        "IfcWindow",
+    ];
+    NAMES
+        .iter()
+        .find(|name| name.eq_ignore_ascii_case(upper))
+        .map_or_else(|| upper.to_string(), |name| (*name).to_string())
+}
+
 fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
     if diagnostics.confidence.level == "scaffold" {
         eprintln!(
@@ -665,6 +768,103 @@ fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A real diagnostics value from the committed synthetic fixture, with
+    /// the fields the summary reads set by the test.
+    fn diagnostics_with(
+        by_ifc_type: &[(&str, usize)],
+        skipped: &[(&str, usize)],
+    ) -> Option<ExportDiagnostics> {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("corpus/tier1/architectural-2024/architectural-2024.rvt");
+        if !fixture.exists() {
+            eprintln!("skipping: tier-1 fixture missing at {}", fixture.display());
+            return None;
+        }
+        let mut rf = RevitFile::open(&fixture).expect("open fixture");
+        let mut diagnostics = PlaceholderExporter
+            .export_with_diagnostics(&mut rf)
+            .expect("export")
+            .diagnostics;
+        diagnostics.exported.by_ifc_type.clear();
+        diagnostics.exported.building_elements = 0;
+        diagnostics.exported.building_elements_with_geometry = 0;
+        diagnostics.skipped.clear();
+        diagnostics.confidence.level = "geometry".into();
+        diagnostics.confidence.score = 1.0;
+        for (name, count) in by_ifc_type {
+            diagnostics
+                .exported
+                .by_ifc_type
+                .insert((*name).to_string(), *count);
+            diagnostics.exported.building_elements += count;
+            diagnostics.exported.building_elements_with_geometry += count;
+        }
+        diagnostics.exported.storey_count = 12;
+        for (reason, count) in skipped {
+            diagnostics.skipped.push(rvt::ifc::SkippedExportItem {
+                reason: (*reason).to_string(),
+                count: *count,
+                classes: Default::default(),
+                sample_names: Vec::new(),
+            });
+        }
+        Some(diagnostics)
+    }
+
+    #[test]
+    fn the_summary_names_the_largest_types_and_what_was_left_out() {
+        let Some(diagnostics) = diagnostics_with(
+            &[
+                ("IFCWALL", 1120),
+                ("IFCMEMBER", 1595),
+                ("IFCDOOR", 141),
+                ("IFCSLAB", 199),
+                ("IFCPLATE", 527),
+                ("IFCFURNITURE", 345),
+                ("IFCROOF", 20),
+            ],
+            &[
+                ("element_record_without_volume", 61),
+                ("element_record_in_non_primary_design_option", 27),
+                ("low_confidence_schema_scan_candidate", 5),
+            ],
+        ) else {
+            return;
+        };
+        let lines = export_summary(&diagnostics, false);
+        assert_eq!(
+            lines,
+            vec![
+                "rvt-ifc: 3947 building element(s), 3947 with geometry, on 12 storey(s)",
+                "  1595 IfcMember, 1120 IfcWall, 527 IfcPlate, 345 IfcFurniture, 199 IfcSlab, 141 IfcDoor, and 1 more type(s)",
+                "  left out as Revit's own export leaves them out: 61 without a 3D body, 27 in non-primary design options",
+                "rvt-ifc: readiness geometry (score 1.00). Add --diagnostics <path> for the full report",
+            ]
+        );
+        // With a sidecar requested, the hint is dropped.
+        let with_sidecar = export_summary(&diagnostics, true);
+        assert_eq!(
+            with_sidecar.last().map(String::as_str),
+            Some("rvt-ifc: readiness geometry (score 1.00)")
+        );
+    }
+
+    #[test]
+    fn a_scaffold_export_gets_only_the_readiness_line() {
+        let Some(mut diagnostics) = diagnostics_with(&[], &[]) else {
+            return;
+        };
+        diagnostics.confidence.level = "scaffold".into();
+        diagnostics.confidence.score = 0.35;
+        // The scaffold warning already gives the --diagnostics advice.
+        assert_eq!(
+            export_summary(&diagnostics, false),
+            vec!["rvt-ifc: readiness scaffold (score 0.35)"]
+        );
+        assert_eq!(ifc_type_display("IFCWALL"), "IfcWall");
+        assert_eq!(ifc_type_display("IFCNOTAKNOWNTYPE"), "IFCNOTAKNOWNTYPE");
+    }
 
     #[test]
     fn attributes_split_on_top_level_commas_only() {
