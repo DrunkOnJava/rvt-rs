@@ -8,6 +8,30 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Records with no ElementId at `+0x00` now get one from the reference order
+  (RE-34).** The second record prologue (RE-30) hides the ElementId in the
+  record's reference list, and records sit in ascending ElementId order.
+  `assign_second_prologue_ids` finds the longest rising chain twice, with
+  ties resolved both ways, and takes an id only when the two agree.
+  - With every id hidden and then scored, it makes 0 wrong picks: 3,458
+    correct on Core Interior, 445 on Snowdon, and 41, 7 and 36 on the RE1
+    models.
+  - Snowdon Towers Architectural now exports 4,245 elements instead of 80,
+    and its readiness score rises from 36% to 91%. 4,077 of its tagged
+    elements are in Revit's own export. The other 115 are real elements
+    Revit's export leaves out (#309), none a wrong id for an exported one.
+  - The RE1 MEP models gain their second-prologue ducts, pipes and
+    fittings, all in Revit's export.
+  - Floors, building pads and ceilings in that layout stay unassigned,
+    because their records name their sketch one id earlier. Levels and
+    types named by 56 or more records are never candidates.
+  - Each element given an id this way carries an
+    `element_id_from_reference_order` provenance warning and an
+    `m_id_from_reference_order` field. Core Interior, which has no such
+    records, exports byte-identically.
+  - `tests/second_prologue_ids.rs` holds the Core hold-out at zero wrong,
+    and `examples/probe_re34_holdout.rs` runs it on any file.
+
 - **Thirteen more categories from Revit 2024 and 2025 element records
   (RE-33).** Furniture, casework, plumbing fixtures, specialty equipment,
   ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts,
@@ -16,10 +40,11 @@ All notable changes will be documented here. This project follows
   `IfcSanitaryTerminal`, `IfcBuildingElementProxy`, `IfcCovering`,
   `IfcMember`, `IfcPlate`, `IfcRailing`, `IfcDuctSegment`, `IfcDuctFitting`,
   `IfcPipeSegment` and `IfcPipeFitting`, with bounding-box bodies.
-  - Every exported element is one Revit's own export of the same file also
-    holds, by ElementId: zero false positives on the MIT RE1 Architecture,
-    Mechanical and Plumbing models (Revit 2025) and on Snowdon Towers
-    (Revit 2024).
+  - Every element exported from a record carrying its ElementId is one
+    Revit's own export of the same file also holds: zero false positives on
+    the MIT RE1 Architecture, Mechanical and Plumbing models (Revit 2025)
+    and on Snowdon Towers (Revit 2024). RE-34 above extends the categories
+    to second-prologue records.
   - RE1 Architecture gains all 58 of its elements in these categories.
     Recall on the MEP models and Snowdon is partial, because most of their
     records use the second prologue (RE-30).

@@ -80,14 +80,16 @@ categories: furniture, casework, plumbing fixtures, specialty equipment,
 ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts,
 duct fittings, pipes and pipe fittings. Only placed instances count (no
 container reference, placement kind `0xffffef7f`), so container members and
-type symbols do not inflate it. The fail-closed decode cannot attribute these
+type symbols do not inflate it. Records RE-34 gave an ElementId are exported and not counted. The fail-closed decode cannot attribute these
 records, so none is exported, and a matching warning says the model is
 incomplete. It is absent on `2024_Core_Interior.rvt` and on every
 project-count fixture. On Autodesk's Snowdon Towers 2024 architectural sample
-it is 4,886 against 43 decodable instances, and there it matches Revit's own
-export exactly for mullions, columns, railings, ceilings and furniture (see
-`reports/element-framing/RE-30-snowdon-generalisation.md` and
-`reports/element-framing/RE-33-product-categories.md`).
+it is 684. Before RE-34 it was 4,886, which matched Revit's own export exactly
+for mullions, columns, railings, ceilings and furniture. RE-34 now gives most
+of those records their ElementId and exports them (see
+`reports/element-framing/RE-30-snowdon-generalisation.md`,
+`reports/element-framing/RE-33-product-categories.md` and
+`reports/element-framing/RE-34-second-prologue-element-ids.md`).
 
 `unsupported_features` carries exactly one geometry-coverage code:
 `real_file_element_geometry` when **no** exported building element has a

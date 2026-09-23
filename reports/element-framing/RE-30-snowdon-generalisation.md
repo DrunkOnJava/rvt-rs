@@ -290,3 +290,13 @@ ElementId on 32 of 15,555 hold-out picks (0.2 %), always smaller than
 the true id, and a wrong id is worse than none under the fail-closed rule. The two invariants are the basis for the next
 attempt. What is needed is a guard that reaches zero wrong on the hold-out
 and on the Snowdon oracle before any decode relies on it.
+
+## 9. Addendum: RE-34 ships a rule with zero wrong picks (2026-09-22)
+
+§8's chain needed a guard that reaches zero wrong. `reports/element-framing/RE-34-second-prologue-element-ids.md` has it:
+- run the chain twice, with ties resolved toward smaller and toward larger ids, and keep only the ids both agree on;
+- consider placed instances only (RE-33);
+- never take an id named by 56 or more frames;
+- never assign a floor, building pad or ceiling, the sketch trap recorded above.
+
+Hidden-id hold-outs score 3,458 / 0 wrong on Core Interior and 445 / 0 on this file, and the Snowdon architectural export grows from 80 elements to 4,245.

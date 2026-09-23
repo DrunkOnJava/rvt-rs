@@ -1113,6 +1113,27 @@ fn element_record_decoded(
             InstanceField::ElementId { tag: 0, id },
         ));
     }
+    // RE-34: the ElementId of a second-prologue frame is inferred from the
+    // reference list and the frame order, not read at `+0x00`. Say so.
+    if record.id_from_reference_order {
+        fields.push((
+            ID_FROM_REFERENCE_ORDER_FIELD.into(),
+            InstanceField::Bool(true),
+        ));
+    }
+    let mut provenance = ElementProvenance::partition(
+        &record.stream,
+        record.offset,
+        "partition_element_record",
+        "partition_schema_mvp::element_category_record",
+        0.8,
+        Some("level_binding_unresolved"),
+    );
+    if record.id_from_reference_order {
+        provenance
+            .warnings
+            .push(ID_FROM_REFERENCE_ORDER_WARNING.into());
+    }
     DecodedElement {
         id: Some(record.element_id),
         class: class.into(),
@@ -1121,16 +1142,16 @@ fn element_record_decoded(
             ..record
                 .offset
                 .saturating_add(crate::partition_element_records::RECORD_MIN_LEN),
-        provenance: ElementProvenance::partition(
-            &record.stream,
-            record.offset,
-            "partition_element_record",
-            "partition_schema_mvp::element_category_record",
-            0.8,
-            Some("level_binding_unresolved"),
-        ),
+        provenance,
     }
 }
+
+/// Field set on an element whose ElementId came from a second-prologue
+/// frame's reference list and frame order (RE-34) rather than from `+0x00`.
+pub const ID_FROM_REFERENCE_ORDER_FIELD: &str = "m_id_from_reference_order";
+
+/// Provenance warning on the same elements (RE-34).
+pub const ID_FROM_REFERENCE_ORDER_WARNING: &str = "element_id_from_reference_order";
 
 fn levels_from_storeys_and_names(
     walls: &[PartitionArcWall],
@@ -1451,6 +1472,7 @@ mod tests {
             preceding_reference: None,
             owner_reference: None,
             references: Vec::new(),
+            id_from_reference_order: false,
         }
     }
 

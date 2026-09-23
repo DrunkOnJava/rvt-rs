@@ -332,6 +332,7 @@ mod tests {
             preceding_reference: None,
             owner_reference: None,
             references,
+            id_from_reference_order: false,
         }
     }
 
