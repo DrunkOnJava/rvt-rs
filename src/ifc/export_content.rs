@@ -77,6 +77,14 @@ impl ExportContentPolicy {
 /// element record's bounding box (#204 / #211).
 pub const ELEMENT_RECORD_PROPERTY_SET: &str = "RvtElementRecordGeometry";
 
+/// Property naming where an element-record element's ElementId (its IFC
+/// `Tag`) came from, written only when it was not read from the record.
+pub const ELEMENT_ID_SOURCE_PROPERTY: &str = "ElementIdSource";
+
+/// [`ELEMENT_ID_SOURCE_PROPERTY`] value for an id inferred from the
+/// record's reference list and the frame order (RE-34).
+pub const ELEMENT_ID_FROM_REFERENCE_ORDER: &str = "reference_order";
+
 /// Decoded classes whose record bounding-box `z` extent is the
 /// element's own thickness rather than an envelope height (#212).
 pub const SLAB_THICKNESS_CLASSES: &[&str] = &["Floor", "BuildingPad"];
@@ -535,8 +543,15 @@ fn element_record_geometry_from_decoded(
     let mut level_id = None;
     let mut room_name = None;
     let mut room_number = None;
+    let mut id_from_reference_order = false;
     for (name, value) in &decoded.fields {
         match (name.as_str(), value) {
+            (
+                crate::partition_schema_mvp::ID_FROM_REFERENCE_ORDER_FIELD,
+                InstanceField::Bool(b),
+            ) => {
+                id_from_reference_order = *b;
+            }
             ("m_name", InstanceField::String(v)) => room_name = Some(v.clone()),
             (crate::partition_schema_mvp::ROOM_NUMBER_FIELD, InstanceField::String(v)) => {
                 room_number = Some(v.clone());
@@ -797,6 +812,16 @@ fn element_record_geometry_from_decoded(
             value: PropertyValue::Text(stream),
         });
     }
+    // RE-34: the `Tag` of this element was inferred from its record's
+    // reference list and the frame order, not read from the record. Say
+    // so in the file, where an IFC consumer (and the viewer's info panel)
+    // can see it. Records that carry their id write nothing here.
+    if id_from_reference_order {
+        properties.push(Property {
+            name: ELEMENT_ID_SOURCE_PROPERTY.into(),
+            value: PropertyValue::Text(ELEMENT_ID_FROM_REFERENCE_ORDER.into()),
+        });
+    }
     // For a plate the recorded vertical extent *is* the element's
     // thickness, which closes the `floor_slab_extrusion_thickness`
     // gap the plan-loop path had to leave open (#31, #212). Measured
@@ -881,6 +906,64 @@ mod tests {
             byte_range: 0..0,
             provenance: Default::default(),
         }
+    }
+
+    /// RE-34: an element whose `Tag` was inferred from reference order
+    /// says so in its property set; one whose id was read does not.
+    #[test]
+    fn an_inferred_element_id_is_named_in_the_property_set() {
+        use crate::partition_element_records::{
+            CONTAINER_NONE, OST_WALLS, PLACEMENT_KIND_INSTANCE, PartitionElementRecord,
+        };
+        let record = |element_id: u32, inferred: bool| PartitionElementRecord {
+            stream: "Partitions/68".into(),
+            offset: element_id as usize,
+            element_id,
+            flags: 0x0141,
+            builtin_category: OST_WALLS,
+            container: CONTAINER_NONE,
+            placement_kind: PLACEMENT_KIND_INSTANCE,
+            bbox_feet: [0.0, 0.0, 0.0, 10.0, 0.5, 9.0],
+            preceding_reference: None,
+            owner_reference: None,
+            references: Vec::new(),
+            id_from_reference_order: inferred,
+        };
+        let walls = crate::partition_schema_mvp::instances_from_records(
+            vec![record(552008, true), record(552009, false)],
+            "Wall",
+            &std::collections::BTreeSet::new(),
+        );
+        let mut entities = vec![entities::IfcEntity::Project {
+            name: Some("t".into()),
+            description: None,
+            long_name: None,
+        }];
+        let mut storeys = Vec::new();
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
+        append_typed_production_elements(walls.into_iter(), &mut entities, &mut storeys, policy);
+        let source = |tag: &str| {
+            entities.iter().find_map(|entity| match entity {
+                entities::IfcEntity::BuildingElement {
+                    type_guid,
+                    property_set: Some(set),
+                    ..
+                } if type_guid.as_deref() == Some(tag) => Some(
+                    set.properties
+                        .iter()
+                        .find(|p| p.name == ELEMENT_ID_SOURCE_PROPERTY)
+                        .map(|p| p.value.to_step()),
+                ),
+                _ => None,
+            })
+        };
+        assert_eq!(
+            source("552008"),
+            Some(Some(format!(
+                "IFCTEXT('{ELEMENT_ID_FROM_REFERENCE_ORDER}')"
+            )))
+        );
+        assert_eq!(source("552009"), Some(None));
     }
 
     #[test]
