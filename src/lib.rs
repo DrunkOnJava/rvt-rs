@@ -159,6 +159,7 @@ pub mod reader;
 pub mod rect_opening_index;
 pub mod redact;
 pub mod relations;
+pub mod revit_global_ids;
 pub mod round_trip;
 pub mod streams;
 pub mod transmission_data;

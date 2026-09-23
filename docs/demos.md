@@ -293,10 +293,12 @@ Notable properties:
 - **Real SI units.** Length in millimetres, area / volume SI. Feet →
   metres is done on the way through the writer (10 ft → 3.048 m,
   20 ft → 6.096 m, 8 inches → 0.2032 m).
-- **Deterministic GlobalIds.** Every IFC entity ID has the form
-  `0rvtrs…` — produced by a seeded counter in the model builder, not
-  random bytes, so the fixture is byte-stable across rebuilds
-  (see Demo 5).
+- **Deterministic GlobalIds.** Every IFC entity ID in this synthetic
+  fixture has the form `0rvtrs…` — produced by a seeded counter in the
+  model builder, not random bytes, so the fixture is byte-stable across
+  rebuilds (see Demo 5). An export of a real Revit 2024 or later project
+  gives its elements, rooms and storeys the GlobalIds Revit's own exporter
+  gives them instead (RE-48).
 - **Real opening chain.** The front door is hosted in the south wall
   (via `host_element_index` in the test), so the writer emits
   `IfcOpeningElement` + `IfcRelVoidsElement(wall, opening)` +

@@ -8,6 +8,20 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Elements, rooms and storeys carry the GlobalId Revit's own exporter
+  gives them (RE-48).**
+  - `Global/History` lists every editing episode's GUID, and each
+    `Global/ElemTable` record holds its element's episode number.
+  - Revit's GlobalId is that GUID with the element's ElementId XORed in.
+  - Every element rvt-rs exports that Revit's export holds now has Revit's
+    GlobalId: 854 of 854 on Core Interior, all 281 on the RE1 models, and
+    5,945 of 5,945 on Snowdon Towers, plus Core's 116 rooms and 15 storeys.
+  - IFC from rvt-rs and from Revit now diff cleanly against each other, and
+    BCF issues and clash results carry over.
+  - Revit 2023 and earlier keep generated GlobalIds.
+  - `rvt::revit_global_ids` exposes the rule, `IfcModel::global_ids` carries
+    it, and `examples/probe_re48_revit_global_ids.rs` compares it with any
+    Revit export.
 - **Walls, floors, ceilings, roofs and railings carry their type's name
   (#322, RE-44).** A system-family type has no RE-38 name entry, but its
   serialised element data names it. The data opens with
