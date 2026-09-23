@@ -2252,7 +2252,7 @@ impl StepWriter {
 /// sequences rather than a concatenated run. The spec allows either
 /// form; separate sequences keep the encoder stateless and the
 /// output diff-friendly.
-fn escape(input: &str) -> String {
+pub(crate) fn escape(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for c in input.chars() {
         match c {
