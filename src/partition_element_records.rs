@@ -706,7 +706,7 @@ pub fn decode_at_with_marker(
         return None;
     }
     let raw_id = read_u64(buf, offset)?;
-    if raw_id == 0 || raw_id > u64::from(u32::MAX) {
+    if carries_no_element_id(raw_id) {
         return None;
     }
     let element_id = raw_id as u32;
@@ -942,13 +942,21 @@ pub fn assign_second_prologue_ids(
     out
 }
 
+/// Whether a frame's `+0x00` `u64` holds no ElementId: `0`, a value above
+/// `u32::MAX` (RE-30's second prologue), or `u32::MAX`, the 32-bit form of
+/// Revit's invalid ElementId −1 (RE-43).
+pub fn carries_no_element_id(raw: u64) -> bool {
+    raw == 0 || raw >= u64::from(u32::MAX)
+}
+
 /// Whether the frame at `offset` is a placed instance in the
-/// `BuiltInCategory` band with no ElementId at `+0x00` (a `u64` of 0 or
-/// above `u32::MAX`): the frames [`assign_second_prologue_ids`] resolves.
+/// `BuiltInCategory` band with no ElementId at `+0x00`
+/// ([`carries_no_element_id`]): the frames [`assign_second_prologue_ids`]
+/// resolves.
 fn is_second_prologue_instance(buf: &[u8], offset: usize) -> bool {
     read_u64(buf, offset + CATEGORY_OFFSET)
         .is_some_and(|v| (BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&(v as i64)))
-        && read_u64(buf, offset).is_some_and(|id| id == 0 || id > u64::from(u32::MAX))
+        && read_u64(buf, offset).is_some_and(carries_no_element_id)
         && is_instance_frame(buf, offset)
 }
 
@@ -1177,7 +1185,7 @@ pub fn count_unattributed_frames_excluding(
         if !categories.contains(&category) {
             continue;
         }
-        if !read_u64(buf, offset).is_some_and(|id| id == 0 || id > u64::from(u32::MAX)) {
+        if !read_u64(buf, offset).is_some_and(carries_no_element_id) {
             continue;
         }
         // A frame with no volume is a 2D symbol Revit's export leaves out
@@ -1881,6 +1889,27 @@ mod tests {
         assert_eq!(
             assigned.into_iter().collect::<Vec<_>>(),
             vec![(nested_frame_at(first.len()), 150)]
+        );
+    }
+
+    /// RE-43: a frame whose `+0x00` holds `u32::MAX`, the 32-bit form of
+    /// the invalid ElementId −1, carries no id either, and takes its
+    /// record's. A declared id below it still starts its own record.
+    #[test]
+    fn a_frame_with_the_invalid_id_takes_its_enclosing_record_id() {
+        assert!(carries_no_element_id(0));
+        assert!(carries_no_element_id(u64::from(u32::MAX)));
+        assert!(carries_no_element_id(0x0000_0001_ffff_ffff));
+        assert!(!carries_no_element_id(1_644_693));
+        let declared = declared(&[100, 1_644_693]);
+        let mut run = second_prologue(OST_STAIRS_RUNS, &[3, 1_644_692, 1_644_693]);
+        run[0..8].copy_from_slice(&u64::from(u32::MAX).to_le_bytes());
+        let first = as_record(first_prologue(100, OST_STAIRS_RUNS));
+        let buf = [first.clone(), nested(1_644_693, &run)].concat();
+        let assigned = assign_second_prologue_ids(&buf, &BBOX_MARKER, &declared);
+        assert_eq!(
+            assigned.into_iter().collect::<Vec<_>>(),
+            vec![(nested_frame_at(first.len()), 1_644_693)]
         );
     }
 

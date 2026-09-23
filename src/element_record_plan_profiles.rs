@@ -299,6 +299,12 @@ pub fn plan_profile_from_segments(segments: &[[f64; 4]]) -> Option<PlanProfile> 
     }
     let mut inner = Vec::new();
     for mut one in iter {
+        // A loop outside the largest one is a second piece of the element,
+        // not a void of it (a slab sketched as two separate rectangles,
+        // RE-43). One outer loop cannot describe that, so give no profile.
+        if !one.iter().all(|point| inside(&outer, *point)) {
+            return None;
+        }
         if signed_area(&one) > 0.0 {
             one.reverse();
         }
@@ -518,6 +524,27 @@ fn merge_collinear(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
     out
 }
 
+/// Whether `point` lies inside the closed loop `polygon` (even-odd rule).
+fn inside(polygon: &[(f64, f64)], point: (f64, f64)) -> bool {
+    let mut within = false;
+    let mut previous = match polygon.last() {
+        Some(last) => *last,
+        None => return false,
+    };
+    for &current in polygon {
+        let (x0, y0) = previous;
+        let (x1, y1) = current;
+        if (y1 > point.1) != (y0 > point.1) {
+            let crossing = x1 + (point.1 - y1) * (x0 - x1) / (y0 - y1);
+            if point.0 < crossing {
+                within = !within;
+            }
+        }
+        previous = current;
+    }
+    within
+}
+
 fn signed_area(points: &[(f64, f64)]) -> f64 {
     let count = points.len();
     let mut total = 0.0;
@@ -600,6 +627,15 @@ mod tests {
         assert_eq!(profile.plan_bounds_feet(), Some([0.0, 0.0, 100.0, 100.0]));
         assert!(signed_area(&profile.outer_xy) > 0.0);
         assert!(signed_area(&profile.inner_xy[0]) < 0.0, "void is CW");
+    }
+
+    /// RE-43: two separate loops are two pieces, not an outer loop and a
+    /// void, so no single profile describes them.
+    #[test]
+    fn two_separate_loops_are_not_an_outer_and_a_void() {
+        let mut segments = rect(9.06, -0.97, 11.15, 0.97);
+        segments.extend(rect(-11.15, -0.97, -9.06, 0.97));
+        assert!(plan_profile_from_segments(&segments).is_none());
     }
 
     #[test]

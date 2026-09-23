@@ -1793,4 +1793,14 @@ Electrical, RE1 Mechanical and Snowdon Towers is Revit's own.
 Report: `reports/element-framing/RE-42-nested-families.md`.
 Probe: `examples/probe_re42_nested_families.rs`.
 
+## Addendum — RE-43 frames holding the invalid ElementId (2026-09-23)
+
+Some element frames hold `u32::MAX`, the 32-bit form of Revit's invalid
+ElementId −1, at `+0x00`. They carry no id of their own, like RE-30's second
+prologue, and take their enclosing partition record's id (RE-35). On Snowdon
+Towers this recovers a stair run and 99 sketch lines; no licensed file has
+such a frame.
+
+Report: `reports/element-framing/RE-43-invalid-element-id.md`.
+
 **End of report.**
