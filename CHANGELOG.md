@@ -8,6 +8,22 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Elements declared by the ElemTable's second id are attributed (RE-41).**
+  A 40-byte `Global/ElemTable` record carries two ids, at `+16` and `+36`.
+  rvt-rs declared only the first. Where the two differ, the second is the
+  id of the element's partition record and the `Tag` Revit's own IFC export
+  writes; the first is neither. `elem_table::declared_ids` now declares
+  both, and every production path uses it.
+  - On Snowdon Towers Architectural the 37 element records that were
+    unattributed (16 walls, 4 columns, 17 generic models) now export, all
+    of them elements Revit's export holds, and
+    `element_record_without_element_id` is absent. Every wall, column and
+    generic model of Revit's export is attributed. Snowdon Structural gains
+    one floor, which the VIM export also holds.
+  - No licensed file in CI has a record whose ids differ, and their
+    exports are unchanged. `examples/probe_re41_elem_table_secondary_ids.rs`
+    measures it.
+
 - **Design options export as Revit exports them (RE-40, #319).** An element
   record holds its design option at `+0x2a`, and a design option set's name
   entry closes with the ElementId of the set's primary option. The exporter

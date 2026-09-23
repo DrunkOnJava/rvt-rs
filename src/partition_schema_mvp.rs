@@ -371,7 +371,7 @@ pub fn product_instances_from_partition_records(
         return Ok(Vec::new());
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(Vec::new()),
     };
     if declared.is_empty() {
@@ -539,7 +539,7 @@ fn column_and_wall_records(
         return Ok((Vec::new(), Vec::new()));
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok((Vec::new(), Vec::new())),
     };
     if declared.is_empty() {
@@ -584,7 +584,7 @@ pub fn level_element_ids(rf: &mut RevitFile, revit_version: u32) -> Result<BTree
         return Ok(BTreeSet::new());
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(BTreeSet::new()),
     };
     crate::partition_level_records::scan_partition_level_ids(rf, revit_version, &declared)
@@ -601,7 +601,7 @@ fn category_records(
         return Ok(None);
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(None),
     };
     if declared.is_empty() {
@@ -644,7 +644,7 @@ pub fn instances_from_partition_category_records(
         return Ok(Vec::new());
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(Vec::new()),
     };
     if declared.is_empty() {
@@ -755,7 +755,7 @@ pub fn openings_from_partition_category_records(
         return Ok(Vec::new());
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(Vec::new()),
     };
     if declared.is_empty() {
@@ -893,7 +893,7 @@ pub fn slabs_from_partition_category_records(
         return Ok(Vec::new());
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(Vec::new()),
     };
     if declared.is_empty() {
@@ -1437,7 +1437,7 @@ fn rect_openings_from_partitions(
     // Confirm related ids against ElemTable when available — never invent
     // Door/Window classes from the index alone.
     let elem_ids: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => BTreeSet::new(),
     };
 

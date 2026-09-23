@@ -39,10 +39,7 @@ fn main() -> rvt::Result<()> {
     for set in &options.unresolved_sets {
         println!("  set {set}: unresolved");
     }
-    let declared: BTreeSet<u32> = rvt::elem_table::parse_records(&mut rf)?
-        .into_iter()
-        .map(|r| r.id_primary)
-        .collect();
+    let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
     let records = scan_category_records_multi(&mut rf, version, &categories, &declared)?;
     // (design option, class) -> ElementIds of placed instances.

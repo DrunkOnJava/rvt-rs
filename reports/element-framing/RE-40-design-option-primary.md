@@ -58,7 +58,7 @@ Placed instances of recovered categories, by design option (`probe_re40_design_o
 | 2059970 | Bleacher Seating | yes | 29 (9 floors, 9 slab edges, 8 walls, a stair, its run, a railing) | **29** |
 | 2059967 | Bleacher Seating | no | 26 (9 floors, 9 slab edges, 8 walls) | **0** |
 | 1500727 | Bandstand Options | no | 1 generic model | **0** |
-| 1500724 | Bandstand Options | yes | 33 (17 generic models, 16 walls) | 33, but not yet attributed by rvt-rs (§5) |
+| 1500724 | Bandstand Options | yes | 33 (17 generic models, 16 walls) | 33, attributed since RE-41 (§5) |
 
 The exporter now drops records in a non-primary option before instance selection. On the Snowdon export:
 
@@ -80,7 +80,7 @@ No other file in the corpus has a design option set: Snowdon Structural, Core In
 
 ## 5. The primary bandstand
 
-The 33 elements of the primary option 1500724 are in Revit's export but not in rvt-rs's. They sit in chain records 2220523 to 2220557, which `Global/ElemTable` does not declare under the id it reads (`id_primary`, `+16` of the 40-byte record). That is a separate finding, taken up in RE-41. It is not a design-option effect: rvt-rs keeps every element of a primary option.
+The 33 elements of the primary option 1500724 are in Revit's export but not in rvt-rs's. They sit in chain records 2220523 to 2220557, which `Global/ElemTable` does not declare under the id it reads (`id_primary`, `+16` of the 40-byte record). That is a separate finding: RE-41 declares the ElemTable's second id, and they now export. It is not a design-option effect: rvt-rs keeps every element of a primary option.
 
 ## 6. What this does not claim
 

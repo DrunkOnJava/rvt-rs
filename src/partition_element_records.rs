@@ -964,7 +964,7 @@ pub fn compute_second_prologue_ids(rf: &mut RevitFile) -> SecondPrologueIds {
         return out;
     };
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return out,
     };
     if declared.is_empty() {
@@ -1234,7 +1234,7 @@ pub fn scan_volumeless_instances(
         return Ok(by_class);
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(by_class),
     };
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();

@@ -93,7 +93,7 @@ Where RE-34 had assigned an id, the record agrees on 13,943 frames and differs o
 
 Stairs and roofs are not exported, which is why the four Snowdon errors never surfaced.
 
-`element_record_without_element_id` now counts only frames inside the chain. On Snowdon Architectural it is 20: 16 walls and 4 columns. That is exactly the 1,078 − 1,062 walls and 118 − 114 columns of Revit's export that rvt-rs does not attribute. It is absent on every RE1 model and on Core Interior.
+`element_record_without_element_id` now counts only frames inside the chain. On Snowdon Architectural it is 20: 16 walls and 4 columns. That is exactly the 1,078 − 1,062 walls and 118 − 114 columns of Revit's export that rvt-rs does not attribute. It is absent on every RE1 model and on Core Interior. RE-41 attributes the 20: their records' ids are the ElemTable's second id.
 
 ## 5. What Revit's export leaves out
 
