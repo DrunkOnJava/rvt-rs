@@ -363,6 +363,24 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCTRANSPORTELEMENT",
         predefined_type: None,
     },
+    // #323: a stair's parts, aggregated under its `IfcStair` as in Revit's
+    // IFC4 export of Snowdon Towers (flights, `.LANDING.` slabs,
+    // `.STRINGER.` members).
+    Mapping {
+        revit_class: "StairsRun",
+        ifc_type: "IFCSTAIRFLIGHT",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "StairsLanding",
+        ifc_type: "IFCSLAB",
+        predefined_type: Some("LANDING"),
+    },
+    Mapping {
+        revit_class: "StairsStringer",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("STRINGER"),
+    },
 ];
 
 /// Look up the IFC entity type for a Revit class name.

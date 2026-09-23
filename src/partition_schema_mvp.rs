@@ -197,6 +197,8 @@ pub fn recover_partition_schema_mvp(
 
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
+    // --- Stair parts under their stairs (#323) ---
+    attach_aggregate_wholes(rf, &mut out.products);
 
     // --- Family and type names (RE-38) ---
     for elements in [
@@ -238,33 +240,9 @@ fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedEleme
         let Some(own) = element.id else {
             continue;
         };
-        let mut stream = None;
-        let mut offset = None;
-        let mut category = None;
-        for (name, value) in &element.fields {
-            match (name.as_str(), value) {
-                ("m_source_stream", InstanceField::String(v)) => stream = Some(v.clone()),
-                ("m_source_offset", InstanceField::Integer { value, .. }) => {
-                    offset = usize::try_from(*value).ok();
-                }
-                ("m_builtinCategory", InstanceField::Integer { value, .. }) => {
-                    category = Some(*value);
-                }
-                _ => {}
-            }
-        }
-        let (Some(stream), Some(offset), Some(category)) = (stream, offset, category) else {
+        let Some((references, category)) = record_references(rf, element) else {
             continue;
         };
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
-            continue;
-        };
-        let references = offset
-            .checked_add(crate::partition_element_records::REFERENCE_LIST_OFFSET)
-            .and_then(|at| {
-                crate::partition_element_records::decode_reference_list(inflated.bytes(), at)
-            })
-            .unwrap_or_default();
         let Some(type_id) =
             crate::partition_names::resolve_type(&names, &references, category, own)
         else {
@@ -293,6 +271,84 @@ fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedEleme
             FAMILY_NAME_FIELD.into(),
             InstanceField::String(family_entry.name.clone()),
         ));
+    }
+}
+
+/// Field naming the ElementId of the stair a run, landing or stringer
+/// belongs to (#323).
+pub const AGGREGATE_WHOLE_FIELD: &str = "m_aggregate_whole";
+
+/// Classes that aggregate parts instead of carrying a body of their own.
+pub const AGGREGATE_WHOLE_CLASSES: &[&str] = &["Stair"];
+
+/// Classes that are parts of a stair when their reference list names one.
+///
+/// Railings are not among them: Revit's export aggregates 65 of the 70
+/// Snowdon railings whose lists name a stair, and nothing read so far tells
+/// the other five apart, so railings stay standalone elements.
+pub const STAIR_PART_CLASSES: &[&str] = &["StairsRun", "StairsLanding", "StairsStringer"];
+
+/// The reference list and category of an element-record element, read
+/// again at its source offset.
+fn record_references(rf: &mut RevitFile, element: &DecodedElement) -> Option<(Vec<u64>, i64)> {
+    let mut stream = None;
+    let mut offset = None;
+    let mut category = None;
+    for (name, value) in &element.fields {
+        match (name.as_str(), value) {
+            ("m_source_stream", InstanceField::String(v)) => stream = Some(v.clone()),
+            ("m_source_offset", InstanceField::Integer { value, .. }) => {
+                offset = usize::try_from(*value).ok();
+            }
+            ("m_builtinCategory", InstanceField::Integer { value, .. }) => {
+                category = Some(*value);
+            }
+            _ => {}
+        }
+    }
+    let inflated = rf.inflated_partition(&stream?).ok()?;
+    let references = offset?
+        .checked_add(crate::partition_element_records::REFERENCE_LIST_OFFSET)
+        .and_then(|at| {
+            crate::partition_element_records::decode_reference_list(inflated.bytes(), at)
+        })
+        .unwrap_or_default();
+    Some((references, category?))
+}
+
+/// Give each stair part the ElementId of the one exported stair its
+/// reference list names (#323). On Snowdon Towers every run, landing and
+/// stringer Revit aggregates under a stair, but one stringer, names that
+/// stair in its reference list. A part that names none, or more than one,
+/// stays a standalone element.
+fn attach_aggregate_wholes(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+    let stairs: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| AGGREGATE_WHOLE_CLASSES.contains(&element.class.as_str()))
+        .filter_map(|element| element.id)
+        .collect();
+    if stairs.is_empty() {
+        return;
+    }
+    for element in products.iter_mut() {
+        if !STAIR_PART_CLASSES.contains(&element.class.as_str()) {
+            continue;
+        }
+        let Some((references, _)) = record_references(rf, element) else {
+            continue;
+        };
+        let named: BTreeSet<u32> = references
+            .iter()
+            .filter_map(|&id| u32::try_from(id).ok())
+            .filter(|id| stairs.contains(id) && Some(*id) != element.id)
+            .collect();
+        if named.len() == 1 {
+            let whole = *named.iter().next().expect("one stair");
+            element.fields.push((
+                AGGREGATE_WHOLE_FIELD.into(),
+                InstanceField::ElementId { tag: 0, id: whole },
+            ));
+        }
     }
 }
 

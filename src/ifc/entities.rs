@@ -154,6 +154,12 @@ pub enum IfcEntity {
         name: String,
         shape_representations: Vec<String>,
     },
+    /// An `IfcRelAggregates` between building elements: `whole` (a stair)
+    /// decomposes into `parts` (its runs, landings and stringers), as
+    /// in Revit's own export (#323). Both are indices into
+    /// `IfcModel::entities`. A part is reached through its whole instead of
+    /// being contained in a storey itself.
+    Aggregate { whole: usize, parts: Vec<usize> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

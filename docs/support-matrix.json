@@ -171,6 +171,15 @@
       "user_impact": "Revit 2024 and 2025 projects export their lighting fixtures, air terminals, kitchen equipment, planting, parking, entourage, hardscape, elevators and ramps as the IFC entities Revit itself uses, each one an element Revit's own export also holds."
     },
     {
+      "id": "element-records-stair-aggregates",
+      "area": "elements",
+      "name": "Stairs as IFC aggregates of their runs, landings and stringers",
+      "status": "experimental",
+      "evidence": "partition_schema_mvp::attach_aggregate_wholes; IfcEntity::Aggregate and the STEP writer's IfcRelAggregates; examples/probe_re39_stair_parts.rs; reports/element-framing/RE-39-stair-aggregates.md",
+      "notes": "A stair's runs, landings and stringers name the stair's ElementId in their reference lists. Each stair exports as a bodiless IfcStair and its parts (IfcStairFlight, IfcSlab .LANDING., IfcMember .STRINGER.) are related to it by IfcRelAggregates, not contained in a storey. Measured locally on Snowdon Towers Architectural, which has no licence and is not in CI: the same 26 stairs aggregate as in Revit's IFC4 export, and every one of the 228 parts rvt-rs attaches is in the matching Revit aggregate; all 256 new elements (27 stairs, 42 flights, 17 landings, 170 stringers) are in Revit's export. Railings stay standalone: Revit aggregates 65 of the 70 that name a stair, and nothing read tells the other five apart. PredefinedTypes are left unset. Roofs are not aggregated yet. Revit 2024 and 2025 only.",
+      "user_impact": "Stairs come out as Revit exports them: one IfcStair per stair holding its flights, landings and stringers, so IFC viewers show and select a stair as one assembly."
+    },
+    {
       "id": "element-record-family-type-names",
       "area": "elements",
       "name": "Family and type names of element-record elements, from partition name entries",

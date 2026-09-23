@@ -8,6 +8,22 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Stairs export as aggregates of their runs, landings and stringers
+  (RE-39, #323).** Each stair is an `IfcStair` with no body of its own. Its
+  runs (`IfcStairFlight`), landings (`IfcSlab` `.LANDING.`) and stringers
+  (`IfcMember` `.STRINGER.`) name it in their reference lists and are
+  related to it by `IfcRelAggregates`, as in Revit's own export. On Snowdon
+  Towers:
+  - the same 26 stairs aggregate as in Revit's IFC4 export;
+  - every one of the 228 parts rvt-rs attaches is in the matching Revit
+    aggregate;
+  - all 256 new elements are elements Revit exports.
+  - Railings stay standalone. Revit aggregates 65 of the 70 that name a
+    stair, and no byte read so far tells the other five apart.
+  - `IfcEntity::Aggregate` carries the relation, and the STEP writer leaves
+    a part out of the storey containment it reaches through its whole.
+    `examples/probe_re39_stair_parts.rs` measures the link.
+
 - **Elements carry Revit's own family and type names (RE-38).** Revit 2024
   and 2025 partitions hold a name entry for every loaded family and type:
   `u64 ElementId · u32 length · UTF-16 name · i64 BuiltInCategory`. An
