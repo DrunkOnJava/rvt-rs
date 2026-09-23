@@ -70,7 +70,7 @@ rvt-rs writes `Family:Type:ElementId` as the IFC `Name` and `Family:Type` as the
 
 Snowdon's other 72, and one each on RE1 Architecture and Plumbing, are elements Revit's export leaves out (RE-35 §5).
 
-On the Snowdon structural sample, which has no Revit IFC export, 1,099 named elements are in the VIM export. For 1,075 the name is exactly the VIM's `FamilyName:Name`. The other 24 are one type the VIM's later edition renamed: this file stores `1'0"x1'-7"x4"` and the VIM `1'0"x1'-9"x4"`. RE1 Electrical's 12 lighting fixtures resolve no unique type and keep the `Class-ElementId` name. Projeto1's door name, "M_Folha única:0915 x 2134mm:325405", is equal once the STEP escapes are decoded: rvt-rs writes `ú` as `\X2\00FA\X0\` and Revit as `\X\FA`.
+On the Snowdon structural sample, which has no Revit IFC export, 1,099 named elements are in the VIM export. For 1,075 the name is exactly the VIM's `FamilyName:Name`. The other 24 are one type the VIM's later edition renamed: this file stores `1'0"x1'-7"x4"` and the VIM `1'0"x1'-9"x4"`. RE1 Electrical's 12 lighting fixtures resolve no unique family and keep the `Class-ElementId` name; RE-42 resolves them, since their types' records also name the family nested in the fixture family. Projeto1's door name, "M_Folha única:0915 x 2134mm:325405", is equal once the STEP escapes are decoded: rvt-rs writes `ú` as `\X2\00FA\X0\` and Revit as `\X\FA`.
 
 ## 5. What this does not claim
 

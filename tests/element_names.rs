@@ -172,7 +172,15 @@ fn re1_names_are_revits() {
         return;
     };
     let mut checked = 0;
-    for (model, expected) in [("Architecture", 57), ("Mechanical", 36), ("Plumbing", 61)] {
+    // Mechanical's 6 "300x150" fittings and Electrical's 12 lighting
+    // fixtures have types whose records also name a family nested in their
+    // own (RE-42).
+    for (model, expected) in [
+        ("Architecture", 57),
+        ("Mechanical", 42),
+        ("Plumbing", 61),
+        ("Electrical", 12),
+    ] {
         let rvt = dir.join(format!("RE1-{model}.rvt"));
         let reference = dir.join(format!("RE1-{model}.ifc"));
         if !rvt.exists() || !reference.exists() {

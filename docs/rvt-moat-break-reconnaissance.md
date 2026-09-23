@@ -1783,4 +1783,14 @@ model left unattributed.
 Report: `reports/element-framing/RE-41-elem-table-secondary-ids.md`.
 Probe: `examples/probe_re41_elem_table_secondary_ids.rs`.
 
+## Addendum — RE-42 families nested in a family (2026-09-23)
+
+A family type's partition record names its family and every family of the
+same category nested in it. The family is the one candidate whose own
+partition record names all the others. Every name that adds on RE1
+Electrical, RE1 Mechanical and Snowdon Towers is Revit's own.
+
+Report: `reports/element-framing/RE-42-nested-families.md`.
+Probe: `examples/probe_re42_nested_families.rs`.
+
 **End of report.**

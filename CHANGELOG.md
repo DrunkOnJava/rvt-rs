@@ -8,6 +8,20 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Families that nest others are named too (RE-42, #324).** A type's
+  partition record names its family, and also any family of the same
+  category nested in it, so RE-38 left such elements with class-and-id
+  names. The family is the one candidate whose own record names every
+  other candidate, and `partition_names::resolve_family` now picks it.
+  - Every name this adds is Revit's own: RE1 Electrical's 12 lighting
+    fixtures, 6 duct fittings on RE1 Mechanical, 117 elements on Snowdon
+    Towers (counter tops with sinks, kitchenettes, trees, dining sets), and
+    50 on the Snowdon structural sample against the VIM export.
+  - Across Core Interior, Snowdon Towers and the RE1 models, 4,397 element
+    names now equal Revit's for the same `Tag`, with no name that differs.
+  - `tests/element_names.rs` now checks RE1 Electrical, and
+    `examples/probe_re42_nested_families.rs` measures the rule.
+
 - **Elements declared by the ElemTable's second id are attributed (RE-41).**
   A 40-byte `Global/ElemTable` record carries two ids, at `+16` and `+36`.
   rvt-rs declared only the first. Where the two differ, the second is the
