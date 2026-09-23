@@ -3,17 +3,17 @@
 //! - Tier1 synthetics: fail-closed honesty (no invented ArcWalls /
 //!   Levels / Materials / Floors / openings; HostObjAttr never on
 //!   production path).
-//! - Optional magnetar project corpus: ArcWalls, Levels, Materials,
-//!   Floor plan-loops, and (2024) ArcWallRectOpening rows when
-//!   `RVT_PROJECT_CORPUS_DIR` is set.
+//! - Optional magnetar project corpus: ArcWalls, Levels, Materials, and
+//!   (2024) ArcWallRectOpening rows when `RVT_PROJECT_CORPUS_DIR` is set.
+//!   Floors and rooms come from element records only, so a 2023 file
+//!   yields none.
 
 use std::path::{Path, PathBuf};
 
 use rvt::elements::MVP_TYPED_CLASSES;
 use rvt::elements::typed_json::is_mvp_typed_class;
 use rvt::geometry::{
-    recover_floor_boundary, recover_level_elevation, recover_wall_location_curve,
-    recover_wall_location_curve_from_arc_wall,
+    recover_level_elevation, recover_wall_location_curve, recover_wall_location_curve_from_arc_wall,
 };
 use rvt::walker::{self, PRODUCTION_ELEMENT_MIN_SCORE};
 use rvt::{RevitFile, elements};
@@ -254,24 +254,11 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
         assert!(m.name.is_some());
     }
 
-    // Floors: ArcWall-excluded plan loops with recoverable boundaries.
-    assert!(
-        !floors.is_empty(),
-        "expected ≥1 Floor plan-loop DecodedElement on Einhoven"
-    );
-    let mut recovered_boundaries = 0usize;
-    for floor in &floors {
-        let outcome = recover_floor_boundary(floor);
-        if let Some(loop_) = outcome.as_recovered() {
-            assert!(loop_.vertices_xy.len() >= 3);
-            assert!(loop_.area_sqft() > 0.0);
-            recovered_boundaries += 1;
-        }
-    }
-    assert!(
-        recovered_boundaries >= 1,
-        "expected ≥1 recovered floor boundary, got {recovered_boundaries}"
-    );
+    // Floors and rooms: element records only, and 2023 has none that
+    // decode. The plan-loop floors and name-only rooms this file used to
+    // get matched nothing in Revit's own exports of other files.
+    assert_eq!(floors.len(), 0, "must not invent Floor on Einhoven 2023");
+    assert_eq!(rooms.len(), 0, "must not invent Room on Einhoven 2023");
 
     // Door/Window: fail closed — do not invent typed Door/Window from
     // 2023 Einhoven (no ArcWallRectOpening envelope on this file).
@@ -283,18 +270,14 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
         "2023 must not emit 2024-only ArcWallRectOpening rows"
     );
 
-    // Rooms are optional (strict filter may yield 0 on Einhoven).
     eprintln!(
-        "partition MVP Einhoven ok · arcwalls={} · curves={} · elev={} · levels={} · level_elev={} · materials={} · floors={} · floor_bounds={} · rooms={} · doors={} · windows={}",
+        "partition MVP Einhoven ok · arcwalls={} · curves={} · elev={} · levels={} · level_elev={} · materials={} · doors={} · windows={}",
         scan.walls.len(),
         recovered_curves,
         with_elevation,
         levels.len(),
         level_elevations,
         materials.len(),
-        floors.len(),
-        recovered_boundaries,
-        rooms.len(),
         doors.len(),
         windows.len()
     );
@@ -395,8 +378,8 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
         elem_confirmed >= 50,
         "expected ≥50 openings with both related ids in ElemTable, got {elem_confirmed}"
     );
-    // Materials / rooms may still surface from strings even when ArcWall
-    // standard decode is version-gated off.
+    // Materials still surface from strings even when ArcWall standard
+    // decode is version-gated off.
     assert!(
         mvp.materials.len() >= 5,
         "expected material name recovers on 2024, got {}",
@@ -404,21 +387,20 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
     );
 
     eprintln!(
-        "2024 Core Interior MVP ok · openings={} · elem_confirmed={} · materials={} · levels={} · floors={} · rooms={}",
+        "2024 Core Interior MVP ok · openings={} · elem_confirmed={} · materials={} · levels={} · slabs={} · rooms={}",
         mvp.rect_openings.len(),
         elem_confirmed,
         mvp.materials.len(),
         mvp.levels.len(),
-        mvp.floors.len(),
+        mvp.slabs.len(),
         mvp.rooms.len()
     );
 }
 
 /// #212 / RE-22: slabs come from `OST_Floors` + `OST_BuildingPad`
-/// element records under the #211 instance rule, the plan-loop floors
-/// stand down when they do, and the twenty per-element "IFC Export As"
-/// overrides are exactly the ids Revit's own export emits as
-/// `IfcShadingDevice`.
+/// element records under the #211 instance rule, and the twenty
+/// per-element "IFC Export As" overrides are exactly the ids Revit's own
+/// export emits as `IfcShadingDevice`.
 #[test]
 fn core_interior_2024_slab_instances_and_export_overrides() {
     let Some(project_dir) = project_dir() else {
@@ -455,11 +437,6 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
         mvp.slabs.len(),
         100,
         "expected the 100 exported OST_Floors / OST_BuildingPad instances"
-    );
-    assert!(
-        mvp.floors.is_empty(),
-        "plan-loop floors must stand down when record-backed slabs decode: \
-         emitting both double-counts the same plates"
     );
 
     let pads: Vec<_> = mvp

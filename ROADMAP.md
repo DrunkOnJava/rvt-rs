@@ -16,8 +16,7 @@ real-project typed element extraction remains mostly unsolved**, with
 narrow exceptions: production `walker::iter_elements` prefers typed MVP
 decoders on `Global/Latest`, merges version-gated **ArcWall** partition
 recovers (Revit 2023 standard), and merges fail-closed partition MVP
-recovers for **Level** / **Material** / **Room** (plus **Floor**
-plan-loops where no element records decode), 2024
+recovers for **Level** / **Material**, 2024
 **ArcWallRectOpening** index rows (ElemTable-confirmed related ids;
 never inventing typed `Door`/`Window` success), and 2024 partition
 element-record **Wall** / **Door** / **Window** / **Column** /
@@ -45,7 +44,7 @@ while the broader registry remains a library building block (see
 | Container, compression, metadata | Shipped | Maintain compatibility and bounds checks. |
 | `Formats/Latest` schema | Shipped | Keep 100 percent field classification gated in CI. |
 | ADocument/document-level walker | Partial | Expand confidence across project releases and older files. |
-| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material/Room/Floor plan-loops + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). Every `DecodedElement` carries M3-07 provenance/confidence (CLI/Python/viewer + default IFC hide below 0.55). RE-19: no Door/Window discriminator / no schema-field Wall. RE-20: no Level ElementId recovery on magnetar corpora (`Level` absent from Formats; Floors/Rooms stay Unassigned). |
+| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). Every `DecodedElement` carries M3-07 provenance/confidence (CLI/Python/viewer + default IFC hide below 0.55). RE-19: no Door/Window discriminator / no schema-field Wall. RE-20: no Level ElementId recovery on magnetar corpora (`Level` absent from Formats; Floors/Rooms stay Unassigned). |
 | IFC writer | Partial | Levels/Floors/Rooms/Materials from partition MVP emit honestly; ArcWall geometry on 2023; Door/Window host IFC + slab extrusion still open (blocked on RE-19); Floor/Room storey bind idle (RE-20). |
 | Browser viewer | Partial | File Status lists recovered storey names + material display-name samples + honest Parameters row (empty until AProperty host joins — RE-20: no AProperty carriers on magnetar Global/Latest); scene tree groups under `IFCBUILDINGSTOREY` (ArcWalls by elevation; Floors/Rooms stay Unassigned — RE-20 negative on Level ElementIds). |
 | Python/CLI surface | Partial | Stabilize JSON schemas and one-shot inspect workflow. |
@@ -77,7 +76,7 @@ real project files, not only synthesized fixtures.
 - Known-count fixtures for levels, walls, floors, doors, and windows.
 - Generic partition record scanner.
 - `ElemTable` id to partition-record offset linkage.
-- Typed MVP decoders + ArcWall + partition Level/Material/Room (+ Floor plan-loop where no records decode) / 2024 opening-index (ElemTable-confirmed) / 2024 element-record Wall/Door/Window/Column/Floor/BuildingPad merge wired into `iter_elements` without false positives; IFC Level/Floor/Room/Material emission (slab plan profiles recovered from OST_SketchLines records, #31/RE-25; wall bodies join-trimmed and column sections joined to their family type, #215/RE-26, with the joins themselves read from the `+0x88` reference list and column bodies cut by the walls they name, #238/#239/RE-29; schema-field Wall and typed Door/Window host binding still open).
+- Typed MVP decoders + ArcWall + partition Level/Material / 2024 opening-index (ElemTable-confirmed) / 2024 element-record Wall/Door/Window/Column/Floor/BuildingPad merge wired into `iter_elements` without false positives; IFC Level/Floor/Room/Material emission (slab plan profiles recovered from OST_SketchLines records, #31/RE-25; wall bodies join-trimmed and column sections joined to their family type, #215/RE-26, with the joins themselves read from the `+0x88` reference list and column bodies cut by the walls they name, #238/#239/RE-29; schema-field Wall and typed Door/Window host binding still open).
 - Decode confidence and provenance attached to every element.
 
 ### 0.4.0: IFC Geometry Beta
