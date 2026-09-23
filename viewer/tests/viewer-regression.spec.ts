@@ -45,6 +45,40 @@ test('loads the viewer shell with disabled export actions and demo gallery', asy
   await expect(page.getByLabel('Supported Revit file profile')).toContainText(/scaffold ~25%/i);
 });
 
+test.describe('on a 2x display', () => {
+  test.use({ deviceScaleFactor: 2, viewport: { width: 1600, height: 1000 } });
+
+  // The renderer sizes the canvas's backing store in device pixels. The
+  // canvas element itself must still fill the viewport exactly, or a HiDPI
+  // screen lays it out twice as large, widens the grid and pushes the file
+  // status panel off-screen with the drop zone centred in the overflow.
+  test('the canvas fills the viewport and every panel stays on screen', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/ready/);
+    const layout = await page.evaluate(() => {
+      const viewport = document.getElementById('viewport')!;
+      const canvas = viewport.querySelector('canvas')!;
+      const rect = canvas.getBoundingClientRect();
+      const title = document.querySelector('#dropzone .big')!.getBoundingClientRect();
+      const viewportRect = viewport.getBoundingClientRect();
+      return {
+        windowWidth: window.innerWidth,
+        pageWidth: document.documentElement.scrollWidth,
+        viewport: [viewport.clientWidth, viewport.clientHeight],
+        canvasCss: [Math.round(rect.width), Math.round(rect.height)],
+        canvasBacking: [canvas.width, canvas.height],
+        sidebarRight: document.getElementById('sidebar-right')!.getBoundingClientRect().right,
+        titleOffset: Math.abs(title.left + title.width / 2 - (viewportRect.left + viewportRect.width / 2)),
+      };
+    });
+    expect(layout.pageWidth).toBe(layout.windowWidth);
+    expect(layout.canvasCss).toEqual(layout.viewport);
+    expect(layout.canvasBacking).toEqual(layout.viewport.map((v) => v * 2));
+    expect(layout.sidebarRight).toBeLessThanOrEqual(layout.windowWidth);
+    expect(layout.titleOffset).toBeLessThan(2);
+  });
+});
+
 test('accessibility shell: landmarks, skip link, keyboard tree activation', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#status')).toHaveText(/ready/);

@@ -58,8 +58,10 @@
       }
       #app {
         display: grid;
-        grid-template-columns: 280px 1fr 320px;
-        grid-template-rows: 44px 1fr;
+        /* minmax(0, …): nothing inside the viewport, least of all the
+           canvas's device-pixel backing size, may widen its track. */
+        grid-template-columns: 280px minmax(0, 1fr) 320px;
+        grid-template-rows: 44px minmax(0, 1fr);
         height: 100vh;
         gap: 0;
       }
@@ -156,9 +158,19 @@
       #viewport {
         position: relative;
         background: #000;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
       }
+      /* The renderer sizes the canvas's backing store in device pixels and
+         leaves its CSS size alone, so the element is pinned to the viewport
+         here. Without this a 2x display lays it out twice as large. */
       #viewport canvas {
         display: block;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
       }
       #dropzone {
         position: absolute;
@@ -166,8 +178,13 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        background: rgba(11, 14, 19, 0.85);
+        justify-content: safe center;
+        overflow-y: auto;
+        padding: 24px 16px;
+        box-sizing: border-box;
+        /* Opaque: the empty scene's grid and axes must not draw lines
+           through the text. */
+        background: #0b0e13;
         color: #d7dce3;
         z-index: 10;
         font-size: 14px;
@@ -1087,7 +1104,7 @@
           overflow: auto;
         }
         #app {
-          grid-template-columns: 1fr;
+          grid-template-columns: minmax(0, 1fr);
           grid-template-rows: auto auto minmax(42vh, 52vh) auto;
           height: auto;
           min-height: 100vh;
@@ -1221,8 +1238,9 @@
           <div class="big">Drop a Revit file here</div>
           <div class="hint">
             Client-side only — every byte is parsed in this tab. No upload, no account, no
-            telemetry. Synthetic tier1 demos are expected to report scaffold ~25% confidence;
-            typed extraction from arbitrary real projects is still unsolved. See
+            telemetry. Revit 2024 and 2025 projects open with their walls, doors, windows,
+            floors, roofs, stairs, furniture and fixtures under Revit's own ElementIds and
+            names; other releases and family files open with their metadata and schema. See
             <a style="color:#6bb7ff" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/viewer-privacy-posture.md"
               >privacy</a
             >
@@ -1284,10 +1302,11 @@
         </details>
         <h2>Supported MVP workflow</h2>
         <div class="mvp-workflow" id="mvp-workflow">
-          <strong>Open locally or pick a tier1 demo</strong> → read Decode / Export confidence →
+          <strong>Open locally or pick a demo</strong> → read Decode / Export confidence →
           inspect decoded elements → choose an IFC bar (scaffold is honest for synthetics) →
           export only after checking the quality label → download diagnostics for partial
-          exports. Typed levels/doors/windows from arbitrary real projects remain unsolved.
+          exports. Typed elements come from Revit 2024 and 2025 projects; other releases export
+          a scaffold.
         </div>
         <h2>Supported profile</h2>
         <div class="support-matrix" aria-label="Supported Revit file profile">
@@ -1305,7 +1324,7 @@
           </div>
           <div class="support-row">
             <span class="k">IFC now</span>
-            <span class="v">Revit 2024 and 2025 projects export walls, doors, windows, columns, slabs, rooms, furniture, casework, fixtures, ceilings, curtain-wall parts, railings, ducts and pipes whose ElementIds match Revit's own export, as bounding-box bodies. Other releases export ArcWalls (2023) or a valid scaffold. The typed / geometry / strict bars refuse a file that does not meet them.</span>
+            <span class="v">Revit 2024 and 2025 projects export walls, doors, windows, columns, slabs, roofs, ceilings, stairs, railings, rooms, curtain-wall parts, furniture, casework, lighting and plumbing fixtures, equipment, ducts, pipes, structural framing and foundations, and site elements, each under the ElementId and, for family instances, the Family:Type name Revit's own export gives it. Bodies are bounding boxes, refined to sketched outlines for slabs and to trimmed runs for walls. Other releases export ArcWalls (2023) or a valid scaffold. The typed / geometry / strict bars refuse a file that does not meet them.</span>
           </div>
           <div class="support-row">
             <span class="k">MVP target</span>
@@ -1313,7 +1332,7 @@
           </div>
           <div class="support-row">
             <span class="k">Not ready</span>
-            <span class="v">Element records whose ElementId neither the record nor the record order gives, such as second-layout floors (the status panel says how many were left out); elements Revit's own export filters out, which rvt-rs still exports; true element geometry beyond bounding boxes for most categories; and semantic Revit editing.</span>
+            <span class="v">Element records before Revit 2024; true element geometry beyond bounding boxes and sketched outlines for most categories; most parameters and the type names of system families such as walls and floors; some elements Revit's own export leaves out, such as empty curtain panels and opening-cut families, which rvt-rs still exports; phase filtering; and semantic Revit editing.</span>
           </div>
           <a class="support-link" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/supported-profile.md">
             Profile details
