@@ -101,6 +101,8 @@ pub struct RevitFile {
     second_prologue_ids: Option<Arc<crate::partition_element_records::SecondPrologueIds>>,
     /// Memoised RE-38 family and type names.
     element_names: Option<Arc<crate::partition_names::ElementNames>>,
+    /// Memoised design option sets and their primary options (RE-40).
+    design_options: Option<Arc<crate::partition_design_options::DesignOptions>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,6 +230,7 @@ impl RevitFile {
             partition_strings: None,
             second_prologue_ids: None,
             element_names: None,
+            design_options: None,
         })
     }
 
@@ -281,6 +284,19 @@ impl RevitFile {
         let computed =
             Arc::new(crate::partition_names::compute_element_names(self).unwrap_or_default());
         self.element_names = Some(Arc::clone(&computed));
+        computed
+    }
+
+    /// Design option sets and their primary options, memoised (RE-40).
+    /// Empty where the release is not proven or a stream does not parse.
+    pub fn design_options(&mut self) -> Arc<crate::partition_design_options::DesignOptions> {
+        if let Some(cached) = &self.design_options {
+            return Arc::clone(cached);
+        }
+        let computed = Arc::new(
+            crate::partition_design_options::compute_design_options(self).unwrap_or_default(),
+        );
+        self.design_options = Some(Arc::clone(&computed));
         computed
     }
 

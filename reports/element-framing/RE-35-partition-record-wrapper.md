@@ -105,6 +105,7 @@ Every exported id Revit's export does not hold is a real element of the category
   - On the recovered categories, all 18 instances carrying option 2059970, "Middle Stair <primary>", are in Revit's export.
   - All 18 carrying a non-primary option (2059967, or 1500727 "Simple Dome") are not.
   - The option records (category −2006114) and option-set records (−2006112) list their members but carry no primary flag in these bytes, so rvt-rs does not filter on it yet.
+  - RE-40 found the primary in each set's name entry, and the exporter now leaves the non-primary options out.
   - The other 6 slabs (2287679 to 2287714) carry no option; why Revit leaves them out is not established.
 - **RE1 Architecture:** door 417199, a Single-Flush door of type 381264 in its own wall. Revit exported the file's other five doors.
 - **RE1 Plumbing:** fixture 442378, a floor-level fixture of type 442362. Neither frame sets any sentinel slot; the cause is not established.

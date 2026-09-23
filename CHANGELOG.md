@@ -8,6 +8,23 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Design options export as Revit exports them (RE-40, #319).** An element
+  record holds its design option at `+0x2a`, and a design option set's name
+  entry closes with the ElementId of the set's primary option. The exporter
+  now leaves out elements in a set's other options, as Revit's own IFC
+  export does by default, and reports them as the skipped item
+  `element_record_in_non_primary_design_option`.
+  - On Snowdon Towers, the 29 placed elements in a primary option are all in
+    Revit's IFC4 export and the 27 in non-primary options are all missing
+    from it. Leaving them out removes 18 exported elements that Revit's
+    export does not hold, and none that it does.
+  - Slab edges (`OST_EdgeSlab`) export as `IfcBuildingElementProxy`: all 59
+    on Snowdon are in Revit's export.
+  - A set whose name entry is missing or ambiguous keeps all its options.
+    `RevitFile::design_options` and `PartitionElementRecord::design_option`
+    expose what is read, and `examples/probe_re40_design_options.rs` prints
+    it.
+
 - **Roofs export as `IfcRoof` (#323).** All 20 placed roofs on Snowdon Towers
   are `IfcRoof`s in Revit's own IFC4 export. Revit decomposes 7 of them into
   a same-`Tag` `IfcSlab` `.ROOF.` part. No decoded byte says which roofs

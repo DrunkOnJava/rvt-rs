@@ -1987,6 +1987,23 @@ pub fn build_export_diagnostics_with_limits(
             sample_names: Vec::new(),
         });
     }
+    // #319: elements in a non-primary design option are left out as
+    // Revit's own export leaves them out. They are not missing either.
+    let non_primary = bfi
+        .as_ref()
+        .and_then(|b| {
+            crate::partition_design_options::scan_non_primary_option_instances(rf, b.version).ok()
+        })
+        .unwrap_or_default();
+    let non_primary_total: usize = non_primary.values().sum();
+    if non_primary_total > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_in_non_primary_design_option".into(),
+            count: non_primary_total,
+            classes: non_primary,
+            sample_names: Vec::new(),
+        });
+    }
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;

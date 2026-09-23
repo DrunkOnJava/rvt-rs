@@ -363,6 +363,13 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCTRANSPORTELEMENT",
         predefined_type: None,
     },
+    // RE-40: Revit's own IFC4 export writes every Snowdon slab edge outside
+    // a non-primary design option as a proxy.
+    Mapping {
+        revit_class: "SlabEdge",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
+        predefined_type: None,
+    },
     // #323: a stair's parts, aggregated under its `IfcStair` as in Revit's
     // IFC4 export of Snowdon Towers (flights, `.LANDING.` slabs,
     // `.STRINGER.` members).

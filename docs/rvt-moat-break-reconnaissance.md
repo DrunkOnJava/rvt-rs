@@ -1750,4 +1750,25 @@ documents, keyed by their own ids.
 Report: `reports/element-framing/RE-35-partition-record-wrapper.md`.
 Probe: `examples/probe_re35_record_wrapper.rs`.
 
+## Addendum — RE-40 a design option set names its primary option (2026-09-23)
+
+An element record holds its design option's ElementId at `+0x2a` (`0xff`×8
+for the main model). A design option set's partition record
+(`OST_DesignOptionSets`) lists the set's own id and its options at `+0x56`,
+and the set's name entry repeats the option list and closes with the primary
+option's ElementId:
+
+```text
+u32 k - 1 · k - 1 option ids (u64) · u32 1 · u32 n · n UTF-16 units · u64 primary
+```
+
+On Snowdon Towers Architectural (local only) both sets resolve to the options
+the VIM export marks primary. Of the placed instances of recovered
+categories, the 29 in a primary option are all in Revit's own IFC4 export and
+the 27 in other options all missing from it, so the exporter leaves those out
+as Revit does.
+
+Report: `reports/element-framing/RE-40-design-option-primary.md`.
+Probe: `examples/probe_re40_design_options.rs`.
+
 **End of report.**

@@ -384,6 +384,7 @@ pub fn product_instances_from_partition_records(
         &categories,
         &declared,
     )?;
+    let records = without_non_primary_options(rf, records);
     let mut by_category: std::collections::BTreeMap<i64, Vec<_>> =
         std::collections::BTreeMap::new();
     for record in records {
@@ -550,6 +551,7 @@ fn column_and_wall_records(
         &[per::OST_COLUMNS, per::OST_WALLS],
         &declared,
     )?;
+    let records = without_non_primary_options(rf, records);
     Ok(records
         .into_iter()
         .partition(|record| record.builtin_category == per::OST_COLUMNS))
@@ -605,14 +607,13 @@ fn category_records(
     if declared.is_empty() {
         return Ok(None);
     }
-    Ok(Some(
-        crate::partition_element_records::scan_category_records(
-            rf,
-            revit_version,
-            builtin_category,
-            &declared,
-        )?,
-    ))
+    let records = crate::partition_element_records::scan_category_records(
+        rf,
+        revit_version,
+        builtin_category,
+        &declared,
+    )?;
+    Ok(Some(without_non_primary_options(rf, records)))
 }
 
 /// Recover placed element instances of one `BuiltInCategory` from
@@ -655,6 +656,7 @@ pub fn instances_from_partition_category_records(
         builtin_category,
         &declared,
     )?;
+    let records = without_non_primary_options(rf, records);
     Ok(instances_from_records(records, class, level_ids))
 }
 
@@ -765,12 +767,26 @@ pub fn openings_from_partition_category_records(
         builtin_category,
         &declared,
     )?;
+    let records = without_non_primary_options(rf, records);
     Ok(opening_instances_from_records(
         records,
         class,
         host_candidates,
         level_ids,
     ))
+}
+
+/// `records` without those in a non-primary design option: Revit's own
+/// export writes the main model and each option set's primary option, and
+/// leaves the other options out (#319, RE-40). Elements of an option whose
+/// set is unresolved are kept.
+fn without_non_primary_options(
+    rf: &mut RevitFile,
+    mut records: Vec<crate::partition_element_records::PartitionElementRecord>,
+) -> Vec<crate::partition_element_records::PartitionElementRecord> {
+    let options = rf.design_options();
+    records.retain(|record| !options.excludes(record));
+    records
 }
 
 /// Instance selection proper: one record per exported ElementId.
@@ -896,6 +912,7 @@ pub fn slabs_from_partition_category_records(
         per::OST_SKETCH_LINES,
     ];
     let scanned = per::scan_category_records_multi(rf, revit_version, &categories, &declared)?;
+    let scanned = without_non_primary_options(rf, scanned);
     let sketch_lines: Vec<per::PartitionElementRecord> = scanned
         .iter()
         .filter(|record| record.builtin_category == per::OST_SKETCH_LINES)
@@ -1606,6 +1623,7 @@ mod tests {
             owner_reference: None,
             references: Vec::new(),
             id_from_enclosing_record: false,
+            design_option: None,
         }
     }
 
