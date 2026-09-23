@@ -16,7 +16,7 @@ All notable changes will be documented here. This project follows
     containers, for x86_64 and aarch64, plus Intel macOS: seven wheels
     instead of three.
   - Each wheel is installed in the oldest environment its tag claims (the
-    manylinux2014 image with CPython 3.8, Alpine, an Intel macOS runner),
+    manylinux2014 image with its oldest CPython, Alpine, an Intel macOS runner),
     where it opens a Revit file and exports IFC before anything is published
     (`tools/ci/wheel-smoke.py`).
   - The PR wheel job builds the same way, so a break in the glibc 2.17

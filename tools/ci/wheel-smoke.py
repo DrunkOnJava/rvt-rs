@@ -3,7 +3,7 @@
 Opens a Revit file through the compiled extension, reads its release and
 schema, and exports it to IFC with its diagnostics, so a wheel that installs but cannot parse
 (a wrong ABI, a missing symbol, a broken build) fails the release. Runs on
-CPython 3.8 (the manylinux2014 image) and later.
+CPython 3.8 and later.
 
 Usage: python tools/ci/wheel-smoke.py FILE.rvt
 """
@@ -24,9 +24,10 @@ def main() -> int:
     diagnostics = json.loads(model.export_diagnostics_json())
     ifc = model.write_ifc("scaffold")
     print(
-        "{} {}: Revit {}, {} streams, {} schema classes, {} bytes of IFC, export mode {}".format(
+        "{} {}, CPython {}: Revit {}, {} streams, {} schema classes, {} bytes of IFC, export mode {}".format(
             platform.system(),
             platform.machine(),
+            platform.python_version(),
             version,
             len(streams),
             len(schema.get("classes", [])),
