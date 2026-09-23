@@ -114,7 +114,7 @@ open("out.ifc", "w").write(f.write_ifc())
 Install: `pip install rvt` — or build from source with [`maturin build --release --manifest-path rvt-py/Cargo.toml`](docs/python.md#from-source). Full API + Jupyter notebook walkthrough: [`docs/python.md`](docs/python.md) and [`docs/rvt-python-quickstart.ipynb`](docs/rvt-python-quickstart.ipynb).
 See [`docs/install.md`](docs/install.md) for cargo, PyPI, source, and viewer
 install/smoke-test paths, and for the prebuilt Linux / macOS / Windows CLI
-archives that tagged releases attach from the next release on.
+archives each GitHub Release carries (from [v0.2.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.2.0) on).
 
 ### In the browser
 

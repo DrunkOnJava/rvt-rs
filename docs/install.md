@@ -4,18 +4,15 @@ This guide covers the supported ways to install or run rvt-rs on a fresh
 machine. Use [user-guide.md](user-guide.md) after installation to decide which
 workflow fits your file.
 
-**Publication status (as of 2026-09-22; the tree is at `0.2.0`, prepared but not yet released):**
+**Publication status (as of 2026-09-23, release `v0.2.0`):**
 
 | Channel | Status |
 |---|---|
-| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.1.2**; 0.2.0 is not yet published |
-| **Prebuilt CLI binaries** (GitHub Releases) | **Not yet published** — the v0.2.0 release will carry archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
-| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Not yet published** — from the v0.2.0 release on, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
-| **crates.io** (`rvt`) | **Not published** — `cargo install rvt` will fail until a successful `cargo publish` |
+| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.2.0** (wheels for Linux x86_64, macOS Apple Silicon and Windows x86_64, plus the sdist) |
+| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.2.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.2.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
+| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.2.0`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
+| **crates.io** (`rvt`) | **Not published** — `cargo install rvt` fails until a successful `cargo publish`; build from source instead |
 | **docs.rs** (`rvt`) | **Not available** (404) until the crate exists on crates.io |
-
-Until the v0.2.0 release is published, build the Rust CLIs from source, or
-download the archives from a **Release binaries** workflow run (see below).
 
 ## Browser Viewer
 
