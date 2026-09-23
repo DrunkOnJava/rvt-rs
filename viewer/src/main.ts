@@ -174,18 +174,38 @@ tick();
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-renderer.domElement.addEventListener('pointerdown', (ev) => {
-  if (!currentModel) return;
+/** The entity drawn under a pointer position, if any. */
+function pickEntity(ev: MouseEvent): number | null {
+  if (!currentModel) return null;
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObject(currentModel, true);
-  if (hits.length === 0) return;
-  const hit = hits[0]!;
-  const userData = hit.object.userData as { entityIndex?: number };
-  if (userData.entityIndex === undefined) return;
-  selectEntity(userData.entityIndex);
+  if (hits.length === 0) return null;
+  const userData = hits[0]!.object.userData as { entityIndex?: number };
+  return userData.entityIndex ?? null;
+}
+
+// A click selects; a drag orbits without changing the selection.
+let pointerDownAt: { x: number; y: number } | null = null;
+const CLICK_SLOP_PX = 4;
+renderer.domElement.addEventListener('pointerdown', (ev) => {
+  pointerDownAt = ev.button === 0 ? { x: ev.clientX, y: ev.clientY } : null;
+});
+renderer.domElement.addEventListener('pointerup', (ev) => {
+  const down = pointerDownAt;
+  pointerDownAt = null;
+  if (!down || Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > CLICK_SLOP_PX) return;
+  const idx = pickEntity(ev);
+  if (idx !== null) selectEntity(idx);
+});
+// A double-click also brings the element into view.
+renderer.domElement.addEventListener('dblclick', (ev) => {
+  const idx = pickEntity(ev);
+  if (idx === null) return;
+  selectEntity(idx);
+  frameEntities(new Set([idx]), entityLabel(idx));
 });
 
 // ---------- Selection highlight (M4-04) ----------
@@ -285,11 +305,54 @@ function sceneSupportsHighlight(): boolean {
  * Host / hosted rows in the panel call this to jump across the
  * relationship.
  */
+/** The element the tree and info panel describe, for F and the zoom button. */
+let selectedIndex: number | null = null;
+
 function selectEntity(idx: number): void {
   clearScheduleHighlightState();
   selectTreeRow(idx);
   highlightEntity(idx);
   showElementInfo(idx);
+  selectedIndex = idx;
+}
+
+/** An entity's name as the tree shows it. */
+function entityLabel(idx: number): string {
+  return model?.entities?.[idx]?.name ?? findSceneNodeByIndex(sceneGraph, idx)?.name ?? 'element';
+}
+
+/** Every entity index under a scene node, the node's own included. */
+function entityIndicesUnder(node: SceneNode): Set<number> {
+  const out = new Set<number>();
+  const walk = (n: SceneNode) => {
+    if (n.entity_index !== null) out.add(n.entity_index);
+    n.children.forEach(walk);
+  };
+  walk(node);
+  return out;
+}
+
+/**
+ * Bring some elements into view: F, a double-click in the tree or the
+ * view, or the element panel's button. Reports when none of them has
+ * drawn geometry rather than moving the camera to nothing.
+ */
+function frameEntities(indices: Set<number>, label: string): boolean {
+  if (!currentModel) return false;
+  const box = new THREE.Box3();
+  currentModel.traverse((obj) => {
+    const idx = (obj.userData as { entityIndex?: number }).entityIndex;
+    if ((obj as THREE.Mesh).isMesh && idx !== undefined && indices.has(idx)) {
+      box.expandByObject(obj);
+    }
+  });
+  if (box.isEmpty()) {
+    setStatus(`${label} has no geometry to zoom to`);
+    return false;
+  }
+  frameBox(box);
+  setStatus(`Zoomed to ${label}`);
+  return true;
 }
 
 function selectTreeRow(idx: number): void {
@@ -632,7 +695,7 @@ async function loadBytes(file: File): Promise<void> {
   pendingInfoIndex = null;
   infoEl.removeAttribute('aria-busy');
   infoEl.textContent =
-    'Select an element in the 3-D view or scene tree (Enter / Space on a tree row).';
+    'Select an element in the 3-D view or scene tree (Enter / Space on a tree row). Double-click it or press F to zoom to it.';
   scheduleTotalEl.textContent = 'Reading the file…';
   scheduleGroupsEl.innerHTML = '';
   clearHighlight();
@@ -834,20 +897,34 @@ function renderScene(glb: Uint8Array): void {
 }
 
 function frameCamera(obj: THREE.Object3D): void {
-  const box = new THREE.Box3().setFromObject(obj);
+  frameBox(new THREE.Box3().setFromObject(obj));
+}
+
+/** The smallest extent a framed box is treated as having, metres. */
+const MIN_FRAME_METRES = 0.5;
+
+function frameBox(box: THREE.Box3): void {
   if (box.isEmpty()) return;
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
+  const maxDim = Math.max(size.x, size.y, size.z, MIN_FRAME_METRES);
   const fov = camera.fov * (Math.PI / 180);
   const dist = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
-  const toPos = center
-    .clone()
-    .add(new THREE.Vector3(1, 0.8, 1).normalize().multiplyScalar(dist));
+  // Keep the approach direction when zooming in on a part of the model,
+  // so the view does not swing round; the whole model gets the default.
+  const approach = camera.position.clone().sub(controls.target);
+  const direction =
+    currentModel && approach.lengthSq() > 0 && !box.equals(new THREE.Box3().setFromObject(currentModel))
+      ? approach.normalize()
+      : new THREE.Vector3(1, 0.8, 1).normalize();
+  const toPos = center.clone().add(direction.multiplyScalar(dist));
   // Clip planes jump immediately: interpolating them causes visible
-  // z-fighting mid-move and carries no information.
+  // z-fighting mid-move and carries no information. The far plane
+  // keeps the rest of the model in view around a small element.
+  const model = currentModel ? new THREE.Box3().setFromObject(currentModel) : box;
+  const modelDim = model.isEmpty() ? maxDim : model.getSize(new THREE.Vector3()).length();
   camera.near = maxDim / 100;
-  camera.far = dist * 10;
+  camera.far = Math.max(dist * 10, dist + modelDim * 2);
   camera.updateProjectionMatrix();
 
   if (prefersReducedMotion()) {
@@ -1003,6 +1080,7 @@ function buildTreeNode(node: SceneNode): HTMLElement {
     if (node.entity_index !== null) {
       highlightEntity(node.entity_index);
       showElementInfo(node.entity_index);
+      selectedIndex = node.entity_index;
       return;
     }
     // Project and storey rows are synthetic — they have no entity to
@@ -1010,8 +1088,15 @@ function buildTreeNode(node: SceneNode): HTMLElement {
     // element was selected before sitting there as if it applied.
     clearHighlight();
     showContainerInfo(node);
+    selectedIndex = null;
   };
   row.addEventListener('click', activate);
+  // Double-click brings the row into view: an element, or everything on a
+  // storey or in the project.
+  row.addEventListener('dblclick', (ev) => {
+    activate(ev);
+    frameEntities(entityIndicesUnder(node), node.name);
+  });
   row.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
@@ -1287,6 +1372,25 @@ function gapNote(missing: string[]): HTMLElement | null {
   return box;
 }
 
+/** The panel's "Zoom to element" button, when the element is drawn. */
+function zoomButton(): HTMLButtonElement | null {
+  const idx = selectedIndex;
+  if (idx === null || !currentModel) return null;
+  let drawn = false;
+  currentModel.traverse((obj) => {
+    if ((obj.userData as { entityIndex?: number }).entityIndex === idx) drawn = true;
+  });
+  if (!drawn) return null;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'side-btn';
+  btn.id = 'zoom-to-element';
+  btn.textContent = 'Zoom to element';
+  btn.title = 'Bring this element into view (F, or double-click it)';
+  btn.addEventListener('click', () => frameEntities(new Set([idx]), entityLabel(idx)));
+  return btn;
+}
+
 /** Render the whole panel from the Rust payload. */
 function renderElementPanel(panel: ElementInfoPanel): void {
   infoEl.innerHTML = '';
@@ -1304,6 +1408,8 @@ function renderElementPanel(panel: ElementInfoPanel): void {
   );
   if (panel.type_guid) identity.appendChild(infoRow('GUID', panel.type_guid));
   infoEl.appendChild(identity);
+  const zoom = zoomButton();
+  if (zoom) infoEl.appendChild(zoom);
 
   if (panel.storey) infoEl.appendChild(storeyGroup(panel.storey));
   if (panel.material) infoEl.appendChild(materialGroup(panel.material));
@@ -2049,6 +2155,22 @@ fileInput.addEventListener('change', () => {
   if (f) void loadBytes(f);
 });
 
+// Keyboard: F brings the selection into view, or the whole model when
+// nothing is selected. Not while typing in a field or choosing an option.
+document.addEventListener('keydown', (ev) => {
+  if ((ev.key !== 'f' && ev.key !== 'F') || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  const target = ev.target as HTMLElement | null;
+  if (target?.closest('input, select, textarea, [contenteditable="true"]')) return;
+  if (!currentModel) return;
+  ev.preventDefault();
+  if (selectedIndex !== null) {
+    frameEntities(new Set([selectedIndex]), entityLabel(selectedIndex));
+  } else {
+    frameCamera(currentModel);
+    setStatus('Zoomed to the whole model');
+  }
+});
+
 // Keyboard: Escape clears tree selection / returns focus toward file open.
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape') return;
@@ -2060,8 +2182,9 @@ document.addEventListener('keydown', (ev) => {
     selected.classList.remove('selected');
     clearHighlight();
     pendingInfoIndex = null;
+    selectedIndex = null;
     infoEl.textContent =
-      'Select an element in the 3-D view or scene tree (Enter / Space on a tree row).';
+      'Select an element in the 3-D view or scene tree (Enter / Space on a tree row). Double-click it or press F to zoom to it.';
   }
   if (!dropzone.classList.contains('hidden')) {
     pickBtn.focus();
