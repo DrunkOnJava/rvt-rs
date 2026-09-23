@@ -103,6 +103,7 @@
 use crate::Result;
 
 pub mod annotation;
+pub mod body_geometry;
 pub mod camera;
 pub mod category_map;
 pub mod clipping;

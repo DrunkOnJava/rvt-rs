@@ -95,6 +95,30 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The viewer and the plan export draw each element's real body.** The GLB
+  the viewer shows (and `rvt-gltf` writes) drew every element as an
+  unrotated box of its width, depth and height, and the plan SVG drew
+  unrotated rectangles. A rotated wall ran along the wrong axis, a
+  sketched slab filled its bounding box, and a sloped or swept solid was
+  not drawn at all.
+  - Both now draw the body the IFC export gives the element
+    (`rvt::ifc::body_geometry`), rotated by the element's rotation: a
+    sketched profile with its holes open, a steel section as its section,
+    and swept, revolved and brep solids as those solids.
+  - An element with no body of its own, such as a stair or curtain wall
+    carried by its parts, is no longer drawn as a phantom 1 ft cube.
+  - The GLB is now Y-up in metres, as glTF defines it. It was Z-up in feet,
+    so every model lay on its side, 3.28 times too large, in the viewer,
+    Blender and any other glTF tool. One root node carries the conversion,
+    and element nodes stay in the model's own frame.
+  - The plan draws slabs, roofs, coverings, plates and spaces beneath the
+    walls, columns and doors instead of over them.
+  - The Khronos glTF validator reports no errors or warnings on Core
+    Interior, RE1 Architecture and Snowdon Towers.
+- **The viewer uses one sans-serif face and sentence-case headers.** Panel
+  values and the diagnostics JSON no longer switch to a monospace face,
+  section headers are bold instead of spaced capitals, and IFC types read
+  `IfcWall` rather than the STEP file's `IFCWALL`.
 - **Property text with non-ASCII characters is written as ISO 10303-21
   escapes.** `IfcPropertySingleValue` text, such as a type name from a
   Portuguese model ("Genérico - 200 mm"), went into the STEP file as raw

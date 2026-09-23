@@ -361,7 +361,7 @@ largeProjectDemoTest(
     await expect(relations).toBeVisible();
     await expect(relations).toContainText(/Hosted by/);
     const hostRow = relations.locator('.info-relation').first();
-    await expect(hostRow).toContainText(/IFCWALL/);
+    await expect(hostRow).toContainText(/IfcWall/);
     const hostIndex = await hostRow.getAttribute('data-entity-index');
     expect(hostIndex).toMatch(/^\d+$/);
 
@@ -377,7 +377,7 @@ largeProjectDemoTest(
     ).toHaveCount(1);
     await expect(relations).toContainText(/Hosts \d+ opening/);
     await expect(relations.locator('.info-relation').first()).toContainText(
-      /IFCDOOR|IFCWINDOW/,
+      /IfcDoor|IfcWindow/,
     );
 
     // Core Interior carries a 10-property RvtElementRecordGeometry set
@@ -442,10 +442,10 @@ projectSampleTest(
     // #33 leftover: File Status lists recovered storey names, not counts only.
     await expect(page.locator('#status-panel')).toContainText(/Level 1|Roof/i);
     await expect(page.locator('#status-panel')).toContainText(/Materials/i);
-    // Scene tree groups under IFCBUILDINGSTOREY nodes from recovered levels.
+    // Scene tree groups under IfcBuildingStorey nodes from recovered levels.
     await expect(page.locator('.tree-node.tree-storey').first()).toBeVisible();
     await expect(page.locator('.tree-node.tree-storey').first()).toContainText(
-      /IFCBUILDINGSTOREY/,
+      /IfcBuildingStorey/,
     );
     await page.locator('#diagnostics-details summary').click();
     await expect(page.locator('#diagnostics-json')).toContainText('"schema_version": 1');
@@ -477,7 +477,7 @@ projectSampleTest(
     const info = page.locator('#info');
     // Identity reads as words, not as the raw element record.
     await expect(info).toContainText('Name');
-    await expect(info).toContainText('IFCWALL');
+    await expect(info).toContainText('IfcWall');
     await expect(info).not.toContainText('ifc_type');
     await expect(info).not.toContainText('property_set');
     await expect(info).not.toContainText('location_feet');
@@ -588,7 +588,7 @@ projectSampleTest(
     await wallGroup.click();
     await expect(wallGroup).toHaveAttribute('aria-pressed', 'true');
     await expect(wallGroup.locator('.schedule-verb')).toHaveText('Clear');
-    await expect(page.locator('#status')).toContainText(/highlighted \d+ IFCWALL mesh/);
+    await expect(page.locator('#status')).toContainText(/highlighted \d+ IfcWall mesh/);
     await wallGroup.click();
     await expect(wallGroup).toHaveAttribute('aria-pressed', 'false');
     await expect(wallGroup.locator('.schedule-verb')).toHaveText('Highlight');
