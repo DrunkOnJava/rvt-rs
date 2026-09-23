@@ -10,15 +10,27 @@ All notable changes will be documented here. This project follows
 
 - **The viewer colours elements by category.** Record-backed elements carry
   no material yet, so the 3D view was one grey mass. An element with no
-  material of its own now takes its category's colour, in the plan's hues:
-  - blue doors and red columns;
-  - magenta beams and members;
-  - translucent windows and curtain panels;
-  - green furniture and planting, and amber stairs and railings;
+  material of its own now takes its category's colour, in the plan's hues
+  from the viewer design system's ramps:
+  - amber doors, red columns and lighter red beams and members;
+  - translucent blue windows and curtain panels;
+  - green furniture and planting, and dark amber stairs and railings;
   - rooms drawn faint, so they no longer hide the building they fill.
 
   An element's own material still wins. `gltf::category_colour` gives the
   palette.
+- **The viewer has a light scheme and a new look.** The browser viewer now
+  follows the system's light or dark setting, on a single design system
+  (`viewer/src/tokens.css`, `viewer/src/styles.css`): a black header over a
+  white sheet, one blue accent for actions, links, focus and selection, pill
+  buttons and hairline borders.
+  - The 3D canvas, grid, lights, axes and selection highlight take their
+    colours from the same tokens and switch with the scheme.
+  - Every label is sans serif and sentence case, with tabular figures where
+    numbers line up. The stylesheet moved out of `index.html`.
+  - The demo thumbnails are flat tiles in the tint of their kind: blue for
+    real projects, green for IFC, amber for families, gray for synthetics.
+  - No web fonts are loaded: the viewer still makes no network requests.
 - **Roofs carry their sketched outline, and sketch lines' exact ends close
   more outlines (RE-50).** A roof's sketch lines name the roof, as a floor's
   name the floor, and close into its outline. Each sketch line's own data

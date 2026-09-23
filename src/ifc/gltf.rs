@@ -491,23 +491,25 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
 }
 
 /// The sRGB colour, and the alpha, an element with no material of its own
-/// is drawn in: its category's, the hues of the plan's palette
-/// ([`super::sheet`]). Glass-like categories are translucent, and spaces
-/// faint enough not to hide the building they fill.
+/// is drawn in: its category's, from the viewer design system's gray, blue,
+/// red, green and amber ramps, in the hues of the plan's palette
+/// ([`super::sheet`]). Blue-6 is left to the viewer's selection highlight.
+/// Glass-like categories are translucent, and spaces faint enough not to
+/// hide the building they fill.
 pub fn category_colour(ifc_type: &str) -> (u32, f32) {
     match ifc_type {
-        "IFCWALL" | "IFCWALLSTANDARDCASE" | "IFCCURTAINWALL" => (0xC8CCD2, 1.0),
-        "IFCSLAB" | "IFCROOF" | "IFCCOVERING" => (0x8A8F98, 1.0),
-        "IFCDOOR" => (0x2266CC, 1.0),
-        "IFCWINDOW" | "IFCPLATE" => (0x22AACC, 0.45),
-        "IFCCOLUMN" => (0xCC2244, 1.0),
-        "IFCBEAM" | "IFCMEMBER" => (0xAA4499, 1.0),
+        "IFCWALL" | "IFCWALLSTANDARDCASE" | "IFCCURTAINWALL" => (0xCDCED0, 1.0),
+        "IFCSLAB" | "IFCROOF" | "IFCCOVERING" => (0x909398, 1.0),
+        "IFCDOOR" => (0xF59E0B, 1.0),
+        "IFCWINDOW" | "IFCPLATE" => (0x8FC1FF, 0.45),
+        "IFCCOLUMN" => (0xDC2626, 1.0),
+        "IFCBEAM" | "IFCMEMBER" => (0xF87171, 1.0),
         "IFCSTAIR" | "IFCSTAIRFLIGHT" | "IFCRAILING" | "IFCRAMP" | "IFCRAMPFLIGHT" => {
-            (0xAA7722, 1.0)
+            (0x92400E, 1.0)
         }
-        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" => (0x228855, 1.0),
-        "IFCSPACE" => (0x6FA8DC, 0.12),
-        _ => (0x9CA3AF, 1.0),
+        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" => (0x16A34A, 1.0),
+        "IFCSPACE" => (0x3D94FF, 0.12),
+        _ => (0xB2B4B8, 1.0),
     }
 }
 
@@ -1016,7 +1018,7 @@ mod tests {
         let door_material = &doc.materials[material_of(1)];
         assert_eq!(door_material.name.as_deref(), Some("Category IFCDOOR"));
         let [r, g, b, a] = door_material.pbr_metallic_roughness.base_color_factor;
-        assert!(b > g && g > r && a == 1.0, "a linear blue");
+        assert!(r > g && g > b && a == 1.0, "a linear amber");
         let room_material = &doc.materials[material_of(2)];
         assert_eq!(room_material.alpha_mode.as_deref(), Some("BLEND"));
         assert!(room_material.pbr_metallic_roughness.base_color_factor[3] < 0.2);

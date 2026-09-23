@@ -17,9 +17,9 @@ const largeProjectDemoTest = fs.existsSync(largeProjectDemoPath) ? test : test.s
 test('loads the viewer shell with disabled export actions and demo gallery', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.locator('#status')).toHaveText(/ready/);
+  await expect(page.locator('#status')).toHaveText(/Ready/);
   await expect(page.locator('#dropzone')).toBeVisible();
-  await expect(page.locator('#export-quality')).toHaveText(/pending/);
+  await expect(page.locator('#export-quality')).toHaveText(/pending/i);
   await expect(page.locator('#export-mode')).toHaveValue('scaffold');
   await expect(page.locator('#export-glb')).toBeDisabled();
   await expect(page.locator('#export-ifc')).toBeDisabled();
@@ -54,7 +54,7 @@ test.describe('on a 2x display', () => {
   // status panel off-screen with the drop zone centred in the overflow.
   test('the canvas fills the viewport and every panel stays on screen', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
     const layout = await page.evaluate(() => {
       const viewport = document.getElementById('viewport')!;
       const canvas = viewport.querySelector('canvas')!;
@@ -81,7 +81,7 @@ test.describe('on a 2x display', () => {
 
 test('accessibility shell: landmarks, skip link, keyboard tree activation', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#status')).toHaveText(/ready/);
+  await expect(page.locator('#status')).toHaveText(/Ready/);
 
   await expect(page.getByRole('link', { name: /Skip to viewport/i })).toBeAttached();
   await expect(page.getByRole('banner')).toBeVisible();
@@ -101,7 +101,7 @@ test('accessibility shell: landmarks, skip link, keyboard tree activation', asyn
   if (await demo.isEnabled()) {
     await demo.focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
     const treeNode = page.locator('.tree-node[role="treeitem"]').first();
     await expect(treeNode).toBeVisible();
     await treeNode.focus();
@@ -116,11 +116,11 @@ stagedDemoTest(
   'MVP workflow via demo gallery: open → status/confidence → inspect → export labels',
   async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
     await expect(page.locator(`[data-demo-id="${stagedDemoId}"]`)).toBeEnabled();
 
     await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
-    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
     await expect(page.locator('#dropzone')).toBeHidden();
 
     await expect(page.locator('#export-glb')).toBeEnabled();
@@ -189,11 +189,11 @@ stagedDemoTest(
   'scaffold-only result explains the empty viewport instead of leaving a bare grid',
   async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
     await expect(page.locator('#scaffold-note')).toBeHidden();
 
     await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
-    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
 
     // Synthetic tier1 fixtures decode with no drawable geometry; the
     // overlay has to say so rather than leaving an empty grid to speak.
@@ -213,14 +213,14 @@ stagedDemoTest(
 
 stagedDemoTest('a completed load raises a toast that dismisses itself', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#status')).toHaveText(/ready/);
+  await expect(page.locator('#status')).toHaveText(/Ready/);
 
   const region = page.locator('#toast-region');
   await expect(region).toHaveAttribute('aria-live', 'polite');
   await expect(region.locator('.toast')).toHaveCount(0);
 
   await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
-  await expect(page.locator('#status')).toHaveText(/loaded/);
+  await expect(page.locator('#status')).toHaveText(/Loaded/);
 
   const toast = region.locator('.toast.ok');
   await expect(toast).toBeVisible();
@@ -235,10 +235,10 @@ stagedDemoTest(
   async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
 
     await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
-    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
     await expect(page.locator('#load-overlay')).toBeHidden();
     await expect(page.locator('#scaffold-note')).toBeVisible();
     await expect(page.locator('#toast-region .toast')).toContainText(/Loaded/i);
@@ -249,7 +249,7 @@ realProjectDemoTest(
   'real-project demo card opens Einhoven with storeys and visible geometry',
   async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
 
     const card = page.locator('[data-demo-id="einhoven-2023"]');
     await expect(card).toBeEnabled();
@@ -257,7 +257,7 @@ realProjectDemoTest(
     await expect(card).toContainText(/MIT/);
     // Real projects are marked so they do not read as synthetic fixtures.
     await expect(card).toHaveAttribute('data-demo-real', 'true');
-    await expect(card.locator('.demo-badge')).toHaveText('real project');
+    await expect(card.locator('.demo-badge')).toHaveText('Real project');
     await expect(page.locator('[data-demo-id="architectural-2024"]')).not.toHaveAttribute(
       'data-demo-real',
       'true',
@@ -268,7 +268,7 @@ realProjectDemoTest(
     );
 
     await card.click();
-    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
     await expect(page.locator('#dropzone')).toBeHidden();
     await expect(page.locator('#file-meta')).toContainText(/Revit_IFC5_Einhoven\.rvt/);
     await expect(page.locator('#export-quality')).toContainText(/Geometry/);
@@ -288,10 +288,10 @@ realProjectDemoTest(
   async ({ page }) => {
     test.skip(stagedDemoPath === null, 'needs a staged synthetic demo to produce a scaffold');
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
 
     await page.locator(`[data-demo-id="${stagedDemoId}"]`).click();
-    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
     await expect(page.locator('#scaffold-note')).toBeVisible();
 
     await page.getByRole('button', { name: /Show real projects/i }).click();
@@ -309,7 +309,7 @@ largeProjectDemoTest(
     // ~2 s; the decode itself takes tens of seconds, hence slow().
     test.slow();
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
 
     const card = page.locator('[data-demo-id="core-interior-2024"]');
     await expect(card).toBeEnabled();
@@ -328,7 +328,7 @@ largeProjectDemoTest(
       timeout: 15_000,
     });
 
-    await expect(page.locator('#status')).toHaveText(/loaded/, { timeout: 300_000 });
+    await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
     await expect(page.locator('#load-overlay')).toBeHidden();
     await expect(card).not.toHaveAttribute('aria-busy', 'true');
     await expect(page.locator('#status')).not.toContainText(/error|unreachable/i);
@@ -347,10 +347,10 @@ largeProjectDemoTest(
     // (132 doors / 6 windows, 138 host binds).
     test.slow();
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
 
     await page.locator('[data-demo-id="core-interior-2024"]').click();
-    await expect(page.locator('#status')).toHaveText(/loaded/, { timeout: 300_000 });
+    await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
 
     // Doors nest under their host wall in the scene tree (M4-04).
     const door = page.locator('.tree-node', { hasText: 'IFCDOOR' }).first();
@@ -407,10 +407,10 @@ projectSampleTest(
   'opens a project sample and exposes geometry diagnostics, toggles, and element info',
   async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
 
     await page.locator('#file-input').setInputFiles(projectSamplePath!);
-    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
     await expect(page.locator('#dropzone')).toBeHidden();
 
     await expect(page.locator('#export-glb')).toBeEnabled();
@@ -553,10 +553,10 @@ projectSampleTest(
   'the schedule breaks down by IFC type and highlights a whole type in the scene',
   async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#status')).toHaveText(/ready/);
+    await expect(page.locator('#status')).toHaveText(/Ready/);
 
     await page.locator('#file-input').setInputFiles(projectSamplePath!);
-    await expect(page.locator('#status')).toHaveText(/loaded/);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
 
     const schedule = page.locator('#schedule-summary');
     await expect(schedule.locator('#schedule-total')).toContainText(
@@ -588,7 +588,7 @@ projectSampleTest(
     await wallGroup.click();
     await expect(wallGroup).toHaveAttribute('aria-pressed', 'true');
     await expect(wallGroup.locator('.schedule-verb')).toHaveText('Clear');
-    await expect(page.locator('#status')).toContainText(/highlighted \d+ IfcWall mesh/);
+    await expect(page.locator('#status')).toContainText(/Highlighted \d+ IfcWall mesh/);
     await wallGroup.click();
     await expect(wallGroup).toHaveAttribute('aria-pressed', 'false');
     await expect(wallGroup.locator('.schedule-verb')).toHaveText('Highlight');

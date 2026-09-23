@@ -1,0 +1,377 @@
+/* Sonic Console design system: tokens.
+ *
+ * Every value is the design system's own (tokens.css / tokens.json). The
+ * system's web-font import is left out on purpose: the viewer makes no
+ * network requests (VW1-21), so Inter is used where the viewer's system has
+ * it and the system UI face otherwise.
+ *
+ * The viewer sets everything in the sans face, so the two monospace faces
+ * point at it: figures that must align use tabular numerals instead.
+ *
+ * Light is the default; the dark scheme follows prefers-color-scheme or
+ * [data-theme="dark"].
+ */
+
+:root {
+  /* ------------------------------------------------------------------------
+     1. RAW PALETTES
+     ------------------------------------------------------------------------ */
+
+  /* Gray — Console theme override. Slightly cool, Apple-like. */
+  --sx-gray-0: #fafafa;
+  --sx-gray-1: #f5f5f7;
+  --sx-gray-2: #e4e5e7;
+  --sx-gray-3: #cdced0;
+  --sx-gray-4: #b2b4b8;
+  --sx-gray-5: #909398;
+  --sx-gray-6: #76797f;
+  --sx-gray-7: #4c4e52;
+  --sx-gray-8: #2c2e30;
+  --sx-gray-9: #121212;
+
+  /* Blue — Console primary. blue-6 #1881FF is the one product accent. */
+  --sx-blue-0: #e6f1ff;
+  --sx-blue-1: #c2ddff;
+  --sx-blue-2: #8fc1ff;
+  --sx-blue-3: #66abff;
+  --sx-blue-4: #3d94ff;
+  --sx-blue-5: #2989ff;
+  --sx-blue-6: #1881ff;
+  --sx-blue-7: #0067e6;
+  --sx-blue-8: #0055bd;
+  --sx-blue-9: #004394;
+
+  /* Error / red — Console theme override. */
+  --sx-red-0: #fef2f2;
+  --sx-red-1: #fee2e2;
+  --sx-red-2: #fecaca;
+  --sx-red-3: #fca5a5;
+  --sx-red-4: #f87171;
+  --sx-red-5: #ef4444;
+  --sx-red-6: #dc2626;
+  --sx-red-7: #b91c1c;
+  --sx-red-8: #991b1b;
+  --sx-red-9: #7f1d1d;
+
+  /* Green / success — (derived) same family as the red ramp. */
+  --sx-green-0: #f0fdf4;
+  --sx-green-1: #dcfce7;
+  --sx-green-2: #bbf7d0;
+  --sx-green-3: #86efac;
+  --sx-green-4: #4ade80;
+  --sx-green-5: #22c55e;
+  --sx-green-6: #16a34a;
+  --sx-green-7: #15803d;
+  --sx-green-8: #166534;
+  --sx-green-9: #14532d;
+
+  /* Amber / warning — (derived) same family as the red ramp. */
+  --sx-amber-0: #fffbeb;
+  --sx-amber-1: #fef3c7;
+  --sx-amber-2: #fde68a;
+  --sx-amber-3: #fcd34d;
+  --sx-amber-4: #fbbf24;
+  --sx-amber-5: #f59e0b;
+  --sx-amber-6: #d97706;
+  --sx-amber-7: #b45309;
+  --sx-amber-8: #92400e;
+  --sx-amber-9: #78350f;
+
+  /* Dark — Mantine dark ramp used by the Console's dark scheme. */
+  --sx-dark-0: #c9c9c9;
+  --sx-dark-1: #b8b8b8;
+  --sx-dark-2: #828282;
+  --sx-dark-3: #696969;
+  --sx-dark-4: #424242;
+  --sx-dark-5: #3b3b3b;
+  --sx-dark-6: #2e2e2e;
+  --sx-dark-7: #242424;
+  --sx-dark-8: #1f1f1f;
+  --sx-dark-9: #141414;
+
+  --sx-white: #ffffff;
+  --sx-black: #000000;
+
+  /* Brand — the marketing layer. Not used in product. */
+  --sx-brand-green: #00ff85;      /* the signature accent / primary CTA */
+  --sx-brand-blue: #1881ff;       /* = blue-6 */
+  --sx-brand-blue-2: #006bd6;
+  --sx-brand-lightblue: #cce3ff;
+  --sx-brand-darkblue: #06172e;   /* deep navy used in gradients */
+  --sx-brand-grey: #8d9eb4;       /* slate grey for units / meta */
+  --sx-brand-darkgrey: #486284;
+  --sx-brand-lightgrey: #f5f5f7;  /* = gray-1 */
+  --sx-brand-red: #ff0000;
+  --sx-brand-border: #cccccc;
+  --sx-brand-background: #fafafa; /* = gray-0 */
+  --sx-brand-mist: #f2f3f7;       /* tertiary button / compare pills */
+  --sx-brand-mint: #adffd8;       /* gradient-3 end stop */
+
+  /* Brand gradients. */
+  --sx-gradient-1: linear-gradient(127deg, #1881ff 6.86%, #003d75 88%);
+  --sx-gradient-2: linear-gradient(127deg, #3c4d62 6.86%, #000000 88%);
+  --sx-gradient-3: linear-gradient(154deg, #06172e 0.14%, #1881ff 57.12%, #adffd8 108.87%);
+
+  /* Window-chrome dots used in product mockups. */
+  --sx-dot-red: #ff5f57;
+  --sx-dot-yellow: #febc2e;
+  --sx-dot-green: #28c840;
+
+  /* ------------------------------------------------------------------------
+     2. SEMANTIC COLOR — LIGHT (the Console ships light-only)
+     ------------------------------------------------------------------------ */
+  --sx-color-body: var(--sx-white);            /* page / sheet */
+  --sx-color-chrome: var(--sx-black);          /* app header, marketing nav, dark bands */
+  --sx-color-surface: var(--sx-white);         /* paper, cards, inputs */
+  --sx-color-surface-subtle: var(--sx-gray-0); /* setting rows, quickstart panel */
+  --sx-color-surface-muted: var(--sx-gray-1);  /* segmented track, code field, pills */
+  --sx-color-hover: var(--sx-gray-0);          /* default hover */
+  --sx-color-selected: var(--sx-blue-1);       /* active nav link */
+  --sx-color-selected-hover: var(--sx-blue-0); /* nav hover */
+
+  --sx-color-text: var(--sx-black);            /* body text: true black */
+  --sx-color-title: var(--sx-gray-8);          /* section titles / headings */
+  --sx-color-text-secondary: var(--sx-gray-7); /* sidebar section titles */
+  --sx-color-dimmed: var(--sx-gray-6);         /* descriptions, meta */
+  --sx-color-placeholder: var(--sx-gray-5);
+  --sx-color-disabled: var(--sx-gray-2);
+  --sx-color-disabled-text: var(--sx-gray-5);
+  --sx-color-on-chrome: var(--sx-white);
+  --sx-color-on-chrome-muted: var(--sx-gray-5);
+  --sx-color-on-chrome-hover: rgba(255, 255, 255, 0.1);
+  --sx-color-link: var(--sx-blue-6);
+
+  --sx-color-border-subtle: var(--sx-gray-2);  /* table rows, list dividers, resource cards */
+  --sx-color-border: var(--sx-gray-3);         /* paper, inputs, outline buttons */
+  --sx-color-border-strong: var(--sx-gray-4);  /* checkbox, default-border */
+
+  --sx-color-primary: var(--sx-blue-6);
+  --sx-color-primary-hover: var(--sx-blue-7);
+  --sx-color-primary-contrast: var(--sx-white);
+  --sx-color-primary-light: rgba(24, 129, 255, 0.1);
+  --sx-color-primary-light-hover: rgba(24, 129, 255, 0.12);
+  --sx-color-primary-outline-hover: rgba(24, 129, 255, 0.05);
+
+  --sx-color-danger: var(--sx-red-6);
+  --sx-color-danger-hover: var(--sx-red-7);
+  --sx-color-danger-light: rgba(220, 38, 38, 0.1);
+  --sx-color-danger-light-hover: rgba(220, 38, 38, 0.12);
+
+  --sx-color-success: var(--sx-green-6);
+  --sx-color-success-light: rgba(22, 163, 74, 0.1);
+  --sx-color-warning: var(--sx-amber-6);
+  --sx-color-warning-light: rgba(217, 119, 6, 0.12);
+
+  --sx-color-neutral-light: rgba(118, 121, 127, 0.1);
+  --sx-color-neutral-light-hover: rgba(118, 121, 127, 0.12);
+
+  --sx-color-accent: var(--sx-brand-green);    /* marketing only */
+  --sx-color-on-accent: var(--sx-black);
+
+  --sx-overlay: rgba(0, 0, 0, 0.6);
+  --sx-loading-veil: rgba(255, 255, 255, 0.3);
+
+  /* ------------------------------------------------------------------------
+     3. TYPOGRAPHY
+     ------------------------------------------------------------------------ */
+  --sx-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --sx-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, "Segoe UI", sans-serif; /* marketing: SF on Apple, Inter elsewhere */
+  --sx-font-mono: var(--sx-font-sans);
+  --sx-font-code: var(--sx-font-sans);
+
+  /* Console text scale (Mantine) */
+  --sx-fs-micro: 10px;    /* eyebrow labels */
+  --sx-fs-xs: 12px;       /* compact buttons, table headers, meta */
+  --sx-fs-compact: 13px;  /* segmented labels, tooltips, cost tables */
+  --sx-fs-sm: 14px;       /* default UI text: nav, table cells, body */
+  --sx-fs-md: 16px;
+  --sx-fs-lg: 18px;
+  --sx-fs-xl: 20px;
+
+  --sx-lh-xs: 1.4;
+  --sx-lh-sm: 1.45;
+  --sx-lh-md: 1.55;       /* base */
+  --sx-lh-lg: 1.6;
+  --sx-lh-xl: 1.65;
+
+  /* Console headings — weight 700, colour gray-8 */
+  --sx-h1: 34px;  --sx-h1-lh: 1.3;
+  --sx-h2: 26px;  --sx-h2-lh: 1.35;
+  --sx-h3: 22px;  --sx-h3-lh: 1.4;
+  --sx-h4: 18px;  --sx-h4-lh: 1.45;
+  --sx-h5: 16px;  --sx-h5-lh: 1.5;
+  --sx-h6: 14px;  --sx-h6-lh: 1.5;
+
+  /* Marketing display scale — weight 600, tracking -0.02em, lh 1.1 */
+  --sx-display-hero: clamp(64px, 16vw, 300px); /* weight 900, -0.02em */
+  --sx-display-1: 48px;
+  --sx-display-2: 44px;
+  --sx-display-3: 38px;
+  --sx-display-4: 28px;
+  --sx-display-5: 24px;
+  --sx-display-6: 20px;
+
+  --sx-fw-regular: 400;
+  --sx-fw-medium: 500;
+  --sx-fw-semibold: 600;
+  --sx-fw-bold: 700;
+  --sx-fw-black: 900;
+
+  --sx-tracking-display: -0.02em;
+  --sx-tracking-eyebrow: 0.05em;   /* 0.5px at 10–12px */
+  --sx-tracking-button: 0.5px;     /* marketing buttons, footer links */
+  --sx-tracking-micro: 0.025em;
+
+  /* ------------------------------------------------------------------------
+     4. SPACING
+     ------------------------------------------------------------------------ */
+  /* Console (Mantine) */
+  --sx-space-xs: 10px;
+  --sx-space-sm: 12px;
+  --sx-space-md: 16px;
+  --sx-space-lg: 20px;
+  --sx-space-xl: 32px;
+  /* Marketing 4px grid (Tailwind --spacing: .25rem) */
+  --sx-space-1: 4px;
+  --sx-space-2: 8px;
+  --sx-space-3: 12px;
+  --sx-space-4: 16px;
+  --sx-space-5: 20px;
+  --sx-space-6: 24px;
+  --sx-space-8: 32px;
+  --sx-space-12: 48px;
+  --sx-space-16: 64px;
+  --sx-space-24: 96px;
+
+  /* ------------------------------------------------------------------------
+     5. RADIUS
+     ------------------------------------------------------------------------ */
+  --sx-radius-xs: 2px;
+  --sx-radius-sm: 4px;      /* checkbox, code chips, audio tags */
+  --sx-radius-md: 8px;      /* inputs, paper, nav links, marketing buttons */
+  --sx-radius-default: 12px;/* Console theme default: cards, tooltips, modals, action icons */
+  --sx-radius-lg: 16px;     /* media, feature tiles */
+  --sx-radius-section: 24px;/* marketing section cards & dark bands */
+  --sx-radius-demo: 28px;   /* floating demo card */
+  --sx-radius-xl: 32px;     /* pill buttons, app sheet top corners */
+  --sx-radius-full: 9999px;
+
+  /* ------------------------------------------------------------------------
+     6. ELEVATION
+     ------------------------------------------------------------------------ */
+  --sx-shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  --sx-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05) 0 10px 15px -5px, rgba(0, 0, 0, 0.04) 0 7px 7px -5px;
+  --sx-shadow-md: 0 1px 3px rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05) 0 20px 25px -5px, rgba(0, 0, 0, 0.04) 0 10px 10px -5px;
+  --sx-shadow-lg: 0 1px 3px rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05) 0 28px 23px -7px, rgba(0, 0, 0, 0.04) 0 12px 12px -7px;
+  --sx-shadow-xl: 0 1px 3px rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05) 0 36px 28px -7px, rgba(0, 0, 0, 0.04) 0 17px 17px -7px;
+  /* Marketing */
+  --sx-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 20px rgba(0, 0, 0, 0.06);
+  --sx-shadow-float: 0 6px 30px rgba(0, 0, 0, 0.2);
+  --sx-shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.18);
+  --sx-ring-tag: 0 0 0 2px rgba(0, 134, 255, 0.1);
+  --sx-ring-focus: 0 0 0 3px rgba(17, 111, 223, 0.1);
+  --sx-focus-outline: 2px solid var(--sx-color-primary);
+
+  /* ------------------------------------------------------------------------
+     7. MOTION
+     ------------------------------------------------------------------------ */
+  --sx-duration-fast: 150ms;   /* hover, colour */
+  --sx-duration-base: 200ms;   /* overlays fade in */
+  --sx-duration-enter: 220ms;  /* step / content enter */
+  --sx-duration-toast: 750ms;  /* "Copied" float-up */
+  --sx-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --sx-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --sx-ease-in: ease-in;
+
+  /* ------------------------------------------------------------------------
+     8. LAYOUT
+     ------------------------------------------------------------------------ */
+  --sx-app-header-height: 56px;
+  --sx-app-navbar-width: 260px;
+  --sx-app-nav-item-height: 32px;
+  --sx-app-sheet-radius: 32px;
+  --sx-site-header-height: 60px;
+  --sx-site-max-width: 1240px;
+  --sx-site-gutter: 20px;
+
+  --sx-bp-xs: 36em;  /* 576px */
+  --sx-bp-sm: 48em;  /* 768px */
+  --sx-bp-md: 62em;  /* 992px */
+  --sx-bp-lg: 75em;  /* 1200px */
+  --sx-bp-xl: 88em;  /* 1408px */
+
+  --sx-z-app: 100;
+  --sx-z-modal: 200;
+  --sx-z-popover: 300;
+  --sx-z-overlay: 400;
+  --sx-z-max: 9999;
+
+  color-scheme: light;
+}
+
+/* ------------------------------------------------------------------------
+   SEMANTIC COLOR — DARK [derived from Mantine's dark-scheme rules]
+   The chrome stays black; the sheet becomes dark-7.
+   ------------------------------------------------------------------------ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sx-color-body: var(--sx-dark-7);
+    --sx-color-surface: var(--sx-dark-6);
+    --sx-color-surface-subtle: var(--sx-dark-6);
+    --sx-color-surface-muted: var(--sx-dark-8);
+    --sx-color-hover: var(--sx-dark-5);
+    --sx-color-selected: rgba(24, 129, 255, 0.22);
+    --sx-color-selected-hover: rgba(24, 129, 255, 0.12);
+    --sx-color-text: var(--sx-dark-0);
+    --sx-color-title: var(--sx-white);
+    --sx-color-text-secondary: var(--sx-dark-1);
+    --sx-color-dimmed: var(--sx-dark-2);
+    --sx-color-placeholder: var(--sx-dark-3);
+    --sx-color-disabled: var(--sx-dark-6);
+    --sx-color-disabled-text: var(--sx-dark-3);
+    --sx-color-link: var(--sx-blue-4);
+    --sx-color-border-subtle: var(--sx-dark-5);
+    --sx-color-border: var(--sx-dark-4);
+    --sx-color-border-strong: var(--sx-dark-3);
+    --sx-color-primary: var(--sx-blue-6);
+    --sx-color-primary-hover: var(--sx-blue-7);
+    --sx-color-primary-light: rgba(61, 148, 255, 0.15);
+    --sx-color-primary-light-hover: rgba(61, 148, 255, 0.2);
+    --sx-color-danger-light: rgba(239, 68, 68, 0.15);
+    --sx-color-success-light: rgba(34, 197, 94, 0.15);
+    --sx-color-warning-light: rgba(245, 158, 11, 0.15);
+    --sx-color-neutral-light: rgba(178, 180, 184, 0.15);
+    --sx-loading-veil: rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sx-color-body: var(--sx-dark-7);
+  --sx-color-surface: var(--sx-dark-6);
+  --sx-color-surface-subtle: var(--sx-dark-6);
+  --sx-color-surface-muted: var(--sx-dark-8);
+  --sx-color-hover: var(--sx-dark-5);
+  --sx-color-selected: rgba(24, 129, 255, 0.22);
+  --sx-color-selected-hover: rgba(24, 129, 255, 0.12);
+  --sx-color-text: var(--sx-dark-0);
+  --sx-color-title: var(--sx-white);
+  --sx-color-text-secondary: var(--sx-dark-1);
+  --sx-color-dimmed: var(--sx-dark-2);
+  --sx-color-placeholder: var(--sx-dark-3);
+  --sx-color-disabled: var(--sx-dark-6);
+  --sx-color-disabled-text: var(--sx-dark-3);
+  --sx-color-link: var(--sx-blue-4);
+  --sx-color-border-subtle: var(--sx-dark-5);
+  --sx-color-border: var(--sx-dark-4);
+  --sx-color-border-strong: var(--sx-dark-3);
+  --sx-color-primary: var(--sx-blue-6);
+  --sx-color-primary-hover: var(--sx-blue-7);
+  --sx-color-primary-light: rgba(61, 148, 255, 0.15);
+  --sx-color-primary-light-hover: rgba(61, 148, 255, 0.2);
+  --sx-color-danger-light: rgba(239, 68, 68, 0.15);
+  --sx-color-success-light: rgba(34, 197, 94, 0.15);
+  --sx-color-warning-light: rgba(245, 158, 11, 0.15);
+  --sx-color-neutral-light: rgba(178, 180, 184, 0.15);
+  --sx-loading-veil: rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}

@@ -66,11 +66,11 @@ test('opens a sample without external or post-open network requests', async ({ p
 
   await page.goto('/');
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('#status')).toHaveText(/ready/);
+  await expect(page.locator('#status')).toHaveText(/Ready/);
 
   phase = 'opening-sample';
   await page.locator('#file-input').setInputFiles(samplePath!);
-  await expect(page.locator('#status')).toHaveText(/loaded/);
+  await expect(page.locator('#status')).toHaveText(/Loaded/);
 
   phase = 'post-open';
   await page.waitForTimeout(observationMs);
