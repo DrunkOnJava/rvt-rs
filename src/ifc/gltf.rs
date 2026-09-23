@@ -1,17 +1,19 @@
 //! glTF 2.0 exporter (VW1-04) — dep-free binary GLB emission.
 //!
 //! Produces a `.glb` file ready to load into Three.js, BabylonJS,
-//! Blender, or any glTF 2.0 viewer. The export strategy for the
-//! first pass is intentionally simple: one unit-cube mesh shared
-//! across all elements, placed with per-element transforms derived
-//! from each `BuildingElement`'s `extrusion` + `location_feet`.
-//! Each element gets a material drawn from `PbrMaterial::from_
-//! material_info` (VW1-06).
+//! Blender, or any glTF 2.0 viewer. Each `BuildingElement` is drawn as the
+//! body the STEP writer gives it ([`super::body_geometry`]), at its
+//! `location_feet` turned by its `rotation_radians`. A plain rectangular
+//! extrusion shares one unit cube, scaled by its node's matrix; every
+//! other body (a sketched profile, a steel section, a swept or revolved
+//! solid, a brep) has its own mesh. An element with no body gets a node
+//! with no mesh. Each element gets a material drawn from
+//! `PbrMaterial::from_material_info` (VW1-06).
 //!
-//! That's enough to show a recognizable massing model in a
-//! browser — real profile + solid-shape geometry will layer on
-//! top once the reader surfaces it (GEO-28..35 on the reader
-//! side is the dependency).
+//! Element nodes are in the model's frame, feet with +Z up. glTF is
+//! metres with +Y up, so they hang under one root node whose matrix
+//! ([`Z_UP_FEET_TO_Y_UP_METRES`]) converts; without it every model lay on
+//! its side, ten times too large, in any glTF viewer.
 //!
 //! GLB file layout (per the glTF 2.0 spec):
 //!
@@ -24,6 +26,7 @@
 //! ```
 
 use super::IfcModel;
+use super::body_geometry::{self, Body, Placement, body_mesh, element_body};
 use super::entities::IfcEntity;
 use super::pbr::PbrMaterial;
 use serde::{Deserialize, Serialize};
@@ -232,14 +235,25 @@ fn unit_cube_indices() -> [u16; 36] {
     ]
 }
 
+/// Column-major matrix taking the model's frame (feet, +Z up) to glTF's
+/// (metres, +Y up): model `(x, y, z)` feet is glTF `(x, z, -y)` metres.
+pub const Z_UP_FEET_TO_Y_UP_METRES: [f32; 16] = [
+    0.3048, 0.0, 0.0, 0.0, // model X stays X
+    0.0, 0.0, -0.3048, 0.0, // model Y is glTF -Z
+    0.0, 0.3048, 0.0, 0.0, // model Z (up) is glTF Y (up)
+    0.0, 0.0, 0.0, 1.0,
+];
+
 /// Build a glTF document + binary buffer from an `IfcModel`
 /// (VW1-04). Returns `(document, binary_buffer)` — wire into
 /// [`write_glb`] for a single-file `.glb` output.
 ///
-/// Each `BuildingElement` with an `extrusion` becomes a Node
-/// with a cube mesh scaled to the extrusion's (width × depth ×
-/// height) and translated to `location_feet`. Elements without
-/// geometry are emitted as transform-less nodes for hierarchy.
+/// Every `BuildingElement` becomes a node carrying its entity index and
+/// IFC type, a child of the root node that converts the model's frame to
+/// glTF's. Its mesh is its body in element-local feet, and its matrix
+/// its placement: the shared unit cube scaled, turned and moved for a
+/// plain rectangular extrusion, a per-element mesh turned and moved for
+/// any other body, and no mesh for an element with none.
 pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
     let mut bin = Vec::<u8>::new();
     let mut doc = GltfDocument::default();
@@ -260,12 +274,6 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
     let idx_len = idx_bytes.len();
     bin.extend_from_slice(&idx_bytes);
     pad_to_4(&mut bin);
-
-    // Buffer (singular — GLB embeds the whole bin chunk as buffer 0).
-    doc.buffers.push(Buffer {
-        byte_length: bin.len(),
-        uri: None,
-    });
 
     // BufferView 0: positions.
     doc.buffer_views.push(BufferView {
@@ -335,79 +343,217 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
         doc.materials.push(mat);
     }
 
-    // Per-element: one Mesh with one Primitive referencing the
-    // shared accessors + the element's material index.
+    // Per-element: a node carrying the entity's identity, with the
+    // shared cube or its own mesh.
     let mut scene_nodes: Vec<usize> = Vec::new();
     for (entity_index, ent) in model.entities.iter().enumerate() {
-        if let IfcEntity::BuildingElement {
+        let IfcEntity::BuildingElement {
             ifc_type,
             name,
             material_index,
             location_feet,
-            extrusion,
+            rotation_radians,
             ..
         } = ent
-        {
-            let mut primitive = Primitive {
-                attributes: {
-                    let mut m = std::collections::BTreeMap::new();
-                    m.insert("POSITION".into(), 0usize);
-                    m
-                },
-                indices: Some(1),
-                material: *material_index,
-                mode: 4, // TRIANGLES
-            };
-            // Stabilise the default Primitive.mode (0 = POINTS,
-            // 4 = TRIANGLES); serde default would emit 0.
-            primitive.mode = 4;
-            let mesh = Mesh {
-                primitives: vec![primitive],
-                name: Some(name.clone()),
-            };
-            let mesh_idx = doc.meshes.len();
-            doc.meshes.push(mesh);
-            // Transform: translate to location, scale to extrusion
-            // dims. Default unit cube = 1×1×1 centered at origin.
-            let (sx, sy, sz) = extrusion
-                .as_ref()
-                .map(|e| {
-                    (
-                        e.width_feet as f32,
-                        e.depth_feet as f32,
-                        e.height_feet as f32,
-                    )
-                })
-                .unwrap_or((1.0, 1.0, 1.0));
-            let (tx, ty, tz) = location_feet
-                .map(|l| (l[0] as f32, l[1] as f32, l[2] as f32 + sz * 0.5))
-                .unwrap_or((0.0, 0.0, sz * 0.5));
-            let matrix = [
-                sx, 0.0, 0.0, 0.0, // col 0
-                0.0, sy, 0.0, 0.0, // col 1
-                0.0, 0.0, sz, 0.0, // col 2
-                tx, ty, tz, 1.0, // col 3 (translation)
-            ];
-            let node = Node {
-                name: Some(name.clone()),
-                mesh: Some(mesh_idx),
-                matrix: Some(matrix),
-                children: Vec::new(),
-                extras: Some(NodeExtras {
-                    entity_index,
-                    ifc_type: ifc_type.clone(),
-                }),
-            };
-            let node_idx = doc.nodes.len();
-            doc.nodes.push(node);
-            scene_nodes.push(node_idx);
-        }
+        else {
+            continue;
+        };
+        let placement = Placement::new(*location_feet, *rotation_radians);
+        let body = element_body(ent, &model.representation_maps);
+        let (c, s) = (placement.cos as f32, placement.sin as f32);
+        let [tx, ty, tz] = placement.origin.map(|v| v as f32);
+        // (accessor pair, matrix)
+        let drawn: Option<((usize, usize), [f32; 16])> = match body {
+            Some(Body::Extrusion(ex))
+                if ex.profile_override.is_none()
+                    && [ex.width_feet, ex.depth_feet, ex.height_feet]
+                        .iter()
+                        .all(|v| v.is_finite() && *v > 0.0) =>
+            {
+                let (sx, sy, sz) = (
+                    ex.width_feet as f32,
+                    ex.depth_feet as f32,
+                    ex.height_feet as f32,
+                );
+                // Translate · rotate about Z · scale the unit cube, whose
+                // base sits half its height below its centre.
+                Some((
+                    (0, 1),
+                    [
+                        c * sx,
+                        s * sx,
+                        0.0,
+                        0.0,
+                        if s == 0.0 { 0.0 } else { -s * sy },
+                        c * sy,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        sz,
+                        0.0,
+                        tx,
+                        ty,
+                        tz + sz * 0.5,
+                        1.0,
+                    ],
+                ))
+            }
+            Some(body) => body_mesh(body).and_then(|mesh| {
+                let accessors = push_mesh(&mut doc, &mut bin, &mesh)?;
+                Some((
+                    accessors,
+                    [
+                        c,
+                        s,
+                        0.0,
+                        0.0,
+                        if s == 0.0 { 0.0 } else { -s },
+                        c,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        tx,
+                        ty,
+                        tz,
+                        1.0,
+                    ],
+                ))
+            }),
+            None => None,
+        };
+        let (mesh, matrix) = match drawn {
+            Some(((position, indices), matrix)) => {
+                let mut attributes = std::collections::BTreeMap::new();
+                attributes.insert("POSITION".into(), position);
+                let mesh_idx = doc.meshes.len();
+                doc.meshes.push(Mesh {
+                    primitives: vec![Primitive {
+                        attributes,
+                        indices: Some(indices),
+                        material: *material_index,
+                        mode: 4, // TRIANGLES
+                    }],
+                    name: Some(name.clone()),
+                });
+                (Some(mesh_idx), Some(matrix))
+            }
+            None => (None, None),
+        };
+        let node_idx = doc.nodes.len();
+        doc.nodes.push(Node {
+            name: Some(name.clone()),
+            mesh,
+            matrix,
+            children: Vec::new(),
+            extras: Some(NodeExtras {
+                entity_index,
+                ifc_type: ifc_type.clone(),
+            }),
+        });
+        scene_nodes.push(node_idx);
     }
 
-    doc.scenes.push(Scene { nodes: scene_nodes });
+    // Buffer (singular — GLB embeds the whole bin chunk as buffer 0).
+    doc.buffers.push(Buffer {
+        byte_length: bin.len(),
+        uri: None,
+    });
+    let root = doc.nodes.len();
+    doc.nodes.push(Node {
+        name: Some("model".into()),
+        mesh: None,
+        matrix: Some(Z_UP_FEET_TO_Y_UP_METRES),
+        children: scene_nodes,
+        extras: None,
+    });
+    doc.scenes.push(Scene { nodes: vec![root] });
     doc.scene = Some(0);
 
     (doc, bin)
+}
+
+/// Append `mesh` to the binary buffer as f32 positions and u32 indices,
+/// with a buffer view and an accessor for each. Returns the
+/// `(POSITION, indices)` accessor indices, or `None` for an empty mesh or
+/// one past `u32` indexing.
+fn push_mesh(
+    doc: &mut GltfDocument,
+    bin: &mut Vec<u8>,
+    mesh: &body_geometry::Mesh,
+) -> Option<(usize, usize)> {
+    if mesh.is_empty() || u32::try_from(mesh.vertices.len()).is_err() {
+        return None;
+    }
+    let mut min = [f32::INFINITY; 3];
+    let mut max = [f32::NEG_INFINITY; 3];
+    let positions: Vec<f32> = mesh
+        .vertices
+        .iter()
+        .flat_map(|v| {
+            let p = v.map(|c| c as f32);
+            for axis in 0..3 {
+                min[axis] = min[axis].min(p[axis]);
+                max[axis] = max[axis].max(p[axis]);
+            }
+            p
+        })
+        .collect();
+    if !positions.iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let indices: Vec<u8> = mesh
+        .triangles
+        .iter()
+        .flatten()
+        .flat_map(|i| i.to_le_bytes())
+        .collect();
+
+    let position_offset = bin.len();
+    bin.extend_from_slice(&bytemuck_cast_f32(&positions));
+    let position_view = doc.buffer_views.len();
+    doc.buffer_views.push(BufferView {
+        buffer: 0,
+        byte_offset: position_offset,
+        byte_length: bin.len() - position_offset,
+        target: Some(34962), // ARRAY_BUFFER
+    });
+    pad_to_4(bin);
+    let index_offset = bin.len();
+    bin.extend_from_slice(&indices);
+    let index_view = doc.buffer_views.len();
+    doc.buffer_views.push(BufferView {
+        buffer: 0,
+        byte_offset: index_offset,
+        byte_length: indices.len(),
+        target: Some(34963), // ELEMENT_ARRAY_BUFFER
+    });
+    pad_to_4(bin);
+
+    let position = doc.accessors.len();
+    doc.accessors.push(Accessor {
+        buffer_view: position_view,
+        byte_offset: 0,
+        component_type: 5126, // f32
+        count: mesh.vertices.len(),
+        type_: "VEC3".into(),
+        min: min.to_vec(),
+        max: max.to_vec(),
+    });
+    let index = doc.accessors.len();
+    doc.accessors.push(Accessor {
+        buffer_view: index_view,
+        byte_offset: 0,
+        component_type: 5125, // u32
+        count: mesh.triangles.len() * 3,
+        type_: "SCALAR".into(),
+        min: Vec::new(),
+        max: Vec::new(),
+    });
+    Some((position, index))
 }
 
 /// Write a GLB (binary glTF) file to `out` given a JSON document
@@ -519,9 +665,7 @@ mod tests {
             ..Default::default()
         };
         let (doc, _) = build_gltf(&model);
-        let extras: Vec<(usize, &str)> = doc
-            .nodes
-            .iter()
+        let extras: Vec<(usize, &str)> = element_nodes(&doc)
             .map(|n| {
                 let e = n.extras.as_ref().expect("node carries extras");
                 (e.entity_index, e.ifc_type.as_str())
@@ -608,9 +752,147 @@ mod tests {
             ..Default::default()
         };
         let (doc, _) = build_gltf(&model);
-        assert_eq!(doc.meshes.len(), 2);
-        assert_eq!(doc.nodes.len(), 2);
-        assert_eq!(doc.scenes[0].nodes.len(), 2);
+        // Wall-2 has no body: it keeps its node, with no mesh, rather than
+        // being drawn as a unit cube it does not have.
+        assert_eq!(doc.meshes.len(), 1);
+        assert_eq!(element_nodes(&doc).count(), 2);
+        assert_eq!(doc.scenes[0].nodes.len(), 1, "the root");
+        assert!(doc.nodes[0].mesh.is_some());
+        assert!(doc.nodes[1].mesh.is_none() && doc.nodes[1].matrix.is_none());
+    }
+
+    fn with_rotation(mut entity: IfcEntity, rotation: f64) -> IfcEntity {
+        if let IfcEntity::BuildingElement {
+            rotation_radians, ..
+        } = &mut entity
+        {
+            *rotation_radians = Some(rotation);
+        }
+        entity
+    }
+
+    #[test]
+    fn a_rotated_element_is_drawn_turned() {
+        let wall = with_rotation(
+            mk_wall(
+                "W",
+                Some([3.0, 7.0, 1.0]),
+                Some(Extrusion::rectangle(20.0, 0.5, 10.0)),
+            ),
+            std::f64::consts::FRAC_PI_2,
+        );
+        let model = IfcModel {
+            entities: vec![wall],
+            ..Default::default()
+        };
+        let (doc, _) = build_gltf(&model);
+        let m = doc.nodes[0].matrix.unwrap();
+        // The cube's X (the wall's length) now runs along +Y.
+        assert!(m[0].abs() < 1e-6 && (m[1] - 20.0).abs() < 1e-5);
+        assert!((m[4] + 0.5).abs() < 1e-6 && m[5].abs() < 1e-6);
+        assert_eq!((m[12], m[13], m[14]), (3.0, 7.0, 6.0));
+    }
+
+    /// Read back a mesh's world-space vertices from the GLB buffer.
+    fn world_vertices(doc: &GltfDocument, bin: &[u8], node: usize) -> Vec<[f32; 3]> {
+        let n = &doc.nodes[node];
+        let mesh = &doc.meshes[n.mesh.expect("mesh")];
+        let accessor = &doc.accessors[mesh.primitives[0].attributes["POSITION"]];
+        let view = &doc.buffer_views[accessor.buffer_view];
+        let m = n.matrix.expect("matrix");
+        bin[view.byte_offset..view.byte_offset + view.byte_length]
+            .chunks_exact(12)
+            .map(|c| {
+                let v: Vec<f32> = c
+                    .chunks_exact(4)
+                    .map(|b| f32::from_le_bytes(b.try_into().unwrap()))
+                    .collect();
+                [
+                    m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12],
+                    m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13],
+                    m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14],
+                ]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_sketched_profile_is_drawn_as_its_own_mesh() {
+        // An L-shaped slab, 0.5 ft thick, placed at (10, 0, 2).
+        let slab = mk_wall(
+            "S",
+            Some([10.0, 0.0, 2.0]),
+            Some(Extrusion::arbitrary_closed(
+                vec![
+                    (0.0, 0.0),
+                    (4.0, 0.0),
+                    (4.0, 2.0),
+                    (2.0, 2.0),
+                    (2.0, 4.0),
+                    (0.0, 4.0),
+                ],
+                0.5,
+            )),
+        );
+        let model = IfcModel {
+            entities: vec![slab],
+            ..Default::default()
+        };
+        let (doc, bin) = build_gltf(&model);
+        assert_eq!(doc.buffers[0].byte_length, bin.len());
+        let vertices = world_vertices(&doc, &bin, 0);
+        let xs: Vec<f32> = vertices.iter().map(|v| v[0]).collect();
+        let zs: Vec<f32> = vertices.iter().map(|v| v[2]).collect();
+        assert_eq!(xs.iter().copied().fold(f32::INFINITY, f32::min), 10.0);
+        assert_eq!(xs.iter().copied().fold(f32::NEG_INFINITY, f32::max), 14.0);
+        assert_eq!(zs.iter().copied().fold(f32::INFINITY, f32::min), 2.0);
+        assert_eq!(zs.iter().copied().fold(f32::NEG_INFINITY, f32::max), 2.5);
+        // No vertex falls in the L's missing corner.
+        assert!(
+            !vertices
+                .iter()
+                .any(|v| v[0] > 12.0 + 1e-4 && v[1] > 2.0 + 1e-4)
+        );
+        let accessor = &doc.accessors[doc.meshes[0].primitives[0].attributes["POSITION"]];
+        assert_eq!(accessor.min, vec![0.0, 0.0, 0.0]);
+        assert_eq!(accessor.max, vec![4.0, 4.0, 0.5]);
+    }
+
+    #[test]
+    fn a_swept_solid_is_drawn_along_its_directrix() {
+        let mut beam = mk_wall("B", Some([0.0, 0.0, 0.0]), None);
+        if let IfcEntity::BuildingElement {
+            ifc_type,
+            solid_shape,
+            extrusion,
+            ..
+        } = &mut beam
+        {
+            *ifc_type = "IFCBEAM".into();
+            // The record box the swept solid takes precedence over.
+            *extrusion = Some(Extrusion::rectangle(1.0, 30.0, 2.0));
+            *solid_shape = Some(super::super::entities::SolidShape::SweptPath {
+                profile: super::super::entities::ProfileDef::Rectangle {
+                    width_feet: 1.0,
+                    depth_feet: 0.5,
+                },
+                directrix_points_feet: vec![[0.0, -10.0, 1.0], [0.0, 10.0, 1.5]],
+                fixed_reference: [0.0, 0.0, 1.0],
+            });
+        }
+        let model = IfcModel {
+            entities: vec![beam],
+            ..Default::default()
+        };
+        let (doc, bin) = build_gltf(&model);
+        let vertices = world_vertices(&doc, &bin, 0);
+        let span = |axis: usize| {
+            let values: Vec<f32> = vertices.iter().map(|v| v[axis]).collect();
+            values.iter().copied().fold(f32::NEG_INFINITY, f32::max)
+                - values.iter().copied().fold(f32::INFINITY, f32::min)
+        };
+        assert!((span(0) - 0.5).abs() < 1e-4, "the section's width");
+        assert!((span(1) - 20.0).abs() < 0.05, "the directrix, not the box");
     }
 
     #[test]
@@ -732,6 +1014,29 @@ mod tests {
         };
         let (doc, _) = build_gltf(&model);
         assert_eq!(doc.scene, Some(0));
-        assert_eq!(doc.scenes[0].nodes.len(), 3);
+        let root = &doc.nodes[doc.scenes[0].nodes[0]];
+        assert_eq!(root.children.len(), 3);
+        assert_eq!(root.matrix, Some(Z_UP_FEET_TO_Y_UP_METRES));
+    }
+
+    /// The nodes of building elements, without the root.
+    fn element_nodes(doc: &GltfDocument) -> impl Iterator<Item = &Node> {
+        doc.nodes.iter().filter(|n| n.extras.is_some())
+    }
+
+    #[test]
+    fn the_root_turns_z_up_feet_into_y_up_metres() {
+        let m = Z_UP_FEET_TO_Y_UP_METRES;
+        let apply = |p: [f32; 3]| {
+            [
+                m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12],
+                m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13],
+                m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14],
+            ]
+        };
+        // 10 ft up is 3.048 m along glTF's +Y; 10 ft north is -Z.
+        assert_eq!(apply([0.0, 0.0, 10.0]), [0.0, 3.048, 0.0]);
+        assert_eq!(apply([0.0, 10.0, 0.0]), [0.0, 0.0, -3.048]);
+        assert_eq!(apply([10.0, 0.0, 0.0]), [3.048, 0.0, 0.0]);
     }
 }

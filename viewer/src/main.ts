@@ -840,6 +840,67 @@ function frameCamera(obj: THREE.Object3D): void {
   };
 }
 
+/**
+ * IFC entity names as IFC spells them. The model carries the STEP file's
+ * upper-case spelling (IFCBUILDINGSTOREY), which is how types are matched;
+ * this is only how they are shown.
+ */
+const IFC_ENTITY_NAMES = [
+  'IfcAirTerminal',
+  'IfcBeam',
+  'IfcBuilding',
+  'IfcBuildingElementProxy',
+  'IfcBuildingStorey',
+  'IfcColumn',
+  'IfcCovering',
+  'IfcCurtainWall',
+  'IfcDoor',
+  'IfcDuctFitting',
+  'IfcDuctSegment',
+  'IfcElectricAppliance',
+  'IfcFlowController',
+  'IfcFlowTerminal',
+  'IfcFooting',
+  'IfcFurnishingElement',
+  'IfcFurniture',
+  'IfcGrid',
+  'IfcLightFixture',
+  'IfcMember',
+  'IfcOpeningElement',
+  'IfcOpeningStandardCase',
+  'IfcPipeFitting',
+  'IfcPipeSegment',
+  'IfcPlate',
+  'IfcProject',
+  'IfcRailing',
+  'IfcRamp',
+  'IfcRampFlight',
+  'IfcReinforcingBar',
+  'IfcRoof',
+  'IfcSanitaryTerminal',
+  'IfcShadingDevice',
+  'IfcSite',
+  'IfcSlab',
+  'IfcSpace',
+  'IfcStair',
+  'IfcStairFlight',
+  'IfcTransportElement',
+  'IfcWall',
+  'IfcWallStandardCase',
+  'IfcWindow',
+];
+const IFC_ENTITY_BY_STEP_NAME = new Map(IFC_ENTITY_NAMES.map((name) => [name.toUpperCase(), name]));
+
+/** `IFCBUILDINGSTOREY` as `IfcBuildingStorey`; an unlisted `IFCFOO` as `IfcFoo`. */
+function ifcTypeLabel(stepName: string): string {
+  const known = IFC_ENTITY_BY_STEP_NAME.get(stepName.toUpperCase());
+  if (known) return known;
+  if (/^IFC[A-Z0-9]+$/.test(stepName)) {
+    return `Ifc${stepName.charAt(3)}${stepName.slice(4).toLowerCase()}`;
+  }
+  return stepName;
+}
+
 // ---------- Panels ----------
 function renderTree(): void {
   if (!sceneGraph) return;
@@ -850,7 +911,7 @@ function renderTree(): void {
 function storeyNodeLabel(node: SceneNode): string {
   const kidCount = node.children.length;
   const elev = storeyElevationLabel(node);
-  const bits = [node.name, node.ifc_type];
+  const bits = [node.name, ifcTypeLabel(node.ifc_type)];
   if (elev) bits.push(elev);
   bits.push(kidCount === 1 ? '1 element' : `${kidCount} elements`);
   return bits.join(' · ');
@@ -899,10 +960,10 @@ function buildTreeNode(node: SceneNode): HTMLElement {
     node.ifc_type === 'IFCBUILDINGSTOREY'
       ? storeyNodeLabel(node)
       : node.ifc_type === 'IFCPROJECT'
-        ? `${node.name} · IFCPROJECT · ${node.children.length} storey${
+        ? `${node.name} · IfcProject · ${node.children.length} storey${
             node.children.length === 1 ? '' : 's'
           }`
-        : `${node.name} · ${node.ifc_type}`;
+        : `${node.name} · ${ifcTypeLabel(node.ifc_type)}`;
   const activate = (ev: Event) => {
     ev.stopPropagation();
     clearScheduleHighlightState();
@@ -966,7 +1027,7 @@ function renderCategories(): void {
       applyCategoryVisibility();
     });
     row.appendChild(cb);
-    row.append(` ${t}`);
+    row.append(` ${ifcTypeLabel(t)}`);
     categoriesEl.appendChild(row);
   }
 }
@@ -1043,8 +1104,8 @@ function relationHeading(text: string): HTMLElement {
 
 function relationRow(rel: RelatedElement): HTMLElement {
   const btn = jumpButton(
-    `${rel.name} · ${rel.ifc_type}`,
-    `Select ${rel.name} (${rel.ifc_type})`,
+    `${rel.name} · ${ifcTypeLabel(rel.ifc_type)}`,
+    `Select ${rel.name} (${ifcTypeLabel(rel.ifc_type)})`,
     () => selectEntity(rel.entity_index),
   );
   btn.dataset.entityIndex = String(rel.entity_index);
@@ -1207,7 +1268,9 @@ function renderElementPanel(panel: ElementInfoPanel): void {
   identity.appendChild(
     infoRow(
       'Type',
-      panel.predefined_type ? `${panel.ifc_type} · ${panel.predefined_type}` : panel.ifc_type,
+      panel.predefined_type
+        ? `${ifcTypeLabel(panel.ifc_type)} · ${panel.predefined_type}`
+        : ifcTypeLabel(panel.ifc_type),
     ),
   );
   if (panel.type_guid) identity.appendChild(infoRow('GUID', panel.type_guid));
@@ -1263,7 +1326,7 @@ function renderScaffoldPanel(idx: number): void {
   }
   const identity = infoGroup('identity');
   identity.appendChild(infoRow('Name', node.name));
-  identity.appendChild(infoRow('Type', node.ifc_type));
+  identity.appendChild(infoRow('Type', ifcTypeLabel(node.ifc_type)));
   infoEl.appendChild(identity);
   const box = infoGroup('gap');
   box.id = 'info-gaps';
@@ -1290,7 +1353,7 @@ function showElementInfo(idx: number): void {
   infoEl.setAttribute('aria-busy', 'true');
   const identity = infoGroup('identity');
   identity.appendChild(infoRow('Name', name));
-  identity.appendChild(infoRow('Type', ifcType));
+  identity.appendChild(infoRow('Type', ifcTypeLabel(ifcType)));
   infoEl.appendChild(identity);
 }
 
@@ -1305,7 +1368,7 @@ function showContainerInfo(node: SceneNode): void {
   infoEl.removeAttribute('aria-busy');
   const identity = infoGroup('identity');
   identity.appendChild(infoRow('Name', node.name));
-  identity.appendChild(infoRow('Type', node.ifc_type));
+  identity.appendChild(infoRow('Type', ifcTypeLabel(node.ifc_type)));
   const kids = node.children.length;
   if (node.ifc_type === 'IFCBUILDINGSTOREY') {
     identity.appendChild(
@@ -1387,7 +1450,7 @@ function scheduleGroupRow(group: ScheduleTypeGroup, canHighlight: boolean): HTML
     const row = document.createElement('div');
     row.className = 'schedule-row';
     row.dataset.ifcType = group.ifc_type;
-    row.appendChild(scheduleCell('schedule-type', group.ifc_type));
+    row.appendChild(scheduleCell('schedule-type', ifcTypeLabel(group.ifc_type)));
     row.appendChild(scheduleCell('schedule-count', countLabel));
     return row;
   }
@@ -1399,9 +1462,9 @@ function scheduleGroupRow(group: ScheduleTypeGroup, canHighlight: boolean): HTML
   btn.setAttribute('aria-pressed', 'false');
   btn.setAttribute(
     'aria-label',
-    `Highlight ${group.count} ${group.ifc_type} elements${storeyNote} in the 3-D view`,
+    `Highlight ${group.count} ${ifcTypeLabel(group.ifc_type)} elements${storeyNote} in the 3-D view`,
   );
-  btn.appendChild(scheduleCell('schedule-type', group.ifc_type));
+  btn.appendChild(scheduleCell('schedule-type', ifcTypeLabel(group.ifc_type)));
   btn.appendChild(scheduleCell('schedule-count', countLabel));
   const verb = scheduleCell('schedule-verb', 'Highlight');
   btn.appendChild(verb);
@@ -1411,12 +1474,12 @@ function scheduleGroupRow(group: ScheduleTypeGroup, canHighlight: boolean): HTML
     if (wasActive) return;
     const lit = highlightIfcType(group.ifc_type);
     if (lit === 0) {
-      toast(`No ${group.ifc_type} geometry to highlight.`, 'info');
+      toast(`No ${ifcTypeLabel(group.ifc_type)} geometry to highlight.`, 'info');
       return;
     }
     btn.setAttribute('aria-pressed', 'true');
     verb.textContent = 'Clear';
-    setStatus(`highlighted ${lit} ${group.ifc_type} mesh${lit === 1 ? '' : 'es'}`);
+    setStatus(`highlighted ${lit} ${ifcTypeLabel(group.ifc_type)} mesh${lit === 1 ? '' : 'es'}`);
   });
   return btn;
 }

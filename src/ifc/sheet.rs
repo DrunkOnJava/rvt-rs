@@ -1,17 +1,20 @@
 //! Sheet rendering (VW1-11) — emit a 2D plan view of an `IfcModel`
 //! as SVG.
 //!
-//! First-pass implementation: for each `BuildingElement` with an
-//! `Extrusion` + `location_feet`, draw a rectangle sized to the
-//! element's width × depth at its XY location. Element `ifc_type`
-//! drives the stroke colour (walls black, doors blue, columns red,
-//! etc.) so a plan looks recognizable without full geometry.
+//! Each placed `BuildingElement` with a body is drawn as what that body
+//! covers in plan ([`super::body_geometry::plan_outline`]): an extrusion's
+//! profile turned by the element's rotation, holes left open, and the
+//! convex hull of a swept, revolved or brep solid. An axis-aligned
+//! rectangle stays a `<rect>`; every other outline is a `<path>`. Element
+//! `ifc_type` drives the stroke colour (walls black, doors blue, columns
+//! red, etc.).
 //!
 //! Output is a self-contained SVG document — no external
 //! stylesheets, no JS. Drop it in a browser, embed in a report,
 //! or convert to PDF via any SVG-to-PDF tool.
 
 use super::IfcModel;
+use super::body_geometry::{Body, Placement, Ring, element_body, plan_outline};
 use super::entities::IfcEntity;
 use std::fmt::Write;
 
@@ -47,11 +50,10 @@ impl Default for SheetOptions {
 ///
 /// The plan is a top-down projection: X maps to SVG x, Y maps to
 /// SVG y (flipped so +Y runs up, matching drafting conventions).
-/// The model bounding box is computed from each element's
-/// `location_feet` ± half its `extrusion.width/depth`, then fit
-/// to `options.width_px × options.height_px` preserving aspect.
+/// The model bounding box is the box of every element's plan outline,
+/// fit to `options.width_px × options.height_px` preserving aspect.
 ///
-/// Elements without an `extrusion` or `location_feet` are skipped
+/// Elements without a body or a `location_feet` are skipped
 /// (nothing to draw).
 pub fn render_plan_svg(model: &IfcModel, options: &SheetOptions) -> String {
     let footprints = collect_footprints(model);
@@ -90,19 +92,52 @@ pub fn render_plan_svg(model: &IfcModel, options: &SheetOptions) -> String {
     )
     .unwrap();
 
-    for fp in &footprints {
-        let sx = offset_x + ((fp.x - min_x) as f32 - fp.w as f32 * 0.5) * scale;
-        let sy = offset_y + ((max_y - fp.y) as f32 - fp.d as f32 * 0.5) * scale;
-        let sw = (fp.w as f32 * scale).max(1.0);
-        let sh = (fp.d as f32 * scale).max(1.0);
-        let (stroke, fill) = colors_for_ifc_type(&fp.ifc_type);
-        write!(
-            &mut out,
-            "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" \
-             fill=\"{}\" stroke=\"{}\" stroke-width=\"1\"/>",
-            sx, sy, sw, sh, fill, stroke
+    let to_svg = |(x, y): (f64, f64)| {
+        (
+            offset_x + (x - min_x) as f32 * scale,
+            offset_y + (max_y - y) as f32 * scale,
         )
-        .unwrap();
+    };
+    for fp in &footprints {
+        let (x0, y0, x1, y1) = ring_bounds(&fp.outer);
+        let (sx, sy) = to_svg((x0, y1));
+        let sw = ((x1 - x0) as f32 * scale).max(1.0);
+        let sh = ((y1 - y0) as f32 * scale).max(1.0);
+        let (stroke, fill) = colors_for_ifc_type(&fp.ifc_type);
+        if fp.axis_aligned_rectangle {
+            write!(
+                &mut out,
+                "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" \
+                 fill=\"{}\" stroke=\"{}\" stroke-width=\"1\"/>",
+                sx, sy, sw, sh, fill, stroke
+            )
+            .unwrap();
+        } else {
+            let mut d = String::new();
+            for ring in std::iter::once(&fp.outer).chain(&fp.holes) {
+                for (i, &p) in ring.iter().enumerate() {
+                    let (px, py) = to_svg(p);
+                    write!(
+                        &mut d,
+                        "{}{:.1} {:.1} ",
+                        if i == 0 { "M" } else { "L" },
+                        px,
+                        py
+                    )
+                    .unwrap();
+                }
+                d.push_str("Z ");
+            }
+            write!(
+                &mut out,
+                "<path d=\"{}\" fill-rule=\"evenodd\" fill=\"{}\" stroke=\"{}\" \
+                 stroke-width=\"1\"/>",
+                d.trim_end(),
+                fill,
+                stroke
+            )
+            .unwrap();
+        }
         if options.show_labels {
             write!(
                 &mut out,
@@ -120,10 +155,11 @@ pub fn render_plan_svg(model: &IfcModel, options: &SheetOptions) -> String {
 }
 
 struct Footprint {
-    x: f64,
-    y: f64,
-    w: f64,
-    d: f64,
+    /// Plan outline in model feet, and its holes.
+    outer: Ring,
+    holes: Vec<Ring>,
+    /// A rectangle on the model axes, drawn as a `<rect>`.
+    axis_aligned_rectangle: bool,
     ifc_type: String,
     name: String,
 }
@@ -131,50 +167,76 @@ struct Footprint {
 fn collect_footprints(model: &IfcModel) -> Vec<Footprint> {
     let mut out = Vec::new();
     for ent in &model.entities {
-        if let IfcEntity::BuildingElement {
+        let IfcEntity::BuildingElement {
             ifc_type,
             name,
             location_feet,
-            extrusion,
+            rotation_radians,
             ..
         } = ent
-        {
-            let Some(loc) = location_feet else {
-                continue;
-            };
-            let Some(ext) = extrusion.as_ref() else {
-                continue;
-            };
-            out.push(Footprint {
-                x: loc[0],
-                y: loc[1],
-                w: ext.width_feet,
-                d: ext.depth_feet,
-                ifc_type: ifc_type.clone(),
-                name: name.clone(),
-            });
-        }
+        else {
+            continue;
+        };
+        let Some(location) = location_feet else {
+            continue;
+        };
+        let Some(body) = element_body(ent, &model.representation_maps) else {
+            continue;
+        };
+        let placement = Placement::new(Some(*location), *rotation_radians);
+        let Some((outer, holes)) = plan_outline(body, &placement) else {
+            continue;
+        };
+        let on_axes = placement.sin.abs() < 1e-12 || placement.cos.abs() < 1e-12;
+        let axis_aligned_rectangle = on_axes
+            && matches!(body, Body::Extrusion(extrusion) if extrusion.profile_override.is_none());
+        out.push(Footprint {
+            outer,
+            holes,
+            axis_aligned_rectangle,
+            ifc_type: ifc_type.clone(),
+            name: name.clone(),
+        });
     }
+    // Plates and spaces underlie the plan: drawn after the walls, their
+    // fills would hide every wall, column and door on their storey.
+    out.sort_by_key(|fp| !is_underlay(&fp.ifc_type));
     out
+}
+
+/// Types drawn beneath the rest of the plan.
+fn is_underlay(ifc_type: &str) -> bool {
+    matches!(
+        ifc_type,
+        "IFCSLAB" | "IFCROOF" | "IFCCOVERING" | "IFCSPACE" | "IFCPLATE"
+    )
+}
+
+fn ring_bounds(ring: &[(f64, f64)]) -> (f64, f64, f64, f64) {
+    ring.iter().fold(
+        (
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ),
+        |(x0, y0, x1, y1), &(x, y)| (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+    )
 }
 
 fn bbox_of_footprints(fps: &[Footprint]) -> (f64, f64, f64, f64) {
     if fps.is_empty() {
         return (0.0, 0.0, 100.0, 100.0);
     }
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-    for fp in fps {
-        let hx = fp.w * 0.5;
-        let hy = fp.d * 0.5;
-        min_x = min_x.min(fp.x - hx);
-        min_y = min_y.min(fp.y - hy);
-        max_x = max_x.max(fp.x + hx);
-        max_y = max_y.max(fp.y + hy);
-    }
-    (min_x, min_y, max_x, max_y)
+    fps.iter().map(|fp| ring_bounds(&fp.outer)).fold(
+        (
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ),
+        |(a, b, c, d), (x0, y0, x1, y1)| (a.min(x0), b.min(y0), c.max(x1), d.max(y1)),
+    )
 }
 
 /// Per-category colour mapping (VW1-11). Sensible defaults that
@@ -238,6 +300,91 @@ mod tests {
             solid_shape: None,
             representation_map_index: None,
         }
+    }
+
+    /// The numbers of a path's `M` / `L` commands, as SVG points.
+    fn path_points(svg: &str) -> Vec<(f32, f32)> {
+        let d = svg
+            .split("<path d=\"")
+            .nth(1)
+            .and_then(|rest| rest.split('"').next())
+            .expect("a path");
+        let numbers: Vec<f32> = d
+            .split(['M', 'L', 'Z', ' '])
+            .filter(|t| !t.is_empty())
+            .map(|t| t.parse().unwrap())
+            .collect();
+        numbers.chunks_exact(2).map(|p| (p[0], p[1])).collect()
+    }
+
+    #[test]
+    fn a_rotated_wall_is_drawn_turned() {
+        // A 20 x 1 ft wall turned a quarter turn, beside a reference square.
+        let mut wall = mk_wall("W", [0.0, 0.0, 0.0], 20.0, 1.0);
+        if let IfcEntity::BuildingElement {
+            rotation_radians, ..
+        } = &mut wall
+        {
+            *rotation_radians = Some(std::f64::consts::FRAC_PI_4);
+        }
+        let model = IfcModel {
+            entities: vec![wall],
+            ..Default::default()
+        };
+        let svg = render_plan_svg(
+            &model,
+            &SheetOptions {
+                show_labels: false,
+                ..Default::default()
+            },
+        );
+        assert_eq!(svg.matches("<path").count(), 1);
+        let points = path_points(&svg);
+        assert_eq!(points.len(), 4);
+        // Turned 45 degrees, the wall's long sides run diagonally: its
+        // corners are not an axis-aligned rectangle's.
+        let xs: std::collections::BTreeSet<i64> =
+            points.iter().map(|p| (p.0 * 10.0).round() as i64).collect();
+        assert_eq!(xs.len(), 4);
+    }
+
+    #[test]
+    fn a_slab_with_a_hole_is_drawn_with_the_hole_open() {
+        let mut slab = mk_wall("S", [0.0, 0.0, 0.0], 0.0, 0.0);
+        if let IfcEntity::BuildingElement {
+            ifc_type,
+            extrusion,
+            ..
+        } = &mut slab
+        {
+            *ifc_type = "IFCSLAB".into();
+            *extrusion = Some(Extrusion::arbitrary_with_voids(
+                vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+                vec![vec![(4.0, 4.0), (6.0, 4.0), (6.0, 6.0), (4.0, 6.0)]],
+                1.0,
+            ));
+        }
+        let model = IfcModel {
+            entities: vec![slab],
+            ..Default::default()
+        };
+        let svg = render_plan_svg(&model, &SheetOptions::default());
+        assert!(svg.contains("fill-rule=\"evenodd\""));
+        assert_eq!(path_points(&svg).len(), 8, "outer ring and hole");
+    }
+
+    #[test]
+    fn slabs_are_drawn_beneath_walls() {
+        let mut slab = mk_wall("Slab", [0.0, 0.0, 0.0], 30.0, 30.0);
+        if let IfcEntity::BuildingElement { ifc_type, .. } = &mut slab {
+            *ifc_type = "IFCSLAB".into();
+        }
+        let model = IfcModel {
+            entities: vec![mk_wall("Wall", [0.0, 0.0, 0.0], 10.0, 1.0), slab],
+            ..Default::default()
+        };
+        let svg = render_plan_svg(&model, &SheetOptions::default());
+        assert!(svg.find(">Slab<").unwrap() < svg.find(">Wall<").unwrap());
     }
 
     #[test]

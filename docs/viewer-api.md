@@ -178,12 +178,27 @@ the schedule's per-type highlight all match on; before #272 no
 `extras` were written at all, so those behaviours were inert against
 the 3-D scene.
 
+Each element is drawn as the body the IFC export gives it
+(`ifc::body_geometry`): a sketched slab as its
+profile with its holes open, a steel section as its section, a swept,
+revolved or brep solid as that solid, all turned by the element's
+`rotation_radians`. A plain rectangular extrusion shares one unit cube
+scaled by its node's matrix. An element with no body keeps its node,
+with no mesh. Element nodes are in the model's frame (feet, +Z up) and
+hang under one root node whose matrix, `gltf::Z_UP_FEET_TO_Y_UP_METRES`,
+turns them into glTF's metres with +Y up.
+
 ### 2D (SVG plan view)
 
 ```rust
 use rvt::ifc::sheet::{render_plan_svg, SheetOptions};
 let svg_string = render_plan_svg(&model, &SheetOptions::default());
 ```
+
+Each element is drawn as what its body covers in plan: an extrusion's
+profile turned by the element's rotation, holes left open, and the
+convex hull of any other solid. Slabs, roofs, coverings, plates and
+spaces are drawn first, beneath the walls, columns and doors.
 
 ### IFC4 STEP
 
