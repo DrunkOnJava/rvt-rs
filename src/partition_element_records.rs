@@ -98,8 +98,10 @@ use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases where this record shape is corpus-proven.
-pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+/// Releases where this record shape is corpus-proven: 2024 on
+/// `2024_Core_Interior.rvt` against Revit's own export, 2025 on the
+/// `Drshelden/IFC-ECS` RE1 projects (MIT) against theirs (RE-32).
+pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Autodesk `BuiltInCategory.OST_Columns` — architectural columns.
 pub const OST_COLUMNS: i64 = -2_000_100;
@@ -173,8 +175,28 @@ pub const REFERENCE_LIST_OFFSET: usize = RECORD_MIN_LEN;
 /// that so an unrelated `u32` cannot make the scan read megabytes.
 pub const REFERENCE_LIST_MAX_ENTRIES: usize = 1024;
 
-/// Fixed marker that precedes the bounding box.
+/// Marker that precedes the bounding box on Revit 2024 files.
+///
+/// The marker is per release (RE-32): a `u16`, `0xFF`×4, and a `u16`
+/// equal to the release's `Global/ElemTable` header constant plus 40
+/// (1411 + 40 = `0x05ab` on 2024). Use [`bbox_marker`] for a given
+/// release.
 pub const BBOX_MARKER: [u8; 8] = [0x46, 0x01, 0xff, 0xff, 0xff, 0xff, 0xab, 0x05];
+
+/// The bbox marker of Revit 2025 files: `0x0159`, `0xFF`×4, `0x05d3`
+/// (1451 + 40), measured on the RE1 projects and on two other 2025
+/// files (RE-32).
+pub const BBOX_MARKER_2025: [u8; 8] = [0x59, 0x01, 0xff, 0xff, 0xff, 0xff, 0xd3, 0x05];
+
+/// The bbox marker of `revit_version`, or `None` where the record shape
+/// is not proven (fail closed).
+pub fn bbox_marker(revit_version: u32) -> Option<[u8; 8]> {
+    match revit_version {
+        2024 => Some(BBOX_MARKER),
+        2025 => Some(BBOX_MARKER_2025),
+        _ => None,
+    }
+}
 
 /// A decoded partition element-record header.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -368,6 +390,7 @@ pub fn is_family_local_bbox(bbox: &[f64; 6]) -> bool {
 /// Whether this release's partition element-record shape is proven.
 pub fn supports_revit_version(revit_version: u32) -> bool {
     PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
+        && bbox_marker(revit_version).is_some()
 }
 
 fn read_u64(buf: &[u8], off: usize) -> Option<u64> {
@@ -439,7 +462,7 @@ fn slot_before(entries: &[u64], element_id: u32) -> Option<u32> {
     Some(previous as u32)
 }
 
-/// Decode one record at `offset`, fail-closed.
+/// Decode one Revit 2024 record at `offset`, fail-closed.
 ///
 /// `declared_ids` is the `Global/ElemTable` id set; a record whose
 /// leading `u64` is not declared there is rejected outright.
@@ -448,6 +471,18 @@ pub fn decode_at(
     buf: &[u8],
     offset: usize,
     declared_ids: &BTreeSet<u32>,
+) -> Option<PartitionElementRecord> {
+    decode_at_with_marker(stream, buf, offset, declared_ids, &BBOX_MARKER)
+}
+
+/// [`decode_at`] for the release whose bbox marker is `marker`
+/// (see [`bbox_marker`]).
+pub fn decode_at_with_marker(
+    stream: &str,
+    buf: &[u8],
+    offset: usize,
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8; 8],
 ) -> Option<PartitionElementRecord> {
     if offset.checked_add(RECORD_MIN_LEN)? > buf.len() {
         return None;
@@ -467,7 +502,7 @@ pub fn decode_at(
     if !(BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&builtin_category) {
         return None;
     }
-    if buf[offset + BBOX_MARKER_OFFSET..offset + BBOX_MARKER_OFFSET + 8] != BBOX_MARKER {
+    if buf[offset + BBOX_MARKER_OFFSET..offset + BBOX_MARKER_OFFSET + 8] != marker[..] {
         return None;
     }
     let mut bbox_feet = [0.0f64; 6];
@@ -521,6 +556,18 @@ pub fn find_category_records(
     builtin_category: i64,
     declared_ids: &BTreeSet<u32>,
 ) -> Vec<PartitionElementRecord> {
+    find_category_records_with_marker(stream, buf, builtin_category, declared_ids, &BBOX_MARKER)
+}
+
+/// [`find_category_records`] for the release whose bbox marker is
+/// `marker`.
+pub fn find_category_records_with_marker(
+    stream: &str,
+    buf: &[u8],
+    builtin_category: i64,
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8; 8],
+) -> Vec<PartitionElementRecord> {
     let needle = (builtin_category as u64).to_le_bytes();
     let mut out = Vec::new();
     if buf.len() < RECORD_MIN_LEN {
@@ -533,7 +580,9 @@ pub fn find_category_records(
         };
         let hit = cursor + found;
         if hit >= CATEGORY_OFFSET {
-            if let Some(record) = decode_at(stream, buf, hit - CATEGORY_OFFSET, declared_ids) {
+            if let Some(record) =
+                decode_at_with_marker(stream, buf, hit - CATEGORY_OFFSET, declared_ids, marker)
+            {
                 out.push(record);
             }
         }
@@ -578,8 +627,18 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 7] = [
 /// file it could not attribute instead of looking complete. None on
 /// `2024_Core_Interior.rvt`.
 pub fn count_unattributed_frames(buf: &[u8], categories: &[i64]) -> BTreeMap<i64, usize> {
+    count_unattributed_frames_with_marker(buf, categories, &BBOX_MARKER)
+}
+
+/// [`count_unattributed_frames`] for the release whose bbox marker is
+/// `marker`.
+pub fn count_unattributed_frames_with_marker(
+    buf: &[u8],
+    categories: &[i64],
+    marker: &[u8; 8],
+) -> BTreeMap<i64, usize> {
     let mut counts = BTreeMap::new();
-    for hit in memchr::memmem::find_iter(buf, &BBOX_MARKER) {
+    for hit in memchr::memmem::find_iter(buf, marker) {
         let Some(offset) = hit.checked_sub(BBOX_MARKER_OFFSET) else {
             continue;
         };
@@ -604,15 +663,18 @@ pub fn scan_unattributed_frames(
     revit_version: u32,
 ) -> Result<BTreeMap<String, usize>> {
     let mut by_class = BTreeMap::new();
-    if !supports_revit_version(revit_version) {
+    let Some(marker) = bbox_marker(revit_version).filter(|_| supports_revit_version(revit_version))
+    else {
         return Ok(by_class);
-    }
+    };
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (category, count) in count_unattributed_frames(inflated.bytes(), &categories) {
+        for (category, count) in
+            count_unattributed_frames_with_marker(inflated.bytes(), &categories, &marker)
+        {
             if let Some((_, class)) = RECOVERED_CATEGORIES.iter().find(|(c, _)| *c == category) {
                 *by_class.entry((*class).to_string()).or_insert(0) += count;
             }
@@ -650,7 +712,11 @@ pub fn scan_category_records_multi(
     builtin_categories: &[i64],
     declared_ids: &BTreeSet<u32>,
 ) -> Result<Vec<PartitionElementRecord>> {
-    if !supports_revit_version(revit_version) || declared_ids.is_empty() {
+    let Some(marker) = bbox_marker(revit_version).filter(|_| supports_revit_version(revit_version))
+    else {
+        return Ok(Vec::new());
+    };
+    if declared_ids.is_empty() {
         return Ok(Vec::new());
     }
     let streams = rf.partition_stream_names();
@@ -661,11 +727,12 @@ pub fn scan_category_records_multi(
             continue;
         };
         for (index, category) in builtin_categories.iter().enumerate() {
-            per_category[index].extend(find_category_records(
+            per_category[index].extend(find_category_records_with_marker(
                 &stream,
                 inflated.bytes(),
                 *category,
                 declared_ids,
+                &marker,
             ));
         }
     }
@@ -695,6 +762,47 @@ mod tests {
 
     fn declared(ids: &[u32]) -> BTreeSet<u32> {
         ids.iter().copied().collect()
+    }
+
+    /// RE-32: the marker is per release; a 2025 record decodes with the
+    /// 2025 marker and not with 2024's, and releases without a measured
+    /// marker stay unsupported.
+    #[test]
+    fn bbox_marker_is_chosen_per_release() {
+        assert_eq!(bbox_marker(2024), Some(BBOX_MARKER));
+        assert_eq!(bbox_marker(2025), Some(BBOX_MARKER_2025));
+        for unproven in [2023, 2026, 2027] {
+            assert_eq!(bbox_marker(unproven), None);
+            assert!(!supports_revit_version(unproven));
+        }
+        // Both markers end in the release's ElemTable header constant + 40.
+        assert_eq!(
+            u16::from_le_bytes([BBOX_MARKER[6], BBOX_MARKER[7]]),
+            1411 + 40
+        );
+        assert_eq!(
+            u16::from_le_bytes([BBOX_MARKER_2025[6], BBOX_MARKER_2025[7]]),
+            1451 + 40
+        );
+
+        let mut buf = synth_record(415_431, OST_WALLS, [0.0, 0.0, 0.0, 0.4, 26.2, 11.5]);
+        buf[BBOX_MARKER_OFFSET..BBOX_MARKER_OFFSET + 8].copy_from_slice(&BBOX_MARKER_2025);
+        let ids = declared(&[415_431]);
+        let record = decode_at_with_marker("Partitions/68", &buf, 0, &ids, &BBOX_MARKER_2025)
+            .expect("2025 record decodes with the 2025 marker");
+        assert_eq!(record.element_id, 415_431);
+        assert!(decode_at("Partitions/68", &buf, 0, &ids).is_none());
+        assert_eq!(
+            find_category_records_with_marker(
+                "Partitions/68",
+                &buf,
+                OST_WALLS,
+                &ids,
+                &BBOX_MARKER_2025
+            )
+            .len(),
+            1
+        );
     }
 
     /// RE-30: a frame with the category and bbox marker in place but no
