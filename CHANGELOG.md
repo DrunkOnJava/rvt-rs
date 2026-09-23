@@ -6,6 +6,28 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Python wheels install on older and more Linux systems, and on Intel
+  Macs.** 0.2.0's Linux wheel was built on the runner's own Ubuntu and came
+  out `manylinux_2_35`. On RHEL 8 and 9, Amazon Linux 2023, Debian 11 and
+  Ubuntu 20.04, pip fell back to compiling the sdist, which needs Rust.
+  - Release wheels now build in the manylinux2014 and musllinux_1_2
+    containers, for x86_64 and aarch64, plus Intel macOS: seven wheels
+    instead of three.
+  - Each wheel is installed in the oldest environment its tag claims (the
+    manylinux2014 image with its oldest CPython, Alpine, an Intel macOS runner),
+    where it opens a Revit file and exports IFC before anything is published
+    (`tools/ci/wheel-smoke.py`).
+  - The PR wheel job builds the same way, so a break in the glibc 2.17
+    build fails on the PR.
+- **The PyPI upload can no longer pick up the CLI archives.** The publish
+  jobs downloaded every artifact of the run and uploaded every `*.tar.gz`,
+  which includes the release-binaries archives once they finish. On v0.2.0
+  the PyPI job downloaded seven seconds before the first one did. They now
+  download only the wheels and the sdist, and check that there are seven
+  and one.
+
 ## [0.2.0] — 2026-09-23
 
 An **inspection-focused alpha** (see
