@@ -54,13 +54,27 @@ jobs:
   # Build release wheels on every target OS. Mirrors the python-wheel
   # matrix in ci.yml so any regression that would fail a push-CI run
   # also fails here, before we publish.
+  #
+  # One abi3 wheel per platform, the same platforms the CLI archives
+  # cover plus musllinux. Linux wheels build inside the manylinux2014 /
+  # musllinux_1_2 containers (`manylinux:`), so they need glibc 2.17 or
+  # musl 1.2 rather than whatever glibc the runner has: 0.2.0's host-built
+  # wheel came out manylinux_2_35 and pip fell back to the Rust sdist on
+  # RHEL 9, Amazon Linux 2023 and Debian 11.
   build-wheels:
-    name: Build wheel / ${{ matrix.os }}
+    name: Build wheel / ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - { name: linux-x86_64, os: ubuntu-latest, target: x86_64, manylinux: "2014" }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64, manylinux: "2014" }
+          - { name: musllinux-x86_64, os: ubuntu-latest, target: x86_64, manylinux: musllinux_1_2 }
+          - { name: musllinux-aarch64, os: ubuntu-24.04-arm, target: aarch64, manylinux: musllinux_1_2 }
+          - { name: macos-arm64, os: macos-latest, target: aarch64-apple-darwin }
+          - { name: macos-x86_64, os: macos-latest, target: x86_64-apple-darwin }
+          - { name: windows-x64, os: windows-latest, target: x64 }
     steps:
       - name: Disable autocrlf on Windows
         if: runner.os == 'Windows'
@@ -70,12 +84,10 @@ jobs:
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        if: runner.os != 'Linux'
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          save-if: false
-          shared-key: ci-release
+          targets: ${{ runner.os == 'macOS' && matrix.target || '' }}
 
       # abi3-py38 means one wheel per OS/arch covers every Python
       # >= 3.8. No per-Python-minor-version matrix needed.
@@ -83,18 +95,19 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: build
+          target: ${{ matrix.target }}
+          # Only read on Linux, where it selects the build container.
+          manylinux: ${{ matrix.manylinux || 'auto' }}
           # SEC-12/13: wheel sources now come from the `rvt-py/`
           # workspace member crate. The `--features python` switch
           # is gone because `rvt-py` is a pyo3-only crate with no
           # optional feature gating.
           args: --release --out dist --manifest-path rvt-py/Cargo.toml
-          # macos-latest is arm64 by default. If Griffin wants x86_64
-          # macs too, add a separate job with `target: x86_64-apple-darwin`.
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: wheel-${{ matrix.os }}
+          name: wheel-${{ matrix.name }}
           path: dist/*.whl
           if-no-files-found: error
 
@@ -129,45 +142,59 @@ jobs:
   # broken release reaching users (TestPyPI round-trip would catch
   # install but not import-time errors).
   validate-wheel-install:
-    name: Install + import / ${{ matrix.os }}
+    name: Install + open a model / ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     needs: [build-wheels]
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          # Linux wheels are installed in the oldest environment their tag
+          # claims: the manylinux2014 image (glibc 2.17, CPython 3.8) and
+          # Alpine (musl).
+          - { name: linux-x86_64, os: ubuntu-latest, image: "quay.io/pypa/manylinux2014_x86_64", python: /opt/python/cp38-cp38/bin/python }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm, image: "quay.io/pypa/manylinux2014_aarch64", python: /opt/python/cp38-cp38/bin/python }
+          - { name: musllinux-x86_64, os: ubuntu-latest, image: "python:3.12-alpine", python: python3 }
+          - { name: musllinux-aarch64, os: ubuntu-24.04-arm, image: "python:3.12-alpine", python: python3 }
+          - { name: macos-arm64, os: macos-latest }
+          # The x86_64 macOS wheel is cross-built on arm64; this is the
+          # Intel runner that proves it loads.
+          - { name: macos-x86_64, os: macos-15-intel }
+          - { name: windows-x64, os: windows-latest }
     steps:
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          python-version: "3.12"
-      - name: Download wheel for this OS
+          sparse-checkout: |
+            corpus/tier1
+            tools/ci/wheel-smoke.py
+          sparse-checkout-cone-mode: false
+      - name: Download wheel for this platform
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: wheel-${{ matrix.os }}
+          name: wheel-${{ matrix.name }}
           path: wheel
-      - name: Install the wheel in a fresh venv
+      - name: Install and open a model in the target Linux environment
+        if: runner.os == 'Linux'
         shell: bash
         run: |
-          python -m venv /tmp/rvt-venv
-          # Cross-platform venv activation: source the right shim.
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            source /tmp/rvt-venv/Scripts/activate
-          else
-            source /tmp/rvt-venv/bin/activate
-          fi
-          python -m pip install --upgrade pip
-          python -m pip install wheel/*.whl
-          python -c "import rvt; print('rvt', rvt.__version__ if hasattr(rvt, '__version__') else 'ok')"
-          # Minimal smoke: can we create a RevitFile instance from a
-          # non-existent path and get a typed error (proves the pyo3
-          # bindings loaded)?
-          python - <<'EOF'
-          import rvt
-          try:
-              rvt.RevitFile("/definitely/does/not/exist.rvt")
-          except (FileNotFoundError, OSError, RuntimeError, Exception) as e:
-              print(f"got expected error: {type(e).__name__}")
-          EOF
+          docker run --rm -v "$PWD:/work" -w /work "${{ matrix.image }}" sh -c '
+            set -e
+            "${{ matrix.python }}" -m venv /tmp/venv
+            /tmp/venv/bin/python -m pip install --quiet wheel/*.whl
+            /tmp/venv/bin/python tools/ci/wheel-smoke.py corpus/tier1/architectural-2024/architectural-2024.rvt
+          '
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: runner.os != 'Linux'
+        with:
+          python-version: "3.12"
+      - name: Install and open a model
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then py="$RUNNER_TEMP/venv/Scripts/python"; else py="$RUNNER_TEMP/venv/bin/python"; fi
+          "$py" -m pip install --quiet wheel/*.whl
+          "$py" tools/ci/wheel-smoke.py corpus/tier1/architectural-2024/architectural-2024.rvt
 
   release-source-smoke:
     name: Cargo install + CLI sample smoke
@@ -387,16 +414,27 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Download all build artifacts
+      # Only the wheel and sdist artifacts. The release-binaries job in this
+      # run uploads CLI archives that are also *.tar.gz; a download of every
+      # artifact picks them up whenever they finish first (on v0.2.0 the
+      # PyPI job downloaded seven seconds before the first one landed).
+      - name: Download the wheels
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          path: dist-artifacts
-      - name: Flatten into dist/
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist
+      - name: Download the sdist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sdist
+          path: dist
+      - name: List the distributions
         shell: bash
         run: |
-          mkdir -p dist
-          find dist-artifacts -type f \( -name '*.whl' -o -name '*.tar.gz' \) -exec mv {} dist/ \;
           ls -la dist/
+          test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 7
+          test "$(find dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
@@ -427,16 +465,27 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Download all build artifacts
+      # Only the wheel and sdist artifacts. The release-binaries job in this
+      # run uploads CLI archives that are also *.tar.gz; a download of every
+      # artifact picks them up whenever they finish first (on v0.2.0 the
+      # PyPI job downloaded seven seconds before the first one landed).
+      - name: Download the wheels
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          path: dist-artifacts
-      - name: Flatten into dist/
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist
+      - name: Download the sdist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sdist
+          path: dist
+      - name: List the distributions
         shell: bash
         run: |
-          mkdir -p dist
-          find dist-artifacts -type f \( -name '*.whl' -o -name '*.tar.gz' \) -exec mv {} dist/ \;
           ls -la dist/
+          test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 7
+          test "$(find dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:

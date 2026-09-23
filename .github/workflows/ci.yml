@@ -747,10 +747,14 @@ jobs:
       # `rvt-py/` workspace member crate; maturin follows the
       # `manifest-path` in pyproject.toml. `--release` produces an
       # optimised binary matching what users get via `pip install rvt`.
+      # Linux builds inside the manylinux2014 container, as the release
+      # does (publish.yml), so a change that breaks the glibc 2.17 build
+      # fails here rather than at tag time.
       - name: Build wheel via maturin
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: build
+          manylinux: "2014"
           args: --release --out dist
       # Install into this runner's Python, then run the pytest suite
       # we ship in tests/python/. This is the real regression gate —
@@ -872,6 +876,8 @@ jobs:
           # Each regex catches a *class* of PII without spelling out
           # any specific sensitive value. The patterns are intentionally
           # broad — they're belt-and-suspenders on top of src/redact.rs.
+          # The backslashes in the Windows patterns are regex escapes.
+          # shellcheck disable=SC1003
           PATTERNS=(
             # Absolute home paths (macOS, Linux, Windows).
             '/Users/[a-z][a-z0-9._-]+/'

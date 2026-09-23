@@ -8,7 +8,7 @@ workflow fits your file.
 
 | Channel | Status |
 |---|---|
-| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.2.0** (wheels for Linux x86_64, macOS Apple Silicon and Windows x86_64, plus the sdist) |
+| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.2.0** (wheels for Linux x86_64 with glibc 2.35 or later, macOS Apple Silicon and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
 | **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.2.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.2.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
 | **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.2.0`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
 | **crates.io** (`rvt`) | **Not published** — `cargo install rvt` fails until a successful `cargo publish`; build from source instead |
@@ -33,6 +33,23 @@ python -m pip install --upgrade pip
 python -m pip install rvt
 python -c "import rvt; print(rvt.__version__)"
 ```
+
+Each wheel is one `abi3` build for CPython 3.8 and later.
+
+| Platform | 0.2.0 | From the next release |
+|---|---|---|
+| Linux x86_64 | glibc 2.35 or later (`manylinux_2_35`) | glibc 2.17 or later (`manylinux2014`) |
+| Linux aarch64 (Graviton, Raspberry Pi 4/5, Docker on Apple Silicon) | none | glibc 2.17 or later |
+| Alpine and other musl Linux, x86_64 and aarch64 | none | musl 1.2 or later (`musllinux_1_2`) |
+| macOS Apple Silicon | 11 or later | 11 or later |
+| macOS Intel | none | 10.12 or later |
+| Windows x86_64 | yes | yes |
+
+Where no wheel fits, pip builds the sdist instead, and that needs a Rust
+toolchain (`rustup`, stable). With 0.2.0 that includes RHEL / Rocky / Alma 8
+and 9, Amazon Linux 2023, Debian 11 and Ubuntu 20.04. If `pip install rvt`
+starts compiling Rust, that is why. Install Rust first, or use the prebuilt
+CLI archives or the container image below.
 
 Smoke test after installation:
 
