@@ -109,6 +109,12 @@ field is simply absent it is omitted; a one-line "Not recovered" note names
 a field only where the export diagnostics confirm it as a known decode gap,
 so an omission is never mistaken for a failure (#272).
 
+To bring an element into view, double-click it in the tree or the 3-D view,
+press F with it selected, or use Zoom to element in the info panel.
+Double-clicking a storey frames everything on it, and F with nothing
+selected frames the whole model. Dragging in the view orbits without
+changing the selection; a click without a drag selects.
+
 ### Performance
 
 Opening a large project is fast since #266, which inflates each partition

@@ -25,6 +25,11 @@ All notable changes will be documented here. This project follows
     its plane (`SolidShape::PlacedExtrusion`).
   - `examples/probe_re52_stair_treads.rs` lists each run type and each
     run's outcome.
+- **Zoom to an element in the viewer.** Double-click an element in the tree
+  or the 3-D view, press F, or use Zoom to element in the info panel to bring
+  it into view. The camera keeps its angle and the rest of the model stays
+  in view around a small element. Double-clicking a storey frames everything
+  on it, and F with nothing selected frames the whole model.
 - **The viewer colours elements by category.** Record-backed elements carry
   no material yet, so the 3D view was one grey mass. An element with no
   material of its own now takes its category's colour, in the plan's hues
@@ -190,6 +195,11 @@ All notable changes will be documented here. This project follows
   `find_type_records_with_marker` take the release's bbox marker.
 
 ### Fixed
+
+- **Orbiting the viewer no longer changes the selection.** An element was
+  picked on every mouse press, so each drag that started on an element
+  selected it. It is now picked on a click: a press and release within a few
+  pixels.
 
 - **The viewer and the plan export draw each element's real body.** The GLB
   the viewer shows (and `rvt-gltf` writes) drew every element as an

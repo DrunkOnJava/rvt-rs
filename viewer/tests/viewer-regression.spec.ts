@@ -595,6 +595,75 @@ projectSampleTest(
   },
 );
 
+projectSampleTest(
+  'double-click, F and the element panel bring elements into view',
+  async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/Ready/);
+    await page.locator('#file-input').setInputFiles(projectSamplePath!);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
+
+    // F with nothing selected frames the whole model, once the model's
+    // geometry has reached the scene (it loads after the status says so).
+    await page.locator('#viewport').focus();
+    await expect(async () => {
+      await page.keyboard.press('f');
+      await expect(page.locator('#status')).toHaveText('Zoomed to the whole model', {
+        timeout: 1000,
+      });
+    }).toPass();
+
+    // A double-clicked storey frames everything on it.
+    const storey = page.locator('.tree-node.tree-storey').first();
+    await storey.dblclick();
+    await expect(page.locator('#status')).toHaveText(/^Zoomed to /);
+
+    // A selected wall: F frames it, and so does the panel's button.
+    const wall = page.locator('.tree-node', { hasText: 'IfcWall' }).first();
+    await wall.click();
+    const zoom = page.locator('#zoom-to-element');
+    await expect(zoom).toBeVisible();
+    await page.locator('#viewport').focus();
+    await page.keyboard.press('f');
+    await expect(page.locator('#status')).toHaveText(/^Zoomed to ArcWall/);
+    await page.locator('#status').evaluate((el) => (el.textContent = ''));
+    await zoom.click();
+    await expect(page.locator('#status')).toHaveText(/^Zoomed to ArcWall/);
+
+    // Escape clears the selection, so F frames the whole model again.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('f');
+    await expect(page.locator('#status')).toHaveText('Zoomed to the whole model');
+  },
+);
+
+projectSampleTest('dragging to orbit does not change the selection', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#status')).toHaveText(/Ready/);
+  await page.locator('#file-input').setInputFiles(projectSamplePath!);
+  await expect(page.locator('#status')).toHaveText(/Loaded/);
+
+  // Frame the first wall so it sits under the middle of the view.
+  const walls = page.locator('.tree-node', { hasText: 'IfcWall' });
+  await walls.nth(0).click();
+  await expect(page.locator('#zoom-to-element')).toBeVisible();
+  await page.locator('#zoom-to-element').click();
+  await expect(page.locator('#status')).toHaveText(/^Zoomed to /);
+  // Select another wall, then drag starting over the framed one.
+  await walls.nth(1).click();
+  const selected = await page.locator('.tree-node.selected').textContent();
+  const box = (await page.locator('#viewport canvas').boundingBox())!;
+  const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 120, cy + 40, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator('.tree-node.selected')).toHaveText(selected!);
+  // A click without a drag does select what is under it.
+  await page.mouse.click(cx, cy);
+  await expect(page.locator('.tree-node.selected')).not.toHaveText(selected!);
+});
+
 function resolveProjectSamplePath(): string | null {
   const candidates = [
     process.env.RVT_VIEWER_SAMPLE,
