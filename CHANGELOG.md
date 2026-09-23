@@ -6,6 +6,26 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Structural framing, structural columns, structural foundations and
+  generic models from element records (RE-36).** They decode under the same
+  instance rule as walls and doors, with their ElementIds from the enclosing
+  partition record (RE-35), and export as `IfcBeam` (`.BEAM.`), `IfcColumn`
+  (`.COLUMN.`), `IfcFooting` and `IfcBuildingElementProxy` with
+  bounding-box bodies.
+  - On Autodesk's Snowdon Towers 2024 structural sample (measured locally),
+    every exported id its VIM export carries has the record's category
+    there: 914 framing members, 74 columns, 90 foundations and 91 generic
+    models, none under another category. The 28 framing ids the VIM lacks
+    are beam-system members its later edition regenerated.
+  - On the architectural sample 260 of 261 generic models are in Revit's own
+    IFC4 export; the other sits in a non-primary design option.
+  - `examples/probe_re36_vim_oracle.rs` reads a VIM file (`vim-format`, MIT)
+    and scores every placed-instance record of a model against it.
+  - Rebar, structural connections and beam systems have correct ids but are
+    not exported, and braces would export as `IfcBeam`.
+
 ### Fixed
 
 - **Second-prologue ElementIds are read from the partition record, not

@@ -78,7 +78,9 @@ keyed by class in `classes`. The recovered categories are walls, doors,
 windows, columns, floors, building pads and rooms, plus the RE-33 product
 categories: furniture, casework, plumbing fixtures, specialty equipment,
 ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts,
-duct fittings, pipes and pipe fittings. Only placed instances count (no
+duct fittings, pipes and pipe fittings, and the RE-36 structural categories:
+structural framing, structural columns, structural foundations and generic
+models. Only placed instances count (no
 container reference, placement kind `0xffffef7f`), so container members and
 type symbols do not inflate it. Only frames inside the partition's leading
 record chain count: records after it belong to loaded families' own documents,
@@ -88,11 +90,13 @@ record carries a declared ElementId is exported under it and not counted
 none is exported, and a matching warning says the model is incomplete. It is
 absent on `2024_Core_Interior.rvt`, on the RE1 models and on every
 project-count fixture. On Autodesk's Snowdon Towers 2024 architectural sample
-it is 20: 16 walls and 4 columns, exactly the walls and columns of Revit's own
-export that rvt-rs does not attribute (see
+it is 37: 16 walls, 4 columns and 17 generic models, exactly the walls,
+columns and generic models of Revit's own export that rvt-rs does not
+attribute (see
 `reports/element-framing/RE-30-snowdon-generalisation.md`,
 `reports/element-framing/RE-33-product-categories.md` and
-`reports/element-framing/RE-35-partition-record-wrapper.md`).
+`reports/element-framing/RE-35-partition-record-wrapper.md` and
+`reports/element-framing/RE-36-structural-categories.md`).
 
 `element_record_without_volume` counts placed instances of a recovered
 category whose record bounding box is flat on some axis. These are 2D symbol
