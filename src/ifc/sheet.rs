@@ -6,7 +6,7 @@
 //! profile turned by the element's rotation, holes left open, and the
 //! convex hull of a swept, revolved or brep solid. An axis-aligned
 //! rectangle stays a `<rect>`; every other outline is a `<path>`. Element
-//! `ifc_type` drives the stroke colour (walls black, doors blue, columns
+//! `ifc_type` drives the stroke colour (walls black, doors amber, columns
 //! red, etc.).
 //!
 //! Output is a self-contained SVG document — no external
@@ -87,7 +87,7 @@ pub fn render_plan_svg(model: &IfcModel, options: &SheetOptions) -> String {
     write!(
         &mut out,
         "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" \
-         fill=\"none\" stroke=\"#CCCCCC\" stroke-width=\"1\"/>",
+         fill=\"none\" stroke=\"#CDCED0\" stroke-width=\"1\"/>",
         options.margin_px, options.margin_px, plot_w, plot_h,
     )
     .unwrap();
@@ -142,7 +142,7 @@ pub fn render_plan_svg(model: &IfcModel, options: &SheetOptions) -> String {
             write!(
                 &mut out,
                 "<text x=\"{:.1}\" y=\"{:.1}\" font-size=\"9\" \
-                 fill=\"#333333\" font-family=\"sans-serif\">{}</text>",
+                 fill=\"#2C2E30\" font-family=\"sans-serif\">{}</text>",
                 sx + sw * 0.5,
                 sy + sh * 0.5,
                 xml_escape(&fp.name)
@@ -239,20 +239,21 @@ fn bbox_of_footprints(fps: &[Footprint]) -> (f64, f64, f64, f64) {
     )
 }
 
-/// Per-category colour mapping (VW1-11). Sensible defaults that
-/// match common drafting conventions — walls black, doors blue,
-/// windows cyan, columns red, slabs grey.
+/// Per-category colour mapping (VW1-11), from the viewer design system's
+/// ramps: walls black, windows blue, doors amber, columns and beams red,
+/// slabs gray, stairs dark amber and furniture green. Each fill is the
+/// light tint of its stroke's ramp.
 fn colors_for_ifc_type(ifc_type: &str) -> (&'static str, &'static str) {
     match ifc_type {
-        "IFCWALL" | "IFCWALLSTANDARDCASE" => ("#000000", "#EEEEEE"),
-        "IFCDOOR" => ("#2266CC", "#DDE7FF"),
-        "IFCWINDOW" => ("#22AACC", "#DDF0FF"),
-        "IFCCOLUMN" => ("#CC2244", "#FFDDE2"),
-        "IFCBEAM" | "IFCMEMBER" => ("#AA4499", "#F0DDE8"),
-        "IFCSLAB" | "IFCROOF" | "IFCCOVERING" => ("#888888", "#EEEEEE"),
-        "IFCSTAIR" | "IFCRAILING" => ("#AA7722", "#F5E5CC"),
-        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" => ("#228855", "#DDEEDD"),
-        _ => ("#444444", "#F4F4F4"),
+        "IFCWALL" | "IFCWALLSTANDARDCASE" => ("#000000", "#E4E5E7"),
+        "IFCDOOR" => ("#D97706", "#FFFBEB"),
+        "IFCWINDOW" => ("#1881FF", "#E6F1FF"),
+        "IFCCOLUMN" => ("#DC2626", "#FEE2E2"),
+        "IFCBEAM" | "IFCMEMBER" => ("#F87171", "#FEF2F2"),
+        "IFCSLAB" | "IFCROOF" | "IFCCOVERING" => ("#909398", "#F5F5F7"),
+        "IFCSTAIR" | "IFCRAILING" => ("#92400E", "#FEF3C7"),
+        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" => ("#16A34A", "#F0FDF4"),
+        _ => ("#4C4E52", "#FAFAFA"),
     }
 }
 
@@ -460,7 +461,7 @@ mod tests {
             ..Default::default()
         };
         let svg = render_plan_svg(&model, &SheetOptions::default());
-        assert!(svg.contains("stroke=\"#2266CC\""));
+        assert!(svg.contains("stroke=\"#D97706\""));
     }
 
     #[test]
@@ -551,7 +552,7 @@ mod tests {
     #[test]
     fn colors_unknown_type_falls_back_to_default_grey() {
         let (stroke, _) = colors_for_ifc_type("IFCMYSTERYELEMENT");
-        assert_eq!(stroke, "#444444");
+        assert_eq!(stroke, "#4C4E52");
     }
 
     #[test]

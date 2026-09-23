@@ -10,11 +10,11 @@ All notable changes will be documented here. This project follows
 
 - **The viewer colours elements by category.** Record-backed elements carry
   no material yet, so the 3D view was one grey mass. An element with no
-  material of its own now takes its category's colour, in the plan's hues:
-  - blue doors and red columns;
-  - magenta beams and members;
-  - translucent windows and curtain panels;
-  - green furniture and planting, and amber stairs and railings;
+  material of its own now takes its category's colour, in the plan's hues
+  from the viewer design system's ramps:
+  - amber doors, red columns and lighter red beams and members;
+  - translucent blue windows and curtain panels;
+  - green furniture and planting, and dark amber stairs and railings;
   - rooms drawn faint, so they no longer hide the building they fill.
 
   An element's own material still wins. `gltf::category_colour` gives the

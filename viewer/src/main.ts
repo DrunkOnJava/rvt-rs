@@ -73,9 +73,12 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.target.set(0, 0, 0);
 
-const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.8);
+// Physical light units: a matte face returns its colour times the light
+// it receives over pi, so a face lit by both lights shows about its own
+// category colour, and faces turned away fall off from there.
+const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 2.0);
 scene.add(hemi);
-const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+const dir = new THREE.DirectionalLight(0xffffff, 1.6);
 dir.position.set(50, 80, 50);
 scene.add(dir);
 let grid: THREE.GridHelper | null = null;

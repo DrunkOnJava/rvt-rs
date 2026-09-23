@@ -588,7 +588,7 @@ projectSampleTest(
     await wallGroup.click();
     await expect(wallGroup).toHaveAttribute('aria-pressed', 'true');
     await expect(wallGroup.locator('.schedule-verb')).toHaveText('Clear');
-    await expect(page.locator('#status')).toContainText(/highlighted \d+ IfcWall mesh/);
+    await expect(page.locator('#status')).toContainText(/Highlighted \d+ IfcWall mesh/);
     await wallGroup.click();
     await expect(wallGroup).toHaveAttribute('aria-pressed', 'false');
     await expect(wallGroup.locator('.schedule-verb')).toHaveText('Highlight');
