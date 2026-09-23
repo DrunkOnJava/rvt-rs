@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **The IFC says which ElementIds were inferred.** An element whose
+  `Tag` came from its record's reference list and the frame order (RE-34)
+  carries `ElementIdSource = 'reference_order'` in its
+  `RvtElementRecordGeometry` property set, so an IFC consumer, and the
+  viewer's element info panel, can tell it from an id read off the record.
+  Records that carry their id write nothing new; Core Interior's export is
+  unchanged.
+
 - **Records with no ElementId at `+0x00` now get one from the reference order
   (RE-34).** The second record prologue (RE-30) hides the ElementId in the
   record's reference list, and records sit in ascending ElementId order.
