@@ -19,6 +19,18 @@ All notable changes will be documented here. This project follows
 
   An element's own material still wins. `gltf::category_colour` gives the
   palette.
+- **The viewer has a light scheme and a new look.** The browser viewer now
+  follows the system's light or dark setting, on a single design system
+  (`viewer/src/tokens.css`, `viewer/src/styles.css`): a black header over a
+  white sheet, one blue accent for actions, links, focus and selection, pill
+  buttons and hairline borders.
+  - The 3D canvas, grid, lights, axes and selection highlight take their
+    colours from the same tokens and switch with the scheme.
+  - Every label is sans serif and sentence case, with tabular figures where
+    numbers line up. The stylesheet moved out of `index.html`.
+  - The demo thumbnails are flat tiles in the tint of their kind: blue for
+    real projects, green for IFC, amber for families, gray for synthetics.
+  - No web fonts are loaded: the viewer still makes no network requests.
 - **Roofs carry their sketched outline, and sketch lines' exact ends close
   more outlines (RE-50).** A roof's sketch lines name the roof, as a floor's
   name the floor, and close into its outline. Each sketch line's own data

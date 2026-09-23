@@ -91,18 +91,17 @@ function buildGenFixture() {
 }
 
 function writeThumbnail(filePath, label, accent) {
+  // A flat tile in the design system's tint and ink for the demo's kind:
+  // the card shows it at 72 x 40, where a building mark reads and text
+  // would not. The label rides along as the SVG title.
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180" role="img">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#11161d"/>
-      <stop offset="100%" stop-color="${accent}"/>
-    </linearGradient>
-  </defs>
-  <rect width="320" height="180" fill="url(#g)"/>
-  <rect x="18" y="18" width="284" height="144" fill="none" stroke="#2a4a6f" stroke-width="2"/>
-  <text x="32" y="70" fill="#d7dce3" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="600">${escapeXml(label)}</text>
-  <text x="32" y="100" fill="#8b95a3" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">rvt-rs demo</text>
+  <title>${escapeXml(label)}</title>
+  <rect width="320" height="180" fill="${accent.tint}"/>
+  <g fill="none" stroke="${accent.ink}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M112 146 V74 L160 42 L208 74 V146 Z"/>
+    <path d="M112 98 H208 M112 122 H208"/>
+  </g>
 </svg>
 `;
   ensureDir(path.dirname(filePath));
@@ -234,12 +233,13 @@ function stageRealProject(demo, destAbs) {
   };
 }
 
+// Tint (the ramp's lightest step) and ink (its step 6) from the design
+// system's blue, green, amber and gray ramps.
 function thumbAccent(demo) {
-  if ((demo.tags ?? []).includes(REAL_PROJECT_TAG)) return '#7a3b1e';
-  if (demo.format === 'ifc') return '#2e684b';
-  if (TIER1_IDS.has(demo.id)) return '#2a4a6f';
-  if (demo.id === 'synthetic-mvp') return '#3c5f86';
-  return '#1a3a5f';
+  if ((demo.tags ?? []).includes(REAL_PROJECT_TAG)) return { tint: '#e6f1ff', ink: '#1881ff' };
+  if (demo.format === 'ifc') return { tint: '#f0fdf4', ink: '#16a34a' };
+  if (demo.format === 'rfa') return { tint: '#fffbeb', ink: '#d97706' };
+  return { tint: '#f5f5f7', ink: '#76797f' };
 }
 
 function main() {

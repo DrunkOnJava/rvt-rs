@@ -64,7 +64,6 @@ function prefersReducedMotion(): boolean {
 
 // ---------- Three.js scene ----------
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b0e13);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
 camera.position.set(60, 40, 60);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -74,15 +73,44 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.target.set(0, 0, 0);
 
-const hemi = new THREE.HemisphereLight(0xd7dce3, 0x0b0e13, 0.8);
+const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.8);
 scene.add(hemi);
 const dir = new THREE.DirectionalLight(0xffffff, 0.7);
 dir.position.set(50, 80, 50);
 scene.add(dir);
-const grid = new THREE.GridHelper(100, 20, 0x1d2430, 0x11161d);
-scene.add(grid);
+let grid: THREE.GridHelper | null = null;
 const axes = new THREE.AxesHelper(10);
 scene.add(axes);
+
+// ---------- Theme ----------
+// The scene takes its colours from the design tokens (tokens.css,
+// styles.css), so the canvas, grid and selection follow the page between
+// the light and dark schemes.
+function tokenColour(name: string): THREE.Color {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return new THREE.Color(value || '#808080');
+}
+
+function applySceneTheme(): void {
+  scene.background = tokenColour('--viewer-canvas');
+  hemi.color = tokenColour('--viewer-light-sky');
+  hemi.groundColor = tokenColour('--viewer-light-ground');
+  if (grid) {
+    scene.remove(grid);
+    grid.geometry.dispose();
+    (grid.material as THREE.Material).dispose();
+  }
+  grid = new THREE.GridHelper(
+    100,
+    20,
+    tokenColour('--viewer-grid'),
+    tokenColour('--viewer-grid-soft'),
+  );
+  scene.add(grid);
+  axes.setColors(tokenColour('--sx-red-6'), tokenColour('--sx-green-6'), tokenColour('--sx-blue-6'));
+  highlightMaterial.color = tokenColour('--viewer-highlight');
+  highlightMaterial.emissive = tokenColour('--viewer-highlight').multiplyScalar(0.25);
+}
 
 let currentModel: THREE.Group | null = null;
 
@@ -158,11 +186,9 @@ renderer.domElement.addEventListener('pointerdown', (ev) => {
 });
 
 // ---------- Selection highlight (M4-04) ----------
-const highlightMaterial = new THREE.MeshStandardMaterial({
-  color: 0x6bb7ff,
-  emissive: 0x14304d,
-  side: THREE.DoubleSide,
-});
+const highlightMaterial = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
+applySceneTheme();
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySceneTheme);
 let highlighted: Array<{
   mesh: THREE.Mesh;
   material: THREE.Material | THREE.Material[];
@@ -394,7 +420,7 @@ function revealRealProjects(): void {
   dropzone.classList.remove('hidden');
   const card = demoListEl.querySelector<HTMLElement>('[data-demo-real="true"]');
   if (!card) {
-    setStatus('real-project demos are not staged in this build');
+    setStatus('Real-project demos are not staged in this build');
     return;
   }
   card.scrollIntoView({
@@ -580,7 +606,7 @@ function selectedExportMode(): string {
 
 // ---------- Load flow ----------
 async function loadBytes(file: File): Promise<void> {
-  setStatus(`reading ${formatBytes(file.size)}…`);
+  setStatus(`Reading ${formatBytes(file.size)}…`);
   startLoadOverlay(file);
   hideScaffoldNote();
   model = null;
@@ -595,7 +621,7 @@ async function loadBytes(file: File): Promise<void> {
   downloadDiagnosticsBtn.disabled = true;
   downloadScheduleBtn.disabled = true;
   downloadRoomsBtn.disabled = true;
-  exportQualityEl.textContent = 'quality: pending';
+  exportQualityEl.textContent = 'Quality pending';
   exportQualityEl.className = 'quality-pill';
   diagnosticsJsonEl.textContent = '';
   // A new file invalidates the panel and the schedule; leaving the
@@ -615,7 +641,7 @@ async function loadBytes(file: File): Promise<void> {
     const message = (err as Error).message ?? String(err);
     stopLoadOverlay();
     clearDemoCardBusy();
-    setStatus(`error: ${message}`);
+    setStatus(`Error: ${message}`);
     renderErrorStatusPanel(message);
     dropzone.classList.remove('hidden');
     toast(`Could not read ${file.name}. ${message}`, 'bad');
@@ -676,7 +702,7 @@ async function loadBytes(file: File): Promise<void> {
     if (msg.type === 'error') {
       stopLoadOverlay();
       clearDemoCardBusy();
-      setStatus(`error: ${msg.message}`);
+      setStatus(`Error: ${msg.message}`);
       renderErrorStatusPanel(msg.message);
       hideScaffoldNote();
       dropzone.classList.remove('hidden');
@@ -706,7 +732,7 @@ async function loadBytes(file: File): Promise<void> {
     // building element decoded, a room schedule only when rooms did.
     downloadScheduleBtn.disabled = !scheduleHasType(msg.schedule, null);
     downloadRoomsBtn.disabled = !scheduleHasType(msg.schedule, 'IFCSPACE');
-    setStatus(`loaded · ${msg.types.length} categories · IFC bar ${qualityMode}`);
+    setStatus(`Loaded · ${msg.types.length} categories · IFC bar ${qualityMode}`);
     stopLoadOverlay();
     clearDemoCardBusy();
     maybeShowScaffoldNote(msg.diagnostics);
@@ -798,7 +824,7 @@ function renderScene(glb: Uint8Array): void {
     },
     undefined,
     (err) => {
-      setStatus(`gltf load error: ${(err as Error).message ?? err}`);
+      setStatus(`glTF load error: ${(err as Error).message ?? err}`);
       URL.revokeObjectURL(url);
     },
   );
@@ -1479,7 +1505,7 @@ function scheduleGroupRow(group: ScheduleTypeGroup, canHighlight: boolean): HTML
     }
     btn.setAttribute('aria-pressed', 'true');
     verb.textContent = 'Clear';
-    setStatus(`highlighted ${lit} ${ifcTypeLabel(group.ifc_type)} mesh${lit === 1 ? '' : 'es'}`);
+    setStatus(`Highlighted ${lit} ${ifcTypeLabel(group.ifc_type)} mesh${lit === 1 ? '' : 'es'}`);
   });
   return btn;
 }
@@ -1585,7 +1611,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
       statusRow(
         'Formats integrity',
         kind,
-        `${status} · ${pages} · strip ${strip}${code}`,
+        `${status.charAt(0).toUpperCase()}${status.slice(1)} · ${pages} · strip ${strip}${code}`,
       ),
     );
   }
@@ -1665,7 +1691,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
         parameterValueCount > 0 ? 'ok' : 'warn',
         parameterValueCount > 0
           ? `${parameterValueCount} AProperty* value(s) recovered`
-          : 'none recovered (AProperty* host joins pending)',
+          : 'None recovered (AProperty* host joins pending)',
       ),
     );
     statusPanelEl.appendChild(
@@ -1685,7 +1711,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   const minConf = decoded.min_element_confidence ?? 0.55;
   if (typeof meanConf === 'number' || belowMin > 0 || validatedElements > 0) {
     const meanPct =
-      typeof meanConf === 'number' ? `${Math.round(meanConf * 100)}% mean` : 'mean n/a';
+      typeof meanConf === 'number' ? `${Math.round(meanConf * 100)}% mean` : 'Mean n/a';
     statusPanelEl.appendChild(
       statusRow(
         'Provenance',
@@ -2056,7 +2082,7 @@ document.body.addEventListener('drop', (ev) => {
   const f = ev.dataTransfer?.files[0];
   if (!f) return;
   if (!/\.(rvt|rfa|rte|rft)$/i.test(f.name)) {
-    setStatus(`ignored: ${f.name} — not a Revit file`);
+    setStatus(`Ignored: ${f.name} — not a Revit file`);
     toast(`${f.name} is not a Revit file. Drop a .rvt, .rfa, .rte or .rft.`, 'bad');
     return;
   }
@@ -2110,7 +2136,7 @@ exportGlbBtn.addEventListener('click', () => {
     type: 'model/gltf-binary',
   });
   download(`${lastFileStem}.glb`, blob);
-  setStatus(`exported ${lastFileStem}.glb`);
+  setStatus(`Exported ${lastFileStem}.glb`);
   toast(`Exported ${lastFileStem}.glb`, 'ok');
 });
 
@@ -2132,13 +2158,13 @@ exportIfcBtn.addEventListener('click', () => {
         );
       }
     }
-    setStatus(`rendering IFC STEP · ${quality} · bar ${bar}`);
+    setStatus(`Rendering IFC STEP · ${quality} · bar ${bar}`);
     try {
       const { modelToIfcStep } = await mainThreadWasm();
       const text = modelToIfcStep(model as unknown as object);
       const blob = new Blob([text], { type: 'application/x-step' });
       download(`${lastFileStem}.ifc`, blob);
-      setStatus(`exported ${lastFileStem}.ifc`);
+      setStatus(`Exported ${lastFileStem}.ifc`);
       toast(`Exported ${lastFileStem}.ifc · ${quality}`, 'ok');
     } catch (err) {
       const message = (err as Error).message ?? String(err);
@@ -2167,17 +2193,17 @@ exportModeEl.addEventListener('change', () => {
 exportSvgBtn.addEventListener('click', () => {
   if (!model) return;
   void (async () => {
-    setStatus('rendering plan SVG…');
+    setStatus('Rendering plan SVG…');
     try {
       const { renderPlanSvg } = await mainThreadWasm();
       const svg = renderPlanSvg(model as unknown as object, null);
       const blob = new Blob([svg], { type: 'image/svg+xml' });
       download(`${lastFileStem}.svg`, blob);
-      setStatus(`exported ${lastFileStem}.svg`);
+      setStatus(`Exported ${lastFileStem}.svg`);
       toast(`Exported ${lastFileStem}.svg`, 'ok');
     } catch (err) {
       const message = (err as Error).message ?? String(err);
-      setStatus(`plan export failed: ${message}`);
+      setStatus(`Plan export failed: ${message}`);
       toast(`Plan export failed. ${message}`, 'bad');
     }
   })();
@@ -2188,7 +2214,7 @@ downloadDiagnosticsBtn.addEventListener('click', () => {
   const json = JSON.stringify(currentDiagnostics, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   download(`${lastFileStem}.diagnostics.json`, blob);
-  setStatus(`exported ${lastFileStem}.diagnostics.json`);
+  setStatus(`Exported ${lastFileStem}.diagnostics.json`);
   toast(`Downloaded ${lastFileStem}.diagnostics.json`, 'ok');
 });
 
@@ -2209,17 +2235,17 @@ function downloadSchedule(kind: 'elements' | 'rooms'): void {
   if (!model) return;
   const label = kind === 'elements' ? 'element schedule' : 'room schedule';
   void (async () => {
-    setStatus(`building ${label}…`);
+    setStatus(`Building ${label}…`);
     try {
       const { scheduleCsv } = await mainThreadWasm();
       const csv = scheduleCsv(model as unknown as object, kind, false, true);
       const rows = Math.max(0, csv.split('\r\n').filter((line) => line.length > 0).length - 1);
       download(`${lastFileStem}.${kind}.csv`, new Blob([csv], { type: 'text/csv' }));
-      setStatus(`exported ${lastFileStem}.${kind}.csv · ${rows} rows`);
+      setStatus(`Exported ${lastFileStem}.${kind}.csv · ${rows} rows`);
       toast(`Exported ${label} · ${rows} rows`, 'ok');
     } catch (err) {
       const message = (err as Error).message ?? String(err);
-      setStatus(`${label} export failed: ${message}`);
+      setStatus(`Could not build the ${label}: ${message}`);
       toast(`Could not build the ${label}. ${message}`, 'bad');
     }
   })();
@@ -2293,11 +2319,11 @@ function clearDemoCardBusy(): void {
 
 async function loadDemoFile(demo: DemoEntry, card?: HTMLElement): Promise<void> {
   if (!demo.loadable || !demo.available) {
-    setStatus(`demo ${demo.id} is reference-only — use download link in gallery`);
+    setStatus(`Demo ${demo.id} is reference-only — use download link in gallery`);
     return;
   }
   if (card) setDemoCardBusy(card);
-  setStatus(`loading demo ${demo.name}…`);
+  setStatus(`Loading demo ${demo.name}…`);
   setStatusBusy(true);
   try {
     const response = await fetch(demoAssetUrl(demo.file));
@@ -2314,7 +2340,7 @@ async function loadDemoFile(demo: DemoEntry, card?: HTMLElement): Promise<void> 
     const message = (err as Error).message ?? String(err);
     stopLoadOverlay();
     clearDemoCardBusy();
-    setStatus(`demo load failed: ${message}`);
+    setStatus(`Demo load failed: ${message}`);
     toast(`Could not open ${demo.name}. ${message}`, 'bad');
   }
 }
@@ -2402,7 +2428,7 @@ function fillDemoCard(card: HTMLElement, demo: DemoEntry, loadable: boolean): vo
     // glance — the two decode to very different results.
     const badge = document.createElement('span');
     badge.className = 'demo-badge';
-    badge.textContent = 'real project';
+    badge.textContent = 'Real project';
     title.appendChild(badge);
   }
   const meta = document.createElement('div');
@@ -2429,7 +2455,7 @@ function fillDemoCard(card: HTMLElement, demo: DemoEntry, loadable: boolean): vo
   }
   const quality = document.createElement('span');
   quality.className = `demo-quality ${qualityPillClass(demo.expected_quality)}`;
-  quality.textContent = `expected: ${demo.expected_quality ?? 'Unknown'}`;
+  quality.textContent = `Expected: ${demo.expected_quality ?? 'Unknown'}`;
   body.appendChild(title);
   body.appendChild(meta);
   body.appendChild(quality);
@@ -2447,10 +2473,10 @@ async function initDemoGallery(): Promise<void> {
   } catch (err) {
     demoAttributionEl.textContent =
       'Demo catalog unavailable in this build. Drop a local .rvt / .rfa instead.';
-    setStatus(`demo gallery: ${(err as Error).message ?? err}`);
+    setStatus(`Demo gallery: ${(err as Error).message ?? err}`);
   }
 }
 
 renderEmptyStatusPanel();
 void initDemoGallery();
-setStatus('ready · drop a file or open a demo');
+setStatus('Ready · drop a file or open a demo');

@@ -62,14 +62,14 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
   if (msg.type !== 'parse') return;
 
   try {
-    send({ type: 'progress', step: 'initializing wasm' });
+    send({ type: 'progress', step: 'Initializing wasm' });
     await init();
 
     // VW1-20 — progressive streaming. Emit the cheap metadata
     // first (sub-second even on hundreds-of-MB files) so the UI
     // can populate the top bar while the expensive full-model
     // parse continues.
-    send({ type: 'progress', step: 'reading file metadata' });
+    send({ type: 'progress', step: 'Reading file metadata' });
     // Worksharing / last-saved identity is a nicety: a file whose
     // BasicFileInfo text block is unreadable still parses.
     let document: unknown = null;
@@ -81,7 +81,7 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     send({ type: 'summary', summary: quickSummary(msg.bytes), document });
 
     const qualityMode = (msg.mode ?? 'scaffold').trim() || 'scaffold';
-    send({ type: 'progress', step: `parsing container · IFC bar ${qualityMode}` });
+    send({ type: 'progress', step: `Parsing container · IFC bar ${qualityMode}` });
     const exportResult = openRvtBytesWithDiagnosticsMode(msg.bytes, qualityMode) as {
       model: unknown;
       diagnostics: unknown;
@@ -89,14 +89,14 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     const model = exportResult.model;
     parsedModel = model;
 
-    send({ type: 'progress', step: 'building scene graph' });
+    send({ type: 'progress', step: 'Building scene graph' });
     const scene = buildSceneGraph(model);
     const types = distinctIfcTypes(scene);
 
-    send({ type: 'progress', step: 'rendering glTF' });
+    send({ type: 'progress', step: 'Rendering glTF' });
     const glb = modelToGlb(model);
 
-    send({ type: 'progress', step: 'building schedule' });
+    send({ type: 'progress', step: 'Building schedule' });
     const schedule = buildSchedule(model);
 
     send(
