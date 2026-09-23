@@ -152,6 +152,18 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The viewer lays out correctly on HiDPI screens.** The 3D canvas's
+  backing store is sized in device pixels, and nothing pinned the element
+  to its container. On a 2x display it laid out twice as large, widened the
+  grid, pushed the file-status panel off-screen and centred the drop zone in
+  the overflow, bottom right. The canvas now fills the viewport exactly. The
+  grid tracks cannot grow from their content, the canvas also follows
+  viewport resizes that are not window resizes, and the empty-state overlay
+  is opaque and scrolls on short screens. A Playwright test at device scale
+  factor 2 holds it. The drop zone, workflow and support-profile copy now
+  describe what Revit 2024 and 2025 projects export instead of calling
+  typed extraction unsolved.
+
 - **Frames holding the invalid ElementId take their record's id (RE-43).**
   Some element frames hold `u32::MAX`, the 32-bit form of Revit's invalid
   ElementId −1, at `+0x00`. They carry no id of their own either, and now

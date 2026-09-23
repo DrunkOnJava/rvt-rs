@@ -89,11 +89,19 @@ let currentModel: THREE.Group | null = null;
 function resize(): void {
   const w = viewport.clientWidth;
   const h = viewport.clientHeight;
+  if (w === 0 || h === 0) {
+    return;
+  }
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
+// The viewport also changes size without a window resize: the responsive
+// layout reflows the grid, and the sidebars change height as they fill.
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(resize).observe(viewport);
+}
 resize();
 
 // A fitted camera that snaps into place reads as a glitch; one short
