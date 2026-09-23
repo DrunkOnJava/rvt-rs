@@ -1817,4 +1817,16 @@ seventh wall's frame, data and bounding box all describe the other type.
 Report: `reports/element-framing/RE-44-system-type-names.md`.
 Probe: `examples/probe_re44_system_type_names.rs`.
 
+## Addendum — RE-45 IFC export overrides (2026-09-23)
+
+Revit's "Export to IFC As", "IFC Predefined Type" and their type-level
+twins are entries `i64 BuiltInParameter · u32 n · UTF-16` in an element's
+serialised data (keys −1019014 to −1019017), owned by the element whose data
+header is the last one before them. An element exports as its own override,
+else its type's. On Core Interior two floors become Revit's `.ROOF.` slabs;
+on `teste_export_2025` three walls become Revit's `IfcCovering .CLADDING.`.
+
+Report: `reports/element-framing/RE-45-ifc-export-parameters.md`.
+Probe: `examples/probe_re45_ifc_export_parameters.rs`.
+
 **End of report.**

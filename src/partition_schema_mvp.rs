@@ -223,8 +223,80 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
+    // --- IFC export overrides, the element's own or its type's (RE-45) ---
+    attach_ifc_export_overrides(
+        rf,
+        revit_version,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ],
+    );
 
     Ok(out)
+}
+
+/// Field naming the IFC entity an element's "Export to IFC As" override,
+/// or its type's "Export Type to IFC As", names (#212, RE-45). The decoder
+/// does not act on it; [`crate::ifc::category_map::lookup_export_override`]
+/// decides which values the IFC writer honours.
+pub const IFC_EXPORT_AS_FIELD: &str = "m_ifc_export_as";
+
+/// Field naming the IFC predefined type an element's or its type's export
+/// parameters set (RE-45). The IFC writer uses it only when it is an
+/// enumerator of the entity the element exports as.
+pub const IFC_PREDEFINED_TYPE_FIELD: &str = "m_ifc_predefined_type";
+
+/// Attach each element's IFC export overrides (RE-45): the element's own
+/// "Export to IFC As" and predefined type, else those its type sets
+/// ([`TYPE_ID_FIELD`], from RE-38 or #322). A type's `IfcCoveringType`
+/// names `IfcCovering`.
+fn attach_ifc_export_overrides(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    lists: [&mut Vec<DecodedElement>; 6],
+) {
+    use crate::partition_ifc_export_overrides as ieo;
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let parameters = ieo::scan_export_parameters(rf, revit_version, &declared).unwrap_or_default();
+    if parameters.is_empty() {
+        return;
+    }
+    let none = ieo::ExportParameters::default();
+    for elements in lists {
+        for element in elements.iter_mut() {
+            let own = element
+                .id
+                .and_then(|id| parameters.get(&id))
+                .unwrap_or(&none);
+            let of_type = element
+                .fields
+                .iter()
+                .find_map(|(name, value)| match value {
+                    InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+                    _ => None,
+                })
+                .and_then(|id| parameters.get(&id));
+            if let Some(entity) = own.effective_export_as(of_type) {
+                element
+                    .fields
+                    .push((IFC_EXPORT_AS_FIELD.into(), InstanceField::String(entity)));
+            }
+            if let Some(predefined) = own.effective_predefined_type(of_type) {
+                element.fields.push((
+                    IFC_PREDEFINED_TYPE_FIELD.into(),
+                    InstanceField::String(predefined),
+                ));
+            }
+        }
+    }
 }
 
 /// Give elements of system families (walls, floors, roofs, ceilings,
@@ -969,10 +1041,8 @@ fn z_extent_key(record: &crate::partition_element_records::PartitionElementRecor
 /// than relabelled a floor — the mapping to `IFCSLAB` happens in
 /// [`crate::ifc::category_map`], where it is visible.
 ///
-/// Per-element IFC export-type overrides
-/// ([`crate::partition_ifc_export_overrides`]) are attached as the
-/// `m_ifc_export_as` field. The decoder does not act on the value;
-/// the IFC writer decides which values it is willing to honour.
+/// Per-element IFC export-type overrides are attached later, with every
+/// other element's, by `attach_ifc_export_overrides` (RE-45).
 ///
 /// The plate's sketched plan profile
 /// ([`crate::element_record_plan_profiles`]) is attached in the same
@@ -996,13 +1066,6 @@ pub fn slabs_from_partition_category_records(
     if declared.is_empty() {
         return Ok(Vec::new());
     }
-    let overrides = crate::partition_ifc_export_overrides::scan_ifc_export_overrides(
-        rf,
-        revit_version,
-        &declared,
-    )
-    .unwrap_or_default();
-
     let categories = [
         per::OST_FLOORS,
         per::OST_BUILDING_PAD,
@@ -1030,12 +1093,6 @@ pub fn slabs_from_partition_category_records(
             .collect();
         for mut decoded in instances_from_records(records, class, level_ids) {
             if let Some(id) = decoded.id {
-                if let Some(value) = overrides.get(&id) {
-                    decoded.fields.push((
-                        "m_ifc_export_as".into(),
-                        InstanceField::String(value.clone()),
-                    ));
-                }
                 if let Some(profile) = profiles.get(&id) {
                     decoded.fields.extend(profile.fields());
                 }

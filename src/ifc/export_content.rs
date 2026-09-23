@@ -214,6 +214,20 @@ pub fn append_typed_production_elements(
         // mapping, so an unknown override can never invent a type.
         let effective = ifc_export_override(&decoded).unwrap_or(mapping);
         let ifc_type = effective.ifc_type.to_string();
+        // RE-45: the element's own or its type's IFC predefined type, when
+        // it is an enumerator of the entity it exports as.
+        let predefined_type = decoded
+            .fields
+            .iter()
+            .find_map(|(name, value)| match value {
+                InstanceField::String(text)
+                    if name == crate::partition_schema_mvp::IFC_PREDEFINED_TYPE_FIELD =>
+                {
+                    category_map::predefined_type_for(effective.ifc_type, text)
+                }
+                _ => None,
+            })
+            .or(effective.predefined_type);
 
         let name = match (decoded.id, family_and_type(&decoded)) {
             // RE-38: `Family:Type:ElementId`, the name Revit's own export
@@ -325,7 +339,7 @@ pub fn append_typed_production_elements(
             ifc_type,
             name,
             type_guid,
-            predefined_type: effective.predefined_type.map(str::to_string),
+            predefined_type: predefined_type.map(str::to_string),
             storey_index,
             material_index: None,
             property_set,
@@ -563,7 +577,7 @@ fn ifc_export_override(decoded: &DecodedElement) -> Option<&'static category_map
         .fields
         .iter()
         .find_map(|(name, value)| match (name.as_str(), value) {
-            ("m_ifc_export_as", InstanceField::String(text)) => {
+            (crate::partition_schema_mvp::IFC_EXPORT_AS_FIELD, InstanceField::String(text)) => {
                 category_map::lookup_export_override(text)
             }
             _ => None,

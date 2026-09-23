@@ -61,6 +61,7 @@ On Revit 2024 and 2025 project files, rvt-rs reads each element from its partiti
 | Rooms | `IfcSpace` with number and name | Core Interior; Revit 2025 rooms without names |
 | Names | `Family:Type:ElementId`, `ObjectType` `Family:Type` | 4,397 family instances named exactly as Revit names them |
 | System-family type names | `TypeName` in the property set of walls, floors, ceilings, roofs and railings | 2,028 of 2,029 equal to Revit's across Core Interior, Snowdon Towers, RE1, Projeto1 and `teste_export_2025`. The other is a wall that export shows in a later state of the model (RE-44) |
+| IFC export overrides | the entity and predefined type set by Revit's "Export to IFC As" and "IFC Predefined Type", the element's own or its type's | Core Interior 20 shading devices and 2 `.ROOF.` slabs; `teste_export_2025` 3 walls as `IfcCovering .CLADDING.`; each as in Revit's export (RE-45) |
 
 Across Autodesk's Snowdon Towers architectural sample (Revit 2024), rvt-rs exports 6,045 elements. 5,945 of them are in Revit's own export, which is every element Revit exports in these entities. The other 100 are elements Revit's exporter leaves out, such as empty curtain panels and opening-cut families (#309). Elements in a design option set's non-primary options and 2D-only families are left out, as Revit leaves them out, and the export diagnostics count them.
 
