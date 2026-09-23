@@ -34,7 +34,7 @@
       "IFCPRODUCTDEFINITIONSHAPE": 1108,
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 970,
-      "IFCPROPERTYSINGLEVALUE": 10471,
+      "IFCPROPERTYSINGLEVALUE": 11259,
       "IFCRECTANGLEPROFILEDEF": 1028,
       "IFCRELAGGREGATES": 3,
       "IFCRELCONTAINEDINSPATIALSTRUCTURE": 14,
@@ -683,7 +683,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "60318ed9e008be0ed24fd2499abee40480d8f3f5795fc6228483cad24cede0dc",
+  "observation_hash_sha256": "fb38cdf7c263015e2591c264cf0cb12f3d22a0ea90966ddfd965d7a0b35bc1f7",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
@@ -700,9 +700,8 @@
     "Unsupported or incomplete geometry was reported: unsupported_geometry_missing_level=1.",
     "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
     "15 building storey name(s) came from partition Level records; 488 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27), the rest through a measured elevation match.",
-    "Suppressed 1 low-confidence schema scan candidates from default export.",
     "Formats/Latest multipage integrity uncertain (checksum-page strip disabled; RVT_FORMATS_MULTIPAGE_UNVERIFIED)."
   ],
   "witness_id": "rvt-rs",
-  "witness_version": "0.1.2"
+  "witness_version": "0.2.0"
 }
