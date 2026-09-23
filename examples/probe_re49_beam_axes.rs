@@ -23,7 +23,7 @@
 //!     MODEL.rvt [MODEL.vim "Document Title"]
 
 use rvt::RevitFile;
-use rvt::partition_beam_axes::{END_TOLERANCE_FEET, beam_body, scan_beam_axes};
+use rvt::partition_beam_axes::{END_TOLERANCE_FEET, beam_body, scan_bounded_lines};
 use rvt::partition_schema_mvp::{
     FAMILY_NAME_FIELD, TYPE_NAME_FIELD, element_record_bbox, recover_partition_schema_mvp,
 };
@@ -251,7 +251,7 @@ fn main() -> rvt::Result<()> {
         .filter(|element| element.class == "StructuralFraming" && element.id.is_some())
         .collect();
     let ids: BTreeSet<u32> = beams.iter().filter_map(|beam| beam.id).collect();
-    let lines = scan_beam_axes(&mut rf, version, &ids)?;
+    let lines = scan_bounded_lines(&mut rf, version, &ids)?;
 
     let mut census: BTreeMap<&str, usize> = BTreeMap::new();
     let mut solved = Vec::new();

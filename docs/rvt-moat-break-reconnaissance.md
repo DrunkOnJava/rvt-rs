@@ -1877,4 +1877,17 @@ trimmed at supports.
 Report: `reports/element-framing/RE-49-beam-axes.md`.
 Probe: `examples/probe_re49_beam_axes.rs`.
 
+## Addendum — RE-50 roof outlines and sketch lines' exact ends (2026-09-23)
+
+A roof's `OST_SketchLines` records name the roof as their owner and close
+into its outline, as a floor's do. A sketch line's own data carries the
+bounded line record RE-49 reads for beams, so its exact ends are known;
+chaining them closes outlines whose boxes leave diagonals ambiguous. On
+Snowdon Towers 13 of 20 roofs gain an outline (11 with Revit's area) and 15
+more slabs close (11 with Revit's area); no outline that closed before
+changes.
+
+Report: `reports/element-framing/RE-50-roof-outlines.md`.
+Probe: `examples/probe_re50_roof_profiles.rs`.
+
 **End of report.**

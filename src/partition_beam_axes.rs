@@ -138,14 +138,15 @@ pub fn first_bounded_line(data: &[u8]) -> Option<BoundedLine> {
     memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG).find_map(|at| bounded_line_at(data, at))
 }
 
-/// The first bounded line in the element data of each id in `beams`, read
-/// from every partition. The data runs from its header to the next header,
-/// at most [`BEAM_DATA_WINDOW`] bytes. An id whose copies disagree is
-/// dropped; the map is empty for a release this layout is not measured on.
-pub fn scan_beam_axes(
+/// The first bounded line in the element data of each id in `ids` (a
+/// beam's location line, or a sketch line's segment, RE-50), read from every
+/// partition. The data runs from its header to the next header, at most
+/// [`BEAM_DATA_WINDOW`] bytes. An id whose copies disagree is dropped; the
+/// map is empty for a release this layout is not measured on.
+pub fn scan_bounded_lines(
     rf: &mut RevitFile,
     revit_version: u32,
-    beams: &BTreeSet<u32>,
+    ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedLine>> {
     let header = match crate::partition_names::element_data_header(revit_version) {
         Some(header) if supports_revit_version(revit_version) => header,
@@ -167,7 +168,7 @@ pub fn scan_beam_axes(
             else {
                 continue;
             };
-            if !beams.contains(&id) {
+            if !ids.contains(&id) {
                 continue;
             }
             let end = hits
