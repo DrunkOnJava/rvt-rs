@@ -70,3 +70,18 @@ End to end, `rvt-ifc` on RE1 Architecture writes:
 - `supports_revit_version` now covers `[2024, 2025]`.
 - The rf-level scans pick the marker by release, and `_with_marker` variants of `decode_at`, `find_category_records` and `count_unattributed_frames` take one explicitly.
 - The existing functions keep the 2024 marker, so callers are unaffected.
+
+## 5. Addendum: the rule predicted the 2026 marker (2026-09-22)
+
+No public Revit 2026 project was found, but the `phi-ag/rvt` family files carry element-record frames too. The §1 rule predicted a 2026 tail of `0x05f1` (1481 + 40), made before looking at the 2026 file. Measured on the four newest family releases:
+
+| family | predicted tail | tail found | first `u16` | frames with a BuiltInCategory at `+0x12` |
+|---|---|---|---|---:|
+| 2023 | `0x0582` | yes (32×) | `0x013c` | 0 |
+| 2024 | `0x05ab` | yes (32×) | `0x0146` | 27 |
+| 2025 | `0x05d3` | yes (32×) | `0x0159` | 27 |
+| **2026** | **`0x05f1`** | **yes (32×)** | **`0x0161`** | **27** |
+
+So the 2026 marker is `61 01 FF FF FF FF F1 05`, and 2026 frames have the 2024/2025 geometry.
+
+2026 decoding stays off. The instance rule has been checked against Revit's own exports only on 2024 and 2025 projects, and a family file has no export to score against. `bbox_marker(2026)` will be added when a 2026 project with a Revit IFC export can check it. The 2023 row confirms again that 2023 frames are laid out differently.
