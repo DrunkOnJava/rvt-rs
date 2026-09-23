@@ -151,16 +151,15 @@ fn revit_2025_product_categories_match_revits_export() {
 }
 
 /// RE-33 on the RE1 MEP models: every duct, duct fitting, pipe and pipe
-/// fitting rvt-rs exports is one Revit exported, and on Mechanical every
-/// duct and duct fitting is recovered. Pipes are partial: most RE1
-/// Plumbing pipes and fittings are not among the `OST_PipeCurves` /
-/// `OST_PipeFitting` records, and that recall is pinned so a change to
-/// it is measured rather than silent.
+/// fitting rvt-rs exports is one Revit exported. Most of them sit in
+/// second-prologue frames whose ElementId RE-34 infers from the reference
+/// order; the rest stay counted as unattributed. The recall is pinned so
+/// a change to it is measured rather than silent.
 #[test]
 fn revit_2025_ducts_and_pipes_are_revits_own() {
     let mut checked = 0;
     for (model, ducts, duct_fittings, pipes, pipe_fittings) in
-        [("Mechanical", 13, 14, 3, 3), ("Plumbing", 0, 0, 3, 6)]
+        [("Mechanical", 21, 18, 6, 3), ("Plumbing", 0, 0, 16, 23)]
     {
         let Some((rvt, ifc)) = re1(model) else {
             eprintln!("skipping: RVT_PROJECT_CORPUS_DIR has no RE1-{model}.rvt/.ifc");
