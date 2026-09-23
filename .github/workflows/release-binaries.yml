@@ -187,6 +187,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # Build provenance for the pushed image (actions/attest).
+      id-token: write
+      attestations: write
     env:
       # build-push-action otherwise uploads a `.dockerbuild` build record as a
       # run artifact, which `gh run download <run>` cannot fetch, so a bulk
@@ -256,6 +259,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Build and push linux/amd64 + linux/arm64
+        id: push
         if: inputs.upload
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -265,6 +269,14 @@ jobs:
           build-args: VERSION=${{ steps.meta.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+      # `gh attestation verify oci://ghcr.io/drunkonjava/rvt-rs:<version> -R DrunkOnJava/rvt-rs`
+      - name: Attest the image's build provenance
+        if: inputs.upload
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.meta.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
 
   upload:
     name: Attach to the GitHub Release
@@ -273,12 +285,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Build provenance for the archives (actions/attest).
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: "*"
           path: dist
           merge-multiple: true
+      # `gh attestation verify <archive> -R DrunkOnJava/rvt-rs`
+      - name: Attest the archives' build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/rvt-rs-*
       - name: Create the release if needed and upload
         env:
           GH_TOKEN: ${{ github.token }}
