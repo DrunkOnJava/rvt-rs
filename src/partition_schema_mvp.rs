@@ -65,6 +65,11 @@ pub struct PartitionSchemaMvp {
     /// `OST_Floors` / `OST_BuildingPad` partition element records
     /// (#212, RE-22), the only source of floors.
     pub slabs: Vec<DecodedElement>,
+    /// Furniture, casework, fixtures, curtain-wall parts, railings, wall
+    /// sweeps, ducts and pipes from partition element records
+    /// ([`crate::partition_element_records::PRODUCT_RECORD_CATEGORIES`],
+    /// RE-33).
+    pub products: Vec<DecodedElement>,
 }
 
 impl PartitionSchemaMvp {
@@ -79,7 +84,8 @@ impl PartitionSchemaMvp {
                 + self.walls.len()
                 + self.doors.len()
                 + self.windows.len()
-                + self.slabs.len(),
+                + self.slabs.len()
+                + self.products.len(),
         );
         out.extend(self.levels);
         out.extend(self.materials);
@@ -90,6 +96,7 @@ impl PartitionSchemaMvp {
         out.extend(self.doors);
         out.extend(self.windows);
         out.extend(self.slabs);
+        out.extend(self.products);
         out
     }
 }
@@ -188,6 +195,58 @@ pub fn recover_partition_schema_mvp(
     // of which a partition *string* can supply.
     out.rooms = rooms_from_partition_category_records(rf, revit_version, &level_ids)?;
 
+    // --- Other product categories from element records (RE-33) ---
+    out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
+
+    Ok(out)
+}
+
+/// Placed instances of every
+/// [`crate::partition_element_records::PRODUCT_RECORD_CATEGORIES`]
+/// category, each decoded under its class name (RE-33).
+///
+/// The selection is the #211 instance rule, the same one that reproduces
+/// the exported wall, door, window and column sets; one sweep of the
+/// partitions serves all thirteen categories. Bodies are the record
+/// bounding box, and a Level binds only when the record's reference list
+/// names exactly one.
+pub fn product_instances_from_partition_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    level_ids: &BTreeSet<u32>,
+) -> Result<Vec<DecodedElement>> {
+    use crate::partition_element_records::PRODUCT_RECORD_CATEGORIES;
+    if !crate::partition_element_records::supports_revit_version(revit_version) {
+        return Ok(Vec::new());
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => return Ok(Vec::new()),
+    };
+    if declared.is_empty() {
+        return Ok(Vec::new());
+    }
+    let categories: Vec<i64> = PRODUCT_RECORD_CATEGORIES.iter().map(|(c, _)| *c).collect();
+    let records = crate::partition_element_records::scan_category_records_multi(
+        rf,
+        revit_version,
+        &categories,
+        &declared,
+    )?;
+    let mut by_category: std::collections::BTreeMap<i64, Vec<_>> =
+        std::collections::BTreeMap::new();
+    for record in records {
+        by_category
+            .entry(record.builtin_category)
+            .or_default()
+            .push(record);
+    }
+    let mut out = Vec::new();
+    for (category, class) in PRODUCT_RECORD_CATEGORIES {
+        if let Some(records) = by_category.remove(&category) {
+            out.extend(instances_from_records(records, class, level_ids));
+        }
+    }
     Ok(out)
 }
 

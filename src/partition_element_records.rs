@@ -143,6 +143,73 @@ pub const OST_ROOMS: i64 = -2_000_160;
 /// [`PartitionElementRecord::owner_reference`] (#31, RE-25).
 pub const OST_SKETCH_LINES: i64 = -2_000_045;
 
+// RE-33: categories whose element records export as typed products.
+// Each was found the way `OST_Rooms` was: a census of every decodable
+// record's category, scored against the `Tag` sets of Revit's own
+// exports (see `PRODUCT_RECORD_CATEGORIES`). The names are the public
+// `BuiltInCategory` enum members.
+
+/// Autodesk `BuiltInCategory.OST_Furniture`.
+pub const OST_FURNITURE: i64 = -2_000_080;
+/// Autodesk `BuiltInCategory.OST_Casework`.
+pub const OST_CASEWORK: i64 = -2_001_000;
+/// Autodesk `BuiltInCategory.OST_PlumbingFixtures`.
+pub const OST_PLUMBING_FIXTURES: i64 = -2_001_160;
+/// Autodesk `BuiltInCategory.OST_SpecialityEquipment`.
+pub const OST_SPECIALITY_EQUIPMENT: i64 = -2_001_350;
+/// Autodesk `BuiltInCategory.OST_Ceilings`.
+pub const OST_CEILINGS: i64 = -2_000_038;
+/// Autodesk `BuiltInCategory.OST_CurtainWallMullions`.
+pub const OST_CURTAIN_WALL_MULLIONS: i64 = -2_000_171;
+/// Autodesk `BuiltInCategory.OST_CurtainWallPanels`.
+pub const OST_CURTAIN_WALL_PANELS: i64 = -2_000_170;
+/// Autodesk `BuiltInCategory.OST_StairsRailing` — railings.
+pub const OST_STAIRS_RAILING: i64 = -2_000_126;
+/// Autodesk `BuiltInCategory.OST_Cornices` — wall sweeps.
+pub const OST_CORNICES: i64 = -2_000_181;
+/// Autodesk `BuiltInCategory.OST_DuctCurves` — ducts.
+pub const OST_DUCT_CURVES: i64 = -2_008_000;
+/// Autodesk `BuiltInCategory.OST_DuctFitting`.
+pub const OST_DUCT_FITTING: i64 = -2_008_010;
+/// Autodesk `BuiltInCategory.OST_PipeCurves` — pipes.
+pub const OST_PIPE_CURVES: i64 = -2_008_044;
+/// Autodesk `BuiltInCategory.OST_PipeFitting`.
+pub const OST_PIPE_FITTING: i64 = -2_008_049;
+
+/// Categories whose placed element records export directly as typed IFC
+/// products, with the class name each is decoded as (RE-33).
+///
+/// On every file where a category occurs, the RE-21 instance rule (no
+/// container reference, placed) selects only ElementIds that Revit's own
+/// export carries as `Tag`, with no false positive:
+///
+/// - `Drshelden/IFC-ECS` RE1 (Revit 2025, MIT): furniture 13, casework
+///   10, plumbing fixtures 7, specialty equipment 9, ceilings 6,
+///   mullions 10, panels 2, railings 1 (Architecture); ducts 13, duct
+///   fittings 14, pipes 3, pipe fittings 3 (Mechanical); pipes 3, pipe
+///   fittings 6 (Plumbing);
+/// - Snowdon Towers Architectural (Revit 2024, local only): wall sweeps
+///   36, furniture 1.
+///
+/// Recall is not complete. Most Snowdon frames use the second prologue
+/// (RE-30) and are counted by [`scan_unattributed_frames`], and most
+/// RE1 Plumbing pipes and fittings are not among these records at all.
+pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 13] = [
+    (OST_FURNITURE, "Furniture"),
+    (OST_CASEWORK, "Casework"),
+    (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
+    (OST_SPECIALITY_EQUIPMENT, "SpecialtyEquipment"),
+    (OST_CEILINGS, "Ceiling"),
+    (OST_CURTAIN_WALL_MULLIONS, "CurtainWallMullion"),
+    (OST_CURTAIN_WALL_PANELS, "CurtainWallPanel"),
+    (OST_STAIRS_RAILING, "Railing"),
+    (OST_CORNICES, "WallSweep"),
+    (OST_DUCT_CURVES, "Duct"),
+    (OST_DUCT_FITTING, "DuctFitting"),
+    (OST_PIPE_CURVES, "Pipe"),
+    (OST_PIPE_FITTING, "PipeFitting"),
+];
+
 /// Lower bound of the Revit `BuiltInCategory` id band.
 pub const BUILTIN_CATEGORY_MIN: i64 = -2_100_000;
 /// Upper bound of the Revit `BuiltInCategory` id band.
@@ -605,8 +672,9 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 /// The categories the exporter recovers instances of, with the class name
-/// each is decoded as.
-pub const RECOVERED_CATEGORIES: [(i64, &str); 7] = [
+/// each is decoded as: the architectural core plus
+/// [`PRODUCT_RECORD_CATEGORIES`].
+pub const RECOVERED_CATEGORIES: [(i64, &str); 20] = [
     (OST_WALLS, "Wall"),
     (OST_DOORS, "Door"),
     (OST_WINDOWS, "Window"),
@@ -614,11 +682,24 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 7] = [
     (OST_FLOORS, "Floor"),
     (OST_BUILDING_PAD, "BuildingPad"),
     (OST_ROOMS, "Room"),
+    (OST_FURNITURE, "Furniture"),
+    (OST_CASEWORK, "Casework"),
+    (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
+    (OST_SPECIALITY_EQUIPMENT, "SpecialtyEquipment"),
+    (OST_CEILINGS, "Ceiling"),
+    (OST_CURTAIN_WALL_MULLIONS, "CurtainWallMullion"),
+    (OST_CURTAIN_WALL_PANELS, "CurtainWallPanel"),
+    (OST_STAIRS_RAILING, "Railing"),
+    (OST_CORNICES, "WallSweep"),
+    (OST_DUCT_CURVES, "Duct"),
+    (OST_DUCT_FITTING, "DuctFitting"),
+    (OST_PIPE_CURVES, "Pipe"),
+    (OST_PIPE_FITTING, "PipeFitting"),
 ];
 
-/// Frames in `buf`, per category, that carry the bbox marker at `+0x50`
-/// and one of `categories` at `+0x12` but no ElementId at `+0x00` (a
-/// `u64` of 0 or above `u32::MAX`).
+/// Placed-instance frames in `buf`, per category, that carry the bbox
+/// marker at `+0x50` and one of `categories` at `+0x12` but no ElementId
+/// at `+0x00` (a `u64` of 0 or above `u32::MAX`).
 ///
 /// This is the second prologue RE-30 measured on Autodesk's Snowdon
 /// Towers samples: shaped like an element record from the category to
@@ -626,6 +707,17 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 7] = [
 /// rejects it. Counting them is what lets an export say how much of a
 /// file it could not attribute instead of looking complete. None on
 /// `2024_Core_Interior.rvt`.
+///
+/// Only frames that pass the RE-21 instance rule count: no container
+/// reference at [`CONTAINER_OFFSET`] and the placed-instance kind at
+/// [`PLACEMENT_KIND_OFFSET`]. The second prologue keeps both fields where
+/// the first has them (RE-33), and with the rule the count reproduces
+/// the number of elements Revit's own export holds that rvt-rs does not:
+/// on Snowdon Towers 1,425 mullions, 118 columns, 131 railings, 68
+/// ceilings and 344 furniture and casework, all exactly; on the RE1 MEP
+/// models 60 pipes, 48 pipe fittings, 18 duct fittings and 15 duct and
+/// pipe segments, all exactly. Without it, container members and type
+/// symbols counted too (6,019 frames on Snowdon against 4,886).
 pub fn count_unattributed_frames(buf: &[u8], categories: &[i64]) -> BTreeMap<i64, usize> {
     count_unattributed_frames_with_marker(buf, categories, &BBOX_MARKER)
 }
@@ -648,7 +740,13 @@ pub fn count_unattributed_frames_with_marker(
         if !categories.contains(&category) {
             continue;
         }
-        if read_u64(buf, offset).is_some_and(|id| id == 0 || id > u64::from(u32::MAX)) {
+        if !read_u64(buf, offset).is_some_and(|id| id == 0 || id > u64::from(u32::MAX)) {
+            continue;
+        }
+        let uncontained = read_u64(buf, offset + CONTAINER_OFFSET) == Some(CONTAINER_NONE);
+        let placed = read_u64(buf, offset + PLACEMENT_KIND_OFFSET)
+            .is_some_and(|v| (v & 0xffff_ffff) as u32 == PLACEMENT_KIND_INSTANCE);
+        if uncontained && placed {
             *counts.entry(category).or_insert(0) += 1;
         }
     }
@@ -818,7 +916,16 @@ mod tests {
         high_word[0..8].copy_from_slice(&0x0000_0006_ffff_ffff_u64.to_le_bytes());
         let mut outside = synth_record(1, OST_SKETCH_LINES, bbox);
         outside[0..8].fill(0xff);
-        let buf = [attributed, all_ff, high_word, outside].concat();
+        // RE-33: a contained frame or a type symbol is not a missing
+        // element, so neither counts.
+        let mut contained = synth_record(1, OST_WALLS, bbox);
+        contained[0..8].fill(0xff);
+        contained[CONTAINER_OFFSET..CONTAINER_OFFSET + 8].copy_from_slice(&20274u64.to_le_bytes());
+        let mut symbol = synth_record(1, OST_DOORS, bbox);
+        symbol[0..8].fill(0xff);
+        symbol[PLACEMENT_KIND_OFFSET..PLACEMENT_KIND_OFFSET + 4]
+            .copy_from_slice(&PLACEMENT_KIND_SYMBOL.to_le_bytes());
+        let buf = [attributed, all_ff, high_word, outside, contained, symbol].concat();
 
         let counts = count_unattributed_frames(&buf, &[OST_WALLS, OST_DOORS]);
         assert_eq!(counts, BTreeMap::from([(OST_WALLS, 1), (OST_DOORS, 1)]));
@@ -1138,5 +1245,33 @@ mod tests {
         assert_eq!(record.preceding_reference, None);
         assert_eq!(record.owner_reference, None);
         assert!(record.references.is_empty());
+    }
+
+    #[test]
+    fn product_categories_are_distinct_mapped_and_counted() {
+        let mut seen = BTreeSet::new();
+        for (category, class) in PRODUCT_RECORD_CATEGORIES {
+            assert!(seen.insert(category), "{category} listed twice");
+            assert!(
+                (BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&category),
+                "{category} outside the BuiltInCategory band"
+            );
+            assert!(
+                crate::ifc::category_map::lookup(class).is_some(),
+                "{class} has no IFC mapping"
+            );
+            assert!(
+                RECOVERED_CATEGORIES.contains(&(category, class)),
+                "{class} frames without an ElementId would go uncounted"
+            );
+        }
+    }
+
+    #[test]
+    fn a_product_category_record_decodes_like_any_other() {
+        let buf = synth_record(738550, OST_FURNITURE, [1.0, 2.0, 0.0, 3.0, 4.0, 2.5]);
+        let record = decode_at("Partitions/12", &buf, 0, &declared(&[738550])).expect("decodes");
+        assert_eq!(record.builtin_category, OST_FURNITURE);
+        assert_eq!(record.element_id, 738550);
     }
 }

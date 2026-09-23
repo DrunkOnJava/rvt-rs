@@ -10,7 +10,7 @@ diagnostics, and support triage. It is not yet a general Revit model converter.
 | File extensions | `.rvt`, `.rfa`, `.rte`, `.rft` containers that use the standard Revit OLE/CFB layout. |
 | Revit versions | Metadata/schema inspection is regression-tested against the 2016-2026 family corpus. |
 | Safe workflows | `rvt-inspect`, `rvt-info`, `rvt-schema`, previews, stream inventory, document metadata, class schema, and diagnostics sidecars (`Formats/Latest` multipage integrity uncertain while strip stays disabled). |
-| IFC output | Spec-valid IFC4 scaffold with project/spatial framework; partition MVP Level storeys / Room spaces / Material names when recovered (Floor boundary-loop slabs only where no element records decode); typed wall geometry limited to the version-gated 2023 ArcWall path; on Revit 2024, `IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` / `IfcShadingDevice` instances from partition element records with a measured slab thickness (#204 / #211 / #212), slab plan profiles from their sketch lines (#31), wall runs cut back by the joins the record names (351 of 360 world-exact) and column bodies cut by the walls that cut them (256 of 256 world-exact, #239 / RE-29) — exact against Revit's own export on the one recorded edge, not a general converter. |
+| IFC output | Spec-valid IFC4 scaffold with project/spatial framework; partition MVP Level storeys and Material names when recovered; typed wall geometry limited to the version-gated 2023 ArcWall path; on Revit 2024, `IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` / `IfcShadingDevice` / `IfcSpace` instances from partition element records with a measured slab thickness (#204 / #211 / #212), slab plan profiles from their sketch lines (#31), wall runs cut back by the joins the record names (351 of 360 world-exact) and column bodies cut by the walls that cut them (256 of 256 world-exact, #239 / RE-29) — exact against Revit's own export on the one recorded edge, not a general converter. On Revit 2024 and 2025 the same records also give furniture, casework, plumbing fixtures, specialty equipment, ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts, pipes and their fittings, as bounding-box bodies, with no element Revit's own export lacks (RE-33); Revit 2025 walls, slabs and rooms follow RE-32. |
 | Browser viewer | Zero-upload inspection, File Status (storey names + material samples), scene tree storey grouping when elevations allow, a typed element info panel (name, type, GUID, clickable storey, placement and extents in feet, property sets as unit-carrying rows, host and hosted rows), a schedule grouped by IFC type with per-type scene highlight, and explicit export-readiness labels before download. |
 
 ## Experimental MVP Target
@@ -20,7 +20,7 @@ The first real-model conversion profile is intentionally narrow:
 | Dimension | Target |
 |---|---|
 | File type | `.rvt` project files before `.rfa` family geometry. |
-| Versions | Revit 2023 and 2024 project files first, because the current project corpus and ArcWall evidence live there. |
+| Versions | Revit 2024 and 2025 project files first, because the element-record evidence lives there; 2023 through the ArcWall path. |
 | Discipline | Architectural core before MEP/structure-heavy projects. |
 | Classes | Levels, walls, floors/slabs, doors, windows, rooms/spaces, materials, and common parameters. |
 | Export quality | `rvt-ifc --mode strict` must reject files that cannot meet the requested quality. |

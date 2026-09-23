@@ -71,15 +71,23 @@ and `unsupported_geometry_missing_dimensions`. A single element can appear in
 more than one geometry bucket because these are condition counts, not a
 deduplicated element total.
 
-`element_record_without_element_id` counts the wall, door, window, column,
-floor, building-pad and room element records whose frame is in place (the
-`BuiltInCategory` at `+0x12` and the bounding-box marker at `+0x50`) but whose
-`+0x00` holds no ElementId, keyed by class in `classes`. The fail-closed
-decode cannot attribute them, so none is exported, and a matching warning says
-the model is incomplete. It is absent on `2024_Core_Interior.rvt` and on every
+`element_record_without_element_id` counts the element records of every
+recovered category whose frame is in place (the `BuiltInCategory` at `+0x12`
+and the bounding-box marker at `+0x50`) but whose `+0x00` holds no ElementId,
+keyed by class in `classes`. The recovered categories are walls, doors,
+windows, columns, floors, building pads and rooms, plus the RE-33 product
+categories: furniture, casework, plumbing fixtures, specialty equipment,
+ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts,
+duct fittings, pipes and pipe fittings. Only placed instances count (no
+container reference, placement kind `0xffffef7f`), so container members and
+type symbols do not inflate it. The fail-closed decode cannot attribute these
+records, so none is exported, and a matching warning says the model is
+incomplete. It is absent on `2024_Core_Interior.rvt` and on every
 project-count fixture. On Autodesk's Snowdon Towers 2024 architectural sample
-it is 2,043 against 7 decodable records (see
-`reports/element-framing/RE-30-snowdon-generalisation.md`).
+it is 4,886 against 43 decodable instances, and there it matches Revit's own
+export exactly for mullions, columns, railings, ceilings and furniture (see
+`reports/element-framing/RE-30-snowdon-generalisation.md` and
+`reports/element-framing/RE-33-product-categories.md`).
 
 `unsupported_features` carries exactly one geometry-coverage code:
 `real_file_element_geometry` when **no** exported building element has a
@@ -103,7 +111,7 @@ Important nested fields:
 | `exported.storey_bound_elements` | integer | Building elements contained in a specific storey. The rest are contained in the `IfcBuilding`, never in a named storey. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
 | `confidence.score` | number | Heuristic 0..1 readiness score for UI sorting and dashboards. Its element terms (elements, typed elements, geometry) are scaled by the exported share when `unexported_element_records` is non-zero. |
-| `confidence.unexported_element_records` | integer | Wall, door, window, column, floor or room records the partition scan found but could not export because no ElementId is attributable (RE-30). Non-zero means the model is incomplete. Zero is not a completeness claim. |
+| `confidence.unexported_element_records` | integer | Element records of a recovered category (walls, doors, windows, columns, floors, rooms and the RE-33 product categories) the partition scan found but could not export because no ElementId is attributable (RE-30). Non-zero means the model is incomplete. Zero is not a completeness claim. |
 
 ## Storey provenance
 

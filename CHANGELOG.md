@@ -8,6 +8,25 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Thirteen more categories from Revit 2024 and 2025 element records
+  (RE-33).** Furniture, casework, plumbing fixtures, specialty equipment,
+  ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts,
+  duct fittings, pipes and pipe fittings now decode under the same instance
+  rule as walls and doors. They export as `IfcFurniture`,
+  `IfcSanitaryTerminal`, `IfcBuildingElementProxy`, `IfcCovering`,
+  `IfcMember`, `IfcPlate`, `IfcRailing`, `IfcDuctSegment`, `IfcDuctFitting`,
+  `IfcPipeSegment` and `IfcPipeFitting`, with bounding-box bodies.
+  - Every exported element is one Revit's own export of the same file also
+    holds, by ElementId: zero false positives on the MIT RE1 Architecture,
+    Mechanical and Plumbing models (Revit 2025) and on Snowdon Towers
+    (Revit 2024).
+  - RE1 Architecture gains all 58 of its elements in these categories.
+    Recall on the MEP models and Snowdon is partial, because most of their
+    records use the second prologue (RE-30).
+  - CI tier 2 now also fetches RE1 Mechanical and Plumbing, and
+    `tests/element_records_2025.rs` checks every category against them.
+    `examples/probe_re33_category_census.rs` is the census.
+
 - **Revit 2025 projects export walls, slabs and rooms (RE-32).** Element
   records in 2025 files have the 2024 shape, but the 8-byte marker in front
   of the bounding box changes with each release. Its tail is the release's
@@ -41,6 +60,19 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The "incomplete model" count covers missing elements, not every
+  unreadable frame.** Frames with no ElementId at `+0x00` keep the
+  container and placement fields of the instance rule (RE-33), so
+  `element_record_without_element_id` and
+  `confidence.unexported_element_records` now count only placed instances.
+  On the MIT RE1 models the count now equals the elements Revit exported
+  and rvt-rs did not, exactly for pipes (60), pipe fittings (48), duct
+  fittings (18) and duct and pipe segments (15). On Snowdon Towers it does
+  the same for mullions (1,425), columns (118), railings (131), ceilings
+  (68) and furniture (344), and falls from 6,019 frames to 4,886.
+- `SpecialtyEquipment`, `FurnitureSystem` and `Mass` no longer map to a
+  `USERDEFINED` PredefinedType with no `ObjectType`, which IFC4 forbids.
+
 - **Export readiness no longer reads 100% on an incomplete model.** When
   the partition scan finds wall, door, window, column, floor or room records
   with no attributable ElementId (RE-30), the export skips them. The score
@@ -51,8 +83,9 @@ All notable changes will be documented here. This project follows
     elements, geometry) now count only for the exported share. Metadata and
     units still count in full.
   - Measured: Snowdon Towers Architectural 100% -> 36%, Snowdon Structural
-    -> 52%, RE1 Architecture (Revit 2025) -> 69%. Core Interior and
-    Einhoven, which leave nothing out, stay at 100%.
+    -> 52%, RE1 Architecture (Revit 2025) -> 95% (its 5 doors and 1 curtain
+    wall are left out). Core Interior and Einhoven, which leave nothing out,
+    stay at 100%.
   - `rvt-inspect` reports a new `incomplete_model` failure mode, names the
     count in its readiness summary and next steps, and `rvt-ifc` prints a
     warning to stderr. The viewer's status panel shows "Incomplete model"

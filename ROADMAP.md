@@ -20,7 +20,10 @@ recovers for **Level** / **Material**, 2024
 **ArcWallRectOpening** index rows (ElemTable-confirmed related ids;
 never inventing typed `Door`/`Window` success), and 2024 partition
 element-record **Wall** / **Door** / **Window** / **Column** /
-**Floor** / **BuildingPad** instances (#204 / #211 / #212). IFC export
+**Floor** / **BuildingPad** instances (#204 / #211 / #212), plus, on 2024
+and 2025, furniture, casework, plumbing fixtures, specialty equipment,
+ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts and
+pipes (RE-33). IFC export
 wires partition **Level** → storeys, **Floor** / **BuildingPad** →
 `IFCSLAB` (or `IFCSHADINGDEVICE` under a per-element Revit export
 override), **Room** → `IFCSPACE`, and **Material** display names →

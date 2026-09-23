@@ -126,6 +126,25 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCRAILING",
         predefined_type: None,
     },
+    // Curtain-wall parts (RE-33): Revit's IFC4 export writes a mullion as
+    // `IfcMember` `.MULLION.` and a panel as `IfcPlate` `.CURTAIN_PANEL.`.
+    Mapping {
+        revit_class: "CurtainWallMullion",
+        ifc_type: "IFCMEMBER",
+        predefined_type: Some("MULLION"),
+    },
+    Mapping {
+        revit_class: "CurtainWallPanel",
+        ifc_type: "IFCPLATE",
+        predefined_type: Some("CURTAIN_PANEL"),
+    },
+    // `OST_Cornices`: Revit's IFC4 export writes a wall sweep as
+    // `IfcBuildingElementProxy` `.NOTDEFINED.` (RE-33).
+    Mapping {
+        revit_class: "WallSweep",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
+        predefined_type: Some("NOTDEFINED"),
+    },
     Mapping {
         revit_class: "Ramp",
         ifc_type: "IFCRAMP",
@@ -237,7 +256,7 @@ pub const MAPPINGS: &[Mapping] = &[
     Mapping {
         revit_class: "FurnitureSystem",
         ifc_type: "IFCFURNITURE",
-        predefined_type: Some("USERDEFINED"),
+        predefined_type: None,
     },
     Mapping {
         revit_class: "Casework",
@@ -272,13 +291,34 @@ pub const MAPPINGS: &[Mapping] = &[
     Mapping {
         revit_class: "SpecialtyEquipment",
         ifc_type: "IFCBUILDINGELEMENTPROXY",
-        predefined_type: Some("USERDEFINED"),
+        predefined_type: None,
+    },
+    // Ducts and pipes (RE-33), as their IFC4 distribution-element types.
+    Mapping {
+        revit_class: "Duct",
+        ifc_type: "IFCDUCTSEGMENT",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "DuctFitting",
+        ifc_type: "IFCDUCTFITTING",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "Pipe",
+        ifc_type: "IFCPIPESEGMENT",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "PipeFitting",
+        ifc_type: "IFCPIPEFITTING",
+        predefined_type: None,
     },
     // Massing / abstract.
     Mapping {
         revit_class: "Mass",
         ifc_type: "IFCBUILDINGELEMENTPROXY",
-        predefined_type: Some("USERDEFINED"),
+        predefined_type: None,
     },
     Mapping {
         revit_class: "GenericModel",

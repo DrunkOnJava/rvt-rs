@@ -27,8 +27,8 @@ REPOS=(
     "DynamoDS/RefineryPrimer"
     "chuongmep/OpenMEP"
     "theseus-rs/file-type"
-    # Revit 2025 projects with Revit's own IFC exports (MIT): the RE-32 oracle,
-    # used by tests/element_records_2025.rs with
+    # Revit 2025 projects with Revit's own IFC exports (MIT): the RE-32 and
+    # RE-33 oracles, used by tests/element_records_2025.rs with
     # RVT_PROJECT_CORPUS_DIR=<target>/IFC-ECS/data/RE1.
     "Drshelden/IFC-ECS"
 )
