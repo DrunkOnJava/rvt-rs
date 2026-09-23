@@ -979,6 +979,7 @@ mod tests {
             owner_reference: None,
             references: Vec::new(),
             id_from_enclosing_record: true,
+            design_option: None,
         };
         let levels = std::collections::BTreeSet::new();
         let mut elements = crate::partition_schema_mvp::instances_from_records(

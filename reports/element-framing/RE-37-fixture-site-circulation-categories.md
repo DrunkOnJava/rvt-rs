@@ -42,7 +42,7 @@ On RE1 Electrical these fixtures are the first elements rvt-rs exports at all. R
 |---|---:|---:|---|
 | `OST_ElectricalFixtures` (RE1 Electrical) | 15 | 15 | half the placed instances are elements Revit's export leaves out; cause not established |
 | `OST_LightingDevices` (RE1 Electrical) | 12 | 6 | same |
-| `OST_EdgeSlab` (Snowdon) | 59 | 9 | all 9 omissions carry non-primary design option 2059967 at `+0x2a` (RE-35 §5); the 9 in the primary option and the 50 in none are all exported. Waits for a primary-option test (#319). |
+| `OST_EdgeSlab` (Snowdon) | 59 | 9 | all 9 omissions carry non-primary design option 2059967 at `+0x2a` (RE-35 §5); the 9 in the primary option and the 50 in none are all exported. Waits for a primary-option test (#319). **Added by RE-40**, which reads the primary. |
 | `OST_FireAlarmDevices`, `OST_DataDevices`, `OST_ElectricalEquipment`, `OST_MechanicalEquipment` (RE1) | 5, 2, 3, 1 | 0 | only IFC2x3 references (`IfcDistributionControlElement`, `IfcFlowTerminal`, proxy); the IFC4 entity Revit writes is unmeasured |
 | `OST_Stairs`, `OST_StairsRuns`, `OST_StairsLandings`, stringers, `OST_Roofs` (Snowdon) | 27, 43, 17, 170, 20 | 0, 0, 0, 1, 0 | Revit exports these as aggregates (a stair of flights, landings and stringers; a roof of slabs); a bounding box for each part would double the volume |
 

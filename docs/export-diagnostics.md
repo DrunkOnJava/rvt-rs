@@ -109,6 +109,16 @@ not count toward `unexported_element_records`. On Snowdon Towers all 60 of
 them (45 specialty equipment, 15 plumbing fixtures) are absent from Revit's
 export, and no element Revit does export lacks volume (#309).
 
+`element_record_in_non_primary_design_option` counts placed instances of a
+recovered category that belong to a design option other than their set's
+primary one. Revit's own IFC export writes the main model and each option
+set's primary option by default, and leaves the other options out; rvt-rs
+reads the primary from the set's name entry and does the same. These are
+omitted by design too, and do not count toward `unexported_element_records`.
+A set whose primary cannot be read keeps all its options. On Snowdon Towers
+the count is 27 (9 floors, 9 slab edges, 8 walls, one generic model), none of
+which Revit's export holds (RE-40).
+
 `unsupported_features` carries exactly one geometry-coverage code:
 `real_file_element_geometry` when **no** exported building element has a
 recovered body, and `partial_element_geometry` when some do and some do not

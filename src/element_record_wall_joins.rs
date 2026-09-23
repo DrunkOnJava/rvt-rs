@@ -333,6 +333,7 @@ mod tests {
             owner_reference: None,
             references,
             id_from_enclosing_record: false,
+            design_option: None,
         }
     }
 

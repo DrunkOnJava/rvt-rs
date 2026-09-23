@@ -17,7 +17,8 @@
 //! +0x0c  u32  0x0000059f on every observed record of this shape
 //! +0x10  u16  0
 //! +0x12  i64  BuiltInCategory id, negative (OST_Columns = -2000100)
-//! +0x1a  24B  0xff sentinel padding (three u64 slots, never set here)
+//! +0x1a  16B  0xff sentinel padding (two u64 slots, never set here)
+//! +0x2a  u64  design option ElementId, 0xff×8 = main model (#319)
 //! +0x32  u64  container ElementId, 0xffff_ffff_ffff_ffff = none
 //! +0x3a  u64  0xff sentinel (never set on observed records)
 //! +0x42  u32  placement kind: 0xffffef7f placed / 0xffff8000 symbol
@@ -233,6 +234,12 @@ pub const OST_STAIRS_STRINGER_CARRIAGE: i64 = -2_000_123;
 /// (#323).
 pub const OST_ROOFS: i64 = -2_000_035;
 
+/// Autodesk `BuiltInCategory.OST_EdgeSlab` — slab edges. Revit's own export
+/// writes them as `IfcBuildingElementProxy`; on Snowdon Towers it holds all
+/// 59 slab edges outside a non-primary design option and none of the 9 in
+/// one (RE-40, #319).
+pub const OST_EDGE_SLAB: i64 = -2_001_392;
+
 /// Categories whose placed element records export directly as typed IFC
 /// products, with the class name each is decoded as (RE-33).
 ///
@@ -255,7 +262,8 @@ pub const OST_ROOFS: i64 = -2_000_035;
 /// carries has the record's category there (914 framing members, 74
 /// columns, 90 foundations, 91 generic models, none under another
 /// category), and 260 of the 261 generic models on the architectural
-/// sample are in Revit's IFC4 export.
+/// sample are in Revit's IFC4 export. The 261st is in a non-primary design
+/// option, which the exporter now leaves out (RE-40).
 ///
 /// RE-37 adds lighting fixtures, air terminals, food-service equipment,
 /// planting, parking, entourage, hardscape, vertical circulation and
@@ -263,7 +271,11 @@ pub const OST_ROOFS: i64 = -2_000_035;
 /// outside it: 447 lighting fixtures, 26 food-service items, 157 site
 /// elements, 2 ramps and 2 elevators on Snowdon Towers; 7 air terminals on
 /// RE1 Mechanical; 12 lighting fixtures on RE1 Electrical.
-pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 31] = [
+///
+/// RE-39 adds stairs with their runs, landings and stringers, and roofs.
+/// RE-40 adds slab edges, once elements in non-primary design options are
+/// left out: all 59 exported on Snowdon Towers are Revit's.
+pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 32] = [
     (OST_FURNITURE, "Furniture"),
     (OST_CASEWORK, "Casework"),
     (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
@@ -295,6 +307,7 @@ pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 31] = [
     (OST_STAIRS_LANDINGS, "StairsLanding"),
     (OST_STAIRS_STRINGER_CARRIAGE, "StairsStringer"),
     (OST_ROOFS, "Roof"),
+    (OST_EDGE_SLAB, "SlabEdge"),
 ];
 
 /// Smallest bounding-box extent, in feet, a placed instance needs on every
@@ -312,6 +325,11 @@ pub const CATEGORY_OFFSET: usize = 0x12;
 pub const CONTAINER_OFFSET: usize = 0x32;
 /// Sentinel value of the container reference meaning "no container".
 pub const CONTAINER_NONE: u64 = u64::MAX;
+/// Offset of the design-option ElementId from the record start: `0xff`×8
+/// for an element of the main model, otherwise the `OST_DesignOptions`
+/// record the element belongs to (#319, RE-40). The same offset holds it in
+/// the second prologue (RE-30).
+pub const DESIGN_OPTION_OFFSET: usize = 0x2a;
 /// Offset of the placement-kind word from the record start.
 pub const PLACEMENT_KIND_OFFSET: usize = 0x42;
 /// Placement-kind value carried by a placed element instance.
@@ -414,6 +432,14 @@ pub struct PartitionElementRecord {
     /// `false` for a frame that starts its record, with the id at `+0x00`.
     #[serde(default)]
     pub id_from_enclosing_record: bool,
+    /// The design option the element belongs to, from `+0x2a`
+    /// ([`DESIGN_OPTION_OFFSET`]). `None` for the main model, and for a
+    /// value outside the `u32` ElementId range.
+    ///
+    /// Whether the option is its set's primary one is document-level
+    /// knowledge: see [`crate::partition_design_options`].
+    #[serde(default)]
+    pub design_option: Option<u32>,
 }
 
 impl PartitionElementRecord {
@@ -740,6 +766,7 @@ pub fn decode_frame_as(
     let owner_reference = offset
         .checked_add(REFERENCE_LIST_OFFSET)
         .and_then(|at| decode_owner_reference(buf, at));
+    let design_option = frame_design_option(buf, offset);
     Some(PartitionElementRecord {
         stream: stream.to_string(),
         offset,
@@ -753,7 +780,16 @@ pub fn decode_frame_as(
         owner_reference,
         references,
         id_from_enclosing_record: false,
+        design_option,
     })
+}
+
+/// The design option at `+0x2a` of the frame at `offset`
+/// ([`PartitionElementRecord::design_option`]).
+pub fn frame_design_option(buf: &[u8], offset: usize) -> Option<u32> {
+    read_u64(buf, offset.checked_add(DESIGN_OPTION_OFFSET)?)
+        .filter(|value| *value != u64::MAX)
+        .and_then(|value| u32::try_from(value).ok())
 }
 
 /// Whether the frame at `offset` is a placed instance under the RE-21
@@ -1037,7 +1073,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// The categories the exporter recovers instances of, with the class name
 /// each is decoded as: the architectural core plus
 /// [`PRODUCT_RECORD_CATEGORIES`].
-pub const RECOVERED_CATEGORIES: [(i64, &str); 38] = [
+pub const RECOVERED_CATEGORIES: [(i64, &str); 39] = [
     (OST_WALLS, "Wall"),
     (OST_DOORS, "Door"),
     (OST_WINDOWS, "Window"),
@@ -1076,6 +1112,7 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 38] = [
     (OST_STAIRS_LANDINGS, "StairsLanding"),
     (OST_STAIRS_STRINGER_CARRIAGE, "StairsStringer"),
     (OST_ROOFS, "Roof"),
+    (OST_EDGE_SLAB, "SlabEdge"),
 ];
 
 /// Placed-instance frames in `buf`, per category, that carry the bbox
@@ -1202,11 +1239,18 @@ pub fn scan_volumeless_instances(
     };
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
     let records = scan_category_records_multi(rf, revit_version, &categories, &declared)?;
+    // An element in a non-primary design option is left out for that reason
+    // instead, and counted by
+    // `partition_design_options::scan_non_primary_option_instances`.
+    let options = rf.design_options();
     // An element framed more than once counts once, and only when no frame
     // of it has volume.
     let mut with_volume: BTreeSet<u32> = BTreeSet::new();
     let mut without: BTreeMap<u32, i64> = BTreeMap::new();
-    for record in records.iter().filter(|r| r.is_exported_instance()) {
+    for record in records
+        .iter()
+        .filter(|r| r.is_exported_instance() && !options.excludes(r))
+    {
         if record.has_volume() {
             with_volume.insert(record.element_id);
         } else {
