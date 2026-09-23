@@ -142,6 +142,7 @@ pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;
 pub mod partition_arc_walls;
+pub mod partition_beam_axes;
 pub mod partition_design_options;
 pub mod partition_element_records;
 pub mod partition_ifc_export_overrides;

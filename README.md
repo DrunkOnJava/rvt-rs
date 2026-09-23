@@ -57,7 +57,7 @@ On Revit 2024 and 2025 project files, rvt-rs reads each element from its partiti
 | Railings, curtain panels, mullions | `IfcRailing`, `IfcPlate`, `IfcMember` | Snowdon Towers 131 railings, every mullion |
 | Furniture, casework, plumbing, lighting, equipment | `IfcFurniture`, `IfcSanitaryTerminal`, `IfcLightFixture`, `IfcElectricAppliance`, proxies | RE1 models and Snowdon Towers, every one Revit exports |
 | Ducts, pipes, fittings, air terminals | `IfcDuctSegment`, `IfcPipeSegment`, their fittings, `IfcAirTerminal` | RE1 Mechanical and Plumbing, every one |
-| Structural framing, columns, foundations | `IfcBeam`, `IfcColumn`, `IfcFooting` | Snowdon structural sample: all 1,078 in the category its VIM export gives them |
+| Structural framing, columns, foundations | `IfcBeam` along its location line, `IfcColumn`, `IfcFooting` | Snowdon structural sample: all 1,078 in the category its VIM export gives them; 923 of 942 beams run along their line, with Revit's own section on 613 of the 839 a later edition kept unchanged, and on 179 more less the top a floor join cuts (RE-49) |
 | Site elements, generic models, slab edges, elevators, ramps | proxies, `IfcTransportElement`, `IfcRamp` | Snowdon Towers, every one Revit exports |
 | Rooms | `IfcSpace` with number and name | Core Interior; Revit 2025 rooms without names |
 | Names | `Family:Type:ElementId`, `ObjectType` `Family:Type` | 4,397 family instances named exactly as Revit names them |

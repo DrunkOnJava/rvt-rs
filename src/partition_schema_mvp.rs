@@ -203,6 +203,8 @@ pub fn recover_partition_schema_mvp(
     attach_curtain_walls(rf, &mut out.walls, &mut out.products);
     // --- Stair and flight riser and tread dimensions (RE-47) ---
     attach_stair_dimensions(rf, revit_version, &mut out.products);
+    // --- Beams along their location lines (RE-49) ---
+    attach_beam_axes(rf, revit_version, &mut out.products);
 
     // --- Family and type names (RE-38) ---
     for elements in [
@@ -632,6 +634,108 @@ fn attach_stair_dimensions(
             };
             let found = *found;
             push(element, &found, flight_counts.get(&id).copied());
+        }
+    }
+}
+
+/// Fields holding the first end of a beam's location line, model feet
+/// (RE-49).
+pub const BEAM_AXIS_START_FIELDS: [&str; 3] = [
+    "m_beam_axis_start_x",
+    "m_beam_axis_start_y",
+    "m_beam_axis_start_z",
+];
+/// Fields holding the second end of a beam's location line, model feet
+/// (RE-49).
+pub const BEAM_AXIS_END_FIELDS: [&str; 3] = [
+    "m_beam_axis_end_x",
+    "m_beam_axis_end_y",
+    "m_beam_axis_end_z",
+];
+
+/// The record box `[min x, min y, min z, max x, max y, max z]` of an element
+/// built from a partition element record: its location fields hold the plan
+/// centre and the base.
+pub fn element_record_bbox(element: &DecodedElement) -> Option<[f64; 6]> {
+    let field = |wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let (x, y, z) = (
+        field("m_locationX")?,
+        field("m_locationY")?,
+        field("m_locationZ")?,
+    );
+    let (width, depth, height) = (
+        field("m_bboxWidth")?,
+        field("m_bboxDepth")?,
+        field("m_bboxHeight")?,
+    );
+    Some([
+        x - width / 2.0,
+        y - depth / 2.0,
+        z,
+        x + width / 2.0,
+        y + depth / 2.0,
+        z + height,
+    ])
+}
+
+/// The two ends of a beam's location line, when the partition MVP gave it one
+/// (RE-49).
+pub fn beam_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<([f64; 3], [f64; 3])> {
+    let field = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let point = |names: [&str; 3]| Some([field(names[0])?, field(names[1])?, field(names[2])?]);
+    Some((point(BEAM_AXIS_START_FIELDS)?, point(BEAM_AXIS_END_FIELDS)?))
+}
+
+/// Give each structural-framing element the location line its data carries,
+/// when the line and the element's record box make a beam solid
+/// ([`crate::partition_beam_axes::beam_body`], RE-49). A line that leaves the
+/// box, or a box no solid along the line reproduces, is not attached.
+fn attach_beam_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_beam_axes as pba;
+    if !pba::supports_revit_version(revit_version) {
+        return;
+    }
+    let beams: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "StructuralFraming")
+        .filter_map(|element| element.id)
+        .collect();
+    if beams.is_empty() {
+        return;
+    }
+    let Ok(lines) = pba::scan_beam_axes(rf, revit_version, &beams) else {
+        return;
+    };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StructuralFraming")
+    {
+        let Some(line) = element.id.and_then(|id| lines.get(&id)) else {
+            continue;
+        };
+        let (start, end) = (line.start(), line.end());
+        let resolves = element_record_bbox(element)
+            .and_then(|bbox| pba::beam_body(bbox, start, end))
+            .is_some();
+        if !resolves {
+            continue;
+        }
+        for (names, point) in [(BEAM_AXIS_START_FIELDS, start), (BEAM_AXIS_END_FIELDS, end)] {
+            for (name, value) in names.iter().zip(point) {
+                element
+                    .fields
+                    .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
         }
     }
 }

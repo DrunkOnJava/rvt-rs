@@ -8,6 +8,28 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Beams run along their location lines (RE-49).** A structural-framing
+  element's data carries its location line as a bounded line record
+  (`04 00 08 01`, two parameters, an origin and a unit direction). With the
+  element's record box it gives the beam's solid, a box
+  `length × width × depth` along the line.
+  - A level beam exports as its section's plan rectangle along the line,
+    rotated to the line's plan angle. A sloped beam becomes its section swept
+    along its centreline (`IfcFixedReferenceSweptAreaSolid`).
+  - Before, every beam was the axis-aligned box around it. For a beam
+    rotated in plan that box is 8.4 times Revit's own beam envelope at the
+    median, against 1.11 times now.
+  - On Snowdon Towers Structural, 923 of the 942 exported beams run along
+    their line. Against the meshes of a later edition's VIM export, the
+    section is Revit's on 613 of the 839 beams that edition kept unchanged,
+    and Revit's less the top a floor join cuts on 179 more.
+  - Beam ends are not trimmed at their supports (352 beams run past Revit's
+    by a median 0.625 ft), and a beam whose box no solid along the line
+    reproduces keeps its box (17, mostly oblique beams with skewed ends).
+  - The property set gains `AxisLengthFeet`, `SectionWidthFeet` and
+    `SectionDepthFeet`, and `BodySource` reads `partition_beam_axis`.
+  - `rvt::partition_beam_axes` exposes the rule, and
+    `examples/probe_re49_beam_axes.rs` scores it against a VIM export.
 - **Elements, rooms and storeys carry the GlobalId Revit's own exporter
   gives them (RE-48).**
   - `Global/History` lists every editing episode's GUID, and each
