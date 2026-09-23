@@ -173,10 +173,10 @@
     {
       "id": "element-records-stair-aggregates",
       "area": "elements",
-      "name": "Stairs as IFC aggregates of their runs, landings and stringers",
+      "name": "Stairs as IFC aggregates of their runs, landings and stringers, and roofs",
       "status": "experimental",
       "evidence": "partition_schema_mvp::attach_aggregate_wholes; IfcEntity::Aggregate and the STEP writer's IfcRelAggregates; examples/probe_re39_stair_parts.rs; reports/element-framing/RE-39-stair-aggregates.md",
-      "notes": "A stair's runs, landings and stringers name the stair's ElementId in their reference lists. Each stair exports as a bodiless IfcStair and its parts (IfcStairFlight, IfcSlab .LANDING., IfcMember .STRINGER.) are related to it by IfcRelAggregates, not contained in a storey. Measured locally on Snowdon Towers Architectural, which has no licence and is not in CI: the same 26 stairs aggregate as in Revit's IFC4 export, and every one of the 228 parts rvt-rs attaches is in the matching Revit aggregate; all 256 new elements (27 stairs, 42 flights, 17 landings, 170 stringers) are in Revit's export. Railings stay standalone: Revit aggregates 65 of the 70 that name a stair, and nothing read tells the other five apart. PredefinedTypes are left unset. Roofs are not aggregated yet. Revit 2024 and 2025 only.",
+      "notes": "A stair's runs, landings and stringers name the stair's ElementId in their reference lists. Each stair exports as a bodiless IfcStair and its parts (IfcStairFlight, IfcSlab .LANDING., IfcMember .STRINGER.) are related to it by IfcRelAggregates, not contained in a storey. Measured locally on Snowdon Towers Architectural, which has no licence and is not in CI: the same 26 stairs aggregate as in Revit's IFC4 export, and every one of the 228 parts rvt-rs attaches is in the matching Revit aggregate; all 256 new elements (27 stairs, 42 flights, 17 landings, 170 stringers) are in Revit's export. Railings stay standalone: Revit aggregates 65 of the 70 that name a stair, and nothing read tells the other five apart. PredefinedTypes are left unset. Roofs (OST_Roofs) export as one IfcRoof each with the record box: all 20 Snowdon roofs are IfcRoof Tags in Revit's export, which decomposes 7 of them into a same-Tag IfcSlab .ROOF. part that rvt-rs does not reproduce. Revit 2024 and 2025 only.",
       "user_impact": "Stairs come out as Revit exports them: one IfcStair per stair holding its flights, landings and stringers, so IFC viewers show and select a stair as one assembly."
     },
     {
