@@ -433,6 +433,12 @@ pub struct ExportedModelDiagnostics {
     pub total_entities: usize,
     pub building_elements: usize,
     pub building_elements_with_geometry: usize,
+    /// Building elements with no body of their own because their
+    /// aggregated parts carry it, as in Revit's export: stairs (RE-39) and
+    /// curtain walls (RE-46). Not counted in
+    /// [`Self::building_elements_with_geometry`].
+    #[serde(default)]
+    pub building_elements_carried_by_parts: usize,
     pub by_ifc_type: std::collections::BTreeMap<String, usize>,
     pub classification_count: usize,
     pub unit_assignment_count: usize,
@@ -2239,7 +2245,16 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut building_elements = 0usize;
     let mut building_elements_with_geometry = 0usize;
     let mut storey_bound_elements = 0usize;
-    for entity in &model.entities {
+    let wholes: std::collections::BTreeSet<usize> = model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::Aggregate { whole, .. } => Some(*whole),
+            _ => None,
+        })
+        .collect();
+    let mut building_elements_carried_by_parts = 0usize;
+    for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
             location_feet,
@@ -2261,6 +2276,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                     || representation_map_index.is_some())
             {
                 building_elements_with_geometry += 1;
+            } else if wholes.contains(&index) {
+                building_elements_carried_by_parts += 1;
             }
         }
     }
@@ -2270,6 +2287,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         total_entities: model.entities.len(),
         building_elements,
         building_elements_with_geometry,
+        building_elements_carried_by_parts,
         by_ifc_type,
         classification_count: model.classifications.len(),
         unit_assignment_count: model.units.len(),
@@ -3401,6 +3419,7 @@ mod tests {
             total_entities: count,
             building_elements: count,
             building_elements_with_geometry: count,
+            building_elements_carried_by_parts: 0,
             by_ifc_type: [("IFCWALL".to_string(), count)].into_iter().collect(),
             classification_count: 0,
             unit_assignment_count: 1,

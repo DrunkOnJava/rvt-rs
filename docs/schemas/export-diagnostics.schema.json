@@ -171,6 +171,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "building_elements_carried_by_parts": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Building elements with no body of their own because their aggregated parts carry it (stairs, curtain walls); not counted in building_elements_with_geometry."
+        },
         "by_ifc_type": {
           "type": "object",
           "additionalProperties": {

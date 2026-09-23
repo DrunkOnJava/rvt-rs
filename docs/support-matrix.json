@@ -225,6 +225,15 @@
       "user_impact": "Elements a modeller set to export as another IFC entity or predefined type - a roof-like floor, a wall used as cladding - come out of rvt-rs as they do out of Revit."
     },
     {
+      "id": "element-record-curtain-walls",
+      "area": "elements",
+      "name": "Curtain walls from Revit 2024 and 2025 element records: the walls their mullions name, aggregating their panels and mullions",
+      "status": "partial",
+      "evidence": "partition_schema_mvp::attach_curtain_walls / CURTAIN_WALL_CLASS / CURTAIN_WALL_PART_CLASSES; ifc::category_map (CurtainWall -> IFCCURTAINWALL .NOTDEFINED.); tests/curtain_walls.rs against RE1 Architecture (CI tier 2); examples/probe_re46_curtain_walls.rs; reports/element-framing/RE-46-curtain-walls.md",
+      "notes": "A placed wall named in the reference list of a placed OST_CurtainWallMullions record is a curtain wall: on Snowdon Towers Architectural those walls are exactly the 42 Revit's IFC4 export writes as IfcCurtainWall, and on RE1 Architecture the one; no other wall in the corpus is named by a mullion. Six Snowdon walls named only by panels are basic walls used as panel infill, which Revit exports as IfcWall, so a panel alone does not make a curtain wall. The wall exports as a bodiless IfcCurtainWall .NOTDEFINED. (Revit's value on all 60 of its rows), and each panel and mullion whose list names exactly one curtain wall is its IfcRelAggregates part. Against Revit's aggregates: 1,798 of 1,906 parts on Snowdon and 12 of 13 on RE1 sit under the same whole; 89 late Snowdon mullions name no curtain wall (72 reach it through a record that names it, likely the curtain grid, not shipped), 18 panels Revit writes as nested IfcCurtainWall stay IfcPlate, and doors are not aggregated because 3 of the 9 Snowdon doors naming a curtain wall are standalone in Revit's export. Core Interior's export is byte-identical. No curtain grid, panel type or IfcCurtainWallType is read or written. Revit 2024 and 2025.",
+      "user_impact": "Curtain walls and storefronts come out as IfcCurtainWall with their glazing panels and mullions grouped under them, as in Revit's export, instead of a solid wall box drawn over the glass."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",

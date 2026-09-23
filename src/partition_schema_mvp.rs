@@ -199,6 +199,8 @@ pub fn recover_partition_schema_mvp(
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
+    // --- Curtain walls and their panels and mullions (RE-46) ---
+    attach_curtain_walls(rf, &mut out.walls, &mut out.products);
 
     // --- Family and type names (RE-38) ---
     for elements in [
@@ -448,7 +450,19 @@ fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedEleme
 pub const AGGREGATE_WHOLE_FIELD: &str = "m_aggregate_whole";
 
 /// Classes that aggregate parts instead of carrying a body of their own.
-pub const AGGREGATE_WHOLE_CLASSES: &[&str] = &["Stair"];
+pub const AGGREGATE_WHOLE_CLASSES: &[&str] = &["Stair", CURTAIN_WALL_CLASS];
+
+/// Class of a wall that is a curtain wall (RE-46): one a curtain-wall
+/// mullion names in its reference list.
+pub const CURTAIN_WALL_CLASS: &str = "CurtainWall";
+
+/// Classes that are parts of a curtain wall when their reference list names
+/// exactly one (RE-46).
+///
+/// Doors are not among them: of the doors whose lists name a Snowdon
+/// curtain wall, Revit's export aggregates only the panel doors, and nothing
+/// read so far tells those from doors inserted in the wall.
+pub const CURTAIN_WALL_PART_CLASSES: &[&str] = &["CurtainWallPanel", "CurtainWallMullion"];
 
 /// Classes that are parts of a stair when their reference list names one.
 ///
@@ -514,6 +528,71 @@ fn attach_aggregate_wholes(rf: &mut RevitFile, products: &mut [DecodedElement]) 
         if named.len() == 1 {
             let whole = *named.iter().next().expect("one stair");
             element.fields.push((
+                AGGREGATE_WHOLE_FIELD.into(),
+                InstanceField::ElementId { tag: 0, id: whole },
+            ));
+        }
+    }
+}
+
+/// Make every wall a curtain-wall mullion names a curtain wall, and give
+/// each panel and mullion that names exactly one of them that wall as its
+/// aggregate whole (RE-46).
+///
+/// A curtain wall owns its grid's mullions, and each mullion's reference
+/// list names its wall. On Snowdon Towers the walls named by a mullion are
+/// exactly the 42 Revit exports as `IfcCurtainWall` aggregates, and on RE1
+/// Architecture the one; no other wall is named by a mullion. Walls named
+/// only by a panel are basic walls used as a panel's infill, which Revit
+/// exports as `IfcWall`, so a panel alone does not make a curtain wall.
+fn attach_curtain_walls(
+    rf: &mut RevitFile,
+    walls: &mut [DecodedElement],
+    products: &mut [DecodedElement],
+) {
+    let wall_ids: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
+    if wall_ids.is_empty() {
+        return;
+    }
+    let mut references: Vec<Option<Vec<u64>>> = Vec::with_capacity(products.len());
+    let mut curtain_walls: BTreeSet<u32> = BTreeSet::new();
+    for product in products.iter() {
+        if !CURTAIN_WALL_PART_CLASSES.contains(&product.class.as_str()) {
+            references.push(None);
+            continue;
+        }
+        let list = record_references(rf, product).map(|(list, _)| list);
+        if product.class == "CurtainWallMullion" {
+            for id in list.iter().flatten() {
+                if let Ok(id) = u32::try_from(*id) {
+                    if wall_ids.contains(&id) {
+                        curtain_walls.insert(id);
+                    }
+                }
+            }
+        }
+        references.push(list);
+    }
+    if curtain_walls.is_empty() {
+        return;
+    }
+    for wall in walls.iter_mut() {
+        if wall.id.is_some_and(|id| curtain_walls.contains(&id)) {
+            wall.class = CURTAIN_WALL_CLASS.into();
+        }
+    }
+    for (product, list) in products.iter_mut().zip(references) {
+        let Some(list) = list else {
+            continue;
+        };
+        let named: BTreeSet<u32> = list
+            .iter()
+            .filter_map(|&id| u32::try_from(id).ok())
+            .filter(|id| curtain_walls.contains(id) && Some(*id) != product.id)
+            .collect();
+        if named.len() == 1 {
+            let whole = *named.iter().next().expect("one curtain wall");
+            product.fields.push((
                 AGGREGATE_WHOLE_FIELD.into(),
                 InstanceField::ElementId { tag: 0, id: whole },
             ));

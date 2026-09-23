@@ -135,6 +135,7 @@ Important nested fields:
 | `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
+| `exported.building_elements_carried_by_parts` | integer | Exported elements with no body of their own because their aggregated parts carry it, as in Revit's export: stairs (RE-39) and curtain walls (RE-46). Not counted in `building_elements_with_geometry`. |
 | `exported.storey_names` | array | Recovered building-storey display names, in emission order. |
 | `exported.storey_elevations_feet` | array | Recovered storey elevations in feet, aligned with `storey_names`. An all-zero list means only Level *name* strings were recovered — no elevation evidence was found. |
 | `exported.storey_bound_elements` | integer | Building elements contained in a specific storey. The rest are contained in the `IfcBuilding`, never in a named storey. |

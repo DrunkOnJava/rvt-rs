@@ -53,6 +53,7 @@ On Revit 2024 and 2025 project files, rvt-rs reads each element from its partiti
 | Columns | `IfcColumn`, minus what the walls cut | Core Interior 256 of 256, world-exact |
 | Roofs, ceilings | `IfcRoof`, `IfcCovering` | Snowdon Towers 20 and 68 |
 | Stairs | `IfcStair` aggregating its flights, landings and stringers | Snowdon Towers 27 stairs, 43 flights, 17 landings, every aggregate relation one Revit's has |
+| Curtain walls | `IfcCurtainWall` aggregating its panels and mullions, with no body of its own | Snowdon Towers 42 of 42 and RE1 1 of 1; 1,798 of Snowdon's 1,906 panel and mullion relations are Revit's own (RE-46) |
 | Railings, curtain panels, mullions | `IfcRailing`, `IfcPlate`, `IfcMember` | Snowdon Towers 131 railings, every mullion |
 | Furniture, casework, plumbing, lighting, equipment | `IfcFurniture`, `IfcSanitaryTerminal`, `IfcLightFixture`, `IfcElectricAppliance`, proxies | RE1 models and Snowdon Towers, every one Revit exports |
 | Ducts, pipes, fittings, air terminals | `IfcDuctSegment`, `IfcPipeSegment`, their fittings, `IfcAirTerminal` | RE1 Mechanical and Plumbing, every one |

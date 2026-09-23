@@ -1829,4 +1829,15 @@ on `teste_export_2025` three walls become Revit's `IfcCovering .CLADDING.`.
 Report: `reports/element-framing/RE-45-ifc-export-parameters.md`.
 Probe: `examples/probe_re45_ifc_export_parameters.rs`.
 
+## Addendum — RE-46 curtain walls (2026-09-23)
+
+A placed wall named in a placed curtain-wall mullion's reference list is a
+curtain wall: exactly the 42 Snowdon walls and the one RE1 wall Revit
+exports as `IfcCurtainWall`. Walls named only by panels are panel infill and
+stay `IfcWall`. Panels and mullions naming exactly one curtain wall become its
+aggregated parts; 1,798 of Revit's 1,906 on Snowdon.
+
+Report: `reports/element-framing/RE-46-curtain-walls.md`.
+Probe: `examples/probe_re46_curtain_walls.rs`.
+
 **End of report.**

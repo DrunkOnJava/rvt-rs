@@ -278,13 +278,14 @@ fn re1_system_type_names_are_revits() {
         eprintln!("skipping: no RE1 Architecture model and reference export");
         return;
     }
-    // Seven basic walls and the curtain wall, whose type is also `-`.
+    // Seven basic walls and the curtain wall (RE-46), whose type is also `-`.
     assert_eq!(
         check_system_type_names(&rvt, &reference, 2025),
         [
             ("Ceiling".to_string(), 6),
+            ("CurtainWall".to_string(), 1),
             ("Floor".to_string(), 2),
-            ("Wall".to_string(), 8),
+            ("Wall".to_string(), 7),
         ]
     );
 }
