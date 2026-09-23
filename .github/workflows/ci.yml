@@ -500,6 +500,20 @@ jobs:
           python tools/ci/validate-real-ifc.py \
             /tmp/walker-real-project.ifc \
             /tmp/walker-real-project.diagnostics.json
+      # The committed fixtures carry no IfcBoolean, so a malformed
+      # `IFCBOOLEAN(.F)` shipped in every real export until the schema
+      # validator ran on one. Validate real exports in full: Einhoven
+      # above and the Core Interior element-record export, which carries
+      # thousands of property values.
+      - name: Schema-validate real-project exports
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" \
+            -o /tmp/core-interior.ifc
+          python -m ifcopenshell.validate /tmp/walker-real-project.ifc
+          python -m ifcopenshell.validate /tmp/core-interior.ifc
+          python tools/ci/ifc_schema_arity.py /tmp/walker-real-project.ifc /tmp/core-interior.ifc
       # Cross-witness gate (docs/verification-protocol.md): an independent
       # IFC reader parses the Revit-authored reference export and must agree
       # with the same manifest counts the rvt-rs decoder is gated against.
