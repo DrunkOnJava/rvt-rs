@@ -342,6 +342,15 @@
       "user_impact": "A Revit 2024 project exports with its real Level names and heights - Basement 2, Mez 1-2, Level 13 - instead of elevation-derived labels, and every storey the project has is present rather than only the ones with a column standing on them."
     },
     {
+      "id": "record-level-storeys-2025",
+      "area": "elements",
+      "name": "Level names and elevations on every Revit 2024 and 2025 project, and the storeys they make",
+      "status": "partial",
+      "evidence": "partition_level_records::elevation_marker / record_marker / decode_name_block_at_with / find_name_blocks_with / decode_record_at_with / owned_level_ids / scan_partition_levels; tests/level_names.rs against the four RE1 exports (CI tier 2); unit tests in partition_level_records; examples/probe_re51_level_names.rs; reports/element-framing/RE-51-level-names.md",
+      "notes": "RE-24's name block (owner ElementId at name-0x47, a 56-byte 0xff run, three zero bytes, u32 length, UTF-16 name) holds every Level's name and elevation on Snowdon Towers (2024) and the RE1, Projeto1 and teste_export_2025 models (2025), where it opens the Level's element data. The elevation marker is 05 00 00 00 and a per-release u16 (0x0248 on 2024, 0x025d on 2025); four plan extents follow and the elevation is 55 bytes past the marker. RE-24's last two marker bytes were the first extent's low bytes, zero on Core Interior's round extents. The confirming copy is the one preceded by the same 24 bytes as the first (153 bytes on on Core, 161 on Snowdon, 246 and 181 on RE1). Level frames in the second prologue take their partition record's id (RE-35), and a Level whose block names another element after its own id is not a storey. Measured against Revit's own exports: every storey written has Revit's name, elevation and GlobalId on Snowdon Towers (18 of 18, local only), each RE1 model (2 of 2, CI), Projeto1 and teste_export_2025 (2 of 2, local only) and Core Interior (15 of 15, unchanged); on Snowdon 3,379 of 3,380 elements are contained in Revit's storey, on RE1 Architecture 14 of 14. Status is partial: Revit 2023 and earlier are not read, what makes a Level a storey in Revit's export is not read, and Snowdon's structural model is refused because 8 of its 19 Levels carry 01 00 00 before the name length where every measured Level carries zeros.",
+      "user_impact": "Projects saved in Revit 2024 and 2025 export and display their storeys with the Level names the team uses (L2, R1, Parking) at the right heights, with the same GlobalIds as Revit's own export, and elements sit on the storey Revit puts them on."
+    },
+    {
       "id": "record-elevation-storey-bind",
       "area": "elements",
       "name": "Storey elevations and containment from Revit 2024 element-record bounding boxes",

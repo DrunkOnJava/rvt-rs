@@ -1890,4 +1890,18 @@ changes.
 Report: `reports/element-framing/RE-50-roof-outlines.md`.
 Probe: `examples/probe_re50_roof_profiles.rs`.
 
+## Addendum — RE-51 Level names on every 2024 and 2025 project (2026-09-23)
+
+RE-24's Level name block holds each Level's name and elevation on Snowdon
+Towers and the 2025 projects too. Its elevation marker is six bytes, `05 00
+00 00` and a per-release `u16` (the other two bytes were the first plan
+extent's), and the confirming copy is the one behind the same 24 bytes, not
+one at a fixed distance. Second-prologue Levels take their partition
+record's id; a Level inside another element names it and is not a storey.
+Every storey now equals Revit's (Snowdon 18, RE1 2 each, Core 15), GlobalIds
+included.
+
+Report: `reports/element-framing/RE-51-level-names.md`.
+Probe: `examples/probe_re51_level_names.rs`.
+
 **End of report.**

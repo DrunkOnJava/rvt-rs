@@ -31,6 +31,25 @@ All notable changes will be documented here. This project follows
   - The demo thumbnails are flat tiles in the tint of their kind: blue for
     real projects, green for IFC, amber for families, gray for synthetics.
   - No web fonts are loaded: the viewer still makes no network requests.
+- **Storeys carry their Revit Level's name, elevation and GlobalId on
+  Revit 2024 and 2025 projects alike (RE-51).** RE-24's Level name block
+  holds them on every project measured. Its elevation marker is six bytes
+  with a per-release `u16` (the other two were the next value's), and the
+  confirming copy is found by the 24 bytes before it rather than at a fixed
+  distance. Levels in second-prologue frames take their partition record's
+  id, and a Level inside another element is not a storey.
+  - Every storey written equals one of Revit's export, name, elevation and
+    GlobalId: Snowdon Towers 18 of 18 (it had 17 storeys named by
+    elevation), each RE1 model 2 of 2, Projeto1 and teste_export_2025 2 of
+    2, Core Interior 15 of 15 as before.
+  - Elements now bind to named storeys. On Snowdon Towers, 3,379 of 3,380
+    are in Revit's storey, and on RE1 Architecture 14 of 14.
+  - Snowdon's structural model keeps its box-derived storeys: 8 of its
+    Levels carry a flag byte no measured export explains, so its storey set
+    is refused.
+  - `tests/level_names.rs` checks the RE1 models in CI, and
+    `examples/probe_re51_level_names.rs` lists a file's Levels and says why
+    a set is refused.
 - **Roofs carry their sketched outline, and sketch lines' exact ends close
   more outlines (RE-50).** A roof's sketch lines name the roof, as a floor's
   name the floor, and close into its outline. Each sketch line's own data
