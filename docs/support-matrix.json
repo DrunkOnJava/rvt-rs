@@ -103,7 +103,7 @@
       "area": "elements",
       "name": "Decode typed elements from real project files",
       "status": "partial",
-      "evidence": "Production iter_elements: ArcWall (2023) + partition MVP Level/Material/Room (+ Floor plan loops on files with no element records) + 2024 ArcWallRectOpening (ElemTable-confirmed ids) + 2024 partition element-record Wall/Door/Window/Column instances (RE-21/#211) Slab/BuildingPad instances with per-element IFC export overrides (RE-22/#212) and Room instances with their parameter-block name, number and Level (RE-29/#90); RE-19/RE-20 negatives",
+      "evidence": "Production iter_elements: ArcWall (2023) + partition MVP Level/Material + 2024 ArcWallRectOpening (ElemTable-confirmed ids) + 2024 partition element-record Wall/Door/Window/Column instances (RE-21/#211) Slab/BuildingPad instances with per-element IFC export overrides (RE-22/#212) and Room instances with their parameter-block name, number and Level (RE-29/#90); RE-19/RE-20 negatives",
       "notes": "Narrow fail-closed MVP only. Seven BuiltInCategories on one Revit 2024 edge match Revit's exporter exactly; generic real-project typed extraction is still not solved. Never mark verified without corpus-backed converter-grade evidence (COR-001).",
       "user_impact": "Useful recovery on supported subsets; full model conversion is not ready."
     },

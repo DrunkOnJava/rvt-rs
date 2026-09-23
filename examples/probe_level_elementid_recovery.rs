@@ -53,9 +53,9 @@ fn main() -> rvt::Result<()> {
 
     let mvp = recover_partition_schema_mvp(&mut rf, bfi.version, limits)?;
     println!(
-        "mvp levels={} floors={} rooms={}",
+        "mvp levels={} slabs={} rooms={}",
         mvp.levels.len(),
-        mvp.floors.len(),
+        mvp.slabs.len(),
         mvp.rooms.len()
     );
 
@@ -235,65 +235,9 @@ fn main() -> rvt::Result<()> {
         }
     }
 
-    // --- H5: Floor plan-loop neighbourhood ElementIds ---
-    println!("\n=== H5 Floor plan-loop neighbourhood ElemTable ids ===");
-    let mut h5_ids: BTreeMap<u32, u32> = BTreeMap::new();
-    for floor in &mvp.floors {
-        let stream = floor
-            .fields
-            .iter()
-            .find(|(n, _)| n == "m_source_stream")
-            .and_then(|(_, v)| match v {
-                rvt::walker::InstanceField::String(s) => Some(s.as_str()),
-                _ => None,
-            });
-        let offset = floor
-            .fields
-            .iter()
-            .find(|(n, _)| n == "m_source_offset")
-            .and_then(|(_, v)| match v {
-                rvt::walker::InstanceField::Integer {
-                    value,
-                    signed: false,
-                    ..
-                } => Some(*value as usize),
-                _ => None,
-            });
-        let (Some(stream), Some(offset)) = (stream, offset) else {
-            continue;
-        };
-        let Ok(raw) = rf.read_stream(stream) else {
-            continue;
-        };
-        let concat: Vec<u8> = compression::inflate_all_chunks(&raw)
-            .into_iter()
-            .flatten()
-            .collect();
-        let lo = offset.saturating_sub(128);
-        let hi = (offset + 128).min(concat.len().saturating_sub(3));
-        let mut j = lo;
-        while j + 4 <= hi {
-            let cand = u32::from_le_bytes(concat[j..j + 4].try_into().unwrap());
-            if cand != 0
-                && cand != u32::MAX
-                && elem_ids.contains(&cand)
-                && !wall_ids.contains(&cand)
-            {
-                *h5_ids.entry(cand).or_insert(0) += 1;
-            }
-            j += 1;
-        }
-    }
-    let mut h5_sorted: Vec<_> = h5_ids.iter().collect();
-    h5_sorted.sort_by(|a, b| b.1.cmp(a.1));
-    println!("h5 candidate ids near floors (top 15):");
-    for (id, n) in h5_sorted.iter().take(15) {
-        println!("  id={id} votes={n}");
-    }
-    println!(
-        "H5_VERDICT distinct_ids={} (Floor→Level join needs stable shared id)",
-        h5_ids.len()
-    );
+    // H5 (ElemTable ids near the plan-loop floors) was retired with the
+    // plan-loop floors themselves, which matched no slab in Revit's own
+    // exports. Record-backed slabs name their Level directly (RE-27).
 
     // --- H6: ContentDocuments id list vs Level string count ---
     println!("\n=== H6 ContentDocuments overview ===");

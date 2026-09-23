@@ -385,9 +385,8 @@ projectSampleTest(
     await expect(page.locator('#download-diagnostics')).toBeEnabled();
     await expect(page.locator('#export-quality')).toContainText(/Geometry|Typed|Scaffold/);
 
-    // Elevation-derived ArcWall storeys remove the old missing-level gap for
-    // walls; Floor/Room rows still report unsupported_geometry_missing_level
-    // until Level ElementId bind (#33 leftover).
+    // Elevation-derived ArcWall storeys remove the missing-level gap for
+    // walls, and a 2023 file has no Floor/Room element records to leave one.
     await expect(page.locator('#status-panel')).toContainText('Partial decode');
     await expect(page.locator('#status-panel')).toContainText(/unit|thickness|storey/i);
     // Document identity from the BasicFileInfo text block + Atom entry.
@@ -422,8 +421,9 @@ projectSampleTest(
     // (was 41). Keep in sync with tests/fixtures/project-counts/revit-ifc5-einhoven.json.
     await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 42');
     await expect(page.locator('#diagnostics-json')).toContainText('lack recovered thickness');
-    // ArcWalls are storey-assigned; missing_level gaps are Floor/Room only.
-    await expect(page.locator('#diagnostics-json')).toContainText(
+    // ArcWalls are storey-assigned, and rooms and floors come from element
+    // records only, so no element is left without a Level.
+    await expect(page.locator('#diagnostics-json')).not.toContainText(
       'unsupported_geometry_missing_level',
     );
 
@@ -529,8 +529,10 @@ projectSampleTest(
       /\d+ scheduled elements · \d+ types?/,
     );
 
+    // Einhoven (2023) exports its ArcWalls and nothing else: rooms and
+    // floors come from element records only, and 2023 has none that decode.
     const groups = schedule.locator('.schedule-row');
-    expect(await groups.count()).toBeGreaterThan(1);
+    expect(await groups.count()).toBeGreaterThanOrEqual(1);
     await expect(schedule.locator('[data-ifc-type="IFCWALL"]')).toBeVisible();
     await expect(schedule.locator('[data-ifc-type="IFCWALL"] .schedule-count')).toHaveText(
       /^\d+$/,

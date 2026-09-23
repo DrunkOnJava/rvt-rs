@@ -33,6 +33,12 @@ All notable changes will be documented here. This project follows
 
   PyPI wheels already carry PEP 740 attestations through trusted publishing.
 
+### Removed
+
+- `PartitionSchemaMvp::floors` and `partition_schema_mvp::is_strict_room_name`,
+  which only served the plan-loop floors and name-only rooms described
+  under Fixed. Floors are in `PartitionSchemaMvp::slabs`.
+
 ### Fixed
 
 - **Export readiness no longer reads 100% on an incomplete model.** When
@@ -51,6 +57,29 @@ All notable changes will be documented here. This project follows
     count in its readiness summary and next steps, and `rvt-ifc` prints a
     warning to stderr. The viewer's status panel shows "Incomplete model"
     and no longer marks decode confidence green while records are missing.
+- **Rooms and floors come from element records only; the partition MVP no
+  longer invents them.** Its name-only rooms (space-like display strings)
+  and plan-loop floors (closed runs of f64 pairs that miss the ArcWall
+  centrelines) matched nothing in Revit's own exports:
+  - every family file, on every release, gained a room named "Office
+    Equipment";
+  - the Revit 2025 RE1 Electrical, Mechanical and Plumbing models
+    (`Drshelden/IFC-ECS`, MIT) exported 38 slabs and 71 spaces, named after
+    space-type strings such as "Banking Activity Area - Office", while
+    Revit's exports of them hold no `IfcSlab` or `IfcSpace`;
+  - on two Revit 2023 projects with paired Revit exports, the name-only
+    path found none of the 9 real rooms of one and invented "Office
+    Equipment" in both, and none of the 17 plan loops (mostly triangles)
+    comes within 10% of the plan area of any exported slab;
+  - Snowdon Towers gained 37 and 15 name-only rooms, including a view name
+    ("Enlarged Residential Lobby Plan"), and RE-25 had already found no
+    plan loop with the bounds of any Core Interior plate.
+
+  Record-backed walls, doors, windows, columns, slabs and rooms on 2024 and
+  2025 are unchanged (Core Interior and RE1 Architecture export exactly as
+  before). A 2023 file now exports its ArcWalls without invented floors or
+  rooms, and a family file exports no building elements.
+  `tests/rooms_floors_from_records_only.rs` checks all 11 family releases.
 
 - **Family files' `Global/ElemTable` is read correctly on every release.**
   It was parsed as 12-byte "implicit" records from `0x30`, which produced
