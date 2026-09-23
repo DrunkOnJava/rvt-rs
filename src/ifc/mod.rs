@@ -1969,6 +1969,24 @@ pub fn build_export_diagnostics_with_limits(
             sample_names: Vec::new(),
         });
     }
+    // #309: placed instances with no 3D body are left out by design, as
+    // Revit's own export leaves them out. They are not missing, so they
+    // do not count toward `unexported_element_records`.
+    let volumeless = bfi
+        .as_ref()
+        .and_then(|b| {
+            crate::partition_element_records::scan_volumeless_instances(rf, b.version).ok()
+        })
+        .unwrap_or_default();
+    let volumeless_total: usize = volumeless.values().sum();
+    if volumeless_total > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_without_volume".into(),
+            count: volumeless_total,
+            classes: volumeless,
+            sample_names: Vec::new(),
+        });
+    }
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
