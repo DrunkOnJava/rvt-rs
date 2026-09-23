@@ -343,6 +343,10 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
         doc.materials.push(mat);
     }
 
+    // An element with no material of its own takes its category's colour,
+    // one material per category, after the model's own.
+    let mut category_materials: std::collections::BTreeMap<String, usize> = Default::default();
+
     // Per-element: a node carrying the entity's identity, with the
     // shared cube or its own mesh.
     let mut scene_nodes: Vec<usize> = Vec::new();
@@ -427,6 +431,16 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
         };
         let (mesh, matrix) = match drawn {
             Some(((position, indices), matrix)) => {
+                let material = material_index.or_else(|| {
+                    Some(
+                        *category_materials
+                            .entry(ifc_type.clone())
+                            .or_insert_with(|| {
+                                doc.materials.push(category_material(ifc_type));
+                                doc.materials.len() - 1
+                            }),
+                    )
+                });
                 let mut attributes = std::collections::BTreeMap::new();
                 attributes.insert("POSITION".into(), position);
                 let mesh_idx = doc.meshes.len();
@@ -434,7 +448,7 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
                     primitives: vec![Primitive {
                         attributes,
                         indices: Some(indices),
-                        material: *material_index,
+                        material,
                         mode: 4, // TRIANGLES
                     }],
                     name: Some(name.clone()),
@@ -474,6 +488,51 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
     doc.scene = Some(0);
 
     (doc, bin)
+}
+
+/// The sRGB colour, and the alpha, an element with no material of its own
+/// is drawn in: its category's, the hues of the plan's palette
+/// ([`super::sheet`]). Glass-like categories are translucent, and spaces
+/// faint enough not to hide the building they fill.
+pub fn category_colour(ifc_type: &str) -> (u32, f32) {
+    match ifc_type {
+        "IFCWALL" | "IFCWALLSTANDARDCASE" | "IFCCURTAINWALL" => (0xC8CCD2, 1.0),
+        "IFCSLAB" | "IFCROOF" | "IFCCOVERING" => (0x8A8F98, 1.0),
+        "IFCDOOR" => (0x2266CC, 1.0),
+        "IFCWINDOW" | "IFCPLATE" => (0x22AACC, 0.45),
+        "IFCCOLUMN" => (0xCC2244, 1.0),
+        "IFCBEAM" | "IFCMEMBER" => (0xAA4499, 1.0),
+        "IFCSTAIR" | "IFCSTAIRFLIGHT" | "IFCRAILING" | "IFCRAMP" | "IFCRAMPFLIGHT" => {
+            (0xAA7722, 1.0)
+        }
+        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" => (0x228855, 1.0),
+        "IFCSPACE" => (0x6FA8DC, 0.12),
+        _ => (0x9CA3AF, 1.0),
+    }
+}
+
+/// The material a category's colour makes, named for the category. glTF
+/// base colours are linear, so the sRGB colour is linearised.
+fn category_material(ifc_type: &str) -> Material {
+    let (rgb, alpha) = category_colour(ifc_type);
+    let linear = |shift: u32| {
+        let c = ((rgb >> shift) & 0xff) as f32 / 255.0;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    Material {
+        name: Some(format!("Category {ifc_type}")),
+        pbr_metallic_roughness: PbrMetallicRoughness {
+            base_color_factor: [linear(16), linear(8), linear(0), alpha],
+            metallic_factor: 0.0,
+            roughness_factor: 0.8,
+        },
+        double_sided: alpha < 1.0,
+        alpha_mode: (alpha < 1.0).then(|| "BLEND".into()),
+    }
 }
 
 /// Append `mesh` to the binary buffer as f32 positions and u32 indices,
@@ -916,6 +975,75 @@ mod tests {
         assert_eq!(m[13], 7.0); // translate Y
         // translate Z = loc.z + height/2 = 0 + 5 = 5
         assert_eq!(m[14], 5.0);
+    }
+
+    #[test]
+    fn elements_without_a_material_take_their_categorys_colour() {
+        let mut door = mk_wall(
+            "D",
+            Some([0.0; 3]),
+            Some(Extrusion::rectangle(3.0, 0.2, 7.0)),
+        );
+        let mut room = mk_wall(
+            "R",
+            Some([0.0; 3]),
+            Some(Extrusion::rectangle(10.0, 10.0, 8.0)),
+        );
+        for (entity, kind) in [(&mut door, "IFCDOOR"), (&mut room, "IFCSPACE")] {
+            if let IfcEntity::BuildingElement { ifc_type, .. } = entity {
+                *ifc_type = kind.into();
+            }
+        }
+        let wall = mk_wall(
+            "W",
+            Some([0.0; 3]),
+            Some(Extrusion::rectangle(10.0, 0.5, 9.0)),
+        );
+        let wall2 = mk_wall(
+            "W2",
+            Some([0.0; 3]),
+            Some(Extrusion::rectangle(5.0, 0.5, 9.0)),
+        );
+        let model = IfcModel {
+            entities: vec![wall, door, room, wall2],
+            ..Default::default()
+        };
+        let (doc, _) = build_gltf(&model);
+        // One material per category, shared by its elements.
+        assert_eq!(doc.materials.len(), 3);
+        let material_of = |mesh: usize| doc.meshes[mesh].primitives[0].material.unwrap();
+        assert_eq!(material_of(0), material_of(3));
+        let door_material = &doc.materials[material_of(1)];
+        assert_eq!(door_material.name.as_deref(), Some("Category IFCDOOR"));
+        let [r, g, b, a] = door_material.pbr_metallic_roughness.base_color_factor;
+        assert!(b > g && g > r && a == 1.0, "a linear blue");
+        let room_material = &doc.materials[material_of(2)];
+        assert_eq!(room_material.alpha_mode.as_deref(), Some("BLEND"));
+        assert!(room_material.pbr_metallic_roughness.base_color_factor[3] < 0.2);
+    }
+
+    #[test]
+    fn an_elements_own_material_wins_over_its_category() {
+        let mut wall = mk_wall(
+            "W",
+            Some([0.0; 3]),
+            Some(Extrusion::rectangle(10.0, 0.5, 9.0)),
+        );
+        if let IfcEntity::BuildingElement { material_index, .. } = &mut wall {
+            *material_index = Some(0);
+        }
+        let model = IfcModel {
+            entities: vec![wall],
+            materials: vec![super::super::MaterialInfo {
+                name: "Concrete".into(),
+                color_packed: Some(0x00808080),
+                transparency: None,
+            }],
+            ..Default::default()
+        };
+        let (doc, _) = build_gltf(&model);
+        assert_eq!(doc.materials.len(), 1);
+        assert_eq!(doc.meshes[0].primitives[0].material, Some(0));
     }
 
     #[test]

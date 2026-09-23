@@ -184,7 +184,10 @@ profile with its holes open, a steel section as its section, a swept,
 revolved or brep solid as that solid, all turned by the element's
 `rotation_radians`. A plain rectangular extrusion shares one unit cube
 scaled by its node's matrix. An element with no body keeps its node,
-with no mesh. Element nodes are in the model's frame (feet, +Z up) and
+with no mesh. An element with no material of its own is drawn in its
+category's colour (`gltf::category_colour`, the plan's hues; rooms faint,
+windows and curtain panels translucent). Element nodes are in the model's
+frame (feet, +Z up) and
 hang under one root node whose matrix, `gltf::Z_UP_FEET_TO_Y_UP_METRES`,
 turns them into glTF's metres with +Y up.
 
