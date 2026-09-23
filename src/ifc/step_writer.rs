@@ -1127,7 +1127,7 @@ impl StepWriter {
         } else {
             model.building_storeys.clone()
         };
-        for storey in &storeys {
+        for (storey_index, storey) in storeys.iter().enumerate() {
             let placement_id = self.id();
             self.emit_entity(
                 placement_id,
@@ -1145,7 +1145,13 @@ impl StepWriter {
                     // needs a decimal point — `0` is an INTEGER literal
                     // and ISO-10303-21 does not admit it here (#214).
                     "IFCBUILDINGSTOREY('{}',#{owner_hist},'{name_escaped}',$,$,#{placement_id},$,'{name_escaped}',.ELEMENT.,{elevation_m:.6})",
-                    make_guid(id),
+                    // RE-48: the Level's own GlobalId where the file yields it.
+                    model
+                        .global_ids
+                        .storeys
+                        .get(&storey_index)
+                        .cloned()
+                        .unwrap_or_else(|| make_guid(id)),
                 ),
             );
             storey_ids.push(id);
@@ -1862,9 +1868,15 @@ impl StepWriter {
                     predefined_type.as_deref(),
                     &long_name_quoted,
                 );
+                // RE-48: Revit's own GlobalId where the file yields it.
+                let global_id = model
+                    .global_ids
+                    .elements
+                    .get(&entity_idx)
+                    .cloned()
+                    .unwrap_or_else(|| make_guid(el_id));
                 let line = format!(
-                    "{ifc_upper}('{}',#{owner_hist},{name_quoted},$,{object_type_quoted},#{placement_id},{rep_slot},{tail})",
-                    make_guid(el_id),
+                    "{ifc_upper}('{global_id}',#{owner_hist},{name_quoted},$,{object_type_quoted},#{placement_id},{rep_slot},{tail})",
                 );
                 self.emit_entity(el_id, line);
                 if !aggregate_parts.contains(&entity_idx) {
@@ -2394,6 +2406,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -2417,6 +2430,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -2482,6 +2496,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -2607,6 +2622,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         assert!(
@@ -2817,6 +2833,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -3261,6 +3278,7 @@ mod tests {
             }],
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCMATERIALLAYER("), "IFCMATERIALLAYER missing");
@@ -3328,6 +3346,7 @@ mod tests {
                 }],
             }],
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         assert!(
@@ -3402,6 +3421,7 @@ mod tests {
                 }],
             }],
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         // Both layer set AND profile set entities exist because
@@ -3458,6 +3478,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         }
     }
 
@@ -3593,6 +3614,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         }
     }
 
@@ -3744,6 +3766,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         // solid_shape path fires:
@@ -3901,6 +3924,7 @@ mod tests {
                 shape: shared_shape,
                 origin_feet: [0.0, 0.0, 0.0],
             }],
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         // Exactly ONE IfcRepresentationMap — that's the whole point
@@ -3983,6 +4007,7 @@ mod tests {
                 shape: SolidShape::ExtrudedArea(Extrusion::rectangle(1.0, 1.0, 1.0)),
                 origin_feet: [0.0, 0.0, 0.0],
             }],
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         // IFCMAPPEDITEM must be emitted; no inline body extrusion
@@ -4046,6 +4071,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         // No mapped item, no extrusion, no brep — just an element
@@ -4078,6 +4104,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)"));
@@ -4113,6 +4140,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         // Conversion chain: IFCSIUNIT base + IFCMEASUREWITHUNIT +
@@ -4160,6 +4188,7 @@ mod tests {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         };
         let s = write_step(&model);
         // Length from the caller (feet).

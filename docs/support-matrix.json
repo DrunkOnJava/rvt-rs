@@ -243,6 +243,15 @@
       "user_impact": "Stairs and flights carry the riser count, riser height and tread length Revit schedules them by, in the standard IFC property sets, and the viewer shows them."
     },
     {
+      "id": "revit-global-ids",
+      "area": "ifc",
+      "name": "Revit's own IFC GlobalIds for elements, rooms and storeys, rebuilt from Global/History and Global/ElemTable",
+      "status": "partial",
+      "evidence": "revit_global_ids::EpisodeHistory / revit_ifc_global_id / revit_global_ids; ifc::IfcModel::global_ids (RevitGlobalIds); tests/revit_global_ids.rs against 2024_Core_Interior_slim.ifc and the four RE1 exports (CI tier 2); unit tests pinned to Snowdon GlobalIds; examples/probe_re48_revit_global_ids.rs; reports/element-framing/RE-48-revit-global-ids.md",
+      "notes": "Global/History lists every editing episode's GUID newest first (u32 count at +0x0e, a u32-counted table at +0x66, then the count again and count entries of a Windows-order GUID and the byte 0x28); a 40-byte Global/ElemTable record holds its element's episode number at +0x18, whose GUID is entry count-1-episode. The GlobalId is that GUID with the record's first ElementId XORed into its last 32 bits (an element whose id has since changed, RE-41, keeps its first), in IFC base-64. Per Tag against Revit's own exports, every element rvt-rs exports that Revit's holds has Revit's GlobalId: Core Interior 854 of 854, RE1 Architecture/Mechanical/Plumbing/Electrical 73/73/123/12, teste_export_2025 8, Projeto1 2, Snowdon Towers 5,945 of 5,945 (local only), with no duplicate GlobalId in any export. Rooms take the same rule (Core 116 of 116, RE1 11 of 11), and a storey takes its Level's through the Level's unique name (Core 15 of 15; Snowdon's Level names are not recovered, so its storeys keep generated ids). Revit's own synthesised parts (stair components, a ramp's flight, extra slab pieces) have GlobalIds of Revit's making and are not written by rvt-rs; a Tag carried by several rvt-rs entities gives the rebuilt GlobalId to the first only. Revit 2023 and earlier (28-byte ElemTable records) keep generated GlobalIds, as do the project, site, building and relationships. Status is partial: Revit 2023 and earlier, the project, site and building, and storeys whose Level names are not recovered keep generated GlobalIds. Where it applies it is exact against Revit's own exports of two releases (Core Interior 2024; RE1 2025), CI-gated.",
+      "user_impact": "An IFC file from rvt-rs and Revit's own IFC of the same model name every element, room and storey with the same GlobalId, so diffs line up and BCF issues, clash results and federated links carry over between them."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",

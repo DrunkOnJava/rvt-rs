@@ -165,6 +165,20 @@ pub struct IfcModel {
     /// mapped-item wrap. Empty `Vec` leaves writer behaviour
     /// unchanged.
     pub representation_maps: Vec<entities::RepresentationMap>,
+    /// The GlobalIds Revit's own exporter gives the model's elements and
+    /// storeys (RE-48). The writer uses them in place of generated ones.
+    #[serde(default)]
+    pub global_ids: RevitGlobalIds,
+}
+
+/// GlobalIds Revit's own exporter gives, rebuilt from the file (RE-48,
+/// [`crate::revit_global_ids`]). Empty when the file does not yield them.
+#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RevitGlobalIds {
+    /// By index in `IfcModel::entities`: building elements and spaces.
+    pub elements: std::collections::BTreeMap<usize, String>,
+    /// By index in `IfcModel::building_storeys`.
+    pub storeys: std::collections::BTreeMap<usize, String>,
 }
 
 /// A single building storey derived from a Revit `Level` element.
@@ -683,6 +697,7 @@ impl Exporter for PlaceholderExporter {
             material_layer_sets: Vec::new(),
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
+            global_ids: Default::default(),
         })
     }
 }
@@ -1021,6 +1036,7 @@ fn export_rvt_doc(
     }
 
     let recovered_units = recover_project_units(rf);
+    let global_ids = revit_model_global_ids(rf, &entities, &building_storeys);
 
     Ok(IfcModel {
         project_name,
@@ -1033,7 +1049,60 @@ fn export_rvt_doc(
         material_layer_sets: Vec::new(),
         material_profile_sets: Vec::new(),
         representation_maps: Vec::new(),
+        global_ids,
     })
+}
+
+/// Revit's own GlobalIds (RE-48): for each building element whose `Tag`
+/// is an ElementId the file gives one to, by entity index, and for each
+/// storey whose name is exactly one Level's (Revit keeps Level names
+/// unique), that Level's. A Tag carried by more than one entity, such as
+/// the further pieces of a slab (#331), goes to the first, so no GlobalId
+/// is written twice.
+fn revit_model_global_ids(
+    rf: &mut crate::RevitFile,
+    entities: &[entities::IfcEntity],
+    storeys: &[Storey],
+) -> RevitGlobalIds {
+    let mut out = RevitGlobalIds::default();
+    let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
+        return out;
+    };
+    if ids.is_empty() {
+        return out;
+    }
+    if let Ok(version) = rf.basic_file_info().map(|info| info.version) {
+        let levels = crate::partition_level_records::recover_partition_levels(rf, version)
+            .unwrap_or_default();
+        for (index, storey) in storeys.iter().enumerate() {
+            let mut named = levels.iter().filter(|level| level.name == storey.name);
+            if let (Some(level), None) = (named.next(), named.next()) {
+                if let Some(global_id) = ids.get(&level.element_id) {
+                    out.storeys.insert(index, global_id.clone());
+                }
+            }
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for (index, entity) in entities.iter().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            type_guid: Some(tag),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let Ok(id) = tag.parse::<u32>() else {
+            continue;
+        };
+        if !seen.insert(id) {
+            continue;
+        }
+        if let Some(global_id) = ids.get(&id) {
+            out.elements.insert(index, global_id.clone());
+        }
+    }
+    out
 }
 
 /// True when an emitted `IFCSLAB` carries no resolved thickness.

@@ -1851,4 +1851,16 @@ writes the stair total on both flights of the three stairs it splits.
 Report: `reports/element-framing/RE-47-stair-dimensions.md`.
 Probe: `examples/probe_re47_stair_dimensions.rs`.
 
+## Addendum — RE-48 Revit's own GlobalIds (2026-09-23)
+
+`Global/History` lists the editing episodes' GUIDs newest first, and a
+40-byte `Global/ElemTable` record holds its element's episode number at
+`+0x18`. Revit's IFC GlobalId is that GUID with the element's first
+ElementId XORed into its last 32 bits. Every element rvt-rs exports that
+Revit's export holds now has Revit's GlobalId (Core 854 of 854, RE1 281 of
+281, Snowdon 5,945 of 5,945), as do Core's rooms and storeys.
+
+Report: `reports/element-framing/RE-48-revit-global-ids.md`.
+Probe: `examples/probe_re48_revit_global_ids.rs`.
+
 **End of report.**
