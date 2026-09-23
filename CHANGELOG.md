@@ -6,6 +6,15 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+## [0.2.0] — prepared, not yet released
+
+An **inspection-focused alpha** (see
+[`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md)). rvt-rs remains a
+Revit inspection / reverse-engineering toolkit with experimental export —
+**not** a production Revit→IFC converter for arbitrary projects. The first
+release with prebuilt CLI archives for Linux, macOS and Windows on the GitHub
+Release, and a multi-arch container image on ghcr.io.
+
 ### Added
 
 - **Slabs sketched as separate pieces export one element per piece
@@ -150,20 +159,6 @@ All notable changes will be documented here. This project follows
   - Rebar, structural connections and beam systems have correct ids but are
     not exported, and braces would export as `IfcBeam`.
 
-### Fixed
-
-- **The viewer lays out correctly on HiDPI screens.** The 3D canvas's
-  backing store is sized in device pixels, and nothing pinned the element
-  to its container. On a 2x display it laid out twice as large, widened the
-  grid, pushed the file-status panel off-screen and centred the drop zone in
-  the overflow, bottom right. The canvas now fills the viewport exactly. The
-  grid tracks cannot grow from their content, the canvas also follows
-  viewport resizes that are not window resizes, and the empty-state overlay
-  is opaque and scrolls on short screens. A Playwright test at device scale
-  factor 2 holds it. The drop zone, workflow and support-profile copy now
-  describe what Revit 2024 and 2025 projects export instead of calling
-  typed extraction unsolved.
-
 - **Frames holding the invalid ElementId take their record's id (RE-43).**
   Some element frames hold `u32::MAX`, the 32-bit form of Revit's invalid
   ElementId −1, at `+0x00`. They carry no id of their own either, and now
@@ -173,6 +168,7 @@ All notable changes will be documented here. This project follows
     Revit's own export in the entity types rvt-rs writes is now exported.
   - It also recovers 99 sketch lines, so 18 slabs get their sketched plan
     profile; 16 of them have exactly Revit's area per solid.
+
 - **A sketch of separate pieces no longer yields voids outside the outer
   loop (RE-43).** `plan_profile_from_segments` took every loop but the
   largest as a void, even one outside it, which gave five Snowdon slabs an
@@ -180,28 +176,26 @@ All notable changes will be documented here. This project follows
   outside the outer one is now a piece of its own (#331, above), and a loop
   that crosses another means no profile.
 
-- **Second-prologue ElementIds are read from the partition record, not
-  inferred (RE-35).** Every `Partitions/*` stream opens with a chain of
+- **Records with no ElementId at `+0x00` take it from their partition record
+  (RE-35).** Every `Partitions/*` stream opens with a chain of
   records, one per element: `u64 ElementId · u32 size · u16 prologue constant
   · u16 count`, the body, then a trailer that repeats the size. A record that
   carries its ElementId at `+0x00` *is* the start of its record. A
   second-prologue frame (RE-30) sits inside its element's record, so its id is
   the record's.
-  - RE-34's reference-order inference gave a wrong id outside its hold-outs:
-    on a Revit 2025 project it named a door after its type (49480 instead of
-    325405), because partitions are several ascending runs, not one. It also
-    had four latent wrong ids for Snowdon stairs and a roof, which are not
-    exported. The inference, its context threshold, `SKETCH_OWNING_CATEGORIES`
-    and its hold-out probe and test are removed.
+  - An interim reference-order inference (RE-34) was replaced before this
+    release: on a Revit 2025 project it named a door after its type,
+    because partitions are several ascending runs, not one.
   - All 30,432 first-prologue records across nine 2024 and 2025 files start a
     record of their own id, and the chains hold every declared ElementId on
     Core Interior and the RE1 models.
-  - The RE1 Architecture, Mechanical and Plumbing models now match every
-    entity rvt-rs recovers in Revit's own export: all doors, the curtain
-    wall, all 66 ducts, pipes and fittings, and all 117 pipes and fittings.
-    Snowdon Towers Architectural exports 4,795 elements instead of 4,132.
-    4,678 are in Revit's export, including every door, window, curtain wall,
-    railing, ceiling, furniture item and fixture, and 1,062 of 1,078 walls.
+  - The RE1 Architecture, Mechanical and Plumbing models match every entity
+    rvt-rs recovers in Revit's own export: all doors, the curtain wall, all
+    66 ducts, pipes and fittings, and all 117 pipes and fittings. Snowdon
+    Towers Architectural exports 4,795 elements from these categories
+    instead of 80; 4,678 are in Revit's export, including every door,
+    window, curtain wall, railing, ceiling, furniture item and fixture, and
+    1,062 of 1,078 walls.
   - Floors, building pads and ceilings in that layout get their ids too;
     Snowdon exports 176 of Revit's 200 slabs.
   - Records after the chain belong to loaded families' own documents and no
@@ -209,58 +203,12 @@ All notable changes will be documented here. This project follows
     `element_record_without_element_id` count is 20 (16 walls, 4 columns),
     exactly what rvt-rs still cannot attribute.
   - Core Interior exports byte-identically.
-  - The `ElementIdSource = 'reference_order'` property and the
-    `element_id_from_reference_order` warning are gone, since no id is
-    inferred any more. `PartitionElementRecord::id_from_reference_order` is
-    now `id_from_enclosing_record`.
+  - `PartitionElementRecord::id_from_enclosing_record` says which kind of
+    frame an id came from.
   - `partition_record_chain`, `enclosing_record` and `record_prologue_constant`
     are public. `examples/probe_re35_record_wrapper.rs` reports the chain for
     any file, and `tests/partition_record_chain.rs` holds the first-prologue
     identity on the project corpus.
-
-## [0.2.0] — prepared, not yet released
-
-An **inspection-focused alpha** (see
-[`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md)). rvt-rs remains a
-Revit inspection / reverse-engineering toolkit with experimental export —
-**not** a production Revit→IFC converter for arbitrary projects. The first
-release with prebuilt CLI archives for Linux, macOS and Windows on the GitHub
-Release, and a multi-arch container image on ghcr.io.
-
-### Added
-
-- **The IFC says which ElementIds were inferred.** An element whose
-  `Tag` came from its record's reference list and the frame order (RE-34)
-  carries `ElementIdSource = 'reference_order'` in its
-  `RvtElementRecordGeometry` property set, so an IFC consumer, and the
-  viewer's element info panel, can tell it from an id read off the record.
-  Records that carry their id write nothing new; Core Interior's export is
-  unchanged.
-
-- **Records with no ElementId at `+0x00` now get one from the reference order
-  (RE-34).** The second record prologue (RE-30) hides the ElementId in the
-  record's reference list, and records sit in ascending ElementId order.
-  `assign_second_prologue_ids` finds the longest rising chain twice, with
-  ties resolved both ways, and takes an id only when the two agree.
-  - With every id hidden and then scored, it makes 0 wrong picks: 3,458
-    correct on Core Interior, 445 on Snowdon, and 41, 7 and 36 on the RE1
-    models.
-  - Snowdon Towers Architectural now exports 4,185 elements instead of 80,
-    and its readiness score rises from 36% to 91%. 4,077 of its 4,132
-    tagged elements are in Revit's own export. The other 55 are real
-    elements Revit's export leaves out (#309), none a wrong id for an
-    exported one.
-  - The RE1 MEP models gain their second-prologue ducts, pipes and
-    fittings, all in Revit's export.
-  - Floors, building pads and ceilings in that layout stay unassigned,
-    because their records name their sketch one id earlier. Levels and
-    types named by 56 or more records are never candidates.
-  - Each element given an id this way carries an
-    `element_id_from_reference_order` provenance warning and an
-    `m_id_from_reference_order` field. Core Interior, which has no such
-    records, exports byte-identically.
-  - `tests/second_prologue_ids.rs` holds the Core hold-out at zero wrong,
-    and `examples/probe_re34_holdout.rs` runs it on any file.
 
 - **Thirteen more categories from Revit 2024 and 2025 element records
   (RE-33).** Furniture, casework, plumbing fixtures, specialty equipment,
@@ -273,7 +221,7 @@ Release, and a multi-arch container image on ghcr.io.
   - Every element exported from a record carrying its ElementId is one
     Revit's own export of the same file also holds: zero false positives on
     the MIT RE1 Architecture, Mechanical and Plumbing models (Revit 2025)
-    and on Snowdon Towers (Revit 2024). RE-34 above extends the categories
+    and on Snowdon Towers (Revit 2024). RE-35 above extends the categories
     to second-prologue records.
   - RE1 Architecture gains all 58 of its elements in these categories.
     Recall on the MEP models and Snowdon is partial, because most of their
@@ -293,7 +241,7 @@ Release, and a multi-arch container image on ghcr.io.
     positives. On the MIT-licensed `Drshelden/IFC-ECS` RE1 architecture model
     it reproduces the export's 7 wall and 2 slab ElementIds and 11 rooms.
   - Doors and windows mostly use the second record prologue (RE-30), so they
-    are counted as unattributed rather than exported.
+    take their ElementIds from their partition records (RE-35 above).
   - Room names, storeys and wall types remain 2024-only.
   - `tools/fetch-corpus.sh` fetches the RE1 models, and
     `tests/element_records_2025.rs` checks them.
@@ -511,6 +459,18 @@ Release, and a multi-arch container image on ghcr.io.
 
 ### Fixed
 
+- **The viewer lays out correctly on HiDPI screens.** The 3D canvas's
+  backing store is sized in device pixels, and nothing pinned the element
+  to its container. On a 2x display it laid out twice as large, widened the
+  grid, pushed the file-status panel off-screen and centred the drop zone in
+  the overflow, bottom right. The canvas now fills the viewport exactly. The
+  grid tracks cannot grow from their content, the canvas also follows
+  viewport resizes that are not window resizes, and the empty-state overlay
+  is opaque and scrolls on short screens. A Playwright test at device scale
+  factor 2 holds it. The drop zone, workflow and support-profile copy now
+  describe what Revit 2024 and 2025 projects export instead of calling
+  typed extraction unsolved.
+
 - **Placed instances with no 3D volume are left out, as Revit leaves them
   out.** 2D symbol families placed as equipment or fixtures (floor drains
   drawn in plan, wheelchair circles, clearance zones) have a flat record
@@ -639,9 +599,8 @@ Release, and a multi-arch container image on ghcr.io.
   Snowdon structural sample and every family file detect exactly as
   before. `reports/element-framing/RE-30-snowdon-generalisation.md` records
   what the same two files show beyond the table: most of their element
-  records use a second prologue whose ElementId is not located, so wall,
-  door, window and room recovery does not yet generalise past
-  `2024_Core_Interior.rvt`, and the support matrix now says so.
+  records use a second prologue, whose ElementId RE-35 above reads from the
+  enclosing partition record.
 - **The browser viewer's Export IFC and Export plan SVG buttons work.**
   Both had failed on every click since they shipped (commit 7d54d3f, 2026-04-20)
   — confirmed on the deployed site before this fix — for two stacked
