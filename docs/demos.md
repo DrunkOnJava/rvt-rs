@@ -311,21 +311,24 @@ Notable properties:
   `IfcBuildingElementProxy` — every input element appears in the output
   even without a dedicated decoder.
 
-<!-- TODO: add screenshot of tests/fixtures/synthetic-project.ifc loaded in BlenderBIM -->
-
-For the end-to-end `.rvt` → `.ifc` path:
+For the end-to-end `.rvt` → `.ifc` path, on the MIT-licensed
+`2024_Core_Interior.rvt` from `magnetar-io/revit-test-datasets`:
 
 ```bash
-./target/release/rvt-ifc samples/rac_basic_sample_family-2024.rfa
-# rvt-ifc: wrote 1847 bytes to samples/rac_basic_sample_family-2024.ifc
+./target/release/rvt-ifc 2024_Core_Interior.rvt
+# rvt-ifc: wrote 1910493 bytes to 2024_Core_Interior.ifc
+# rvt-ifc: 970 building element(s), 970 with geometry, on 15 storey(s)
+#   360 IfcWall, 256 IfcColumn, 132 IfcDoor, 116 IfcSpace, 80 IfcSlab, 20 IfcShadingDevice, and 1 more type(s)
+# rvt-ifc: readiness geometry (score 1.00). Add --diagnostics <path> for the full report
 ```
 
-Today that path emits a valid IFC4 spatial tree (Project + Site +
-Building + Storey) but per-element branches are sparse — the
-end-to-end Revit walker that drives every decoded `Wall` / `Floor` /
-`Door` into `build_ifc_model` the way the synthetic test does is
-L5B-01 (historical planning id) + a handful of IFC tasks
-*(not yet implemented)*.
+Revit 2024 and 2025 projects export typed elements read from their
+partition element records; the README's "What rvt-rs reads from real
+projects" measures them against Revit's own export. The summary also
+counts what the export leaves out on purpose, as Revit's does: 2D-only
+families and elements in non-primary design options. A family file
+(`.rfa`) or a project from an earlier release writes the spatial tree
+(Project, Site, Building, Storeys) with a scaffold readiness level.
 
 ---
 

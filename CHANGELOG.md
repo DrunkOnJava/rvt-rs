@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **`rvt-ifc` says what it wrote.** After the IFC is written, it prints the
+  number of building elements, how many have geometry and on how many
+  storeys; the six largest IFC types; what it left out on purpose, as Revit's
+  own export does (2D-only families, non-primary design options); and the
+  readiness level, with a pointer to `--diagnostics` for the full report. It
+  prints on stderr, so a pipeline reading stdout is unaffected.
+
 - **Families that nest others are named too (RE-42, #324).** A type's
   partition record names its family, and also any family of the same
   category nested in it, so RE-38 left such elements with class-and-id
