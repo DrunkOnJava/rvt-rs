@@ -33,10 +33,11 @@ Release, and a multi-arch container image on ghcr.io.
   - With every id hidden and then scored, it makes 0 wrong picks: 3,458
     correct on Core Interior, 445 on Snowdon, and 41, 7 and 36 on the RE1
     models.
-  - Snowdon Towers Architectural now exports 4,245 elements instead of 80,
-    and its readiness score rises from 36% to 91%. 4,077 of its tagged
-    elements are in Revit's own export. The other 115 are real elements
-    Revit's export leaves out (#309), none a wrong id for an exported one.
+  - Snowdon Towers Architectural now exports 4,185 elements instead of 80,
+    and its readiness score rises from 36% to 91%. 4,077 of its 4,132
+    tagged elements are in Revit's own export. The other 55 are real
+    elements Revit's export leaves out (#309), none a wrong id for an
+    exported one.
   - The RE1 MEP models gain their second-prologue ducts, pipes and
     fittings, all in Revit's export.
   - Floors, building pads and ceilings in that layout stay unassigned,
@@ -297,6 +298,17 @@ Release, and a multi-arch container image on ghcr.io.
   under Fixed. Floors are in `PartitionSchemaMvp::slabs`.
 
 ### Fixed
+
+- **Placed instances with no 3D volume are left out, as Revit leaves them
+  out.** 2D symbol families placed as equipment or fixtures (floor drains
+  drawn in plan, wheelchair circles, clearance zones) have a flat record
+  bounding box and no body. Revit's IFC export omits them, and rvt-rs
+  exported them as bodiless entities.
+  - On Snowdon Towers all 60 such instances were among the elements Revit's
+    export lacks, and no element it holds on any measured file is flat.
+    Snowdon's elements outside Revit's export fall from 115 to 55.
+  - The sidecar reports them as `element_record_without_volume`. They do
+    not count toward `unexported_element_records` (#309).
 
 - **Boolean property values are valid STEP.** The writer emitted
   `IFCBOOLEAN(.T)` / `IFCBOOLEAN(.F)`, missing the closing dot of an ISO

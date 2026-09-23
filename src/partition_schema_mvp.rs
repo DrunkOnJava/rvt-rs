@@ -662,7 +662,9 @@ fn select_instance_records(
     // over all 976 multi-framed instances.
     let mut by_id: BTreeMap<u32, PartitionElementRecord> = BTreeMap::new();
     for record in records {
-        if !record.is_exported_instance() {
+        // A placed instance with no volume has no 3D body, and Revit's
+        // export leaves it out (#309); see `has_volume`.
+        if !record.is_exported_instance() || !record.has_volume() {
             continue;
         }
         let better = match by_id.get(&record.element_id) {

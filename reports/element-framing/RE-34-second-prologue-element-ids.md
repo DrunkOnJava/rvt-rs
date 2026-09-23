@@ -129,3 +129,13 @@ They are real elements the rule identifies and Revit's exporter leaves out (for 
 - Elements Revit's export omits are exported (#309).
 - 684 of the 4,929 placed instances of recovered categories on Snowdon (14 %), and 1,416 of 4,874 in the Core hold-out, stay unassigned because the ordering does not force their id. They remain counted as `element_record_without_element_id`.
 - 2023 and 2026 stay unsupported.
+
+## 8. Addendum: 60 of the 115 have no 3D volume (#309, 2026-09-22)
+
+The 115 Snowdon elements Revit's export omits follow their type: eight type ids, named by no exported element, cover 111 of them. Three of those types sit next to the strings "Floor Drain-2D", "ADA Clear Space" and "Wheel Chair Circle". These are 2D symbol families, and their record bounding boxes are flat on one axis:
+
+- all 45 omitted specialty-equipment instances and all 15 omitted plumbing fixtures;
+- none of the 4,077 exported elements, and none on Core Interior or the RE1 models.
+
+Placed instances with no volume are now left out as Revit leaves them out, and reported as `element_record_without_volume`. Snowdon exports 4,185 elements; 55 remain outside Revit's export: 47 curtain panels, whose types include the system "Empty" panel, 7 bleacher walls and the #309 slab.
+

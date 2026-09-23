@@ -210,6 +210,10 @@ pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 13] = [
     (OST_PIPE_FITTING, "PipeFitting"),
 ];
 
+/// Smallest bounding-box extent, in feet, a placed instance needs on every
+/// axis to count as having a 3D body ([`PartitionElementRecord::has_volume`]).
+pub const VOLUME_EPSILON_FEET: f64 = 1e-6;
+
 /// Lower bound of the Revit `BuiltInCategory` id band.
 pub const BUILTIN_CATEGORY_MIN: i64 = -2_100_000;
 /// Upper bound of the Revit `BuiltInCategory` id band.
@@ -350,6 +354,24 @@ impl PartitionElementRecord {
             self.bbox_feet[4] - self.bbox_feet[1],
             self.bbox_feet[5] - self.bbox_feet[2],
         )
+    }
+
+    /// Whether the record's bounding box has extent on all three axes
+    /// (more than [`VOLUME_EPSILON_FEET`]).
+    ///
+    /// A placed instance with no volume is a 2D symbol family: a floor
+    /// drain drawn in plan, a wheelchair turning circle, an accessible
+    /// clearance zone. Revit's IFC export leaves such an instance out,
+    /// because it has no 3D body to write. On Snowdon Towers all 60 placed
+    /// instances without volume (45 specialty equipment, 15 plumbing
+    /// fixtures) are missing from Revit's export, and none of the 4,077
+    /// instances the export does hold, nor any on `2024_Core_Interior.rvt`
+    /// or the RE1 models, lacks volume (#309).
+    pub fn has_volume(&self) -> bool {
+        let (dx, dy, dz) = self.extents_feet();
+        [dx, dy, dz]
+            .iter()
+            .all(|extent| extent.is_finite() && *extent > VOLUME_EPSILON_FEET)
     }
 
     /// True when the bbox is expressed in family-local coordinates
@@ -738,6 +760,19 @@ pub fn context_element_ids<'a>(
         .collect()
 }
 
+/// [`PartitionElementRecord::has_volume`] read straight off the frame at
+/// `offset`, for frames that are never decoded.
+fn frame_has_volume(buf: &[u8], offset: usize) -> bool {
+    let mut bbox = [0.0f64; 6];
+    for (index, slot) in bbox.iter_mut().enumerate() {
+        match read_f64(buf, offset + BBOX_OFFSET + index * 8) {
+            Some(value) if value.is_finite() => *slot = value,
+            _ => return false,
+        }
+    }
+    (0..3).all(|axis| bbox[axis + 3] - bbox[axis] > VOLUME_EPSILON_FEET)
+}
+
 /// ElementIds for second-prologue frames in one partition, by frame offset
 /// (RE-34).
 ///
@@ -1070,7 +1105,9 @@ pub fn count_unattributed_frames_excluding(
         if !read_u64(buf, offset).is_some_and(|id| id == 0 || id > u64::from(u32::MAX)) {
             continue;
         }
-        if is_instance_frame(buf, offset) {
+        // A frame with no volume is a 2D symbol Revit's export leaves out
+        // (#309), so it is not a missing element either.
+        if is_instance_frame(buf, offset) && frame_has_volume(buf, offset) {
             *counts.entry(category).or_insert(0) += 1;
         }
     }
@@ -1104,6 +1141,46 @@ pub fn scan_unattributed_frames(
             if let Some((_, class)) = RECOVERED_CATEGORIES.iter().find(|(c, _)| *c == category) {
                 *by_class.entry((*class).to_string()).or_insert(0) += count;
             }
+        }
+    }
+    Ok(by_class)
+}
+
+/// Placed instances of the [`RECOVERED_CATEGORIES`] whose bounding box has
+/// no volume ([`PartitionElementRecord::has_volume`]), one per ElementId,
+/// keyed by class name. The export leaves them out, as Revit's does
+/// (#309); this counts them so the diagnostics can say so.
+pub fn scan_volumeless_instances(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> Result<BTreeMap<String, usize>> {
+    let mut by_class = BTreeMap::new();
+    if !supports_revit_version(revit_version) {
+        return Ok(by_class);
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Err(_) => return Ok(by_class),
+    };
+    let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
+    let records = scan_category_records_multi(rf, revit_version, &categories, &declared)?;
+    // An element framed more than once counts once, and only when no frame
+    // of it has volume.
+    let mut with_volume: BTreeSet<u32> = BTreeSet::new();
+    let mut without: BTreeMap<u32, i64> = BTreeMap::new();
+    for record in records.iter().filter(|r| r.is_exported_instance()) {
+        if record.has_volume() {
+            with_volume.insert(record.element_id);
+        } else {
+            without.insert(record.element_id, record.builtin_category);
+        }
+    }
+    for (id, category) in without {
+        if with_volume.contains(&id) {
+            continue;
+        }
+        if let Some((_, class)) = RECOVERED_CATEGORIES.iter().find(|(c, _)| *c == category) {
+            *by_class.entry((*class).to_string()).or_insert(0) += 1;
         }
     }
     Ok(by_class)
@@ -1717,6 +1794,37 @@ mod tests {
         assert_eq!(
             count_unattributed_frames(&buf, &[OST_WALLS]),
             BTreeMap::from([(OST_WALLS, 1)])
+        );
+    }
+
+    /// #309: a placed instance whose box is flat on any axis has no 3D
+    /// body and is neither exported nor counted as missing.
+    #[test]
+    fn a_placed_instance_without_volume_is_left_out_and_not_counted_missing() {
+        let flat = [0.0, 0.0, 0.0, 5.0, 5.0, 0.0];
+        let solid = [0.0, 0.0, 0.0, 5.0, 5.0, 3.0];
+        let declared = declared(&[100, 200]);
+        let buf = [
+            synth_record(100, OST_SPECIALITY_EQUIPMENT, flat),
+            synth_record(200, OST_SPECIALITY_EQUIPMENT, solid),
+        ]
+        .concat();
+        let records =
+            find_category_records("Partitions/68", &buf, OST_SPECIALITY_EQUIPMENT, &declared);
+        let volumes: Vec<(u32, bool)> = records
+            .iter()
+            .map(|r| (r.element_id, r.has_volume()))
+            .collect();
+        assert_eq!(volumes, vec![(100, false), (200, true)]);
+
+        let mut hidden_flat = synth_record(1, OST_SPECIALITY_EQUIPMENT, flat);
+        hidden_flat[0..8].fill(0xff);
+        let mut hidden_solid = synth_record(1, OST_SPECIALITY_EQUIPMENT, solid);
+        hidden_solid[0..8].fill(0xff);
+        let buf = [hidden_flat, hidden_solid].concat();
+        assert_eq!(
+            count_unattributed_frames(&buf, &[OST_SPECIALITY_EQUIPMENT]),
+            BTreeMap::from([(OST_SPECIALITY_EQUIPMENT, 1)])
         );
     }
 }

@@ -91,6 +91,15 @@ of those records their ElementId and exports them (see
 `reports/element-framing/RE-33-product-categories.md` and
 `reports/element-framing/RE-34-second-prologue-element-ids.md`).
 
+`element_record_without_volume` counts placed instances of a recovered
+category whose record bounding box is flat on some axis. These are 2D symbol
+families (a floor drain drawn in plan, a wheelchair turning circle, an
+accessible clearance zone) with no 3D body. Revit's own IFC export leaves them
+out, and so does rvt-rs. They are omitted by design, not missing, so they do
+not count toward `unexported_element_records`. On Snowdon Towers all 60 of
+them (45 specialty equipment, 15 plumbing fixtures) are absent from Revit's
+export, and no element Revit does export lacks volume (#309).
+
 `unsupported_features` carries exactly one geometry-coverage code:
 `real_file_element_geometry` when **no** exported building element has a
 recovered body, and `partial_element_geometry` when some do and some do not
