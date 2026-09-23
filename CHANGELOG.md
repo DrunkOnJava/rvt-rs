@@ -134,6 +134,23 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Frames holding the invalid ElementId take their record's id (RE-43).**
+  Some element frames hold `u32::MAX`, the 32-bit form of Revit's invalid
+  ElementId −1, at `+0x00`. They carry no id of their own either, and now
+  take their enclosing partition record's id like other second-prologue
+  frames (RE-35).
+  - On Snowdon Towers this recovers stair run 1644693. Every element of
+    Revit's own export in the entity types rvt-rs writes is now exported.
+  - It also recovers 99 sketch lines, so 18 slabs get their sketched plan
+    profile; 16 of them have exactly Revit's area per solid.
+- **A sketch of separate pieces no longer yields voids outside the outer
+  loop (RE-43).** `plan_profile_from_segments` took every loop but the
+  largest as a void, even one outside it, which gave five Snowdon slabs an
+  invalid `IfcArbitraryProfileDefWithVoids` with near-zero area. A loop not
+  inside the outer one now means no profile, and the slab keeps its record
+  box (`ProfileResolved` false). Revit writes such slabs as one `IfcSlab`
+  per piece (#331).
+
 - **Second-prologue ElementIds are read from the partition record, not
   inferred (RE-35).** Every `Partitions/*` stream opens with a chain of
   records, one per element: `u64 ElementId · u32 size · u16 prologue constant
