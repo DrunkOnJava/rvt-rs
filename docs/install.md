@@ -101,6 +101,14 @@ Expand-Archive .\rvt-rs-<version>-x86_64-pc-windows-msvc.zip -DestinationPath .
 .\rvt-rs-<version>-x86_64-pc-windows-msvc\rvt-info.exe --version
 ```
 
+Each archive also carries a GitHub build-provenance attestation, which
+proves it was built by this repository's release workflow from the tagged
+commit. Check it with the GitHub CLI:
+
+```bash
+gh attestation verify rvt-rs-<version>-<target>.tar.gz -R DrunkOnJava/rvt-rs
+```
+
 The binaries are not code-signed. On macOS, a browser download is
 quarantined by Gatekeeper; clear it for the unpacked folder with
 `xattr -dr com.apple.quarantine rvt-rs-<version>-<target>`. On Windows,
@@ -131,6 +139,12 @@ docker run --rm -v "$PWD:/data" --user "$(id -u):$(id -g)" \
 
 `--user` makes files the tools write owned by you rather than by the image's
 default non-root user. Without a command the image prints `rvt-info --help`.
+
+The image carries a build-provenance attestation too:
+
+```bash
+gh attestation verify oci://ghcr.io/drunkonjava/rvt-rs:<version> -R DrunkOnJava/rvt-rs
+```
 
 To build the image yourself, stage the release's Linux archives and build
 from `docker/`:

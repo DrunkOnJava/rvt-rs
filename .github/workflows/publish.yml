@@ -293,6 +293,9 @@ jobs:
       contents: write
       # The image job pushes the container to ghcr.io.
       packages: write
+      # Build-provenance attestations for the archives and the image.
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/release-binaries.yml
     with:
       upload: true

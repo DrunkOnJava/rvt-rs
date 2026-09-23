@@ -23,6 +23,15 @@ All notable changes will be documented here. This project follows
   - Room names, storeys and wall types remain 2024-only.
   - `tools/fetch-corpus.sh` fetches the RE1 models, and
     `tests/element_records_2025.rs` checks them.
+- **Release archives and the container image carry build-provenance
+  attestations.** The release workflow attests every CLI archive before
+  attaching it, and it attests the pushed image digest into ghcr.io
+  (`actions/attest`), so anyone can check that a download was built from
+  this repository's tagged commit:
+  - `gh attestation verify <archive> -R DrunkOnJava/rvt-rs`
+  - `gh attestation verify oci://ghcr.io/drunkonjava/rvt-rs:<version> -R DrunkOnJava/rvt-rs`
+
+  PyPI wheels already carry PEP 740 attestations through trusted publishing.
 
 ### Fixed
 
