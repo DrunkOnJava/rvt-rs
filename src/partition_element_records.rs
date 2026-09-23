@@ -322,11 +322,11 @@ pub struct PartitionElementRecord {
     #[serde(default)]
     pub references: Vec<u64>,
     /// `true` when the frame carries no ElementId at `+0x00` (the second
-    /// prologue, RE-30) and [`assign_second_prologue_ids`] chose
-    /// [`Self::element_id`] from the reference list and the frame order
-    /// (RE-34). `false` for a record whose ElementId is at `+0x00`.
+    /// prologue, RE-30) and [`Self::element_id`] is the id of the partition
+    /// record the frame sits in ([`assign_second_prologue_ids`], RE-35).
+    /// `false` for a frame that starts its record, with the id at `+0x00`.
     #[serde(default)]
-    pub id_from_reference_order: bool,
+    pub id_from_enclosing_record: bool,
 }
 
 impl PartitionElementRecord {
@@ -497,6 +497,16 @@ fn read_f64(buf: &[u8], off: usize) -> Option<f64> {
     read_u64(buf, off).map(f64::from_bits)
 }
 
+fn read_u32(buf: &[u8], off: usize) -> Option<u32> {
+    buf.get(off..off.checked_add(4)?)
+        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
+}
+
+fn read_u16(buf: &[u8], off: usize) -> Option<u16> {
+    buf.get(off..off.checked_add(2)?)
+        .map(|s| u16::from_le_bytes(s.try_into().expect("2 bytes")))
+}
+
 /// Decode the counted reference list whose `u32` length prefix sits
 /// at `at` (#222, RE-23).
 ///
@@ -595,8 +605,8 @@ pub fn decode_at_with_marker(
 
 /// Decode the frame at `offset` as the record of `element_id`, which the
 /// caller has already established: the ElementId at `+0x00` for a
-/// first-prologue frame, or the one [`assign_second_prologue_ids`] chose
-/// for a second-prologue frame. Everything from `+0x10` on is read and
+/// first-prologue frame, or its enclosing record's id
+/// ([`assign_second_prologue_ids`]) for a second-prologue frame. Everything from `+0x10` on is read and
 /// validated exactly as for any record.
 pub fn decode_frame_as(
     stream: &str,
@@ -655,7 +665,7 @@ pub fn decode_frame_as(
         preceding_reference,
         owner_reference,
         references,
-        id_from_reference_order: false,
+        id_from_enclosing_record: false,
     })
 }
 
@@ -668,96 +678,88 @@ fn is_instance_frame(buf: &[u8], offset: usize) -> bool {
             .is_some_and(|v| (v & 0xffff_ffff) as u32 == PLACEMENT_KIND_INSTANCE)
 }
 
-/// A framed element as the RE-34 order rule sees it.
-struct Frame {
-    offset: usize,
-    category: i64,
-    /// The declared ElementId at `+0x00`, for a first-prologue frame.
-    fixed_id: Option<u32>,
-    instance: bool,
-    references: Vec<u64>,
+/// Length of the header that opens every partition record: the `u64`
+/// ElementId, the `u32` record size, the `u16` prologue constant
+/// ([`record_prologue_constant`]) and a `u16` count (RE-35).
+pub const PARTITION_RECORD_HEADER_LEN: usize = 16;
+
+/// Length of the trailer that closes every partition record: an unread
+/// `u64`, a `u32` flag word (`0` or `0x0100_0000`) and the record size
+/// again (RE-35).
+pub const PARTITION_RECORD_TRAILER_LEN: usize = 16;
+
+/// The `u16` at `+0x0c` of every partition record header: the release
+/// constant plus 28 (`0x059f` on 2024, `0x05c7` on 2025), which is 12
+/// below the constant the release's [`bbox_marker`] ends with.
+pub fn record_prologue_constant(marker: &[u8; 8]) -> u16 {
+    u16::from_le_bytes([marker[6], marker[7]]).wrapping_sub(12)
 }
 
-/// Every frame in `buf` with a category in the `BuiltInCategory` band and
-/// either a declared ElementId at `+0x00` or none at all (a `u64` of 0 or
-/// above `u32::MAX`), in offset order.
-fn framed_elements(buf: &[u8], marker: &[u8; 8], declared_ids: &BTreeSet<u32>) -> Vec<Frame> {
-    let mut frames = Vec::new();
-    for hit in memchr::memmem::find_iter(buf, marker) {
-        let Some(offset) = hit.checked_sub(BBOX_MARKER_OFFSET) else {
-            continue;
-        };
-        let Some(category) = read_u64(buf, offset + CATEGORY_OFFSET).map(|v| v as i64) else {
-            continue;
-        };
-        if !(BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&category) {
-            continue;
-        }
-        let Some(raw_id) = read_u64(buf, offset) else {
-            continue;
-        };
-        let fixed_id = if raw_id == 0 || raw_id > u64::from(u32::MAX) {
-            None
-        } else if declared_ids.contains(&(raw_id as u32)) {
-            Some(raw_id as u32)
-        } else {
-            continue;
-        };
-        let references = offset
-            .checked_add(REFERENCE_LIST_OFFSET)
-            .and_then(|at| decode_reference_list(buf, at))
-            .unwrap_or_default();
-        frames.push(Frame {
-            offset,
-            category,
-            fixed_id,
-            instance: is_instance_frame(buf, offset),
-            references,
-        });
-    }
-    frames
+/// One record of a partition's leading record chain (RE-35).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PartitionRecordSpan {
+    /// Offset of the record header.
+    pub start: usize,
+    /// Offset one past the record body, where its trailer starts.
+    pub end: usize,
+    /// The `u64` the header opens with: the ElementId the record belongs
+    /// to. It is declared in `Global/ElemTable` for every project element;
+    /// the caller checks.
+    pub element_id: u64,
 }
 
-/// How many framed elements must name an ElementId in their reference
-/// lists before RE-34 treats it as context (a Level, a type, a phase)
-/// rather than a possible own id.
+/// The leading chain of records in one inflated partition (RE-35).
 ///
-/// On `2024_Core_Interior.rvt` no placed instance's own id is named by more
-/// than 34 frames, while the Levels and types the unfiltered rule wrongly
-/// picked are named by 66 to 260. Every hold-out stays at zero wrong for
-/// any threshold from 48 to 64; this is the middle of that band.
-pub const SECOND_PROLOGUE_CONTEXT_REFERENCES: usize = 56;
-
-/// Categories RE-34 never assigns an id to: an element that owns a sketch
-/// lists the sketch, created one ElementId earlier, next to its own id, and
-/// the order rule cannot tell them apart. On Snowdon Towers the one floor
-/// it would assign takes the sketch's id (1423898 for floor 1423899). The
-/// frames stay in the chain, so they still constrain their neighbours.
-pub const SKETCH_OWNING_CATEGORIES: [i64; 3] = [OST_FLOORS, OST_BUILDING_PAD, OST_CEILINGS];
-
-/// ElementIds named by at least [`SECOND_PROLOGUE_CONTEXT_REFERENCES`]
-/// framed elements across `buffers` (one per partition).
-pub fn context_element_ids<'a>(
-    buffers: impl IntoIterator<Item = &'a [u8]>,
-    marker: &[u8; 8],
-    declared_ids: &BTreeSet<u32>,
-) -> BTreeSet<u32> {
-    let mut named_by: BTreeMap<u64, usize> = BTreeMap::new();
-    for buf in buffers {
-        for frame in framed_elements(buf, marker, declared_ids) {
-            let distinct: BTreeSet<u64> = frame.references.into_iter().collect();
-            for id in distinct {
-                *named_by.entry(id).or_insert(0) += 1;
-            }
+/// A partition opens with one record per element, back to back: a
+/// [`PARTITION_RECORD_HEADER_LEN`]-byte header, the body, and a
+/// [`PARTITION_RECORD_TRAILER_LEN`]-byte trailer that repeats the size.
+/// A frame with the element's ElementId at `+0x00` (the first prologue)
+/// starts its record, so its header *is* the record header; a
+/// second-prologue frame (RE-30) sits inside its element's record body.
+///
+/// The walk starts at offset 0 and stops at the first position that is
+/// not a header whose trailer echoes its size. What follows (the records
+/// of loaded families' own documents, with their own ElementIds) is not
+/// part of the chain. Every step moves at least
+/// `PARTITION_RECORD_HEADER_LEN + PARTITION_RECORD_TRAILER_LEN` bytes, so
+/// the walk is linear in `buf`.
+pub fn partition_record_chain(buf: &[u8], marker: &[u8; 8]) -> Vec<PartitionRecordSpan> {
+    let constant = record_prologue_constant(marker);
+    let mut chain = Vec::new();
+    let mut at = 0usize;
+    while let Some(element_id) = read_u64(buf, at) {
+        let Some(size) = read_u32(buf, at + 8).map(|v| v as usize) else {
+            break;
+        };
+        if size < PARTITION_RECORD_HEADER_LEN || read_u16(buf, at + 0x0c) != Some(constant) {
+            break;
         }
+        let Some(end) = at.checked_add(size) else {
+            break;
+        };
+        let flags = end.checked_add(8).and_then(|t| read_u32(buf, t));
+        let echo = end.checked_add(12).and_then(|t| read_u32(buf, t));
+        if !matches!(flags, Some(0 | 0x0100_0000)) || echo.map(|v| v as usize) != Some(size) {
+            break;
+        }
+        chain.push(PartitionRecordSpan {
+            start: at,
+            end,
+            element_id,
+        });
+        at = end + PARTITION_RECORD_TRAILER_LEN;
     }
-    named_by
-        .into_iter()
-        .filter(|&(id, count)| {
-            count >= SECOND_PROLOGUE_CONTEXT_REFERENCES && id <= u64::from(u32::MAX)
-        })
-        .map(|(id, _)| id as u32)
-        .collect()
+    chain
+}
+
+/// The record of `chain` whose body contains `offset`.
+pub fn enclosing_record(
+    chain: &[PartitionRecordSpan],
+    offset: usize,
+) -> Option<&PartitionRecordSpan> {
+    let index = chain.partition_point(|span| span.start <= offset);
+    let span = chain.get(index.checked_sub(1)?)?;
+    (offset < span.end).then_some(span)
 }
 
 /// [`PartitionElementRecord::has_volume`] read straight off the frame at
@@ -773,85 +775,62 @@ fn frame_has_volume(buf: &[u8], offset: usize) -> bool {
     (0..3).all(|axis| bbox[axis + 3] - bbox[axis] > VOLUME_EPSILON_FEET)
 }
 
-/// ElementIds for second-prologue frames in one partition, by frame offset
-/// (RE-34).
+/// ElementIds for the second-prologue frames of one partition, by frame
+/// offset (RE-35).
 ///
-/// A second-prologue frame (RE-30) has no ElementId at `+0x00`, but its own
-/// id is one slot of its counted reference list, and element frames sit in
-/// each partition in ascending ElementId order. So every framed element in
-/// `buf` is a link in one chain:
+/// A second-prologue frame (RE-30) carries no ElementId at `+0x00`, but it
+/// sits inside its element's record in the partition's leading record
+/// chain ([`partition_record_chain`]), whose header carries the ElementId.
+/// A placed-instance frame (RE-21 rule) whose enclosing record's id is
+/// declared in `Global/ElemTable` gets that id. Frames outside the chain
+/// (loaded families' own documents) and frames whose record id is not
+/// declared get none (fail closed).
 ///
-/// - a first-prologue frame whose `+0x00` ElementId is declared is fixed at
-///   that id;
-/// - a placed-instance second-prologue frame (no container, placed kind) may
-///   take any declared id in its reference list after the leading slot,
-///   except the `context` ids ([`context_element_ids`]).
-///
-/// The longest chain whose ids rise strictly with offset is found twice:
-/// once resolving ties toward smaller ids and once toward larger ones. A
-/// frame gets an id only when both chains give it the same one, so the id
-/// is forced by the ordering alone, and never for a
-/// [`SKETCH_OWNING_CATEGORIES`] frame. Everything else stays unassigned
-/// (fail closed).
-///
-/// Measured with every `+0x00` id hidden and then scored: 3,458 correct and
-/// 0 wrong on `2024_Core_Interior.rvt`, 445 / 0 on Snowdon Towers'
-/// first-prologue frames, 41 / 0, 7 / 0 and 36 / 0 on the RE1
-/// Architecture, Mechanical and Plumbing models. On Snowdon's real
-/// second-prologue frames every assigned id is either the one `Tag` of the
-/// expected entity in the frame's list, a wall matching Revit's geometry,
-/// or an element Revit's export omits; none is a wrong id for an exported
-/// element.
+/// On every first-prologue frame of the corpus (23,470 on
+/// `2024_Core_Interior.rvt`, 2,075 on Snowdon Towers, 152 / 50 / 136 on
+/// the RE1 models) the enclosing record starts at the frame and carries
+/// the same id. On Snowdon Towers, the RE1 models and both `255ribeiro`
+/// 2025 projects, every id this gives a recovered category is either a
+/// `Tag` of Revit's own export, of the entity that category exports as,
+/// or an element Revit's export leaves out (#309).
 pub fn assign_second_prologue_ids(
     buf: &[u8],
     marker: &[u8; 8],
     declared_ids: &BTreeSet<u32>,
-    context: &BTreeSet<u32>,
 ) -> BTreeMap<usize, u32> {
-    let frames: Vec<Frame> = framed_elements(buf, marker, declared_ids)
-        .into_iter()
-        .filter(|frame| frame.fixed_id.is_some() || frame.instance)
-        .collect();
-    let forward: Vec<Vec<i64>> = frames
-        .iter()
-        .map(|frame| match frame.fixed_id {
-            Some(id) => vec![i64::from(id)],
-            None => frame
-                .references
-                .iter()
-                .skip(1)
-                .filter(|&&id| id <= u64::from(u32::MAX))
-                .map(|&id| id as u32)
-                .filter(|id| declared_ids.contains(id) && !context.contains(id))
-                .map(i64::from)
-                .collect(),
-        })
-        .collect();
-    let backward: Vec<Vec<i64>> = forward
-        .iter()
-        .rev()
-        .map(|ids| ids.iter().map(|id| -id).collect())
-        .collect();
-    let smaller = longest_rising_chain(&forward);
-    let mut larger = longest_rising_chain(&backward);
-    larger.reverse();
-
+    let chain = partition_record_chain(buf, marker);
     let mut out = BTreeMap::new();
-    for (index, frame) in frames.iter().enumerate() {
-        if frame.fixed_id.is_some() || SKETCH_OWNING_CATEGORIES.contains(&frame.category) {
+    for hit in memchr::memmem::find_iter(buf, marker) {
+        let Some(offset) = hit.checked_sub(BBOX_MARKER_OFFSET) else {
+            continue;
+        };
+        if !is_second_prologue_instance(buf, offset) {
             continue;
         }
-        if let (Some(a), Some(b)) = (smaller[index], larger[index]) {
-            if a == -b {
-                out.insert(frame.offset, a as u32);
+        let Some(span) = enclosing_record(&chain, offset) else {
+            continue;
+        };
+        if let Ok(id) = u32::try_from(span.element_id) {
+            if declared_ids.contains(&id) {
+                out.insert(offset, id);
             }
         }
     }
     out
 }
 
+/// Whether the frame at `offset` is a placed instance in the
+/// `BuiltInCategory` band with no ElementId at `+0x00` (a `u64` of 0 or
+/// above `u32::MAX`): the frames [`assign_second_prologue_ids`] resolves.
+fn is_second_prologue_instance(buf: &[u8], offset: usize) -> bool {
+    read_u64(buf, offset + CATEGORY_OFFSET)
+        .is_some_and(|v| (BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&(v as i64)))
+        && read_u64(buf, offset).is_some_and(|id| id == 0 || id > u64::from(u32::MAX))
+        && is_instance_frame(buf, offset)
+}
+
 /// Second-prologue ElementIds for a whole file, keyed by partition stream
-/// and frame offset (RE-34). Empty where the release's record shape is not
+/// and frame offset (RE-35). Empty where the release's record shape is not
 /// proven. [`crate::RevitFile::second_prologue_ids`] memoises it.
 pub fn compute_second_prologue_ids(rf: &mut RevitFile) -> SecondPrologueIds {
     let mut out = SecondPrologueIds::new();
@@ -868,75 +847,24 @@ pub fn compute_second_prologue_ids(rf: &mut RevitFile) -> SecondPrologueIds {
     if declared.is_empty() {
         return out;
     }
-    let partitions: Vec<(String, std::sync::Arc<crate::compression::InflatedStream>)> = rf
-        .partition_stream_names()
-        .into_iter()
-        .filter_map(|stream| {
-            rf.inflated_partition(&stream)
-                .ok()
-                .map(|inflated| (stream, inflated))
-        })
-        .collect();
-    let context = context_element_ids(
-        partitions.iter().map(|(_, inflated)| inflated.bytes()),
-        &marker,
-        &declared,
-    );
-    for (stream, inflated) in &partitions {
-        let assigned = assign_second_prologue_ids(inflated.bytes(), &marker, &declared, &context);
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let assigned = assign_second_prologue_ids(inflated.bytes(), &marker, &declared);
         if !assigned.is_empty() {
-            out.insert(stream.clone(), assigned);
+            out.insert(stream, assigned);
         }
     }
     out
 }
 
-/// Assigned second-prologue ElementIds: partition stream, then frame offset.
+/// Second-prologue ElementIds: partition stream, then frame offset.
 pub type SecondPrologueIds = BTreeMap<String, BTreeMap<usize, u32>>;
-
-/// One value per item, chosen from each item's candidates, so the chosen
-/// values rise strictly along the items and as many items as possible get
-/// one; ties resolve toward smaller values. `None` for an item off the chain.
-///
-/// Patience sorting over (item, value) nodes. An item's candidates are
-/// offered largest first, so two values of one item can never both sit on
-/// a strictly rising chain.
-fn longest_rising_chain(candidates: &[Vec<i64>]) -> Vec<Option<i64>> {
-    let mut tails: Vec<i64> = Vec::new();
-    let mut tail_node: Vec<usize> = Vec::new();
-    // (item, value, previous node)
-    let mut nodes: Vec<(usize, i64, Option<usize>)> = Vec::new();
-    for (item, values) in candidates.iter().enumerate() {
-        let mut values = values.clone();
-        values.sort_unstable();
-        values.dedup();
-        for &value in values.iter().rev() {
-            let k = tails.partition_point(|&tail| tail < value);
-            let previous = k.checked_sub(1).map(|j| tail_node[j]);
-            nodes.push((item, value, previous));
-            let node = nodes.len() - 1;
-            if k == tails.len() {
-                tails.push(value);
-                tail_node.push(node);
-            } else {
-                tails[k] = value;
-                tail_node[k] = node;
-            }
-        }
-    }
-    let mut picks = vec![None; candidates.len()];
-    let mut cursor = tail_node.last().copied();
-    while let Some(node) = cursor {
-        let (item, value, previous) = nodes[node];
-        picks[item] = Some(value);
-        cursor = previous;
-    }
-    picks
-}
 
 /// [`find_category_records_with_marker`], also decoding the
 /// second-prologue frames of `builtin_category` that
-/// [`assign_second_prologue_ids`] gave an id (RE-34).
+/// [`assign_second_prologue_ids`] gave an id (RE-35).
 pub fn find_category_records_assigned(
     stream: &str,
     buf: &[u8],
@@ -952,7 +880,7 @@ pub fn find_category_records_assigned(
             continue;
         }
         if let Some(mut record) = decode_frame_as(stream, buf, offset, element_id, marker) {
-            record.id_from_reference_order = true;
+            record.id_from_enclosing_record = true;
             out.push(record);
         }
     }
@@ -1081,7 +1009,11 @@ pub fn count_unattributed_frames_with_marker(
 }
 
 /// [`count_unattributed_frames_with_marker`], leaving out the frames at the
-/// offsets in `assigned` ([`assign_second_prologue_ids`], RE-34).
+/// offsets in `assigned` ([`assign_second_prologue_ids`], RE-35).
+///
+/// Only frames inside the partition's leading record chain
+/// ([`partition_record_chain`]) count: the records after it belong to
+/// loaded families' own documents, whose frames are not model elements.
 pub fn count_unattributed_frames_excluding(
     buf: &[u8],
     categories: &[i64],
@@ -1089,11 +1021,12 @@ pub fn count_unattributed_frames_excluding(
     assigned: &BTreeMap<usize, u32>,
 ) -> BTreeMap<i64, usize> {
     let mut counts = BTreeMap::new();
+    let chain = partition_record_chain(buf, marker);
     for hit in memchr::memmem::find_iter(buf, marker) {
         let Some(offset) = hit.checked_sub(BBOX_MARKER_OFFSET) else {
             continue;
         };
-        if assigned.contains_key(&offset) {
+        if assigned.contains_key(&offset) || enclosing_record(&chain, offset).is_none() {
             continue;
         }
         let Some(category) = read_u64(buf, offset + CATEGORY_OFFSET).map(|v| v as i64) else {
@@ -1133,7 +1066,7 @@ pub fn scan_unattributed_frames(
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        // A frame RE-34 assigned an id to is exported, not missing.
+        // A frame RE-35 gave an id to is exported, not missing.
         let assigned = assigned_all.get(&stream).unwrap_or(&none);
         for (category, count) in
             count_unattributed_frames_excluding(inflated.bytes(), &categories, &marker, assigned)
@@ -1334,11 +1267,21 @@ mod tests {
         symbol[0..8].fill(0xff);
         symbol[PLACEMENT_KIND_OFFSET..PLACEMENT_KIND_OFFSET + 4]
             .copy_from_slice(&PLACEMENT_KIND_SYMBOL.to_le_bytes());
-        let buf = [attributed, all_ff, high_word, outside, contained, symbol].concat();
+        // Each sits in a record of an undeclared id, so none is attributed.
+        let first = as_record(attributed);
+        let buf = [
+            first.clone(),
+            nested(9001, &all_ff),
+            nested(9002, &high_word),
+            nested(9003, &outside),
+            nested(9004, &contained),
+            nested(9005, &symbol),
+        ]
+        .concat();
 
         let counts = count_unattributed_frames(&buf, &[OST_WALLS, OST_DOORS]);
         assert_eq!(counts, BTreeMap::from([(OST_WALLS, 1), (OST_DOORS, 1)]));
-        assert!(count_unattributed_frames(&buf[..RECORD_MIN_LEN], &[OST_WALLS]).is_empty());
+        assert!(count_unattributed_frames(&first, &[OST_WALLS]).is_empty());
     }
 
     /// Append the counted reference list a real record carries after
@@ -1701,79 +1644,121 @@ mod tests {
         )
     }
 
-    #[test]
-    fn longest_rising_chain_picks_one_value_per_item_and_prefers_small() {
-        let picks = longest_rising_chain(&[vec![5], vec![6, 7], vec![8]]);
-        assert_eq!(picks, vec![Some(5), Some(6), Some(8)]);
-        // An item's two candidates never both enter the chain.
-        let picks = longest_rising_chain(&[vec![1, 2, 3]]);
-        assert_eq!(picks.iter().flatten().count(), 1);
-        // Two chains of equal length: the smaller values win, and the item
-        // off the chain gets nothing.
-        let picks = longest_rising_chain(&[vec![10], vec![4], vec![11]]);
-        assert_eq!(picks, vec![None, Some(4), Some(11)]);
+    /// `frame` as a whole partition record: a first-prologue frame is its
+    /// own record header, so only the size at `+0x08` and the trailer are
+    /// added (RE-35).
+    fn as_record(mut frame: Vec<u8>) -> Vec<u8> {
+        let size = frame.len() as u32;
+        frame[8..12].copy_from_slice(&size.to_le_bytes());
+        trailer(&mut frame, size, 0);
+        frame
     }
 
-    /// RE-34: a second-prologue frame between two anchored frames takes
-    /// the one declared reference the ascending order leaves it, and stays
-    /// unassigned when two references fit.
+    /// `frame` nested in the record of `element_id`, behind a header and a
+    /// few bytes of body the way a second-prologue frame sits (RE-35).
+    fn nested(element_id: u64, frame: &[u8]) -> Vec<u8> {
+        let mut record = element_id.to_le_bytes().to_vec();
+        let size = (PARTITION_RECORD_HEADER_LEN + 6 + frame.len()) as u32;
+        record.extend_from_slice(&size.to_le_bytes());
+        record.extend_from_slice(&0x059fu16.to_le_bytes());
+        record.extend_from_slice(&1u16.to_le_bytes());
+        record.extend_from_slice(&[0u8; 6]);
+        record.extend_from_slice(frame);
+        trailer(&mut record, size, 0x0100_0000);
+        record
+    }
+
+    fn trailer(record: &mut Vec<u8>, size: u32, flags: u32) {
+        record.extend_from_slice(&0x0bcd_u64.to_le_bytes());
+        record.extend_from_slice(&flags.to_le_bytes());
+        record.extend_from_slice(&size.to_le_bytes());
+    }
+
+    /// Offset of the frame inside a [`nested`] record starting at `start`.
+    fn nested_frame_at(start: usize) -> usize {
+        start + PARTITION_RECORD_HEADER_LEN + 6
+    }
+
     #[test]
-    fn second_prologue_ids_come_from_the_order_and_fail_closed_on_ties() {
-        let declared = declared(&[100, 150, 160, 200, 300, 20274]);
-        // The own id 150 is the only declared slot between 100 and 200;
-        // 20274 is larger than the next anchor, 90 is undeclared.
-        let forced = [
-            first_prologue(100, OST_WALLS),
-            second_prologue(OST_WALLS, &[3, 90, 150, 20274]),
-            first_prologue(200, OST_WALLS),
-        ]
-        .concat();
-        let assigned =
-            assign_second_prologue_ids(&forced, &BBOX_MARKER, &declared, &BTreeSet::new());
+    fn the_prologue_constant_sits_twelve_below_the_marker_constant() {
+        assert_eq!(record_prologue_constant(&BBOX_MARKER), 0x059f);
+        assert_eq!(record_prologue_constant(&BBOX_MARKER_2025), 0x05c7);
+    }
+
+    /// RE-35: the chain walks header to trailer from offset 0 and stops at
+    /// the first position that is not a record; a record after the break
+    /// (a loaded family's document) is not part of it.
+    #[test]
+    fn the_leading_record_chain_stops_at_the_first_non_record() {
+        let first = as_record(first_prologue(100, OST_WALLS));
+        let second = nested(150, &second_prologue(OST_WALLS, &[3, 90]));
+        let chained = [first.clone(), second.clone()].concat();
+        let family = nested(160, &second_prologue(OST_WALLS, &[3, 90]));
+        let buf = [chained.clone(), vec![0x42; 40], family].concat();
+        let chain = partition_record_chain(&buf, &BBOX_MARKER);
+        let ids: Vec<(usize, u64)> = chain.iter().map(|r| (r.start, r.element_id)).collect();
+        assert_eq!(ids, vec![(0, 100), (first.len(), 150)]);
+        assert_eq!(chain[1].end, chained.len() - 16);
+
+        // A trailer that does not echo the size ends the chain there.
+        let mut broken = first.clone();
+        let echo = broken.len() - 4;
+        broken[echo..].copy_from_slice(&7u32.to_le_bytes());
+        assert!(partition_record_chain(&broken, &BBOX_MARKER).is_empty());
+        // So does a flag word other than 0 or 0x0100_0000.
+        let mut flagged = first;
+        let flags = flagged.len() - 8;
+        flagged[flags..flags + 4].copy_from_slice(&2u32.to_le_bytes());
+        assert!(partition_record_chain(&flagged, &BBOX_MARKER).is_empty());
+        // And the 2025 constant is not the 2024 one.
+        assert!(partition_record_chain(&chained, &BBOX_MARKER_2025).is_empty());
+    }
+
+    /// RE-35: a second-prologue frame's ElementId is its enclosing record's,
+    /// whatever its reference list names. A declared type id in the list
+    /// (the Projeto1 door named its type 49480) does not matter, a record
+    /// with an undeclared id gives none, and a family record after the
+    /// chain gives none even when its id is declared.
+    #[test]
+    fn a_second_prologue_frame_takes_its_enclosing_record_id() {
+        let declared = declared(&[100, 150, 160, 49480]);
+        let first = as_record(first_prologue(100, OST_WALLS));
+        let door = nested(150, &second_prologue(OST_DOORS, &[3, 49480, 150, 160]));
+        let undeclared = nested(170, &second_prologue(OST_DOORS, &[3, 150]));
+        let chained = [first.clone(), door.clone(), undeclared].concat();
+        let family = nested(160, &second_prologue(OST_DOORS, &[3, 160]));
+        let buf = [chained, vec![0x42; 40], family].concat();
+        let assigned = assign_second_prologue_ids(&buf, &BBOX_MARKER, &declared);
         assert_eq!(
             assigned.into_iter().collect::<Vec<_>>(),
-            vec![(RECORD_MIN_LEN + 4 + 16, 150)]
-        );
-
-        // 150 and 160 both fit between 100 and 200: no id.
-        let tied = [
-            first_prologue(100, OST_WALLS),
-            second_prologue(OST_WALLS, &[3, 150, 160]),
-            first_prologue(200, OST_WALLS),
-        ]
-        .concat();
-        assert!(
-            assign_second_prologue_ids(&tied, &BBOX_MARKER, &declared, &BTreeSet::new()).is_empty()
+            vec![(nested_frame_at(first.len()), 150)]
         );
     }
 
     #[test]
     fn a_second_prologue_frame_that_is_not_a_placed_instance_gets_no_id() {
-        let declared = declared(&[100, 150, 200]);
+        let declared = declared(&[100, 150]);
         let mut symbol = second_prologue(OST_DOORS, &[3, 150]);
         symbol[PLACEMENT_KIND_OFFSET..PLACEMENT_KIND_OFFSET + 4]
             .copy_from_slice(&PLACEMENT_KIND_SYMBOL.to_le_bytes());
         let buf = [
-            first_prologue(100, OST_DOORS),
-            symbol,
-            first_prologue(200, OST_DOORS),
+            as_record(first_prologue(100, OST_DOORS)),
+            nested(150, &symbol),
         ]
         .concat();
-        assert!(
-            assign_second_prologue_ids(&buf, &BBOX_MARKER, &declared, &BTreeSet::new()).is_empty()
-        );
+        assert!(assign_second_prologue_ids(&buf, &BBOX_MARKER, &declared).is_empty());
     }
 
     #[test]
     fn an_assigned_frame_decodes_under_its_category_and_is_not_counted_missing() {
         let declared = declared(&[100, 150, 200]);
         let buf = [
-            first_prologue(100, OST_WALLS),
-            second_prologue(OST_WALLS, &[3, 150]),
-            first_prologue(200, OST_WALLS),
+            as_record(first_prologue(100, OST_WALLS)),
+            nested(150, &second_prologue(OST_WALLS, &[3, 90])),
+            as_record(first_prologue(200, OST_WALLS)),
         ]
         .concat();
-        let assigned = assign_second_prologue_ids(&buf, &BBOX_MARKER, &declared, &BTreeSet::new());
+        let assigned = assign_second_prologue_ids(&buf, &BBOX_MARKER, &declared);
         let records = find_category_records_assigned(
             "Partitions/68",
             &buf,
@@ -1784,7 +1769,7 @@ mod tests {
         );
         let ids: Vec<(u32, bool)> = records
             .iter()
-            .map(|r| (r.element_id, r.id_from_reference_order))
+            .map(|r| (r.element_id, r.id_from_enclosing_record))
             .collect();
         assert_eq!(ids, vec![(100, false), (150, true), (200, false)]);
         assert!(
@@ -1795,6 +1780,16 @@ mod tests {
             count_unattributed_frames(&buf, &[OST_WALLS]),
             BTreeMap::from([(OST_WALLS, 1)])
         );
+    }
+
+    /// A family document's frames, after the chain, are not model elements
+    /// and are not counted missing either.
+    #[test]
+    fn frames_after_the_record_chain_are_not_counted_missing() {
+        let chain = as_record(first_prologue(100, OST_WALLS));
+        let family = nested(7, &second_prologue(OST_WALLS, &[3, 7]));
+        let buf = [chain, vec![0x42; 40], family].concat();
+        assert!(count_unattributed_frames(&buf, &[OST_WALLS]).is_empty());
     }
 
     /// #309: a placed instance whose box is flat on any axis has no 3D
@@ -1821,7 +1816,7 @@ mod tests {
         hidden_flat[0..8].fill(0xff);
         let mut hidden_solid = synth_record(1, OST_SPECIALITY_EQUIPMENT, solid);
         hidden_solid[0..8].fill(0xff);
-        let buf = [hidden_flat, hidden_solid].concat();
+        let buf = [nested(300, &hidden_flat), nested(301, &hidden_solid)].concat();
         assert_eq!(
             count_unattributed_frames(&buf, &[OST_SPECIALITY_EQUIPMENT]),
             BTreeMap::from([(OST_SPECIALITY_EQUIPMENT, 1)])

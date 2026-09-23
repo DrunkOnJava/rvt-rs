@@ -6,6 +6,46 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Second-prologue ElementIds are read from the partition record, not
+  inferred (RE-35).** Every `Partitions/*` stream opens with a chain of
+  records, one per element: `u64 ElementId · u32 size · u16 prologue constant
+  · u16 count`, the body, then a trailer that repeats the size. A record that
+  carries its ElementId at `+0x00` *is* the start of its record. A
+  second-prologue frame (RE-30) sits inside its element's record, so its id is
+  the record's.
+  - RE-34's reference-order inference gave a wrong id outside its hold-outs:
+    on a Revit 2025 project it named a door after its type (49480 instead of
+    325405), because partitions are several ascending runs, not one. It also
+    had four latent wrong ids for Snowdon stairs and a roof, which are not
+    exported. The inference, its context threshold, `SKETCH_OWNING_CATEGORIES`
+    and its hold-out probe and test are removed.
+  - All 30,432 first-prologue records across nine 2024 and 2025 files start a
+    record of their own id, and the chains hold every declared ElementId on
+    Core Interior and the RE1 models.
+  - The RE1 Architecture, Mechanical and Plumbing models now match every
+    entity rvt-rs recovers in Revit's own export: all doors, the curtain
+    wall, all 66 ducts, pipes and fittings, and all 117 pipes and fittings.
+    Snowdon Towers Architectural exports 4,795 elements instead of 4,132.
+    4,678 are in Revit's export, including every door, window, curtain wall,
+    railing, ceiling, furniture item and fixture, and 1,062 of 1,078 walls.
+  - Floors, building pads and ceilings in that layout get their ids too;
+    Snowdon exports 176 of Revit's 200 slabs.
+  - Records after the chain belong to loaded families' own documents and no
+    longer count as unattributed model elements. On Snowdon the
+    `element_record_without_element_id` count is 20 (16 walls, 4 columns),
+    exactly what rvt-rs still cannot attribute.
+  - Core Interior exports byte-identically.
+  - The `ElementIdSource = 'reference_order'` property and the
+    `element_id_from_reference_order` warning are gone, since no id is
+    inferred any more. `PartitionElementRecord::id_from_reference_order` is
+    now `id_from_enclosing_record`.
+  - `partition_record_chain`, `enclosing_record` and `record_prologue_constant`
+    are public. `examples/probe_re35_record_wrapper.rs` reports the chain for
+    any file, and `tests/partition_record_chain.rs` holds the first-prologue
+    identity on the project corpus.
+
 ## [0.2.0] — prepared, not yet released
 
 An **inspection-focused alpha** (see

@@ -4,9 +4,9 @@
 //! projects next to IFC exports Revit wrote from them. Fetch it with
 //! `tools/fetch-corpus.sh` and point `RVT_PROJECT_CORPUS_DIR` at
 //! `IFC-ECS/data/RE1`; without it the test skips. Walls and slabs must
-//! reproduce the export's ElementId (`Tag`) sets exactly, rooms its count,
-//! and the doors, whose records use the second prologue (RE-30), must be
-//! reported as unattributed rather than dropped silently.
+//! reproduce the export's ElementId (`Tag`) sets exactly and rooms its
+//! count. The doors and the curtain wall use the second prologue (RE-30);
+//! their ElementIds come from their enclosing partition records (RE-35).
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
@@ -91,8 +91,13 @@ fn revit_2025_walls_slabs_and_rooms_match_revits_export() {
         .expect("export");
     let step = write_step(&result.model);
 
-    let walls = tags(&reference, &["IFCWALL", "IFCWALLSTANDARDCASE"]);
-    assert_eq!(walls.len(), 7);
+    // The curtain wall is `IfcCurtainWall` in Revit's export; rvt-rs
+    // writes every wall as `IfcWall`.
+    let walls = tags(
+        &reference,
+        &["IFCWALL", "IFCWALLSTANDARDCASE", "IFCCURTAINWALL"],
+    );
+    assert_eq!(walls.len(), 8);
     assert_eq!(tags(&step, &["IFCWALL"]), walls, "wall ElementIds");
 
     let slabs = tags(&reference, &["IFCSLAB"]);
@@ -102,25 +107,32 @@ fn revit_2025_walls_slabs_and_rooms_match_revits_export() {
     assert_eq!(count(&reference, "IFCSPACE"), 11);
     assert_eq!(count(&step, "IFCSPACE"), 11, "rooms");
 
-    // Revit's export holds 5 doors and 1 curtain wall that rvt-rs cannot
-    // attribute: their frames carry no ElementId at +0x00 (RE-30). The
-    // count is 6 door frames and 1 wall frame that pass the instance
-    // rule; the other second-prologue frames are container members or
-    // type symbols and do not count (RE-33).
-    let unattributed = result
-        .diagnostics
-        .skipped
-        .iter()
-        .find(|item| item.reason == "element_record_without_element_id")
-        .expect("second-prologue door records are counted");
-    assert_eq!(unattributed.classes.get("Door"), Some(&6));
-    assert_eq!(unattributed.classes.get("Wall"), Some(&1));
-    assert_eq!(unattributed.count, 7);
+    // Every door Revit exported, plus 417199: a placed Single-Flush door of
+    // another type in its own wall that Revit's export leaves out. Its
+    // frame carries no design option or phase field that would say why
+    // (RE-35 §5), so it is pinned as measured.
+    let doors = tags(&reference, &["IFCDOOR"]);
+    assert_eq!(doors.len(), 5);
+    let exported_doors = tags(&step, &["IFCDOOR"]);
+    assert!(exported_doors.is_superset(&doors), "door ElementIds");
+    assert_eq!(
+        exported_doors
+            .difference(&doors)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![417199]
+    );
 
-    // The readiness score must not read as complete while records are missing.
-    let confidence = &result.diagnostics.confidence;
-    assert_eq!(confidence.unexported_element_records, unattributed.count);
-    assert!(confidence.score < 1.0, "score {}", confidence.score);
+    // Nothing is left unattributed, so the readiness score is complete.
+    assert!(
+        !result
+            .diagnostics
+            .skipped
+            .iter()
+            .any(|item| item.reason == "element_record_without_element_id"),
+        "no unattributed element records"
+    );
+    assert_eq!(result.diagnostics.confidence.unexported_element_records, 0);
 }
 
 /// RE-33: the other product categories whose element records decode on
@@ -150,36 +162,49 @@ fn revit_2025_product_categories_match_revits_export() {
     }
 }
 
-/// RE-33 on the RE1 MEP models: every duct, duct fitting, pipe and pipe
-/// fitting rvt-rs exports is one Revit exported. Most of them sit in
-/// second-prologue frames whose ElementId RE-34 infers from the reference
-/// order; the rest stay counted as unattributed. The recall is pinned so
-/// a change to it is measured rather than silent.
+/// RE-33 and RE-35 on the RE1 MEP models: the ducts and pipes rvt-rs
+/// exports are exactly Revit's `IfcFlowSegment`s, and the duct and pipe
+/// fittings exactly its `IfcFlowFitting`s (IFC2x3 references; rvt-rs writes
+/// the IFC4 entities). Most of them sit in second-prologue frames whose
+/// ElementId is their enclosing record's. Plumbing fixtures are every
+/// `IfcFlowTerminal` Revit wrote on the Plumbing model plus one, 442378, a
+/// floor-level fixture Revit's export leaves out (RE-35 §5).
 #[test]
 fn revit_2025_ducts_and_pipes_are_revits_own() {
     let mut checked = 0;
     for (model, ducts, duct_fittings, pipes, pipe_fittings) in
-        [("Mechanical", 21, 18, 6, 3), ("Plumbing", 0, 0, 16, 23)]
+        [("Mechanical", 25, 32, 6, 3), ("Plumbing", 0, 0, 63, 54)]
     {
         let Some((rvt, ifc)) = re1(model) else {
             eprintln!("skipping: RVT_PROJECT_CORPUS_DIR has no RE1-{model}.rvt/.ifc");
             continue;
         };
         let (step, reference) = export_and_reference(&rvt, &ifc);
-        let segments = tags(&reference, &["IFCFLOWSEGMENT"]);
-        let fittings = tags(&reference, &["IFCFLOWFITTING"]);
-        for (ours, reference_set, expected) in [
-            ("IFCDUCTSEGMENT", &segments, ducts),
-            ("IFCPIPESEGMENT", &segments, pipes),
-            ("IFCDUCTFITTING", &fittings, duct_fittings),
-            ("IFCPIPEFITTING", &fittings, pipe_fittings),
+        for (ours, count) in [
+            ("IFCDUCTSEGMENT", ducts),
+            ("IFCPIPESEGMENT", pipes),
+            ("IFCDUCTFITTING", duct_fittings),
+            ("IFCPIPEFITTING", pipe_fittings),
         ] {
-            let exported = tags(&step, &[ours]);
-            assert_eq!(exported.len(), expected, "{model} {ours} count");
-            assert!(
-                exported.is_subset(reference_set),
-                "{model} {ours}: {:?} not in Revit's export",
-                exported.difference(reference_set).collect::<Vec<_>>()
+            assert_eq!(tags(&step, &[ours]).len(), count, "{model} {ours} count");
+        }
+        assert_eq!(
+            tags(&step, &["IFCDUCTSEGMENT", "IFCPIPESEGMENT"]),
+            tags(&reference, &["IFCFLOWSEGMENT"]),
+            "{model} segment ElementIds"
+        );
+        assert_eq!(
+            tags(&step, &["IFCDUCTFITTING", "IFCPIPEFITTING"]),
+            tags(&reference, &["IFCFLOWFITTING"]),
+            "{model} fitting ElementIds"
+        );
+        if model == "Plumbing" {
+            let terminals = tags(&reference, &["IFCFLOWTERMINAL"]);
+            let fixtures = tags(&step, &["IFCSANITARYTERMINAL"]);
+            assert!(fixtures.is_superset(&terminals), "plumbing fixtures");
+            assert_eq!(
+                fixtures.difference(&terminals).copied().collect::<Vec<_>>(),
+                vec![442378]
             );
         }
         checked += 1;

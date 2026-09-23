@@ -1,6 +1,10 @@
 # RE-34 — The second prologue's ElementId, from the reference list and the frame order
 
 **Date:** 2026-09-22
+
+> **Superseded by RE-35 (2026-09-23).** A second-prologue frame sits inside its element's partition record, whose header carries the ElementId (`reports/element-framing/RE-35-partition-record-wrapper.md`). The id is read, not inferred.
+>
+> The rule below also failed outside its hold-outs. On `Projeto1` (Revit 2025, `255ribeiro/intro_ifc`) it gave a door its type's id, 49480 instead of 325405, because partitions are several ascending runs, not one. On Snowdon it had also mis-assigned four elements of categories that are not exported. The code (`assign_second_prologue_ids`'s chain, `context_element_ids`, `SKETCH_OWNING_CATEGORIES`, `examples/probe_re34_holdout.rs`, `tests/second_prologue_ids.rs`) was removed. It can be rerun from commit `08e2740`. The measurements below stand as recorded.
 **Result:**
 - **Positive.** A second-prologue frame's ElementId can be recovered with no oracle and no wrong id on any measurement:
   - one slot of its reference list is the id (RE-30 §7);

@@ -300,3 +300,7 @@ and on the Snowdon oracle before any decode relies on it.
 - never assign a floor, building pad or ceiling, the sketch trap recorded above.
 
 Hidden-id hold-outs score 3,458 / 0 wrong on Core Interior and 445 / 0 on this file, and the Snowdon architectural export grows from 80 elements to 4,245.
+
+## 10. Addendum: RE-35 finds where the ElementId is (2026-09-23)
+
+The second prologue has no ElementId at `+0x00` because the frame is not the start of its record. Every element's data is one record in the partition's leading record chain: `u64 ElementId · u32 size · u16 prologue constant · u16 count`, the body, then a trailer that repeats the size. A first-prologue frame starts its record; a second-prologue frame sits inside it, at a distance that varies with what precedes it in the body, which is why §4 found no fixed preceding offset. `reports/element-framing/RE-35-partition-record-wrapper.md` has the layout, the measurements and the exports. It replaces RE-34's inference.
