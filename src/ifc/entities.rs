@@ -1264,7 +1264,7 @@ impl PropertyValue {
             PropertyValue::Integer(n) => format!("IFCINTEGER({n})"),
             PropertyValue::Real(v) => format!("IFCREAL({v:.6})"),
             PropertyValue::Boolean(b) => {
-                format!("IFCBOOLEAN(.{})", if *b { "T" } else { "F" })
+                format!("IFCBOOLEAN(.{}.)", if *b { "T" } else { "F" })
             }
             PropertyValue::LengthFeet(ft) => {
                 // Convert to metres at emit time (project length unit).
@@ -1318,8 +1318,10 @@ mod tests {
     fn property_value_to_step_primitives() {
         assert_eq!(PropertyValue::Integer(42).to_step(), "IFCINTEGER(42)");
         assert_eq!(PropertyValue::Real(1.25).to_step(), "IFCREAL(1.250000)");
-        assert_eq!(PropertyValue::Boolean(true).to_step(), "IFCBOOLEAN(.T)");
-        assert_eq!(PropertyValue::Boolean(false).to_step(), "IFCBOOLEAN(.F)");
+        // A STEP enumeration is written between two dots (ISO 10303-21);
+        // `.T)` without the closing dot is not a valid IfcBoolean.
+        assert_eq!(PropertyValue::Boolean(true).to_step(), "IFCBOOLEAN(.T.)");
+        assert_eq!(PropertyValue::Boolean(false).to_step(), "IFCBOOLEAN(.F.)");
         assert_eq!(
             PropertyValue::Text("hello".into()).to_step(),
             "IFCTEXT('hello')"

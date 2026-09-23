@@ -60,6 +60,15 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Boolean property values are valid STEP.** The writer emitted
+  `IFCBOOLEAN(.T)` / `IFCBOOLEAN(.F)`, missing the closing dot of an ISO
+  10303-21 enumeration. Every export that carried a boolean property was
+  therefore invalid IFC: the element-record property sets (`ProfileResolved`,
+  `LevelBindResolved`, `ThicknessResolved`) put 2,400 of them in the Core
+  Interior export alone. IfcOpenShell's validator now reports no issue on the
+  Einhoven and Core Interior exports. CI validates both in full, because the
+  committed fixtures carry no boolean and never exercised the path.
+
 - **The "incomplete model" count covers missing elements, not every
   unreadable frame.** Frames with no ElementId at `+0x00` keep the
   container and placement fields of the instance rule (RE-33), so
