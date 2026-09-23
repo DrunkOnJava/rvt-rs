@@ -49,6 +49,18 @@ A loop that is not inside the outer loop is now a second piece, not a void, and 
 
 Revit writes such a slab as one `IfcSlab` per piece, all with the element's `Tag` (1402063 is two 0.377 m² slabs). Representing that is #331.
 
+**Addendum (#331, 2026-09-23).** A plan profile now keeps every separate loop as a piece with the voids inside it, and the exporter writes each further piece as another element with the element's `Tag`, named `…:2`, `…:3`. The five slabs against Revit's pieces (m²):
+
+| slab | rvt-rs | Revit |
+|---|---|---|
+| 1388180 | 1.60, 1.60 | 1.60, 1.60 |
+| 1388290 | 1.99, 1.99 | 1.99, 1.99 |
+| 1402063 | 0.38, 0.38 | 0.38, 0.38 |
+| 1404309 | 9.02, 9.76 | 9.02, 9.76 |
+| 1402277 | 0.40, 0.40, 3.35 | one `IfcSlab` with three tessellated bodies |
+
+IfcOpenShell reports no issue on the export, and Core Interior and the RE1 models export as before.
+
 ## 4. Other files
 
 Core Interior, RE1 Architecture and RE1 Electrical export byte-identically apart from timestamps. None of the licensed files has a frame with the invalid id or a sketch of separate pieces.
