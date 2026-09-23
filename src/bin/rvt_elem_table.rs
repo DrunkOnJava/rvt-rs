@@ -64,7 +64,7 @@ fn run() -> anyhow::Result<()> {
     let header = elem_table::parse_header(&mut rf)?;
     let layout = elem_table::read_layout(&mut rf)?;
     let records = elem_table::parse_records(&mut rf)?;
-    let declared: std::collections::BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let declared = elem_table::declared_ids(&records);
     let with_owner = records.iter().filter(|r| r.owner_id.is_some()).count();
     let owner_declared = records
         .iter()

@@ -90,11 +90,10 @@ whose frames are not model elements. A second-prologue frame whose enclosing
 record carries a declared ElementId is exported under it and not counted
 (RE-35). The fail-closed decode cannot attribute the frames that remain, so
 none is exported, and a matching warning says the model is incomplete. It is
-absent on `2024_Core_Interior.rvt`, on the RE1 models and on every
-project-count fixture. On Autodesk's Snowdon Towers 2024 architectural sample
-it is 37: 16 walls, 4 columns and 17 generic models, exactly the walls,
-columns and generic models of Revit's own export that rvt-rs does not
-attribute (see
+absent on `2024_Core_Interior.rvt`, on the RE1 models, on every
+project-count fixture and, since RE-41 declares the ElemTable's second id,
+on Autodesk's Snowdon Towers 2024 architectural sample, where it was 37
+(16 walls, 4 columns and 17 generic models, all in Revit's own export) (see
 `reports/element-framing/RE-30-snowdon-generalisation.md`,
 `reports/element-framing/RE-33-product-categories.md` and
 `reports/element-framing/RE-35-partition-record-wrapper.md` and

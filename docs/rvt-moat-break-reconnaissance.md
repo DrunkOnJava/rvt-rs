@@ -1771,4 +1771,16 @@ as Revit does.
 Report: `reports/element-framing/RE-40-design-option-primary.md`.
 Probe: `examples/probe_re40_design_options.rs`.
 
+## Addendum — RE-41 the ElemTable's second id (2026-09-23)
+
+A 40-byte `Global/ElemTable` record carries two `u32` ids, at `+16` and
+`+36`. They agree on nearly every record. On Autodesk's Snowdon Towers
+samples they differ on 84 and 27 records, and there the second is the id of
+the element's partition record (RE-35) and the `Tag` Revit's own IFC export
+writes. Declaring both attributes every element record the architectural
+model left unattributed.
+
+Report: `reports/element-framing/RE-41-elem-table-secondary-ids.md`.
+Probe: `examples/probe_re41_elem_table_secondary_ids.rs`.
+
 **End of report.**

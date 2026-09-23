@@ -96,7 +96,10 @@ pub struct ElemRecord {
     pub offset: usize,
     /// First u32 after the marker (element id on project files).
     pub id_primary: u32,
-    /// Second u32 (secondary id / version on project files).
+    /// Second u32. Equal to `id_primary` on nearly every record. Where the
+    /// two differ on the 40-byte layout, this one is the element's
+    /// ElementId as its partition record and Revit's own IFC export carry
+    /// it (RE-41, [`declared_ids`]).
     pub id_secondary: u32,
     /// The element this record's element belongs to, read from the field
     /// the layout detector anchors on (`u64` at `+4` on the 40-byte layout,
@@ -525,10 +528,32 @@ pub fn link_partition_element_ids<'a>(
 /// returns IDs only, not offsets.
 pub fn declared_element_ids(rf: &mut RevitFile) -> Result<Vec<u32>> {
     let records = parse_records(rf)?;
-    let mut ids: Vec<u32> = records.iter().map(|r| r.id_primary).collect();
-    ids.sort_unstable();
-    ids.dedup();
-    Ok(ids)
+    Ok(declared_ids(&records).into_iter().collect())
+}
+
+/// Length of a record on the 40-byte layout (Revit 2024 and later).
+pub const RECORD_LEN_40: usize = 40;
+
+/// The ElementIds `records` declare (RE-41): every record's `id_primary`,
+/// and on the 40-byte layout also its `id_secondary` when that is not `0`.
+///
+/// The two agree on every record of the 2016-2023 projects, the family
+/// files and the 2024 and 2025 projects measured, except Autodesk's Snowdon
+/// Towers samples. There they differ on 84 records (Architectural) and 27
+/// (Structural), and `id_secondary` is the id the element's partition
+/// record carries (RE-35) and the `Tag` Revit's own IFC export writes;
+/// `id_primary` is neither. Both are kept, so no id declared before is
+/// dropped. A `0` in `id_secondary` is not added: the 2024 family file's
+/// record 18 carries one.
+pub fn declared_ids(records: &[ElemRecord]) -> std::collections::BTreeSet<u32> {
+    let mut ids = std::collections::BTreeSet::new();
+    for record in records {
+        ids.insert(record.id_primary);
+        if record.raw.len() == RECORD_LEN_40 && record.id_secondary != 0 {
+            ids.insert(record.id_secondary);
+        }
+    }
+    ids
 }
 
 /// Attempt to enumerate records after the header. Conservative: stops at
@@ -686,6 +711,30 @@ mod tests {
             (0..RECORDS as u32)
                 .map(|r| 0x10_0000 + r)
                 .collect::<Vec<_>>()
+        );
+    }
+
+    /// RE-41: a 40-byte record whose two ids differ declares both; a `0` in
+    /// `id_secondary`, and `id_secondary` on the 28-byte layout, are not
+    /// declared.
+    #[test]
+    fn declared_ids_add_a_differing_secondary_id_on_the_40_byte_layout() {
+        let record = |len: usize, id_primary: u32, id_secondary: u32| ElemRecord {
+            offset: 0,
+            id_primary,
+            id_secondary,
+            owner_id: None,
+            raw: vec![0; len],
+        };
+        let records = [
+            record(RECORD_LEN_40, 2_120_309, 2_120_399),
+            record(RECORD_LEN_40, 2_059_967, 2_059_967),
+            record(RECORD_LEN_40, 18, 0),
+            record(28, 18, 5151),
+        ];
+        assert_eq!(
+            declared_ids(&records).into_iter().collect::<Vec<_>>(),
+            vec![18, 2_059_967, 2_120_309, 2_120_399]
         );
     }
 

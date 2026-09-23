@@ -178,7 +178,7 @@ pub fn compute_element_names(rf: &mut RevitFile) -> Result<ElementNames> {
         return Ok(out);
     };
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => records.into_iter().map(|r| r.id_primary).collect(),
+        Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(out),
     };
     let mut found = Vec::new();

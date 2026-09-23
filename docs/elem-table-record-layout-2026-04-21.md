@@ -89,7 +89,7 @@ offset +4  | FF × 8                       (8-byte marker: two u32 owner
 offset +12 | 4 bytes of zero (alignment?)
 offset +16 | u32 id_primary  (monotonic: 1, 2, 3, …)
 offset +20 | 16 bytes of payload/zero
-offset +36 | u32 id_secondary (matches id_primary on observed samples)
+offset +36 | u32 id_secondary (matches id_primary on nearly every record; where they differ it is the element's ElementId, RE-41)
 ```
 
 `rvt-elem-table --raw` on record 0 of `2024_Core_Interior.rvt` prints the
