@@ -2117,6 +2117,19 @@ impl StepWriter {
             );
         }
 
+        // RE-47: further sets of an element, such as Pset_StairCommon.
+        for entity in &model.entities {
+            let super::entities::IfcEntity::ElementPropertySet { element, set } = entity else {
+                continue;
+            };
+            if !is_building_element(*element) || set.properties.is_empty() {
+                continue;
+            }
+            if let Some(el_id) = entity_index_to_el_id.get(*element).and_then(|slot| *slot) {
+                element_property_sets.push((el_id, set));
+            }
+        }
+
         // IfcPropertySet emission — one set per element that ships
         // properties. Each property becomes an
         // IfcPropertySingleValue, the set wraps them, then an
@@ -2939,6 +2952,83 @@ mod tests {
             ..IfcModel::default()
         };
         write_step(&model)
+    }
+
+    /// RE-47: a further property set is its own `IfcPropertySet`, related
+    /// to its element, with the measure types its properties declare.
+    #[test]
+    fn a_further_property_set_is_related_to_its_element() {
+        use super::super::entities::{IfcEntity, Property, PropertySet, PropertyValue};
+        let stair = IfcEntity::BuildingElement {
+            ifc_type: "IFCSTAIR".into(),
+            name: "Stair".into(),
+            type_guid: Some("620883".into()),
+            predefined_type: None,
+            storey_index: None,
+            material_index: None,
+            property_set: None,
+            location_feet: None,
+            rotation_radians: None,
+            extrusion: None,
+            host_element_index: None,
+            material_layer_set_index: None,
+            material_profile_set_index: None,
+            solid_shape: None,
+            representation_map_index: None,
+        };
+        let model = IfcModel {
+            entities: vec![
+                stair,
+                IfcEntity::ElementPropertySet {
+                    element: 0,
+                    set: PropertySet {
+                        name: "Pset_StairCommon".into(),
+                        properties: vec![
+                            Property {
+                                name: "NumberOfRiser".into(),
+                                value: PropertyValue::CountValue(19),
+                            },
+                            Property {
+                                name: "TreadLength".into(),
+                                value: PropertyValue::PositiveLengthFeet(11.0 / 12.0),
+                            },
+                        ],
+                    },
+                },
+                // An index that is not a building element is ignored.
+                IfcEntity::ElementPropertySet {
+                    element: 9,
+                    set: PropertySet {
+                        name: "Pset_Nowhere".into(),
+                        properties: vec![Property {
+                            name: "X".into(),
+                            value: PropertyValue::CountValue(1),
+                        }],
+                    },
+                },
+            ],
+            ..IfcModel::default()
+        };
+        let step = write_step(&model);
+        assert!(step.contains("IFCPROPERTYSINGLEVALUE('NumberOfRiser',$,IFCCOUNTMEASURE(19),$)"));
+        assert!(step.contains(
+            "IFCPROPERTYSINGLEVALUE('TreadLength',$,IFCPOSITIVELENGTHMEASURE(0.279400),$)"
+        ));
+        assert!(!step.contains("Pset_Nowhere"));
+        let stair_id = step
+            .lines()
+            .find(|l| l.contains("=IFCSTAIR("))
+            .and_then(|l| l.split('=').next())
+            .expect("stair")
+            .to_string();
+        let set_id = step
+            .lines()
+            .find(|l| l.contains("'Pset_StairCommon'"))
+            .and_then(|l| l.split('=').next())
+            .expect("set")
+            .to_string();
+        assert!(step.lines().any(|l| l.contains("IFCRELDEFINESBYPROPERTIES")
+            && l.contains(&format!("({stair_id}),{set_id})"))));
     }
 
     fn element_args<'a>(step: &'a str, ifc_type: &str) -> &'a str {

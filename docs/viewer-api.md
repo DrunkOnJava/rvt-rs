@@ -80,6 +80,7 @@ use rvt::ifc::scene_graph::{
   - `material: Option<PanelMaterial { index, name, element_count }>`
     resolves `material_index` and counts the elements sharing it.
   - `property_group: Option<PanelPropertyGroup { name, properties }>`
+  - `further_property_groups: Vec<PanelPropertyGroup>`: the element's standard property sets beside its own, such as `Pset_StairCommon` (RE-47); empty when there are none
     is the element's property set as one titled group of
     `PanelProperty { name, value, kind, numeric }` rows — values
     carry their unit, booleans read as `Yes` / `No`.

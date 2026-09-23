@@ -160,6 +160,10 @@ pub enum IfcEntity {
     /// `IfcModel::entities`. A part is reached through its whole instead of
     /// being contained in a storey itself.
     Aggregate { whole: usize, parts: Vec<usize> },
+    /// A further property set of the building element at `element` (an
+    /// index into `IfcModel::entities`), beside its own `property_set`:
+    /// a standard set such as `Pset_StairCommon` (RE-47).
+    ElementPropertySet { element: usize, set: PropertySet },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1243,6 +1247,10 @@ pub enum PropertyValue {
     /// Length measurement in feet (writer converts to metres).
     /// Maps to `IfcLengthMeasure` with project length unit.
     LengthFeet(f64),
+    /// A length that must be greater than zero, in feet (writer converts
+    /// to metres). Maps to `IfcPositiveLengthMeasure`, the type standard
+    /// property sets such as `Pset_StairCommon` declare (RE-47).
+    PositiveLengthFeet(f64),
     /// Angle in radians. Maps to `IfcPlaneAngleMeasure`.
     AngleRadians(f64),
     /// Area in square feet (writer converts to square metres).
@@ -1276,6 +1284,10 @@ impl PropertyValue {
                 // Convert to metres at emit time (project length unit).
                 let metres = ft * 0.3048;
                 format!("IFCLENGTHMEASURE({metres:.6})")
+            }
+            PropertyValue::PositiveLengthFeet(ft) => {
+                let metres = ft * 0.3048;
+                format!("IFCPOSITIVELENGTHMEASURE({metres:.6})")
             }
             PropertyValue::AngleRadians(r) => format!("IFCPLANEANGLEMEASURE({r:.6})"),
             PropertyValue::AreaSquareFeet(sqft) => {

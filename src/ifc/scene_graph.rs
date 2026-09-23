@@ -300,6 +300,10 @@ pub struct ElementInfoPanel {
     ///. `None` when no property set is attached.
     #[serde(default)]
     pub property_group: Option<PanelPropertyGroup>,
+    /// The element's further property sets, such as `Pset_StairCommon`
+    /// (RE-47), each as its own group, in model order.
+    #[serde(default)]
+    pub further_property_groups: Vec<PanelPropertyGroup>,
     /// The element this one is hosted by — the wall a door or
     /// window sits in (M4-04). `None` when nothing hosts it.
     #[serde(default)]
@@ -370,7 +374,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
                 .collect()
         })
         .unwrap_or_default();
-    let property_group = property_set.as_ref().map(|pset| PanelPropertyGroup {
+    let panel_group = |pset: &crate::ifc::entities::PropertySet| PanelPropertyGroup {
         name: pset.name.clone(),
         properties: pset
             .properties
@@ -382,7 +386,18 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
                 numeric: property_value_is_numeric(&p.value),
             })
             .collect(),
-    });
+    };
+    let property_group = property_set.as_ref().map(panel_group);
+    let further_property_groups: Vec<PanelPropertyGroup> = model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            IfcEntity::ElementPropertySet { element, set } if *element == entity_index => {
+                Some(panel_group(set))
+            }
+            _ => None,
+        })
+        .collect();
     let placement_rows = placement_rows(location_feet.as_ref(), rotation_radians.as_ref());
     let extent_rows = extent_rows(extrusion.as_ref());
     let missing = missing_fields(
@@ -426,6 +441,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         material,
         properties,
         property_group,
+        further_property_groups,
         host,
         hosted,
         missing,
@@ -568,7 +584,7 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
         // Words, not `true` / `false` — the panel is read by people,
         // and a Revit yes/no parameter is a yes/no answer.
         PropertyValue::Boolean(b) => if *b { "Yes" } else { "No" }.to_string(),
-        PropertyValue::LengthFeet(f) => format!("{f:.3} ft"),
+        PropertyValue::LengthFeet(f) | PropertyValue::PositiveLengthFeet(f) => format!("{f:.3} ft"),
         PropertyValue::AngleRadians(r) => format!("{:.3}°", r.to_degrees()),
         PropertyValue::AreaSquareFeet(a) => format!("{a:.2} sq ft"),
         PropertyValue::VolumeCubicFeet(c) => format!("{c:.2} cu ft"),
@@ -588,7 +604,7 @@ fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
         PropertyValue::Integer(_) => "integer",
         PropertyValue::Real(_) => "real",
         PropertyValue::Boolean(_) => "boolean",
-        PropertyValue::LengthFeet(_) => "length",
+        PropertyValue::LengthFeet(_) | PropertyValue::PositiveLengthFeet(_) => "length",
         PropertyValue::AngleRadians(_) => "angle",
         PropertyValue::AreaSquareFeet(_) => "area",
         PropertyValue::VolumeCubicFeet(_) => "volume",

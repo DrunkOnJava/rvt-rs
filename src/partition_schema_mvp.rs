@@ -201,6 +201,8 @@ pub fn recover_partition_schema_mvp(
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
     attach_curtain_walls(rf, &mut out.walls, &mut out.products);
+    // --- Stair and flight riser and tread dimensions (RE-47) ---
+    attach_stair_dimensions(rf, revit_version, &mut out.products);
 
     // --- Family and type names (RE-38) ---
     for elements in [
@@ -531,6 +533,105 @@ fn attach_aggregate_wholes(rf: &mut RevitFile, products: &mut [DecodedElement]) 
                 AGGREGATE_WHOLE_FIELD.into(),
                 InstanceField::ElementId { tag: 0, id: whole },
             ));
+        }
+    }
+}
+
+/// Field holding a stair's or flight's number of risers (RE-47).
+pub const STAIR_RISER_COUNT_FIELD: &str = "m_stair_riser_count";
+/// Field holding a stair's or flight's riser height, feet (RE-47).
+pub const STAIR_RISER_HEIGHT_FIELD: &str = "m_stair_riser_height";
+/// Field holding a stair's or flight's tread depth, feet (RE-47).
+pub const STAIR_TREAD_DEPTH_FIELD: &str = "m_stair_tread_depth";
+
+/// Give each stair its riser height, tread depth and number of risers, and
+/// each of its runs the same riser height and tread depth and, where
+/// [`crate::partition_stairs::flight_riser_counts`] can tell, its own number
+/// of risers (RE-47). Runs are the stair's parts (#323).
+fn attach_stair_dimensions(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_stairs as ps;
+    if !ps::supports_revit_version(revit_version) {
+        return;
+    }
+    let stairs: Vec<u32> = products
+        .iter()
+        .filter(|element| element.class == "Stair")
+        .filter_map(|element| element.id)
+        .collect();
+    let whole_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == AGGREGATE_WHOLE_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let runs: Vec<(u32, u32)> = products
+        .iter()
+        .filter(|element| element.class == "StairsRun")
+        .filter_map(|element| Some((element.id?, whole_of(element)?)))
+        .filter(|(_, stair)| stairs.contains(stair))
+        .collect();
+    if stairs.is_empty() {
+        return;
+    }
+    let run_ids: Vec<u32> = runs.iter().map(|(run, _)| *run).collect();
+    let Ok((dimensions, run_counts)) =
+        ps::scan_stair_dimensions(rf, revit_version, &stairs, &run_ids)
+    else {
+        return;
+    };
+    let mut flight_counts: std::collections::BTreeMap<u32, u32> = std::collections::BTreeMap::new();
+    for (stair, found) in &dimensions {
+        let of_stair: Vec<(u32, Option<u32>)> = runs
+            .iter()
+            .filter(|(_, whole)| whole == stair)
+            .map(|(run, _)| (*run, run_counts.get(run).copied()))
+            .collect();
+        flight_counts.extend(ps::flight_riser_counts(found.riser_count, &of_stair));
+    }
+    let push = |element: &mut DecodedElement, found: &ps::StairDimensions, risers: Option<u32>| {
+        if let Some(risers) = risers {
+            element.fields.push((
+                STAIR_RISER_COUNT_FIELD.into(),
+                InstanceField::Integer {
+                    value: i64::from(risers),
+                    signed: false,
+                    size: 4,
+                },
+            ));
+        }
+        element.fields.push((
+            STAIR_RISER_HEIGHT_FIELD.into(),
+            InstanceField::Float {
+                value: found.riser_height_feet,
+                size: 8,
+            },
+        ));
+        element.fields.push((
+            STAIR_TREAD_DEPTH_FIELD.into(),
+            InstanceField::Float {
+                value: found.tread_depth_feet,
+                size: 8,
+            },
+        ));
+    };
+    for element in products.iter_mut() {
+        let Some(id) = element.id else {
+            continue;
+        };
+        if element.class == "Stair" {
+            if let Some(found) = dimensions.get(&id) {
+                push(element, found, Some(found.riser_count));
+            }
+        } else if element.class == "StairsRun" {
+            let Some(found) = whole_of(element).and_then(|stair| dimensions.get(&stair)) else {
+                continue;
+            };
+            let found = *found;
+            push(element, &found, flight_counts.get(&id).copied());
         }
     }
 }

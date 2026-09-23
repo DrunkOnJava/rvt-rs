@@ -382,6 +382,14 @@ pub fn append_typed_production_elements(
                 }
             }
         }
+        // RE-47: a stair's or flight's riser and tread dimensions, in the
+        // standard set Revit's export writes them in.
+        if let Some(set) = stair_property_set(&decoded) {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set,
+            });
+        }
     }
 
     // #323: group each whole's parts into one aggregate.
@@ -590,6 +598,42 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
             name: "RvtWallGeometry".into(),
             properties,
         }),
+    })
+}
+
+/// `Pset_StairCommon` for a stair and `Pset_StairFlightCommon` for a
+/// flight, holding the number of risers, riser height and tread length
+/// their data records (RE-47), with the measure types those standard sets
+/// declare. `None` when nothing was read.
+fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
+    use crate::partition_schema_mvp as mvp;
+    let name = match decoded.class.as_str() {
+        "Stair" => "Pset_StairCommon",
+        "StairsRun" => "Pset_StairFlightCommon",
+        _ => return None,
+    };
+    let mut properties = Vec::new();
+    for (field, value) in &decoded.fields {
+        let property = match (field.as_str(), value) {
+            (mvp::STAIR_RISER_COUNT_FIELD, InstanceField::Integer { value, .. }) => Property {
+                name: "NumberOfRiser".into(),
+                value: PropertyValue::CountValue(*value),
+            },
+            (mvp::STAIR_RISER_HEIGHT_FIELD, InstanceField::Float { value, .. }) => Property {
+                name: "RiserHeight".into(),
+                value: PropertyValue::PositiveLengthFeet(*value),
+            },
+            (mvp::STAIR_TREAD_DEPTH_FIELD, InstanceField::Float { value, .. }) => Property {
+                name: "TreadLength".into(),
+                value: PropertyValue::PositiveLengthFeet(*value),
+            },
+            _ => continue,
+        };
+        properties.push(property);
+    }
+    (!properties.is_empty()).then(|| PropertySet {
+        name: name.into(),
+        properties,
     })
 }
 
@@ -1177,6 +1221,131 @@ mod tests {
             })
             .collect();
         assert_eq!(aggregates, vec![(stair, vec![run])]);
+    }
+
+    /// RE-47: a stair's and a flight's riser and tread dimensions become
+    /// `Pset_StairCommon` and `Pset_StairFlightCommon`, which the viewer
+    /// panel lists beside the element's own set.
+    #[test]
+    fn stair_dimensions_become_the_standard_stair_sets() {
+        use crate::partition_element_records::{
+            CONTAINER_NONE, OST_STAIRS, OST_STAIRS_RUNS, PLACEMENT_KIND_INSTANCE,
+            PartitionElementRecord,
+        };
+        use crate::partition_schema_mvp as mvp;
+        let record = |element_id: u32, category: i64| PartitionElementRecord {
+            stream: "Partitions/68".into(),
+            offset: element_id as usize,
+            element_id,
+            flags: 0x0141,
+            builtin_category: category,
+            container: CONTAINER_NONE,
+            placement_kind: PLACEMENT_KIND_INSTANCE,
+            bbox_feet: [0.0, 0.0, 0.0, 10.0, 4.0, 9.0],
+            preceding_reference: None,
+            owner_reference: None,
+            references: Vec::new(),
+            id_from_enclosing_record: true,
+            design_option: None,
+        };
+        let dimensions = |risers: i64| {
+            vec![
+                (
+                    mvp::STAIR_RISER_COUNT_FIELD.to_string(),
+                    InstanceField::Integer {
+                        value: risers,
+                        signed: false,
+                        size: 4,
+                    },
+                ),
+                (
+                    mvp::STAIR_RISER_HEIGHT_FIELD.to_string(),
+                    InstanceField::Float {
+                        value: 11.0 / 19.0,
+                        size: 8,
+                    },
+                ),
+                (
+                    mvp::STAIR_TREAD_DEPTH_FIELD.to_string(),
+                    InstanceField::Float {
+                        value: 11.0 / 12.0,
+                        size: 8,
+                    },
+                ),
+            ]
+        };
+        let levels = std::collections::BTreeSet::new();
+        let mut elements =
+            mvp::instances_from_records(vec![record(620883, OST_STAIRS)], "Stair", &levels);
+        elements[0].fields.extend(dimensions(19));
+        let mut runs = mvp::instances_from_records(
+            vec![record(621141, OST_STAIRS_RUNS)],
+            "StairsRun",
+            &levels,
+        );
+        runs[0].fields.push((
+            mvp::AGGREGATE_WHOLE_FIELD.into(),
+            InstanceField::ElementId { tag: 0, id: 620883 },
+        ));
+        runs[0].fields.extend(dimensions(10));
+        elements.extend(runs);
+        let mut entities = Vec::new();
+        let mut storeys = Vec::new();
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
+        append_typed_production_elements(elements.into_iter(), &mut entities, &mut storeys, policy);
+        let sets: Vec<(usize, String, Vec<String>)> = entities
+            .iter()
+            .filter_map(|entity| match entity {
+                entities::IfcEntity::ElementPropertySet { element, set } => Some((
+                    *element,
+                    set.name.clone(),
+                    set.properties.iter().map(|p| p.value.to_step()).collect(),
+                )),
+                _ => None,
+            })
+            .collect();
+        let index_of = |tag: &str| {
+            entities.iter().position(|entity| {
+                matches!(entity, entities::IfcEntity::BuildingElement { type_guid, .. }
+                    if type_guid.as_deref() == Some(tag))
+            })
+        };
+        let stair = index_of("620883").expect("stair");
+        let run = index_of("621141").expect("run");
+        assert_eq!(
+            sets,
+            vec![
+                (
+                    stair,
+                    "Pset_StairCommon".to_string(),
+                    vec![
+                        "IFCCOUNTMEASURE(19)".to_string(),
+                        "IFCPOSITIVELENGTHMEASURE(0.176463)".to_string(),
+                        "IFCPOSITIVELENGTHMEASURE(0.279400)".to_string(),
+                    ]
+                ),
+                (
+                    run,
+                    "Pset_StairFlightCommon".to_string(),
+                    vec![
+                        "IFCCOUNTMEASURE(10)".to_string(),
+                        "IFCPOSITIVELENGTHMEASURE(0.176463)".to_string(),
+                        "IFCPOSITIVELENGTHMEASURE(0.279400)".to_string(),
+                    ]
+                ),
+            ]
+        );
+        let model = super::super::IfcModel {
+            entities,
+            ..super::super::IfcModel::default()
+        };
+        let panel = super::super::scene_graph::element_info_panel(&model, stair).expect("panel");
+        let names: Vec<&str> = panel
+            .further_property_groups
+            .iter()
+            .map(|group| group.name.as_str())
+            .collect();
+        assert_eq!(names, ["Pset_StairCommon"]);
     }
 
     /// A stair family placed on its own names no part and keeps its body,
