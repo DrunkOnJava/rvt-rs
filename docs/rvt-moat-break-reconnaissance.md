@@ -1729,4 +1729,25 @@ and compatibility matrix:
 > structurally shaped but only internally consistent within
 > same-era version bands.
 
+## Addendum — RE-35 Partitions/NN records are ElementId-keyed (2026-09-23)
+
+The inflated body of every Revit 2024 and 2025 `Partitions/NN` stream opens
+with a chain of records, one per element, back to back from offset 0:
+
+```text
+u64 ElementId · u32 size · u16 prologue constant · u16 count · body ·
+u64 (unread) · u32 flag 0 | 0x0100_0000 · u32 size again
+```
+
+The prologue constant is the release's ElemTable constant + 28 (`0x059f` on
+2024, `0x05c7` on 2025). An element frame with its ElementId at `+0x00`
+starts its record; one without (RE-30's second prologue) sits inside it.
+On `2024_Core_Interior.rvt` the chains hold all 26,425 declared ElementIds,
+and across nine 2024 and 2025 files all 30,432 id-carrying frames start a
+record of their own id. What follows the chain are the loaded families' own
+documents, keyed by their own ids.
+
+Report: `reports/element-framing/RE-35-partition-record-wrapper.md`.
+Probe: `examples/probe_re35_record_wrapper.rs`.
+
 **End of report.**

@@ -95,10 +95,9 @@ pub struct RevitFile {
     /// step after inflate, and unit recovery, storey names and the
     /// partition MVP each asked for it independently.
     partition_strings: Option<Arc<Vec<crate::object_graph::StringRecord>>>,
-    /// Memoised RE-34 second-prologue ElementIds. The context filter needs
-    /// a count over every partition before any one can be assigned, and
-    /// the element-record sweeps and the unattributed count all read the
-    /// same result.
+    /// Memoised RE-35 second-prologue ElementIds. Every category sweep and
+    /// the unattributed count read the same result, so the record chains
+    /// are walked once per file.
     second_prologue_ids: Option<Arc<crate::partition_element_records::SecondPrologueIds>>,
 }
 
@@ -255,8 +254,8 @@ impl RevitFile {
     }
 
     /// ElementIds [`crate::partition_element_records::assign_second_prologue_ids`]
-    /// infers for second-prologue frames, by stream and frame offset,
-    /// memoised (RE-34).
+    /// reads for second-prologue frames from their enclosing partition
+    /// records, by stream and frame offset, memoised (RE-35).
     pub fn second_prologue_ids(
         &mut self,
     ) -> Arc<crate::partition_element_records::SecondPrologueIds> {
