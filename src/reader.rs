@@ -99,6 +99,8 @@ pub struct RevitFile {
     /// the unattributed count read the same result, so the record chains
     /// are walked once per file.
     second_prologue_ids: Option<Arc<crate::partition_element_records::SecondPrologueIds>>,
+    /// Memoised RE-38 family and type names.
+    element_names: Option<Arc<crate::partition_names::ElementNames>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -225,6 +227,7 @@ impl RevitFile {
             inflated: std::collections::HashMap::new(),
             partition_strings: None,
             second_prologue_ids: None,
+            element_names: None,
         })
     }
 
@@ -265,6 +268,19 @@ impl RevitFile {
         let computed =
             Arc::new(crate::partition_element_records::compute_second_prologue_ids(self));
         self.second_prologue_ids = Some(Arc::clone(&computed));
+        computed
+    }
+
+    /// Family and type names from the partition name entries, with each
+    /// named type's family candidates, memoised (RE-38). Empty where the
+    /// release is not proven or a stream does not parse.
+    pub fn element_names(&mut self) -> Arc<crate::partition_names::ElementNames> {
+        if let Some(cached) = &self.element_names {
+            return Arc::clone(cached);
+        }
+        let computed =
+            Arc::new(crate::partition_names::compute_element_names(self).unwrap_or_default());
+        self.element_names = Some(Arc::clone(&computed));
         computed
     }
 

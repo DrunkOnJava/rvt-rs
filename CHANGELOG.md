@@ -8,6 +8,24 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Elements carry Revit's own family and type names (RE-38).** Revit 2024
+  and 2025 partitions hold a name entry for every loaded family and type:
+  `u64 ElementId · u32 length · UTF-16 name · i64 BuiltInCategory`. An
+  element's type is the one reference of its own category that carries an
+  entry, and the type's partition record names its family the same way.
+  - The IFC `Name` of such an element is now `Family:Type:ElementId` and its
+    `ObjectType` `Family:Type`, as in Revit's own export, and the
+    element-record property set gains `FamilyName` and `TypeName`. Every one
+    of the 4,241 names and object types written on Core Interior, Snowdon
+    Towers, the RE1 models and `teste_export_2025` is exactly Revit's.
+  - On Snowdon every name entry that the VIM export also carries has the
+    VIM's name and category (348 of 348).
+  - Walls, floors, roofs and other system families keep the
+    `Class-ElementId` name: their types are not in these entries.
+  - `rvt::partition_names` and `RevitFile::element_names` expose the table.
+    `examples/probe_re38_names.rs` reports it for any file, and
+    `tests/element_names.rs` checks every name against Revit's export.
+
 - **Lighting fixtures, air terminals, food-service equipment, planting,
   parking, entourage, hardscape, elevators and ramps from element records
   (RE-37).** They export as the entities Revit's own IFC4 export writes for
