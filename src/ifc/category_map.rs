@@ -65,10 +65,13 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCWALL",
         predefined_type: Some("NOTDEFINED"),
     },
+    // Also a wall a mullion names (RE-46). Revit's IFC4 export of Snowdon
+    // Towers writes `.NOTDEFINED.` on all 60 of its `IFCCURTAINWALL` rows,
+    // each a bodiless aggregate of its panels and mullions.
     Mapping {
         revit_class: "CurtainWall",
         ifc_type: "IFCCURTAINWALL",
-        predefined_type: None,
+        predefined_type: Some("NOTDEFINED"),
     },
     // Revit writes `.DOOR.` on all 132 `IFCDOOR` rows and `.WINDOW.`
     // on all 6 `IFCWINDOW` rows of the same export (#220); emitting

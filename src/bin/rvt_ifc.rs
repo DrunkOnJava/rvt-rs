@@ -658,8 +658,12 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
     let mut lines = Vec::new();
     let exported = &diagnostics.exported;
     if exported.building_elements > 0 {
+        let carried = match exported.building_elements_carried_by_parts {
+            0 => String::new(),
+            n => format!(" and {n} carried by their parts"),
+        };
         lines.push(format!(
-            "rvt-ifc: {} building element(s), {} with geometry, on {} storey(s)",
+            "rvt-ifc: {} building element(s), {} with geometry{carried}, on {} storey(s)",
             exported.building_elements,
             exported.building_elements_with_geometry,
             exported.storey_count
@@ -847,6 +851,20 @@ mod tests {
         assert_eq!(
             with_sidecar.last().map(String::as_str),
             Some("rvt-ifc: readiness geometry (score 1.00)")
+        );
+    }
+
+    #[test]
+    fn the_summary_counts_elements_their_parts_carry() {
+        let Some(mut diagnostics) = diagnostics_with(&[("IFCSTAIR", 27), ("IFCMEMBER", 100)], &[])
+        else {
+            return;
+        };
+        diagnostics.exported.building_elements_with_geometry = 100;
+        diagnostics.exported.building_elements_carried_by_parts = 27;
+        assert_eq!(
+            export_summary(&diagnostics, true)[0],
+            "rvt-ifc: 127 building element(s), 100 with geometry and 27 carried by their parts, on 12 storey(s)"
         );
     }
 

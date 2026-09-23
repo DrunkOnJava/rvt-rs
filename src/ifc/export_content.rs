@@ -154,6 +154,10 @@ pub fn append_typed_production_elements(
     let mut out = TypedProductionAppend::default();
     let mut pending_hosts: Vec<(usize, u32)> = Vec::new();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
+    // Bodies of aggregate wholes, held back until their parts are known: a
+    // whole that no part names keeps its own body.
+    let mut held_bodies: std::collections::BTreeMap<usize, Extrusion> =
+        std::collections::BTreeMap::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
 
     for decoded in decoded_iter {
@@ -244,6 +248,7 @@ pub fn append_typed_production_elements(
         let mut property_set = None;
         let mut pending_host_id = None;
         let mut piece_bodies: Vec<Extrusion> = Vec::new();
+        let mut held_body = None;
 
         if policy.include_geometry {
             // Partition element records carry their own model bbox for
@@ -259,11 +264,14 @@ pub fn append_typed_production_elements(
             if let Some((location, body, properties, pieces)) = element_record_geometry {
                 location_feet = Some(location);
                 piece_bodies = pieces;
-                // #323: a stair is carried by its parts, as in Revit's
-                // export; its own record box would double their volume.
-                if !crate::partition_schema_mvp::AGGREGATE_WHOLE_CLASSES
+                // #323 / RE-46: a stair or curtain wall is carried by its
+                // parts, as in Revit's export; its own record box would
+                // double their volume. It is held until the parts are known.
+                if crate::partition_schema_mvp::AGGREGATE_WHOLE_CLASSES
                     .contains(&decoded.class.as_str())
                 {
+                    held_body = Some(body);
+                } else {
                     extrusion = Some(body);
                 }
                 property_set = Some(properties);
@@ -315,6 +323,9 @@ pub fn append_typed_production_elements(
         }
         if let Some(host_id) = pending_host_id {
             pending_hosts.push((entity_index, host_id));
+        }
+        if let Some(body) = held_body {
+            held_bodies.insert(entity_index, body);
         }
         if let Some(whole) = decoded.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. }
@@ -382,6 +393,19 @@ pub fn append_typed_production_elements(
                 .entry(whole_index)
                 .or_default()
                 .push(part_index);
+        }
+    }
+    // A whole no part names is not carried by parts: it keeps its body, as
+    // Revit's export does for a stair family placed on its own (Snowdon
+    // 1603717).
+    for (index, body) in held_bodies {
+        if parts_by_whole.contains_key(&index) {
+            continue;
+        }
+        if let Some(entities::IfcEntity::BuildingElement { extrusion, .. }) =
+            entities.get_mut(index)
+        {
+            *extrusion = Some(body);
         }
     }
     for (whole, parts) in parts_by_whole {
@@ -1153,6 +1177,73 @@ mod tests {
             })
             .collect();
         assert_eq!(aggregates, vec![(stair, vec![run])]);
+    }
+
+    /// A stair family placed on its own names no part and keeps its body,
+    /// as Revit's export does for Snowdon 1603717; a curtain wall with a
+    /// panel is carried by it (RE-46).
+    #[test]
+    fn a_whole_no_part_names_keeps_its_body() {
+        use crate::partition_element_records::{
+            CONTAINER_NONE, OST_CURTAIN_WALL_PANELS, OST_STAIRS, OST_WALLS,
+            PLACEMENT_KIND_INSTANCE, PartitionElementRecord,
+        };
+        let record = |element_id: u32, category: i64| PartitionElementRecord {
+            stream: "Partitions/68".into(),
+            offset: element_id as usize,
+            element_id,
+            flags: 0x0141,
+            builtin_category: category,
+            container: CONTAINER_NONE,
+            placement_kind: PLACEMENT_KIND_INSTANCE,
+            bbox_feet: [0.0, 0.0, 0.0, 10.0, 4.0, 9.0],
+            preceding_reference: None,
+            owner_reference: None,
+            references: Vec::new(),
+            id_from_enclosing_record: true,
+            design_option: None,
+        };
+        let levels = std::collections::BTreeSet::new();
+        let mut elements = crate::partition_schema_mvp::instances_from_records(
+            vec![record(1603717, OST_STAIRS)],
+            "Stair",
+            &levels,
+        );
+        elements.extend(crate::partition_schema_mvp::instances_from_records(
+            vec![record(946544, OST_WALLS)],
+            crate::partition_schema_mvp::CURTAIN_WALL_CLASS,
+            &levels,
+        ));
+        let mut panels = crate::partition_schema_mvp::instances_from_records(
+            vec![record(946600, OST_CURTAIN_WALL_PANELS)],
+            "CurtainWallPanel",
+            &levels,
+        );
+        panels[0].fields.push((
+            crate::partition_schema_mvp::AGGREGATE_WHOLE_FIELD.into(),
+            InstanceField::ElementId { tag: 0, id: 946544 },
+        ));
+        elements.extend(panels);
+        let mut entities = Vec::new();
+        let mut storeys = Vec::new();
+        let policy = ExportContentPolicy::for_quality_mode(ExportQualityMode::Geometry);
+        append_typed_production_elements(elements.into_iter(), &mut entities, &mut storeys, policy);
+        let element = |tag: &str| {
+            entities.iter().find_map(|entity| match entity {
+                entities::IfcEntity::BuildingElement {
+                    type_guid,
+                    ifc_type,
+                    extrusion,
+                    ..
+                } if type_guid.as_deref() == Some(tag) => {
+                    Some((ifc_type.clone(), extrusion.is_some()))
+                }
+                _ => None,
+            })
+        };
+        assert_eq!(element("1603717"), Some(("IFCSTAIR".into(), true)));
+        assert_eq!(element("946544"), Some(("IFCCURTAINWALL".into(), false)));
+        assert_eq!(element("946600"), Some(("IFCPLATE".into(), true)));
     }
 
     #[test]

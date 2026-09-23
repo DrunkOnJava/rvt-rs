@@ -42,6 +42,23 @@ All notable changes will be documented here. This project follows
   - `IfcSlab` and `IfcCovering` join `IfcShadingDevice` as honoured targets.
   - `examples/probe_re45_ifc_export_parameters.rs` lists a file's overrides,
     and `tests/ifc_export_overrides.rs` checks Core.
+- **Curtain walls export as `IfcCurtainWall` aggregates of their panels and
+  mullions (RE-46).** A wall a curtain-wall mullion names in its reference
+  list is a curtain wall: exactly Revit's 42 on Snowdon Towers and 1 on RE1.
+  - It exports as a bodiless `IfcCurtainWall` `.NOTDEFINED.`, as Revit's
+    does, instead of a wall box drawn over its own glazing.
+  - Each panel and mullion naming exactly one curtain wall is its
+    `IfcRelAggregates` part: 1,798 of Revit's 1,906 on Snowdon and 12 of 13
+    on RE1. Late mullions that name no curtain wall, panels Revit writes as
+    nested curtain walls, and doors stay standalone.
+  - `examples/probe_re46_curtain_walls.rs` lists them, and
+    `tests/curtain_walls.rs` checks RE1.
+  - A stair or curtain wall that no part names keeps its own body. Snowdon
+    stair 1603717, a stair family placed on its own, had been exported with
+    no body since RE-39.
+  - The export diagnostics count `building_elements_carried_by_parts`, and
+    `rvt-ifc` prints it ("6037 with geometry and 68 carried by their
+    parts"), so aggregate wholes no longer read as missing geometry.
 - **Type records are read on Revit 2025.** `partition_type_records` read
   Revit 2024 only. The same records on 2025 carry the 2025 marker and
   prologue constant, and most are second-prologue frames that take their
