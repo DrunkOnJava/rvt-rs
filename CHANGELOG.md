@@ -8,6 +8,10 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Railings whose type has no element data are named as Revit names
+  them (RE-66).** Their type's name is read from its type object, ending
+  at a fixed field frame. On Snowdon Towers all 131 railings carry
+  Revit's `Name` and `ObjectType`, up from 101.
 - **Filter the viewer's scene tree.** A box above the tree, reached with
   /, keeps only the elements whose name, type or ElementId contains the
   text, opens the storeys and categories that hold them and counts them.

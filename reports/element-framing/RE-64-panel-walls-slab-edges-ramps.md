@@ -45,7 +45,7 @@ Both already carried their type's name as `TypeName` (RE-44). Slab Edge and Ramp
 |---:|---|---|---|
 | 258 | `WallSweep-ElementId` | the ElementId alone, no `ObjectType` | Revit writes no family or type |
 | 170 stringers, 43 runs, 17 landings, 26 stairs | `StairsStringer-ElementId` and so on | "Assembled Stair:Stair:620883 Run 1", `ObjectType` "Non-Monolithic Run:…" | the stair's instance name and part numbering, and the Monolithic or Non-Monolithic kind, are not read. Named since RE-65 |
-| 30 railings | `Railing-ElementId` | "Railing:Gate:1991314" | their types' names are not read (#322) |
+| 30 railings | `Railing-ElementId` | "Railing:Gate:1991314" | their types' names are not read (#322). Named since RE-66 |
 | 7 | `GenericModel-ElementId` | "Model Text:10" Trebuchet MS:1448731" | model text has no type join yet |
 
 ## 4. End-to-end measurement

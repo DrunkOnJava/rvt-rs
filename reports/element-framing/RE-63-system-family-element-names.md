@@ -36,7 +36,7 @@ The element's `RvtElementRecordGeometry` property set carries `FamilyName` with 
 ## 2. The residuals
 
 - **Floors (15 on Snowdon).** Revit exports each of these floors as two slabs, the second named with a `:2` suffix, and rvt-rs writes one. The `Tag` match meets either of Revit's two. rvt-rs's name is the first part's, and `ObjectType` is equal.
-- **Railings (30 on Snowdon, 1 on RE1).** Their type name is not read (#322). They keep `Railing-ElementId`.
+- **Railings (30 on Snowdon, 1 on RE1).** Their type name is not read (#322). They keep `Railing-ElementId`. Snowdon's 30 are named since RE-66.
 - **Curtain panels that are walls (18 on Snowdon).** Revit names them `Basic Wall:…`, and rvt-rs exports them as panels named `CurtainWallPanel-ElementId`. Named since RE-64.
 
 ## 3. End-to-end measurement

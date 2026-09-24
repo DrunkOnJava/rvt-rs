@@ -413,7 +413,36 @@ fn attach_system_type_names(
         return;
     }
     let wanted: BTreeSet<u32> = picks.iter().map(|(_, id)| *id).collect();
-    let names = type_data_names(rf, &header, &wanted);
+    let mut names = type_data_names(rf, &header, &wanted);
+    // A railing type with no element data keeps its name in its type object
+    // (RE-66, measured on Revit 2024 only).
+    let railing_types: BTreeSet<u32> = picks
+        .iter()
+        .filter(|(index, id)| {
+            elements[*index].class == "Railing" && !matches!(names.get(id), Some(Some(_)))
+        })
+        .map(|(_, id)| *id)
+        .collect();
+    if revit_version == 2024 && !railing_types.is_empty() {
+        for stream in rf.partition_stream_names() {
+            let Ok(inflated) = rf.inflated_partition(&stream) else {
+                continue;
+            };
+            for (id, name) in
+                crate::partition_names::find_railing_type_names(inflated.bytes(), &railing_types)
+            {
+                match names.get(&id) {
+                    Some(Some(held)) if *held != name => {
+                        names.insert(id, None);
+                    }
+                    Some(None) => {}
+                    _ => {
+                        names.insert(id, Some(name));
+                    }
+                }
+            }
+        }
+    }
     attach_type_picks(elements, picks, &names);
 }
 
