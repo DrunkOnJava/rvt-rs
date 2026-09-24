@@ -348,6 +348,11 @@ types give Revit's constituent sequence, and the glTF export draws 2024
 walls as their layers in their materials' colours
 (`reports/element-framing/RE-53-wall-layers.md`). The IFC export still
 writes no layer set, since material names are not read (#355).
+**RE-54 (2026-09-23)** builds a 2024 wall's body from its stored location
+line, which is its centreline, at its type's thickness, where the record
+box does not already give it. Core Interior's walls are unchanged.
+Snowdon's angled walls, which were their whole axis-aligned box, have
+Revit's faces on 75 of 102 (`reports/element-framing/RE-54-wall-bodies.md`).
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

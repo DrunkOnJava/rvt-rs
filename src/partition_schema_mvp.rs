@@ -652,6 +652,43 @@ pub const WALL_EXTERIOR_FIELDS: [&str; 2] = ["m_wall_exterior_x", "m_wall_exteri
 /// transparency (RE-53).
 pub const WALL_LAYERS_FIELD: &str = "m_wall_layers";
 
+/// Fields holding a wall's centreline start and end in plan, model feet
+/// (RE-54).
+pub const WALL_AXIS_START_FIELDS: [&str; 2] = ["m_wall_axis_start_x", "m_wall_axis_start_y"];
+/// See [`WALL_AXIS_START_FIELDS`].
+pub const WALL_AXIS_END_FIELDS: [&str; 2] = ["m_wall_axis_end_x", "m_wall_axis_end_y"];
+/// Field holding a wall's thickness, its type's layers summed (RE-54).
+pub const WALL_TYPE_THICKNESS_FIELD: &str = "m_wall_type_thickness";
+
+/// A wall's centreline and its type's thickness (RE-54).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WallAxis {
+    /// Plan start, model feet.
+    pub start: [f64; 2],
+    /// Plan end, model feet.
+    pub end: [f64; 2],
+    /// The type's layers summed, feet.
+    pub thickness_feet: f64,
+}
+
+/// The centreline and thickness [`WALL_AXIS_START_FIELDS`],
+/// [`WALL_AXIS_END_FIELDS`] and [`WALL_TYPE_THICKNESS_FIELD`] record.
+pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallAxis> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [sx, sy] = WALL_AXIS_START_FIELDS.map(float);
+    let [ex, ey] = WALL_AXIS_END_FIELDS.map(float);
+    Some(WallAxis {
+        start: [sx?, sy?],
+        end: [ex?, ey?],
+        thickness_feet: float(WALL_TYPE_THICKNESS_FIELD)?,
+    })
+}
+
 /// The layers [`WALL_LAYERS_FIELD`] and [`WALL_EXTERIOR_FIELDS`] record.
 pub fn element_layers_from_fields(
     fields: &[(String, InstanceField)],
@@ -697,8 +734,10 @@ pub fn element_layers_from_fields(
 /// material's shading, and the plan direction of its exterior face: the
 /// right of its location line's direction when its flip flag is set, the
 /// left otherwise (RE-53, [`crate::partition_compound_structure`],
-/// [`crate::partition_materials`]). A wall without a type, a location line
-/// or a flip flag gets none. Membranes, which have no width, are left out.
+/// [`crate::partition_materials`]). A wall whose word is 1 also gets its
+/// centreline and its type's thickness, from which the exporter builds its
+/// body (RE-54). A wall without a type, a location line or an orientation
+/// gets none of these. Membranes, which have no width, are left out.
 fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
     use crate::partition_compound_structure as pcs;
     if !crate::partition_beam_axes::supports_revit_version(revit_version)
@@ -735,9 +774,9 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     .iter()
     .map(|record| record.element_id)
     .collect();
-    let (Ok(layers), Ok(flips), Ok(lines), Ok(appearances)) = (
+    let (Ok(layers), Ok(orientations), Ok(lines), Ok(appearances)) = (
         pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
-        pcs::scan_wall_flips(rf, revit_version, &wall_ids),
+        pcs::scan_wall_orientations(rf, revit_version, &wall_ids),
         crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &wall_ids),
         crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
     ) else {
@@ -747,8 +786,8 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         let (Some(id), Some(type_id)) = (wall.id, type_of(wall)) else {
             continue;
         };
-        let (Some(type_layers), Some(&flip), Some(line)) =
-            (layers.get(&type_id), flips.get(&id), lines.get(&id))
+        let (Some(type_layers), Some(orientation), Some(line)) =
+            (layers.get(&type_id), orientations.get(&id), lines.get(&id))
         else {
             continue;
         };
@@ -758,8 +797,28 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         if !length.is_finite() || length <= 1e-9 {
             continue;
         }
+        let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
+        if orientation.word == 1 && thickness.is_finite() && thickness > 0.0 {
+            for (names, point) in [(WALL_AXIS_START_FIELDS, start), (WALL_AXIS_END_FIELDS, end)] {
+                for (name, value) in names.iter().zip(point) {
+                    wall.fields
+                        .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+                }
+            }
+            wall.fields.push((
+                WALL_TYPE_THICKNESS_FIELD.into(),
+                InstanceField::Float {
+                    value: thickness,
+                    size: 8,
+                },
+            ));
+        }
         let (dx, dy) = (dx / length, dy / length);
-        let exterior = if flip { [dy, -dx] } else { [-dy, dx] };
+        let exterior = if orientation.flip {
+            [dy, -dx]
+        } else {
+            [-dy, dx]
+        };
         let bands: Vec<InstanceField> = type_layers
             .iter()
             .filter(|layer| layer.width_feet > 0.0)

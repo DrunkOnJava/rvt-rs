@@ -34,11 +34,16 @@
 //!
 //! A wall's data carries, after `ff ff ff ff 01 00 00 00`, three `u32`: its
 //! location line (0 to 5), a word of 0 to 2, and a flip flag
-//! ([`wall_flip`]). With the flag set, the wall's exterior (its first
+//! ([`wall_orientation`]). With the flag set, the wall's exterior (its first
 //! layer) lies to the right of its location line's direction; clear, to
 //! the left. On Snowdon Towers this holds on all 416 walls whose first and
 //! last layers Revit's IFC4 export places measurably apart. The one other
 //! wall's two outer layers are 0.03 ft apart, too close to tell.
+//!
+//! The wall's stored location line (RE-49's bounded line) is its
+//! centreline whatever its location-line setting: Revit's IFC4 body spans
+//! exactly half the type's thickness either side of it on 964 of Snowdon's
+//! 1,054 walls, all of them with word 1 (RE-54).
 
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -226,35 +231,49 @@ pub fn scan_type_layers(
         .collect())
 }
 
-/// A wall's flip flag, from its data: `Some(true)` puts its exterior to the
-/// right of its location line's direction. `None` without the anchor or
-/// with values a wall does not take.
-pub fn wall_flip(data: &[u8]) -> Option<bool> {
+/// What a wall's data says about its location line and its sides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WallOrientation {
+    /// Revit's location-line setting, 0 to 5. The stored line is the
+    /// wall's centreline whatever it is (RE-54).
+    pub location_line: u32,
+    /// A word of 0 to 2. Every Snowdon Towers wall whose body is centred on
+    /// its line at its type's thickness carries 1 (RE-54).
+    pub word: u32,
+    /// Set puts the wall's exterior to the right of its location line's
+    /// direction; clear, to the left.
+    pub flip: bool,
+}
+
+/// A wall's orientation, from its data. `None` without the anchor or with
+/// values a wall does not take.
+pub fn wall_orientation(data: &[u8]) -> Option<WallOrientation> {
     let at = memchr::memmem::find(data, &WALL_FLIP_ANCHOR)? + WALL_FLIP_ANCHOR.len();
     let location_line = u32_at(data, at)?;
     let word = u32_at(data, at + 4)?;
-    let flip = u32_at(data, at + 8)?;
-    if location_line > 5 || word > 2 {
-        return None;
-    }
-    match flip {
-        0 => Some(false),
-        1 => Some(true),
-        _ => None,
-    }
+    let flip = match u32_at(data, at + 8)? {
+        0 => false,
+        1 => true,
+        _ => return None,
+    };
+    (location_line <= 5 && word <= 2).then_some(WallOrientation {
+        location_line,
+        word,
+        flip,
+    })
 }
 
-/// Each wall's flip flag, by ElementId, from its own data; a wall whose
+/// Each wall's orientation, by ElementId, from its own data; a wall whose
 /// copies disagree is dropped.
-pub fn scan_wall_flips(
+pub fn scan_wall_orientations(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &BTreeSet<u32>,
-) -> Result<BTreeMap<u32, bool>> {
+) -> Result<BTreeMap<u32, WallOrientation>> {
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
         return Ok(BTreeMap::new());
     };
-    let mut found: BTreeMap<u32, Option<bool>> = BTreeMap::new();
+    let mut found: BTreeMap<u32, Option<WallOrientation>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -275,15 +294,15 @@ pub fn scan_wall_flips(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(LAYER_WINDOW))
                 .min(buf.len());
-            let Some(flip) = buf.get(id_at + 8..end).and_then(wall_flip) else {
+            let Some(orientation) = buf.get(id_at + 8..end).and_then(wall_orientation) else {
                 continue;
             };
             match found.get_mut(&id) {
                 None => {
-                    found.insert(id, Some(flip));
+                    found.insert(id, Some(orientation));
                 }
                 Some(held) => {
-                    if *held != Some(flip) {
+                    if *held != Some(orientation) {
                         *held = None;
                     }
                 }
@@ -292,6 +311,6 @@ pub fn scan_wall_flips(
     }
     Ok(found
         .into_iter()
-        .filter_map(|(id, flip)| flip.map(|f| (id, f)))
+        .filter_map(|(id, orientation)| orientation.map(|o| (id, o)))
         .collect())
 }

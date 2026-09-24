@@ -733,6 +733,121 @@ fn beam_swept_solid(
 /// `BodySource` of a stair run drawn as its treads and risers (RE-52).
 pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
 
+/// `BodySource` of a wall drawn its type's thickness either side of its
+/// centreline (RE-54).
+pub const WALL_CENTRELINE_BODY_SOURCE: &str = "partition_wall_centreline";
+
+/// `ThicknessSource` of a wall whose thickness is its type's layers summed
+/// (RE-54).
+pub const WALL_TYPE_THICKNESS_SOURCE: &str = "wall_type_compound_structure";
+
+/// How far outside a wall's record box its centreline's midpoint may lie,
+/// beyond the wall's own thickness, before the line is taken to belong to
+/// something else.
+const WALL_AXIS_BOX_TOLERANCE_FEET: f64 = 1e-6;
+
+/// How closely a rectangle along an angled wall's line must reproduce its
+/// record box for the box to set its length.
+const WALL_BOX_CLOSURE_FEET: f64 = 1e-4;
+
+/// A wall's body from its centreline (RE-54): a rectangle its type's
+/// thickness across, centred on the line.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct WallCentrelineBody {
+    centre: [f64; 2],
+    /// Plan rotation of the rectangle's width axis; `None` keeps the model
+    /// axes.
+    rotation: Option<f64>,
+    width_feet: f64,
+    depth_feet: f64,
+    thickness_feet: f64,
+}
+
+/// The body of a wall with centreline `axis` whose record box is centred on
+/// `(x, y)` with plan extents `width` × `depth`.
+///
+/// Across the wall, the body is the type's thickness centred on the line.
+/// Along it:
+/// - an axis-parallel wall keeps the box's extent, which its joins trimmed
+///   (RE-26). A box thinner than the type is a wall Revit cut, and keeps
+///   the box.
+/// - a wall at an angle is the rectangle the box closes on, when one of the
+///   type's thickness along the line fits the box exactly and is centred on
+///   the line; otherwise it runs from one end of its line to the other,
+///   unless the box is more than twice the wall's thickness (at least a
+///   foot) wider than that rectangle's.
+///
+/// `None` when the line is degenerate, its midpoint lies outside the box,
+/// or the box is thinner than the type or too wide.
+fn wall_centreline_body(
+    axis: crate::partition_schema_mvp::WallAxis,
+    [x, y]: [f64; 2],
+    width: f64,
+    depth: f64,
+) -> Option<WallCentrelineBody> {
+    let [sx, sy] = axis.start;
+    let [ex, ey] = axis.end;
+    let thickness = axis.thickness_feet;
+    let length = (ex - sx).hypot(ey - sy);
+    if !(length.is_finite() && length > 1e-9 && thickness.is_finite() && thickness > 0.0) {
+        return None;
+    }
+    let (mx, my) = ((sx + ex) / 2.0, (sy + ey) / 2.0);
+    let slack = thickness + WALL_AXIS_BOX_TOLERANCE_FEET;
+    if (mx - x).abs() > width / 2.0 + slack || (my - y).abs() > depth / 2.0 + slack {
+        return None;
+    }
+    let (ux, uy) = ((ex - sx) / length, (ey - sy) / length);
+    let thinner = |across: f64| across < thickness - WALL_AXIS_BOX_TOLERANCE_FEET;
+    if uy.abs() <= 1e-9 {
+        return (!thinner(depth)).then_some(WallCentrelineBody {
+            centre: [x, sy],
+            rotation: None,
+            width_feet: width,
+            depth_feet: thickness,
+            thickness_feet: thickness,
+        });
+    }
+    if ux.abs() <= 1e-9 {
+        return (!thinner(width)).then_some(WallCentrelineBody {
+            centre: [sx, y],
+            rotation: None,
+            width_feet: thickness,
+            depth_feet: depth,
+            thickness_feet: thickness,
+        });
+    }
+    // The box of a rectangle `run` long and `thickness` across along
+    // (ux, uy) is `run·|ux| + thickness·|uy|` wide and
+    // `run·|uy| + thickness·|ux|` deep.
+    let run_from_width = (width - thickness * uy.abs()) / ux.abs();
+    let run_from_depth = (depth - thickness * ux.abs()) / uy.abs();
+    let off_line = (x - sx) * -uy + (y - sy) * ux;
+    let (centre, run) = if (run_from_width - run_from_depth).abs() <= WALL_BOX_CLOSURE_FEET
+        && off_line.abs() <= WALL_BOX_CLOSURE_FEET
+        && run_from_width > 0.0
+    {
+        ([x, y], run_from_width)
+    } else {
+        // A box far wider than the line's own rectangle holds a body that
+        // is not that rectangle: a leaning or profiled wall.
+        let limit = 2.0 * thickness.max(1.0);
+        let excess_width = width - (length * ux.abs() + thickness * uy.abs());
+        let excess_depth = depth - (length * uy.abs() + thickness * ux.abs());
+        if excess_width > limit || excess_depth > limit {
+            return None;
+        }
+        ([mx, my], length)
+    };
+    Some(WallCentrelineBody {
+        centre,
+        rotation: Some(uy.atan2(ux)),
+        width_feet: run,
+        depth_feet: thickness,
+        thickness_feet: thickness,
+    })
+}
+
 /// A stair run's treads and risers: its side view extruded across the run.
 /// `location` is the element's placement, which the solid's own placement
 /// is relative to. That placement's Z axis runs across the run and its X
@@ -904,6 +1019,22 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // RE-54: a wall whose centreline and type thickness are known is that
+    // thickness either side of the line. It replaces the box only where the
+    // two differ, so a wall the box already drew right is unchanged.
+    let wall_centreline = if class == "Wall" {
+        crate::partition_schema_mvp::wall_axis_from_fields(&decoded.fields)
+            .and_then(|axis| wall_centreline_body(axis, [x, y], width, depth))
+            .filter(|body| {
+                body.rotation.is_some()
+                    || (body.centre[0] - x).abs() > 1e-9
+                    || (body.centre[1] - y).abs() > 1e-9
+                    || (body.width_feet - width).abs() > 1e-9
+                    || (body.depth_feet - depth).abs() > 1e-9
+            })
+    } else {
+        None
+    };
     // The sketched plan profile, when the element's `OST_SketchLines`
     // records closed one (#31, RE-25). It is recovered in project
     // plan coordinates and the body is placed at the record's plan
@@ -968,8 +1099,9 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         Property {
             name: "BodySource".into(),
             value: PropertyValue::Text(
-                wall_body_source
-                    .clone()
+                wall_centreline
+                    .map(|_| WALL_CENTRELINE_BODY_SOURCE.into())
+                    .or_else(|| wall_body_source.clone())
                     .or_else(|| column_body_source.clone())
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
@@ -982,7 +1114,8 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 profile.is_some()
                     || type_section.is_some()
                     || beam.is_some()
-                    || stair_run.is_some(),
+                    || stair_run.is_some()
+                    || wall_centreline.is_some(),
             ),
         },
         Property {
@@ -1053,11 +1186,18 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::LengthFeet(section_depth),
         });
     }
-    // A wall whose joins resolved reports the trim it took and the
-    // thickness it read off the box's thin axis (RE-26).
-    if let (Some(thickness), Some(start), Some(end)) =
-        (wall_thickness, wall_trim_start, wall_trim_end)
-    {
+    // A wall drawn from its centreline reports its type's thickness
+    // (RE-54); one whose joins resolved reports the trim it took and, unless
+    // its centreline redrew it, the thickness it read off the box's thin
+    // axis (RE-26).
+    let thickness = wall_centreline
+        .map(|body| (body.thickness_feet, WALL_TYPE_THICKNESS_SOURCE))
+        .or_else(|| {
+            wall_thickness.map(|t| (t, crate::element_record_wall_joins::WALL_THICKNESS_SOURCE))
+        });
+    if let Some((thickness, source)) = thickness.filter(|_| {
+        wall_centreline.is_some() || (wall_trim_start.is_some() && wall_trim_end.is_some())
+    }) {
         properties.push(Property {
             name: "ThicknessResolved".into(),
             value: PropertyValue::Boolean(true),
@@ -1068,10 +1208,10 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         });
         properties.push(Property {
             name: "ThicknessSource".into(),
-            value: PropertyValue::Text(
-                crate::element_record_wall_joins::WALL_THICKNESS_SOURCE.into(),
-            ),
+            value: PropertyValue::Text(source.into()),
         });
+    }
+    if let (Some(_), Some(start), Some(end)) = (wall_thickness, wall_trim_start, wall_trim_end) {
         properties.push(Property {
             name: "JoinTrimStartFeet".into(),
             value: PropertyValue::LengthFeet(start),
@@ -1175,24 +1315,35 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         height_feet: height,
         profile_override,
     };
-    let (rotation, body, solid) = match beam {
-        // A level beam is its section's plan rectangle along the line,
-        // extruded through its depth from the record box's base.
-        Some(beam) if beam.is_horizontal() => (
-            Some(beam.plan_angle_radians()),
-            Extrusion::rectangle(beam.length_feet, beam.width_feet, beam.depth_feet),
+    let (location, rotation, body, solid) = match (beam, wall_centreline) {
+        (_, Some(wall)) => (
+            [wall.centre[0], wall.centre[1], z],
+            wall.rotation,
+            Extrusion::rectangle(wall.width_feet, wall.depth_feet, height),
             None,
         ),
-        Some(beam) => (None, record_body, Some(beam_swept_solid(&beam, [x, y, z]))),
-        None => {
-            let solid = stair_run
-                .as_ref()
-                .map(|run| stair_run_solid(run, [x, y, z]));
-            (None, record_body, solid)
+        (beam, None) => {
+            let (rotation, body, solid) = match beam {
+                // A level beam is its section's plan rectangle along the line,
+                // extruded through its depth from the record box's base.
+                Some(beam) if beam.is_horizontal() => (
+                    Some(beam.plan_angle_radians()),
+                    Extrusion::rectangle(beam.length_feet, beam.width_feet, beam.depth_feet),
+                    None,
+                ),
+                Some(beam) => (None, record_body, Some(beam_swept_solid(&beam, [x, y, z]))),
+                None => {
+                    let solid = stair_run
+                        .as_ref()
+                        .map(|run| stair_run_solid(run, [x, y, z]));
+                    (None, record_body, solid)
+                }
+            };
+            ([x, y, z], rotation, body, solid)
         }
     };
     Some(RecordGeometry {
-        location: [x, y, z],
+        location,
         rotation,
         body,
         solid,

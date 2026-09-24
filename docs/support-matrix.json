@@ -279,6 +279,15 @@
       "user_impact": "In the viewer and exported glTF, walls show their construction: each layer as a band in its material's colour instead of one grey block."
     },
     {
+      "id": "element-record-wall-centreline-bodies",
+      "area": "elements",
+      "name": "Wall bodies from their centreline at their type's thickness (Revit 2024)",
+      "status": "partial",
+      "evidence": "partition_compound_structure::wall_orientation / scan_wall_orientations; partition_schema_mvp::attach_wall_layers (m_wall_axis_*, m_wall_type_thickness) and wall_axis_from_fields; ifc::export_content::wall_centreline_body (BodySource partition_wall_centreline); tools/re/wall_bodies_vs_ifc.py (rvt-gltf GLB against Revit's IFC4 bodies); reports/element-framing/RE-54-wall-bodies.md",
+      "notes": "The bounded line a wall's data stores (RE-49) is its centreline whatever its location-line setting: Revit's IFC4 body lies exactly half the type's layer sum (RE-53) either side of it on 964 of Snowdon Towers' 1,054 walls, all with 1 in the word after the setting; none of the 23 with 0 or 2 is centred. A 2024 wall with word 1 is built as that rectangle where the record box does not already give it: an axis-parallel wall keeps RE-26's trimmed run and keeps its box when the box is thinner than the type (a cut wall); an angled wall is the rectangle its box closes on (1e-4 ft), or runs joint to joint unless its box exceeds that rectangle's by more than 2 x max(T, 1 ft). Measured end to end on Snowdon Towers (local only) with rvt-gltf against Revit's IFC4 bodies (IfcOpenShell 0.8.5): angled walls' faces within 0.001 ft on 75 of 102 (0 before) and ends on 13 (1 before); axis-parallel faces on 927 of 976 (918 before); per wall 71 better, 1,003 unchanged, 4 worse; walls drawn in layers 967 (883 before). Core Interior is unchanged (IFC byte-identical but for timestamps). Status is partial: angled walls' ends at joints are not modelled (Revit butt-joins 115 of 156 end faces at two-wall joints), cut, profiled and word 0/2 walls keep their box, and location lines are read on Revit 2024 only.",
+      "user_impact": "Angled walls export and display as walls of their real thickness along their line instead of as the box around them, and more walls show their layers."
+    },
+    {
       "id": "revit-global-ids",
       "area": "ifc",
       "name": "Revit's own IFC GlobalIds for elements, rooms and storeys, rebuilt from Global/History and Global/ElemTable",
