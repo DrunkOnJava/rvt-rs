@@ -256,6 +256,19 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
+    // --- Curtain panels that are walls (RE-64) ---
+    let mut unnamed_panels: Vec<&mut DecodedElement> = out
+        .products
+        .iter_mut()
+        .filter(|element| {
+            element.class == "CurtainWallPanel"
+                && !element
+                    .fields
+                    .iter()
+                    .any(|(name, _)| name == TYPE_NAME_FIELD)
+        })
+        .collect();
+    attach_panel_wall_types(rf, revit_version, &mut unnamed_panels);
     // --- Walls' layers and exterior side (RE-53) ---
     attach_wall_layers(rf, revit_version, &mut out.walls);
     // --- A shed roof's slope (RE-56) ---
@@ -398,6 +411,18 @@ fn attach_system_type_names(
         return;
     }
     let wanted: BTreeSet<u32> = picks.iter().map(|(_, id)| *id).collect();
+    let names = type_data_names(rf, &header, &wanted);
+    attach_type_picks(elements, picks, &names);
+}
+
+/// Each wanted type's name, read from its serialised data
+/// ([`crate::partition_names::find_element_data_names`]); `None` when two
+/// copies of the type disagree.
+fn type_data_names(
+    rf: &mut RevitFile,
+    header: &[u8; 10],
+    wanted: &BTreeSet<u32>,
+) -> std::collections::BTreeMap<u32, Option<String>> {
     let mut names: std::collections::BTreeMap<u32, Option<String>> =
         std::collections::BTreeMap::new();
     for stream in rf.partition_stream_names() {
@@ -405,7 +430,7 @@ fn attach_system_type_names(
             continue;
         };
         for (id, name) in
-            crate::partition_names::find_element_data_names(inflated.bytes(), &header, &wanted)
+            crate::partition_names::find_element_data_names(inflated.bytes(), header, wanted)
         {
             match names.get(&id) {
                 None => {
@@ -418,6 +443,16 @@ fn attach_system_type_names(
             }
         }
     }
+    names
+}
+
+/// Set [`TYPE_ID_FIELD`] and [`TYPE_NAME_FIELD`] on each picked element
+/// whose type has one agreed name.
+fn attach_type_picks(
+    elements: &mut [&mut DecodedElement],
+    picks: Vec<(usize, u32)>,
+    names: &std::collections::BTreeMap<u32, Option<String>>,
+) {
     for (index, type_id) in picks {
         let Some(Some(name)) = names.get(&type_id) else {
             continue;
@@ -434,6 +469,81 @@ fn attach_system_type_names(
             .fields
             .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
     }
+}
+
+/// Give a curtain panel that is a wall its wall type (RE-64).
+///
+/// Revit lets a curtain grid cell hold a basic wall instead of a panel. The
+/// element keeps the panel category, but its reference list names a wall
+/// type rather than a panel type, so [`attach_system_type_names`] finds no
+/// type for it. Here the type is the one wall-type record the list names,
+/// taken only when that type has compound layers
+/// ([`crate::partition_compound_structure::scan_type_layers`]): a panel's
+/// list also names its curtain wall, whose type is a wall type with none.
+/// [`attach_system_family_names`] then names its family "Basic Wall".
+fn attach_panel_wall_types(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    panels: &mut [&mut DecodedElement],
+) {
+    use crate::partition_type_records as ptr;
+    if panels.is_empty()
+        || !ptr::supports_revit_version(revit_version)
+        || !crate::partition_compound_structure::COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS
+            .contains(&revit_version)
+    {
+        return;
+    }
+    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+        return;
+    };
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let wall_types = ptr::type_definition_ids(
+        &ptr::scan_type_records(
+            rf,
+            revit_version,
+            crate::partition_element_records::OST_WALLS,
+            &declared,
+        )
+        .unwrap_or_default(),
+    );
+    let mut picks: Vec<(usize, u32)> = Vec::new();
+    for (index, panel) in panels.iter().enumerate() {
+        let Some((references, _)) = record_references(rf, panel) else {
+            continue;
+        };
+        if let Some(type_id) = ptr::unique_type_reference(&references, &wall_types) {
+            picks.push((index, type_id));
+        }
+    }
+    if picks.is_empty() {
+        return;
+    }
+    let candidates: BTreeSet<u32> = picks.iter().map(|(_, id)| *id).collect();
+    let materials: BTreeSet<u32> =
+        ptr::scan_type_records(rf, revit_version, ptr::OST_MATERIALS, &declared)
+            .unwrap_or_default()
+            .iter()
+            .map(|record| record.element_id)
+            .collect();
+    let layered: BTreeSet<u32> = crate::partition_compound_structure::scan_type_layers(
+        rf,
+        revit_version,
+        &candidates,
+        &materials,
+        &declared,
+    )
+    .unwrap_or_default()
+    .into_iter()
+    .filter(|(_, layers)| !layers.is_empty())
+    .map(|(id, _)| id)
+    .collect();
+    picks.retain(|(_, id)| layered.contains(id));
+    let names = type_data_names(rf, &header, &layered);
+    attach_type_picks(panels, picks, &names);
 }
 
 /// Field naming an element-record element's type, from the partition name
@@ -842,9 +952,12 @@ pub fn element_layers_from_fields(
 /// kind, and the category gives it where only one system family fits:
 /// - a curtain wall (RE-46) is a Curtain Wall, and a railing a Railing;
 /// - a floor is a Floor, and a building pad a Pad;
+/// - a slab edge is a Slab Edge, and a ramp a Ramp (RE-64);
 /// - a wall, ceiling or roof whose type has compound layers (`has_layers`)
 ///   is a Basic Wall, a Compound Ceiling or a Basic Roof, since a Curtain
-///   or Stacked Wall, a Basic Ceiling and Sloped Glazing have none.
+///   or Stacked Wall, a Basic Ceiling and Sloped Glazing have none;
+/// - a curtain panel whose type is a wall type with layers is a Basic Wall
+///   (RE-64).
 ///
 /// Measured against the `Family:Type:ElementId` names Revit's own IFC
 /// export gives the same elements, on every record-backed wall, floor,
@@ -856,7 +969,9 @@ pub fn system_family(class: &str, has_layers: bool) -> Option<&'static str> {
         ("Railing", _) => Some("Railing"),
         ("Floor", _) => Some("Floor"),
         ("BuildingPad", _) => Some("Pad"),
-        ("Wall", true) => Some("Basic Wall"),
+        ("SlabEdge", _) => Some("Slab Edge"),
+        ("Ramp", _) => Some("Ramp"),
+        ("Wall" | "CurtainWallPanel", true) => Some("Basic Wall"),
         ("Ceiling", true) => Some("Compound Ceiling"),
         ("Roof", true) => Some("Basic Roof"),
         _ => None,
@@ -904,7 +1019,12 @@ fn attach_system_family_names(
     let pending: BTreeSet<u32> = elements
         .iter()
         .flat_map(|list| list.iter())
-        .filter(|element| matches!(element.class.as_str(), "Wall" | "Ceiling" | "Roof"))
+        .filter(|element| {
+            matches!(
+                element.class.as_str(),
+                "Wall" | "Ceiling" | "Roof" | "CurtainWallPanel"
+            )
+        })
         .filter_map(type_of)
         .filter(|id| !layered.contains(id))
         .collect();

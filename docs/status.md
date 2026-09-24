@@ -428,6 +428,12 @@ Revit's export names them. The system family is derived by RE-61's rule.
 On Core Interior all 460 such elements carry Revit's name, and on Snowdon
 every wall, curtain wall, ceiling and roof does
 (`reports/element-framing/RE-63-system-family-element-names.md`).
+**RE-64 (2026-09-24)** names three more kinds the same way. A curtain
+panel that holds a basic wall takes the one layered wall type its record
+names, and slab edges and ramps take their only system family. On Snowdon,
+18 of 18 panel walls and 59 of 59 slab edges carry Revit's name, and both
+ramps its `ObjectType`
+(`reports/element-framing/RE-64-panel-walls-slab-edges-ramps.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
