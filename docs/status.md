@@ -441,6 +441,10 @@ runs, landings and supports after them ("Assembled Stair:Stair:620883 Run
 Stringer or Carriage). On Snowdon all 256 stair elements carry Revit's name
 and `ObjectType`. Measured on Snowdon only, as no other oracle has stairs
 (`reports/element-framing/RE-65-stair-names.md`).
+**RE-66 (2026-09-24)** reads a railing type's name from its type object
+when the type has no element data. On Snowdon all 131 railings now carry
+Revit's name, up from 101
+(`reports/element-framing/RE-66-railing-type-names.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

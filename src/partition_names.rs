@@ -287,6 +287,92 @@ pub fn find_element_data_names(
         .collect()
 }
 
+/// The class tag at `+0x47` from the ElementId of the serialised object that
+/// run, stair, landing, support and railing types share (RE-52, RE-65,
+/// RE-66): `01 00 00 00 · u64 id`, often held inside another element's data.
+pub const TYPE_OBJECT_TAG: [u8; 2] = [0xdb, 0x0f];
+/// See [`TYPE_OBJECT_TAG`].
+pub const TYPE_OBJECT_TAG_OFFSET: usize = 0x47;
+/// Where a railing type's name is looked for in its type object (RE-66,
+/// Revit 2024), as offsets from the ElementId.
+pub const RAILING_TYPE_NAME_WINDOW: std::ops::Range<usize> = 0x100..0x300;
+/// The bytes that follow a railing type's name: an unset field frame with
+/// tag `0x020b`.
+pub const RAILING_TYPE_NAME_END: [u8; 6] = [0xff, 0xff, 0xff, 0xff, 0x0b, 0x02];
+
+/// The names railing types keep in their type objects (RE-66), by
+/// ElementId, for the ids in `wanted`.
+///
+/// Most railing types also have element data that [`find_element_data_names`]
+/// reads. Those that do not keep their name only in their type object
+/// ([`TYPE_OBJECT_TAG`]). The name is the one `u32 n · n UTF-16 units` that
+/// ends where [`RAILING_TYPE_NAME_END`] first starts within
+/// [`RAILING_TYPE_NAME_WINDOW`]. What comes before it varies: on Autodesk's
+/// Snowdon Towers 2024 sample most types put it at `+0x1ae`, and the two
+/// that carry a Uniformat code parameter put it at `+0x1cb`. An id whose
+/// occurrences give different names is dropped.
+pub fn find_railing_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, String> {
+    let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for &id in wanted {
+        let mut pattern = [0u8; 12];
+        pattern[0] = 1;
+        pattern[4..].copy_from_slice(&u64::from(id).to_le_bytes());
+        for hit in memchr::memmem::find_iter(buf, &pattern) {
+            let id_at = hit + 4;
+            let tag_at = id_at + TYPE_OBJECT_TAG_OFFSET;
+            if buf.get(tag_at..tag_at + 2) != Some(&TYPE_OBJECT_TAG[..]) {
+                continue;
+            }
+            let Some(name) = railing_type_name_at(buf, id_at) else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(name));
+                }
+                Some(slot) => {
+                    if slot.as_deref() != Some(name.as_str()) {
+                        *slot = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, name)| name.map(|n| (id, n)))
+        .collect()
+}
+
+/// The one name that ends at the first [`RAILING_TYPE_NAME_END`] of the
+/// type object whose ElementId starts at `id_at`.
+fn railing_type_name_at(buf: &[u8], id_at: usize) -> Option<String> {
+    let start = id_at.checked_add(RAILING_TYPE_NAME_WINDOW.start)?;
+    let stop = id_at
+        .checked_add(RAILING_TYPE_NAME_WINDOW.end)?
+        .min(buf.len());
+    let end = start + memchr::memmem::find(buf.get(start..stop)?, &RAILING_TYPE_NAME_END)?;
+    let mut names = (1..=NAME_MAX_UNITS).filter_map(|units| {
+        let at = end.checked_sub(4 + 2 * units)?;
+        if read_u32(buf, at)? as usize != units {
+            return None;
+        }
+        let code_units: Vec<u16> = buf
+            .get(at + 4..end)?
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        let name = String::from_utf16(&code_units).ok()?;
+        (!name.trim().is_empty()
+            && !name
+                .chars()
+                .any(|c| c.is_control() || matches!(c, '\u{fffd}' | '\u{fffe}' | '\u{ffff}')))
+        .then_some(name)
+    });
+    let name = names.next()?;
+    names.next().is_none().then_some(name)
+}
+
 /// The first `ff ff ff ff · u16 tag · u32 n · n UTF-16 units` string that
 /// starts in `buf[start..start + ELEMENT_DATA_NAME_WINDOW]`.
 fn first_framed_name(buf: &[u8], start: usize) -> Option<String> {
