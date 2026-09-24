@@ -1394,6 +1394,13 @@ pub const WALL_TYPE_THICKNESS_FIELD: &str = "m_wall_type_thickness";
 /// wall's body reaches at a butt join, feet, negative where it stops short
 /// (RE-70). Absent at an end the join lists do not decide.
 pub const WALL_JOIN_REACH_FIELDS: [&str; 2] = ["m_wall_join_start_reach", "m_wall_join_end_reach"];
+/// Fields holding the one wall a wall butt-joins at its start and at its
+/// end, where the join lists decide which of the two runs through (RE-70).
+pub const WALL_JOIN_PARTNER_FIELDS: [&str; 2] = ["m_wall_join_start_wall", "m_wall_join_end_wall"];
+/// Fields holding whether a wall runs through that join (true) or stops at
+/// it (false) (RE-70).
+pub const WALL_JOIN_THROUGH_FIELDS: [&str; 2] =
+    ["m_wall_join_start_through", "m_wall_join_end_through"];
 
 /// A wall's centreline and its type's thickness (RE-54).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1765,13 +1772,14 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         }
         wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
     }
-    attach_wall_join_reaches(rf, revit_version, walls);
+    attach_wall_butt_joins(rf, revit_version, walls);
 }
 
-/// Give each wall with a centreline how far past each end its body reaches
-/// at a butt join, where its and its partner's join lists decide it
-/// ([`crate::element_record_wall_joins::butt_join_reaches`], RE-70).
-fn attach_wall_join_reaches(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
+/// Give each wall with a centreline the wall it butt-joins at each end and
+/// whether it runs through there, where its and its partner's join lists
+/// decide it, and, between single-layer walls, how far past the end its
+/// body reaches ([`crate::element_record_wall_joins::butt_joins`], RE-70).
+fn attach_wall_butt_joins(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
     use crate::element_record_wall_joins as joins;
     let float = |wall: &DecodedElement, wanted: &str| {
         wall.fields.iter().find_map(|(name, value)| match value {
@@ -1812,17 +1820,31 @@ fn attach_wall_join_reaches(rf: &mut RevitFile, revit_version: u32, walls: &mut 
     ) else {
         return;
     };
-    let reaches = joins::butt_join_reaches(&lines, &partners);
+    let found = joins::butt_joins(&lines, &partners);
     for wall in walls.iter_mut() {
-        let Some(reach) = wall.id.and_then(|id| reaches.get(&id)) else {
+        let Some(ends) = wall.id.and_then(|id| found.get(&id)) else {
             continue;
         };
-        for (name, value) in WALL_JOIN_REACH_FIELDS.iter().zip(reach) {
-            if let Some(value) = value {
+        for (slot, join) in ends.iter().enumerate() {
+            let Some(join) = join else {
+                continue;
+            };
+            wall.fields.push((
+                WALL_JOIN_PARTNER_FIELDS[slot].into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: join.partner,
+                },
+            ));
+            wall.fields.push((
+                WALL_JOIN_THROUGH_FIELDS[slot].into(),
+                InstanceField::Bool(join.runs_through),
+            ));
+            if let Some(reach) = join.reach_feet {
                 wall.fields.push((
-                    (*name).into(),
+                    WALL_JOIN_REACH_FIELDS[slot].into(),
                     InstanceField::Float {
-                        value: *value,
+                        value: reach,
                         size: 8,
                     },
                 ));

@@ -168,6 +168,19 @@ pub struct RelatedElement {
     pub ifc_type: String,
 }
 
+/// One end of a wall that butt-joins another wall, as its join lists read
+/// (RE-70).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PanelJoin {
+    /// `"Start"` or `"End"` of the wall's location line.
+    pub end: String,
+    /// True where this wall runs on to the other's far face, false where
+    /// it stops at its near face.
+    pub runs_through: bool,
+    /// The other wall.
+    pub wall: RelatedElement,
+}
+
 /// A labelled, pre-formatted panel row. `label` is the display
 /// term the viewer prints in the key gutter; `value` is already
 /// unit-carrying text (`"10.500 ft"`, `"90.0°"`) so the frontend
@@ -342,6 +355,10 @@ pub struct ElementInfoPanel {
     /// windows a wall carries. Empty when it hosts nothing.
     #[serde(default)]
     pub hosted: Vec<RelatedElement>,
+    /// The walls this wall butt-joins at its start and end, where its join
+    /// lists decide which one runs through (RE-70). Empty otherwise.
+    #[serde(default)]
+    pub joins: Vec<PanelJoin>,
     /// Field names absent on this element, drawn from the fixed
     /// set `"storey"`, `"material"`, `"properties"`,
     /// `"placement"`, `"extents"`. The viewer reports one
@@ -491,6 +508,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         })
         .filter_map(|(i, _)| related_element(model, i))
         .collect();
+    let joins = wall_joins(model, property_set.as_ref());
     Some(ElementInfoPanel {
         name: name.clone(),
         ifc_type: ifc_type.clone(),
@@ -511,8 +529,49 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         further_property_groups,
         host,
         hosted,
+        joins,
         missing,
     })
+}
+
+/// The walls a wall's `JoinStartWallElementId` / `JoinEndWallElementId`
+/// properties name, with whether it runs through there (RE-70), resolved
+/// to the elements whose `Tag` is that ElementId.
+fn wall_joins(
+    model: &IfcModel,
+    property_set: Option<&crate::ifc::entities::PropertySet>,
+) -> Vec<PanelJoin> {
+    use super::entities::PropertyValue;
+    let Some(set) = property_set else {
+        return Vec::new();
+    };
+    let value = |name: String| {
+        set.properties
+            .iter()
+            .find(|p| p.name == name)
+            .map(|p| &p.value)
+    };
+    ["Start", "End"]
+        .into_iter()
+        .filter_map(|end| {
+            let PropertyValue::Integer(id) = value(format!("Join{end}WallElementId"))? else {
+                return None;
+            };
+            let PropertyValue::Boolean(runs_through) = value(format!("Join{end}RunsThrough"))?
+            else {
+                return None;
+            };
+            let tag = id.to_string();
+            let index = model.entities.iter().position(|entity| {
+                matches!(entity, IfcEntity::BuildingElement { type_guid: Some(t), .. } if *t == tag)
+            })?;
+            Some(PanelJoin {
+                end: end.into(),
+                runs_through: *runs_through,
+                wall: related_element(model, index)?,
+            })
+        })
+        .collect()
 }
 
 /// How many `BuildingElement`s use `material_index`, directly or as one of

@@ -313,7 +313,7 @@ pub fn join_trims(records: &[PartitionElementRecord]) -> BTreeMap<u32, WallJoinT
 pub const PERPENDICULAR_EPS: f64 = 1e-6;
 
 /// A wall's centreline, its type's thickness and layer count and its
-/// elevation range, which is what [`butt_join_reaches`] reads.
+/// elevation range, which is what [`butt_joins`] reads.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WallLine {
     /// The wall's own ElementId.
@@ -332,29 +332,41 @@ pub struct WallLine {
     pub top_feet: f64,
 }
 
-/// How far past each end of its centreline a wall's body reaches where it
-/// butt-joins one other wall, keyed by ElementId, `[start, end]` (RE-70).
+/// What a wall's join lists say about one end of it (RE-70).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ButtJoin {
+    /// The one other wall whose centreline ends there too.
+    pub partner: u32,
+    /// True where this wall runs on to the partner's far face, false where
+    /// it stops at its near face.
+    pub runs_through: bool,
+    /// How far past the line's end the body reaches, negative where it
+    /// stops short: half the partner's thickness. `None` unless both walls
+    /// have a single layer.
+    pub reach_feet: Option<f64>,
+}
+
+/// The butt join at each end of each wall, keyed by ElementId,
+/// `[start, end]` (RE-70).
 ///
 /// An end is read when exactly one other wall overlapping it in elevation
 /// ends its centreline there too, perpendicular to it. Revit runs one of
 /// the two on to the other's far face and stops the other at its near
 /// face, and the wall that runs through is the one that names the other
 /// in its join lists (`partners`,
-/// [`crate::partition_compound_structure::scan_wall_join_partners`]).
-/// So an end reaches half the other wall's thickness past the line where
-/// this wall names it and is not named back, and stops that far short of
-/// the line where it is named and names nothing back.
+/// [`crate::partition_compound_structure::scan_wall_join_partners`]) and
+/// is not named back. A pair that name each other or neither, a joint of
+/// three walls and an angled joint stay `None`.
 ///
-/// Both walls must have a single layer. Revit cleans a join layer by
-/// layer, and where either wall has several, its finishes wrap the corner
-/// and the body's end is no longer one face: on Snowdon Towers 631 of 667
-/// such ends, against none of the 158 where both walls have one layer.
-/// A pair that name each other or neither, a joint of three walls and an
-/// angled joint stay `None` too.
-pub fn butt_join_reaches(
+/// Where either wall has several layers the end is still read, but it has
+/// no `reach_feet`. Revit cleans such a join layer by layer and its
+/// finishes wrap the corner, so the body's end is no longer one face: on
+/// Snowdon Towers 631 of 667 such ends, against none of the 158 where both
+/// walls have one layer.
+pub fn butt_joins(
     walls: &[WallLine],
     partners: &BTreeMap<u32, BTreeSet<u32>>,
-) -> BTreeMap<u32, [Option<f64>; 2]> {
+) -> BTreeMap<u32, [Option<ButtJoin>; 2]> {
     let length = |wall: &WallLine| (wall.end[0] - wall.start[0]).hypot(wall.end[1] - wall.start[1]);
     let lines: Vec<&WallLine> = walls
         .iter()
@@ -378,7 +390,7 @@ pub fn butt_join_reaches(
             (wall.end[0] - wall.start[0]) / run,
             (wall.end[1] - wall.start[1]) / run,
         ];
-        let mut reaches = [None, None];
+        let mut joins = [None, None];
         for (slot, point) in [wall.start, wall.end].into_iter().enumerate() {
             let from = ends.partition_point(|(p, _)| p[0] < point[0] - JOIN_EPS_FEET);
             let mates: BTreeSet<usize> = ends[from..]
@@ -396,9 +408,6 @@ pub fn butt_join_reaches(
                 continue;
             };
             let other = lines[mate];
-            if wall.layer_count != 1 || other.layer_count != 1 {
-                continue;
-            }
             let other_run = length(other);
             let cosine = (along[0] * (other.end[0] - other.start[0])
                 + along[1] * (other.end[1] - other.start[1]))
@@ -406,15 +415,21 @@ pub fn butt_join_reaches(
             if cosine.abs() > PERPENDICULAR_EPS {
                 continue;
             }
-            let half = other.thickness_feet * 0.5;
-            reaches[slot] = match (names(wall, other), names(other, wall)) {
-                (true, false) => Some(half),
-                (false, true) => Some(-half),
-                _ => None,
+            let runs_through = match (names(wall, other), names(other, wall)) {
+                (true, false) => true,
+                (false, true) => false,
+                _ => continue,
             };
+            let half = other.thickness_feet * 0.5;
+            let single = wall.layer_count == 1 && other.layer_count == 1;
+            joins[slot] = Some(ButtJoin {
+                partner: other.element_id,
+                runs_through,
+                reach_feet: single.then_some(if runs_through { half } else { -half }),
+            });
         }
-        if reaches.iter().any(Option::is_some) {
-            out.insert(wall.element_id, reaches);
+        if joins.iter().any(Option::is_some) {
+            out.insert(wall.element_id, joins);
         }
     }
     out

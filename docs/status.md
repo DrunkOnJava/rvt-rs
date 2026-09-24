@@ -468,7 +468,9 @@ Revit's export draws cleanly on Snowdon Towers (212 of 212 decided ends),
 nor the record box at 1,110 axis-parallel ends on five 2024 and 2025
 files. Between single-layer walls the body now ends there, which gives 8
 more Snowdon walls both of Revit's ends and makes none worse. Layered
-joins, which Revit cleans layer by layer, keep their ends
+joins, which Revit cleans layer by layer, keep their ends, but every
+decided end, layered or not, names its partner wall and whether it runs
+through, in the IFC and in the viewer's element panel
 (`reports/element-framing/RE-70-wall-join-lists.md`).
 
 The public viewer's demo gallery leads with the two files this section

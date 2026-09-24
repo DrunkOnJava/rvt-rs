@@ -1349,15 +1349,40 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::Text(source.into()),
         });
     }
-    // RE-70: an end a butt join decided reports how far past the line it
-    // reaches, negative where it stops short.
-    for (name, reach) in ["JoinReachStartFeet", "JoinReachEndFeet"]
-        .into_iter()
-        .zip(wall_centreline.map_or([None, None], |body| body.join_reach_feet))
-    {
-        if let Some(reach) = reach {
+    // RE-70: an end its join lists decide names the wall it butt-joins and
+    // whether it runs through, and, where the body was drawn to it, how
+    // far past the line it reaches (negative where it stops short).
+    let reaches = wall_centreline.map_or([None, None], |body| body.join_reach_feet);
+    for (slot, end) in ["Start", "End"].into_iter().enumerate() {
+        let partner = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. }
+                if name == crate::partition_schema_mvp::WALL_JOIN_PARTNER_FIELDS[slot] =>
+            {
+                Some(*id)
+            }
+            _ => None,
+        });
+        let through = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Bool(through)
+                if name == crate::partition_schema_mvp::WALL_JOIN_THROUGH_FIELDS[slot] =>
+            {
+                Some(*through)
+            }
+            _ => None,
+        });
+        if let (Some(partner), Some(through)) = (partner, through) {
             properties.push(Property {
-                name: name.into(),
+                name: format!("Join{end}WallElementId"),
+                value: PropertyValue::Integer(i64::from(partner)),
+            });
+            properties.push(Property {
+                name: format!("Join{end}RunsThrough"),
+                value: PropertyValue::Boolean(through),
+            });
+        }
+        if let Some(reach) = reaches[slot] {
+            properties.push(Property {
+                name: format!("JoinReach{end}Feet"),
                 value: PropertyValue::LengthFeet(reach),
             });
         }

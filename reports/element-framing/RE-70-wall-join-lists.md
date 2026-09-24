@@ -145,3 +145,19 @@ Measured per wall end on Snowdon Towers after RE-70:
 - **36 clean multi-layer ends**: nothing found yet separates them from the 631 irregular ones.
 
 The witness observations do not change.
+
+## 7. Addendum: which wall, in the IFC and the viewer
+
+Every end the lists decide now names its partner and says which wall runs through, layered walls included: `JoinStartWallElementId` / `JoinEndWallElementId` and `JoinStartRunsThrough` / `JoinEndRunsThrough` in `RvtElementRecordGeometry`. Only the body's reach stays limited to single-layer joins.
+
+| file | walls | walls with a join | ends | runs through |
+|---|---:|---:|---:|---:|
+| Snowdon Towers Architectural | 1,078 | 600 | 825 | 406 |
+| 2024_Core_Interior | 360 | 185 | 236 | 118 |
+| MIT house 2024 | 45 | 36 | 46 | 23 |
+| MIT house 2025 | 45 | 36 | 46 | 23 |
+| RE1-Architecture | 7 | 2 | 2 | 1 |
+
+Snowdon's 825 are exactly its perpendicular L-joint ends the rule decides in §2. The GLBs are byte-identical to RE-70's.
+
+The element panel (`scene_graph::element_info_panel`, `joins`) resolves each partner to its element. The viewer lists it under the host rows, "Start: runs through" or "End: stops at", as a link that selects the other wall. A Playwright test on the Core Interior demo selects wall 20796 by ElementId, follows its "Start: runs through" link to wall 20797, and checks that 20797 reads "End: stops at" back to 20796.
