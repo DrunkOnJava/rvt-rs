@@ -51,6 +51,24 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Releases these layouts are measured on.
 pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
+/// Releases a wall's location line (RE-49's bounded line) is read on. On
+/// 2025 it is measured by the same house saved in 2024 and 2025, whose 50
+/// walls read the same line, orientation and layers from both (RE-55).
+pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// Each wall's location line, by ElementId, on a release in
+/// [`WALL_LINE_SUPPORTED_REVIT_VERSIONS`]; empty elsewhere.
+pub fn scan_wall_lines(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, crate::partition_beam_axes::BoundedLine>> {
+    if !WALL_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    crate::partition_beam_axes::scan_first_bounded_lines(rf, revit_version, walls)
+}
+
 /// Bytes per layer record.
 pub const LAYER_RECORD_LEN: usize = 37;
 

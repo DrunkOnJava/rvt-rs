@@ -353,6 +353,10 @@ line, which is its centreline, at its type's thickness, where the record
 box does not already give it. Core Interior's walls are unchanged.
 Snowdon's angled walls, which were their whole axis-aligned box, have
 Revit's faces on 75 of 102 (`reports/element-framing/RE-54-wall-bodies.md`).
+**RE-55 (2026-09-23)** reads the same wall line, orientation and layers on
+Revit 2025: a house saved in 2024 and 2025 reads the same on all 50 of its
+walls, and 2025 walls now get centreline bodies and layers
+(`reports/element-framing/RE-55-wall-lines-2025.md`).
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

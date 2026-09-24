@@ -740,7 +740,7 @@ pub fn element_layers_from_fields(
 /// gets none of these. Membranes, which have no width, are left out.
 fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
     use crate::partition_compound_structure as pcs;
-    if !crate::partition_beam_axes::supports_revit_version(revit_version)
+    if !pcs::WALL_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
         || !pcs::COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
     {
         return;
@@ -777,7 +777,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     let (Ok(layers), Ok(orientations), Ok(lines), Ok(appearances)) = (
         pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
         pcs::scan_wall_orientations(rf, revit_version, &wall_ids),
-        crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &wall_ids),
+        pcs::scan_wall_lines(rf, revit_version, &wall_ids),
         crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
     ) else {
         return;

@@ -148,9 +148,22 @@ pub fn scan_bounded_lines(
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedLine>> {
-    let header = match crate::partition_names::element_data_header(revit_version) {
-        Some(header) if supports_revit_version(revit_version) => header,
-        _ => return Ok(BTreeMap::new()),
+    if !supports_revit_version(revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    scan_first_bounded_lines(rf, revit_version, ids)
+}
+
+/// [`scan_bounded_lines`] without its release gate, for callers that
+/// measured the layout on other releases (a wall's location line on 2025,
+/// RE-55). Empty where the element-data header is not known.
+pub fn scan_first_bounded_lines(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, BoundedLine>> {
+    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+        return Ok(BTreeMap::new());
     };
     let mut found: BTreeMap<u32, Option<BoundedLine>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {

@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2025 walls get their centreline bodies and layers (RE-55).** A
+  2025 wall stores its location line, orientation and type layers as 2024
+  does: a house saved in 2024 and 2025 reads the same line, flip and layers
+  on all 50 of its walls, and its 45 exported walls draw identically from
+  both. Against Revit's own 2025 exports, RE1 Architecture's and Projeto1's
+  walls stay exact, and 2 of teste_export_2025's 3 angled walls, drawn as
+  boxes up to 38 ft off before, now have Revit's faces and ends. Beams and
+  sketch lines keep their 2024-only reading.
 - **Wall bodies from their centreline (RE-54).** The location line a
   wall's data stores is its centreline, whatever its location-line
   setting: Revit's own body lies half the type's thickness either side of
