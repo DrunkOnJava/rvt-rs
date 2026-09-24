@@ -200,20 +200,26 @@ pub fn recover_partition_schema_mvp(
 
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
-    // --- Base constraints of elements naming two Levels (RE-59) ---
-    resolve_base_constraint_levels(
-        rf,
-        revit_version,
-        &mut [
-            &mut out.walls,
-            &mut out.columns,
-            &mut out.doors,
-            &mut out.windows,
-            &mut out.slabs,
-            &mut out.rooms,
-            &mut out.products,
-        ],
-    );
+    // --- Base constraints of elements naming two Levels (RE-59), then
+    // railings by their host and elements by the Level objects they name
+    // (RE-60) ---
+    let level_elevations: std::collections::BTreeMap<u32, f64> =
+        crate::partition_level_records::recover_partition_levels(rf, revit_version)
+            .unwrap_or_default()
+            .iter()
+            .map(|level| (level.element_id, level.elevation_feet))
+            .collect();
+    let mut record_backed = [
+        &mut out.walls,
+        &mut out.columns,
+        &mut out.doors,
+        &mut out.windows,
+        &mut out.slabs,
+        &mut out.rooms,
+        &mut out.products,
+    ];
+    resolve_base_constraint_levels(&level_elevations, &mut record_backed);
+    resolve_hosted_levels(rf, &level_elevations, &mut record_backed);
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
@@ -2494,17 +2500,10 @@ fn apply_wall_join_trim(
 /// as its host Level, from the Levels' own elevations (RE-51). Nothing
 /// changes where the Levels' elevations are not recovered.
 fn resolve_base_constraint_levels(
-    rf: &mut RevitFile,
-    revit_version: u32,
+    elevations: &std::collections::BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],
 ) {
     use crate::element_record_level_refs as refs;
-    let elevations: std::collections::BTreeMap<u32, f64> =
-        crate::partition_level_records::recover_partition_levels(rf, revit_version)
-            .unwrap_or_default()
-            .iter()
-            .map(|level| (level.element_id, level.elevation_feet))
-            .collect();
     if elevations.is_empty() {
         return;
     }
@@ -2526,23 +2525,128 @@ fn resolve_base_constraint_levels(
                 _ => {}
             }
         }
-        let Some(level) = base.and_then(|z| refs::base_constraint_level(&named, &elevations, z))
+        let Some(level) = base.and_then(|z| refs::base_constraint_level(&named, elevations, z))
         else {
             continue;
         };
-        for (name, value) in element.fields.iter_mut() {
-            if name == "m_level_bound" {
-                *value = InstanceField::Bool(true);
-            }
+        bind_record_level(element, level, refs::BASE_CONSTRAINT_SOURCE);
+    }
+}
+
+/// Give a record-backed element `level` as its host Level, recording how.
+fn bind_record_level(element: &mut DecodedElement, level: u32, source: &str) {
+    use crate::element_record_level_refs as refs;
+    for (name, value) in element.fields.iter_mut() {
+        if name == "m_level_bound" {
+            *value = InstanceField::Bool(true);
         }
-        element.fields.push((
-            refs::LEVEL_REFERENCE_FIELD.into(),
-            InstanceField::ElementId { tag: 0, id: level },
-        ));
-        element.fields.push((
-            refs::LEVEL_BIND_SOURCE_FIELD.into(),
-            InstanceField::String(refs::BASE_CONSTRAINT_SOURCE.into()),
-        ));
+    }
+    element.fields.push((
+        refs::LEVEL_REFERENCE_FIELD.into(),
+        InstanceField::ElementId { tag: 0, id: level },
+    ));
+    element.fields.push((
+        refs::LEVEL_BIND_SOURCE_FIELD.into(),
+        InstanceField::String(source.into()),
+    ));
+}
+
+fn element_ids_field(element: &DecodedElement, field: &str) -> Vec<u32> {
+    element
+        .fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Vector(ids) if name == field => Some(
+                ids.iter()
+                    .filter_map(|id| match id {
+                        InstanceField::ElementId { id, .. } => Some(*id),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+fn record_level(element: &DecodedElement) -> Option<u32> {
+    element.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::ElementId { id, .. }
+            if name == crate::element_record_level_refs::LEVEL_REFERENCE_FIELD =>
+        {
+            Some(*id)
+        }
+        _ => None,
+    })
+}
+
+/// RE-60: a Level for record-backed elements whose record names none.
+///
+/// - A railing takes the Level of the one stair or ramp its record names,
+///   where that has one.
+/// - Any other element takes the Level the objects its record names carry
+///   ([`crate::partition_level_records::scan_level_objects`]), only where
+///   they carry one and it is also the highest Level at or below the
+///   element's base ([`crate::element_record_level_refs::level_at_or_below`]).
+fn resolve_hosted_levels(
+    rf: &mut RevitFile,
+    elevations: &std::collections::BTreeMap<u32, f64>,
+    elements: &mut [&mut Vec<DecodedElement>],
+) {
+    use crate::element_record_level_refs as refs;
+    if elevations.is_empty() {
+        return;
+    }
+    let pending = elements.iter().flat_map(|list| list.iter()).any(|element| {
+        record_level(element).is_none()
+            && !element_ids_field(element, refs::REFERENCES_FIELD).is_empty()
+    });
+    if !pending {
+        return;
+    }
+    let hosts: std::collections::BTreeMap<u32, Option<u32>> = elements
+        .iter()
+        .flat_map(|list| list.iter())
+        .filter(|element| matches!(element.class.as_str(), "Stair" | "Ramp"))
+        .filter_map(|element| Some((element.id?, record_level(element))))
+        .collect();
+    let declared = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let level_ids: BTreeSet<u32> = elevations.keys().copied().collect();
+    let level_objects =
+        crate::partition_level_records::scan_level_objects(rf, &declared, &level_ids);
+    for element in elements.iter_mut().flat_map(|list| list.iter_mut()) {
+        if record_level(element).is_some() {
+            continue;
+        }
+        let references = element_ids_field(element, refs::REFERENCES_FIELD);
+        if references.is_empty() {
+            continue;
+        }
+        if element.class == "Railing" {
+            let named: Vec<&Option<u32>> =
+                references.iter().filter_map(|id| hosts.get(id)).collect();
+            if let [Some(level)] = named.as_slice() {
+                bind_record_level(element, *level, refs::HOST_SOURCE);
+            }
+            continue;
+        }
+        let carried: BTreeSet<u32> = references
+            .iter()
+            .filter_map(|id| level_objects.get(id).copied())
+            .collect();
+        let base = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == "m_locationZ" => Some(*value),
+            _ => None,
+        });
+        let (Some(&level), 1, Some(base)) = (carried.first(), carried.len(), base) else {
+            continue;
+        };
+        if refs::level_at_or_below(elevations, base) == Some(level) {
+            bind_record_level(element, level, refs::LEVEL_OBJECT_SOURCE);
+        }
     }
 }
 
@@ -2620,6 +2724,29 @@ fn element_record_decoded(
         // RE-59: base and top constraint, resolved against the Levels'
         // elevations by `resolve_base_constraint_levels`.
         let named = crate::element_record_level_refs::named_levels(&record.references, level_ids);
+        if named.is_empty() {
+            // RE-60: what the record names instead, resolved by
+            // `resolve_hosted_levels`.
+            let mut references: Vec<u32> = Vec::new();
+            for slot in &record.references {
+                if let Ok(id) = u32::try_from(*slot) {
+                    if id != record.element_id && !references.contains(&id) {
+                        references.push(id);
+                    }
+                }
+            }
+            if !references.is_empty() {
+                fields.push((
+                    crate::element_record_level_refs::REFERENCES_FIELD.into(),
+                    InstanceField::Vector(
+                        references
+                            .iter()
+                            .map(|&id| InstanceField::ElementId { tag: 0, id })
+                            .collect(),
+                    ),
+                ));
+            }
+        }
         if named.len() == 2 {
             fields.push((
                 crate::element_record_level_refs::CONSTRAINT_LEVELS_FIELD.into(),
