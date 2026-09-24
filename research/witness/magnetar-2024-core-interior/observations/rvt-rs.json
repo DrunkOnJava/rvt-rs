@@ -39,11 +39,11 @@
       "IFCPRODUCTDEFINITIONSHAPE": 1108,
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 970,
-      "IFCPROPERTYSINGLEVALUE": 11719,
+      "IFCPROPERTYSINGLEVALUE": 12684,
       "IFCRECTANGLEPROFILEDEF": 1028,
       "IFCRELAGGREGATES": 3,
       "IFCRELASSOCIATESMATERIAL": 88,
-      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 14,
+      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 13,
       "IFCRELDEFINESBYPROPERTIES": 970,
       "IFCRELFILLSELEMENT": 138,
       "IFCRELVOIDSELEMENT": 138,
@@ -692,7 +692,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "35a83b783adf9649592b08011376e444f6d3854238fa71e10281b1d720c3fd89",
+  "observation_hash_sha256": "3371f4ae7eac5b317241b0b04c89d5e0fbaee900a1a35b4c57511225c418cada",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
@@ -706,9 +706,8 @@
     "revit_element_parameters_to_ifc_property_sets"
   ],
   "warnings": [
-    "Unsupported or incomplete geometry was reported: unsupported_geometry_missing_level=1.",
     "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
-    "15 building storey name(s) came from partition Level records; 488 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27), the rest through a measured elevation match.",
+    "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match.",
     "Formats/Latest multipage integrity uncertain (checksum-page strip disabled; RVT_FORMATS_MULTIPAGE_UNVERIFIED)."
   ],
   "witness_id": "rvt-rs",

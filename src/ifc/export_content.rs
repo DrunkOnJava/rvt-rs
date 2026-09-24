@@ -974,6 +974,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let mut type_symbol_id = None;
     let mut type_profile = (None, None);
     let mut level_id = None;
+    let mut level_bind_source: Option<String> = None;
     let mut room_name = None;
     let mut room_number = None;
     let mut family_name = None;
@@ -1034,6 +1035,10 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 crate::element_record_level_refs::LEVEL_REFERENCE_FIELD,
                 InstanceField::ElementId { id, .. },
             ) => level_id = Some(*id),
+            (
+                crate::element_record_level_refs::LEVEL_BIND_SOURCE_FIELD,
+                InstanceField::String(source),
+            ) => level_bind_source = Some(source.clone()),
             (
                 crate::partition_schema_mvp::TYPE_PROFILE_WIDTH_FIELD,
                 InstanceField::Float { value, .. },
@@ -1228,9 +1233,9 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         });
         properties.push(Property {
             name: "LevelBindSource".into(),
-            value: PropertyValue::Text(
-                crate::element_record_level_refs::LEVEL_REFERENCE_SOURCE.into(),
-            ),
+            value: PropertyValue::Text(level_bind_source.unwrap_or_else(|| {
+                crate::element_record_level_refs::LEVEL_REFERENCE_SOURCE.into()
+            })),
         });
     }
     if let Some(profile) = profile.as_ref() {

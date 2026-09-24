@@ -256,9 +256,10 @@ rooms, all 100 record-backed plates (`IFCSLAB` 80 of 80,
 used to sit 0.1667 ft below their level at the structural-slab /
 architectural-topping interface, and the 6 windows whose record base is
 a sill height 4.73 ft above their level, are exactly the elements a
-named Level reaches and an inferred elevation cannot. What stays unbound
-is **one** wall, whose record names no single Level; it is contained in
-the **`IfcBuilding`** — "in this building, storey unknown" — where the
+named Level reaches and an inferred elevation cannot. What stayed unbound
+was **one** wall, whose record names no single Level (RE-59 now binds it
+through its base constraint); such an element is contained in the
+**`IfcBuilding`** — "in this building, storey unknown" — where the
 writer used to drop such elements into whichever storey came first,
 which on this file put 71 elements, some of them at 185 ft, into
 `Basement 2` at −40 ft. The 18 name-only `IFCSPACE` rows that used to
@@ -391,6 +392,16 @@ Core Interior's reference export is a Reference View file with no layer
 set in it. There the layers are scored against the faces Revit's body
 styles with each material, and its walls, single layers by category, get
 none.
+
+**RE-59 (2026-09-23)** contains an element whose record names two Levels,
+its base and top constraint, in the base constraint: the higher of the two
+at or below the record's base, else the lower. That is the storey Revit's
+own export gives it on 650 of 650 such Snowdon records, 482 of 482 on Core
+Interior and 7 of 7 on RE1. Core Interior now binds all 970 building
+elements, each in Revit's storey. On Snowdon, 5,612 elements are in
+Revit's storey (3,975 before) and 294 are on none (1,931 before). The
+tutorial house, where 230 were on none (#365), leaves one railing
+(`reports/element-framing/RE-59-base-constraint-levels.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

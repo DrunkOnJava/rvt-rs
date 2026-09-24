@@ -1552,9 +1552,9 @@ pub(crate) const STOREY_BIND_RECORD_LEVEL_REFERENCE: &str = "record_level_refere
 /// The record's counted reference list at `+0x88` carries the host
 /// Level as a plain ElementId slot;
 /// [`crate::element_record_level_refs::unique_level_reference`] accepts
-/// it only when exactly one recovered Level is named, so a column or
-/// wall that carries both a base and a top constraint resolves to
-/// nothing and keeps whatever the elevation join gives it.
+/// it when exactly one recovered Level is named. A column or wall that
+/// names two, its base and top constraint, takes its base constraint
+/// ([`crate::element_record_level_refs::base_constraint_level`], RE-59).
 ///
 /// Fail closed twice more here:
 ///
@@ -2371,7 +2371,7 @@ pub fn build_export_diagnostics_with_limits(
             ));
         } else if named > 0 {
             warnings.push(format!(
-                "{named} building storey name(s) came from partition Level records; {level_reference_bound} building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27), the rest through a measured elevation match."
+                "{named} building storey name(s) came from partition Level records; {level_reference_bound} building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
             ));
         }
         if elevation_fallback > 0 {

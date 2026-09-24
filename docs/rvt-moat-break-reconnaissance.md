@@ -2026,4 +2026,18 @@ all 15 on RE1. RE1's 2025 export writes the same four sets itself.
 
 Report: `reports/element-framing/RE-58-material-layer-sets.md`.
 
+## Addendum — RE-59 base-constraint storeys (2026-09-23)
+
+A record that names two Levels names its element's base and top
+constraint, in no fixed order. The base constraint is the higher of the
+two at or below the record's base, else the lower. It is the storey
+Revit's export contains the element in on every such record: 650 on
+Snowdon, 482 on Core Interior and 7 on RE1.
+
+Binding by it takes Core Interior to 970 of 970 elements in Revit's
+storey. On Snowdon, the number of elements on no storey falls from 1,931
+to 294, and the 294 left name no Level.
+
+Report: `reports/element-framing/RE-59-base-constraint-levels.md`.
+
 **End of report.**
