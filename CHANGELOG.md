@@ -15,6 +15,12 @@ All notable changes will be documented here. This project follows
   Snowdon Towers sample 10.1 s instead of 17.9 s. In the browser viewer,
   where WebAssembly searches without SIMD, Snowdon Towers opens in 24
   seconds instead of 56. Output is byte-identical.
+- **The partition string scan is about four times faster.** It reads
+  every inflated partition byte by byte for length-prefixed UTF-16 strings
+  (project units, Level names). It now tests 64 offsets at a time for the
+  bytes every such string must have, and checks only the offsets that pass.
+  On Snowdon Towers the scan takes 0.22 s instead of 0.85 s, and it finds
+  the same 644,367 strings.
 
 ### Added
 

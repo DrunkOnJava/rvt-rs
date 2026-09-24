@@ -157,6 +157,11 @@ viewer gains more, since WebAssembly searches without SIMD: Snowdon Towers
 now opens in **24 seconds** instead of 56. The IFC and the diagnostics are
 byte-identical on all 14 local test files.
 
+The scan for length-prefixed strings (project units, Level names) then
+tested every byte of every partition. It now tests 64 offsets at a time for
+the bytes a string must have: 0.22 s instead of 0.85 s over Snowdon's 443 MB
+of partitions, finding the same 644,367 strings.
+
 ## Inspect A File From The Command Line
 
 Use `rvt-inspect` when you want a shareable support report:

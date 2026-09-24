@@ -138,8 +138,16 @@ pub struct StringRecord {
 /// check simultaneously.
 pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
     let mut out = Vec::new();
+    let mut candidates = RecordCandidates::default();
     let mut i = 0usize;
     while i + 8 < decomp.len() {
+        // Every offset the checks below accept has its count's two high
+        // bytes and its first code unit's high byte zero. Offsets without
+        // them are rejected one byte at a time, so jump past them.
+        let Some(next) = candidates.next(decomp, i) else {
+            break;
+        };
+        i = next;
         let tag = u32::from_le_bytes([decomp[i], decomp[i + 1], decomp[i + 2], decomp[i + 3]]);
         let cnt = u32::from_le_bytes([decomp[i + 4], decomp[i + 5], decomp[i + 6], decomp[i + 7]])
             as usize;
@@ -168,6 +176,79 @@ pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
         i += 1;
     }
     out
+}
+
+/// The offsets where a string record could start. The `u32` count at `+4`
+/// is at most 400, so byte `+5` is 0 or 1 and bytes `+6` and `+7` are zero;
+/// the first code unit at `+8` is printable ASCII, so byte `+8` is not zero
+/// and byte `+9` is.
+///
+/// Sixty-four offsets are tested at once, and the block's result is kept
+/// while the scan walks through it: masks of the bytes that are zero, and
+/// that are 0 or 1, from the block's first offset + 5 are built eight bytes
+/// at a time, and an offset qualifies when its five bits agree. The offsets
+/// it skips are exactly those the byte-by-byte test would reject, so the
+/// records found do not change.
+#[derive(Default)]
+struct RecordCandidates {
+    /// First offset of the cached block, when one is cached.
+    start: Option<usize>,
+    /// Bit `k` set when offset `start + k` qualifies.
+    hits: u64,
+}
+
+impl RecordCandidates {
+    /// The first qualifying offset at or after `from`.
+    fn next(&mut self, buf: &[u8], from: usize) -> Option<usize> {
+        const LOW7: u64 = 0x7f7f_7f7f_7f7f_7f7f;
+        // One bit per byte of `word`, set where the byte is zero.
+        let zero_bits = |word: u64| -> u128 {
+            let high = !((word & LOW7).wrapping_add(LOW7) | word | LOW7);
+            u128::from((high >> 7).wrapping_mul(0x0102_0408_1020_4080) >> 56)
+        };
+        let mut at = from;
+        loop {
+            if let Some(start) = self
+                .start
+                .filter(|start| (*start..*start + 64).contains(&at))
+            {
+                let left = self.hits >> (at - start);
+                if left != 0 {
+                    return Some(at + left.trailing_zeros() as usize);
+                }
+                at = start + 64;
+                continue;
+            }
+            // 64 offsets need 68 bytes from `at + 5`, read as 72.
+            if at + 5 + 72 > buf.len() {
+                break;
+            }
+            let (mut zeros, mut small) = (0u128, 0u128);
+            for word in 0..9 {
+                let first = at + 5 + 8 * word;
+                let bytes: [u8; 8] = buf[first..first + 8].try_into().expect("8 bytes");
+                let value = u64::from_le_bytes(bytes);
+                zeros |= zero_bits(value) << (8 * word);
+                small |= zero_bits(value & !0x0101_0101_0101_0101) << (8 * word);
+            }
+            self.start = Some(at);
+            // Bit j is byte at + 5 + j: +5 small, +6 +7 zero, +8 not, +9 zero.
+            self.hits = (small & (zeros >> 1) & (zeros >> 2) & !(zeros >> 3) & (zeros >> 4)) as u64;
+        }
+        // The last few offsets, one at a time.
+        while at + 9 < buf.len() {
+            if buf[at + 5] <= 1
+                && buf[at + 6] == 0
+                && buf[at + 7] == 0
+                && buf[at + 8] != 0
+                && buf[at + 9] == 0
+            {
+                return Some(at);
+            }
+            at += 1;
+        }
+        None
+    }
 }
 
 /// Whether `body` is a non-empty UTF-16LE run of printable ASCII.
