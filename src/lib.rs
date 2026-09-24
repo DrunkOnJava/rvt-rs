@@ -146,6 +146,7 @@ pub mod partition_beam_axes;
 pub mod partition_compound_structure;
 pub mod partition_design_options;
 pub mod partition_element_records;
+pub mod partition_id_objects;
 pub mod partition_ifc_export_overrides;
 pub mod partition_level_records;
 pub mod partition_materials;

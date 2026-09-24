@@ -313,27 +313,21 @@ pub const RAILING_TYPE_NAME_END: [u8; 6] = [0xff, 0xff, 0xff, 0xff, 0x0b, 0x02];
 /// occurrences give different names is dropped.
 pub fn find_railing_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, String> {
     let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
-    for &id in wanted {
-        let mut pattern = [0u8; 12];
-        pattern[0] = 1;
-        pattern[4..].copy_from_slice(&u64::from(id).to_le_bytes());
-        for hit in memchr::memmem::find_iter(buf, &pattern) {
-            let id_at = hit + 4;
-            let tag_at = id_at + TYPE_OBJECT_TAG_OFFSET;
-            if buf.get(tag_at..tag_at + 2) != Some(&TYPE_OBJECT_TAG[..]) {
-                continue;
+    for (id, id_at) in crate::partition_id_objects::find_id_objects(buf, wanted) {
+        let tag_at = id_at + TYPE_OBJECT_TAG_OFFSET;
+        if buf.get(tag_at..tag_at + 2) != Some(&TYPE_OBJECT_TAG[..]) {
+            continue;
+        }
+        let Some(name) = railing_type_name_at(buf, id_at) else {
+            continue;
+        };
+        match found.get_mut(&id) {
+            None => {
+                found.insert(id, Some(name));
             }
-            let Some(name) = railing_type_name_at(buf, id_at) else {
-                continue;
-            };
-            match found.get_mut(&id) {
-                None => {
-                    found.insert(id, Some(name));
-                }
-                Some(slot) => {
-                    if slot.as_deref() != Some(name.as_str()) {
-                        *slot = None;
-                    }
+            Some(slot) => {
+                if slot.as_deref() != Some(name.as_str()) {
+                    *slot = None;
                 }
             }
         }

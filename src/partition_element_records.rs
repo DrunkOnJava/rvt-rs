@@ -1019,6 +1019,82 @@ pub fn find_category_records_assigned(
     out
 }
 
+/// [`find_category_records_assigned`] for several categories in one sweep:
+/// `out[i]` holds the records of `builtin_categories[i]`, exactly as a call
+/// for that category alone returns them.
+///
+/// A call per category searches the whole partition once per category, and
+/// the product sweep asks for dozens. Category ids share their top six
+/// bytes (`e1 ff ff ff ff ff` for every `OST_*` id read so far), so the
+/// categories are grouped by those bytes, each group costs one search, and
+/// each hit's low two bytes pick its category. Every occurrence of a
+/// category's 8 bytes carries its group's 6 at `+2`, and the search steps
+/// one byte past each hit, so no occurrence is missed.
+pub fn find_categories_records_assigned(
+    stream: &str,
+    buf: &[u8],
+    builtin_categories: &[i64],
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8; 8],
+    assigned: &BTreeMap<usize, u32>,
+) -> Vec<Vec<PartitionElementRecord>> {
+    let mut out: Vec<Vec<PartitionElementRecord>> = vec![Vec::new(); builtin_categories.len()];
+    if buf.len() >= RECORD_MIN_LEN {
+        let mut groups: BTreeMap<[u8; 6], Vec<(usize, [u8; 2])>> = BTreeMap::new();
+        for (index, category) in builtin_categories.iter().enumerate() {
+            let bytes = (*category as u64).to_le_bytes();
+            let suffix: [u8; 6] = bytes[2..].try_into().expect("6 bytes");
+            groups
+                .entry(suffix)
+                .or_default()
+                .push((index, [bytes[0], bytes[1]]));
+        }
+        for (suffix, members) in &groups {
+            let finder = memchr::memmem::Finder::new(suffix);
+            let mut cursor = 2usize;
+            while cursor + suffix.len() <= buf.len() {
+                let Some(found) = finder.find(&buf[cursor..]) else {
+                    break;
+                };
+                let at = cursor + found - 2;
+                cursor += found + 1;
+                let low = [buf[at], buf[at + 1]];
+                for (index, _) in members.iter().filter(|(_, bytes)| *bytes == low) {
+                    if at >= CATEGORY_OFFSET {
+                        if let Some(record) = decode_at_with_marker(
+                            stream,
+                            buf,
+                            at - CATEGORY_OFFSET,
+                            declared_ids,
+                            marker,
+                        ) {
+                            out[*index].push(record);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (&offset, &element_id) in assigned {
+        let Some(category) = read_u64(buf, offset + CATEGORY_OFFSET).map(|v| v as i64) else {
+            continue;
+        };
+        for (index, wanted) in builtin_categories.iter().enumerate() {
+            if *wanted != category {
+                continue;
+            }
+            if let Some(mut record) = decode_frame_as(stream, buf, offset, element_id, marker) {
+                record.id_from_enclosing_record = true;
+                out[index].push(record);
+            }
+        }
+    }
+    for records in &mut out {
+        records.sort_by_key(|record| record.offset);
+    }
+    out
+}
+
 /// Find every element record in `buf` carrying `builtin_category`.
 ///
 /// The scan anchors on the 8-byte little-endian encoding of the
@@ -1067,10 +1143,11 @@ pub fn find_category_records_with_marker(
 
 /// First occurrence of `needle` in `haystack`.
 ///
-/// The category sweep runs this over every inflated `Partitions/*` byte
-/// once per category, so on a project file it is ~1 GiB of searching per
-/// export. `memchr::memmem` is the vectorised form of exactly the
-/// first-byte-then-compare loop this used to spell out by hand.
+/// A single-category scan runs this over every inflated `Partitions/*`
+/// byte; the product sweep asks for dozens of categories at once through
+/// [`find_categories_records_assigned`] instead. `memchr::memmem` is the
+/// vectorised form of exactly the first-byte-then-compare loop this used
+/// to spell out by hand.
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
@@ -1322,15 +1399,18 @@ pub fn scan_category_records_multi(
             continue;
         };
         let assigned = assigned_all.get(&stream).unwrap_or(&none);
-        for (index, category) in builtin_categories.iter().enumerate() {
-            per_category[index].extend(find_category_records_assigned(
-                &stream,
-                inflated.bytes(),
-                *category,
-                declared_ids,
-                &marker,
-                assigned,
-            ));
+        for (index, records) in find_categories_records_assigned(
+            &stream,
+            inflated.bytes(),
+            builtin_categories,
+            declared_ids,
+            &marker,
+            assigned,
+        )
+        .into_iter()
+        .enumerate()
+        {
+            per_category[index].extend(records);
         }
     }
     Ok(per_category.into_iter().flatten().collect())
