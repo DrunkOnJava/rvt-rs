@@ -8,6 +8,25 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Elements naming two Levels are contained in their base constraint
+  (RE-59, #365).** A wall, column, stair or curtain wall whose element
+  record names two Levels, its base and top constraint, now goes in the
+  storey of its base: the higher of the two at or below its base, else
+  the lower. That is Revit's own storey on every such record measured:
+  650 of 650 on Snowdon Towers, 482 of 482 on Core Interior and 7 of 7 on
+  RE1.
+
+  | file | in Revit's storey, before → after | on no storey, before → after |
+  |---|---:|---:|
+  | Core Interior | 853 → 854 | 1 → 0 |
+  | Snowdon Towers | 3,975 → 5,612 | 1,931 → 294 |
+  | RE1 | 27 → 34 | 7 → 0 |
+  | the Autodesk tutorial house | no oracle | 230 → 1 |
+
+  - On Core Interior, all 970 building elements now bind to a storey,
+    each Revit's.
+  - `tools/re/storeys_vs_ifc.py` compares every element's storey with
+    Revit's.
 - **Material names, and layer sets in the IFC export (RE-58).** A
   material's name is now read from its own data, by ElementId:
   - 219 of Snowdon Towers' 220 materials and 78 of Core Interior's 86;

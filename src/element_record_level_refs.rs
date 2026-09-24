@@ -17,8 +17,14 @@
 //! elevation join gives it (which for those columns is already exact).
 //!
 //! See `reports/element-framing/RE-27-level-reference-storey-bind.md`.
+//!
+//! A record that names exactly two Levels names its base and top
+//! constraint (RE-59). The list does not order them. Revit's own exports
+//! always contain the element in the higher of the two that lies at or
+//! below the record's base, or in the lower one when neither does: the
+//! element's base constraint ([`base_constraint_level`]).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Field carrying the recovered host `Level` ElementId on a
 /// record-backed element.
@@ -29,6 +35,62 @@ pub const LEVEL_REFERENCE_SOURCE: &str = "partition_element_record_reference_lis
 
 /// Property the emitted element carries [`LEVEL_REFERENCE_FIELD`] on.
 pub const LEVEL_ELEMENT_ID_PROPERTY: &str = "LevelElementId";
+
+/// Field carrying the two Levels a record names, in list order, when it
+/// names exactly two (RE-59).
+pub const CONSTRAINT_LEVELS_FIELD: &str = "m_constraintLevelIds";
+
+/// Field recording how [`LEVEL_REFERENCE_FIELD`] was chosen when it is not
+/// the single Level a record names.
+pub const LEVEL_BIND_SOURCE_FIELD: &str = "m_levelBindSource";
+
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a Level chosen by
+/// [`base_constraint_level`].
+pub const BASE_CONSTRAINT_SOURCE: &str = "partition_element_record_base_constraint";
+
+/// The distinct recovered `Level` ElementIds a record's counted reference
+/// list names, in list order.
+pub fn named_levels(references: &[u64], level_ids: &BTreeSet<u32>) -> Vec<u32> {
+    let mut named = Vec::new();
+    for slot in references {
+        if let Ok(id) = u32::try_from(*slot) {
+            if level_ids.contains(&id) && !named.contains(&id) {
+                named.push(id);
+            }
+        }
+    }
+    named
+}
+
+/// The base constraint of an element whose record names exactly two
+/// Levels (RE-59): the higher of the two whose elevation is at or below the
+/// record's base `base_feet` (within 1e-3 ft), else the lower of the two.
+/// `None` unless exactly two Levels are named, both have an elevation and
+/// the elevations differ.
+///
+/// Measured against the storey Revit's own IFC export contains the element
+/// in, over every record naming two Levels: Snowdon Towers 650 of 650,
+/// 2024_Core_Interior 482 of 482, RE1 Architecture 7 of 7.
+pub fn base_constraint_level(
+    named: &[u32],
+    elevations: &BTreeMap<u32, f64>,
+    base_feet: f64,
+) -> Option<u32> {
+    let [a, b] = named else {
+        return None;
+    };
+    let (ea, eb) = (*elevations.get(a)?, *elevations.get(b)?);
+    // Two Levels at one elevation: nothing tells base from top.
+    if ea == eb || !base_feet.is_finite() {
+        return None;
+    }
+    let (low, high, high_at) = if ea < eb { (*a, *b, eb) } else { (*b, *a, ea) };
+    Some(if high_at <= base_feet + 1e-3 {
+        high
+    } else {
+        low
+    })
+}
 
 /// The single recovered `Level` ElementId a record's counted
 /// reference list names, or `None`.

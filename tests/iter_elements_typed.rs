@@ -482,12 +482,11 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
 /// and the ones it gives none for are contained in the `IfcBuilding`
 /// rather than dropped into whichever storey happens to be first.
 ///
-/// Measured on `2024_Core_Interior.rvt` after #90 / RE-29 replaced the
-/// 18 name-only spaces with 116 record-backed rooms: 969 of 970
-/// elements reach a storey — 488 through the `Level` ElementId their
-/// own partition element record names, 481 through the #212 / #213
-/// elevation match. The one that does not is `Wall 55840`, whose
-/// record names no single Level.
+/// Measured on `2024_Core_Interior.rvt`: all 970 elements reach a
+/// storey through the `Level` their own partition element record names —
+/// 488 name one Level, and 482 name two, their base and top constraint,
+/// and take the base (RE-59). Before RE-59, 481 of those reached a storey
+/// through the #212 / #213 elevation match and `Wall 55840` reached none.
 #[test]
 fn core_interior_2024_storey_containment_is_evidence_backed() {
     let Some(project_dir) = project_dir() else {
@@ -511,7 +510,7 @@ fn core_interior_2024_storey_containment_is_evidence_backed() {
 
     assert_eq!(result.diagnostics.exported.building_elements, 970);
     assert_eq!(
-        result.diagnostics.exported.storey_bound_elements, 969,
+        result.diagnostics.exported.storey_bound_elements, 970,
         "storey containment regressed; re-measure before moving this number"
     );
 
@@ -546,16 +545,12 @@ fn core_interior_2024_storey_containment_is_evidence_backed() {
             .expect("a bound element records how it reached its storey");
         *by_source.entry(source).or_default() += 1;
     }
-    assert_eq!(by_source.get("record_level_reference").copied(), Some(488));
-    assert_eq!(by_source.values().sum::<usize>(), 969);
-    assert_eq!(
-        unbound_types,
-        [("IFCWALL", 1)].into_iter().collect(),
-        "only the one wall naming no single Level stays unbound"
-    );
+    assert_eq!(by_source.get("record_level_reference").copied(), Some(970));
+    assert_eq!(by_source.values().sum::<usize>(), 970);
+    assert!(unbound_types.is_empty(), "unbound: {unbound_types:?}");
 
-    // The unbound elements are contained in the IfcBuilding, never in a
-    // named storey (#219).
+    // An unbound element would be contained in the IfcBuilding, never in
+    // a named storey (#219); none is left.
     let step = rvt::ifc::write_step(&result.model);
     let building_id = step
         .lines()
@@ -569,7 +564,10 @@ fn core_interior_2024_storey_containment_is_evidence_backed() {
         .filter(|line| line.contains("IFCRELCONTAINEDINSPATIALSTRUCTURE("))
         .filter(|line| line.ends_with(&format!(",#{building_id});")))
         .count();
-    assert_eq!(on_building, 1, "one containment relation holds the unbound");
+    assert_eq!(
+        on_building, 0,
+        "no containment relation holds unbound elements"
+    );
 }
 
 /// #31 / RE-25: every recovered slab carries the plan profile its

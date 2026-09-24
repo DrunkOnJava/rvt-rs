@@ -200,6 +200,20 @@ pub fn recover_partition_schema_mvp(
 
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
+    // --- Base constraints of elements naming two Levels (RE-59) ---
+    resolve_base_constraint_levels(
+        rf,
+        revit_version,
+        &mut [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.rooms,
+            &mut out.products,
+        ],
+    );
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
@@ -2475,6 +2489,63 @@ fn apply_wall_join_trim(
     ));
 }
 
+/// RE-59: give each record-backed element whose record names two Levels
+/// its base constraint ([`crate::element_record_level_refs::base_constraint_level`])
+/// as its host Level, from the Levels' own elevations (RE-51). Nothing
+/// changes where the Levels' elevations are not recovered.
+fn resolve_base_constraint_levels(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: &mut [&mut Vec<DecodedElement>],
+) {
+    use crate::element_record_level_refs as refs;
+    let elevations: std::collections::BTreeMap<u32, f64> =
+        crate::partition_level_records::recover_partition_levels(rf, revit_version)
+            .unwrap_or_default()
+            .iter()
+            .map(|level| (level.element_id, level.elevation_feet))
+            .collect();
+    if elevations.is_empty() {
+        return;
+    }
+    for element in elements.iter_mut().flat_map(|list| list.iter_mut()) {
+        let mut named = Vec::new();
+        let mut base = None;
+        for (name, value) in &element.fields {
+            match (name.as_str(), value) {
+                (refs::CONSTRAINT_LEVELS_FIELD, InstanceField::Vector(ids)) => {
+                    named = ids
+                        .iter()
+                        .filter_map(|id| match id {
+                            InstanceField::ElementId { id, .. } => Some(*id),
+                            _ => None,
+                        })
+                        .collect();
+                }
+                ("m_locationZ", InstanceField::Float { value, .. }) => base = Some(*value),
+                _ => {}
+            }
+        }
+        let Some(level) = base.and_then(|z| refs::base_constraint_level(&named, &elevations, z))
+        else {
+            continue;
+        };
+        for (name, value) in element.fields.iter_mut() {
+            if name == "m_level_bound" {
+                *value = InstanceField::Bool(true);
+            }
+        }
+        element.fields.push((
+            refs::LEVEL_REFERENCE_FIELD.into(),
+            InstanceField::ElementId { tag: 0, id: level },
+        ));
+        element.fields.push((
+            refs::LEVEL_BIND_SOURCE_FIELD.into(),
+            InstanceField::String(refs::BASE_CONSTRAINT_SOURCE.into()),
+        ));
+    }
+}
+
 fn element_record_decoded(
     record: &crate::partition_element_records::PartitionElementRecord,
     class: &str,
@@ -2545,6 +2616,22 @@ fn element_record_decoded(
             InstanceField::Bool(level_id.is_some()),
         ),
     ];
+    if level_id.is_none() {
+        // RE-59: base and top constraint, resolved against the Levels'
+        // elevations by `resolve_base_constraint_levels`.
+        let named = crate::element_record_level_refs::named_levels(&record.references, level_ids);
+        if named.len() == 2 {
+            fields.push((
+                crate::element_record_level_refs::CONSTRAINT_LEVELS_FIELD.into(),
+                InstanceField::Vector(
+                    named
+                        .iter()
+                        .map(|&id| InstanceField::ElementId { tag: 0, id })
+                        .collect(),
+                ),
+            ));
+        }
+    }
     if let Some(id) = level_id {
         fields.push((
             crate::element_record_level_refs::LEVEL_REFERENCE_FIELD.into(),

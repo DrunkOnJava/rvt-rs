@@ -79,10 +79,11 @@ RE-29). Rooms come out as 116 `IFCSPACE` carrying their real Revit name,
 number and storey, with a body that is the record's bounding box — exactly
 the reference export's plan envelope and floor-to-ceiling extent on all
 116 (#90, RE-29). Those elements land on the Revit Level their own element
-record names, so 969 of 970 exported elements on Core Interior are
-contained in a specific storey; the one that is not — a wall whose record
-names no single Level — is contained in the building rather than filed
-under an arbitrary storey (#219, RE-27). Every wall also joins to its
+record names, or their base constraint where it names two, so all 970
+exported elements on Core Interior are contained in the storey Revit's own
+export gives them (#219, RE-27, RE-59). An element whose record names no
+Level is contained in the building rather than filed under an arbitrary
+storey. Every wall also joins to its
 `IfcWallType` exactly, 360 of 360, though that join is library-side today
 and is not yet written onto the exported wall (#88, RE-28). Still blocked
 (RE-19 / RE-20 negative on magnetar corpora): schema-field Walls, typed
