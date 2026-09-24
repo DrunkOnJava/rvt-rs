@@ -461,6 +461,15 @@ from the one type object their record names, and names a sweep of a wall
 type's own structure by its ElementId, as Revit does. On Snowdon all 258
 wall sweeps carry Revit's name
 (`reports/element-framing/RE-69-wall-sweep-names.md`).
+**RE-70 (2026-09-24)** reads which wall runs through a butt join from the
+walls' own join lists: the wall that names the other runs on to its far
+face, and the other stops at its near face. They never contradict a joint
+Revit's export draws cleanly on Snowdon Towers (212 of 212 decided ends),
+nor the record box at 1,110 axis-parallel ends on five 2024 and 2025
+files. Between single-layer walls the body now ends there, which gives 8
+more Snowdon walls both of Revit's ends and makes none worse. Layered
+joins, which Revit cleans layer by layer, keep their ends
+(`reports/element-framing/RE-70-wall-join-lists.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

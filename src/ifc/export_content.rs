@@ -844,6 +844,9 @@ struct WallCentrelineBody {
     width_feet: f64,
     depth_feet: f64,
     thickness_feet: f64,
+    /// How far past its line's start and end the body reaches at a butt
+    /// join, where the join lists decided it (RE-70).
+    join_reach_feet: [Option<f64>; 2],
 }
 
 /// The body of a wall with centreline `axis` whose record box is centred on
@@ -859,6 +862,9 @@ struct WallCentrelineBody {
 ///   the line; otherwise it runs from one end of its line to the other,
 ///   unless the box is more than twice the wall's thickness (at least a
 ///   foot) wider than that rectangle's.
+/// - an end at a butt join its join lists decide reaches half the other
+///   wall's thickness past the line's end, or stops that far short of it
+///   (RE-70), for either kind of wall.
 ///
 /// `None` when the line is degenerate, its midpoint lies outside the box,
 /// or the box is thinner than the type or too wide.
@@ -882,22 +888,39 @@ fn wall_centreline_body(
     }
     let (ux, uy) = ((ex - sx) / length, (ey - sy) / length);
     let thinner = |across: f64| across < thickness - WALL_AXIS_BOX_TOLERANCE_FEET;
+    // RE-70: an end its join lists decide sits that far past the line's
+    // end, whatever the box says; the other end keeps its own.
+    let joined = |centre: [f64; 2], run: f64| {
+        let middle = (centre[0] - sx) * ux + (centre[1] - sy) * uy;
+        let [start, end] = axis.join_reach_feet;
+        let low = start.map_or(middle - run / 2.0, |reach| -reach);
+        let high = end.map_or(middle + run / 2.0, |reach| length + reach);
+        if high - low <= WALL_AXIS_BOX_TOLERANCE_FEET {
+            return (centre, run);
+        }
+        let at = (low + high) / 2.0;
+        ([sx + ux * at, sy + uy * at], high - low)
+    };
     if uy.abs() <= 1e-9 {
+        let (centre, run) = joined([x, sy], width);
         return (!thinner(depth)).then_some(WallCentrelineBody {
-            centre: [x, sy],
+            centre,
             rotation: None,
-            width_feet: width,
+            width_feet: run,
             depth_feet: thickness,
             thickness_feet: thickness,
+            join_reach_feet: axis.join_reach_feet,
         });
     }
     if ux.abs() <= 1e-9 {
+        let (centre, run) = joined([sx, y], depth);
         return (!thinner(width)).then_some(WallCentrelineBody {
-            centre: [sx, y],
+            centre,
             rotation: None,
             width_feet: thickness,
-            depth_feet: depth,
+            depth_feet: run,
             thickness_feet: thickness,
+            join_reach_feet: axis.join_reach_feet,
         });
     }
     // The box of a rectangle `run` long and `thickness` across along
@@ -922,12 +945,14 @@ fn wall_centreline_body(
         }
         ([mx, my], length)
     };
+    let (centre, run) = joined(centre, run);
     Some(WallCentrelineBody {
         centre,
         rotation: Some(uy.atan2(ux)),
         width_feet: run,
         depth_feet: thickness,
         thickness_feet: thickness,
+        join_reach_feet: axis.join_reach_feet,
     })
 }
 
@@ -1323,6 +1348,19 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             name: "ThicknessSource".into(),
             value: PropertyValue::Text(source.into()),
         });
+    }
+    // RE-70: an end a butt join decided reports how far past the line it
+    // reaches, negative where it stops short.
+    for (name, reach) in ["JoinReachStartFeet", "JoinReachEndFeet"]
+        .into_iter()
+        .zip(wall_centreline.map_or([None, None], |body| body.join_reach_feet))
+    {
+        if let Some(reach) = reach {
+            properties.push(Property {
+                name: name.into(),
+                value: PropertyValue::LengthFeet(reach),
+            });
+        }
     }
     if let (Some(_), Some(start), Some(end)) = (wall_thickness, wall_trim_start, wall_trim_end) {
         properties.push(Property {

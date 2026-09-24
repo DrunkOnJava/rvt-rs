@@ -24,6 +24,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A butt join's wall runs through, and the other stops, as Revit draws
+  them (RE-70, #358).** A wall's own data lists the walls it runs through
+  at a join; where two walls' centrelines end at one point, that wall
+  reaches the other's far face and the other stops at its near face. The
+  lists never contradict a joint Revit's own export draws cleanly: 212 of
+  212 decided ends on Snowdon Towers, and 1,110 axis-parallel ends against
+  the record box on five 2024 and 2025 files. Walls take these ends where
+  both have a single layer, since Revit cleans layered joins layer by
+  layer. On Snowdon Towers 9 walls improve and none gets worse, and 346 of
+  976 axis-parallel walls have both of Revit's ends, from 338. The IFC
+  reports each such end as `JoinReachStartFeet` / `JoinReachEndFeet`.
 - **Wall sweeps are named as Revit names them (RE-69):** "Wall
   Sweep:Base_Simple:2074039" from the one type object the sweep's record
   names, or the ElementId alone for a sweep of a wall type's own

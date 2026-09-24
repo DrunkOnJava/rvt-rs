@@ -341,3 +341,152 @@ pub fn scan_wall_orientations(
         .filter_map(|(id, orientation)| orientation.map(|o| (id, o)))
         .collect())
 }
+
+/// Where a join list's count sits past its opening word on
+/// `revit_version`: Revit 2025 puts a zero `u32` before it (RE-70).
+/// `None` where the layout is not measured.
+pub fn wall_join_count_offset(revit_version: u32) -> Option<usize> {
+    match revit_version {
+        2024 => Some(12),
+        2025 => Some(16),
+        _ => None,
+    }
+}
+
+/// The word that opens a wall's join list (RE-70).
+pub const WALL_JOIN_LIST_WORD: [u8; 4] = [0x07, 0x00, 0x00, 0x00];
+
+/// Bytes per join-list entry: `u32 · u64 ElementId · u32`.
+pub const WALL_JOIN_ENTRY_LEN: usize = 16;
+
+/// Most entries a join list is taken to have.
+pub const MAX_WALL_JOIN_ENTRIES: usize = 64;
+
+/// How far into a wall's data its join lists are looked for. They sit up
+/// to 12 KB in on Snowdon Towers.
+pub const WALL_JOIN_WINDOW: usize = 0x1_0000;
+
+/// A wall's join lists, each as its tag and the ElementIds it names.
+pub type WallJoinLists = Vec<(u32, Vec<u32>)>;
+
+/// Every join list in a wall's `data` that names at least one wall and
+/// only walls in `walls`, as its tag and the ElementIds it names (RE-70).
+///
+/// A list is `07 00 00 00 · u32 tag · 02 00 00 00`, a zero `u32` on Revit
+/// 2025 ([`wall_join_count_offset`]), a `u32` count and that many
+/// [`WALL_JOIN_ENTRY_LEN`]-byte entries whose `u64` is a wall's ElementId.
+pub fn wall_join_lists(
+    data: &[u8],
+    count_at: usize,
+    walls: &BTreeSet<u32>,
+) -> Vec<(u32, Vec<u32>)> {
+    let mut out = Vec::new();
+    for at in memchr::memmem::find_iter(data, &WALL_JOIN_LIST_WORD) {
+        let (Some(tag), Some(2), Some(count)) = (
+            u32_at(data, at + 4),
+            u32_at(data, at + 8),
+            u32_at(data, at + count_at),
+        ) else {
+            continue;
+        };
+        let count = count as usize;
+        if count == 0
+            || count > MAX_WALL_JOIN_ENTRIES
+            || (count_at > 12 && u32_at(data, at + 12) != Some(0))
+        {
+            continue;
+        }
+        let named: Option<Vec<u32>> = (0..count)
+            .map(|index| {
+                u64_at(data, at + count_at + 8 + index * WALL_JOIN_ENTRY_LEN)
+                    .and_then(|id| u32::try_from(id).ok())
+                    .filter(|id| walls.contains(id))
+            })
+            .collect();
+        if let Some(named) = named {
+            out.push((tag, named));
+        }
+    }
+    out
+}
+
+/// The walls each wall in `read` names in its join lists, by ElementId
+/// (RE-70). `walls` is every recovered wall; a list naming anything else is
+/// not a join list.
+///
+/// The lists' tag is one value per document (`0x0b9f7d` on Snowdon Towers,
+/// Core Interior and RE1, `0x039f3d` on the MIT tutorial house) that no
+/// schema class carries, so it is read off the data: the one tag whose
+/// lists name walls. A file where two tags do gives nothing, and so does a
+/// wall whose copies disagree.
+pub fn scan_wall_join_partners(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &BTreeSet<u32>,
+    read: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, BTreeSet<u32>>> {
+    let (Some(header), Some(count_at)) = (
+        crate::partition_names::element_data_header(revit_version),
+        wall_join_count_offset(revit_version),
+    ) else {
+        return Ok(BTreeMap::new());
+    };
+    let mut found: BTreeMap<u32, Option<WallJoinLists>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        for (index, &hit) in hits.iter().enumerate() {
+            let id_at = hit + header.len();
+            let Some(id) = u64_at(buf, id_at)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| read.contains(id))
+            else {
+                continue;
+            };
+            let end = hits
+                .get(index + 1)
+                .copied()
+                .unwrap_or(buf.len())
+                .min(hit.saturating_add(WALL_JOIN_WINDOW))
+                .min(buf.len());
+            let Some(data) = buf.get(id_at + 8..end) else {
+                continue;
+            };
+            let lists = wall_join_lists(data, count_at, walls);
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(lists));
+                }
+                Some(held) => {
+                    if held.as_ref() != Some(&lists) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    let tags: BTreeSet<u32> = found
+        .values()
+        .flatten()
+        .flatten()
+        .map(|(tag, _)| *tag)
+        .collect();
+    let [tag] = tags.into_iter().collect::<Vec<_>>()[..] else {
+        return Ok(BTreeMap::new());
+    };
+    Ok(found
+        .into_iter()
+        .filter_map(|(id, lists)| {
+            let named: BTreeSet<u32> = lists?
+                .into_iter()
+                .filter(|(list_tag, _)| *list_tag == tag)
+                .flat_map(|(_, named)| named)
+                .filter(|other| *other != id)
+                .collect();
+            Some((id, named))
+        })
+        .collect())
+}
