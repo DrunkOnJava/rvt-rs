@@ -408,7 +408,7 @@ fn catalogued_divergence_notes(deltas: &BTreeMap<String, CountDelta>) -> Vec<Str
         ),
         (
             "IFCMATERIALLAYERSETUSAGE",
-            "Compound layer thicknesses tracked in #88 (RE-15-08).",
+            "rvt-rs writes a layer set for each wall, floor, roof and ceiling whose body is as thick as its type's layers (RE-58); a Reference View export such as Revit's IFC4 writes none, and elements drawn whole get none (#358).",
         ),
         (
             "IFCOPENINGELEMENT",

@@ -323,8 +323,9 @@ second id space: the list is ascending and both ids are in it, with
 `tests/iter_elements_typed.rs::core_interior_2024_wall_type_record_join`;
 it is **not** yet a property on the emitted wall, no emitted entity,
 property or relation changes, and both count manifests record that.
-**Compound layer thicknesses stay unrecovered, and this corpus cannot
-witness them** (#88, RE-28 §4–§5). A 128 KiB sweep centred on each of the
+**RE-28 left compound layer thicknesses unrecovered, and found this
+corpus cannot witness them** (#88, RE-28 §4–§5; RE-53 and RE-58 below
+supersede this). A 128 KiB sweep centred on each of the
 four exported wall-type records finds **0** runs of consecutive `f64`
 summing to that type's nominal width, and the two 6″ types have no
 `0.5` ft hit anywhere in their span. More decisively, the reference
@@ -334,13 +335,13 @@ export is a **`ReferenceView_V1.2`** file carrying **0**
 `IfcMaterial` rather than a constituent set. #88's layer-thickness
 criterion therefore has **no oracle on this artifact** — it can be
 neither met nor refuted here — and closing it needs a layer-set-carrying
-export of the same `.rvt` or an owner-supplied wall-type schedule. Until
-one exists nothing emits a layer. The same work bounds materials: the
+export of the same `.rvt` or an owner-supplied wall-type schedule. The
+same work bounds materials: the
 real carrier is a record family, **86** `OST_Materials` records in the
 same bbox-less shape, a closed byte-derived set against the 102 the
-string heuristic yields — but the records carry no recovered name and
-the element → material join is incomplete, so nothing is recovered from
-them yet and the manifest row stays `known_gap` (#34, #86).
+string heuristic yields. RE-28 recovered no name from them; RE-58 names
+78 of the 86. The element → material join is still incomplete, and the
+manifest row stays `known_gap` (#34, #86).
 **RE-53 (2026-09-23) found the layers** in the type's own element data,
 not near its record, which is where RE-28 swept. On Core Interior each of
 the four types is one layer by category. On Snowdon Towers, 42 of 42
