@@ -2466,6 +2466,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -2490,6 +2491,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -2556,6 +2558,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -2682,6 +2685,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         assert!(
@@ -2893,6 +2897,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -3338,6 +3343,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCMATERIALLAYER("), "IFCMATERIALLAYER missing");
@@ -3406,6 +3412,7 @@ mod tests {
             }],
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         assert!(
@@ -3481,6 +3488,7 @@ mod tests {
             }],
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         // Both layer set AND profile set entities exist because
@@ -3538,6 +3546,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         }
     }
 
@@ -3674,6 +3683,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         }
     }
 
@@ -3826,6 +3836,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         // solid_shape path fires:
@@ -4033,6 +4044,7 @@ mod tests {
                 origin_feet: [0.0, 0.0, 0.0],
             }],
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         // Exactly ONE IfcRepresentationMap — that's the whole point
@@ -4116,6 +4128,7 @@ mod tests {
                 origin_feet: [0.0, 0.0, 0.0],
             }],
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         // IFCMAPPEDITEM must be emitted; no inline body extrusion
@@ -4180,6 +4193,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         // No mapped item, no extrusion, no brep — just an element
@@ -4213,6 +4227,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)"));
@@ -4249,6 +4264,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         // Conversion chain: IFCSIUNIT base + IFCMEASUREWITHUNIT +
@@ -4297,6 +4313,7 @@ mod tests {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         };
         let s = write_step(&model);
         // Length from the caller (feet).

@@ -233,6 +233,8 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
+    // --- Walls' layers and exterior side (RE-53) ---
+    attach_wall_layers(rf, revit_version, &mut out.walls);
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -639,6 +641,156 @@ fn attach_stair_dimensions(
             let found = *found;
             push(element, &found, flight_counts.get(&id).copied());
         }
+    }
+}
+
+/// Fields holding the unit plan direction from a wall's inside to its
+/// exterior face, model axes (RE-53).
+pub const WALL_EXTERIOR_FIELDS: [&str; 2] = ["m_wall_exterior_x", "m_wall_exterior_y"];
+/// Field holding a wall's layers, exterior first: each a vector of width
+/// (feet), shading colour (`0x00BBGGRR`, or -1 for the category's) and
+/// transparency (RE-53).
+pub const WALL_LAYERS_FIELD: &str = "m_wall_layers";
+
+/// The layers [`WALL_LAYERS_FIELD`] and [`WALL_EXTERIOR_FIELDS`] record.
+pub fn element_layers_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<crate::ifc::ElementLayers> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [x, y] = WALL_EXTERIOR_FIELDS.map(float);
+    let layers = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(items) if name == WALL_LAYERS_FIELD => items
+            .iter()
+            .map(|item| match item {
+                InstanceField::Vector(parts) => match parts.as_slice() {
+                    [
+                        InstanceField::Float { value: width, .. },
+                        InstanceField::Integer { value: colour, .. },
+                        InstanceField::Float {
+                            value: transparency,
+                            ..
+                        },
+                    ] => Some(crate::ifc::LayerBand {
+                        width_feet: *width,
+                        color_packed: u32::try_from(*colour).ok(),
+                        transparency: *transparency,
+                    }),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>(),
+        _ => None,
+    })?;
+    (!layers.is_empty()).then_some(crate::ifc::ElementLayers {
+        exterior_normal: [x?, y?],
+        layers,
+    })
+}
+
+/// Give each wall its type's layers, exterior first, each with its
+/// material's shading, and the plan direction of its exterior face: the
+/// right of its location line's direction when its flip flag is set, the
+/// left otherwise (RE-53, [`crate::partition_compound_structure`],
+/// [`crate::partition_materials`]). A wall without a type, a location line
+/// or a flip flag gets none. Membranes, which have no width, are left out.
+fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
+    use crate::partition_compound_structure as pcs;
+    if !crate::partition_beam_axes::supports_revit_version(revit_version)
+        || !pcs::COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
+    {
+        return;
+    }
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let wall_ids: BTreeSet<u32> = walls
+        .iter()
+        .filter(|wall| type_of(wall).is_some())
+        .filter_map(|wall| wall.id)
+        .collect();
+    if wall_ids.is_empty() {
+        return;
+    }
+    let types: BTreeSet<u32> = walls.iter().filter_map(type_of).collect();
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_type_records::OST_MATERIALS,
+        &declared,
+    )
+    .unwrap_or_default()
+    .iter()
+    .map(|record| record.element_id)
+    .collect();
+    let (Ok(layers), Ok(flips), Ok(lines), Ok(appearances)) = (
+        pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
+        pcs::scan_wall_flips(rf, revit_version, &wall_ids),
+        crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &wall_ids),
+        crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
+    ) else {
+        return;
+    };
+    for wall in walls.iter_mut() {
+        let (Some(id), Some(type_id)) = (wall.id, type_of(wall)) else {
+            continue;
+        };
+        let (Some(type_layers), Some(&flip), Some(line)) =
+            (layers.get(&type_id), flips.get(&id), lines.get(&id))
+        else {
+            continue;
+        };
+        let (start, end) = (line.start(), line.end());
+        let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
+        let length = dx.hypot(dy);
+        if !length.is_finite() || length <= 1e-9 {
+            continue;
+        }
+        let (dx, dy) = (dx / length, dy / length);
+        let exterior = if flip { [dy, -dx] } else { [-dy, dx] };
+        let bands: Vec<InstanceField> = type_layers
+            .iter()
+            .filter(|layer| layer.width_feet > 0.0)
+            .map(|layer| {
+                let appearance = layer.material.and_then(|m| appearances.get(&m));
+                InstanceField::Vector(vec![
+                    InstanceField::Float {
+                        value: layer.width_feet,
+                        size: 8,
+                    },
+                    InstanceField::Integer {
+                        value: appearance.map_or(-1, |a| i64::from(a.color_packed())),
+                        signed: true,
+                        size: 8,
+                    },
+                    InstanceField::Float {
+                        value: appearance.map_or(0.0, |a| f64::from(a.transparency)),
+                        size: 8,
+                    },
+                ])
+            })
+            .collect();
+        if bands.is_empty() {
+            continue;
+        }
+        for (name, value) in WALL_EXTERIOR_FIELDS.iter().zip(exterior) {
+            wall.fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        wall.fields
+            .push((WALL_LAYERS_FIELD.into(), InstanceField::Vector(bands)));
     }
 }
 

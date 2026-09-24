@@ -341,6 +341,13 @@ same bbox-less shape, a closed byte-derived set against the 102 the
 string heuristic yields — but the records carry no recovered name and
 the element → material join is incomplete, so nothing is recovered from
 them yet and the manifest row stays `known_gap` (#34, #86).
+**RE-53 (2026-09-23) found the layers** in the type's own element data,
+not near its record, which is where RE-28 swept. On Core Interior each of
+the four types is one layer by category. On Snowdon Towers, 42 of 42
+types give Revit's constituent sequence, and the glTF export draws 2024
+walls as their layers in their materials' colours
+(`reports/element-framing/RE-53-wall-layers.md`). The IFC export still
+writes no layer set, since material names are not read (#355).
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

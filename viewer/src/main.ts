@@ -642,6 +642,7 @@ interface ExportDiagnostics {
     unit_assignment_count?: number;
     storey_names?: string[];
     material_names_sample?: string[];
+    layered_element_count?: number;
   };
   unsupported_features?: string[];
   warnings?: string[];
@@ -1784,11 +1785,14 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
               ? ` · +${materialCount - materialSample.length} more`
               : '')
           : `${materialCount} display names`;
+      const layered = exported.layered_element_count ?? 0;
       statusPanelEl.appendChild(
         statusRow(
           'Materials',
           'ok',
-          `${materialCount} · ${named} (names only; no compound layers)`,
+          layered > 0
+            ? `${materialCount} · ${named} · layers and colours read for ${layered} ${layered === 1 ? 'wall' : 'walls'}`
+            : `${materialCount} · ${named} (names only; no compound layers)`,
         ),
       );
     }

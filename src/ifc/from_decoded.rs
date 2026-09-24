@@ -1384,6 +1384,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
         material_profile_sets: Vec::new(),
         representation_maps: Vec::new(),
         global_ids: Default::default(),
+        element_layers: Default::default(),
     }
 }
 

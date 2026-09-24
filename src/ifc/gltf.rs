@@ -346,6 +346,8 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
     // An element with no material of its own takes its category's colour,
     // one material per category, after the model's own.
     let mut category_materials: std::collections::BTreeMap<String, usize> = Default::default();
+    // Layer colours (RE-53), one material per colour and alpha.
+    let mut layer_materials: std::collections::BTreeMap<(u32, u32), usize> = Default::default();
 
     // Per-element: a node carrying the entity's identity, with the
     // shared cube or its own mesh.
@@ -354,6 +356,7 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
         let IfcEntity::BuildingElement {
             ifc_type,
             name,
+            type_guid,
             material_index,
             location_feet,
             rotation_radians,
@@ -366,6 +369,95 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
         let body = element_body(ent, &model.representation_maps);
         let (c, s) = (placement.cos as f32, placement.sin as f32);
         let [tx, ty, tz] = placement.origin.map(|v| v as f32);
+        let body_matrix = [
+            c,
+            s,
+            0.0,
+            0.0,
+            if s == 0.0 { 0.0 } else { -s },
+            c,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            tx,
+            ty,
+            tz,
+            1.0,
+        ];
+        // RE-53: a layered element is one node per layer, each in its
+        // material's colour, all carrying the element's identity.
+        let layered = type_guid
+            .as_deref()
+            .and_then(|tag| tag.parse::<u32>().ok())
+            .and_then(|id| model.element_layers.get(&id));
+        if let (Some(layers), Some(Body::Extrusion(extrusion))) = (layered, body) {
+            let [nx, ny] = layers.exterior_normal;
+            let local = [
+                nx * placement.cos + ny * placement.sin,
+                -nx * placement.sin + ny * placement.cos,
+            ];
+            let widths: Vec<f64> = layers.layers.iter().map(|l| l.width_feet).collect();
+            if let Some(meshes) = body_geometry::layered_extrusion_meshes(extrusion, local, &widths)
+            {
+                for (mesh, band) in meshes.iter().zip(&layers.layers) {
+                    let Some((position, indices)) = push_mesh(&mut doc, &mut bin, mesh) else {
+                        continue;
+                    };
+                    let material = match band.color_packed {
+                        Some(packed) => {
+                            let rgb = ((packed & 0xff) << 16)
+                                | (packed & 0xff00)
+                                | ((packed >> 16) & 0xff);
+                            let alpha = (1.0 - band.transparency.clamp(0.0, 1.0)) as f32;
+                            *layer_materials
+                                .entry((rgb, alpha.to_bits()))
+                                .or_insert_with(|| {
+                                    doc.materials.push(colour_material(
+                                        format!("Layer {rgb:06x}"),
+                                        rgb,
+                                        alpha,
+                                    ));
+                                    doc.materials.len() - 1
+                                })
+                        }
+                        None => *category_materials
+                            .entry(ifc_type.clone())
+                            .or_insert_with(|| {
+                                doc.materials.push(category_material(ifc_type));
+                                doc.materials.len() - 1
+                            }),
+                    };
+                    let mut attributes = std::collections::BTreeMap::new();
+                    attributes.insert("POSITION".into(), position);
+                    let mesh_idx = doc.meshes.len();
+                    doc.meshes.push(Mesh {
+                        primitives: vec![Primitive {
+                            attributes,
+                            indices: Some(indices),
+                            material: Some(material),
+                            mode: 4,
+                        }],
+                        name: Some(name.clone()),
+                    });
+                    let node_idx = doc.nodes.len();
+                    doc.nodes.push(Node {
+                        name: Some(name.clone()),
+                        mesh: Some(mesh_idx),
+                        matrix: Some(body_matrix),
+                        children: Vec::new(),
+                        extras: Some(NodeExtras {
+                            entity_index,
+                            ifc_type: ifc_type.clone(),
+                        }),
+                    });
+                    scene_nodes.push(node_idx);
+                }
+                continue;
+            }
+        }
         // (accessor pair, matrix)
         let drawn: Option<((usize, usize), [f32; 16])> = match body {
             Some(Body::Extrusion(ex))
@@ -405,27 +497,7 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             }
             Some(body) => body_mesh(body).and_then(|mesh| {
                 let accessors = push_mesh(&mut doc, &mut bin, &mesh)?;
-                Some((
-                    accessors,
-                    [
-                        c,
-                        s,
-                        0.0,
-                        0.0,
-                        if s == 0.0 { 0.0 } else { -s },
-                        c,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0,
-                        0.0,
-                        tx,
-                        ty,
-                        tz,
-                        1.0,
-                    ],
-                ))
+                Some((accessors, body_matrix))
             }),
             None => None,
         };
@@ -513,10 +585,15 @@ pub fn category_colour(ifc_type: &str) -> (u32, f32) {
     }
 }
 
-/// The material a category's colour makes, named for the category. glTF
-/// base colours are linear, so the sRGB colour is linearised.
+/// The material a category's colour makes, named for the category.
 fn category_material(ifc_type: &str) -> Material {
     let (rgb, alpha) = category_colour(ifc_type);
+    colour_material(format!("Category {ifc_type}"), rgb, alpha)
+}
+
+/// A material of one sRGB colour (`0xRRGGBB`) and alpha. glTF base colours
+/// are linear, so the colour is linearised.
+fn colour_material(name: String, rgb: u32, alpha: f32) -> Material {
     let linear = |shift: u32| {
         let c = ((rgb >> shift) & 0xff) as f32 / 255.0;
         if c <= 0.04045 {
@@ -526,7 +603,7 @@ fn category_material(ifc_type: &str) -> Material {
         }
     };
     Material {
-        name: Some(format!("Category {ifc_type}")),
+        name: Some(name),
         pbr_metallic_roughness: PbrMetallicRoughness {
             base_color_factor: [linear(16), linear(8), linear(0), alpha],
             metallic_factor: 0.0,

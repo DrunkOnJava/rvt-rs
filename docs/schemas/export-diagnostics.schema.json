@@ -212,6 +212,11 @@
             "type": "string"
           },
           "description": "Capped sample of recovered IfcMaterial display names for File Status."
+        },
+        "layered_element_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Elements whose compound layers and layer colours were decoded (RE-53); the glTF export draws each in its layers where they add up to its body's thickness."
         }
       }
     },

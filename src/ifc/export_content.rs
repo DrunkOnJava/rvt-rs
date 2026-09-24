@@ -43,6 +43,8 @@ pub struct TypedProductionAppend {
     /// Floors/Rooms assigned to a storey via Level ElementId bind.
     /// Stays 0 on current corpora (partition Levels lack ElementIds).
     pub level_elementid_binds: usize,
+    /// Layered elements' layers, by ElementId (RE-53).
+    pub element_layers: BTreeMap<u32, super::ElementLayers>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -177,6 +179,16 @@ pub fn append_typed_production_elements(
                 building_storeys.push(storey);
             }
             continue;
+        }
+
+        // RE-53: a wall's layers, for the glTF export to draw in colour.
+        if policy.include_geometry {
+            if let (Some(id), Some(layers)) = (
+                decoded.id,
+                crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields),
+            ) {
+                out.element_layers.insert(id, layers);
+            }
         }
 
         // Materials are IfcMaterial rows, never building-element proxies.
