@@ -242,6 +242,23 @@ pub struct PanelMaterial {
     pub element_count: usize,
 }
 
+/// An element's material layers (RE-58), in the order its layer set lists
+/// them. Each row is a layer: its material's name, or `"Material not
+/// read"` where the file's material name was not found, and its thickness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PanelLayers {
+    /// The layer set's name: the element's type name.
+    pub name: String,
+    /// Which side the first row is on: `"exterior first"` for a layer set
+    /// used across an element's placement (a wall), `"top first"` for one
+    /// used along its height (a floor, roof or ceiling). `None` when the
+    /// model states no usage for the element.
+    pub order: Option<String>,
+    pub rows: Vec<PanelRow>,
+    /// The layers' thicknesses added up.
+    pub total: String,
+}
+
 /// Element info panel payload (VW1-08). The shape a viewer's
 /// "click to inspect" UI reads — a single JSON-ready struct
 /// describing an element's identity, location, and property set.
@@ -292,6 +309,9 @@ pub struct ElementInfoPanel {
     /// The same material, resolved to a highlight target.
     #[serde(default)]
     pub material: Option<PanelMaterial>,
+    /// The element's material layers, when it has a layer set (RE-58).
+    #[serde(default)]
+    pub layers: Option<PanelLayers>,
     /// Flat `(property_name, formatted_value)` pairs from the
     /// element's `Pset_*Common` property set. Empty when no
     /// property set is attached.
@@ -335,6 +355,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         predefined_type,
         storey_index,
         material_index,
+        material_layer_set_index,
         property_set,
         location_feet,
         rotation_radians,
@@ -365,6 +386,31 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
             element_count: count_elements_using_material(model, index),
         });
     let material_name = material.as_ref().map(|m| m.name.clone());
+    let layers = material_layer_set_index
+        .and_then(|i| model.material_layer_sets.get(i))
+        .filter(|set| !set.layers.is_empty())
+        .map(|set| PanelLayers {
+            name: set.name.clone(),
+            order: model.material_layer_usages.get(&entity_index).map(|usage| {
+                match usage.direction {
+                    crate::ifc::entities::LayerSetDirection::Axis3 => "top first",
+                    _ => "exterior first",
+                }
+                .to_string()
+            }),
+            rows: set
+                .layers
+                .iter()
+                .map(|layer| {
+                    let material = layer
+                        .material_index
+                        .and_then(|i| model.materials.get(i))
+                        .map_or("Material not read", |m| m.name.as_str());
+                    PanelRow::new(material, format_feet(layer.thickness_feet))
+                })
+                .collect(),
+            total: format_feet(set.layers.iter().map(|layer| layer.thickness_feet).sum()),
+        });
     let properties: Vec<(String, String)> = property_set
         .as_ref()
         .map(|pset| {
@@ -439,6 +485,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         extent_rows,
         material_name,
         material,
+        layers,
         properties,
         property_group,
         further_property_groups,

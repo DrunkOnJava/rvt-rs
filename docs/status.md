@@ -346,8 +346,8 @@ not near its record, which is where RE-28 swept. On Core Interior each of
 the four types is one layer by category. On Snowdon Towers, 42 of 42
 types give Revit's constituent sequence, and the glTF export draws 2024
 walls as their layers in their materials' colours
-(`reports/element-framing/RE-53-wall-layers.md`). The IFC export still
-writes no layer set, since material names are not read (#355).
+(`reports/element-framing/RE-53-wall-layers.md`). RE-58 writes them into
+the IFC export.
 **RE-54 (2026-09-23)** builds a 2024 wall's body from its stored location
 line, which is its centreline, at its type's thickness, where the record
 box does not already give it. Core Interior's walls are unchanged.
@@ -365,6 +365,26 @@ and the viewer as their type's layers, stacked top first, where they add up
 to the element's recorded height; every layer matches Revit's on Snowdon's
 236 and Core Interior's 68 compared slabs
 (`reports/element-framing/RE-57-slab-layers.md`).
+**RE-58 (2026-09-23)** reads each material's name from its own data, by
+ElementId, and the IFC export writes the layers of walls, floors, roofs
+and ceilings as an `IfcMaterialLayerSetUsage` over an
+`IfcMaterialLayerSet`, each layer with its material and thickness.
+- Materials named: 219 of Snowdon's 220 and 78 of Core Interior's 86, and
+  every one of RE1's, Projeto1's, `teste_export_2025`'s and the tutorial
+  house's.
+- Against Revit's own exports, the layer names are Revit's, in Revit's
+  order, on 3,321 of Snowdon's 3,322 layers and all of Core Interior's
+  and RE1's.
+- The sets sit on Revit's bodies within 0.001 ft on 1,196 of 1,207
+  Snowdon elements, 88 of 88 on Core Interior and 15 of 15 on RE1, whose
+  2025 export writes the same four sets
+  (`reports/element-framing/RE-58-material-layer-sets.md`).
+
+Core Interior's reference export is a Reference View file with no layer
+set in it. There the layers are scored against the faces Revit's body
+styles with each material, and its walls, single layers by category, get
+none.
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

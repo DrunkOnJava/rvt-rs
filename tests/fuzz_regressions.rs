@@ -822,6 +822,7 @@ fn step_writer_handles_adversarial_model_strings() {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let out = write_step_with_options(&model, &StepOptions { timestamp: Some(0) });
         assert!(out.contains("IFCPROJECT"));

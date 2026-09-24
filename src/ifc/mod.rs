@@ -175,6 +175,11 @@ pub struct IfcModel {
     /// material's colour.
     #[serde(default)]
     pub element_layers: std::collections::BTreeMap<u32, ElementLayers>,
+    /// How each element's material layer set lies on it, by index into
+    /// `entities` (RE-58). An element with a layer set and no entry here
+    /// gets the IFC4 defaults.
+    #[serde(default)]
+    pub material_layer_usages: std::collections::BTreeMap<usize, entities::MaterialLayerSetUsage>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -192,13 +197,16 @@ pub struct ElementLayers {
 }
 
 /// One layer of an [`ElementLayers`].
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LayerBand {
     /// Feet.
     pub width_feet: f64,
     /// The layer material's shading colour, `0x00BBGGRR`; `None` where the
     /// layer takes its category's.
     pub color_packed: Option<u32>,
+    /// The layer material's name, where it is read (RE-58).
+    #[serde(default)]
+    pub name: Option<String>,
     /// 0 opaque to 1 fully transparent.
     pub transparency: f64,
 }
@@ -736,6 +744,7 @@ impl Exporter for PlaceholderExporter {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         })
     }
 }
@@ -1077,6 +1086,8 @@ fn export_rvt_doc(
 
     let recovered_units = recover_project_units(rf);
     let global_ids = revit_model_global_ids(rf, &entities, &building_storeys);
+    let (material_layer_sets, material_layer_usages) =
+        material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
 
     Ok(IfcModel {
         project_name,
@@ -1086,12 +1097,185 @@ fn export_rvt_doc(
         units: recovered_units.assignments,
         building_storeys,
         materials,
-        material_layer_sets: Vec::new(),
+        material_layer_sets,
         material_profile_sets: Vec::new(),
         representation_maps: Vec::new(),
         global_ids,
         element_layers,
+        material_layer_usages,
     })
+}
+
+/// How a layered element's layers lie on its extruded body (RE-58): a
+/// floor's, roof's or ceiling's from the top of the body down its third
+/// axis; a wall's from its exterior face across the plan axis its exterior
+/// normal runs along. `None` unless the layers add up to the body's
+/// thickness within [`body_geometry::LAYER_THICKNESS_TOLERANCE_FEET`] and
+/// a wall's exterior normal runs along one of its placement's plan axes.
+fn material_layer_set_usage(
+    layers: &ElementLayers,
+    extrusion: &entities::Extrusion,
+    rotation_radians: Option<f64>,
+) -> Option<entities::MaterialLayerSetUsage> {
+    let total: f64 = layers.layers.iter().map(|band| band.width_feet).sum();
+    let fits =
+        |extent: f64| (extent - total).abs() <= body_geometry::LAYER_THICKNESS_TOLERANCE_FEET;
+    if layers.stacked {
+        let height = extrusion.height_feet;
+        return fits(height).then_some(entities::MaterialLayerSetUsage {
+            direction: entities::LayerSetDirection::Axis3,
+            positive: false,
+            offset_feet: height,
+        });
+    }
+    let (outer, _) = body_geometry::extrusion_rings(extrusion)?;
+    let angle = rotation_radians.unwrap_or(0.0);
+    let (cos, sin) = (angle.cos(), angle.sin());
+    let [nx, ny] = layers.exterior_normal;
+    let local = [nx * cos + ny * sin, -nx * sin + ny * cos];
+    let (axis, direction, toward) = if local[1].abs() >= local[0].abs() {
+        (1, entities::LayerSetDirection::Axis2, local[1])
+    } else {
+        (0, entities::LayerSetDirection::Axis1, local[0])
+    };
+    if local[1 - axis].abs() > 1e-6 {
+        return None;
+    }
+    let coordinate = |p: &(f64, f64)| if axis == 0 { p.0 } else { p.1 };
+    let (low, high) = outer
+        .iter()
+        .map(coordinate)
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
+            (lo.min(v), hi.max(v))
+        });
+    if !fits(high - low) {
+        return None;
+    }
+    Some(if toward > 0.0 {
+        entities::MaterialLayerSetUsage {
+            direction,
+            positive: false,
+            offset_feet: high,
+        }
+    } else {
+        entities::MaterialLayerSetUsage {
+            direction,
+            positive: true,
+            offset_feet: low,
+        }
+    })
+}
+
+/// A layer set's identity: its type name, and each layer's material and
+/// thickness bits.
+type LayerSetKey = (String, Vec<(Option<usize>, u64)>);
+
+/// The material layer sets of layered elements (RE-58): one per type name
+/// and layer sequence, shared by its elements, each layer with its material
+/// where the material's name is read (added to `materials` with its colour
+/// when it is not already there) and its thickness; and each element's
+/// usage of its set, by entity index. An element with a single layer and no
+/// named material gets none: the set would say only what its body does.
+fn material_layer_sets_from_layers(
+    entities: &mut [entities::IfcEntity],
+    element_layers: &std::collections::BTreeMap<u32, ElementLayers>,
+    materials: &mut Vec<MaterialInfo>,
+) -> (
+    Vec<entities::MaterialLayerSet>,
+    std::collections::BTreeMap<usize, entities::MaterialLayerSetUsage>,
+) {
+    let mut sets: Vec<entities::MaterialLayerSet> = Vec::new();
+    let mut set_of: std::collections::BTreeMap<LayerSetKey, usize> =
+        std::collections::BTreeMap::new();
+    let mut usages = std::collections::BTreeMap::new();
+    for (index, entity) in entities.iter_mut().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            type_guid,
+            extrusion: Some(extrusion),
+            rotation_radians,
+            material_layer_set_index,
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let Some(layers) = type_guid
+            .as_deref()
+            .and_then(|tag| tag.parse::<u32>().ok())
+            .and_then(|id| element_layers.get(&id))
+        else {
+            continue;
+        };
+        if layers.layers.len() < 2 && layers.layers.iter().all(|band| band.name.is_none()) {
+            continue;
+        }
+        let Some(usage) = material_layer_set_usage(layers, extrusion, *rotation_radians) else {
+            continue;
+        };
+        let type_name = property_set
+            .as_ref()
+            .and_then(|set| {
+                set.properties
+                    .iter()
+                    .find_map(|property| match &property.value {
+                        entities::PropertyValue::Text(text)
+                            if property.name == export_content::TYPE_NAME_PROPERTY =>
+                        {
+                            Some(text.clone())
+                        }
+                        _ => None,
+                    })
+            })
+            .unwrap_or_default();
+        let key: Vec<(Option<usize>, u64)> = layers
+            .layers
+            .iter()
+            .map(|band| {
+                let material = band.name.as_ref().map(|name| {
+                    match materials.iter().position(|m| &m.name == name) {
+                        Some(found) => {
+                            let material = &mut materials[found];
+                            if material.color_packed.is_none() && band.color_packed.is_some() {
+                                material.color_packed = band.color_packed;
+                                material.transparency = Some(band.transparency);
+                            }
+                            found
+                        }
+                        None => {
+                            materials.push(MaterialInfo {
+                                name: name.clone(),
+                                color_packed: band.color_packed,
+                                transparency: band.color_packed.map(|_| band.transparency),
+                            });
+                            materials.len() - 1
+                        }
+                    }
+                });
+                (material, band.width_feet.to_bits())
+            })
+            .collect();
+        let set = *set_of
+            .entry((type_name.clone(), key.clone()))
+            .or_insert_with(|| {
+                sets.push(entities::MaterialLayerSet {
+                    name: type_name,
+                    layers: key
+                        .iter()
+                        .map(|&(material_index, width)| entities::MaterialLayer {
+                            material_index,
+                            thickness_feet: f64::from_bits(width),
+                            name: None,
+                        })
+                        .collect(),
+                    description: None,
+                });
+                sets.len() - 1
+            });
+        *material_layer_set_index = Some(set);
+        usages.insert(index, usage);
+    }
+    (sets, usages)
 }
 
 /// Revit's own GlobalIds (RE-48): for each building element whose `Tag`

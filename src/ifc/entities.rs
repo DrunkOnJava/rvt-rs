@@ -690,10 +690,11 @@ pub enum ProfileDef {
 /// One layer of a compound building-element material assembly
 /// (IFC-28). `thickness_feet` is the physical thickness (writer
 /// converts to metres at emit time). `material_index` points into
-/// `IfcModel.materials` — the material filling this layer.
+/// `IfcModel.materials` — the material filling this layer, or `None` for a
+/// layer whose material is not known (IFC4 makes it optional).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialLayer {
-    pub material_index: usize,
+    pub material_index: Option<usize>,
     pub thickness_feet: f64,
     /// Optional per-layer name. When `Some`, emitted as the
     /// `IfcMaterialLayer.Name` attribute. Revit's convention is
@@ -722,6 +723,26 @@ pub struct MaterialLayerSet {
     /// Optional description; emitted as `IfcMaterialLayerSet.Description`.
     #[serde(default)]
     pub description: Option<String>,
+}
+
+/// Which axis of an element's placement a material layer set runs along
+/// (IFC4 `IfcLayerSetDirectionEnum`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LayerSetDirection {
+    Axis1,
+    Axis2,
+    Axis3,
+}
+
+/// How a [`MaterialLayerSet`] lies on one element (IFC4
+/// `IfcMaterialLayerSetUsage`): the axis its layers stack along, whether
+/// they stack towards its positive or negative end, and where the first
+/// layer starts on it, feet from the placement.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MaterialLayerSetUsage {
+    pub direction: LayerSetDirection,
+    pub positive: bool,
+    pub offset_feet: f64,
 }
 
 impl MaterialLayerSet {
@@ -1396,17 +1417,17 @@ mod tests {
             description: None,
             layers: vec![
                 MaterialLayer {
-                    material_index: 0,
+                    material_index: Some(0),
                     thickness_feet: 5.0 / 12.0, // 5"
                     name: Some("Finish".into()),
                 },
                 MaterialLayer {
-                    material_index: 1,
+                    material_index: Some(1),
                     thickness_feet: 2.0 / 12.0, // 2"
                     name: Some("Structure".into()),
                 },
                 MaterialLayer {
-                    material_index: 2,
+                    material_index: Some(2),
                     thickness_feet: 1.0 / 12.0, // 1"
                     name: Some("Air Gap".into()),
                 },
