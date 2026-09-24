@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **IFC length properties no longer end in "Feet".** Their values were
+  always `IfcLengthMeasure` / `IfcPositiveLengthMeasure` in the file's
+  length unit, metres, so a name ending in "Feet" misread them by a factor
+  of 3.28. `ThicknessFeet` is now `Thickness`, `JoinReachStartFeet` /
+  `JoinReachEndFeet` are `JoinReachStart` / `JoinReachEnd`, `JoinTrimStartFeet`
+  / `JoinTrimEndFeet` are `JoinTrimStart` / `JoinTrimEnd`, `AxisLengthFeet`,
+  `SectionWidthFeet` and `SectionDepthFeet` are `AxisLength`, `SectionWidth`
+  and `SectionDepth`, and `TypeSectionWidthFeet` / `TypeSectionDepthFeet` are
+  `TypeSectionWidth` / `TypeSectionDepth`. The values are unchanged. Anything
+  that reads these properties by name needs the new names.
 - **Large projects open about twice as fast.** The partition scans each
   searched every partition once per element category, once per Level and
   once per type they looked for. They now make one pass for all of them.
@@ -78,7 +88,7 @@ All notable changes will be documented here. This project follows
   both have a single layer, since Revit cleans layered joins layer by
   layer. On Snowdon Towers 9 walls improve and none gets worse, and 346 of
   976 axis-parallel walls have both of Revit's ends, from 338. The IFC
-  reports each such end as `JoinReachStartFeet` / `JoinReachEndFeet`.
+  reports each such end as `JoinReachStart` / `JoinReachEnd`.
 - **A wall names the walls it butt-joins.** Every end the join lists
   decide, layered walls included, carries `JoinStartWallElementId` /
   `JoinEndWallElementId` and `JoinStartRunsThrough` / `JoinEndRunsThrough`
@@ -398,8 +408,8 @@ All notable changes will be documented here. This project follows
   - Beam ends are not trimmed at their supports (352 beams run past Revit's
     by a median 0.625 ft), and a beam whose box no solid along the line
     reproduces keeps its box (17, mostly oblique beams with skewed ends).
-  - The property set gains `AxisLengthFeet`, `SectionWidthFeet` and
-    `SectionDepthFeet`, and `BodySource` reads `partition_beam_axis`.
+  - The property set gains `AxisLength`, `SectionWidth` and
+    `SectionDepth`, and `BodySource` reads `partition_beam_axis`.
   - `rvt::partition_beam_axes` exposes the rule, and
     `examples/probe_re49_beam_axes.rs` scores it against a VIM export.
 - **Elements, rooms and storeys carry the GlobalId Revit's own exporter

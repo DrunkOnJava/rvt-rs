@@ -1433,11 +1433,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::Integer(i64::from(symbol)),
         });
         properties.push(Property {
-            name: "TypeSectionWidthFeet".into(),
+            name: "TypeSectionWidth".into(),
             value: PropertyValue::LengthFeet(section_width),
         });
         properties.push(Property {
-            name: "TypeSectionDepthFeet".into(),
+            name: "TypeSectionDepth".into(),
             value: PropertyValue::LengthFeet(section_depth),
         });
     }
@@ -1458,7 +1458,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::Boolean(true),
         });
         properties.push(Property {
-            name: "ThicknessFeet".into(),
+            name: "Thickness".into(),
             value: PropertyValue::LengthFeet(thickness),
         });
         properties.push(Property {
@@ -1499,18 +1499,18 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         }
         if let Some(reach) = reaches[slot] {
             properties.push(Property {
-                name: format!("JoinReach{end}Feet"),
+                name: format!("JoinReach{end}"),
                 value: PropertyValue::LengthFeet(reach),
             });
         }
     }
     if let (Some(_), Some(start), Some(end)) = (wall_thickness, wall_trim_start, wall_trim_end) {
         properties.push(Property {
-            name: "JoinTrimStartFeet".into(),
+            name: "JoinTrimStart".into(),
             value: PropertyValue::LengthFeet(start),
         });
         properties.push(Property {
-            name: "JoinTrimEndFeet".into(),
+            name: "JoinTrimEnd".into(),
             value: PropertyValue::LengthFeet(end),
         });
     }
@@ -1544,9 +1544,9 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // record box leaves across it.
     if let Some(beam) = beam {
         for (name, value) in [
-            ("AxisLengthFeet", beam.length_feet),
-            ("SectionWidthFeet", beam.width_feet),
-            ("SectionDepthFeet", beam.depth_feet),
+            ("AxisLength", beam.length_feet),
+            ("SectionWidth", beam.width_feet),
+            ("SectionDepth", beam.depth_feet),
         ] {
             properties.push(Property {
                 name: name.into(),
@@ -1601,7 +1601,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::Boolean(true),
         });
         properties.push(Property {
-            name: "ThicknessFeet".into(),
+            name: "Thickness".into(),
             value: PropertyValue::LengthFeet(height),
         });
         properties.push(Property {
@@ -2237,7 +2237,7 @@ mod tests {
         assert_eq!(location[2], 10.0 - depth);
         assert_eq!(body_source(&properties), Some(BEAM_AXIS_BODY_SOURCE));
         assert!(properties.properties.iter().any(|p| {
-            p.name == "AxisLengthFeet"
+            p.name == "AxisLength"
                 && matches!(p.value, PropertyValue::LengthFeet(v) if (v - length).abs() < 1e-9)
         }));
 
