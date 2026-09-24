@@ -81,7 +81,11 @@ fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
     }
     let transparency = f32_at(buf, at - 24)?;
     let second = f32_at(buf, at - 20)?;
-    if !(0.0..=1.0).contains(&transparency) || !(0.0..=1.0).contains(&second) {
+    // A run of `ff` longer than 8 also frames a read a few bytes early,
+    // whose floats are subnormal: Core Interior's Glass reads 2.35e-38 and
+    // black there, 0.75 and blue three bytes on.
+    let plausible = |v: f32| (0.0..=1.0).contains(&v) && (v == 0.0 || v.is_normal());
+    if !plausible(transparency) || !plausible(second) {
         return None;
     }
     // Each COLORREF's high byte is zero.

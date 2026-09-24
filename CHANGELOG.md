@@ -265,6 +265,12 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A material's colour was read from a misaligned frame when a longer
+  run of `ff` bytes preceded its shading frame.** The early read's floats
+  are subnormal and its colour a byte-shifted or black one: Core Interior's
+  Glass read black instead of Revit's 0000ff at 0.75 transparency. Frames
+  with subnormal floats are now rejected; 3 to 6 materials per file change,
+  and Glass now equals Revit's style.
 - **Orbiting the viewer no longer changes the selection.** An element was
   picked on every mouse press, so each drag that started on an element
   selected it. It is now picked on a click: a press and release within a few
