@@ -1520,14 +1520,15 @@ pub const WALL_AXIS_END_FIELDS: [&str; 2] = ["m_wall_axis_end_x", "m_wall_axis_e
 pub const WALL_TYPE_THICKNESS_FIELD: &str = "m_wall_type_thickness";
 /// Fields holding how far past the start and the end of its centreline a
 /// wall's body reaches at a butt join, feet, negative where it stops short
-/// (RE-70). Absent at an end the join lists do not decide.
+/// (RE-70), or at a T joint (RE-73). Absent at an end neither decides.
 pub const WALL_JOIN_REACH_FIELDS: [&str; 2] = ["m_wall_join_start_reach", "m_wall_join_end_reach"];
 /// Fields holding the one wall a wall butt-joins at its start and at its
-/// end, where the join lists decide which of the two runs through (RE-70).
+/// end, where the join lists decide which of the two runs through (RE-70),
+/// or the wall it stops against at a T joint (RE-73).
 pub const WALL_JOIN_PARTNER_FIELDS: [&str; 2] = ["m_wall_join_start_wall", "m_wall_join_end_wall"];
 /// Fields holding how far past the start and the end of its centreline
-/// each of a wall's layers reaches at a layered butt join, exterior first,
-/// feet (RE-71).
+/// each of a wall's layers reaches at a layered butt join (RE-71) or T
+/// joint (RE-73), exterior first, feet.
 pub const WALL_JOIN_LAYER_REACH_FIELDS: [&str; 2] = [
     "m_wall_join_start_layer_reaches",
     "m_wall_join_end_layer_reaches",

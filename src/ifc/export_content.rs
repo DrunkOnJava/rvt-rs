@@ -849,7 +849,7 @@ struct WallCentrelineBody {
     depth_feet: f64,
     thickness_feet: f64,
     /// How far past its line's start and end the body reaches at a butt
-    /// join, where the join lists decided it (RE-70).
+    /// join its join lists decide (RE-70) or a T joint (RE-73).
     join_reach_feet: [Option<f64>; 2],
 }
 
@@ -868,7 +868,8 @@ struct WallCentrelineBody {
 ///   foot) wider than that rectangle's.
 /// - an end at a butt join its join lists decide reaches half the other
 ///   wall's thickness past the line's end, or stops that far short of it
-///   (RE-70), for either kind of wall.
+///   (RE-70), for either kind of wall; an end at a T joint stops that far
+///   short (RE-73).
 ///
 /// `None` when the line is degenerate, its midpoint lies outside the box,
 /// or the box is thinner than the type or too wide.
@@ -1465,7 +1466,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::Text(source.into()),
         });
     }
-    // RE-70: an end its join lists decide names the wall it butt-joins and
+    // RE-70, RE-73: an end a join decides names the wall it butt-joins and
     // whether it runs through, and, where the body was drawn to it, how
     // far past the line it reaches (negative where it stops short).
     let reaches = wall_centreline.map_or([None, None], |body| body.join_reach_feet);
