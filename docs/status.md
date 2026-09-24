@@ -449,6 +449,13 @@ Revit's name, up from 101
 its list names a text type, a type object that frames a font after its
 name. On Snowdon all 7 model texts carry Revit's name
 (`reports/element-framing/RE-67-model-text-names.md`).
+**RE-68 (2026-09-24)** places the Snowdon elements RE-59 and RE-60 left on
+no storey. A multistory stair takes the Level its base sits at, and its
+railings follow it. The parts of a nested light fixture follow the fixture.
+Slab edges, light fixtures, wall sweeps, generic models, hardscape and
+stairs take the Level their base elevation gives, within a fail-closed
+band. 97 of the 102 are now on Revit's storey and none is on a wrong one
+(`reports/element-framing/RE-68-remaining-storeys.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

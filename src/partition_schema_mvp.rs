@@ -219,7 +219,9 @@ pub fn recover_partition_schema_mvp(
         &mut out.products,
     ];
     resolve_base_constraint_levels(&level_elevations, &mut record_backed);
+    resolve_base_at_level(&level_elevations, &mut record_backed);
     resolve_hosted_levels(rf, &level_elevations, &mut record_backed);
+    resolve_remaining_levels(&level_elevations, &mut record_backed);
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
@@ -3394,6 +3396,113 @@ fn resolve_hosted_levels(
         };
         if refs::level_at_or_below(elevations, base) == Some(level) {
             bind_record_level(element, level, refs::LEVEL_OBJECT_SOURCE);
+        }
+    }
+}
+
+/// A record-backed element's base elevation, feet.
+fn record_base_feet(element: &DecodedElement) -> Option<f64> {
+    element.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == "m_locationZ" => Some(*value),
+        _ => None,
+    })
+}
+
+/// RE-68: a stair or ramp that names no Level, or several (a multistory
+/// stair names three), takes the one Level its base sits exactly at, so
+/// its railings can follow it (RE-60). On Snowdon Towers these are the
+/// three multistory stairs, whose base is L3's elevation; Revit writes
+/// each one on L3 and again on L4.
+fn resolve_base_at_level(
+    elevations: &std::collections::BTreeMap<u32, f64>,
+    elements: &mut [&mut Vec<DecodedElement>],
+) {
+    use crate::element_record_level_refs as refs;
+    for element in elements.iter_mut().flat_map(|list| list.iter_mut()) {
+        if record_level(element).is_some() || !matches!(element.class.as_str(), "Stair" | "Ramp") {
+            continue;
+        }
+        let Some(base) = record_base_feet(element) else {
+            continue;
+        };
+        let mut at = elevations
+            .iter()
+            .filter(|(_, at)| (**at - base).abs() <= 1e-3);
+        if let (Some((&level, _)), None) = (at.next(), at.next()) {
+            bind_record_level(element, level, refs::BASE_AT_LEVEL_SOURCE);
+        }
+    }
+}
+
+/// Classes Revit's export places by elevation when their record names no
+/// Level of their own (RE-68): on Snowdon Towers every unplaced slab edge,
+/// light fixture, wall sweep, generic model, hardscape element and stair is
+/// on the Level [`crate::element_record_level_refs::elevation_band_level`]
+/// gives, while plumbing fixtures follow the Level object they name instead.
+pub const ELEVATION_PLACED_CLASSES: &[&str] = &[
+    "SlabEdge",
+    "LightingFixture",
+    "WallSweep",
+    "GenericModel",
+    "Hardscape",
+    "Stair",
+];
+
+/// RE-68: a Level for record-backed elements still without one after RE-59
+/// and RE-60.
+///
+/// - An element takes the Level of the one element of its own class its
+///   record names, where that has one: the parts of a nested light-fixture
+///   family follow the fixture that holds them.
+/// - Otherwise an element of [`ELEVATION_PLACED_CLASSES`] takes the Level
+///   its base elevation gives, within a fail-closed band
+///   ([`crate::element_record_level_refs::elevation_band_level`]).
+///
+/// Measured on Snowdon Towers against every copy Revit writes of each
+/// element (a multistory stair and its railings appear once per storey).
+fn resolve_remaining_levels(
+    elevations: &std::collections::BTreeMap<u32, f64>,
+    elements: &mut [&mut Vec<DecodedElement>],
+) {
+    use crate::element_record_level_refs as refs;
+    if elevations.is_empty() {
+        return;
+    }
+    let leveled: std::collections::BTreeMap<u32, (String, u32)> = elements
+        .iter()
+        .flat_map(|list| list.iter())
+        .filter_map(|element| Some((element.id?, (element.class.clone(), record_level(element)?))))
+        .collect();
+    for element in elements.iter_mut().flat_map(|list| list.iter_mut()) {
+        if record_level(element).is_some() {
+            continue;
+        }
+        let references = element_ids_field(element, refs::REFERENCES_FIELD);
+        let same_class: BTreeSet<u32> = references
+            .iter()
+            .filter_map(|id| leveled.get(id))
+            .filter(|(class, _)| *class == element.class)
+            .map(|(_, level)| *level)
+            .collect();
+        let hosts = references
+            .iter()
+            .filter(|id| {
+                leveled
+                    .get(id)
+                    .is_some_and(|(class, _)| *class == element.class)
+            })
+            .count();
+        if let (1, Some(&level)) = (hosts, same_class.first()) {
+            bind_record_level(element, level, refs::SAME_CLASS_HOST_SOURCE);
+            continue;
+        }
+        if !ELEVATION_PLACED_CLASSES.contains(&element.class.as_str()) {
+            continue;
+        }
+        if let Some(level) =
+            record_base_feet(element).and_then(|base| refs::elevation_band_level(elevations, base))
+        {
+            bind_record_level(element, level, refs::BASE_ELEVATION_SOURCE);
         }
     }
 }
