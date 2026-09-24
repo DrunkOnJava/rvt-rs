@@ -289,6 +289,22 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The IFC export's materials are now the file's own materials (#34).**
+  On Revit 2024 and 2025 files, `IfcMaterial` now lists each material the
+  file declares whose name is read (RE-58), each with its shading colour.
+  It used to list every material-like string found in the file:
+
+  | file | materials written before | now |
+  |---|---:|---:|
+  | Snowdon Towers | 946 | 219 |
+  | RE1 Architecture | 775 | 69 |
+  | the Autodesk tutorial house | 686 | 171 |
+  | Core Interior | 104 | 78 |
+
+  - Every material Revit's own export writes is among them, except two on
+    Snowdon, and each colour both exports write is Revit's.
+  - The viewer's Materials row lists these names.
+  - Earlier releases keep the string heuristic.
 - **A material's colour was read from a misaligned frame when a longer
   run of `ff` bytes preceded its shading frame.** The early read's floats
   are subnormal and its colour a byte-shifted or black one: Core Interior's

@@ -381,6 +381,12 @@ and ceilings as an `IfcMaterialLayerSetUsage` over an
   2025 export writes the same four sets
   (`reports/element-framing/RE-58-material-layer-sets.md`).
 
+Since #34, the IFC's material list on Revit 2024 and 2025 is those named
+material records, each with its colour, rather than every material-like
+string in the file: Snowdon writes 219 materials instead of 946, and Core
+Interior 78 instead of 104. Every material Revit's own export writes is
+among them, except two on Snowdon.
+
 Core Interior's reference export is a Reference View file with no layer
 set in it. There the layers are scored against the faces Revit's body
 styles with each material, and its walls, single layers by category, get

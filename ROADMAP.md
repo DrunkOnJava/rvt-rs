@@ -29,8 +29,9 @@ terminals, food-service equipment, planting, parking, entourage, hardscape,
 elevators and ramps (RE-37). IFC export
 wires partition **Level** → storeys, **Floor** / **BuildingPad** →
 `IFCSLAB` (or `IFCSHADINGDEVICE` under a per-element Revit export
-override), **Room** → `IFCSPACE`, and **Material** display names →
-`IfcMaterial`.
+override), **Room** → `IFCSPACE`, and **Material** → `IfcMaterial`: on 2024 and
+2025 the file's own material records, named by ElementId with their
+colours (RE-58, #34), and display-name strings before that.
 **RE-19 (2026-08-29) negative on magnetar corpora:** no reliable Door vs
 Window discriminator in the 2024 opening index / nearby partition strings /
 ElemTable payloads, and no schema-field `Wall` / fail-closed 2024 ArcWall
