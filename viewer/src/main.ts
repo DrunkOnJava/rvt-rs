@@ -2377,8 +2377,8 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
         'Parameters',
         parameterValueCount > 0 ? 'ok' : 'warn',
         parameterValueCount > 0
-          ? `${parameterValueCount} AProperty* value(s) recovered`
-          : 'None recovered (AProperty* host joins pending)',
+          ? `${parameterValueCount} parameter ${parameterValueCount === 1 ? 'value' : 'values'} read`
+          : "Revit's parameter table is not read yet · each element lists the properties rvt-rs decodes",
       ),
     );
     statusPanelEl.appendChild(
