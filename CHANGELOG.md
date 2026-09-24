@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Curtain panels that are walls, slab edges and ramps are named as Revit
+  names them (RE-64).**
+  - A curtain grid cell can hold a basic wall. Its record keeps the panel
+    category but names a wall type. Such a panel now takes the one wall
+    type its record names, when that type has compound layers, and is
+    named "Basic Wall:Type:ElementId" (#370).
+  - Slab edges and ramps take their only system family: "Slab
+    Edge:_Stair Landing Plate Stringer:629902" rather than
+    "SlabEdge-629902".
+  - On Snowdon Towers, 18 of 18 panel walls and 59 of 59 slab edges carry
+    Revit's `Name` and `ObjectType`, and both ramps its `ObjectType`.
 - **The viewer's scene tree groups each storey by category and leads each
   element with its type name.** A storey opens to its categories, each
   with a count, and a category to its elements, sorted by family and type.

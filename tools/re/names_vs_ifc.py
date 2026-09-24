@@ -2,13 +2,14 @@
 """Compare the Name and ObjectType of each element in an rvt-rs IFC with
 Revit's own IFC export of the same file.
 
-Research tool for `reports/element-framing/RE-63-system-family-element-names.md`.
+Research tool for `reports/element-framing/RE-63-system-family-element-names.md`
+and `RE-64-panel-walls-slab-edges-ramps.md`.
 
 Elements are matched by `Tag`, the Revit ElementId. An `IfcOpeningElement`
 carries the Tag of the element that cuts it, so openings are left out. An
 element counts as a system-family element when Revit's Name starts with a
-system family (Basic Wall, Curtain Wall, Floor, Pad, Compound Ceiling,
-Basic Roof, Railing, ...), and as a family instance otherwise.
+system family (Basic Wall, Curtain Wall, Floor, Pad, Slab Edge, Ramp,
+Compound Ceiling, Basic Roof, Railing, ...), and as a family instance otherwise.
 
 Usage:
 
@@ -30,6 +31,8 @@ SYSTEM_FAMILIES = {
     "Floor",
     "Foundation Slab",
     "Pad",
+    "Slab Edge",
+    "Ramp",
     "Compound Ceiling",
     "Basic Ceiling",
     "Basic Roof",
