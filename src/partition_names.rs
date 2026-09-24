@@ -338,6 +338,19 @@ pub fn find_railing_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u
         .collect()
 }
 
+/// The ids in `wanted` that have a type object ([`TYPE_OBJECT_TAG`]) in
+/// `buf` (RE-69).
+pub fn find_type_object_ids(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeSet<u32> {
+    crate::partition_id_objects::find_id_objects(buf, wanted)
+        .into_iter()
+        .filter(|(_, id_at)| {
+            let tag_at = id_at + TYPE_OBJECT_TAG_OFFSET;
+            buf.get(tag_at..tag_at + 2) == Some(&TYPE_OBJECT_TAG[..])
+        })
+        .map(|(id, _)| id)
+        .collect()
+}
+
 /// The frame tag of a type object's own name on Revit 2024 (RE-67), as
 /// material names are framed (RE-58): `ff ff ff ff 49 01 · u32 n · UTF-16`.
 pub const TYPE_NAME_FRAME_TAG: [u8; 2] = [0x49, 0x01];

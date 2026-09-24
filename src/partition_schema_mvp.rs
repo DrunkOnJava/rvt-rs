@@ -273,6 +273,8 @@ pub fn recover_partition_schema_mvp(
     attach_panel_wall_types(rf, revit_version, &mut unnamed_panels);
     // --- Model text (RE-67) ---
     attach_model_text_types(rf, revit_version, &mut out.products);
+    // --- Wall sweeps (RE-69) ---
+    attach_wall_sweep_types(rf, revit_version, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
     attach_wall_layers(rf, revit_version, &mut out.walls);
     // --- A shed roof's slope (RE-56) ---
@@ -503,6 +505,118 @@ fn attach_type_picks(
         element
             .fields
             .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+    }
+}
+
+/// Give wall sweeps their type and family, or Revit's name for one without a
+/// type (RE-69).
+///
+/// A wall sweep's type is a system-family type with no type-definition
+/// record of the sweep category, so RE-44's join finds none. Its record
+/// names it among other things: its profile (a family type with a name
+/// entry, RE-38), its material, the walls it runs along. The type is the
+/// one id the record names that has a type object
+/// ([`crate::partition_names::find_type_object_ids`]), no name entry, and
+/// an element-data name; the sweep is then named `Wall Sweep:<type>:<id>`.
+/// A sweep whose record names no such object at all is a sweep of a wall
+/// type's own structure, which Revit names by its ElementId alone.
+///
+/// Measured on Snowdon Towers only (Revit 2024): 249 sweeps take a type and
+/// 9 are named by ElementId, all as Revit's export names them.
+fn attach_wall_sweep_types(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    if revit_version != 2024 {
+        return;
+    }
+    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+        return;
+    };
+    let has = |element: &DecodedElement, field: &str| {
+        element.fields.iter().any(|(name, _)| name == field)
+    };
+    let mut lists: Vec<(usize, BTreeSet<u32>)> = Vec::new();
+    for (index, element) in products.iter().enumerate() {
+        if element.class != "WallSweep"
+            || has(element, TYPE_NAME_FIELD)
+            || has(element, FAMILY_NAME_FIELD)
+            || has(element, ELEMENT_NAME_FIELD)
+        {
+            continue;
+        }
+        let Some((references, _)) = record_references(rf, element) else {
+            continue;
+        };
+        let named: BTreeSet<u32> = references
+            .iter()
+            .filter_map(|&slot| u32::try_from(slot).ok())
+            .filter(|id| Some(*id) != element.id)
+            .collect();
+        lists.push((index, named));
+    }
+    if lists.is_empty() {
+        return;
+    }
+    let entries = rf.element_names();
+    let wanted: BTreeSet<u32> = lists
+        .iter()
+        .flat_map(|(_, ids)| ids.iter().copied())
+        .filter(|id| !entries.entries.contains_key(id))
+        .collect();
+    let mut objects: BTreeSet<u32> = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        objects.extend(crate::partition_names::find_type_object_ids(
+            inflated.bytes(),
+            &wanted,
+        ));
+    }
+    let names = type_data_names(rf, &header, &objects);
+    for (index, ids) in lists {
+        let types: Vec<u32> = ids
+            .iter()
+            .copied()
+            .filter(|id| objects.contains(id))
+            .collect();
+        let element = &mut products[index];
+        match types.as_slice() {
+            [] => {
+                if let Some(id) = element.id {
+                    element.fields.push((
+                        ELEMENT_NAME_FIELD.into(),
+                        InstanceField::String(id.to_string()),
+                    ));
+                }
+            }
+            [type_id] => {
+                let Some(Some(name)) = names.get(type_id) else {
+                    continue;
+                };
+                element.fields.push((
+                    TYPE_ID_FIELD.into(),
+                    InstanceField::ElementId {
+                        tag: 0,
+                        id: *type_id,
+                    },
+                ));
+                element
+                    .fields
+                    .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+                element.fields.push((
+                    FAMILY_NAME_FIELD.into(),
+                    InstanceField::String("Wall Sweep".into()),
+                ));
+                element.fields.push((
+                    FAMILY_NAME_SOURCE_FIELD.into(),
+                    InstanceField::String(SYSTEM_FAMILY_SOURCE.into()),
+                ));
+            }
+            _ => {}
+        }
     }
 }
 

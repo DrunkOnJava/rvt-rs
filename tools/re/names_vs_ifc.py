@@ -45,6 +45,7 @@ SYSTEM_FAMILIES = {
     "Cast-In-Place Stair",
     "Precast Stair",
     "Model Text",
+    "Wall Sweep",
 }
 
 
