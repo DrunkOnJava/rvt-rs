@@ -3857,10 +3857,15 @@ fn record_level(element: &DecodedElement) -> Option<u32> {
 ///
 /// - A railing takes the Level of the one stair or ramp its record names,
 ///   where that has one.
-/// - Any other element takes the Level the objects its record names carry
-///   ([`crate::partition_level_records::scan_level_objects`]), only where
-///   they carry one and it is also the highest Level at or below the
-///   element's base ([`crate::element_record_level_refs::level_at_or_below`]).
+/// - A plumbing fixture takes the Level the objects its record names carry
+///   ([`crate::partition_level_records::scan_level_objects`]), where they
+///   carry one (RE-68 §6). On Snowdon Towers that is Revit's storey for all
+///   4 such fixtures, where their base elevation gives another.
+/// - Any other element takes that Level only where it is also the highest
+///   Level at or below the element's base
+///   ([`crate::element_record_level_refs::level_at_or_below`]). For light
+///   fixtures, slab edges and wall sweeps the objects alone name a Level
+///   other than Revit's on 73 of the 214 that name one.
 fn resolve_hosted_levels(
     rf: &mut RevitFile,
     elevations: &std::collections::BTreeMap<u32, f64>,
@@ -3914,7 +3919,14 @@ fn resolve_hosted_levels(
             InstanceField::Float { value, .. } if name == "m_locationZ" => Some(*value),
             _ => None,
         });
-        let (Some(&level), 1, Some(base)) = (carried.first(), carried.len(), base) else {
+        let (Some(&level), 1) = (carried.first(), carried.len()) else {
+            continue;
+        };
+        if element.class == "PlumbingFixture" {
+            bind_record_level(element, level, refs::PLUMBING_LEVEL_OBJECT_SOURCE);
+            continue;
+        }
+        let Some(base) = base else {
             continue;
         };
         if refs::level_at_or_below(elevations, base) == Some(level) {

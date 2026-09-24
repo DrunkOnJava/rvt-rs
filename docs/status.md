@@ -455,7 +455,10 @@ railings follow it. The parts of a nested light fixture follow the fixture.
 Slab edges, light fixtures, wall sweeps, generic models, hardscape and
 stairs take the Level their base elevation gives, within a fail-closed
 band. 97 of the 102 are now on Revit's storey and none is on a wrong one
-(`reports/element-framing/RE-68-remaining-storeys.md`).
+(`reports/element-framing/RE-68-remaining-storeys.md`). Its addendum
+(§6, #369) places the 4 plumbing fixtures left over: they take the Level
+their Level objects carry, as Revit does, whatever their base elevation
+gives. On Snowdon 5,949 elements are on Revit's storey, 1 on no storey.
 **RE-69 (2026-09-24)** names wall sweeps "Wall Sweep:<type>:<ElementId>"
 from the one type object their record names, and names a sweep of a wall
 type's own structure by its ElementId, as Revit does. On Snowdon all 258

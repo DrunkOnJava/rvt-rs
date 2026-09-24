@@ -29,7 +29,8 @@
 //! stair or ramp it names. Any other element takes a Level only where two
 //! readings agree: the Level of the objects it names (each object
 //! `01 00 00 00 · u64 id · u64 Level id`), and the highest Level at or below
-//! its base ([`level_at_or_below`]).
+//! its base ([`level_at_or_below`]). A plumbing fixture takes the Level of
+//! the objects it names on its own (RE-68 §6).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -67,6 +68,11 @@ pub const HOST_SOURCE: &str = "partition_element_record_host";
 /// the objects its record names carry, where that is also the highest
 /// Level at or below its base (RE-60).
 pub const LEVEL_OBJECT_SOURCE: &str = "partition_element_record_level_object";
+
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a plumbing fixture given the
+/// Level the objects its record names carry, whatever its base elevation
+/// (RE-68 §6).
+pub const PLUMBING_LEVEL_OBJECT_SOURCE: &str = "partition_element_record_plumbing_level_object";
 
 /// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a stair or ramp whose base sits
 /// exactly at one Level's elevation (RE-68).
