@@ -411,6 +411,13 @@ tutorial house, where 230 were on none (#365), leaves one railing
 
 Snowdon now has 5,805 elements in Revit's storey and 102 on none
 (`reports/element-framing/RE-60-hosted-levels.md`).
+**RE-61 (2026-09-24)** names each layer set `Family:Type` as Revit does,
+for example "Basic Wall:Exterior - Brick on Mtl. Stud". Revit stores no
+system family name; a type with compound layers is a Basic Wall, Floor,
+Compound Ceiling, Basic Roof or Pad by its category. The names equal
+Revit's on all 1,210 Snowdon elements and on every Core Interior and
+RE1 element
+(`reports/element-framing/RE-61-system-family-names.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

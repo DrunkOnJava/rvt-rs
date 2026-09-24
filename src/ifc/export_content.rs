@@ -183,10 +183,13 @@ pub fn append_typed_production_elements(
 
         // RE-53: a wall's layers, for the glTF export to draw in colour.
         if policy.include_geometry {
-            if let (Some(id), Some(layers)) = (
+            if let (Some(id), Some(mut layers)) = (
                 decoded.id,
                 crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields),
             ) {
+                layers.system_family =
+                    crate::partition_schema_mvp::layered_system_family(&decoded.class)
+                        .map(String::from);
                 out.element_layers.insert(id, layers);
             }
         }

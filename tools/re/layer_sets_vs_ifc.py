@@ -5,6 +5,8 @@ export of the same file.
 Research tool for `reports/element-framing/RE-58-material-layer-sets.md`.
 For every element rvt-rs gives an `IfcMaterialLayerSetUsage`, it:
 
+- compares the set's name with the `Family:Type` part of Revit's name for
+  the element (RE-61);
 - compares the layer materials' names with the names of the layers Revit's
   export gives the same element (its constituent or layer set), in order;
 - places each layer where the usage puts it: along the usage's axis of the
@@ -86,7 +88,8 @@ def main():
     settings.set("use-world-coords", True)
     by_tag = {}
     for element in theirs.by_type("IfcElement"):
-        if element.Tag:
+        # An opening carries the Tag of the element that cuts it.
+        if element.Tag and not element.is_a("IfcOpeningElement"):
             by_tag.setdefault(element.Tag, element)
     stats = collections.Counter()
     errors = []
@@ -105,6 +108,10 @@ def main():
             stats["not in Revit's export"] += 1
             continue
         revit_names = names_of(revit)
+        family_type = ":".join((revit.Name or "").split(":")[:2])
+        if family_type.count(":") == 1:
+            same = usage.ForLayerSet.LayerSetName == family_type
+            stats["set name = Revit's Family:Type" if same else "set name differs from Revit's Family:Type"] += 1
         if revit_names and len(revit_names) == len(our_names):
             for a, b in zip(our_names, revit_names):
                 if a is None:
