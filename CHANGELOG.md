@@ -34,6 +34,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Walls that meet at an angle end on slanted lines, as Revit draws them
+  (RE-74, #358).** RE-70's butt joins, RE-71's layered corners and RE-73's
+  T joints now apply where two walls meet at 45 to 135 degrees, not only
+  at right angles, and each layer ends where its two edges meet the other
+  wall's face or layer boundary. On Snowdon Towers 34 of 102 angled walls
+  have both of Revit's ends, from 18, and 689 of 976 axis-parallel walls,
+  from 675. Every angled L join drawn is right along every layer edge, and
+  18 of 22 angled T joints. One wall gets worse: its core now ends where
+  Revit's does, but Revit runs its interior finish past the end. At sharp
+  corners and shallow bends, outside 45 to 135 degrees, Revit draws
+  something else, so those joints keep their ends.
 - **Plumbing fixtures whose record names no Level sit on Revit's storey
   (RE-68, #369).** They take the Level the objects their record names
   carry, as Revit's export does, even where their base elevation points

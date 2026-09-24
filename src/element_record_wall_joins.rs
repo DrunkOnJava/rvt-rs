@@ -313,9 +313,9 @@ pub fn join_trims(records: &[PartitionElementRecord]) -> BTreeMap<u32, WallJoinT
 pub const PERPENDICULAR_EPS: f64 = 1e-6;
 
 /// The largest `|cos|` of the angle between two walls at which an angled
-/// join is read (45 degrees). On Snowdon Towers Revit butt-joins the walls
-/// that meet at 65 to 80 degrees, and none of the 14 ends where they meet at
-/// 10 to 30 degrees.
+/// join is read: 45 to 135 degrees. On Snowdon Towers Revit butt-joins walls
+/// whose corner is 82.5 to 114.5 degrees, and none of the 14 ends at sharper
+/// corners (7.5 and 24.5 degrees) or shallower bends (148 to 172.5 degrees).
 pub const ANGLED_JOIN_MAX_COSINE: f64 = std::f64::consts::FRAC_1_SQRT_2;
 
 /// A wall's centreline, its type's thickness and layers, its exterior side
@@ -395,6 +395,10 @@ pub struct ButtJoin {
 ///
 /// An end no other wall's centreline ends at is read as a T joint where it
 /// lies part way along another wall's centreline ([`tee_join`], RE-73).
+///
+/// Two walls that meet at 45 to 135 degrees, rather than at a right angle,
+/// are read the same way, and their ends slant along the other
+/// wall's lines ([`angled_layer_edges`], [`angled_tee_edges`], RE-74).
 pub fn butt_joins(
     walls: &[WallLine],
     partners: &BTreeMap<u32, BTreeSet<u32>>,
@@ -510,8 +514,9 @@ pub fn butt_joins(
 /// clean stop at the face, as it does at all three on RE1 (Revit 2025).
 ///
 /// `None` unless exactly one other wall overlapping it in elevation has
-/// `point` on its centreline, perpendicular to `wall`, far enough from its
-/// ends that all of `wall`'s width meets its side. Where the other wall ends
+/// `point` on its centreline, at 45 to 135 degrees to `wall` (a slanted
+/// end below a right angle, [`angled_tee_edges`]), far enough from its ends
+/// that all of `wall`'s width meets its side. Where the other wall ends
 /// within that width, Revit stops `wall` at the other wall's face or does
 /// not join the two at all (Core Interior's 8), so it is left alone.
 pub fn tee_join(
@@ -751,7 +756,7 @@ pub fn angled_layer_edges(
 /// T joint (RE-74): each of its layers ends, along both of its edges, on
 /// the host boundary line RE-73's layer priorities give, counted from the
 /// face it meets. A single-layer wall stops at that face.
-fn angled_tee_edges(
+pub fn angled_tee_edges(
     wall: &WallLine,
     host: &WallLine,
     point: [f64; 2],

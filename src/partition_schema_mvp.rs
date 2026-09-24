@@ -1625,7 +1625,10 @@ pub fn wall_layer_ends_from_fields(fields: &[(String, InstanceField)]) -> Option
         .iter()
         .map(|band| band.width_feet)
         .collect();
-    if square.iter().flatten().any(|reach| reach.len() != widths.len())
+    if square
+        .iter()
+        .flatten()
+        .any(|reach| reach.len() != widths.len())
         || slanted
             .iter()
             .flatten()
