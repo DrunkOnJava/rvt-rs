@@ -100,6 +100,18 @@ The viewer can show a scene, categories, element info, schedule summary, export
 quality, a demo gallery with license/provenance, and a supported-profile matrix.
 Geometry shown in the viewer is limited to what rvt-rs actually decoded.
 
+The scene tree lists each storey's elements by category, with a count per
+category. A category opens to its elements, sorted by family and type. Each
+element row leads with its type name, with the family and ElementId on a
+second line, so "Basic Wall:8" Interior Partition 3 Hour:20796" reads as
+"8" Interior Partition 3 Hour" over "Basic Wall · 20796". A curtain wall
+opens to its panels and mullions, and a stair to its flights. Doors and
+windows are listed in their own category; the info panel names the wall
+that hosts them. Selecting a category lights up its elements. Picking an
+element in the 3-D view opens its category and scrolls to it. The arrow
+keys move through the tree: Right opens a row, Left closes it or moves to
+its parent, and Home and End go to the first and last rows.
+
 Selecting an element fills the info panel with typed rows rather than raw
 record fields: name, IFC type and predefined type, GUID, the storey it sits
 on (clickable — it selects that storey in the tree), placement and extents

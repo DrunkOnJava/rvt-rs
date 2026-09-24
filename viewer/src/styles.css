@@ -304,11 +304,71 @@ header .export-btn:active:not(:disabled) {
 .tree-node.tree-storey-unassigned {
   color: var(--sx-color-warning);
 }
+.tree-node.tree-category {
+  font-weight: var(--sx-fw-semibold);
+}
+/* Rows open and close from a chevron, drawn as the diagnostics disclosure's. */
+.tree-caret {
+  display: inline-flex;
+  flex: none;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 1lh;
+  margin: 0 4px 0 -4px;
+  border-radius: var(--sx-radius-sm);
+}
+.tree-caret::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border: solid var(--sx-color-dimmed);
+  border-width: 0 1.75px 1.75px 0;
+  transform: translateX(-1px) rotate(-45deg);
+  transition: transform var(--sx-duration-base) var(--sx-ease-standard);
+}
+.tree-node[aria-expanded='true'] > .tree-caret::before {
+  transform: translateY(-1px) rotate(45deg);
+}
+.tree-caret-none::before {
+  content: none;
+}
+.tree-caret:not(.tree-caret-none):hover {
+  background: var(--sx-color-selected-hover);
+}
+/* A row reads as its label over a quieter line (an element's family and
+   ElementId, a storey's elevation), with a category's count on the right. */
+.tree-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.tree-detail {
+  font-size: var(--sx-fs-xs);
+  font-weight: var(--sx-fw-regular);
+  color: var(--sx-color-dimmed);
+}
+.tree-node.tree-storey-unassigned .tree-detail {
+  color: inherit;
+}
+.tree-count {
+  flex: none;
+  padding-left: 8px;
+  font-size: var(--sx-fs-xs);
+  font-weight: var(--sx-fw-regular);
+  font-variant-numeric: tabular-nums;
+  color: var(--sx-color-dimmed);
+}
 /* Children hang off a 1px rail, as the navbar's sub-links do. */
 .tree-children {
   margin-left: 12px;
   padding-left: 6px;
   border-left: 1px solid var(--sx-color-border-subtle);
+}
+.tree-children[hidden] {
+  display: none;
 }
 
 /* ---- Categories: checkbox rows ------------------------------------------ */
@@ -327,6 +387,14 @@ header .export-btn:active:not(:disabled) {
 }
 .category-toggle:hover {
   background: var(--sx-color-selected-hover);
+}
+.category-toggle .tree-count {
+  margin-left: auto;
+}
+.category-empty {
+  padding: 4px 8px;
+  font-size: var(--sx-fs-xs);
+  color: var(--sx-color-dimmed);
 }
 .category-toggle:focus-within {
   background: var(--sx-color-selected);

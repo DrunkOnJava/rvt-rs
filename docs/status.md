@@ -436,10 +436,11 @@ checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
 whose bytes do not match the catalog hash, and both cards are gated by
 Playwright. Viewer File Status lists
 recovered storey names, material name samples, and an honest Parameters
-row (empty until AProperty* host joins). The scene tree groups elements
-under `IFCBUILDINGSTOREY` nodes (ArcWalls and 2024 element records by
-elevation; Floors/Rooms remain Unassigned until Level ElementIds exist
-on both sides — bind plumbing is fail-closed and corpus-idle today).
+row (empty until AProperty* host joins). The scene tree groups each
+storey's elements by category, type name first, with curtain-wall and
+stair parts under their whole. Elements reach their storey from the
+Level their record names (RE-59, RE-60): all 970 of Core Interior's
+building elements sit on Revit's storey, and ArcWalls bind by elevation.
 RE-20 (same corpora) found **no** recoverable Level ElementId map:
 `Level` is absent from Formats schema; LevelAssociationCell / name /
 elevation proximity scans are noise-dominated — Floors/Rooms stay

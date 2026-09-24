@@ -8,6 +8,21 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **The viewer's scene tree groups each storey by category and leads each
+  element with its type name.** A storey opens to its categories, each
+  with a count, and a category to its elements, sorted by family and type.
+  - An element row reads "8" Interior Partition 3 Hour" over "Basic Wall ·
+    20796" rather than the whole `Family:Type:ElementId` name cut short.
+  - A curtain wall's panels and mullions, and a stair's flights, sit
+    under their whole. Doors and windows are listed in their own category;
+    the info panel still names their host wall.
+  - Selecting a category lights up its elements. Picking an element in the
+    3-D view opens its category. Right and Left open and close rows, Home
+    and End go to the first and last, and the tree is one tab stop.
+  - The project row shows its file name rather than a full path.
+- **The Categories panel counts each category's elements**, and no longer
+  lists the project and storeys, which have nothing to show or hide.
+
 - **Walls, floors, ceilings, roofs and railings are named as Revit names
   them (RE-63).** `Name` is `Family:Type:ElementId`, such as "Basic
   Wall:8" Interior Partition 3 Hour:20796" rather than "Wall-20796", and

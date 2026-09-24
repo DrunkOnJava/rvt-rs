@@ -332,14 +332,14 @@ function entityLabel(idx: number): string {
   return model?.entities?.[idx]?.name ?? findSceneNodeByIndex(sceneGraph, idx)?.name ?? 'element';
 }
 
-/** Every entity index under a scene node, the node's own included. */
-function entityIndicesUnder(node: SceneNode): Set<number> {
+/** Every entity index under a tree row, the row's own included. */
+function entityIndicesUnder(item: TreeItem): Set<number> {
   const out = new Set<number>();
-  const walk = (n: SceneNode) => {
-    if (n.entity_index !== null) out.add(n.entity_index);
+  const walk = (n: TreeItem) => {
+    if (n.entityIndex !== null) out.add(n.entityIndex);
     n.children.forEach(walk);
   };
-  walk(node);
+  walk(item);
   return out;
 }
 
@@ -372,12 +372,13 @@ function selectTreeRow(idx: number): void {
     .forEach((el) => el.classList.remove('selected'));
   const row = treeEl.querySelector<HTMLElement>(`.tree-node[data-entity-index="${idx}"]`);
   if (!row) return;
+  revealTreeRow(row);
   row.classList.add('selected');
   row.scrollIntoView({
     block: 'nearest',
     behavior: prefersReducedMotion() ? 'auto' : 'smooth',
   });
-  row.focus();
+  focusTreeRow(row);
 }
 
 // ---------- Status ----------
@@ -537,11 +538,15 @@ interface IfcModel {
   materials?: Array<{ name: string; color_packed?: number; transparency?: number }>;
   material_layer_sets?: Array<{ layers: Array<{ material_index?: number | null }> }>;
   entities?: Array<{
+    kind?: string;
     name: string;
     ifc_type: string;
     guid?: string;
     material_index?: number | null;
     material_layer_set_index?: number | null;
+    /** `Aggregate` entities: the whole and its parts (RE-39, RE-46). */
+    whole?: number;
+    parts?: number[];
   }>;
 }
 interface RelatedElement {
@@ -1034,26 +1039,201 @@ function ifcTypeLabel(stepName: string): string {
 }
 
 // ---------- Panels ----------
+/**
+ * A scene tree row: the project, a storey, one category on a storey, or
+ * an element. Built from the worker's scene graph by `buildTreeItems`.
+ */
+interface TreeItem {
+  kind: 'project' | 'storey' | 'category' | 'element';
+  name: string;
+  ifcType: string;
+  entityIndex: number | null;
+  storeyIndex: number | null;
+  /** The storey a category row belongs to, for its panel. */
+  storeyName?: string;
+  /** Elements under the row, parts included; 1 for a bare element. */
+  count: number;
+  children: TreeItem[];
+}
+
+/** A Revit element name split for its tree row. */
+interface ElementNameParts {
+  /** The row's text: the type, or the whole name when it has no type. */
+  label: string;
+  /** The family, when the name carries one that differs from the label. */
+  family: string | null;
+  /** The ElementId, with Revit's `:2` part suffix when there is one. */
+  id: string | null;
+}
+
+/**
+ * Split `Family:Type:ElementId` (RE-38, RE-63) and the `Class-ElementId`
+ * fallback so a row can lead with the type. Revit names a second part
+ * of one element `Family:Type:ElementId:2`, and some types are named
+ * `-`; a type equal to its family is shown once.
+ */
+function splitElementName(name: string): ElementNameParts {
+  const parts = name.split(':');
+  const digits = (s: string | undefined) => s !== undefined && /^\d+$/.test(s);
+  if (parts.length >= 4 && digits(parts[parts.length - 1]) && digits(parts[parts.length - 2])) {
+    const typed = splitElementName(parts.slice(0, -1).join(':'));
+    if (typed.id) return { ...typed, id: `${typed.id}:${parts[parts.length - 1]}` };
+  }
+  if (parts.length >= 3 && digits(parts[parts.length - 1])) {
+    const family = parts[0]!;
+    const type = parts.slice(1, -1).join(':');
+    const id = parts[parts.length - 1]!;
+    if (type === '' || type === '-' || type === family) return { label: family, family: null, id };
+    return { label: type, family, id };
+  }
+  const fallback = /^(.+)-(\d+)$/.exec(name);
+  if (fallback) return { label: fallback[1]!, family: null, id: fallback[2]! };
+  return { label: name, family: null, id: null };
+}
+
+const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+/** Rows of one category read in family, type, then ElementId order. */
+function compareElementNames(a: string, b: string): number {
+  const x = splitElementName(a);
+  const y = splitElementName(b);
+  return (
+    nameCollator.compare(x.family ?? x.label, y.family ?? y.label) ||
+    nameCollator.compare(x.label, y.label) ||
+    nameCollator.compare(x.id ?? '', y.id ?? '') ||
+    nameCollator.compare(a, b)
+  );
+}
+
+/**
+ * The scene graph as the tree shows it, the way Revit's own browsers
+ * group a model: each storey's elements by category, sorted by family
+ * and type. An aggregate's parts (a curtain wall's panels and mullions,
+ * a stair's flights) sit under their whole, as in Revit's IFC export.
+ * Doors and windows are listed in their own category rather than under
+ * their host wall; the element panel names the host.
+ */
+function buildTreeItems(root: SceneNode): TreeItem {
+  const elementsOf = (node: SceneNode): SceneNode[] => {
+    const out: SceneNode[] = [];
+    const walk = (n: SceneNode) => {
+      if (n.entity_index !== null) out.push(n);
+      n.children.forEach(walk);
+    };
+    node.children.forEach(walk);
+    return out;
+  };
+  const perStorey = root.children.map(elementsOf);
+  const inTree = new Map<number, SceneNode>();
+  for (const n of perStorey.flat()) inTree.set(n.entity_index!, n);
+
+  const wholeOf = new Map<number, number>();
+  for (const e of model?.entities ?? []) {
+    if (e.kind !== 'Aggregate' || e.whole === undefined) continue;
+    for (const part of e.parts ?? []) {
+      if (part !== e.whole && inTree.has(e.whole)) wholeOf.set(part, e.whole);
+    }
+  }
+  // A part whose chain of wholes loops back to it stays a row of its own.
+  for (const start of [...wholeOf.keys()]) {
+    const seen = new Set<number>([start]);
+    for (let at = wholeOf.get(start); at !== undefined; at = wholeOf.get(at)) {
+      if (seen.has(at)) {
+        wholeOf.delete(start);
+        break;
+      }
+      seen.add(at);
+    }
+  }
+  const partsOf = new Map<number, SceneNode[]>();
+  for (const [part, whole] of wholeOf) {
+    const node = inTree.get(part);
+    if (!node) continue;
+    const list = partsOf.get(whole) ?? [];
+    list.push(node);
+    partsOf.set(whole, list);
+  }
+
+  const byName = (a: SceneNode, b: SceneNode) =>
+    nameCollator.compare(ifcTypeLabel(a.ifc_type), ifcTypeLabel(b.ifc_type)) ||
+    compareElementNames(a.name, b.name);
+  const elementItem = (n: SceneNode): TreeItem => {
+    const children = (partsOf.get(n.entity_index!) ?? []).sort(byName).map(elementItem);
+    return {
+      kind: 'element',
+      name: n.name,
+      ifcType: n.ifc_type,
+      entityIndex: n.entity_index,
+      storeyIndex: null,
+      count: 1 + children.reduce((sum, c) => sum + c.count, 0),
+      children,
+    };
+  };
+
+  const storeys: TreeItem[] = root.children.map((storey, i) => {
+    const byType = new Map<string, SceneNode[]>();
+    for (const n of perStorey[i]!) {
+      if (wholeOf.has(n.entity_index!)) continue;
+      const list = byType.get(n.ifc_type) ?? [];
+      list.push(n);
+      byType.set(n.ifc_type, list);
+    }
+    const categories: TreeItem[] = [...byType.entries()]
+      .sort(([a], [b]) => nameCollator.compare(ifcTypeLabel(a), ifcTypeLabel(b)))
+      .map(([ifcType, nodes]) => {
+        const children = nodes.sort(byName).map(elementItem);
+        return {
+          kind: 'category',
+          name: `${ifcTypeLabel(ifcType)} on ${storey.name}`,
+          ifcType,
+          entityIndex: null,
+          storeyIndex: storey.storey_index ?? null,
+          storeyName: storey.name === 'Unassigned' ? undefined : storey.name,
+          count: children.reduce((sum, c) => sum + c.count, 0),
+          children,
+        };
+      });
+    return {
+      kind: 'storey',
+      name: storey.name,
+      ifcType: storey.ifc_type,
+      entityIndex: null,
+      storeyIndex: storey.storey_index ?? null,
+      count: categories.reduce((sum, c) => sum + c.count, 0),
+      children: categories,
+    };
+  });
+  return {
+    kind: 'project',
+    name: root.name,
+    ifcType: root.ifc_type,
+    entityIndex: null,
+    storeyIndex: null,
+    count: storeys.reduce((sum, c) => sum + c.count, 0),
+    children: storeys,
+  };
+}
+
 function renderTree(): void {
   if (!sceneGraph) return;
   treeEl.innerHTML = '';
-  treeEl.appendChild(buildTreeNode(sceneGraph));
+  treeEl.appendChild(buildTreeRow(buildTreeItems(sceneGraph), 1));
+  const first = treeEl.querySelector<HTMLElement>('.tree-node');
+  if (first) first.tabIndex = 0;
 }
 
-function storeyNodeLabel(node: SceneNode): string {
-  const kidCount = node.children.length;
+/** A storey row's second line: its elevation and what it holds. */
+function storeyNodeDetail(node: TreeItem): string {
   const elev = storeyElevationLabel(node);
-  const bits = [node.name, ifcTypeLabel(node.ifc_type)];
-  if (elev) bits.push(elev);
-  bits.push(kidCount === 1 ? '1 element' : `${kidCount} elements`);
-  return bits.join(' · ');
+  const count = node.count === 1 ? '1 element' : `${node.count} elements`;
+  return elev ? `${elev} · ${count}` : count;
 }
 
-function storeyElevationLabel(node: SceneNode): string | null {
-  if (node.ifc_type !== 'IFCBUILDINGSTOREY') return null;
+function storeyElevationLabel(node: TreeItem): string | null {
+  if (node.kind !== 'storey') return null;
   if (node.name === 'Unassigned') return 'no Level ElementId bind';
   const storeys = model?.building_storeys ?? [];
-  const idx = node.storey_index;
+  const idx = node.storeyIndex;
   if (idx == null || idx < 0 || idx >= storeys.length) return null;
   const elev = storeys[idx]?.elevation_feet;
   if (typeof elev !== 'number') return null;
@@ -1067,35 +1247,141 @@ function storeyElevationLabel(node: SceneNode): string | null {
   return `elev ${elev.toFixed(3)} ft`;
 }
 
-function buildTreeNode(node: SceneNode): HTMLElement {
+/**
+ * The text of a row: a label, a quieter second line, and a count on the
+ * right. The sidebar is narrow, so the lines wrap rather than cut a
+ * Revit type name short.
+ */
+function treeRowText(row: HTMLElement, label: string, detail?: string, count?: number): void {
+  const text = document.createElement('span');
+  text.className = 'tree-text';
+  const main = document.createElement('span');
+  main.className = 'tree-label';
+  main.textContent = label;
+  text.appendChild(main);
+  // Spaces between the spans keep the row's text readable to assistive
+  // technology and in copied text; the flex layout does not render them.
+  if (detail) {
+    text.appendChild(document.createTextNode(' '));
+    const sub = document.createElement('span');
+    sub.className = 'tree-detail';
+    sub.textContent = detail;
+    text.appendChild(sub);
+  }
+  row.appendChild(text);
+  if (count !== undefined) {
+    row.appendChild(document.createTextNode(' '));
+    const n = document.createElement('span');
+    n.className = 'tree-count';
+    n.textContent = String(count);
+    row.appendChild(n);
+  }
+}
+
+/**
+ * Let a long IFC class name (`IfcBuildingElementProxy`) wrap between its
+ * words rather than inside one; the text itself is unchanged.
+ */
+function breakAtCamelHumps(el: HTMLElement): void {
+  const words = (el.textContent ?? '').split(/(?=[A-Z][a-z])/);
+  el.textContent = '';
+  words.forEach((word, i) => {
+    if (i > 0) el.appendChild(document.createElement('wbr'));
+    el.appendChild(document.createTextNode(word));
+  });
+}
+
+/** A project named by its file path reads as the file's name. */
+function projectLabel(name: string): string {
+  return name.split(/[\\/]/).filter(Boolean).pop() ?? name;
+}
+
+/** Rows a keyboard user can reach: those under no collapsed row. */
+function visibleTreeRows(): HTMLElement[] {
+  return Array.from(treeEl.querySelectorAll<HTMLElement>('.tree-node[role="treeitem"]')).filter(
+    (row) => !row.closest('.tree-children[hidden]'),
+  );
+}
+
+/** Move the tree's single tab stop to `row` and focus it. */
+function focusTreeRow(row: HTMLElement): void {
+  treeEl.querySelectorAll<HTMLElement>('.tree-node[tabindex="0"]').forEach((el) => {
+    if (el !== row) el.tabIndex = -1;
+  });
+  row.tabIndex = 0;
+  row.focus();
+}
+
+function setTreeRowExpanded(row: HTMLElement, expanded: boolean): void {
+  const group = row.nextElementSibling as HTMLElement | null;
+  if (!group?.classList.contains('tree-children')) return;
+  row.setAttribute('aria-expanded', String(expanded));
+  group.hidden = !expanded;
+}
+
+/** Expand every collapsed row above `row`, so a selection is never hidden. */
+function revealTreeRow(row: HTMLElement): void {
+  for (
+    let group = row.parentElement?.closest<HTMLElement>('.tree-children');
+    group;
+    group = group.parentElement?.closest<HTMLElement>('.tree-children')
+  ) {
+    const owner = group.previousElementSibling as HTMLElement | null;
+    if (owner) setTreeRowExpanded(owner, true);
+  }
+}
+
+function buildTreeRow(item: TreeItem, level: number): HTMLElement {
   const wrap = document.createElement('div');
   const row = document.createElement('div');
-  row.className = 'tree-node';
-  if (node.ifc_type === 'IFCBUILDINGSTOREY') {
-    row.classList.add('tree-storey');
-    if (node.name === 'Unassigned') row.classList.add('tree-storey-unassigned');
-    if (node.children.length === 0) row.classList.add('tree-storey-empty');
-  } else if (node.ifc_type === 'IFCPROJECT') {
-    row.classList.add('tree-project');
+  row.className = `tree-node tree-${item.kind}`;
+  if (item.kind === 'storey') {
+    if (item.name === 'Unassigned') row.classList.add('tree-storey-unassigned');
+    if (item.count === 0) row.classList.add('tree-storey-empty');
   }
   row.setAttribute('role', 'treeitem');
-  row.tabIndex = 0;
-  if (node.entity_index !== null) {
-    row.dataset.entityIndex = String(node.entity_index);
+  row.setAttribute('aria-level', String(level));
+  row.tabIndex = -1;
+  if (item.entityIndex !== null) {
+    row.dataset.entityIndex = String(item.entityIndex);
+  }
+  if (item.kind === 'element' || item.kind === 'category') {
+    row.dataset.ifcType = item.ifcType;
   }
   // Storey nodes are synthetic — they carry no entity index, so the
   // panel's storey jump addresses them by storey index instead.
-  if (node.ifc_type === 'IFCBUILDINGSTOREY' && node.storey_index != null) {
-    row.dataset.storeyIndex = String(node.storey_index);
+  if (item.kind === 'storey' && item.storeyIndex != null) {
+    row.dataset.storeyIndex = String(item.storeyIndex);
   }
-  row.textContent =
-    node.ifc_type === 'IFCBUILDINGSTOREY'
-      ? storeyNodeLabel(node)
-      : node.ifc_type === 'IFCPROJECT'
-        ? `${node.name} · IfcProject · ${node.children.length} storey${
-            node.children.length === 1 ? '' : 's'
-          }`
-        : `${node.name} · ${ifcTypeLabel(node.ifc_type)}`;
+
+  const expandable = item.children.length > 0;
+  const caret = document.createElement('span');
+  caret.className = expandable ? 'tree-caret' : 'tree-caret tree-caret-none';
+  caret.setAttribute('aria-hidden', 'true');
+  row.appendChild(caret);
+  if (item.kind === 'project') {
+    const storeys = item.children.length;
+    treeRowText(
+      row,
+      projectLabel(item.name),
+      `IfcProject · ${storeys} storey${storeys === 1 ? '' : 's'}`,
+    );
+    row.title = item.name;
+  } else if (item.kind === 'storey') {
+    treeRowText(row, item.name, storeyNodeDetail(item));
+    row.title = `${item.name} · ${ifcTypeLabel(item.ifcType)}`;
+  } else if (item.kind === 'category') {
+    // The count is the rows the category opens to; parts are inside them.
+    treeRowText(row, ifcTypeLabel(item.ifcType), undefined, item.children.length);
+    breakAtCamelHumps(row.querySelector('.tree-label')!);
+    row.title = item.name;
+  } else {
+    const name = splitElementName(item.name);
+    const detail = [name.family, name.id].filter(Boolean).join(' · ');
+    treeRowText(row, name.label, detail || undefined);
+    row.title = `${item.name} · ${ifcTypeLabel(item.ifcType)}`;
+  }
+
   const activate = (ev: Event) => {
     ev.stopPropagation();
     clearScheduleHighlightState();
@@ -1103,25 +1389,47 @@ function buildTreeNode(node: SceneNode): HTMLElement {
       .querySelectorAll('.tree-node.selected')
       .forEach((el) => el.classList.remove('selected'));
     row.classList.add('selected');
-    if (node.entity_index !== null) {
-      highlightEntity(node.entity_index);
-      showElementInfo(node.entity_index);
-      selectedIndex = node.entity_index;
+    focusTreeRow(row);
+    if (item.entityIndex !== null) {
+      highlightEntity(item.entityIndex);
+      showElementInfo(item.entityIndex);
+      selectedIndex = item.entityIndex;
       return;
     }
-    // Project and storey rows are synthetic — they have no entity to
-    // inspect. Describe the node itself rather than leaving whatever
-    // element was selected before sitting there as if it applied.
-    clearHighlight();
-    showContainerInfo(node);
+    // Project, storey and category rows are synthetic — they have no
+    // entity to inspect. Describe the row itself rather than leaving
+    // whatever element was selected before sitting there as if it
+    // applied. A category lights up its elements.
+    if (item.kind === 'category') {
+      const indices = entityIndicesUnder(item);
+      highlightWhere((data) => data.entityIndex !== undefined && indices.has(data.entityIndex));
+    } else {
+      clearHighlight();
+    }
+    showContainerInfo(item);
     selectedIndex = null;
   };
-  row.addEventListener('click', activate);
-  // Double-click brings the row into view: an element, or everything on a
-  // storey or in the project.
-  row.addEventListener('dblclick', (ev) => {
+  row.addEventListener('click', (ev) => {
+    // A category opens as it is selected; other rows open from the caret.
+    if (item.kind === 'category') {
+      setTreeRowExpanded(row, row.getAttribute('aria-expanded') !== 'true');
+      activate(ev);
+      return;
+    }
+    if (expandable && ev.target === caret) {
+      ev.stopPropagation();
+      setTreeRowExpanded(row, row.getAttribute('aria-expanded') !== 'true');
+      focusTreeRow(row);
+      return;
+    }
     activate(ev);
-    frameEntities(entityIndicesUnder(node), node.name);
+  });
+  // Double-click brings the row into view: an element, or everything in
+  // a category, on a storey or in the project.
+  row.addEventListener('dblclick', (ev) => {
+    if (ev.target === caret) return;
+    activate(ev);
+    frameEntities(entityIndicesUnder(item), item.name);
   });
   row.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' || ev.key === ' ') {
@@ -1129,33 +1437,65 @@ function buildTreeNode(node: SceneNode): HTMLElement {
       activate(ev);
       return;
     }
-    if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+    const expanded = row.getAttribute('aria-expanded') === 'true';
+    if (ev.key === 'ArrowRight') {
+      ev.preventDefault();
+      if (!expandable) return;
+      if (!expanded) setTreeRowExpanded(row, true);
+      else {
+        const child = row.nextElementSibling?.querySelector<HTMLElement>('.tree-node');
+        if (child) focusTreeRow(child);
+      }
+      return;
+    }
+    if (ev.key === 'ArrowLeft') {
+      ev.preventDefault();
+      if (expandable && expanded) {
+        setTreeRowExpanded(row, false);
+        return;
+      }
+      const owner = row.parentElement?.closest('.tree-children')?.previousElementSibling;
+      if (owner instanceof HTMLElement) focusTreeRow(owner);
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(ev.key)) return;
     ev.preventDefault();
-    const items = Array.from(
-      treeEl.querySelectorAll<HTMLElement>('.tree-node[role="treeitem"]'),
-    );
+    const items = visibleTreeRows();
     const idx = items.indexOf(row);
     if (idx < 0) return;
     const next =
-      ev.key === 'ArrowDown'
-        ? items[Math.min(items.length - 1, idx + 1)]
-        : items[Math.max(0, idx - 1)];
-    next?.focus();
+      ev.key === 'Home'
+        ? items[0]
+        : ev.key === 'End'
+          ? items[items.length - 1]
+          : ev.key === 'ArrowDown'
+            ? items[Math.min(items.length - 1, idx + 1)]
+            : items[Math.max(0, idx - 1)];
+    if (next) focusTreeRow(next);
   });
   wrap.appendChild(row);
-  if (node.children.length > 0) {
+  if (expandable) {
     const ch = document.createElement('div');
     ch.className = 'tree-children';
     ch.setAttribute('role', 'group');
-    for (const c of node.children) ch.appendChild(buildTreeNode(c));
+    for (const c of item.children) ch.appendChild(buildTreeRow(c, level + 1));
     wrap.appendChild(ch);
+    // The project and its storeys open; categories and an element's
+    // parts wait for a click, so a storey reads as its categories.
+    setTreeRowExpanded(row, item.kind === 'project' || item.kind === 'storey');
   }
   return wrap;
 }
 
 function renderCategories(): void {
   categoriesEl.innerHTML = '';
+  // The project and its storeys draw nothing, so they have no toggle.
+  const counts = new Map<string, number>();
+  for (const e of model?.entities ?? []) {
+    if (e.kind === 'BuildingElement') counts.set(e.ifc_type, (counts.get(e.ifc_type) ?? 0) + 1);
+  }
   for (const t of distinctTypes) {
+    if (t === 'IFCPROJECT' || t === 'IFCBUILDINGSTOREY') continue;
     const row = document.createElement('label');
     row.className = 'category-toggle';
     const cb = document.createElement('input');
@@ -1168,7 +1508,21 @@ function renderCategories(): void {
     });
     row.appendChild(cb);
     row.append(` ${ifcTypeLabel(t)}`);
+    const count = counts.get(t);
+    if (count !== undefined) {
+      row.append(' ');
+      const n = document.createElement('span');
+      n.className = 'tree-count';
+      n.textContent = String(count);
+      row.appendChild(n);
+    }
     categoriesEl.appendChild(row);
+  }
+  if (!categoriesEl.firstChild) {
+    const empty = document.createElement('div');
+    empty.className = 'category-empty';
+    empty.textContent = 'No drawn elements to show or hide.';
+    categoriesEl.appendChild(empty);
   }
 }
 
@@ -1573,20 +1927,31 @@ function showElementInfo(idx: number): void {
  * storey. These carry no entity, so the panel reports what the
  * node itself is and how much it holds.
  */
-function showContainerInfo(node: SceneNode): void {
+function showContainerInfo(node: TreeItem): void {
   pendingInfoIndex = null;
   infoEl.innerHTML = '';
   infoEl.removeAttribute('aria-busy');
   const identity = infoGroup('identity');
+  const elements = `${node.count} element${node.count === 1 ? '' : 's'}`;
+  if (node.kind === 'category') {
+    const rows = node.children.length;
+    const parts = node.count - rows;
+    identity.appendChild(infoRow('Category', ifcTypeLabel(node.ifcType)));
+    identity.appendChild(infoRow('Storey', node.storeyName ?? 'Unassigned'));
+    identity.appendChild(infoRow('Contains', `${rows} element${rows === 1 ? '' : 's'}`, true));
+    if (parts > 0) {
+      identity.appendChild(infoRow('Their parts', String(parts), true));
+    }
+    infoEl.appendChild(identity);
+    return;
+  }
   identity.appendChild(infoRow('Name', node.name));
-  identity.appendChild(infoRow('Type', ifcTypeLabel(node.ifc_type)));
+  identity.appendChild(infoRow('Type', ifcTypeLabel(node.ifcType)));
   const kids = node.children.length;
-  if (node.ifc_type === 'IFCBUILDINGSTOREY') {
-    identity.appendChild(
-      infoRow('Contains', `${kids} element${kids === 1 ? '' : 's'}`, true),
-    );
+  if (node.kind === 'storey') {
+    identity.appendChild(infoRow('Contains', elements, true));
     const storeys = model?.building_storeys ?? [];
-    const idx = node.storey_index;
+    const idx = node.storeyIndex;
     const elev = idx != null ? storeys[idx]?.elevation_feet : undefined;
     if (typeof elev === 'number') {
       identity.appendChild(infoRow('Elevation', `${elev.toFixed(3)} ft`, true));
@@ -1602,12 +1967,13 @@ function selectStorey(storeyIndex: number): void {
   const row = treeEl.querySelector<HTMLElement>(`.tree-node[data-storey-index="${storeyIndex}"]`);
   if (!row) return;
   document.querySelectorAll('.tree-node.selected').forEach((el) => el.classList.remove('selected'));
+  revealTreeRow(row);
   row.classList.add('selected');
   row.scrollIntoView({
     block: 'nearest',
     behavior: prefersReducedMotion() ? 'auto' : 'smooth',
   });
-  row.focus();
+  focusTreeRow(row);
   clearHighlight();
 }
 
