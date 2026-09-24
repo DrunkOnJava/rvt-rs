@@ -21,7 +21,9 @@
 //!     MODEL.rvt [--json OUT.json] [--verbose]
 
 use rvt::RevitFile;
-use rvt::ifc::body_geometry::{Body, Placement, element_body, layered_extrusion_meshes};
+use rvt::ifc::body_geometry::{
+    Body, Placement, element_body, layered_extrusion_meshes, stacked_extrusion_meshes,
+};
 use rvt::ifc::entities::IfcEntity;
 use rvt::ifc::{Exporter, RvtDocExporter};
 use std::collections::BTreeMap;
@@ -69,9 +71,21 @@ fn main() -> rvt::Result<()> {
             -nx * placement.sin + ny * placement.cos,
         ];
         let widths: Vec<f64> = layers.layers.iter().map(|l| l.width_feet).collect();
+        if layers.stacked {
+            // RE-57: a floor, roof or ceiling, its layers stacked top first.
+            let drawn = stacked_extrusion_meshes(extrusion, &widths).is_some();
+            *census
+                .entry(if drawn {
+                    "floors, roofs and ceilings drawn in layers"
+                } else {
+                    "floors, roofs and ceilings whose layers do not add up to the body"
+                })
+                .or_default() += 1;
+            continue;
+        }
         let Some(meshes) = layered_extrusion_meshes(extrusion, local, &widths) else {
             *census
-                .entry("layers do not add up to the body's thickness")
+                .entry("walls whose layers do not add up to the body's thickness")
                 .or_default() += 1;
             if verbose {
                 let thickness =
@@ -93,7 +107,7 @@ fn main() -> rvt::Result<()> {
             }
             continue;
         };
-        *census.entry("drawn in layers").or_default() += 1;
+        *census.entry("walls drawn in layers").or_default() += 1;
         if !json.ends_with('[') {
             json.push(',');
         }

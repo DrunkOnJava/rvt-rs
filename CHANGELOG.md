@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Floors, roofs and ceilings are drawn as their layers (RE-57).** In the
+  glTF export and the viewer, a Revit 2024 or 2025 floor, building pad, flat
+  roof or ceiling is now its type's layers, stacked top first in their
+  materials' colours, wherever they add up to its recorded height.
+  - Against Revit's own IFC4 exports, every layer's bottom and top matches
+    to 1.4e-6 ft on 236 of Snowdon Towers' slabs and all 68 of Core
+    Interior's floors, and all 427 compared colours are Revit's.
+  - `tools/re/slab_layers_vs_ifc.py` scores them.
 - **Shed roofs are drawn along their slope (RE-56).** Each sketch line of a
   footprint roof carries its edge's slope angle and whether it defines the
   roof's slope. A Revit 2024 roof with exactly one defining edge now rises

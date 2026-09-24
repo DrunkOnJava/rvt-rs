@@ -360,6 +360,11 @@ walls, and 2025 walls now get centreline bodies and layers
 **RE-56 (2026-09-23)** reads a roof edge's slope and draws a 2024 shed roof
 along it when its rise and thickness reproduce its recorded height
 (`reports/element-framing/RE-56-roof-slopes.md`).
+**RE-57 (2026-09-23)** draws floors, roofs and ceilings in the glTF export
+and the viewer as their type's layers, stacked top first, where they add up
+to the element's recorded height; every layer matches Revit's on Snowdon's
+236 and Core Interior's 68 compared slabs
+(`reports/element-framing/RE-57-slab-layers.md`).
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

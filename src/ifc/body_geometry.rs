@@ -603,6 +603,34 @@ pub fn sloped_slab_mesh(
         .then_some(mesh)
 }
 
+/// An extruded body cut into layers stacked from its top down (RE-57): for
+/// each layer width, top first, the prism of the body's plan outline over
+/// that layer's heights. `None` unless the widths add up to the body's
+/// height within [`LAYER_THICKNESS_TOLERANCE_FEET`].
+pub fn stacked_extrusion_meshes(extrusion: &Extrusion, widths: &[f64]) -> Option<Vec<Mesh>> {
+    let height = extrusion.height_feet;
+    let total: f64 = widths.iter().sum();
+    if !(height.is_finite() && height > 0.0 && total.is_finite() && total > 0.0)
+        || (height - total).abs() > LAYER_THICKNESS_TOLERANCE_FEET
+    {
+        return None;
+    }
+    let (outer, holes) = extrusion_rings(extrusion)?;
+    let section = section(&outer, &holes)?;
+    let mut top = height;
+    Some(
+        widths
+            .iter()
+            .map(|&width| {
+                let bottom = top - width;
+                let band = top;
+                top = bottom;
+                prism(&section, |(x, y), t| [x, y, bottom + t * (band - bottom)])
+            })
+            .collect(),
+    )
+}
+
 /// An extrusion's body in element-local feet.
 pub fn extrusion_mesh(extrusion: &Extrusion) -> Option<Mesh> {
     let height = extrusion.height_feet;

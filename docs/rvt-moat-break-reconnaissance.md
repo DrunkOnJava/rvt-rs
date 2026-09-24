@@ -1991,4 +1991,16 @@ is not read.
 
 Report: `reports/element-framing/RE-56-roof-slopes.md`.
 
+## Addendum — RE-57 floors, roofs and ceilings in their layers (2026-09-23)
+
+A floor's, roof's or ceiling's type layers run top first, and where they add
+up to the element's record box height the plate is exactly its layers. The
+glTF export cuts such a body into one prism per layer from its top down:
+against Revit's IFC4 body faces, every layer's bottom and top matches on
+Snowdon's 236 and Core Interior's 68 compared slabs, with every compared
+colour Revit's. Revit's 2025 export of RE1 styles each layered body with a
+single material, so only its colours can be compared there.
+
+Report: `reports/element-framing/RE-57-slab-layers.md`.
+
 **End of report.**
