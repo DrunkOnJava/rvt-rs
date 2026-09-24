@@ -997,13 +997,16 @@ fn layered_wall_profile(
     let mut top = total / 2.0;
     let mut bands = Vec::with_capacity(ends.widths.len());
     for (index, width) in ends.widths.iter().enumerate() {
-        let low = start
-            .as_ref()
-            .map_or(middle - run / 2.0, |reach| -reach[index]);
-        let high = end
-            .as_ref()
-            .map_or(middle + run / 2.0, |reach| length + reach[index]);
-        if high - low <= WALL_AXIS_BOX_TOLERANCE_FEET {
+        // Each layer ends along both of its edges, square or slanted (RE-74).
+        let low = start.as_ref().map_or([middle - run / 2.0; 2], |reach| {
+            [-reach[index][0], -reach[index][1]]
+        });
+        let high = end.as_ref().map_or([middle + run / 2.0; 2], |reach| {
+            [length + reach[index][0], length + reach[index][1]]
+        });
+        if high[0] - low[0] <= WALL_AXIS_BOX_TOLERANCE_FEET
+            || high[1] - low[1] <= WALL_AXIS_BOX_TOLERANCE_FEET
+        {
             return None;
         }
         bands.push((low, high, top, top - width));
@@ -1014,14 +1017,14 @@ fn layered_wall_profile(
     let mut outline: Vec<(f64, f64)> = Vec::with_capacity(bands.len() * 4);
     for (low, high, upper, lower) in &bands {
         if outline.is_empty() {
-            outline.push((*low, *upper));
+            outline.push((low[0], *upper));
         }
-        outline.push((*high, *upper));
-        outline.push((*high, *lower));
+        outline.push((high[0], *upper));
+        outline.push((high[1], *lower));
     }
     for (low, _, upper, lower) in bands.iter().rev() {
-        outline.push((*low, *lower));
-        outline.push((*low, *upper));
+        outline.push((low[1], *lower));
+        outline.push((low[0], *upper));
     }
     outline.pop();
     outline.dedup_by(|a, b| (a.0 - b.0).abs() <= 1e-12 && (a.1 - b.1).abs() <= 1e-12);

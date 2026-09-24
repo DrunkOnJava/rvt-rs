@@ -132,7 +132,9 @@ def main():
                 at, across, run, _ = on_line(other, point)
                 if not (EPS < at < run - EPS and abs(across) <= EPS):
                     continue
-                ours = join["layer_reaches"] or [join["reach"]] * len(row["layers"])
+                # A layer's end is its two edges' reaches (RE-74); at its
+                # middle line it is their mean.
+                ours = [sum(pair) / 2 for pair in join["layer_reaches"]] if join["layer_reaches"] else [join["reach"]] * len(row["layers"])
                 if any(r is None for r in ours):
                     continue
                 theirs = revit_reaches(row, bodies[tag], point, into)
