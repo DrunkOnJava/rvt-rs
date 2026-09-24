@@ -170,6 +170,33 @@ pub struct IfcModel {
     /// storeys (RE-48). The writer uses them in place of generated ones.
     #[serde(default)]
     pub global_ids: RevitGlobalIds,
+    /// Layered elements' layers across their thickness, by ElementId (the
+    /// element's `Tag`, RE-53). The glTF export draws each layer in its
+    /// material's colour.
+    #[serde(default)]
+    pub element_layers: std::collections::BTreeMap<u32, ElementLayers>,
+}
+
+/// A layered element's layers across its thickness (RE-53).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ElementLayers {
+    /// Unit plan direction, model axes, from the element's inside to its
+    /// exterior face.
+    pub exterior_normal: [f64; 2],
+    /// Exterior first. Membranes, which have no width, are left out.
+    pub layers: Vec<LayerBand>,
+}
+
+/// One layer of an [`ElementLayers`].
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LayerBand {
+    /// Feet.
+    pub width_feet: f64,
+    /// The layer material's shading colour, `0x00BBGGRR`; `None` where the
+    /// layer takes its category's.
+    pub color_packed: Option<u32>,
+    /// 0 opaque to 1 fully transparent.
+    pub transparency: f64,
 }
 
 /// GlobalIds Revit's own exporter gives, rebuilt from the file (RE-48,
@@ -476,6 +503,11 @@ pub struct ExportedModelDiagnostics {
     /// Status / inspect — not a full inventory when counts are large.
     #[serde(default)]
     pub material_names_sample: Vec<String>,
+    /// Elements whose compound layers and layer colours were decoded
+    /// ([`IfcModel::element_layers`], RE-53). The glTF export draws each
+    /// one in its layers where they add up to its body's thickness.
+    #[serde(default)]
+    pub layered_element_count: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -699,6 +731,7 @@ impl Exporter for PlaceholderExporter {
             material_profile_sets: Vec::new(),
             representation_maps: Vec::new(),
             global_ids: Default::default(),
+            element_layers: Default::default(),
         })
     }
 }
@@ -915,11 +948,13 @@ fn export_rvt_doc(
     // element entities — we never regress the metadata-only baseline.
     let mut building_storeys = Vec::new();
     let mut materials = Vec::new();
+    let mut element_layers = std::collections::BTreeMap::new();
     append_production_walker_elements(
         rf,
         &mut entities,
         &mut building_storeys,
         &mut materials,
+        &mut element_layers,
         policy,
         walker_limits,
     );
@@ -1051,6 +1086,7 @@ fn export_rvt_doc(
         material_profile_sets: Vec::new(),
         representation_maps: Vec::new(),
         global_ids,
+        element_layers,
     })
 }
 
@@ -1731,6 +1767,7 @@ fn append_production_walker_elements(
     entities: &mut Vec<entities::IfcEntity>,
     building_storeys: &mut Vec<Storey>,
     materials: &mut Vec<MaterialInfo>,
+    element_layers: &mut std::collections::BTreeMap<u32, ElementLayers>,
     policy: export_content::ExportContentPolicy,
     walker_limits: crate::walker::WalkerLimits,
 ) {
@@ -1749,6 +1786,7 @@ fn append_production_walker_elements(
             policy,
         );
         materials.extend(append.materials);
+        element_layers.extend(append.element_layers);
     }
 }
 
@@ -2380,6 +2418,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             .take(MATERIAL_NAME_SAMPLE_CAP)
             .map(|m| m.name.clone())
             .collect(),
+        layered_element_count: model.element_layers.len(),
     }
 }
 
@@ -3499,6 +3538,7 @@ mod tests {
             storey_elevations_feet: Vec::new(),
             storey_bound_elements: 0,
             material_names_sample: Vec::new(),
+            layered_element_count: 0,
         }
     }
 

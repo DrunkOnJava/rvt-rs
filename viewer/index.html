@@ -143,12 +143,16 @@
             <span class="v">Revit 2024 and 2025 projects export walls, doors, windows, columns, slabs, roofs, ceilings, stairs, railings, rooms, curtain-wall parts, furniture, casework, lighting and plumbing fixtures, equipment, ducts, pipes, structural framing and foundations, and site elements, each under the ElementId and, for family instances, the Family:Type name Revit's own export gives it. Bodies are bounding boxes, refined to sketched outlines for slabs and roofs, trimmed runs for walls, beams along their axes and steps for stair flights. Other releases export ArcWalls (2023) or a valid scaffold. The typed / geometry / strict bars refuse a file that does not meet them.</span>
           </div>
           <div class="support-row">
+            <span class="k">3-D view</span>
+            <span class="v">Revit 2024 walls are drawn as their layers, each in its material's shading colour, where the layers add up to the wall's thickness. Other elements take their category's colour.</span>
+          </div>
+          <div class="support-row">
             <span class="k">MVP target</span>
             <span class="v">Revit 2024/2025 projects: levels, walls, floors, doors, windows, rooms, materials, and the building products around them.</span>
           </div>
           <div class="support-row">
             <span class="k">Not ready</span>
-            <span class="v">Element records before Revit 2024; true element geometry beyond bounding boxes and sketched outlines for most categories; most parameters and the type names of system families such as walls and floors; some elements Revit's own export leaves out, such as empty curtain panels and opening-cut families, which rvt-rs still exports; phase filtering; and semantic Revit editing.</span>
+            <span class="v">Element records before Revit 2024; true element geometry beyond bounding boxes and sketched outlines for most categories; most parameters; material names, so exported IFC carries no layer sets; some elements Revit's own export leaves out, such as empty curtain panels and opening-cut families, which rvt-rs still exports; phase filtering; and semantic Revit editing.</span>
           </div>
           <a class="support-link" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/supported-profile.md">
             Profile details

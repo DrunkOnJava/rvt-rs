@@ -593,6 +593,81 @@ pub fn extrusion_mesh(extrusion: &Extrusion) -> Option<Mesh> {
     Some(prism(&section, |(x, y), t| [x, y, t * height]))
 }
 
+/// How far a layered element's layers may add up to other than its body's
+/// thickness across them before the layers are not drawn, feet.
+pub const LAYER_THICKNESS_TOLERANCE_FEET: f64 = 0.02;
+
+/// The part of `ring` whose offset along `normal` lies within `lo..=hi`
+/// (Sutherland–Hodgman against the two half-planes).
+pub fn clip_ring_to_band(ring: &[Point2], normal: [f64; 2], lo: f64, hi: f64) -> Ring {
+    let offset = |p: Point2| p.0 * normal[0] + p.1 * normal[1];
+    let clip = |ring: &[Point2], keep: &dyn Fn(f64) -> bool, edge: f64| -> Ring {
+        let mut out = Ring::new();
+        for (i, &p) in ring.iter().enumerate() {
+            let q = ring[(i + 1) % ring.len()];
+            let (sp, sq) = (offset(p), offset(q));
+            if keep(sp) {
+                out.push(p);
+            }
+            if keep(sp) != keep(sq) {
+                let t = (edge - sp) / (sq - sp);
+                out.push((p.0 + t * (q.0 - p.0), p.1 + t * (q.1 - p.1)));
+            }
+        }
+        out
+    };
+    let below = clip(ring, &|s| s <= hi, hi);
+    clip(&below, &|s| s >= lo, lo)
+}
+
+/// An extruded body cut into its layers across the thickness: for each
+/// layer width, exterior first, the prism of the body's plan outline that
+/// lies within it. `exterior` is the unit plan direction to the exterior
+/// face in the extrusion's own axes. `None` unless the body is one outline
+/// with no voids and the widths add up to its thickness along `exterior`
+/// within [`LAYER_THICKNESS_TOLERANCE_FEET`].
+pub fn layered_extrusion_meshes(
+    extrusion: &Extrusion,
+    exterior: [f64; 2],
+    widths: &[f64],
+) -> Option<Vec<Mesh>> {
+    let height = extrusion.height_feet;
+    if !(height.is_finite() && height > 0.0) || widths.is_empty() {
+        return None;
+    }
+    let (outer, holes) = extrusion_rings(extrusion)?;
+    if !holes.is_empty() || outer.len() < 3 {
+        return None;
+    }
+    let offsets: Vec<f64> = outer
+        .iter()
+        .map(|p| p.0 * exterior[0] + p.1 * exterior[1])
+        .collect();
+    let (min, max) = offsets
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &s| {
+            (lo.min(s), hi.max(s))
+        });
+    let total: f64 = widths.iter().sum();
+    if !total.is_finite()
+        || total <= 0.0
+        || ((max - min) - total).abs() > LAYER_THICKNESS_TOLERANCE_FEET
+    {
+        return None;
+    }
+    let mut meshes = Vec::with_capacity(widths.len());
+    let mut face = max;
+    for &width in widths {
+        let band = clip_ring_to_band(&outer, exterior, face - width, face);
+        face -= width;
+        let mesh = section(&band, &[])
+            .map(|section| prism(&section, |(x, y), t| [x, y, t * height]))
+            .unwrap_or_default();
+        meshes.push(mesh);
+    }
+    Some(meshes)
+}
+
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }

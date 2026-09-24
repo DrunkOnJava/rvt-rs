@@ -270,6 +270,7 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
         material_profile_sets: vec![w12x26_profile_set],
         representation_maps: vec![door_map],
         global_ids: Default::default(),
+        element_layers: Default::default(),
     };
 
     let step = write_step(&model);

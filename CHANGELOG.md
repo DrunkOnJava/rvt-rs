@@ -8,6 +8,31 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Walls are drawn as their layers, each in its material's colour
+  (RE-53).** A wall type's data carries its compound structure: each
+  layer's width, material, deck and function, exterior first. A material's
+  data carries its shading colour and transparency, and a wall's data
+  carries the flip that puts its exterior on the right or the left of its
+  location line. The glTF export and the viewer now draw a Revit 2024
+  wall as one band per layer in its material's colour, all selecting as
+  the one wall.
+  - Snowdon Towers: 883 of the 1,054 walls whose layers are read are drawn
+    this way. Against Revit's own IFC4 per-layer solids, every layer centre
+    is within 0.001 ft on 851 of 862 walls. The other 11 are one soffit
+    type whose stud layer Revit cuts back.
+  - All 1,368 compared layer colours are Revit's own surface style colours.
+  - A wall whose layers do not add up to its body's thickness (165 on
+    Snowdon, mostly soffit wraps and profiled walls) is drawn whole.
+  - Floors, roofs and ceilings: their layers are read but not drawn. Revit
+    2025 walls are not drawn in layers, because their location lines are
+    not read. The IFC export writes no layer sets until material names are
+    read (#355).
+  - The viewer's File status reports the walls whose layers are read under
+    Materials, and the export diagnostics carry the count as
+    `exported.layered_element_count`.
+  - `examples/probe_re53_wall_layers.rs` counts the walls drawn in layers.
+    `tools/re/wall_layers_vs_ifc.py` scores an `rvt-gltf` GLB against
+    Revit's IFC4 export.
 - **Stair flights are drawn as their treads and risers (RE-52).** A straight
   run's data carries its plan sketch: its two sides and a line at each
   riser. The run type it names carries its tread, riser and nosing sizes and

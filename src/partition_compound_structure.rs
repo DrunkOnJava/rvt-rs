@@ -1,0 +1,297 @@
+//! Host types' layers and which side of a wall is its exterior (RE-53).
+//!
+//! # Layers
+//!
+//! A wall, floor, roof or ceiling type's own serialised data (its
+//! element-data header and ElementId, [`crate::partition_names`]) carries
+//! its compound structure: a `u32` layer count and one
+//! [`LAYER_RECORD_LEN`]-byte record per layer, exterior (or top) first:
+//!
+//! ```text
+//! +0   f64  width, feet (0 only on a membrane)
+//! +8   u64  material ElementId, ff × 8 = by category
+//! +16  u64  deck profile ElementId, ff × 8 = none
+//! +24  u32  function: 1 structure, 2 substrate, 3 thermal / air,
+//!           4 finish 1, 5 finish 2, 100 membrane, 200 structural deck
+//! +28  9 bytes not read
+//! ```
+//!
+//! The count is framed one of two ways ([`find_layers`]):
+//! - `ff ff ff ff` and a per-release tag, `0x10a6` on Revit 2024 and
+//!   `0x110e` on Revit 2025 ([`layer_frame_tag`]). On 2024 this follows
+//!   the type's name directly.
+//! - `u32 k`, then `k` × `2d 00`, then `u32 0`: Revit 2025 floors and
+//!   ceilings.
+//!
+//! Against the materials Revit's own IFC4 export gives the same types:
+//! - Snowdon Towers (2024): 42 of 42 types give Revit's constituent
+//!   sequence, once the 0-width membranes Revit leaves out are dropped;
+//! - Core Interior (2024): 4 of 4, all by category;
+//! - RE1 Architecture (2025): the wall, both floors and the ceiling give
+//!   Revit's layer widths and materials.
+//!
+//! # Wall orientation
+//!
+//! A wall's data carries, after `ff ff ff ff 01 00 00 00`, three `u32`: its
+//! location line (0 to 5), a word of 0 to 2, and a flip flag
+//! ([`wall_flip`]). With the flag set, the wall's exterior (its first
+//! layer) lies to the right of its location line's direction; clear, to
+//! the left. On Snowdon Towers this holds on all 416 walls whose first and
+//! last layers Revit's IFC4 export places measurably apart. The one other
+//! wall's two outer layers are 0.03 ft apart, too close to tell.
+
+use crate::{Result, RevitFile};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// Releases these layouts are measured on.
+pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// Bytes per layer record.
+pub const LAYER_RECORD_LEN: usize = 37;
+
+/// Most layers a type is taken to have.
+pub const MAX_LAYERS: usize = 32;
+
+/// How far into a type's data the layers are looked for.
+pub const LAYER_WINDOW: usize = 0x2000;
+
+/// The bytes a wall's location line, a word and its flip flag follow.
+pub const WALL_FLIP_ANCHOR: [u8; 8] = [0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00];
+
+/// The tag framing a type's layer count on `revit_version`.
+pub fn layer_frame_tag(revit_version: u32) -> Option<[u8; 2]> {
+    match revit_version {
+        2024 => Some([0xa6, 0x10]),
+        2025 => Some([0x0e, 0x11]),
+        _ => None,
+    }
+}
+
+/// One layer of a type's compound structure.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CompoundLayer {
+    /// Feet.
+    pub width_feet: f64,
+    /// The layer's material; `None` where the layer takes its category's.
+    pub material: Option<u32>,
+    /// The layer's function (see the module docs).
+    pub function: u32,
+}
+
+fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
+    buf.get(at..at.checked_add(4)?)
+        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
+}
+
+fn u64_at(buf: &[u8], at: usize) -> Option<u64> {
+    buf.get(at..at.checked_add(8)?)
+        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+}
+
+/// The layers whose count starts at `count_at`, or `None` unless every
+/// record is one a type can have: a width under 10 ft that is positive (0
+/// only on a membrane), a material in `materials` or by category, a deck
+/// profile that is none or a declared id, and a known function.
+pub fn layers_at(
+    buf: &[u8],
+    count_at: usize,
+    materials: &BTreeSet<u32>,
+    declared: &BTreeSet<u32>,
+) -> Option<Vec<CompoundLayer>> {
+    let count = usize::try_from(u32_at(buf, count_at)?).ok()?;
+    if !(1..=MAX_LAYERS).contains(&count) {
+        return None;
+    }
+    let mut layers = Vec::with_capacity(count);
+    for index in 0..count {
+        let at = count_at + 4 + LAYER_RECORD_LEN * index;
+        let width = f64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?);
+        let material = u64_at(buf, at + 8)?;
+        let deck = u64_at(buf, at + 16)?;
+        let function = u32_at(buf, at + 24)?;
+        let membrane = function == 100;
+        let width_ok =
+            width.is_finite() && width < 10.0 && (width >= 1e-3 || (membrane && width == 0.0));
+        let material = match material {
+            u64::MAX => None,
+            id => Some(u32::try_from(id).ok().filter(|id| materials.contains(id))?),
+        };
+        let deck_ok = deck == u64::MAX
+            || u32::try_from(deck)
+                .ok()
+                .is_some_and(|id| declared.contains(&id));
+        if !width_ok || !deck_ok || !matches!(function, 0..=5 | 100 | 200) {
+            return None;
+        }
+        layers.push(CompoundLayer {
+            width_feet: width,
+            material,
+            function,
+        });
+    }
+    Some(layers)
+}
+
+/// Whether the layer count at `count_at` is framed as a type's layers are.
+fn framed(buf: &[u8], count_at: usize, tag: [u8; 2]) -> bool {
+    let tagged = count_at >= 6
+        && buf.get(count_at - 6..count_at - 2) == Some(&[0xff; 4][..])
+        && buf.get(count_at - 2..count_at) == Some(&tag[..]);
+    if tagged {
+        return true;
+    }
+    // u32 k, k × 2d 00, u32 0.
+    if count_at < 4 || u32_at(buf, count_at - 4) != Some(0) {
+        return false;
+    }
+    (1..=4).any(|k: usize| {
+        let Some(start) = count_at.checked_sub(4 + 2 * k + 4) else {
+            return false;
+        };
+        u32_at(buf, start) == Some(k as u32)
+            && (0..k).all(|i| buf.get(start + 4 + 2 * i..start + 6 + 2 * i) == Some(&[0x2d, 0][..]))
+    })
+}
+
+/// The first framed layer list in `data`.
+pub fn find_layers(
+    data: &[u8],
+    tag: [u8; 2],
+    materials: &BTreeSet<u32>,
+    declared: &BTreeSet<u32>,
+) -> Option<Vec<CompoundLayer>> {
+    (6..data.len().saturating_sub(4))
+        .filter(|&at| framed(data, at, tag))
+        .find_map(|at| layers_at(data, at, materials, declared))
+}
+
+/// The layers of each type in `types`, by ElementId, from each type's own
+/// data. A type whose copies disagree is dropped; empty for a release the
+/// layout is not measured on.
+pub fn scan_type_layers(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+    materials: &BTreeSet<u32>,
+    declared: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, Vec<CompoundLayer>>> {
+    let (Some(header), Some(tag)) = (
+        crate::partition_names::element_data_header(revit_version),
+        layer_frame_tag(revit_version),
+    ) else {
+        return Ok(BTreeMap::new());
+    };
+    let mut found: BTreeMap<u32, Option<Vec<CompoundLayer>>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        for (index, &hit) in hits.iter().enumerate() {
+            let id_at = hit + header.len();
+            let Some(id) = u64_at(buf, id_at)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| types.contains(id))
+            else {
+                continue;
+            };
+            let end = hits
+                .get(index + 1)
+                .copied()
+                .unwrap_or(buf.len())
+                .min(hit.saturating_add(LAYER_WINDOW))
+                .min(buf.len());
+            let Some(layers) = buf
+                .get(id_at + 8..end)
+                .and_then(|data| find_layers(data, tag, materials, declared))
+            else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(layers));
+                }
+                Some(held) => {
+                    if held.as_ref() != Some(&layers) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    Ok(found
+        .into_iter()
+        .filter_map(|(id, layers)| layers.map(|l| (id, l)))
+        .collect())
+}
+
+/// A wall's flip flag, from its data: `Some(true)` puts its exterior to the
+/// right of its location line's direction. `None` without the anchor or
+/// with values a wall does not take.
+pub fn wall_flip(data: &[u8]) -> Option<bool> {
+    let at = memchr::memmem::find(data, &WALL_FLIP_ANCHOR)? + WALL_FLIP_ANCHOR.len();
+    let location_line = u32_at(data, at)?;
+    let word = u32_at(data, at + 4)?;
+    let flip = u32_at(data, at + 8)?;
+    if location_line > 5 || word > 2 {
+        return None;
+    }
+    match flip {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
+/// Each wall's flip flag, by ElementId, from its own data; a wall whose
+/// copies disagree is dropped.
+pub fn scan_wall_flips(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, bool>> {
+    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+        return Ok(BTreeMap::new());
+    };
+    let mut found: BTreeMap<u32, Option<bool>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        for (index, &hit) in hits.iter().enumerate() {
+            let id_at = hit + header.len();
+            let Some(id) = u64_at(buf, id_at)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| walls.contains(id))
+            else {
+                continue;
+            };
+            let end = hits
+                .get(index + 1)
+                .copied()
+                .unwrap_or(buf.len())
+                .min(hit.saturating_add(LAYER_WINDOW))
+                .min(buf.len());
+            let Some(flip) = buf.get(id_at + 8..end).and_then(wall_flip) else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(flip));
+                }
+                Some(held) => {
+                    if *held != Some(flip) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    Ok(found
+        .into_iter()
+        .filter_map(|(id, flip)| flip.map(|f| (id, f)))
+        .collect())
+}

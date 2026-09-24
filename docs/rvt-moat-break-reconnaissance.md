@@ -1923,4 +1923,23 @@ ObjectType on all 49 exported flights.
 Report: `reports/element-framing/RE-52-stair-treads.md`.
 Probe: `examples/probe_re52_stair_treads.rs`.
 
+## Addendum — RE-53 wall layers and material colours (2026-09-23)
+
+A material's object (`01 00 00 00 · u64 id`, tag `28 0a` on 2024 and `6b
+0a` on 2025 at +0x47) holds, in its first `ff × 8 · f32 · f32` frame, its
+transparency, four pattern COLORREFs, its shading COLORREF and shininess:
+Revit's IFC surface style colour on 123 of 123 materials across five
+files. A host type's own data holds a `u32` layer count framed by `ff ff ff
+ff` and tag `a6 10` (2024) / `0e 11` (2025), or by `u32 k · k × 2d 00 · u32
+0` (2025 floors and ceilings), then 37-byte layers: f64 width, u64
+material (ff × 8 by category), u64 deck, u32 function. A wall's data holds,
+after `ff ff ff ff 01 00 00 00`, its location line, a word and a flip flag:
+set puts the first layer right of the location line's direction. On
+Snowdon Towers the glTF export draws 883 walls in layers; against Revit's
+IFC4 per-layer solids, 851 of 862 match every layer centre to 0.001 ft,
+and all 1,368 compared colours are Revit's.
+
+Report: `reports/element-framing/RE-53-wall-layers.md`.
+Probe: `examples/probe_re53_wall_layers.rs`.
+
 **End of report.**
