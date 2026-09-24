@@ -472,6 +472,16 @@ joins, which Revit cleans layer by layer, keep their ends, but every
 decided end, layered or not, names its partner wall and whether it runs
 through, in the IFC and in the viewer's element panel
 (`reports/element-framing/RE-70-wall-join-lists.md`).
+**RE-71 (2026-09-24)** draws layered walls' corners layer by layer: the
+layers nest like concentric Ls, the through wall's layers reaching the
+outer edges of the other wall's and the stopping wall's their inner edges.
+Where both walls show the same layers in the same order and share their
+base and top, the wall's body is that staircase. On Snowdon Towers 516 of
+976 axis-parallel walls have both of Revit's ends (346 before) and 3,925 of
+5,634 layer ends match Revit's body (3,078 before). A few such joints
+Revit draws as clean butts, which nothing read predicts: 16 layer ends on
+Snowdon and one RE1 wall get worse
+(`reports/element-framing/RE-71-layered-wall-joins.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

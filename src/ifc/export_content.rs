@@ -820,6 +820,10 @@ fn roof_slope_solid(
 /// centreline (RE-54).
 pub const WALL_CENTRELINE_BODY_SOURCE: &str = "partition_wall_centreline";
 
+/// `BodySource` of a wall drawn from its centreline whose layers end where
+/// its layered butt joins put them (RE-71).
+pub const WALL_LAYER_JOIN_BODY_SOURCE: &str = "partition_wall_centreline_layer_joins";
+
 /// `ThicknessSource` of a wall whose thickness is its type's layers summed
 /// (RE-54).
 pub const WALL_TYPE_THICKNESS_SOURCE: &str = "wall_type_compound_structure";
@@ -954,6 +958,106 @@ fn wall_centreline_body(
         thickness_feet: thickness,
         join_reach_feet: axis.join_reach_feet,
     })
+}
+
+/// A wall body's plan outline where its layered butt joins end each layer
+/// on its own line (RE-71), in the body's local frame: a staircase of one
+/// band per layer across the wall. An end no layered join decides keeps
+/// `body`'s end for every layer.
+///
+/// `None` when the layers do not add up to the body's thickness, the
+/// exterior is not across the line, or a layer would have no length.
+fn layered_wall_profile(
+    body: &WallCentrelineBody,
+    axis: &crate::partition_schema_mvp::WallAxis,
+    ends: &crate::partition_schema_mvp::WallLayerEnds,
+) -> Option<Vec<(f64, f64)>> {
+    let [sx, sy] = axis.start;
+    let length = (axis.end[0] - sx).hypot(axis.end[1] - sy);
+    if !(length.is_finite() && length > 1e-9) {
+        return None;
+    }
+    let along = [(axis.end[0] - sx) / length, (axis.end[1] - sy) / length];
+    let across = ends.exterior;
+    let total: f64 = ends.widths.iter().sum();
+    if (along[0] * across[0] + along[1] * across[1]).abs() > 1e-6
+        || (across[0].hypot(across[1]) - 1.0).abs() > 1e-6
+        || (total - body.thickness_feet).abs() > WALL_BOX_CLOSURE_FEET
+    {
+        return None;
+    }
+    let run = if body.rotation.is_some() || along[1].abs() <= 1e-9 {
+        body.width_feet
+    } else {
+        body.depth_feet
+    };
+    let middle = (body.centre[0] - sx) * along[0] + (body.centre[1] - sy) * along[1];
+    let [start, end] = &ends.reach_feet;
+    let mut top = total / 2.0;
+    let mut bands = Vec::with_capacity(ends.widths.len());
+    for (index, width) in ends.widths.iter().enumerate() {
+        let low = start
+            .as_ref()
+            .map_or(middle - run / 2.0, |reach| -reach[index]);
+        let high = end
+            .as_ref()
+            .map_or(middle + run / 2.0, |reach| length + reach[index]);
+        if high - low <= WALL_AXIS_BOX_TOLERANCE_FEET {
+            return None;
+        }
+        bands.push((low, high, top, top - width));
+        top -= width;
+    }
+    // Along the exterior face to the end, down the end's steps, back along
+    // the interior face and up the start's steps.
+    let mut outline: Vec<(f64, f64)> = Vec::with_capacity(bands.len() * 4);
+    for (low, high, upper, lower) in &bands {
+        if outline.is_empty() {
+            outline.push((*low, *upper));
+        }
+        outline.push((*high, *upper));
+        outline.push((*high, *lower));
+    }
+    for (low, _, upper, lower) in bands.iter().rev() {
+        outline.push((*low, *lower));
+        outline.push((*low, *upper));
+    }
+    outline.pop();
+    outline.dedup_by(|a, b| (a.0 - b.0).abs() <= 1e-12 && (a.1 - b.1).abs() <= 1e-12);
+    // Where neighbouring layers end together, their shared end is one edge.
+    let corners: Vec<(f64, f64)> = (0..outline.len())
+        .filter(|&index| {
+            let previous = outline[(index + outline.len() - 1) % outline.len()];
+            let point = outline[index];
+            let next = outline[(index + 1) % outline.len()];
+            ((point.0 - previous.0) * (next.1 - point.1)
+                - (point.1 - previous.1) * (next.0 - point.0))
+                .abs()
+                > 1e-12
+        })
+        .map(|index| outline[index])
+        .collect();
+    let outline = corners;
+    let (cos, sin) = body
+        .rotation
+        .map_or((1.0, 0.0), |angle| (angle.cos(), angle.sin()));
+    let mut points: Vec<(f64, f64)> = outline
+        .into_iter()
+        .map(|(t, a)| {
+            let x = sx + along[0] * t + across[0] * a - body.centre[0];
+            let y = sy + along[1] * t + across[1] * a - body.centre[1];
+            (x * cos + y * sin, -x * sin + y * cos)
+        })
+        .collect();
+    let area: f64 = points
+        .iter()
+        .zip(points.iter().cycle().skip(1))
+        .map(|(p, q)| p.0 * q.1 - q.0 * p.1)
+        .sum();
+    if area < 0.0 {
+        points.reverse();
+    }
+    Some(points)
 }
 
 /// A stair run's treads and risers: its side view extruded across the run.
@@ -1139,18 +1243,28 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // RE-54: a wall whose centreline and type thickness are known is that
     // thickness either side of the line. It replaces the box only where the
     // two differ, so a wall the box already drew right is unchanged.
-    let wall_centreline = if class == "Wall" {
+    let wall_axis = if class == "Wall" {
         crate::partition_schema_mvp::wall_axis_from_fields(&decoded.fields)
-            .and_then(|axis| wall_centreline_body(axis, [x, y], width, depth))
-            .filter(|body| {
-                body.rotation.is_some()
-                    || (body.centre[0] - x).abs() > 1e-9
-                    || (body.centre[1] - y).abs() > 1e-9
-                    || (body.width_feet - width).abs() > 1e-9
-                    || (body.depth_feet - depth).abs() > 1e-9
-            })
     } else {
         None
+    };
+    // RE-71: a wall whose layered butt joins end each layer on its own line
+    // is the staircase they make.
+    let layer_ends = wall_axis
+        .and_then(|_| crate::partition_schema_mvp::wall_layer_ends_from_fields(&decoded.fields));
+    let wall_centreline = wall_axis
+        .and_then(|axis| wall_centreline_body(axis, [x, y], width, depth))
+        .filter(|body| {
+            layer_ends.is_some()
+                || body.rotation.is_some()
+                || (body.centre[0] - x).abs() > 1e-9
+                || (body.centre[1] - y).abs() > 1e-9
+                || (body.width_feet - width).abs() > 1e-9
+                || (body.depth_feet - depth).abs() > 1e-9
+        });
+    let wall_profile = match (wall_centreline, wall_axis, layer_ends.as_ref()) {
+        (Some(body), Some(axis), Some(ends)) => layered_wall_profile(&body, &axis, ends),
+        _ => None,
     };
     // The sketched plan profile, when the element's `OST_SketchLines`
     // records closed one (#31, RE-25). It is recovered in project
@@ -1236,8 +1350,10 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         Property {
             name: "BodySource".into(),
             value: PropertyValue::Text(
-                wall_centreline
-                    .map(|_| WALL_CENTRELINE_BODY_SOURCE.into())
+                wall_profile
+                    .as_ref()
+                    .map(|_| WALL_LAYER_JOIN_BODY_SOURCE.into())
+                    .or_else(|| wall_centreline.map(|_| WALL_CENTRELINE_BODY_SOURCE.into()))
                     .or_else(|| wall_body_source.clone())
                     .or_else(|| column_body_source.clone())
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
@@ -1502,7 +1618,12 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         (_, Some(wall)) => (
             [wall.centre[0], wall.centre[1], z],
             wall.rotation,
-            Extrusion::rectangle(wall.width_feet, wall.depth_feet, height),
+            Extrusion {
+                profile_override: wall_profile
+                    .clone()
+                    .map(|points| entities::ProfileDef::ArbitraryClosed { points }),
+                ..Extrusion::rectangle(wall.width_feet, wall.depth_feet, height)
+            },
             None,
         ),
         (beam, None) => {

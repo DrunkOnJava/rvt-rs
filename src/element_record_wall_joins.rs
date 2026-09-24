@@ -312,9 +312,9 @@ pub fn join_trims(records: &[PartitionElementRecord]) -> BTreeMap<u32, WallJoinT
 /// within `1e-12`.
 pub const PERPENDICULAR_EPS: f64 = 1e-6;
 
-/// A wall's centreline, its type's thickness and layer count and its
-/// elevation range, which is what [`butt_joins`] reads.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// A wall's centreline, its type's thickness and layers, its exterior side
+/// and its elevation range, which is what [`butt_joins`] reads.
+#[derive(Debug, Clone, PartialEq)]
 pub struct WallLine {
     /// The wall's own ElementId.
     pub element_id: u32,
@@ -324,8 +324,12 @@ pub struct WallLine {
     pub end: [f64; 2],
     /// The type's layers summed, feet.
     pub thickness_feet: f64,
-    /// The type's layers of non-zero width.
-    pub layer_count: usize,
+    /// The type's layers of non-zero width, exterior first, each its width
+    /// in feet and its function (1 structure, 2 substrate, 3 thermal or
+    /// air, 4 finish 1, 5 finish 2).
+    pub layers: Vec<(f64, u32)>,
+    /// Plan unit vector towards the wall's exterior face.
+    pub exterior: [f64; 2],
     /// Base of the wall's record box, feet.
     pub base_feet: f64,
     /// Top of the wall's record box, feet.
@@ -333,7 +337,7 @@ pub struct WallLine {
 }
 
 /// What a wall's join lists say about one end of it (RE-70).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ButtJoin {
     /// The one other wall whose centreline ends there too.
     pub partner: u32,
@@ -344,6 +348,9 @@ pub struct ButtJoin {
     /// stops short: half the partner's thickness. `None` unless both walls
     /// have a single layer.
     pub reach_feet: Option<f64>,
+    /// How far past the line's end each layer reaches, exterior first,
+    /// where both walls are layered alike (RE-71). `None` otherwise.
+    pub layer_reach_feet: Option<Vec<f64>>,
 }
 
 /// The butt join at each end of each wall, keyed by ElementId,
@@ -363,6 +370,14 @@ pub struct ButtJoin {
 /// finishes wrap the corner, so the body's end is no longer one face: on
 /// Snowdon Towers 631 of 667 such ends, against none of the 158 where both
 /// walls have one layer.
+///
+/// The layers then nest like concentric Ls ([`layer_reaches`], RE-71):
+/// counting both walls' layers from the outside of the corner, layer `i` of
+/// the wall that runs through reaches the outer edge of the partner's layer
+/// `i`, and layer `i` of the wall that stops, its inner edge. That holds
+/// where both walls show the same layer functions in the same order from
+/// the corner and share their base and top, and those ends get
+/// `layer_reach_feet`.
 pub fn butt_joins(
     walls: &[WallLine],
     partners: &BTreeMap<u32, BTreeSet<u32>>,
@@ -421,11 +436,17 @@ pub fn butt_joins(
                 _ => continue,
             };
             let half = other.thickness_feet * 0.5;
-            let single = wall.layer_count == 1 && other.layer_count == 1;
+            let single = wall.layers.len() == 1 && other.layers.len() == 1;
+            let into = if slot == 0 {
+                along
+            } else {
+                [-along[0], -along[1]]
+            };
             joins[slot] = Some(ButtJoin {
                 partner: other.element_id,
                 runs_through,
                 reach_feet: single.then_some(if runs_through { half } else { -half }),
+                layer_reach_feet: layer_reaches(wall, other, point, into, runs_through),
             });
         }
         if joins.iter().any(Option::is_some) {
@@ -434,6 +455,82 @@ pub fn butt_joins(
     }
     out
 }
+
+/// How far past the joint `point` each of `wall`'s layers reaches, exterior
+/// first, where `wall` meets `other` at a layered butt join (RE-71).
+/// `into` points from the joint along `wall`.
+///
+/// `None` unless both walls have several layers, both show the same layer
+/// functions in the same order counted from the outside of the corner, and
+/// both share their base and top: on Snowdon Towers, 522 of the 528 such
+/// ends are cleaned layer by layer, against 17 of 75 clean where the walls'
+/// heights differ.
+pub fn layer_reaches(
+    wall: &WallLine,
+    other: &WallLine,
+    point: [f64; 2],
+    into: [f64; 2],
+    runs_through: bool,
+) -> Option<Vec<f64>> {
+    if wall.layers.len() < 2
+        || other.layers.len() != wall.layers.len()
+        || (wall.base_feet - other.base_feet).abs() > LAYER_JOIN_HEIGHT_EPS_FEET
+        || (wall.top_feet - other.top_feet).abs() > LAYER_JOIN_HEIGHT_EPS_FEET
+    {
+        return None;
+    }
+    let dot = |a: [f64; 2], b: [f64; 2]| a[0] * b[0] + a[1] * b[1];
+    // The partner runs from the joint to its other end. On the side of
+    // `wall` it runs to, `wall`'s face is inside the corner.
+    let far = if (other.start[0] - point[0]).hypot(other.start[1] - point[1]) <= JOIN_EPS_FEET {
+        other.end
+    } else {
+        other.start
+    };
+    let partner_on_exterior = dot([far[0] - point[0], far[1] - point[1]], wall.exterior) > 0.0;
+    // How far past the joint each of the partner's layer boundaries lies,
+    // its exterior face first: the partner is perpendicular, so its
+    // exterior points along `into` or against it.
+    let outward = if dot(other.exterior, [-into[0], -into[1]]) >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    let mut bound = other.thickness_feet * 0.5;
+    let mut bounds = vec![bound * outward];
+    for (width, _) in &other.layers {
+        bound -= width;
+        bounds.push(bound * outward);
+    }
+    // Both walls' layers counted from the outside of the corner.
+    let ours: Vec<u32> = if partner_on_exterior {
+        wall.layers.iter().rev().map(|(_, f)| *f).collect()
+    } else {
+        wall.layers.iter().map(|(_, f)| *f).collect()
+    };
+    let partner_outside_first = outward > 0.0;
+    let theirs: Vec<u32> = if partner_outside_first {
+        other.layers.iter().map(|(_, f)| *f).collect()
+    } else {
+        other.layers.iter().rev().map(|(_, f)| *f).collect()
+    };
+    if ours != theirs {
+        return None;
+    }
+    bounds.sort_by(|a, b| b.total_cmp(a));
+    let reaches: Vec<f64> = (0..wall.layers.len())
+        .map(|rank| bounds[if runs_through { rank } else { rank + 1 }])
+        .collect();
+    Some(if partner_on_exterior {
+        reaches.into_iter().rev().collect()
+    } else {
+        reaches
+    })
+}
+
+/// How closely two walls' bases and tops must agree for their layered join
+/// to be read ([`layer_reaches`]), in feet.
+pub const LAYER_JOIN_HEIGHT_EPS_FEET: f64 = 1e-3;
 
 #[cfg(test)]
 mod tests {
