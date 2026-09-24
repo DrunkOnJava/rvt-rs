@@ -45,6 +45,20 @@
       </header>
       <aside id="sidebar-left" aria-label="Scene tree and categories">
         <h2 id="scene-tree-heading">Scene tree</h2>
+        <div class="tree-filter">
+          <input
+            id="tree-filter"
+            type="search"
+            placeholder="Filter by name, type or ElementId"
+            aria-label="Filter the scene tree"
+            aria-controls="tree"
+            aria-describedby="tree-filter-status"
+            autocomplete="off"
+            spellcheck="false"
+            disabled
+          />
+          <div id="tree-filter-status" class="tree-filter-status" aria-live="polite"></div>
+        </div>
         <div id="tree" role="tree" aria-labelledby="scene-tree-heading"></div>
         <h2 id="categories-heading">Categories</h2>
         <div id="categories" role="group" aria-labelledby="categories-heading"></div>

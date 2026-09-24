@@ -267,6 +267,44 @@ header .export-btn:active:not(:disabled) {
 
 /* ---- Scene tree: nav links ---------------------------------------------- */
 
+/* The filter sits above the tree, as a navbar's search does. */
+.tree-filter {
+  margin: 0 0 8px;
+}
+.tree-filter input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  font-size: var(--sx-fs-compact);
+  color: var(--sx-color-text);
+  background: var(--sx-color-surface);
+  border: 1px solid var(--sx-color-border);
+  border-radius: var(--sx-radius-md);
+  transition: border-color var(--sx-duration-fast) var(--sx-ease-standard);
+}
+.tree-filter input::placeholder {
+  color: var(--sx-color-dimmed);
+}
+.tree-filter input:focus-visible {
+  outline: none;
+  border-color: var(--sx-color-primary);
+}
+.tree-filter input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.tree-filter-status {
+  padding: 4px 4px 0;
+  font-size: var(--sx-fs-xs);
+  color: var(--sx-color-dimmed);
+}
+.tree-filter-status:empty {
+  display: none;
+}
+.tree-item[hidden] {
+  display: none;
+}
+
 .tree-node {
   display: flex;
   align-items: center;
