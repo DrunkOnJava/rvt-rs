@@ -306,6 +306,120 @@ pub fn join_trims(records: &[PartitionElementRecord]) -> BTreeMap<u32, WallJoinT
     out
 }
 
+/// How far off perpendicular two centrelines may be for their butt join to
+/// be read, as the cosine of the angle between them. Revit writes the
+/// joined ends as the same doubles; every such pair on Snowdon Towers is
+/// within `1e-12`.
+pub const PERPENDICULAR_EPS: f64 = 1e-6;
+
+/// A wall's centreline, its type's thickness and layer count and its
+/// elevation range, which is what [`butt_join_reaches`] reads.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WallLine {
+    /// The wall's own ElementId.
+    pub element_id: u32,
+    /// Plan start of the centreline, feet.
+    pub start: [f64; 2],
+    /// Plan end of the centreline, feet.
+    pub end: [f64; 2],
+    /// The type's layers summed, feet.
+    pub thickness_feet: f64,
+    /// The type's layers of non-zero width.
+    pub layer_count: usize,
+    /// Base of the wall's record box, feet.
+    pub base_feet: f64,
+    /// Top of the wall's record box, feet.
+    pub top_feet: f64,
+}
+
+/// How far past each end of its centreline a wall's body reaches where it
+/// butt-joins one other wall, keyed by ElementId, `[start, end]` (RE-70).
+///
+/// An end is read when exactly one other wall overlapping it in elevation
+/// ends its centreline there too, perpendicular to it. Revit runs one of
+/// the two on to the other's far face and stops the other at its near
+/// face, and the wall that runs through is the one that names the other
+/// in its join lists (`partners`,
+/// [`crate::partition_compound_structure::scan_wall_join_partners`]).
+/// So an end reaches half the other wall's thickness past the line where
+/// this wall names it and is not named back, and stops that far short of
+/// the line where it is named and names nothing back.
+///
+/// Both walls must have a single layer. Revit cleans a join layer by
+/// layer, and where either wall has several, its finishes wrap the corner
+/// and the body's end is no longer one face: on Snowdon Towers 631 of 667
+/// such ends, against none of the 158 where both walls have one layer.
+/// A pair that name each other or neither, a joint of three walls and an
+/// angled joint stay `None` too.
+pub fn butt_join_reaches(
+    walls: &[WallLine],
+    partners: &BTreeMap<u32, BTreeSet<u32>>,
+) -> BTreeMap<u32, [Option<f64>; 2]> {
+    let length = |wall: &WallLine| (wall.end[0] - wall.start[0]).hypot(wall.end[1] - wall.start[1]);
+    let lines: Vec<&WallLine> = walls
+        .iter()
+        .filter(|wall| length(wall).is_finite() && length(wall) > 1e-9)
+        .collect();
+    let mut ends: Vec<([f64; 2], usize)> = lines
+        .iter()
+        .enumerate()
+        .flat_map(|(index, wall)| [(wall.start, index), (wall.end, index)])
+        .collect();
+    ends.sort_by(|a, b| a.0[0].total_cmp(&b.0[0]));
+    let names = |from: &WallLine, to: &WallLine| {
+        partners
+            .get(&from.element_id)
+            .is_some_and(|named| named.contains(&to.element_id))
+    };
+    let mut out = BTreeMap::new();
+    for (index, wall) in lines.iter().enumerate() {
+        let run = length(wall);
+        let along = [
+            (wall.end[0] - wall.start[0]) / run,
+            (wall.end[1] - wall.start[1]) / run,
+        ];
+        let mut reaches = [None, None];
+        for (slot, point) in [wall.start, wall.end].into_iter().enumerate() {
+            let from = ends.partition_point(|(p, _)| p[0] < point[0] - JOIN_EPS_FEET);
+            let mates: BTreeSet<usize> = ends[from..]
+                .iter()
+                .take_while(|(p, _)| p[0] <= point[0] + JOIN_EPS_FEET)
+                .filter(|(p, other)| *other != index && (p[1] - point[1]).abs() <= JOIN_EPS_FEET)
+                .map(|(_, other)| *other)
+                .filter(|other| {
+                    let other = lines[*other];
+                    wall.top_feet.min(other.top_feet) - wall.base_feet.max(other.base_feet)
+                        > JOIN_EPS_FEET
+                })
+                .collect();
+            let [mate] = mates.into_iter().collect::<Vec<_>>()[..] else {
+                continue;
+            };
+            let other = lines[mate];
+            if wall.layer_count != 1 || other.layer_count != 1 {
+                continue;
+            }
+            let other_run = length(other);
+            let cosine = (along[0] * (other.end[0] - other.start[0])
+                + along[1] * (other.end[1] - other.start[1]))
+                / other_run;
+            if cosine.abs() > PERPENDICULAR_EPS {
+                continue;
+            }
+            let half = other.thickness_feet * 0.5;
+            reaches[slot] = match (names(wall, other), names(other, wall)) {
+                (true, false) => Some(half),
+                (false, true) => Some(-half),
+                _ => None,
+            };
+        }
+        if reaches.iter().any(Option::is_some) {
+            out.insert(wall.element_id, reaches);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

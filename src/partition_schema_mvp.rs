@@ -1390,6 +1390,10 @@ pub const WALL_AXIS_START_FIELDS: [&str; 2] = ["m_wall_axis_start_x", "m_wall_ax
 pub const WALL_AXIS_END_FIELDS: [&str; 2] = ["m_wall_axis_end_x", "m_wall_axis_end_y"];
 /// Field holding a wall's thickness, its type's layers summed (RE-54).
 pub const WALL_TYPE_THICKNESS_FIELD: &str = "m_wall_type_thickness";
+/// Fields holding how far past the start and the end of its centreline a
+/// wall's body reaches at a butt join, feet, negative where it stops short
+/// (RE-70). Absent at an end the join lists do not decide.
+pub const WALL_JOIN_REACH_FIELDS: [&str; 2] = ["m_wall_join_start_reach", "m_wall_join_end_reach"];
 
 /// A wall's centreline and its type's thickness (RE-54).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1400,10 +1404,14 @@ pub struct WallAxis {
     pub end: [f64; 2],
     /// The type's layers summed, feet.
     pub thickness_feet: f64,
+    /// How far past its start and its end the body reaches at a butt join,
+    /// where the join lists decide it (RE-70).
+    pub join_reach_feet: [Option<f64>; 2],
 }
 
 /// The centreline and thickness [`WALL_AXIS_START_FIELDS`],
-/// [`WALL_AXIS_END_FIELDS`] and [`WALL_TYPE_THICKNESS_FIELD`] record.
+/// [`WALL_AXIS_END_FIELDS`] and [`WALL_TYPE_THICKNESS_FIELD`] record, with
+/// the [`WALL_JOIN_REACH_FIELDS`] present.
 pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallAxis> {
     let float = |wanted: &str| {
         fields.iter().find_map(|(name, value)| match value {
@@ -1417,6 +1425,7 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
         start: [sx?, sy?],
         end: [ex?, ey?],
         thickness_feet: float(WALL_TYPE_THICKNESS_FIELD)?,
+        join_reach_feet: WALL_JOIN_REACH_FIELDS.map(float),
     })
 }
 
@@ -1755,6 +1764,70 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
         wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
+    }
+    attach_wall_join_reaches(rf, revit_version, walls);
+}
+
+/// Give each wall with a centreline how far past each end its body reaches
+/// at a butt join, where its and its partner's join lists decide it
+/// ([`crate::element_record_wall_joins::butt_join_reaches`], RE-70).
+fn attach_wall_join_reaches(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
+    use crate::element_record_wall_joins as joins;
+    let float = |wall: &DecodedElement, wanted: &str| {
+        wall.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let lines: Vec<joins::WallLine> = walls
+        .iter()
+        .filter_map(|wall| {
+            let axis = wall_axis_from_fields(&wall.fields)?;
+            let base = float(wall, "m_locationZ")?;
+            let layer_count = wall.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Vector(bands) if name == WALL_LAYERS_FIELD => Some(bands.len()),
+                _ => None,
+            })?;
+            Some(joins::WallLine {
+                element_id: wall.id?,
+                start: axis.start,
+                end: axis.end,
+                thickness_feet: axis.thickness_feet,
+                layer_count,
+                base_feet: base,
+                top_feet: base + float(wall, "m_bboxHeight")?,
+            })
+        })
+        .collect();
+    if lines.len() < 2 {
+        return;
+    }
+    let every: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
+    let read: BTreeSet<u32> = lines.iter().map(|line| line.element_id).collect();
+    let Ok(partners) = crate::partition_compound_structure::scan_wall_join_partners(
+        rf,
+        revit_version,
+        &every,
+        &read,
+    ) else {
+        return;
+    };
+    let reaches = joins::butt_join_reaches(&lines, &partners);
+    for wall in walls.iter_mut() {
+        let Some(reach) = wall.id.and_then(|id| reaches.get(&id)) else {
+            continue;
+        };
+        for (name, value) in WALL_JOIN_REACH_FIELDS.iter().zip(reach) {
+            if let Some(value) = value {
+                wall.fields.push((
+                    (*name).into(),
+                    InstanceField::Float {
+                        value: *value,
+                        size: 8,
+                    },
+                ));
+            }
+        }
     }
 }
 
