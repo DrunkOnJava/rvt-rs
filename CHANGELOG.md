@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Layer sets are named `Family:Type`, as Revit names them (RE-61).** A
+  wall's set is now "Basic Wall:Exterior - Brick on Mtl. Stud" rather than
+  the type name alone.
+  - Revit stores no system family name. A type with compound layers is a
+    Basic Wall, Floor, Compound Ceiling, Basic Roof or Pad by its category.
+  - The names equal Revit's on all 1,210 Snowdon Towers elements, on
+    all of Core Interior's and RE1's, and on RE1's own four layer sets.
 - **Storeys for elements whose record names no Level (RE-60, #369).**
   - A railing now takes the storey of the stair or ramp its record names.
     That is Revit's storey on 73 of 74 Snowdon Towers railings.

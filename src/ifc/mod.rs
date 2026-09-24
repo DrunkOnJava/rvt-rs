@@ -194,6 +194,11 @@ pub struct ElementLayers {
     /// ceiling's do (RE-57); `exterior_normal` is unused.
     #[serde(default)]
     pub stacked: bool,
+    /// The Revit system family of the element's type, which a type with
+    /// layers implies (RE-61,
+    /// [`crate::partition_schema_mvp::layered_system_family`]).
+    #[serde(default)]
+    pub system_family: Option<String>,
 }
 
 /// One layer of an [`ElementLayers`].
@@ -1255,11 +1260,16 @@ fn material_layer_sets_from_layers(
                 (material, band.width_feet.to_bits())
             })
             .collect();
+        // Revit names a layer set `Family:Type` (RE-61).
+        let set_name = match &layers.system_family {
+            Some(family) if !type_name.is_empty() => format!("{family}:{type_name}"),
+            _ => type_name,
+        };
         let set = *set_of
-            .entry((type_name.clone(), key.clone()))
+            .entry((set_name.clone(), key.clone()))
             .or_insert_with(|| {
                 sets.push(entities::MaterialLayerSet {
-                    name: type_name,
+                    name: set_name,
                     layers: key
                         .iter()
                         .map(|&(material_index, width)| entities::MaterialLayer {

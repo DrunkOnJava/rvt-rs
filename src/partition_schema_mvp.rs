@@ -814,6 +814,7 @@ pub fn element_layers_from_fields(
             exterior_normal: [0.0, 0.0],
             layers,
             stacked: true,
+            system_family: None,
         });
     }
     let float = |wanted: &str| match field(wanted) {
@@ -826,7 +827,30 @@ pub fn element_layers_from_fields(
         exterior_normal: [x?, y?],
         layers,
         stacked: false,
+        system_family: None,
     })
+}
+
+/// The Revit system family a record-backed element's type belongs to when
+/// the type has compound layers (RE-61). Revit derives the name rather than
+/// storing it. Only one system family per category has compound layers, so
+/// the category gives it: a wall is a Basic Wall (not a Curtain or Stacked
+/// Wall), a ceiling a Compound Ceiling (not a Basic Ceiling) and a roof a
+/// Basic Roof (not Sloped Glazing).
+///
+/// Measured against the `Family:Type:ElementId` names Revit's own IFC
+/// export gives the same elements, on every record-backed wall, floor,
+/// ceiling, roof and building pad of Snowdon Towers, Core Interior and RE1
+/// Architecture: 1,444 walls, 283 floors, 74 ceilings, 20 roofs and 1 pad.
+pub fn layered_system_family(class: &str) -> Option<&'static str> {
+    match class {
+        "Wall" => Some("Basic Wall"),
+        "Floor" => Some("Floor"),
+        "Ceiling" => Some("Compound Ceiling"),
+        "Roof" => Some("Basic Roof"),
+        "BuildingPad" => Some("Pad"),
+        _ => None,
+    }
 }
 
 /// Give each wall its type's layers, exterior first, each with its
