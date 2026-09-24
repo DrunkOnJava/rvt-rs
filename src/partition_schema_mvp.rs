@@ -235,6 +235,8 @@ pub fn recover_partition_schema_mvp(
     attach_system_type_names(rf, revit_version, &mut unnamed);
     // --- Walls' layers and exterior side (RE-53) ---
     attach_wall_layers(rf, revit_version, &mut out.walls);
+    // --- A shed roof's slope (RE-56) ---
+    attach_roof_slopes(rf, revit_version, &mut out.products);
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -1871,8 +1873,8 @@ fn sketch_plan_profiles(
 }
 
 /// Give each roof the plan outline its sketch lines close (RE-50), as a
-/// floor has (RE-25). The body stays the record box's height: a sloped
-/// roof's slope is not read.
+/// floor has (RE-25). The body is the record box's height; a shed roof's
+/// slope is attached later ([`attach_roof_slopes`], RE-56).
 fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     use crate::partition_element_records as per;
     let roofs: BTreeSet<u32> = products
@@ -1900,6 +1902,184 @@ fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [
         if let Some(profile) = roof.id.and_then(|id| profiles.get(&id)) {
             roof.fields.extend(profile.fields());
         }
+    }
+}
+
+/// Fields holding the plan start and end of the one roof edge that defines
+/// the roof's slope, model feet (RE-56).
+pub const ROOF_SLOPE_EDGE_FIELDS: [&str; 4] = [
+    "m_roof_slope_edge_start_x",
+    "m_roof_slope_edge_start_y",
+    "m_roof_slope_edge_end_x",
+    "m_roof_slope_edge_end_y",
+];
+/// Field holding that edge's slope angle from horizontal, radians (RE-56).
+pub const ROOF_SLOPE_ANGLE_FIELD: &str = "m_roof_slope_angle";
+/// Field holding the roof's type thickness, its layers summed (RE-56).
+pub const ROOF_TYPE_THICKNESS_FIELD: &str = "m_roof_type_thickness";
+
+/// A shed roof's slope: the one edge that defines it, its angle, and the
+/// roof's thickness measured square to the slope (RE-56).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RoofSlope {
+    /// Plan start of the defining edge, model feet.
+    pub edge_start: [f64; 2],
+    /// Plan end of the defining edge, model feet.
+    pub edge_end: [f64; 2],
+    /// Slope from horizontal, radians.
+    pub angle_radians: f64,
+    /// The roof type's layers summed, feet.
+    pub thickness_feet: f64,
+}
+
+/// The slope [`ROOF_SLOPE_EDGE_FIELDS`], [`ROOF_SLOPE_ANGLE_FIELD`] and
+/// [`ROOF_TYPE_THICKNESS_FIELD`] record.
+pub fn roof_slope_from_fields(fields: &[(String, InstanceField)]) -> Option<RoofSlope> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [sx, sy, ex, ey] = ROOF_SLOPE_EDGE_FIELDS.map(float);
+    Some(RoofSlope {
+        edge_start: [sx?, sy?],
+        edge_end: [ex?, ey?],
+        angle_radians: float(ROOF_SLOPE_ANGLE_FIELD)?,
+        thickness_feet: float(ROOF_TYPE_THICKNESS_FIELD)?,
+    })
+}
+
+/// Give each roof whose sketch lines all carry a slope block, exactly one
+/// of them defining the roof's slope, that edge, its angle and its type's
+/// thickness (RE-56, [`crate::partition_roof_slopes`]). A roof with no
+/// defining edge is flat and gets nothing; one with two or more (a hip or
+/// a gable) gets nothing either, as its surfaces are not built.
+fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_element_records as per;
+    use crate::partition_roof_slopes as prs;
+    if !prs::ROOF_SLOPE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let roofs: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "Roof" && type_of(element).is_some())
+        .filter(|element| {
+            crate::element_record_plan_profiles::plan_profile_from_fields(&element.fields).is_some()
+        })
+        .filter_map(|element| element.id)
+        .collect();
+    if roofs.is_empty() {
+        return;
+    }
+    let declared = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let Ok(sketch_lines) =
+        per::scan_category_records_multi(rf, revit_version, &[per::OST_SKETCH_LINES], &declared)
+    else {
+        return;
+    };
+    let mut edges: std::collections::BTreeMap<u32, BTreeSet<u32>> = Default::default();
+    for line in &sketch_lines {
+        if let Some(owner) = line.owner_reference.filter(|owner| roofs.contains(owner)) {
+            edges.entry(owner).or_default().insert(line.element_id);
+        }
+    }
+    let line_ids: BTreeSet<u32> = edges.values().flatten().copied().collect();
+    let Ok(slopes) = prs::scan_edge_slopes(rf, revit_version, &line_ids) else {
+        return;
+    };
+    let mut defining: std::collections::BTreeMap<u32, (u32, f64)> = Default::default();
+    for (&roof, lines) in &edges {
+        if !lines.iter().all(|line| slopes.contains_key(line)) {
+            continue;
+        }
+        let mut sloped = lines
+            .iter()
+            .filter_map(|line| slopes.get(line).map(|slope| (*line, slope)))
+            .filter(|(_, slope)| slope.defines_slope);
+        if let (Some((line, slope)), None) = (sloped.next(), sloped.next()) {
+            defining.insert(roof, (line, slope.angle_radians));
+        }
+    }
+    if defining.is_empty() {
+        return;
+    }
+    let defining_lines: BTreeSet<u32> = defining.values().map(|(line, _)| *line).collect();
+    let types: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.id.is_some_and(|id| defining.contains_key(&id)))
+        .filter_map(type_of)
+        .collect();
+    let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_type_records::OST_MATERIALS,
+        &declared,
+    )
+    .unwrap_or_default()
+    .iter()
+    .map(|record| record.element_id)
+    .collect();
+    let (Ok(lines), Ok(layers)) = (
+        crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &defining_lines),
+        crate::partition_compound_structure::scan_type_layers(
+            rf,
+            revit_version,
+            &types,
+            &materials,
+            &declared,
+        ),
+    ) else {
+        return;
+    };
+    for roof in products
+        .iter_mut()
+        .filter(|element| element.class == "Roof")
+    {
+        let (Some(id), Some(type_id)) = (roof.id, type_of(roof)) else {
+            continue;
+        };
+        let Some(&(line_id, angle)) = defining.get(&id) else {
+            continue;
+        };
+        let (Some(line), Some(type_layers)) = (lines.get(&line_id), layers.get(&type_id)) else {
+            continue;
+        };
+        let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
+        if !(thickness.is_finite() && thickness > 0.0) {
+            continue;
+        }
+        let (start, end) = (line.start(), line.end());
+        for (name, value) in ROOF_SLOPE_EDGE_FIELDS
+            .iter()
+            .zip([start[0], start[1], end[0], end[1]])
+        {
+            roof.fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        roof.fields.push((
+            ROOF_SLOPE_ANGLE_FIELD.into(),
+            InstanceField::Float {
+                value: angle,
+                size: 8,
+            },
+        ));
+        roof.fields.push((
+            ROOF_TYPE_THICKNESS_FIELD.into(),
+            InstanceField::Float {
+                value: thickness,
+                size: 8,
+            },
+        ));
     }
 }
 

@@ -1975,5 +1975,20 @@ Projeto1's walls stay exact, and 2 of teste_export_2025's 3 angled walls
 now have Revit's faces and ends.
 
 Report: `reports/element-framing/RE-55-wall-lines-2025.md`.
+## Addendum — RE-56 roof edges' slopes and shed roofs (2026-09-23)
+
+A footprint roof's sketch line carries its edge's slope block: the slope
+angle (9:12 by default), 16 zero bytes, 32 `ff`, a small negative i64, a
+u32, `u32 7`, then flags `00 00 01 00` or, on an edge that defines the
+roof's slope, `01 01 01 00` followed by −rise/run. A roof type's layers
+follow its name and `u32 0`, the framing RE-53 saw as "hyphens" on 2025
+floors (types named "-"). A 2024 roof with exactly one defining edge is
+drawn rising from it, with its type's thickness square to the slope, when
+that reproduces its record box height: the Autodesk tutorial house's 1:12
+shed matches to 1e-9 ft. Snowdon's roofs have no defining edge, yet one is
+sloped in Revit's export, so another slope carrier (likely a slope arrow)
+is not read.
+
+Report: `reports/element-framing/RE-56-roof-slopes.md`.
 
 **End of report.**

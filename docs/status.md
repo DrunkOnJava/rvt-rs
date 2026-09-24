@@ -357,6 +357,9 @@ Revit's faces on 75 of 102 (`reports/element-framing/RE-54-wall-bodies.md`).
 Revit 2025: a house saved in 2024 and 2025 reads the same on all 50 of its
 walls, and 2025 walls now get centreline bodies and layers
 (`reports/element-framing/RE-55-wall-lines-2025.md`).
+**RE-56 (2026-09-23)** reads a roof edge's slope and draws a 2024 shed roof
+along it when its rise and thickness reproduce its recorded height
+(`reports/element-framing/RE-56-roof-slopes.md`).
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

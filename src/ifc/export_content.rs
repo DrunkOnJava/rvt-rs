@@ -733,6 +733,76 @@ fn beam_swept_solid(
 /// `BodySource` of a stair run drawn as its treads and risers (RE-52).
 pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
 
+/// `BodySource` of a shed roof drawn along its slope (RE-56).
+pub const ROOF_SLOPE_BODY_SOURCE: &str = "partition_roof_slope";
+
+/// How closely a shed roof's rise and thickness must reproduce its record
+/// box's height for its slope to be drawn, feet.
+const ROOF_SLOPE_CLOSURE_FEET: f64 = 1e-4;
+
+/// A shed roof's body (RE-56): its plan outline, rising from the edge that
+/// defines its slope at that slope, with its type's thickness measured
+/// square to the slope and upright sides. `outer` and `inner` are the
+/// outline relative to the element's placement at `(x, y)` and the record
+/// box's base, and `height` is the box's height.
+///
+/// `None` unless the outline lies on one side of the edge and the rise
+/// across it plus the thickness's vertical extent reproduces `height`
+/// within [`ROOF_SLOPE_CLOSURE_FEET`], so the body is exactly as tall as
+/// the one Revit recorded.
+fn roof_slope_solid(
+    slope: crate::partition_schema_mvp::RoofSlope,
+    [x, y]: [f64; 2],
+    outer: &[(f64, f64)],
+    inner: &[Vec<(f64, f64)>],
+    height: f64,
+) -> Option<entities::SolidShape> {
+    let [sx, sy] = slope.edge_start;
+    let [ex, ey] = slope.edge_end;
+    let length = (ex - sx).hypot(ey - sy);
+    let angle = slope.angle_radians;
+    if !(length > 1e-9 && angle.is_finite() && angle > 0.0 && angle < std::f64::consts::FRAC_PI_2) {
+        return None;
+    }
+    let (ux, uy) = ((ex - sx) / length, (ey - sy) / length);
+    // Distance from the edge, local coordinates, positive into the roof.
+    let offset = |(px, py): (f64, f64)| (px + x - sx) * -uy + (py + y - sy) * ux;
+    let (low, high) = outer
+        .iter()
+        .map(|&p| offset(p))
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), d| {
+            (lo.min(d), hi.max(d))
+        });
+    let (sign, far) = if high.abs() >= low.abs() {
+        (1.0, high)
+    } else {
+        (-1.0, -low)
+    };
+    let near = if sign > 0.0 { low } else { -high };
+    if near < -1e-6 {
+        return None;
+    }
+    let rise = angle.tan();
+    let vertical = slope.thickness_feet / angle.cos();
+    if (far * rise + vertical - height).abs() > ROOF_SLOPE_CLOSURE_FEET {
+        return None;
+    }
+    let mesh = super::body_geometry::sloped_slab_mesh(
+        outer,
+        inner,
+        |p| sign * offset(p) * rise,
+        vertical,
+    )?;
+    Some(entities::SolidShape::FacetedBrep {
+        vertices_feet: mesh.vertices,
+        triangles: mesh
+            .triangles
+            .into_iter()
+            .map(|[a, b, c]| entities::BrepTriangle(a, b, c))
+            .collect(),
+    })
+}
+
 /// `BodySource` of a wall drawn its type's thickness either side of its
 /// centreline (RE-54).
 pub const WALL_CENTRELINE_BODY_SOURCE: &str = "partition_wall_centreline";
@@ -1055,6 +1125,26 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let profile_override = profile
         .as_ref()
         .map(|profile| relative(&profile.outer_xy, &profile.inner_xy));
+    // RE-56: a shed roof whose slope reproduces its record box rises along
+    // it.
+    let roof_slope = if class == "Roof" {
+        profile.as_ref().and_then(|profile| {
+            let slope = crate::partition_schema_mvp::roof_slope_from_fields(&decoded.fields)?;
+            let outer: Vec<(f64, f64)> = profile
+                .outer_xy
+                .iter()
+                .map(|(px, py)| (px - x, py - y))
+                .collect();
+            let inner: Vec<Vec<(f64, f64)>> = profile
+                .inner_xy
+                .iter()
+                .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
+                .collect();
+            roof_slope_solid(slope, [x, y], &outer, &inner, height)
+        })
+    } else {
+        None
+    };
     // #331: the further pieces of a sketch of separate loops, each its own
     // body at the element's placement, as Revit exports one element per
     // piece.
@@ -1105,6 +1195,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| column_body_source.clone())
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
+                    .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
                     .unwrap_or_else(|| "partition_element_record_bbox".into()),
             ),
         },
@@ -1335,7 +1426,8 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 None => {
                     let solid = stair_run
                         .as_ref()
-                        .map(|run| stair_run_solid(run, [x, y, z]));
+                        .map(|run| stair_run_solid(run, [x, y, z]))
+                        .or(roof_slope);
                     (None, record_body, solid)
                 }
             };

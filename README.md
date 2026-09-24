@@ -51,7 +51,7 @@ On Revit 2024 and 2025 project files, rvt-rs reads each element from its partiti
 | Doors, windows | `IfcDoor`, `IfcWindow`, each filling an opening in its host wall | Core Interior 132 and 6; Snowdon Towers 132 and 68 |
 | Floors, building pads | `IfcSlab` with its sketched plan profile | Core Interior 80 of 80, every one with its sketched outline |
 | Columns | `IfcColumn`, minus what the walls cut | Core Interior 256 of 256, world-exact |
-| Roofs, ceilings | `IfcRoof` with its sketched outline, `IfcCovering` | Snowdon Towers 20 and 68; 13 roofs carry their outline, 11 with the area of Revit's own roof (RE-50) |
+| Roofs, ceilings | `IfcRoof` with its sketched outline, a shed roof along its slope; `IfcCovering` | Snowdon Towers 20 and 68; 13 roofs carry their outline, 11 with the area of Revit's own roof (RE-50); a shed roof's slope, thickness and outline reproduce its recorded height to 1e-9 ft (RE-56) |
 | Stairs | `IfcStair` aggregating its flights, landings and stringers, with `Pset_StairCommon` / `Pset_StairFlightCommon` riser count, riser height and tread length; straight flights with separate treads and risers drawn as them | Snowdon Towers 27 stairs, 43 flights, 17 landings, every aggregate relation one Revit's has; every stair's riser and tread values are Revit's (26 of 26), and flights' on 37 of 43 (RE-47); 34 flights drawn as their treads and risers, 30 of them equal to Revit's own geometry (RE-52) |
 | Curtain walls | `IfcCurtainWall` aggregating its panels and mullions, with no body of its own | Snowdon Towers 42 of 42 and RE1 1 of 1; 1,798 of Snowdon's 1,906 panel and mullion relations are Revit's own (RE-46) |
 | Railings, curtain panels, mullions | `IfcRailing`, `IfcPlate`, `IfcMember` | Snowdon Towers 131 railings, every mullion |

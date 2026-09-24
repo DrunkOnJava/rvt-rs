@@ -582,6 +582,27 @@ fn prism(section: &Section, at: impl Fn(Point2, f64) -> [f64; 3]) -> Mesh {
     mesh
 }
 
+/// A slab over the plan area inside `outer` and outside `holes` whose
+/// underside lies at `bottom(point)` and whose top lies `thickness` above
+/// it, with upright sides (RE-56).
+pub fn sloped_slab_mesh(
+    outer: &[Point2],
+    holes: &[Ring],
+    bottom: impl Fn(Point2) -> f64,
+    thickness: f64,
+) -> Option<Mesh> {
+    if !(thickness.is_finite() && thickness > 0.0) {
+        return None;
+    }
+    let section = section(outer, holes)?;
+    let mesh = prism(&section, |p, t| [p.0, p.1, bottom(p) + t * thickness]);
+    mesh.vertices
+        .iter()
+        .flatten()
+        .all(|v| v.is_finite())
+        .then_some(mesh)
+}
+
 /// An extrusion's body in element-local feet.
 pub fn extrusion_mesh(extrusion: &Extrusion) -> Option<Mesh> {
     let height = extrusion.height_feet;
