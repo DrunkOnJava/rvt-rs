@@ -18,6 +18,11 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Model text is named as Revit names it (RE-67)**, for example "Model
+  Text:10" Trebuchet MS:1448731" rather than "GenericModel-1448731". Its
+  type is the one text type its record names, a type object that carries a
+  font. On Snowdon Towers all 7 model texts carry Revit's `Name` and
+  `ObjectType`.
 - **Railings whose type has no element data are named as Revit names
   them (RE-66).** Their type's name is read from its type object, ending
   at a fixed field frame. On Snowdon Towers all 131 railings carry
