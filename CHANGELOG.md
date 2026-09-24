@@ -24,6 +24,14 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Plumbing fixtures whose record names no Level sit on Revit's storey
+  (RE-68, #369).** They take the Level the objects their record names
+  carry, as Revit's export does, even where their base elevation points
+  elsewhere: Snowdon Towers' floor sinks sit 0.57 ft below that Level and
+  its faucet 3.2 ft above. All 4 are now on Revit's storey. On Snowdon,
+  5,949 elements are on Revit's storey, 1 is on no storey and 1 on another.
+  Other classes still need that Level to agree with their base, because for
+  light fixtures, slab edges and wall sweeps it alone is wrong on 73 of 214.
 - **A wall that ends part way along another stops against it layer by
   layer, as Revit draws T joints (RE-73, #358).** The other wall runs
   through. Counted from the face it meets, each layer of the stopping wall
