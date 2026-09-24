@@ -561,6 +561,12 @@ interface RelatedElement {
   name: string;
   ifc_type: string;
 }
+/** One end of a wall that butt-joins another, from its join lists (RE-70). */
+interface PanelJoin {
+  end: string;
+  runs_through: boolean;
+  wall: RelatedElement;
+}
 interface PanelRow {
   label: string;
   value: string;
@@ -611,6 +617,7 @@ interface ElementInfoPanel {
   further_property_groups?: PanelPropertyGroup[];
   host?: RelatedElement | null;
   hosted?: RelatedElement[];
+  joins?: PanelJoin[];
   missing?: string[];
 }
 interface ScheduleTypeGroup {
@@ -1715,13 +1722,15 @@ function relationRow(rel: RelatedElement): HTMLElement {
 
 /**
  * Host relationships (M4-04) computed by `element_info_panel` in
- * Rust: the wall a door or window sits in, and the openings a wall
- * carries. Each row re-selects its element — mouse or keyboard.
+ * Rust: the wall a door or window sits in, the openings a wall
+ * carries, and the walls a wall butt-joins at its ends (RE-70). Each
+ * row re-selects its element — mouse or keyboard.
  */
 function relationsBox(panel: ElementInfoPanel): HTMLElement | null {
   const host = panel.host ?? null;
   const hosted = panel.hosted ?? [];
-  if (!host && hosted.length === 0) return null;
+  const joins = panel.joins ?? [];
+  if (!host && hosted.length === 0 && joins.length === 0) return null;
   const box = document.createElement('div');
   box.id = 'info-relations';
   box.className = 'info-relations';
@@ -1734,6 +1743,12 @@ function relationsBox(panel: ElementInfoPanel): HTMLElement | null {
       relationHeading(`Hosts ${hosted.length} opening${hosted.length === 1 ? '' : 's'}`),
     );
     for (const rel of hosted) box.appendChild(relationRow(rel));
+  }
+  for (const join of joins) {
+    box.appendChild(
+      relationHeading(`${join.end}: ${join.runs_through ? 'runs through' : 'stops at'}`),
+    );
+    box.appendChild(relationRow(join.wall));
   }
   return box;
 }

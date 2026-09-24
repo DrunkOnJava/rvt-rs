@@ -74,6 +74,12 @@ use rvt::ifc::scene_graph::{
     the openings a wall carries, each as a
     `RelatedElement { entity_index, name, ifc_type }` the viewer
     uses to re-select the other end of the relationship.
+  - `joins: Vec<PanelJoin { end, runs_through, wall }>` carries the
+    walls a wall butt-joins at its `"Start"` and `"End"`, where its join
+    lists decide which one runs through (RE-70): `runs_through` is true
+    where this wall runs on to the other's far face and false where it
+    stops at its near face, and `wall` is the other wall as a
+    `RelatedElement`. The viewer lists them under the host rows.
   - `storey: Option<PanelStorey { index, name, elevation_feet, elevation_label }>`
     resolves `storey_index`; `index` addresses the same
     `IFCBUILDINGSTOREY` scene node, so the viewer can jump to it.

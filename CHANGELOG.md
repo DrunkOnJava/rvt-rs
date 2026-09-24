@@ -35,6 +35,12 @@ All notable changes will be documented here. This project follows
   layer. On Snowdon Towers 9 walls improve and none gets worse, and 346 of
   976 axis-parallel walls have both of Revit's ends, from 338. The IFC
   reports each such end as `JoinReachStartFeet` / `JoinReachEndFeet`.
+- **A wall names the walls it butt-joins.** Every end the join lists
+  decide, layered walls included, carries `JoinStartWallElementId` /
+  `JoinEndWallElementId` and `JoinStartRunsThrough` / `JoinEndRunsThrough`
+  in the IFC: 185 of Core Interior's 360 walls. The viewer's element panel
+  lists them as "Start: runs through" or "End: stops at" with the other
+  wall, a link that selects it.
 - **Wall sweeps are named as Revit names them (RE-69):** "Wall
   Sweep:Base_Simple:2074039" from the one type object the sweep's record
   names, or the ElementId alone for a sweep of a wall type's own

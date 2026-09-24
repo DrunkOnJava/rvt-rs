@@ -407,6 +407,45 @@ largeProjectDemoTest(
   },
 );
 
+largeProjectDemoTest(
+  'a Core Interior wall names the walls it butt-joins and jumps to them',
+  async ({ page }) => {
+    // RE-70: wall 20796's join lists say it runs through at its start,
+    // past wall 20797, and stops at its end against wall 20799. Wall
+    // 20797 in turn stops against 20796.
+    test.slow();
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/Ready/);
+    await page.locator('[data-demo-id="core-interior-2024"]').click();
+    await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
+
+    const filter = page.locator('#tree-filter');
+    await filter.fill('20796');
+    await expect(page.locator('#tree-filter-status')).toHaveText('1 element matches');
+    await page
+      .locator('.tree-node.tree-element[data-ifc-type="IFCWALL"]')
+      .filter({ hasText: '20796' })
+      .first()
+      .click();
+
+    const relations = page.locator('#info-relations');
+    await expect(relations).toContainText('Start: runs through');
+    await expect(relations).toContainText('End: stops at');
+    const partner = relations.locator('.info-relation').filter({ hasText: ':20797' });
+    await expect(partner).toContainText(/IfcWall/);
+    const partnerIndex = await partner.getAttribute('data-entity-index');
+    expect(partnerIndex).toMatch(/^\d+$/);
+
+    await partner.focus();
+    await page.keyboard.press('Enter');
+    await expect(
+      page.locator(`.tree-node.selected[data-entity-index="${partnerIndex}"]`),
+    ).toBeVisible();
+    await expect(relations).toContainText('End: stops at');
+    await expect(relations.locator('.info-relation').filter({ hasText: ':20796' })).toBeVisible();
+  },
+);
+
 projectSampleTest(
   'opens a project sample and exposes geometry diagnostics, toggles, and element info',
   async ({ page }) => {
