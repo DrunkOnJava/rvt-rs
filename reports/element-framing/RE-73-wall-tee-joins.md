@@ -17,7 +17,8 @@
 | layer ends in the GLB matching Revit's body | 3,925 of 5,634 | 4,290 |
 
 - Per wall on Snowdon: 186 better, 14 worse, faces unchanged. 172 walls gain both of Revit's ends and 13 lose them.
-- Revit draws a few T joints as a clean stop at the face, which nothing read predicts: 16 Snowdon ends, and all three on RE1 (Revit 2025), where 3 of the 7 walls keep both of Revit's ends (6 on main). RE-71 found RE1's one layered corner drawn the same way.
+- Revit draws a few T joints as a clean stop at the face, which nothing read predicts: 16 Snowdon ends.
+- RE1's export (Revit 2025) cannot show a layered end: it writes each wall as one rectangle (§3). Against it, 3 of the 7 walls keep both ends (6 on main), and RE-71's one RE1 corner is drawn the same way.
 - Core Interior's 202 T ends, all between single-layer walls, are right. Its bodies already stopped there (RE-26's trims), so they are unchanged (351 of 360 walls world-exact), but each end now names the wall it stops against.
 
 -----
@@ -66,7 +67,7 @@ Free ends on one other wall's centreline that the exporter leaves alone, on Snow
 ## 3. What does not separate the clean stops
 
 Of the 313 measured ends, 33 have a layer the rule gets wrong:
-- **16 are clean stops.** Every layer of the stopping wall ends at the other wall's face, although its core could pass the other wall's finish. RE1's three T ends, all walls of one type (finish 1, structure, finish 1), are the same.
+- **16 are clean stops.** Every layer of the stopping wall ends at the other wall's face, although its core could pass the other wall's finish.
 - **17 are other shapes.** A layer runs short of or past its line, or, once, a single-layer wall runs on to the other wall's centreline.
 
 Nothing measured tells the clean stops from the staircases:
@@ -74,6 +75,9 @@ Nothing measured tells the clean stops from the staircases:
 - **The record box.** At a T end it runs to the other wall's centreline, the location line's end, on 330 of 332 axis-parallel ends. RE-26's trims then stop it at the face on 308 of the 313 measured ends, right or wrong alike.
 - **The join lists.** They name the other wall at 8 of the 334 ends. None of the 16 clean stops is among them, and the rule is right on 2 of the 7 of those 8 that can be measured.
 - **Heights.** Where the other wall covers only part of the stopping wall's height (12% to 90% of it), the rule is right on 25 of 30 measured ends, as the whole wall's join. Revit cleans the join over the full height either way.
+- **Materials.** The two walls' cores share a material on 3 of the 16 clean stops and on 181 of the 260 layered ends the rule gets right. Where the cores differ, the rule is still right on 79 of 101 ends. Both walls have the same type on none of the clean stops, but on only 51 of the 260 ends the rule gets right.
+
+**RE1 is a different export.** Its IFC is IFC2X3 Coordination View 2.0 from Revit 2026.2's exporter. It writes each of its 7 walls as one `IfcExtrudedAreaSolid` of an `IfcRectangleProfileDef`, so every layer of a wall ends on the same line, whatever the model holds. Snowdon Towers' and Core Interior's exports are IFC4 Reference View 1.2 from Revit 2024, and Snowdon's writes one solid per layer on 790 of its 858 layered walls. RE1's three T ends are clean stops at the face, and RE-71's one RE1 corner is a clean butt. Both show that export's form, and say nothing about where RE1's layers end.
 
 ## 4. In the exporter
 
@@ -108,5 +112,5 @@ python3 tools/re/ifc_world_aabb.py OURS.ifc --type IFCWALL --scale 3.28083989501
   - `rvt-ifc`'s own IFC and `rvt-gltf`'s GLB agree on all 1,078 walls to 0.000 ft, and IfcOpenShell meshes every one.
   - `rvt-ifc` takes 10.0 s.
 - **Core Interior:** 202 T ends, all right in Revit's body; 351 of 360 walls world-exact, as on main, and no wall's box changes. The IFC gains the partner properties at those ends, so both witness observations of it are regenerated; they replay to PASS.
-- **RE1 (Revit 2025):** 3 T ends, all clean stops in Revit's body; 3 of 7 walls keep both of Revit's ends (6 on main).
+- **RE1 (Revit 2025):** 3 T ends. Its export draws each wall as one rectangle (§3), so all three are clean stops there, and 3 of 7 walls keep both of that export's ends (6 on main).
 - **MIT tutorial house (local only, no Revit export):** 20 T ends on 16 walls, the same in the 2024 and the 2025 save. Its IFC and GLB agree on all 45 walls in both.

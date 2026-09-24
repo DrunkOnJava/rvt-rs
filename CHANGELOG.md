@@ -32,20 +32,20 @@ All notable changes will be documented here. This project follows
   5,949 elements are on Revit's storey, 1 is on no storey and 1 on another.
   Other classes still need that Level to agree with their base, because for
   light fixtures, slab edges and wall sweeps it alone is wrong on 73 of 214.
-- **A wall that ends part way along another stops against it layer by
-  layer, as Revit draws T joints (RE-73, #358).** The other wall runs
-  through. Counted from the face it meets, each layer of the stopping wall
-  passes the other wall's layers of lower priority, so a core passes a
-  finish, and stops at the first of equal or higher priority; a
-  single-layer wall stops at the face. On Snowdon Towers 280 of 313
-  measured T ends are right in every layer, 675 of 976 axis-parallel walls
-  now have both of Revit's ends, from 516, and 4,290 of 5,634 layer ends
-  match Revit's body, from 3,925. Each such end names the wall it stops
-  against in the IFC and the viewer's element panel, 202 more on Core
-  Interior, whose bodies already stopped there. Revit draws some T joints
-  as a clean stop at the face instead, which nothing read predicts: 13
-  Snowdon walls lose an end they had, and so do RE1's (Revit 2025), where
-  3 of 7 walls keep both of Revit's ends, from 6.
+- **A wall that ends part way along another stops against it layer by layer,
+  as Revit draws T joints (RE-73, #358).** The other wall runs through.
+  Counted from the face it meets, each layer of the stopping wall passes the
+  other wall's layers of lower priority, so a core passes a finish, and
+  stops at the first of equal or higher priority; a single-layer wall stops
+  at the face. On Snowdon Towers 280 of 313 measured T ends are right in
+  every layer, 675 of 976 axis-parallel walls now have both of Revit's ends,
+  from 516, and 4,290 of 5,634 layer ends match Revit's body, from 3,925.
+  Each such end names the wall it stops against in the IFC and the viewer's
+  element panel, 202 more on Core Interior, whose bodies already stopped
+  there. Revit draws some T joints as a clean stop at the face instead,
+  which nothing read predicts, and 13 Snowdon walls lose an end they had.
+  RE1's export (Revit 2025) writes each wall as one rectangle, so no layered
+  end shows in it: against it 3 of 7 walls keep both ends, from 6.
 - **Every curtain panel and mullion sits in the curtain wall Revit puts it
   in (RE-72, #370).** A panel names the curtain grid it lies on, and the
   grid's own data names its curtain wall: that settles the panels that name
@@ -65,7 +65,9 @@ All notable changes will be documented here. This project follows
   Towers 516 of 976 axis-parallel walls now have both of Revit's ends, from
   346, and 3,925 of 5,634 layer ends match Revit's body, from 3,078. Revit
   draws a few such joints as a clean butt instead, which nothing read
-  predicts: 16 layer ends on Snowdon and one RE1 wall's end get worse.
+  predicts: 16 layer ends on Snowdon get worse. So does one RE1 wall's
+  end, but RE1's export writes each wall as one rectangle and cannot show
+  layered ends (RE-73).
 - **A butt join's wall runs through, and the other stops, as Revit draws
   them (RE-70, #358).** A wall's own data lists the walls it runs through
   at a join; where two walls' centrelines end at one point, that wall

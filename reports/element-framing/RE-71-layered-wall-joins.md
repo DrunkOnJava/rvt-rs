@@ -18,7 +18,7 @@
 |---|---:|---:|
 | right | 3,078 of 5,634 | 3,925 |
 
-- 16 layer ends that were right go wrong, all on walls Revit draws as a clean butt (§3). On RE1 the one layered joint the rule draws is such a clean butt: 6 of 7 walls keep both of Revit's ends (7 on main), and 38 of 42 layer ends match (42 on main).
+- 16 layer ends that were right go wrong, all on walls Revit draws as a clean butt (§3). RE1's one layered joint is drawn as a clean butt, but RE1's export writes every wall as one rectangle, so no layered end shows in it (RE-73 §3). Against it, 6 of 7 walls keep both ends (7 on main), and 38 of 42 layer ends match (42 on main).
 - Measured on Snowdon Towers (Revit 2024) and RE1 (Revit 2025). Core Interior is unchanged; its walls have one layer.
 
 -----
@@ -54,7 +54,7 @@ So the exporter draws the staircase only on the 528 ends of the first kind, and 
 ## 3. What does not separate the clean butts
 
 Of those 528 ends, 7 have a layer the rule gets wrong:
-- **Six are clean butts.** Revit runs every layer of the through wall to the far face, or stops every layer of the stopping wall at the near face: walls 837426, 1323736, 1477441 and 1929800, and 1479342 at both ends. The one layered joint on RE1, 416297 against 418450, is another.
+- **Six are clean butts.** Revit runs every layer of the through wall to the far face, or stops every layer of the stopping wall at the near face: walls 837426, 1323736, 1477441 and 1929800, and 1479342 at both ends. The one layered joint on RE1, 416297 against 418450, is drawn the same way, but RE1's export writes every wall as one rectangle and cannot show layers ending apart (RE-73 §3).
 - **The seventh**, 752956's end against 752985, follows the rule for its three outer layers and stops its inner three on the third's line.
 
 Nothing measured tells the clean butts from the 522 staircases:

@@ -483,7 +483,8 @@ base and top, the wall's body is that staircase. On Snowdon Towers 516 of
 976 axis-parallel walls have both of Revit's ends (346 before) and 3,925 of
 5,634 layer ends match Revit's body (3,078 before). A few such joints
 Revit draws as clean butts, which nothing read predicts: 16 layer ends on
-Snowdon and one RE1 wall get worse
+Snowdon get worse. One RE1 wall does too, but RE1's export writes each wall
+as one rectangle and cannot show layered ends
 (`reports/element-framing/RE-71-layered-wall-joins.md`).
 **RE-72 (2026-09-24)** reads the curtain grid a panel lies on, whose own
 data names its curtain wall, and exports panels that hold a basic wall as
@@ -497,8 +498,9 @@ higher priority, and a single-layer wall stops at the face. On Snowdon
 Towers 280 of 313 measured T ends are right in every layer, 675 of 976
 axis-parallel walls have both of Revit's ends (516 before) and 4,290 of
 5,634 layer ends match Revit's body (3,925 before). Revit draws some T
-joints as a clean stop at the face, which nothing read predicts: 13
-Snowdon walls and 3 of RE1's 7 lose an end they had
+joints as a clean stop at the face, which nothing read predicts, and 13
+Snowdon walls lose an end they had. Against RE1's export, which writes each
+wall as one rectangle, 3 of its 7 do
 (`reports/element-framing/RE-73-wall-tee-joins.md`).
 
 The public viewer's demo gallery leads with the two files this section
