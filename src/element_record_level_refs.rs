@@ -68,6 +68,59 @@ pub const HOST_SOURCE: &str = "partition_element_record_host";
 /// Level at or below its base (RE-60).
 pub const LEVEL_OBJECT_SOURCE: &str = "partition_element_record_level_object";
 
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a stair or ramp whose base sits
+/// exactly at one Level's elevation (RE-68).
+pub const BASE_AT_LEVEL_SOURCE: &str = "partition_element_record_base_at_level";
+
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for an element given the Level of
+/// the one element of its own class its record names, such as a part of a
+/// nested light-fixture family (RE-68).
+pub const SAME_CLASS_HOST_SOURCE: &str = "partition_element_record_same_class_host";
+
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for an element placed by its base
+/// elevation (RE-68, [`elevation_band_level`]).
+pub const BASE_ELEVATION_SOURCE: &str = "partition_element_record_base_elevation";
+
+/// How far below a Level an element's base may sit and still be on that
+/// Level (RE-68). On Snowdon Towers Revit puts on the Level just above
+/// their base 5 elements whose base is 0.013 to 0.233 ft below it.
+pub const BELOW_LEVEL_TOLERANCE_FEET: f64 = 0.25;
+
+/// How far below the next Level up an element's base must sit to be on the
+/// Level at or below it (RE-68). The nearest such base on Snowdon Towers is
+/// 0.333 ft below the next Level. Between this and
+/// [`BELOW_LEVEL_TOLERANCE_FEET`] no Level is chosen.
+pub const CLEAR_OF_LEVEL_FEET: f64 = 0.5;
+
+/// The Level an element sits on by its base elevation (RE-68), within a
+/// fail-closed band:
+/// - the Level just above `base_feet` when the base is at most
+///   [`BELOW_LEVEL_TOLERANCE_FEET`] below it;
+/// - the Level at or below the base ([`level_at_or_below`]) when the next
+///   Level up is at least [`CLEAR_OF_LEVEL_FEET`] above it, or there is none;
+/// - `None` in between, or when two Levels share the elevation that decides.
+pub fn elevation_band_level(elevations: &BTreeMap<u32, f64>, base_feet: f64) -> Option<u32> {
+    if !base_feet.is_finite() {
+        return None;
+    }
+    let above = elevations
+        .values()
+        .copied()
+        .filter(|at| *at > base_feet + 1e-3)
+        .fold(None, |low: Option<f64>, at| {
+            Some(low.map_or(at, |l| l.min(at)))
+        });
+    match above {
+        Some(up) if up - base_feet <= BELOW_LEVEL_TOLERANCE_FEET => {
+            let mut at_up = elevations.iter().filter(|(_, at)| **at == up);
+            let (id, _) = at_up.next()?;
+            at_up.next().is_none().then_some(*id)
+        }
+        Some(up) if up - base_feet < CLEAR_OF_LEVEL_FEET => None,
+        _ => level_at_or_below(elevations, base_feet),
+    }
+}
+
 /// The highest Level whose elevation is at or below `base_feet` (within
 /// 1e-3 ft), or `None` when none is, or when two Levels share that
 /// elevation.

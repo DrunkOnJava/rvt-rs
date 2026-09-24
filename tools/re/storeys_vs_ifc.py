@@ -15,10 +15,13 @@ With only the rvt-rs file, it counts the elements left off a storey.
 
 Usage:
 
-    python3 tools/re/storeys_vs_ifc.py [-v] <rvt-rs.ifc> [<revit-export.ifc>]
+    python3 tools/re/storeys_vs_ifc.py [-v] [--any-copy] <rvt-rs.ifc> [<revit-export.ifc>]
 
-`-v` prints the elements whose storeys differ. Needs IfcOpenShell (tested
-with 0.8.5).
+`-v` prints the elements whose storeys differ. Revit writes a multistory
+stair and its railings once per storey under one `Tag`; `--any-copy`
+counts a storey equal when it is the storey of any element sharing its
+`Tag`, where the default compares with one of them. Needs IfcOpenShell
+(tested with 0.8.5).
 """
 
 import collections
@@ -34,8 +37,10 @@ def tag(entity):
         return None
 
 
-def storeys(model):
-    """Each element's storey name by Tag, or `<type>` for another container."""
+def storeys(model, every=False):
+    """Each element's storey name by Tag, or `<type>` for another container.
+
+    With `every`, the set of storeys of all the elements sharing each Tag."""
     by_id = {}
     for rel in model.by_type("IfcRelContainedInSpatialStructure"):
         where = rel.RelatingStructure
@@ -52,7 +57,10 @@ def storeys(model):
     for entity_id, name in by_id.items():
         key = tag(model.by_id(entity_id))
         if key:
-            out[key] = name
+            if every:
+                out.setdefault(key, set()).add(name)
+            else:
+                out[key] = name
     return out
 
 
@@ -61,8 +69,9 @@ def on_storey(name):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != "-v"]
+    args = [a for a in sys.argv[1:] if a not in ("-v", "--any-copy")]
     verbose = "-v" in sys.argv[1:]
+    any_copy = "--any-copy" in sys.argv[1:]
     if not 1 <= len(args) <= 2:
         raise SystemExit(__doc__)
     ours = ifcopenshell.open(args[0])
@@ -74,7 +83,7 @@ def main():
         print(f"  {count:>5}  {kind}")
     if len(args) == 1:
         return
-    theirs = storeys(ifcopenshell.open(args[1]))
+    theirs = storeys(ifcopenshell.open(args[1]), every=any_copy)
     verdicts = collections.Counter()
     differ = collections.Counter()
     for element in elements:
@@ -82,6 +91,8 @@ def main():
         if key not in theirs:
             continue
         mine, revit = our_storeys.get(key), theirs[key]
+        if any_copy:
+            revit = mine if mine in revit else sorted(revit, key=str)[0]
         if mine == revit:
             verdicts["same storey as Revit's"] += 1
         elif not on_storey(mine):

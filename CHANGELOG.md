@@ -18,6 +18,16 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Elements whose record names no Level reach their storey (RE-68).**
+  - A multistory stair takes the Level its base sits at, and its railings
+    follow it.
+  - The parts of a nested light fixture follow the fixture that holds
+    them.
+  - Slab edges, light fixtures, wall sweeps, generic models, hardscape and
+    stairs take the Level their base elevation gives, within a fail-closed
+    band.
+  - On Snowdon Towers, the elements on no storey fall from 102 to 5, and
+    none is placed on a wrong storey.
 - **Model text is named as Revit names it (RE-67)**, for example "Model
   Text:10" Trebuchet MS:1448731" rather than "GenericModel-1448731". Its
   type is the one text type its record names, a type object that carries a
