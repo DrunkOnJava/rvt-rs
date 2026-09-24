@@ -487,6 +487,16 @@ data names its curtain wall, and exports panels that hold a basic wall as
 `IfcCurtainWall` with their body, as Revit does. On Snowdon all 2,075
 curtain parts Revit aggregates have Revit's whole and all 60 curtain walls
 match Revit's (`reports/element-framing/RE-72-curtain-grids.md`).
+**RE-73 (2026-09-24)** draws T joints: a wall that ends part way along
+another stops against it layer by layer, each layer passing the other
+wall's layers of lower priority and stopping at the first of equal or
+higher priority, and a single-layer wall stops at the face. On Snowdon
+Towers 280 of 313 measured T ends are right in every layer, 675 of 976
+axis-parallel walls have both of Revit's ends (516 before) and 4,290 of
+5,634 layer ends match Revit's body (3,925 before). Revit draws some T
+joints as a clean stop at the face, which nothing read predicts: 13
+Snowdon walls and 3 of RE1's 7 lose an end they had
+(`reports/element-framing/RE-73-wall-tee-joins.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

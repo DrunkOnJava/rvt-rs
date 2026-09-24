@@ -336,20 +336,23 @@ pub struct WallLine {
     pub top_feet: f64,
 }
 
-/// What a wall's join lists say about one end of it (RE-70).
+/// How one end of a wall meets another wall: a butt join its join lists
+/// decide (RE-70), or a T joint (RE-73).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ButtJoin {
-    /// The one other wall whose centreline ends there too.
+    /// The one other wall whose centreline ends there too, or, at a T
+    /// joint, whose centreline the end lies on.
     pub partner: u32,
     /// True where this wall runs on to the partner's far face, false where
     /// it stops at its near face.
     pub runs_through: bool,
     /// How far past the line's end the body reaches, negative where it
     /// stops short: half the partner's thickness. `None` unless both walls
-    /// have a single layer.
+    /// have a single layer, or, at a T joint, this one has.
     pub reach_feet: Option<f64>,
     /// How far past the line's end each layer reaches, exterior first,
-    /// where both walls are layered alike (RE-71). `None` otherwise.
+    /// where both walls are layered alike (RE-71) or where this wall is
+    /// layered and stops at a T joint (RE-73). `None` otherwise.
     pub layer_reach_feet: Option<Vec<f64>>,
 }
 
@@ -378,6 +381,9 @@ pub struct ButtJoin {
 /// where both walls show the same layer functions in the same order from
 /// the corner and share their base and top, and those ends get
 /// `layer_reach_feet`.
+///
+/// An end no other wall's centreline ends at is read as a T joint where it
+/// lies part way along another wall's centreline ([`tee_join`], RE-73).
 pub fn butt_joins(
     walls: &[WallLine],
     partners: &BTreeMap<u32, BTreeSet<u32>>,
@@ -419,6 +425,15 @@ pub fn butt_joins(
                         > JOIN_EPS_FEET
                 })
                 .collect();
+            let into = if slot == 0 {
+                along
+            } else {
+                [-along[0], -along[1]]
+            };
+            if mates.is_empty() {
+                joins[slot] = tee_join(wall, &lines, point, into);
+                continue;
+            }
             let [mate] = mates.into_iter().collect::<Vec<_>>()[..] else {
                 continue;
             };
@@ -437,11 +452,6 @@ pub fn butt_joins(
             };
             let half = other.thickness_feet * 0.5;
             let single = wall.layers.len() == 1 && other.layers.len() == 1;
-            let into = if slot == 0 {
-                along
-            } else {
-                [-along[0], -along[1]]
-            };
             joins[slot] = Some(ButtJoin {
                 partner: other.element_id,
                 runs_through,
@@ -454,6 +464,103 @@ pub fn butt_joins(
         }
     }
     out
+}
+
+/// The T joint `wall` makes where its centreline ends at `point`, part way
+/// along one other wall's centreline (RE-73). `into` points from `point`
+/// along `wall`.
+///
+/// The other wall runs through, and `wall` stops against it layer by layer,
+/// by Revit's layer priorities (1 structure, 2 substrate, 3 thermal or air,
+/// 4 finish 1, 5 finish 2): each of `wall`'s layers runs on into the other
+/// wall through its layers of lower priority, counted from the face `wall`
+/// meets, and stops at the first of equal or higher priority. So a core
+/// passes the other wall's finishes and stops at its core, and a finish
+/// stops at its face. A single-layer wall stops at the other wall's face.
+/// On Snowdon Towers that is every layer's end on 280 of the 313 T joints
+/// measured against Revit's IFC4 bodies; 16 of the rest Revit draws as a
+/// clean stop at the face, as it does at all three on RE1 (Revit 2025).
+///
+/// `None` unless exactly one other wall overlapping it in elevation has
+/// `point` on its centreline, perpendicular to `wall`, far enough from its
+/// ends that all of `wall`'s width meets its side. Where the other wall ends
+/// within that width, Revit stops `wall` at the other wall's face or does
+/// not join the two at all (Core Interior's 8), so it is left alone.
+pub fn tee_join(
+    wall: &WallLine,
+    lines: &[&WallLine],
+    point: [f64; 2],
+    into: [f64; 2],
+) -> Option<ButtJoin> {
+    let dot = |a: [f64; 2], b: [f64; 2]| a[0] * b[0] + a[1] * b[1];
+    let hosts: Vec<&WallLine> = lines
+        .iter()
+        .copied()
+        .filter(|other| other.element_id != wall.element_id)
+        .filter(|other| {
+            wall.top_feet.min(other.top_feet) - wall.base_feet.max(other.base_feet) > JOIN_EPS_FEET
+        })
+        .filter(|other| {
+            let run = (other.end[0] - other.start[0]).hypot(other.end[1] - other.start[1]);
+            let axis = [
+                (other.end[0] - other.start[0]) / run,
+                (other.end[1] - other.start[1]) / run,
+            ];
+            let offset = [point[0] - other.start[0], point[1] - other.start[1]];
+            let at = dot(offset, axis);
+            let across = dot(offset, [-axis[1], axis[0]]);
+            let clear = wall.thickness_feet * 0.5 - JOIN_EPS_FEET;
+            at > clear && at < run - clear && across.abs() <= JOIN_EPS_FEET
+        })
+        .collect();
+    let [host] = hosts[..] else {
+        return None;
+    };
+    let run = (host.end[0] - host.start[0]).hypot(host.end[1] - host.start[1]);
+    let cosine = dot(
+        into,
+        [
+            (host.end[0] - host.start[0]) / run,
+            (host.end[1] - host.start[1]) / run,
+        ],
+    );
+    if cosine.abs() > PERPENDICULAR_EPS || wall.layers.is_empty() || host.layers.is_empty() {
+        return None;
+    }
+    let half = host.thickness_feet * 0.5;
+    if wall.layers.len() == 1 {
+        return Some(ButtJoin {
+            partner: host.element_id,
+            runs_through: false,
+            reach_feet: Some(-half),
+            layer_reach_feet: None,
+        });
+    }
+    // The host's layers from the face `wall` meets: its exterior faces
+    // `wall` where it points along `into`.
+    let near_first: Vec<(f64, u32)> = if dot(host.exterior, into) > 0.0 {
+        host.layers.clone()
+    } else {
+        host.layers.iter().rev().copied().collect()
+    };
+    let reaches: Vec<f64> = wall
+        .layers
+        .iter()
+        .map(|(_, function)| {
+            -half
+                + near_first
+                    .iter()
+                    .take_while(|(_, other)| other > function)
+                    .map(|(width, _)| width)
+                    .sum::<f64>()
+        })
+        .collect();
+    Some(ButtJoin {
+        partner: host.element_id,
+        runs_through: false,
+        reach_feet: None,
+        layer_reach_feet: Some(reaches),
+    })
 }
 
 /// How far past the joint `point` each of `wall`'s layers reaches, exterior

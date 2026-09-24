@@ -169,7 +169,7 @@ pub struct RelatedElement {
 }
 
 /// One end of a wall that butt-joins another wall, as its join lists read
-/// (RE-70).
+/// (RE-70), or stops against it at a T joint (RE-73).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PanelJoin {
     /// `"Start"` or `"End"` of the wall's location line.
@@ -356,7 +356,8 @@ pub struct ElementInfoPanel {
     #[serde(default)]
     pub hosted: Vec<RelatedElement>,
     /// The walls this wall butt-joins at its start and end, where its join
-    /// lists decide which one runs through (RE-70). Empty otherwise.
+    /// lists decide which one runs through (RE-70) or it stops at a T joint
+    /// (RE-73). Empty otherwise.
     #[serde(default)]
     pub joins: Vec<PanelJoin>,
     /// Field names absent on this element, drawn from the fixed
@@ -535,7 +536,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
 }
 
 /// The walls a wall's `JoinStartWallElementId` / `JoinEndWallElementId`
-/// properties name, with whether it runs through there (RE-70), resolved
+/// properties name, with whether it runs through there (RE-70, RE-73), resolved
 /// to the elements whose `Tag` is that ElementId.
 fn wall_joins(
     model: &IfcModel,
