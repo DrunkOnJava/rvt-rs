@@ -24,6 +24,14 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Every curtain panel and mullion sits in the curtain wall Revit puts it
+  in (RE-72, #370).** A panel names the curtain grid it lies on, and the
+  grid's own data names its curtain wall: that settles the panels that name
+  several walls and a nested curtain wall that took the wrong parent. Panels
+  that hold a basic wall export as `IfcCurtainWall` with their own body, as
+  Revit exports them. On Snowdon Towers all 2,075 curtain parts Revit
+  aggregates now have Revit's whole (16 had none and one another), and all
+  60 curtain walls match Revit's, bodiless or not.
 - **Layered walls end layer by layer at their corners, as Revit draws them
   (RE-71, #358).** At a butt join between two layered walls, the layers
   nest like concentric Ls: counted from the outside of the corner, each

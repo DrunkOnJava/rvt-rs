@@ -482,6 +482,11 @@ base and top, the wall's body is that staircase. On Snowdon Towers 516 of
 Revit draws as clean butts, which nothing read predicts: 16 layer ends on
 Snowdon and one RE1 wall get worse
 (`reports/element-framing/RE-71-layered-wall-joins.md`).
+**RE-72 (2026-09-24)** reads the curtain grid a panel lies on, whose own
+data names its curtain wall, and exports panels that hold a basic wall as
+`IfcCurtainWall` with their body, as Revit does. On Snowdon all 2,075
+curtain parts Revit aggregates have Revit's whole and all 60 curtain walls
+match Revit's (`reports/element-framing/RE-72-curtain-grids.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

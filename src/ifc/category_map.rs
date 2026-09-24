@@ -66,10 +66,20 @@ pub const MAPPINGS: &[Mapping] = &[
         predefined_type: Some("NOTDEFINED"),
     },
     // Also a wall a mullion names (RE-46). Revit's IFC4 export of Snowdon
-    // Towers writes `.NOTDEFINED.` on all 60 of its `IFCCURTAINWALL` rows,
-    // each a bodiless aggregate of its panels and mullions.
+    // Towers writes `.NOTDEFINED.` on all 60 of its `IFCCURTAINWALL` rows;
+    // 42 are bodiless aggregates of their panels and mullions, and the
+    // other 18 are panels that hold a basic wall (`CurtainPanelWall`).
     Mapping {
         revit_class: "CurtainWall",
+        ifc_type: "IFCCURTAINWALL",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    // A curtain panel that holds a basic wall (RE-64). Revit's export of
+    // Snowdon Towers writes all 18 as `IFCCURTAINWALL` with their own body,
+    // nested under the curtain wall they are panels of (RE-72); these are
+    // the only curtain walls there that carry a body.
+    Mapping {
+        revit_class: "CurtainPanelWall",
         ifc_type: "IFCCURTAINWALL",
         predefined_type: Some("NOTDEFINED"),
     },
