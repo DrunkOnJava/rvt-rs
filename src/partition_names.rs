@@ -338,6 +338,85 @@ pub fn find_railing_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u
         .collect()
 }
 
+/// The frame tag of a type object's own name on Revit 2024 (RE-67), as
+/// material names are framed (RE-58): `ff ff ff ff 49 01 · u32 n · UTF-16`.
+pub const TYPE_NAME_FRAME_TAG: [u8; 2] = [0x49, 0x01];
+/// The frame tag of a text type's font on Revit 2024 (RE-67):
+/// `ff ff ff ff eb 07 · u32 n · UTF-16`, such as "Trebuchet MS".
+pub const FONT_FRAME_TAG: [u8; 2] = [0xeb, 0x07];
+/// Where a text type's name and font are looked for, as offsets from the
+/// ElementId.
+pub const TEXT_TYPE_WINDOW: std::ops::Range<usize> = 0x40..0x200;
+
+/// The names of the text types among `wanted` (RE-67), by ElementId.
+///
+/// A text type, such as the one model text uses, is a type object
+/// ([`TYPE_OBJECT_TAG`]) that frames its own name with
+/// [`TYPE_NAME_FRAME_TAG`] and then its font with [`FONT_FRAME_TAG`], both
+/// within [`TEXT_TYPE_WINDOW`]. A type object without a font is not read.
+/// On Autodesk's Snowdon Towers 2024 sample, the two such types are the
+/// types of all 7 model texts: "10\" Trebuchet MS" and "18\" Trebuchet MS",
+/// both in Trebuchet MS. An id whose occurrences give different names is
+/// dropped.
+pub fn find_text_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, String> {
+    let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for (id, id_at) in crate::partition_id_objects::find_id_objects(buf, wanted) {
+        let tag_at = id_at + TYPE_OBJECT_TAG_OFFSET;
+        if buf.get(tag_at..tag_at + 2) != Some(&TYPE_OBJECT_TAG[..]) {
+            continue;
+        }
+        let start = id_at + TEXT_TYPE_WINDOW.start;
+        let stop = (id_at + TEXT_TYPE_WINDOW.end).min(buf.len());
+        let Some((name, name_end)) = framed_string(buf, start, stop, TYPE_NAME_FRAME_TAG) else {
+            continue;
+        };
+        if framed_string(buf, name_end, stop, FONT_FRAME_TAG).is_none() {
+            continue;
+        }
+        match found.get_mut(&id) {
+            None => {
+                found.insert(id, Some(name));
+            }
+            Some(slot) => {
+                if slot.as_deref() != Some(name.as_str()) {
+                    *slot = None;
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, name)| name.map(|n| (id, n)))
+        .collect()
+}
+
+/// The first `ff ff ff ff · tag · u32 n · n UTF-16 units` string that
+/// starts in `buf[start..stop]`, and where it ends.
+fn framed_string(buf: &[u8], start: usize, stop: usize, tag: [u8; 2]) -> Option<(String, usize)> {
+    let frame = [0xff, 0xff, 0xff, 0xff, tag[0], tag[1]];
+    let window = buf.get(start..stop)?;
+    let at = start + memchr::memmem::find(window, &frame)? + frame.len();
+    let units = read_u32(buf, at)? as usize;
+    if !(1..=NAME_MAX_UNITS).contains(&units) {
+        return None;
+    }
+    let end = at + 4 + 2 * units;
+    let code_units: Vec<u16> = buf
+        .get(at + 4..end)?
+        .chunks_exact(2)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    let text = String::from_utf16(&code_units).ok()?;
+    if text.trim().is_empty()
+        || text
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '\u{fffd}' | '\u{fffe}' | '\u{ffff}'))
+    {
+        return None;
+    }
+    Some((text, end))
+}
+
 /// The one name that ends at the first [`RAILING_TYPE_NAME_END`] of the
 /// type object whose ElementId starts at `id_at`.
 fn railing_type_name_at(buf: &[u8], id_at: usize) -> Option<String> {

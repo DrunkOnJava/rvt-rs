@@ -445,6 +445,10 @@ and `ObjectType`. Measured on Snowdon only, as no other oracle has stairs
 when the type has no element data. On Snowdon all 131 railings now carry
 Revit's name, up from 101
 (`reports/element-framing/RE-66-railing-type-names.md`).
+**RE-67 (2026-09-24)** names model text "Model Text:<type>:<ElementId>":
+its list names a text type, a type object that frames a font after its
+name. On Snowdon all 7 model texts carry Revit's name
+(`reports/element-framing/RE-67-model-text-names.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

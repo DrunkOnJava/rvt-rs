@@ -44,6 +44,7 @@ SYSTEM_FAMILIES = {
     "Assembled Stair",
     "Cast-In-Place Stair",
     "Precast Stair",
+    "Model Text",
 }
 
 

@@ -269,6 +269,8 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_panel_wall_types(rf, revit_version, &mut unnamed_panels);
+    // --- Model text (RE-67) ---
+    attach_model_text_types(rf, revit_version, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
     attach_wall_layers(rf, revit_version, &mut out.walls);
     // --- A shed roof's slope (RE-56) ---
@@ -499,6 +501,103 @@ fn attach_type_picks(
         element
             .fields
             .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+    }
+}
+
+/// Give model text its type and family (RE-67).
+///
+/// A model text element is in the Generic Models category, but it is not a
+/// family instance: its reference list names a text type, which has no name
+/// entry (RE-38) and no type-definition record of the category. The text
+/// type is the one id the list names whose type object carries a font
+/// ([`crate::partition_names::find_text_type_names`]), and Revit names the
+/// element `Model Text:<type>:<ElementId>`. Measured on Snowdon Towers only
+/// (Revit 2024), where it names all 7 model texts as Revit's export does.
+fn attach_model_text_types(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    if revit_version != 2024 {
+        return;
+    }
+    let has = |element: &DecodedElement, field: &str| {
+        element.fields.iter().any(|(name, _)| name == field)
+    };
+    let mut lists: Vec<(usize, BTreeSet<u32>)> = Vec::new();
+    for (index, element) in products.iter().enumerate() {
+        if element.class != "GenericModel"
+            || has(element, TYPE_NAME_FIELD)
+            || has(element, FAMILY_NAME_FIELD)
+        {
+            continue;
+        }
+        let Some((references, _)) = record_references(rf, element) else {
+            continue;
+        };
+        let named: BTreeSet<u32> = references
+            .iter()
+            .filter_map(|&slot| u32::try_from(slot).ok())
+            .filter(|id| Some(*id) != element.id)
+            .collect();
+        lists.push((index, named));
+    }
+    if lists.is_empty() {
+        return;
+    }
+    let wanted: BTreeSet<u32> = lists
+        .iter()
+        .flat_map(|(_, ids)| ids.iter().copied())
+        .collect();
+    let mut names: std::collections::BTreeMap<u32, Option<String>> =
+        std::collections::BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        for (id, name) in crate::partition_names::find_text_type_names(inflated.bytes(), &wanted) {
+            match names.get(&id) {
+                Some(Some(held)) if *held != name => {
+                    names.insert(id, None);
+                }
+                Some(None) => {}
+                _ => {
+                    names.insert(id, Some(name));
+                }
+            }
+        }
+    }
+    for (index, ids) in lists {
+        let text_types: Vec<(u32, &String)> = ids
+            .iter()
+            .filter_map(|id| match names.get(id) {
+                Some(Some(name)) => Some((*id, name)),
+                _ => None,
+            })
+            .collect();
+        let [(type_id, name)] = text_types.as_slice() else {
+            continue;
+        };
+        let element = &mut products[index];
+        element.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: *type_id,
+            },
+        ));
+        element.fields.push((
+            TYPE_NAME_FIELD.into(),
+            InstanceField::String((*name).clone()),
+        ));
+        element.fields.push((
+            FAMILY_NAME_FIELD.into(),
+            InstanceField::String("Model Text".into()),
+        ));
+        element.fields.push((
+            FAMILY_NAME_SOURCE_FIELD.into(),
+            InstanceField::String(TYPE_KIND_FAMILY_SOURCE.into()),
+        ));
     }
 }
 
