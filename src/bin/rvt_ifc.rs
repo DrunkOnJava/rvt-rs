@@ -687,6 +687,7 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
             let what = match item.reason.as_str() {
                 "element_record_without_volume" => "without a 3D body",
                 "element_record_in_non_primary_design_option" => "in non-primary design options",
+                "element_record_empty_curtain_panel" => "empty curtain panels",
                 _ => return None,
             };
             Some(format!("{} {what}", item.count))

@@ -2316,9 +2316,34 @@ pub fn build_export_diagnostics_with_limits(
             sample_names: Vec::new(),
         });
     }
+    // #309: empty curtain panels are left out as Revit's own export leaves
+    // them out, recognised by their family's name. A type of theirs with a
+    // material set would contradict that name, and is reported.
+    let empty_panels = bfi
+        .as_ref()
+        .and_then(|b| crate::partition_schema_mvp::scan_empty_curtain_panels(rf, b.version).ok())
+        .unwrap_or_default();
+    if empty_panels.count > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_empty_curtain_panel".into(),
+            count: empty_panels.count,
+            classes: std::collections::BTreeMap::from([(
+                "CurtainWallPanel".to_string(),
+                empty_panels.count,
+            )]),
+            sample_names: Vec::new(),
+        });
+    }
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
+    if !empty_panels.types_with_material.is_empty() {
+        warnings.push(format!(
+            "{} empty curtain panel type(s) carry a material, which an empty panel should not: {:?}",
+            empty_panels.types_with_material.len(),
+            empty_panels.types_with_material
+        ));
+    }
     // Surface ArcWall partition-scan limit hits so crafted large
     // Partitions/* streams are visible in the diagnostics sidecar.
     if let Some(version) = bfi.as_ref().map(|b| b.version) {

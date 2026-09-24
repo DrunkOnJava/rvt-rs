@@ -233,7 +233,7 @@
         "properties": {
           "reason": {
             "type": "string",
-            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry and element_record_without_element_id for element records with no attributable ElementId (RE-30), element_record_without_volume for placed instances with no 3D body, left out as Revit's export leaves them out (#309), and element_record_in_non_primary_design_option for placed instances in a design option other than their set's primary one, also left out as Revit's export leaves them out (RE-40)."
+            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry and element_record_without_element_id for element records with no attributable ElementId (RE-30), element_record_without_volume for placed instances with no 3D body, left out as Revit's export leaves them out (#309), and element_record_in_non_primary_design_option for placed instances in a design option other than their set's primary one, also left out as Revit's export leaves them out (RE-40), and element_record_empty_curtain_panel for curtain panels of the Empty System Panel family, left out as Revit's export leaves them out (#309)."
           },
           "count": {
             "type": "integer",

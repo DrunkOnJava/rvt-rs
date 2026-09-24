@@ -338,6 +338,29 @@ pub fn find_railing_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u
         .collect()
 }
 
+/// Where a curtain panel type's material follows its ElementId: the `u64`
+/// right after its [`TYPE_OBJECT_TAG`] (#309). On Snowdon Towers the
+/// "Glazed" and "Solid" system panel types name "Glass" and "Default", and
+/// the "Empty" type of the "Empty System Panel" family names none (`ff` ×
+/// 8).
+pub const PANEL_TYPE_MATERIAL_OFFSET: usize = TYPE_OBJECT_TAG_OFFSET + 2;
+
+/// For each id in `wanted` with a type object in `buf`, the material its
+/// [`PANEL_TYPE_MATERIAL_OFFSET`] names, `None` where it is unset (#309).
+pub fn find_panel_type_materials(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, Option<u64>> {
+    crate::partition_id_objects::find_id_objects(buf, wanted)
+        .into_iter()
+        .filter_map(|(id, id_at)| {
+            let tag_at = id_at + TYPE_OBJECT_TAG_OFFSET;
+            (buf.get(tag_at..tag_at + 2) == Some(&TYPE_OBJECT_TAG[..])).then_some(())?;
+            let raw = buf
+                .get(id_at + PANEL_TYPE_MATERIAL_OFFSET..id_at + PANEL_TYPE_MATERIAL_OFFSET + 8)?;
+            let material = u64::from_le_bytes(raw.try_into().ok()?);
+            Some((id, (material != u64::MAX).then_some(material)))
+        })
+        .collect()
+}
+
 /// The ids in `wanted` that have a type object ([`TYPE_OBJECT_TAG`]) in
 /// `buf` (RE-69).
 pub fn find_type_object_ids(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeSet<u32> {

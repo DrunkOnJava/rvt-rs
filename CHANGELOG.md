@@ -465,6 +465,14 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Empty curtain panels are left out, as Revit's export leaves them out
+  (#309).** A curtain panel of the "Empty System Panel" family fills a grid
+  cell with nothing, and Revit never exports one; rvt-rs wrote each as a
+  plate box. On Snowdon Towers the 24 are gone and counted in the export
+  diagnostics as `element_record_empty_curtain_panel`. The family is
+  recognised by its English name, so files saved in another language keep
+  them. The panel type's unset material is checked as well: an empty-family
+  type with a material is reported.
 - The viewer's Parameters status row says in plain words that Revit's
   parameter table is not read yet (#35), instead of "AProperty* host joins
   pending".

@@ -118,6 +118,17 @@ A set whose primary cannot be read keeps all its options. On Snowdon Towers
 the count is 27 (9 floors, 9 slab edges, 8 walls, one generic model), none of
 which Revit's export holds (RE-40).
 
+`element_record_empty_curtain_panel` counts placed curtain panels of the
+"Empty System Panel" family, the panel type that fills a grid cell with
+nothing. Revit's own IFC export leaves every one of them out, and so does
+rvt-rs: all 24 on Snowdon Towers. They are recognised by that family's name,
+which is Revit's English one, so a file saved in another language keeps its
+empty panels. As a cross-check, an empty panel type stores no material (the
+`u64` after its type-object tag is unset), where Snowdon's glazed and solid
+panel types name "Glass" and "Default". An empty-family type that carries a
+material is reported in `warnings`. The material alone isn't used, because a
+panel set to "By Category" may store no material either (#309).
+
 `unsupported_features` carries exactly one geometry-coverage code:
 `real_file_element_geometry` when **no** exported building element has a
 recovered body, and `partial_element_geometry` when some do and some do not
