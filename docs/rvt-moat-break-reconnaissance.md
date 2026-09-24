@@ -1963,4 +1963,17 @@ faces (butt joins), which are not modelled.
 
 Report: `reports/element-framing/RE-54-wall-bodies.md`.
 
+## Addendum — RE-55 Revit 2025 walls' lines, sides and layers (2026-09-23)
+
+A Revit 2025 wall stores its location line, its location-line setting,
+word and flip, and its type's layers as 2024 does. One house saved in both
+releases reads the same values from both on all 50 of its walls, and its
+walls draw identically from both. Wall lines are now read on 2025 through
+their own gate, `WALL_LINE_SUPPORTED_REVIT_VERSIONS`; beams and sketch
+lines keep theirs at 2024. Against Revit's 2025 exports, RE1's and
+Projeto1's walls stay exact, and 2 of teste_export_2025's 3 angled walls
+now have Revit's faces and ends.
+
+Report: `reports/element-framing/RE-55-wall-lines-2025.md`.
+
 **End of report.**
