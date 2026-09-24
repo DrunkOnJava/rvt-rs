@@ -44,7 +44,7 @@ use crate::partition_name_candidates::{
 use crate::rect_opening_index::ArcWallRectOpeningIndex;
 use crate::walker::{DecodedElement, ElementProvenance, InstanceField, WalkerLimits};
 use crate::{Result, RevitFile};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Bundle of partition-derived MVP `DecodedElement`s.
 #[derive(Debug, Clone, Default)]
@@ -225,7 +225,7 @@ pub fn recover_partition_schema_mvp(
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
-    attach_curtain_walls(rf, &mut out.walls, &mut out.products);
+    attach_curtain_walls(rf, revit_version, &mut out.walls, &mut out.products);
     // --- Stair and flight riser and tread dimensions (RE-47) ---
     attach_stair_dimensions(rf, revit_version, &mut out.products);
     // --- Stair runs' treads and risers, and their run type (RE-52) ---
@@ -309,6 +309,17 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- Curtain panels that are walls export as curtain walls (RE-72) ---
+    // Last, so every step above still sees them as panels.
+    for product in &mut out.products {
+        if product.class == "CurtainWallPanel"
+            && product.fields.iter().any(|(name, value)| {
+                name == CURTAIN_PANEL_WALL_FIELD && matches!(value, InstanceField::Bool(true))
+            })
+        {
+            product.class = CURTAIN_PANEL_WALL_CLASS.into();
+        }
+    }
 
     Ok(out)
 }
@@ -790,7 +801,26 @@ fn attach_panel_wall_types(
     picks.retain(|(_, id)| layered.contains(id));
     let names = type_data_names(rf, &header, &layered);
     attach_type_picks(panels, picks, &names);
+    // RE-72: Revit exports such a panel as a curtain wall of its own.
+    for panel in panels.iter_mut() {
+        let wall_type = panel.fields.iter().any(|(name, value)| {
+            matches!(value, InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD && layered.contains(id))
+        });
+        if wall_type {
+            panel
+                .fields
+                .push((CURTAIN_PANEL_WALL_FIELD.into(), InstanceField::Bool(true)));
+        }
+    }
 }
+
+/// Field marking a curtain panel that holds a basic wall (RE-64, RE-72).
+pub const CURTAIN_PANEL_WALL_FIELD: &str = "m_curtain_panel_is_wall";
+
+/// Class of a curtain panel that holds a basic wall. Revit's IFC4 export
+/// writes each as an `IfcCurtainWall` with its own body, nested under the
+/// curtain wall it is a panel of: all 18 on Snowdon Towers (RE-72).
+pub const CURTAIN_PANEL_WALL_CLASS: &str = "CurtainPanelWall";
 
 /// Field naming an element-record element's type, from the partition name
 /// entries (RE-38).
@@ -2274,6 +2304,7 @@ fn attach_beam_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [Deco
 /// Revit's export aggregates.
 fn attach_curtain_walls(
     rf: &mut RevitFile,
+    revit_version: u32,
     walls: &mut [DecodedElement],
     products: &mut [DecodedElement],
 ) {
@@ -2300,6 +2331,17 @@ fn attach_curtain_walls(
         }
         references.push(list);
     }
+    // RE-72: a part names the curtain grid it lies on, and the grid's own
+    // data names its curtain wall.
+    let unrecorded: BTreeSet<u32> = references
+        .iter()
+        .flatten()
+        .flatten()
+        .filter_map(|&id| u32::try_from(id).ok())
+        .filter(|id| !wall_ids.contains(id))
+        .collect();
+    let grids = scan_curtain_grid_walls(rf, revit_version, &unrecorded, &wall_ids);
+    curtain_walls.extend(grids.values().copied());
     if curtain_walls.is_empty() {
         return;
     }
@@ -2324,9 +2366,15 @@ fn attach_curtain_walls(
             .filter_map(|&id| u32::try_from(id).ok())
             .filter(|id| curtain_walls.contains(id) && Some(*id) != product.id)
             .collect();
-        let whole = match named.len() {
-            1 => named.iter().next().copied(),
-            0 => element_record_bbox(product).and_then(|part| {
+        let on_grid: BTreeSet<u32> = list
+            .iter()
+            .filter_map(|&id| u32::try_from(id).ok())
+            .filter_map(|id| grids.get(&id).copied())
+            .collect();
+        let whole = match (on_grid.len(), named.len()) {
+            (1, _) => on_grid.iter().next().copied(),
+            (0, 1) => named.iter().next().copied(),
+            (0, 0) => element_record_bbox(product).and_then(|part| {
                 let mut inside = wall_boxes
                     .iter()
                     .filter(|(_, wall)| box_contains(wall, &part, CURTAIN_PART_BOX_TOLERANCE_FEET))
@@ -2343,6 +2391,70 @@ fn attach_curtain_walls(
             ));
         }
     }
+}
+
+/// Where a curtain grid's element data names its curtain wall, as a `u64`
+/// at both offsets past the data's ElementId (RE-72).
+pub const CURTAIN_GRID_WALL_OFFSETS: [usize; 2] = [85, 478];
+
+/// The curtain wall each id in `candidates` names as a curtain grid, by
+/// the grid's ElementId (RE-72): its element data carries a wall in
+/// `walls` at both [`CURTAIN_GRID_WALL_OFFSETS`]. A grid whose copies
+/// disagree is left out.
+fn scan_curtain_grid_walls(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    candidates: &BTreeSet<u32>,
+    walls: &BTreeSet<u32>,
+) -> BTreeMap<u32, u32> {
+    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+        return BTreeMap::new();
+    };
+    let u64_at = |buf: &[u8], at: usize| {
+        buf.get(at..at.checked_add(8)?)
+            .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
+    };
+    let mut found: BTreeMap<u32, Option<u32>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for hit in memchr::memmem::find_iter(buf, &header) {
+            let id_at = hit + header.len();
+            let Some(id) = u64_at(buf, id_at)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| candidates.contains(id))
+            else {
+                continue;
+            };
+            let [first, second] =
+                CURTAIN_GRID_WALL_OFFSETS.map(|offset| u64_at(buf, id_at + 8 + offset));
+            let wall = match (first, second) {
+                (Some(first), Some(second)) if first == second => u32::try_from(first)
+                    .ok()
+                    .filter(|wall| walls.contains(wall)),
+                _ => None,
+            };
+            let Some(wall) = wall else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(wall));
+                }
+                Some(held) => {
+                    if *held != Some(wall) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, wall)| wall.map(|wall| (id, wall)))
+        .collect()
 }
 
 /// How far past a curtain wall's record box a part's box may reach and
