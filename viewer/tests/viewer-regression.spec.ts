@@ -158,7 +158,8 @@ stagedDemoTest(
     await expect(page.locator('#info')).toContainText(/Type/);
     await expect(page.locator('#info')).toContainText(/IFCPROJECT/i);
     await expect(page.locator('#info')).not.toContainText(/ifc_type/);
-    await expect(page.locator('.category-toggle')).toContainText(/IFCPROJECT/i);
+    // The project and storeys draw nothing, so they have no category toggle.
+    await expect(page.locator('#categories')).not.toContainText(/IfcProject|IfcBuildingStorey/i);
 
     const ifcTitle = await page.locator('#export-ifc').getAttribute('title');
     expect(ifcTitle ?? '').toMatch(/Scaffold|Typed|Geometry|Diagnostic|Proxy|Unknown/i);
@@ -352,8 +353,10 @@ largeProjectDemoTest(
     await page.locator('[data-demo-id="core-interior-2024"]').click();
     await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
 
-    // Doors nest under their host wall in the scene tree (M4-04).
-    const door = page.locator('.tree-node', { hasText: 'IFCDOOR' }).first();
+    // Doors are listed in their storey's IfcDoor category, and the panel
+    // names the wall that hosts them (M4-04).
+    await page.locator('.tree-node.tree-category[data-ifc-type="IFCDOOR"]').first().click();
+    const door = page.locator('.tree-node.tree-element[data-ifc-type="IFCDOOR"]').first();
     await expect(door).toBeVisible();
     await door.click();
 
@@ -372,9 +375,10 @@ largeProjectDemoTest(
 
     // The wall is now selected in the tree, and its panel lists the
     // openings it hosts — including the door we came from.
+    // The jump opens the wall's collapsed category to show it.
     await expect(
       page.locator(`.tree-node.selected[data-entity-index="${hostIndex}"]`),
-    ).toHaveCount(1);
+    ).toBeVisible();
     await expect(relations).toContainText(/Hosts \d+ opening/);
     await expect(relations.locator('.info-relation').first()).toContainText(
       /IfcDoor|IfcWindow/,
@@ -444,7 +448,8 @@ projectSampleTest(
     await expect(page.locator('#status-panel')).toContainText(/Materials/i);
     // Scene tree groups under IfcBuildingStorey nodes from recovered levels.
     await expect(page.locator('.tree-node.tree-storey').first()).toBeVisible();
-    await expect(page.locator('.tree-node.tree-storey').first()).toContainText(
+    await expect(page.locator('.tree-node.tree-storey').first()).toHaveAttribute(
+      'title',
       /IfcBuildingStorey/,
     );
     await page.locator('#diagnostics-details summary').click();
@@ -470,7 +475,9 @@ projectSampleTest(
     await categoryCheckbox.check();
     await expect(categoryCheckbox).toBeChecked();
 
-    const wallNode = page.locator('.tree-node', { hasText: 'IFCWALL' }).first();
+    // A storey opens to its categories; a category opens to its elements.
+    await page.locator('.tree-node.tree-category[data-ifc-type="IFCWALL"]').first().click();
+    const wallNode = page.locator('.tree-node.tree-element[data-ifc-type="IFCWALL"]').first();
     await expect(wallNode).toBeVisible();
     await wallNode.click();
 
@@ -619,7 +626,8 @@ projectSampleTest(
     await expect(page.locator('#status')).toHaveText(/^Zoomed to /);
 
     // A selected wall: F frames it, and so does the panel's button.
-    const wall = page.locator('.tree-node', { hasText: 'IfcWall' }).first();
+    await page.locator('.tree-node.tree-category[data-ifc-type="IFCWALL"]').first().click();
+    const wall = page.locator('.tree-node.tree-element[data-ifc-type="IFCWALL"]').first();
     await wall.click();
     const zoom = page.locator('#zoom-to-element');
     await expect(zoom).toBeVisible();
@@ -644,7 +652,11 @@ projectSampleTest('dragging to orbit does not change the selection', async ({ pa
   await expect(page.locator('#status')).toHaveText(/Loaded/);
 
   // Frame the first wall so it sits under the middle of the view.
-  const walls = page.locator('.tree-node', { hasText: 'IfcWall' });
+  const wallCategory = page.locator('.tree-node.tree-category[data-ifc-type="IFCWALL"]').first();
+  await wallCategory.click();
+  const walls = page.locator(
+    '.tree-node.tree-category[aria-expanded="true"] + .tree-children .tree-node.tree-element',
+  );
   await walls.nth(0).click();
   await expect(page.locator('#zoom-to-element')).toBeVisible();
   await page.locator('#zoom-to-element').click();
