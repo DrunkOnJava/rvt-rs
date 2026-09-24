@@ -495,6 +495,10 @@ All notable changes will be documented here. This project follows
   recognised by its English name, so files saved in another language keep
   them. The panel type's unset material is checked as well: an empty-family
   type with a material is reported.
+- The viewer's "Not ready" row no longer lists empty curtain panels among
+  the elements rvt-rs exports and Revit's export leaves out. It names the
+  ones that remain: opening-cut families and curtain panels with no
+  resolved type.
 - The viewer's Parameters status row says in plain words that Revit's
   parameter table is not read yet (#35), instead of "AProperty* host joins
   pending".
