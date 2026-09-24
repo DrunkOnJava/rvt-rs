@@ -126,7 +126,10 @@ pub fn recover_partition_schema_mvp(
     };
 
     out.levels = levels_from_storeys_and_names(&walls, &level_names);
-    out.materials = materials_from_names(&name_set);
+    out.materials = match materials_from_records(rf, revit_version) {
+        Some(materials) => materials,
+        None => materials_from_names(&name_set),
+    };
 
     // Rooms and floors come from partition element records only. The
     // name-only rooms (space-like display strings) and ArcWall-excluded
@@ -2627,6 +2630,74 @@ fn level_decoded(name: &str, elevation: Option<f64>, index: usize) -> DecodedEle
             },
         ),
     }
+}
+
+/// Every material the file declares, from its `OST_Materials` record
+/// (RE-28), with the name (RE-58) and shading colour (RE-53) read from its
+/// own object, in ElementId order. A record whose name is not found is left
+/// out. `None` on a release those layouts are not measured on, where the
+/// partition display-name strings stand in ([`materials_from_names`]).
+fn materials_from_records(rf: &mut RevitFile, revit_version: u32) -> Option<Vec<DecodedElement>> {
+    use crate::partition_materials as pm;
+    if !pm::MATERIALS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return None;
+    }
+    let declared = crate::elem_table::declared_ids(&crate::elem_table::parse_records(rf).ok()?);
+    let ids: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_type_records::OST_MATERIALS,
+        &declared,
+    )
+    .ok()?
+    .iter()
+    .map(|record| record.element_id)
+    .collect();
+    let names = pm::scan_material_names(rf, revit_version, &declared).ok()?;
+    let appearances = pm::scan_material_appearances(rf, revit_version, &declared).ok()?;
+    Some(
+        ids.into_iter()
+            .filter_map(|id| {
+                let name = names.get(&id)?;
+                let mut fields = vec![("m_name".into(), InstanceField::String(name.clone()))];
+                if let Some(appearance) = appearances.get(&id) {
+                    fields.push((
+                        "m_color".into(),
+                        InstanceField::Integer {
+                            value: i64::from(appearance.color_packed()),
+                            signed: false,
+                            size: 4,
+                        },
+                    ));
+                    fields.push((
+                        "m_transparency".into(),
+                        InstanceField::Float {
+                            value: f64::from(appearance.transparency),
+                            size: 4,
+                        },
+                    ));
+                }
+                fields.push((
+                    "m_source".into(),
+                    InstanceField::String("partition_materials".into()),
+                ));
+                Some(DecodedElement {
+                    id: Some(id),
+                    class: "Material".into(),
+                    fields,
+                    byte_range: 0..0,
+                    provenance: ElementProvenance::partition(
+                        "partition",
+                        0,
+                        "partition_materials",
+                        "partition_materials::material_record",
+                        0.9,
+                        None::<String>,
+                    ),
+                })
+            })
+            .collect(),
+    )
 }
 
 fn materials_from_names(name_set: &BTreeSet<(NameBucket, String)>) -> Vec<DecodedElement> {

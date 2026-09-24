@@ -1598,10 +1598,10 @@ fn core_interior_2024_wall_type_record_join() {
 /// Measured on `2024_Core_Interior.rvt`: 86 records carry
 /// `OST_Materials`, every one of them naming its own ElementId in its
 /// slot list. Revit's own export of the same file writes 10
-/// `IfcMaterial`; `partition_name_candidates` currently yields 102.
-/// The record family is a real, closed set — it is not, however, a
-/// recovery, because these records carry no name, and this test
-/// asserts nothing about which ten of the 86 Revit exports.
+/// `IfcMaterial`; `partition_name_candidates` yielded 102. The records
+/// themselves carry no name; RE-58 reads 78 names from the materials'
+/// own objects, and the IFC export writes those (#34). This test asserts
+/// nothing about which ten of the 86 Revit exports.
 #[test]
 fn core_interior_2024_material_record_family() {
     let Some(project_dir) = project_dir() else {
