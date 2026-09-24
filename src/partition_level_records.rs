@@ -748,6 +748,43 @@ pub fn scan_partition_levels(
     Ok(levels)
 }
 
+/// Every declared object laid out `01 00 00 00 · u64 id · u64 Level id`
+/// whose second id is one of `level_ids`, as its Level, by id (RE-60).
+/// An id found with two different Levels is dropped. The objects are the
+/// work planes and views a family instance can reference.
+pub fn scan_level_objects(
+    rf: &mut RevitFile,
+    declared: &BTreeSet<u32>,
+    level_ids: &BTreeSet<u32>,
+) -> BTreeMap<u32, u32> {
+    let mut found: BTreeMap<u32, Option<u32>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for at in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
+            let (Some(id), Some(level)) = (read_u64(buf, at + 4), read_u64(buf, at + 12)) else {
+                continue;
+            };
+            let (Ok(id), Ok(level)) = (u32::try_from(id), u32::try_from(level)) else {
+                continue;
+            };
+            if !declared.contains(&id) || level_ids.contains(&id) || !level_ids.contains(&level) {
+                continue;
+            }
+            let held = found.entry(id).or_insert(Some(level));
+            if *held != Some(level) {
+                *held = None;
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, level)| level.map(|level| (id, level)))
+        .collect()
+}
+
 /// [`scan_partition_levels`] with the `Global/ElemTable` id set read
 /// from `rf`, for callers that hold no id set of their own.
 pub fn recover_partition_levels(

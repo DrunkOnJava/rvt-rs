@@ -402,6 +402,15 @@ elements, each in Revit's storey. On Snowdon, 5,612 elements are in
 Revit's storey (3,975 before) and 294 are on none (1,931 before). The
 tutorial house, where 230 were on none (#365), leaves one railing
 (`reports/element-framing/RE-59-base-constraint-levels.md`).
+**RE-60 (2026-09-24)** places elements whose record names no Level:
+- a railing takes the storey of the stair or ramp it names, which is
+  Revit's storey on 73 of 74 Snowdon railings;
+- any other element takes the Level its work planes carry, but only where
+  that is also the highest Level at or below its base. That is Revit's
+  storey on 161 of 161.
+
+Snowdon now has 5,805 elements in Revit's storey and 102 on none
+(`reports/element-framing/RE-60-hosted-levels.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Storeys for elements whose record names no Level (RE-60, #369).**
+  - A railing now takes the storey of the stair or ramp its record names.
+    That is Revit's storey on 73 of 74 Snowdon Towers railings.
+  - Light fixtures, generic models, slab edges and wall sweeps take the
+    Level their work planes carry, but only where that is also the
+    highest Level at or below their base. That is Revit's storey on 161 of
+    161.
+  - Snowdon's elements on no storey fall from 294 to 102, and 5,805 are
+    in Revit's storey (5,612 before).
 - **Elements naming two Levels are contained in their base constraint
   (RE-59, #365).** A wall, column, stair or curtain wall whose element
   record names two Levels, its base and top constraint, now goes in the

@@ -2040,4 +2040,19 @@ to 294, and the 294 left name no Level.
 
 Report: `reports/element-framing/RE-59-base-constraint-levels.md`.
 
+## Addendum — RE-60 storeys for records naming no Level (2026-09-24)
+
+A railing's record names the stair or ramp that hosts it, and Revit
+contains the railing in that host's storey on 73 of 74 Snowdon railings.
+
+Other records name objects whose data opens `u64 id · u64 Level id`:
+work planes and views, 6,435 of them on Snowdon. Where the one Level
+those objects carry is also the highest Level at or below the element's
+base, it is Revit's storey on 161 of 161. Either reading alone fails on
+dozens of light fixtures.
+
+Snowdon's elements on no storey fall from 294 to 102.
+
+Report: `reports/element-framing/RE-60-hosted-levels.md`.
+
 **End of report.**

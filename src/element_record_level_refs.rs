@@ -23,6 +23,13 @@
 //! always contain the element in the higher of the two that lies at or
 //! below the record's base, or in the lower one when neither does: the
 //! element's base constraint ([`base_constraint_level`]).
+//!
+//! A record that names no Level keeps its reference list
+//! ([`REFERENCES_FIELD`], RE-60). A railing then takes the Level of the one
+//! stair or ramp it names. Any other element takes a Level only where two
+//! readings agree: the Level of the objects it names (each object
+//! `01 00 00 00 · u64 id · u64 Level id`), and the highest Level at or below
+//! its base ([`level_at_or_below`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -47,6 +54,44 @@ pub const LEVEL_BIND_SOURCE_FIELD: &str = "m_levelBindSource";
 /// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a Level chosen by
 /// [`base_constraint_level`].
 pub const BASE_CONSTRAINT_SOURCE: &str = "partition_element_record_base_constraint";
+
+/// Field carrying the reference list of a record that names no Level,
+/// less its own id (RE-60).
+pub const REFERENCES_FIELD: &str = "m_referenceIds";
+
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a railing given the Level of
+/// the stair or ramp its record names (RE-60).
+pub const HOST_SOURCE: &str = "partition_element_record_host";
+
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for an element given the Level
+/// the objects its record names carry, where that is also the highest
+/// Level at or below its base (RE-60).
+pub const LEVEL_OBJECT_SOURCE: &str = "partition_element_record_level_object";
+
+/// The highest Level whose elevation is at or below `base_feet` (within
+/// 1e-3 ft), or `None` when none is, or when two Levels share that
+/// elevation.
+pub fn level_at_or_below(elevations: &BTreeMap<u32, f64>, base_feet: f64) -> Option<u32> {
+    if !base_feet.is_finite() {
+        return None;
+    }
+    let mut best: Option<(u32, f64)> = None;
+    let mut tied = false;
+    for (&id, &at) in elevations {
+        if at > base_feet + 1e-3 {
+            continue;
+        }
+        match best {
+            Some((_, seen)) if at < seen => {}
+            Some((_, seen)) if at == seen => tied = true,
+            _ => {
+                best = Some((id, at));
+                tied = false;
+            }
+        }
+    }
+    if tied { None } else { best.map(|(id, _)| id) }
+}
 
 /// The distinct recovered `Level` ElementIds a record's counted reference
 /// list names, in list order.
