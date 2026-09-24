@@ -18,6 +18,11 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Wall sweeps are named as Revit names them (RE-69):** "Wall
+  Sweep:Base_Simple:2074039" from the one type object the sweep's record
+  names, or the ElementId alone for a sweep of a wall type's own
+  structure. On Snowdon Towers all 258 wall sweeps carry Revit's `Name`
+  and `ObjectType`.
 - **Elements whose record names no Level reach their storey (RE-68).**
   - A multistory stair takes the Level its base sits at, and its railings
     follow it.

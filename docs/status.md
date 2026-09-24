@@ -456,6 +456,11 @@ Slab edges, light fixtures, wall sweeps, generic models, hardscape and
 stairs take the Level their base elevation gives, within a fail-closed
 band. 97 of the 102 are now on Revit's storey and none is on a wrong one
 (`reports/element-framing/RE-68-remaining-storeys.md`).
+**RE-69 (2026-09-24)** names wall sweeps "Wall Sweep:<type>:<ElementId>"
+from the one type object their record names, and names a sweep of a wall
+type's own structure by its ElementId, as Revit does. On Snowdon all 258
+wall sweeps carry Revit's name
+(`reports/element-framing/RE-69-wall-sweep-names.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
