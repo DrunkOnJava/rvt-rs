@@ -1942,4 +1942,25 @@ and all 1,368 compared colours are Revit's.
 Report: `reports/element-framing/RE-53-wall-layers.md`.
 Probe: `examples/probe_re53_wall_layers.rs`.
 
+## Addendum — RE-54 wall bodies from their centreline (2026-09-23)
+
+The bounded line a wall's data stores (RE-49) is its centreline, whatever
+its location-line setting (0 to 5): Revit's IFC4 body lies exactly half
+the type's layer sum either side of it on 964 of Snowdon Towers' 1,054
+walls. All 964 carry 1 in the word after the setting, and no wall with 0 or
+2 there is centred. rvt-rs builds a 2024 wall with word 1 from its
+centreline at its type's thickness where the record box does not already
+give it:
+- an axis-parallel wall keeps its trimmed run and keeps its box when the
+  box is thinner than the type;
+- an angled wall is the rectangle its box closes on, or runs joint to
+  joint unless its box is far wider.
+
+Snowdon's angled walls go from 0 to 75 of 102 with Revit's faces, and
+walls drawn in layers from 883 to 967. Core Interior is unchanged. At a
+joint of two angled walls, 115 of 156 end faces stop on the other wall's
+faces (butt joins), which are not modelled.
+
+Report: `reports/element-framing/RE-54-wall-bodies.md`.
+
 **End of report.**

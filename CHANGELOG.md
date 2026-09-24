@@ -8,6 +8,23 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Wall bodies from their centreline (RE-54).** The location line a
+  wall's data stores is its centreline, whatever its location-line
+  setting: Revit's own body lies half the type's thickness either side of
+  it on 964 of Snowdon Towers' 1,054 walls. A Revit 2024 wall is now its
+  type's thickness either side of that line, where the record box does not
+  already give it.
+  - Angled walls, which were drawn as their whole axis-aligned box, now
+    have Revit's faces on 75 of Snowdon's 102 (none before) and Revit's
+    ends on the 13 whose box a rectangle of their thickness closes.
+  - Walls whose box is wider than their type (such as CMU retaining walls)
+    take the type's thickness. Walls Revit cut back, and leaning or
+    profiled walls, keep their box.
+  - More walls are drawn in their layers: 967 on Snowdon (883 before).
+  - Core Interior's walls, all axis-parallel and already right, are
+    unchanged.
+  - `tools/re/wall_bodies_vs_ifc.py` scores an `rvt-gltf` GLB's walls
+    against Revit's IFC4 bodies.
 - **Walls are drawn as their layers, each in its material's colour
   (RE-53).** A wall type's data carries its compound structure: each
   layer's width, material, deck and function, exterior first. A material's
