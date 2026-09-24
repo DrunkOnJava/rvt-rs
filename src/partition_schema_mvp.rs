@@ -309,6 +309,9 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- Empty curtain panels are left out, as Revit leaves them out (#309) ---
+    out.products
+        .retain(|product| !is_empty_curtain_panel(product));
     // --- Curtain panels that are walls export as curtain walls (RE-72) ---
     // Last, so every step above still sees them as panels.
     for product in &mut out.products {
@@ -812,6 +815,101 @@ fn attach_panel_wall_types(
                 .push((CURTAIN_PANEL_WALL_FIELD.into(), InstanceField::Bool(true)));
         }
     }
+}
+
+/// The family Revit names its empty curtain panel type after (#309). Revit's
+/// IFC4 export leaves every panel of it out: all 24 on Snowdon Towers. The
+/// name is Revit's English one, so a file saved in another language keeps
+/// its empty panels. The panel type's unset material
+/// ([`crate::partition_names::find_panel_type_materials`]) is only a
+/// cross-check, since a panel set to "By Category" may store no material
+/// either.
+pub const EMPTY_PANEL_FAMILY_NAME: &str = "Empty System Panel";
+
+/// Whether `element` is a curtain panel of the [`EMPTY_PANEL_FAMILY_NAME`]
+/// family.
+fn is_empty_curtain_panel(element: &DecodedElement) -> bool {
+    element.class == "CurtainWallPanel"
+        && element.fields.iter().any(|(name, value)| {
+            matches!(value, InstanceField::String(family) if name == FAMILY_NAME_FIELD && family == EMPTY_PANEL_FAMILY_NAME)
+        })
+}
+
+/// The curtain panels left out as empty (#309): how many, and the types of
+/// theirs whose material is set, which would contradict the name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EmptyCurtainPanels {
+    /// Placed panels of the [`EMPTY_PANEL_FAMILY_NAME`] family.
+    pub count: usize,
+    /// Their types whose material is set.
+    pub types_with_material: BTreeSet<u32>,
+}
+
+/// Count the placed curtain panels of the [`EMPTY_PANEL_FAMILY_NAME`]
+/// family, the ones recovery leaves out, through the same name-entry type
+/// and family join ([`crate::partition_names::resolve_type`],
+/// [`crate::partition_names::resolve_family`]).
+pub fn scan_empty_curtain_panels(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> Result<EmptyCurtainPanels> {
+    use crate::partition_element_records as per;
+    let mut out = EmptyCurtainPanels::default();
+    if !per::supports_revit_version(revit_version) {
+        return Ok(out);
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return Ok(out),
+    };
+    let names = rf.element_names();
+    let empty_families: BTreeSet<u32> = names
+        .entries
+        .iter()
+        .filter(|(_, entry)| entry.name == EMPTY_PANEL_FAMILY_NAME)
+        .map(|(id, _)| *id)
+        .collect();
+    if empty_families.is_empty() {
+        return Ok(out);
+    }
+    let records =
+        per::scan_category_records(rf, revit_version, per::OST_CURTAIN_WALL_PANELS, &declared)?;
+    let options = rf.design_options();
+    let mut panels: BTreeSet<u32> = BTreeSet::new();
+    let mut types: BTreeSet<u32> = BTreeSet::new();
+    for record in records
+        .iter()
+        .filter(|r| r.is_exported_instance() && !options.excludes(r) && r.has_volume())
+    {
+        let Some(type_id) = crate::partition_names::resolve_type(
+            &names,
+            &record.references,
+            record.builtin_category,
+            record.element_id,
+        ) else {
+            continue;
+        };
+        if crate::partition_names::resolve_family(&names, type_id)
+            .is_some_and(|family| empty_families.contains(&family))
+        {
+            panels.insert(record.element_id);
+            types.insert(type_id);
+        }
+    }
+    out.count = panels.len();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        for (id, material) in
+            crate::partition_names::find_panel_type_materials(inflated.bytes(), &types)
+        {
+            if material.is_some() {
+                out.types_with_material.insert(id);
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Field marking a curtain panel that holds a basic wall (RE-64, RE-72).
