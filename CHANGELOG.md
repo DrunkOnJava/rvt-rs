@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Shed roofs are drawn along their slope (RE-56).** Each sketch line of a
+  footprint roof carries its edge's slope angle and whether it defines the
+  roof's slope. A Revit 2024 roof with exactly one defining edge now rises
+  from that edge at its slope, with its type's thickness square to the
+  slope, in IFC (an `IfcFacetedBrep`), glTF and the viewer.
+  - It is drawn so only when the rise and thickness reproduce the roof's
+    recorded height. On the Autodesk tutorial house the one sloped roof,
+    at 1:12, matches to 1e-9 ft.
+  - Hip and gable roofs, and roofs sloped some other way, stay level plates.
+  - Roof types' layers are now read too: behind the type's name, as on
+    2025 floors, whose "hyphen" framing was a type named "-".
 - **Revit 2025 walls get their centreline bodies and layers (RE-55).** A
   2025 wall stores its location line, orientation and type layers as 2024
   does: a house saved in 2024 and 2025 reads the same line, flip and layers

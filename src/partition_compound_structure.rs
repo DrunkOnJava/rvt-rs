@@ -20,8 +20,9 @@
 //! - `ff ff ff ff` and a per-release tag, `0x10a6` on Revit 2024 and
 //!   `0x110e` on Revit 2025 ([`layer_frame_tag`]). On 2024 this follows
 //!   the type's name directly.
-//! - `u32 k`, then `k` × `2d 00`, then `u32 0`: Revit 2025 floors and
-//!   ceilings.
+//! - the type's name (`u32 k`, `k` UTF-16 code units), then `u32 0`:
+//!   Revit 2025 floors and ceilings, whose types on RE1 are named "-", and
+//!   Revit 2024 roofs (RE-56).
 //!
 //! Against the materials Revit's own IFC4 export gives the same types:
 //! - Snowdon Towers (2024): 42 of 42 types give Revit's constituent
@@ -77,6 +78,10 @@ pub const MAX_LAYERS: usize = 32;
 
 /// How far into a type's data the layers are looked for.
 pub const LAYER_WINDOW: usize = 0x2000;
+
+/// Longest type name, in UTF-16 code units, a name-framed layer count is
+/// looked for behind.
+pub const MAX_NAME_UNITS: usize = 256;
 
 /// The bytes a wall's location line, a word and its flip flag follow.
 pub const WALL_FLIP_ANCHOR: [u8; 8] = [0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00];
@@ -163,16 +168,20 @@ fn framed(buf: &[u8], count_at: usize, tag: [u8; 2]) -> bool {
     if tagged {
         return true;
     }
-    // u32 k, k × 2d 00, u32 0.
+    // The type's name (u32 k, k UTF-16 code units), u32 0.
     if count_at < 4 || u32_at(buf, count_at - 4) != Some(0) {
         return false;
     }
-    (1..=4).any(|k: usize| {
+    (1..=MAX_NAME_UNITS).any(|k: usize| {
         let Some(start) = count_at.checked_sub(4 + 2 * k + 4) else {
             return false;
         };
         u32_at(buf, start) == Some(k as u32)
-            && (0..k).all(|i| buf.get(start + 4 + 2 * i..start + 6 + 2 * i) == Some(&[0x2d, 0][..]))
+            && (0..k).all(|i| {
+                buf.get(start + 4 + 2 * i..start + 6 + 2 * i)
+                    .map(|unit| u16::from_le_bytes([unit[0], unit[1]]))
+                    .is_some_and(|unit| unit >= 0x20)
+            })
     })
 }
 
