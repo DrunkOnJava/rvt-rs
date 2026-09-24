@@ -465,6 +465,9 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- The viewer's Parameters status row says in plain words that Revit's
+  parameter table is not read yet (#35), instead of "AProperty* host joins
+  pending".
 - **The element panel labels the ElementId as ElementId**, not GUID, and
   shows Revit's own GlobalId (RE-48) beside it where the file yields one.
 - **The IFC export's materials are now the file's own materials (#34).**
