@@ -112,8 +112,15 @@ element in the 3-D view opens its category and scrolls to it. The arrow
 keys move through the tree: Right opens a row, Left closes it or moves to
 its parent, and Home and End go to the first and last rows.
 
+Type in the filter above the tree, or press / to reach it, to keep only the
+elements whose name or IFC type contains the text: "M_Single", "IfcDoor" or
+an ElementId such as "20796". The storeys and categories that hold them
+open, and a count shows under the box. Enter moves to the first match, and
+Escape clears the filter.
+
 Selecting an element fills the info panel with typed rows rather than raw
-record fields: name, IFC type and predefined type, GUID, the storey it sits
+record fields: name, IFC type and predefined type, ElementId, Revit's own
+GlobalId where the file yields it (RE-48), the storey it sits
 on (clickable — it selects that storey in the tree), placement and extents
 in feet, and each property set as labelled rows carrying their units. Host
 and hosted rows let you jump from a door or window to its wall and back.

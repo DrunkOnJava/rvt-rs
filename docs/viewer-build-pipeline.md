@@ -175,7 +175,9 @@ against the 3-D scene even though this page documented
 
 The panel itself is rendered, not computed, in TypeScript. The Rust
 `element_info_panel` returns display-ready rows — name, IFC type and
-predefined type, GUID, the resolved storey (its `index` addresses
+predefined type, the ElementId (`type_guid`, which the panel labels
+ElementId and pairs with Revit's GlobalId from the model), the resolved
+storey (its `index` addresses
 the same `IFCBUILDINGSTOREY` scene node, so the row is clickable),
 placement and extents in feet, the property set as unit-carrying
 rows with booleans as `Yes` / `No`, and `host` / `hosted` rows for

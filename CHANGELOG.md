@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Filter the viewer's scene tree.** A box above the tree, reached with
+  /, keeps only the elements whose name, type or ElementId contains the
+  text, opens the storeys and categories that hold them and counts them.
+  Enter moves to the first match, and Escape clears it. Picking an element
+  the filter hides clears the filter.
+- **Stair parts read as their number in the scene tree** ("Run 1",
+  "Stringer 2") under their stair.
 - **Stairs and their parts are named as Revit names them (RE-65).**
   - A stair is "Assembled Stair:Stair:620883", and its parts are
     "Assembled Stair:Stair:620883 Run 1", "… Landing 1" and "… Stringer
@@ -381,6 +388,8 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The element panel labels the ElementId as ElementId**, not GUID, and
+  shows Revit's own GlobalId (RE-48) beside it where the file yields one.
 - **The IFC export's materials are now the file's own materials (#34).**
   On Revit 2024 and 2025 files, `IfcMaterial` now lists each material the
   file declares whose name is read (RE-58), each with its shading colour.

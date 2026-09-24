@@ -29,6 +29,8 @@ const pickBtn = $('pick-file');
 const statusEl = $('status');
 const fileMetaEl = $('file-meta');
 const treeEl = $('tree');
+const treeFilterEl = $('tree-filter') as HTMLInputElement;
+const treeFilterStatusEl = $('tree-filter-status');
 const categoriesEl = $('categories');
 const infoEl = $('info');
 const scheduleEl = $('schedule-summary');
@@ -537,6 +539,11 @@ interface IfcModel {
   building_storeys?: Array<{ name: string; elevation_feet?: number }>;
   materials?: Array<{ name: string; color_packed?: number; transparency?: number }>;
   material_layer_sets?: Array<{ layers: Array<{ material_index?: number | null }> }>;
+  /**
+   * Revit's own GlobalIds by entity index (RE-48). serde-wasm-bindgen hands
+   * a Rust map over as a `Map`; JSON gives an object keyed by string.
+   */
+  global_ids?: { elements?: Map<number, string> | Record<string, string> };
   entities?: Array<{
     kind?: string;
     name: string;
@@ -708,6 +715,7 @@ async function loadBytes(file: File): Promise<void> {
   hideScaffoldNote();
   model = null;
   sceneGraph = null;
+  resetTreeFilter();
   distinctTypes = [];
   lastGlb = null;
   lastSchedule = null;
@@ -1073,6 +1081,10 @@ interface ElementNameParts {
  * `-`; a type equal to its family is shown once.
  */
 function splitElementName(name: string): ElementNameParts {
+  // A stair's run, landing or support is named after the stair (RE-65),
+  // and sits under it in the tree, so it reads as its number alone.
+  const stairPart = /^.+:Stair:\d+ ((?:Run|Landing|Stringer) \d+)(?::\d+)?$/.exec(name);
+  if (stairPart) return { label: stairPart[1]!, family: null, id: null };
   const parts = name.split(':');
   const digits = (s: string | undefined) => s !== undefined && /^\d+$/.test(s);
   if (parts.length >= 4 && digits(parts[parts.length - 1]) && digits(parts[parts.length - 2])) {
@@ -1214,12 +1226,95 @@ function buildTreeItems(root: SceneNode): TreeItem {
   };
 }
 
+/** Element rows and the text the filter matches them by. */
+let treeFilterIndex: Array<{ wrap: HTMLElement; text: string }> = [];
+
 function renderTree(): void {
   if (!sceneGraph) return;
   treeEl.innerHTML = '';
+  treeFilterIndex = [];
   treeEl.appendChild(buildTreeRow(buildTreeItems(sceneGraph), 1));
   const first = treeEl.querySelector<HTMLElement>('.tree-node');
   if (first) first.tabIndex = 0;
+  treeFilterEl.disabled = false;
+  if (treeFilterEl.value.trim()) applyTreeFilter(treeFilterEl.value);
+}
+
+/**
+ * Show only the elements whose name or IFC type contains `query`, with the
+ * storeys and categories that hold them opened. An element that matches
+ * keeps its parts. An empty query restores the tree as it opens.
+ */
+function applyTreeFilter(query: string): void {
+  const needle = query.trim().toLowerCase();
+  const wraps = treeEl.querySelectorAll<HTMLElement>('.tree-item');
+  if (!needle) {
+    wraps.forEach((wrap) => {
+      wrap.hidden = false;
+    });
+    treeEl.querySelectorAll<HTMLElement>('.tree-node[aria-expanded]').forEach((row) => {
+      const open = row.classList.contains('tree-project') || row.classList.contains('tree-storey');
+      setTreeRowExpanded(row, open);
+    });
+    const selected = treeEl.querySelector<HTMLElement>('.tree-node.selected');
+    if (selected) revealTreeRow(selected);
+    treeFilterStatusEl.textContent = '';
+    return;
+  }
+  wraps.forEach((wrap) => {
+    wrap.hidden = true;
+  });
+  let matches = 0;
+  for (const entry of treeFilterIndex) {
+    if (!entry.text.includes(needle)) continue;
+    matches += 1;
+    entry.wrap.hidden = false;
+    entry.wrap.querySelectorAll<HTMLElement>('.tree-item').forEach((inner) => {
+      inner.hidden = false;
+    });
+    for (
+      let group = entry.wrap.parentElement?.closest<HTMLElement>('.tree-children');
+      group;
+      group = group.parentElement?.closest<HTMLElement>('.tree-children')
+    ) {
+      const owner = group.previousElementSibling as HTMLElement | null;
+      if (owner) setTreeRowExpanded(owner, true);
+      const holder = group.parentElement;
+      if (holder) holder.hidden = false;
+    }
+  }
+  treeFilterStatusEl.textContent =
+    matches === 0 ? 'No element matches' : matches === 1 ? '1 element matches' : `${matches} elements match`;
+}
+
+let treeFilterTimer: number | undefined;
+treeFilterEl.addEventListener('input', () => {
+  window.clearTimeout(treeFilterTimer);
+  treeFilterTimer = window.setTimeout(() => applyTreeFilter(treeFilterEl.value), 120);
+});
+treeFilterEl.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && treeFilterEl.value) {
+    // Clear the filter only; a second Escape clears the selection.
+    ev.stopPropagation();
+    treeFilterEl.value = '';
+    applyTreeFilter('');
+    return;
+  }
+  if (ev.key === 'ArrowDown' || ev.key === 'Enter') {
+    const first = visibleTreeRows().find((row) => row.classList.contains('tree-element'));
+    if (first) {
+      ev.preventDefault();
+      focusTreeRow(first);
+    }
+  }
+});
+
+function resetTreeFilter(): void {
+  window.clearTimeout(treeFilterTimer);
+  treeFilterEl.value = '';
+  treeFilterEl.disabled = true;
+  treeFilterStatusEl.textContent = '';
+  treeFilterIndex = [];
 }
 
 /** A storey row's second line: its elevation and what it holds. */
@@ -1296,10 +1391,10 @@ function projectLabel(name: string): string {
   return name.split(/[\\/]/).filter(Boolean).pop() ?? name;
 }
 
-/** Rows a keyboard user can reach: those under no collapsed row. */
+/** Rows a keyboard user can reach: those neither collapsed nor filtered out. */
 function visibleTreeRows(): HTMLElement[] {
   return Array.from(treeEl.querySelectorAll<HTMLElement>('.tree-node[role="treeitem"]')).filter(
-    (row) => !row.closest('.tree-children[hidden]'),
+    (row) => !row.closest('[hidden]'),
   );
 }
 
@@ -1321,6 +1416,11 @@ function setTreeRowExpanded(row: HTMLElement, expanded: boolean): void {
 
 /** Expand every collapsed row above `row`, so a selection is never hidden. */
 function revealTreeRow(row: HTMLElement): void {
+  // A selection the filter hides clears the filter rather than stay unseen.
+  if (row.closest('.tree-item[hidden]') && treeFilterEl.value) {
+    treeFilterEl.value = '';
+    applyTreeFilter('');
+  }
   for (
     let group = row.parentElement?.closest<HTMLElement>('.tree-children');
     group;
@@ -1333,6 +1433,13 @@ function revealTreeRow(row: HTMLElement): void {
 
 function buildTreeRow(item: TreeItem, level: number): HTMLElement {
   const wrap = document.createElement('div');
+  wrap.className = 'tree-item';
+  if (item.kind === 'element') {
+    treeFilterIndex.push({
+      wrap,
+      text: `${item.name} ${ifcTypeLabel(item.ifcType)}`.toLowerCase(),
+    });
+  }
   const row = document.createElement('div');
   row.className = `tree-node tree-${item.kind}`;
   if (item.kind === 'storey') {
@@ -1820,6 +1927,13 @@ function zoomButton(): HTMLButtonElement | null {
   return btn;
 }
 
+/** The GlobalId Revit's own export gives entity `idx`, when rebuilt (RE-48). */
+function revitGlobalId(idx: number): string | undefined {
+  const elements = model?.global_ids?.elements;
+  if (elements instanceof Map) return elements.get(idx);
+  return elements?.[String(idx)];
+}
+
 /** Render the whole panel from the Rust payload. */
 function renderElementPanel(panel: ElementInfoPanel): void {
   infoEl.innerHTML = '';
@@ -1835,7 +1949,11 @@ function renderElementPanel(panel: ElementInfoPanel): void {
         : ifcTypeLabel(panel.ifc_type),
     ),
   );
-  if (panel.type_guid) identity.appendChild(infoRow('GUID', panel.type_guid));
+  // `type_guid` carries the Revit ElementId, which the IFC export writes as
+  // the element's Tag; the GlobalId is Revit's own (RE-48) when rebuilt.
+  if (panel.type_guid) identity.appendChild(infoRow('ElementId', panel.type_guid, true));
+  const globalId = selectedIndex !== null ? revitGlobalId(selectedIndex) : undefined;
+  if (globalId) identity.appendChild(infoRow('GlobalId', globalId));
   infoEl.appendChild(identity);
   const zoom = zoomButton();
   if (zoom) infoEl.appendChild(zoom);
@@ -2614,6 +2732,17 @@ document.addEventListener('keydown', (ev) => {
     frameCamera(currentModel);
     setStatus('Zoomed to the whole model');
   }
+});
+
+// Keyboard: / moves to the scene tree filter, as in most file browsers.
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== '/' || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  const target = ev.target as HTMLElement | null;
+  if (target?.closest('input, select, textarea, [contenteditable="true"]')) return;
+  if (treeFilterEl.disabled) return;
+  ev.preventDefault();
+  treeFilterEl.focus();
+  treeFilterEl.select();
 });
 
 // Keyboard: Escape clears tree selection / returns focus toward file open.

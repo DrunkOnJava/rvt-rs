@@ -485,6 +485,21 @@ projectSampleTest(
     // Identity reads as words, not as the raw element record.
     await expect(info).toContainText('Name');
     await expect(info).toContainText('IfcWall');
+    await expect(info).toContainText('ElementId');
+    await expect(info).not.toContainText('GUID');
+
+    // The filter keeps only matching elements and counts them; Escape
+    // clears it.
+    const filter = page.locator('#tree-filter');
+    await expect(filter).toBeEnabled();
+    await filter.fill('ArcWall');
+    await expect(page.locator('#tree-filter-status')).toHaveText(/^\d+ elements? match$/);
+    await expect(page.locator('.tree-node.tree-element[data-ifc-type="IFCWALL"]').first()).toBeVisible();
+    await filter.fill('no element is named this');
+    await expect(page.locator('#tree-filter-status')).toHaveText('No element matches');
+    await filter.press('Escape');
+    await expect(filter).toHaveValue('');
+    await expect(page.locator('#tree-filter-status')).toBeHidden();
     await expect(info).not.toContainText('ifc_type');
     await expect(info).not.toContainText('property_set');
     await expect(info).not.toContainText('location_feet');
