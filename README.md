@@ -47,7 +47,7 @@ On Revit 2024 and 2025 project files, rvt-rs reads each element from its partiti
 
 | Elements | IFC | Against Revit's own export |
 |---|---|---|
-| Walls | `IfcWall`, runs trimmed at their joins; a 2024 or 2025 wall its type's thickness either side of its centreline, running through or stopping at a butt join as its join lists say, layer by layer where both walls are layered alike | Core Interior 360 of 360 (351 world-exact); Snowdon Towers 1,078 of 1,078, faces exactly Revit's on 1,002 of them (RE-54), both ends on 534 (RE-70, RE-71) |
+| Walls | `IfcWall`, runs trimmed at their joins; a 2024 or 2025 wall its type's thickness either side of its centreline, running through or stopping at a butt join as its join lists say, layer by layer where both walls are layered alike, and stopping layer by layer where it ends part way along another wall | Core Interior 360 of 360 (351 world-exact); Snowdon Towers 1,078 of 1,078, faces exactly Revit's on 1,002 of them (RE-54), both ends on 693 (RE-70, RE-71, RE-73) |
 | Doors, windows | `IfcDoor`, `IfcWindow`, each filling an opening in its host wall | Core Interior 132 and 6; Snowdon Towers 132 and 68 |
 | Floors, building pads | `IfcSlab` with its sketched plan profile | Core Interior 80 of 80, every one with its sketched outline |
 | Columns | `IfcColumn`, minus what the walls cut | Core Interior 256 of 256, world-exact |

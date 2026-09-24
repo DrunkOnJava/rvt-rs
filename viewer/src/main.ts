@@ -561,7 +561,7 @@ interface RelatedElement {
   name: string;
   ifc_type: string;
 }
-/** One end of a wall that butt-joins another, from its join lists (RE-70). */
+/** One end of a wall that butt-joins another (RE-70) or stops against it at a T joint (RE-73). */
 interface PanelJoin {
   end: string;
   runs_through: boolean;
@@ -1723,7 +1723,7 @@ function relationRow(rel: RelatedElement): HTMLElement {
 /**
  * Host relationships (M4-04) computed by `element_info_panel` in
  * Rust: the wall a door or window sits in, the openings a wall
- * carries, and the walls a wall butt-joins at its ends (RE-70). Each
+ * carries, and the walls a wall butt-joins at its ends (RE-70, RE-73). Each
  * row re-selects its element — mouse or keyboard.
  */
 function relationsBox(panel: ElementInfoPanel): HTMLElement | null {

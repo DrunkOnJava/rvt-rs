@@ -76,7 +76,8 @@ use rvt::ifc::scene_graph::{
     uses to re-select the other end of the relationship.
   - `joins: Vec<PanelJoin { end, runs_through, wall }>` carries the
     walls a wall butt-joins at its `"Start"` and `"End"`, where its join
-    lists decide which one runs through (RE-70): `runs_through` is true
+    lists decide which one runs through (RE-70), or stops against part
+    way along the other (a T joint, RE-73): `runs_through` is true
     where this wall runs on to the other's far face and false where it
     stops at its near face, and `wall` is the other wall as a
     `RelatedElement`. The viewer lists them under the host rows.

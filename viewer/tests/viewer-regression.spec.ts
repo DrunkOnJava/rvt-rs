@@ -446,6 +446,34 @@ largeProjectDemoTest(
   },
 );
 
+largeProjectDemoTest(
+  'a Core Interior wall names the walls it stops against at T joints',
+  async ({ page }) => {
+    // RE-73: wall 20804 ends part way along wall 20800 at its start and
+    // part way along wall 20802 at its end, and stops against each.
+    test.slow();
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/Ready/);
+    await page.locator('[data-demo-id="core-interior-2024"]').click();
+    await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
+
+    await page.locator('#tree-filter').fill('20804');
+    await expect(page.locator('#tree-filter-status')).toHaveText('1 element matches');
+    await page
+      .locator('.tree-node.tree-element[data-ifc-type="IFCWALL"]')
+      .filter({ hasText: '20804' })
+      .first()
+      .click();
+
+    const relations = page.locator('#info-relations');
+    await expect(relations).toContainText('Start: stops at');
+    await expect(relations).toContainText('End: stops at');
+    await expect(relations).not.toContainText('runs through');
+    await expect(relations.locator('.info-relation').filter({ hasText: ':20800' })).toBeVisible();
+    await expect(relations.locator('.info-relation').filter({ hasText: ':20802' })).toBeVisible();
+  },
+);
+
 projectSampleTest(
   'opens a project sample and exposes geometry diagnostics, toggles, and element info',
   async ({ page }) => {

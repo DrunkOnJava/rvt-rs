@@ -24,6 +24,20 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A wall that ends part way along another stops against it layer by
+  layer, as Revit draws T joints (RE-73, #358).** The other wall runs
+  through. Counted from the face it meets, each layer of the stopping wall
+  passes the other wall's layers of lower priority, so a core passes a
+  finish, and stops at the first of equal or higher priority; a
+  single-layer wall stops at the face. On Snowdon Towers 280 of 313
+  measured T ends are right in every layer, 675 of 976 axis-parallel walls
+  now have both of Revit's ends, from 516, and 4,290 of 5,634 layer ends
+  match Revit's body, from 3,925. Each such end names the wall it stops
+  against in the IFC and the viewer's element panel, 202 more on Core
+  Interior, whose bodies already stopped there. Revit draws some T joints
+  as a clean stop at the face instead, which nothing read predicts: 13
+  Snowdon walls lose an end they had, and so do RE1's (Revit 2025), where
+  3 of 7 walls keep both of Revit's ends, from 6.
 - **Every curtain panel and mullion sits in the curtain wall Revit puts it
   in (RE-72, #370).** A panel names the curtain grid it lies on, and the
   grid's own data names its curtain wall: that settles the panels that name
