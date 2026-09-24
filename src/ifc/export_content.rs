@@ -188,7 +188,7 @@ pub fn append_typed_production_elements(
                 crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields),
             ) {
                 layers.system_family =
-                    crate::partition_schema_mvp::layered_system_family(&decoded.class)
+                    crate::partition_schema_mvp::system_family(&decoded.class, true)
                         .map(String::from);
                 out.element_layers.insert(id, layers);
             }
@@ -981,12 +981,16 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let mut room_name = None;
     let mut room_number = None;
     let mut family_name = None;
+    let mut family_name_source: Option<String> = None;
     let mut type_name = None;
     for (name, value) in &decoded.fields {
         match (name.as_str(), value) {
             ("m_name", InstanceField::String(v)) => room_name = Some(v.clone()),
             (crate::partition_schema_mvp::FAMILY_NAME_FIELD, InstanceField::String(v)) => {
                 family_name = Some(v.clone());
+            }
+            (crate::partition_schema_mvp::FAMILY_NAME_SOURCE_FIELD, InstanceField::String(v)) => {
+                family_name_source = Some(v.clone());
             }
             (crate::partition_schema_mvp::TYPE_NAME_FIELD, InstanceField::String(v)) => {
                 type_name = Some(v.clone());
@@ -1375,6 +1379,13 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             name: FAMILY_NAME_PROPERTY.into(),
             value: PropertyValue::Text(family.clone()),
         });
+        // RE-63: a system family's name is derived, not read.
+        if let Some(source) = family_name_source {
+            properties.push(Property {
+                name: "FamilyNameSource".into(),
+                value: PropertyValue::Text(source),
+            });
+        }
     }
     if let Some(type_name) = type_name {
         properties.push(Property {

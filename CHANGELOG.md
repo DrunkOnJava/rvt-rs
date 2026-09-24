@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Walls, floors, ceilings, roofs and railings are named as Revit names
+  them (RE-63).** `Name` is `Family:Type:ElementId`, such as "Basic
+  Wall:8" Interior Partition 3 Hour:20796" rather than "Wall-20796", and
+  `ObjectType` is `Family:Type`.
+  - The system family is derived by RE-61's rule and recorded as
+    `FamilyNameSource` `system_family_by_category`.
+  - Core Interior's 460 such elements, and every wall, curtain wall,
+    ceiling and roof on Snowdon Towers, carry Revit's own name.
 - **Curtain-wall parts whose record names no wall join the curtain wall
   that contains them (RE-62).** On Snowdon Towers, the mullions of the
   "Solar Panels" curtain walls name only one another. Each now takes the

@@ -422,6 +422,12 @@ RE1 element
 wall the curtain wall whose record box contains it. That is Revit's parent
 for all 89 such mullions on Snowdon
 (`reports/element-framing/RE-62-curtain-part-containment.md`).
+**RE-63 (2026-09-24)** names walls, curtain walls, floors, ceilings, roofs
+and railings `Family:Type:ElementId`, with `ObjectType` `Family:Type`, as
+Revit's export names them. The system family is derived by RE-61's rule.
+On Core Interior all 460 such elements carry Revit's name, and on Snowdon
+every wall, curtain wall, ceiling and roof does
+(`reports/element-framing/RE-63-system-family-element-names.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

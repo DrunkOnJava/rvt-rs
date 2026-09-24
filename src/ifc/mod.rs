@@ -196,7 +196,7 @@ pub struct ElementLayers {
     pub stacked: bool,
     /// The Revit system family of the element's type, which a type with
     /// layers implies (RE-61,
-    /// [`crate::partition_schema_mvp::layered_system_family`]).
+    /// [`crate::partition_schema_mvp::system_family`]).
     #[serde(default)]
     pub system_family: Option<String>,
 }

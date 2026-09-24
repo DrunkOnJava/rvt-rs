@@ -160,9 +160,9 @@ fn core_interior_names_are_revits() {
         eprintln!("skipping: no Core Interior model and reference export");
         return;
     }
-    // Doors, windows and columns: every family instance of the recovered
-    // categories. Walls and slabs are system families, named elsewhere.
-    assert_eq!(check(&rvt, &reference), 394);
+    // Every element: the 394 doors, windows and columns (RE-38), and the
+    // 460 walls, floors and building pad whose system family RE-63 derives.
+    assert_eq!(check(&rvt, &reference), 854);
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn re1_names_are_revits() {
     // fixtures have types whose records also name a family nested in their
     // own (RE-42).
     for (model, expected) in [
-        ("Architecture", 57),
+        ("Architecture", 73),
         ("Mechanical", 42),
         ("Plumbing", 61),
         ("Electrical", 12),
@@ -197,8 +197,9 @@ fn re1_names_are_revits() {
 /// #322: every element whose type is a system-family type (walls, floors,
 /// ceilings, roofs, railings) carries the type name its type's own data
 /// gives, and it equals the type half of Revit's `ObjectType`
-/// (`Basic Wall:<type>`, `Floor:<type>`) for the same Tag. Returns how many
-/// were checked per class.
+/// (`Basic Wall:<type>`, `Floor:<type>`) for the same Tag. Where RE-63 gives
+/// it a system family, the whole `Family:Type` equals Revit's `ObjectType`.
+/// Returns how many were checked per class.
 fn check_system_type_names(rvt: &Path, reference: &Path, release: u32) -> Vec<(String, usize)> {
     let theirs = names_by_tag(&std::fs::read_to_string(reference).expect("reference IFC"));
     let mut rf = RevitFile::open(rvt).expect("open");
@@ -221,7 +222,10 @@ fn check_system_type_names(rvt: &Path, reference: &Path, release: u32) -> Vec<(S
         .chain(mvp.slabs.iter())
         .chain(mvp.products.iter())
     {
-        if field(element, rvt::partition_schema_mvp::FAMILY_NAME_FIELD).is_some() {
+        let family = field(element, rvt::partition_schema_mvp::FAMILY_NAME_FIELD);
+        let derived = field(element, rvt::partition_schema_mvp::FAMILY_NAME_SOURCE_FIELD)
+            .is_some_and(|source| source == rvt::partition_schema_mvp::SYSTEM_FAMILY_SOURCE);
+        if family.is_some() && !derived {
             continue;
         }
         let Some(ours) = field(element, rvt::partition_schema_mvp::TYPE_NAME_FIELD) else {
@@ -234,6 +238,14 @@ fn check_system_type_names(rvt: &Path, reference: &Path, release: u32) -> Vec<(S
             .map(|(_, t)| t)
             .expect("Family:Type");
         assert_eq!(ours, want, "{} {id}", element.class);
+        if let Some(family) = family {
+            assert_eq!(
+                &format!("{family}:{ours}"),
+                object_type,
+                "{} {id}",
+                element.class
+            );
+        }
         *checked.entry(element.class.clone()).or_insert(0) += 1;
     }
     checked.into_iter().collect()
