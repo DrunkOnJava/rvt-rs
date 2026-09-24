@@ -24,6 +24,18 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Layered walls end layer by layer at their corners, as Revit draws them
+  (RE-71, #358).** At a butt join between two layered walls, the layers
+  nest like concentric Ls: counted from the outside of the corner, each
+  layer of the wall that runs through reaches the outer edge of the other
+  wall's matching layer, and each layer of the wall that stops, its inner
+  edge. Where both walls show the same layers in the same order and share
+  their base and top, the wall is drawn as that staircase, as an
+  `IfcArbitraryClosedProfileDef` and one GLB band per layer. On Snowdon
+  Towers 516 of 976 axis-parallel walls now have both of Revit's ends, from
+  346, and 3,925 of 5,634 layer ends match Revit's body, from 3,078. Revit
+  draws a few such joints as a clean butt instead, which nothing read
+  predicts: 16 layer ends on Snowdon and one RE1 wall's end get worse.
 - **A butt join's wall runs through, and the other stops, as Revit draws
   them (RE-70, #358).** A wall's own data lists the walls it runs through
   at a join; where two walls' centrelines end at one point, that wall

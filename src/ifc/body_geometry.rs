@@ -666,7 +666,30 @@ pub fn clip_ring_to_band(ring: &[Point2], normal: [f64; 2], lo: f64, hi: f64) ->
         out
     };
     let below = clip(ring, &|s| s <= hi, hi);
-    clip(&below, &|s| s >= lo, lo)
+    without_spikes(clip(&below, &|s| s >= lo, lo))
+}
+
+/// `ring` without the vertices that lie on a straight line through their
+/// neighbours. Clipping an outline with steps on the band's edges (a wall
+/// whose layers end on different lines, RE-71) leaves zero-width spikes
+/// along those edges, out to where the neighbouring layer ends; they draw
+/// nothing but carry vertices at the wrong length.
+fn without_spikes(mut ring: Ring) -> Ring {
+    let mut index = 0;
+    while ring.len() > 2 && index < ring.len() {
+        let previous = ring[(index + ring.len() - 1) % ring.len()];
+        let point = ring[index];
+        let next = ring[(index + 1) % ring.len()];
+        let cross = (point.0 - previous.0) * (next.1 - point.1)
+            - (point.1 - previous.1) * (next.0 - point.0);
+        if cross.abs() <= 1e-12 {
+            ring.remove(index);
+            index = index.saturating_sub(1);
+        } else {
+            index += 1;
+        }
+    }
+    ring
 }
 
 /// An extruded body cut into its layers across the thickness: for each

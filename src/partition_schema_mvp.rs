@@ -1397,6 +1397,13 @@ pub const WALL_JOIN_REACH_FIELDS: [&str; 2] = ["m_wall_join_start_reach", "m_wal
 /// Fields holding the one wall a wall butt-joins at its start and at its
 /// end, where the join lists decide which of the two runs through (RE-70).
 pub const WALL_JOIN_PARTNER_FIELDS: [&str; 2] = ["m_wall_join_start_wall", "m_wall_join_end_wall"];
+/// Fields holding how far past the start and the end of its centreline
+/// each of a wall's layers reaches at a layered butt join, exterior first,
+/// feet (RE-71).
+pub const WALL_JOIN_LAYER_REACH_FIELDS: [&str; 2] = [
+    "m_wall_join_start_layer_reaches",
+    "m_wall_join_end_layer_reaches",
+];
 /// Fields holding whether a wall runs through that join (true) or stops at
 /// it (false) (RE-70).
 pub const WALL_JOIN_THROUGH_FIELDS: [&str; 2] =
@@ -1433,6 +1440,70 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
         end: [ex?, ey?],
         thickness_feet: float(WALL_TYPE_THICKNESS_FIELD)?,
         join_reach_feet: WALL_JOIN_REACH_FIELDS.map(float),
+    })
+}
+
+/// Where each layer of a wall ends at its layered butt joins (RE-71).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WallLayerEnds {
+    /// Plan unit vector towards the wall's exterior face.
+    pub exterior: [f64; 2],
+    /// The layers' widths, exterior first, feet.
+    pub widths: Vec<f64>,
+    /// How far past its start and its end each layer reaches, exterior
+    /// first, where a layered join decides it.
+    pub reach_feet: [Option<Vec<f64>>; 2],
+}
+
+/// The [`WALL_JOIN_LAYER_REACH_FIELDS`] a wall carries, with its layers'
+/// widths and exterior side. `None` without a layered join at either end,
+/// or where a reach list does not match the layers.
+pub fn wall_layer_ends_from_fields(fields: &[(String, InstanceField)]) -> Option<WallLayerEnds> {
+    let floats = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == wanted => items
+                .iter()
+                .map(|item| match item {
+                    InstanceField::Float { value, .. } => Some(*value),
+                    _ => None,
+                })
+                .collect::<Option<Vec<f64>>>(),
+            _ => None,
+        })
+    };
+    let reach_feet = WALL_JOIN_LAYER_REACH_FIELDS.map(floats);
+    if reach_feet.iter().all(Option::is_none) {
+        return None;
+    }
+    let widths: Vec<f64> = fields
+        .iter()
+        .find_map(|(name, value)| {
+            (name == WALL_LAYERS_FIELD).then(|| layer_bands_from_field(value))
+        })
+        .flatten()?
+        .iter()
+        .map(|band| band.width_feet)
+        .collect();
+    if reach_feet
+        .iter()
+        .flatten()
+        .any(|reach| reach.len() != widths.len())
+    {
+        return None;
+    }
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [Some(ex), Some(ey)] = WALL_EXTERIOR_FIELDS.map(float) else {
+        return None;
+    };
+    Some(WallLayerEnds {
+        exterior: [ex, ey],
+        widths,
+        reach_feet,
     })
 }
 
@@ -1772,14 +1843,22 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         }
         wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
     }
-    attach_wall_butt_joins(rf, revit_version, walls);
+    attach_wall_butt_joins(rf, revit_version, walls, &layers);
 }
 
 /// Give each wall with a centreline the wall it butt-joins at each end and
 /// whether it runs through there, where its and its partner's join lists
 /// decide it, and, between single-layer walls, how far past the end its
 /// body reaches ([`crate::element_record_wall_joins::butt_joins`], RE-70).
-fn attach_wall_butt_joins(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
+fn attach_wall_butt_joins(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &mut [DecodedElement],
+    type_layers: &std::collections::BTreeMap<
+        u32,
+        Vec<crate::partition_compound_structure::CompoundLayer>,
+    >,
+) {
     use crate::element_record_wall_joins as joins;
     let float = |wall: &DecodedElement, wanted: &str| {
         wall.fields.iter().find_map(|(name, value)| match value {
@@ -1792,16 +1871,26 @@ fn attach_wall_butt_joins(rf: &mut RevitFile, revit_version: u32, walls: &mut [D
         .filter_map(|wall| {
             let axis = wall_axis_from_fields(&wall.fields)?;
             let base = float(wall, "m_locationZ")?;
-            let layer_count = wall.fields.iter().find_map(|(name, value)| match value {
-                InstanceField::Vector(bands) if name == WALL_LAYERS_FIELD => Some(bands.len()),
+            let type_id = wall.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
                 _ => None,
             })?;
+            let layers: Vec<(f64, u32)> = type_layers
+                .get(&type_id)?
+                .iter()
+                .filter(|layer| layer.width_feet > 0.0)
+                .map(|layer| (layer.width_feet, layer.function))
+                .collect();
+            let [Some(ex), Some(ey)] = WALL_EXTERIOR_FIELDS.map(|name| float(wall, name)) else {
+                return None;
+            };
             Some(joins::WallLine {
                 element_id: wall.id?,
                 start: axis.start,
                 end: axis.end,
                 thickness_feet: axis.thickness_feet,
-                layer_count,
+                layers,
+                exterior: [ex, ey],
                 base_feet: base,
                 top_feet: base + float(wall, "m_bboxHeight")?,
             })
@@ -1847,6 +1936,20 @@ fn attach_wall_butt_joins(rf: &mut RevitFile, revit_version: u32, walls: &mut [D
                         value: reach,
                         size: 8,
                     },
+                ));
+            }
+            if let Some(reaches) = &join.layer_reach_feet {
+                wall.fields.push((
+                    WALL_JOIN_LAYER_REACH_FIELDS[slot].into(),
+                    InstanceField::Vector(
+                        reaches
+                            .iter()
+                            .map(|value| InstanceField::Float {
+                                value: *value,
+                                size: 8,
+                            })
+                            .collect(),
+                    ),
                 ));
             }
         }
