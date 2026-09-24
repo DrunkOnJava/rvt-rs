@@ -185,6 +185,10 @@ pub struct ElementLayers {
     pub exterior_normal: [f64; 2],
     /// Exterior first. Membranes, which have no width, are left out.
     pub layers: Vec<LayerBand>,
+    /// The layers stack from the top down, as a floor's, roof's or
+    /// ceiling's do (RE-57); `exterior_normal` is unused.
+    #[serde(default)]
+    pub stacked: bool,
 }
 
 /// One layer of an [`ElementLayers`].

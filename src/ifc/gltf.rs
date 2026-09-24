@@ -400,8 +400,12 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
                 -nx * placement.sin + ny * placement.cos,
             ];
             let widths: Vec<f64> = layers.layers.iter().map(|l| l.width_feet).collect();
-            if let Some(meshes) = body_geometry::layered_extrusion_meshes(extrusion, local, &widths)
-            {
+            let meshes = if layers.stacked {
+                body_geometry::stacked_extrusion_meshes(extrusion, &widths)
+            } else {
+                body_geometry::layered_extrusion_meshes(extrusion, local, &widths)
+            };
+            if let Some(meshes) = meshes {
                 for (mesh, band) in meshes.iter().zip(&layers.layers) {
                     let Some((position, indices)) = push_mesh(&mut doc, &mut bin, mesh) else {
                         continue;

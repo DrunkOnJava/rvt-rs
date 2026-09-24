@@ -1791,7 +1791,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
           'Materials',
           'ok',
           layered > 0
-            ? `${materialCount} · ${named} · layers and colours read for ${layered} ${layered === 1 ? 'wall' : 'walls'}`
+            ? `${materialCount} · ${named} · layers and colours read for ${layered} ${layered === 1 ? 'element' : 'elements'}`
             : `${materialCount} · ${named} (names only; no compound layers)`,
         ),
       );

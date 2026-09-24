@@ -237,6 +237,15 @@ pub fn recover_partition_schema_mvp(
     attach_wall_layers(rf, revit_version, &mut out.walls);
     // --- A shed roof's slope (RE-56) ---
     attach_roof_slopes(rf, revit_version, &mut out.products);
+    // --- Floors', roofs' and ceilings' layers (RE-57) ---
+    attach_slab_layers(
+        rf,
+        revit_version,
+        out.slabs
+            .iter_mut()
+            .chain(out.products.iter_mut())
+            .collect(),
+    );
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -691,44 +700,98 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
     })
 }
 
-/// The layers [`WALL_LAYERS_FIELD`] and [`WALL_EXTERIOR_FIELDS`] record.
+/// Field holding a floor's, roof's or ceiling's layers, top first, in the
+/// form of [`WALL_LAYERS_FIELD`] (RE-57).
+pub const SLAB_LAYERS_FIELD: &str = "m_slab_layers";
+
+/// The layers of a [`WALL_LAYERS_FIELD`] or [`SLAB_LAYERS_FIELD`] value.
+fn layer_bands_from_field(value: &InstanceField) -> Option<Vec<crate::ifc::LayerBand>> {
+    let InstanceField::Vector(items) = value else {
+        return None;
+    };
+    let bands = items
+        .iter()
+        .map(|item| match item {
+            InstanceField::Vector(parts) => match parts.as_slice() {
+                [
+                    InstanceField::Float { value: width, .. },
+                    InstanceField::Integer { value: colour, .. },
+                    InstanceField::Float {
+                        value: transparency,
+                        ..
+                    },
+                ] => Some(crate::ifc::LayerBand {
+                    width_feet: *width,
+                    color_packed: u32::try_from(*colour).ok(),
+                    transparency: *transparency,
+                }),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    (!bands.is_empty()).then_some(bands)
+}
+
+/// The field form of a type's layers, each with its material's shading;
+/// membranes, which have no width, are left out.
+fn layer_bands_field(
+    layers: &[crate::partition_compound_structure::CompoundLayer],
+    appearances: &std::collections::BTreeMap<u32, crate::partition_materials::MaterialAppearance>,
+) -> InstanceField {
+    InstanceField::Vector(
+        layers
+            .iter()
+            .filter(|layer| layer.width_feet > 0.0)
+            .map(|layer| {
+                let appearance = layer.material.and_then(|m| appearances.get(&m));
+                InstanceField::Vector(vec![
+                    InstanceField::Float {
+                        value: layer.width_feet,
+                        size: 8,
+                    },
+                    InstanceField::Integer {
+                        value: appearance.map_or(-1, |a| i64::from(a.color_packed())),
+                        signed: true,
+                        size: 8,
+                    },
+                    InstanceField::Float {
+                        value: appearance.map_or(0.0, |a| f64::from(a.transparency)),
+                        size: 8,
+                    },
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// The layers [`WALL_LAYERS_FIELD`] and [`WALL_EXTERIOR_FIELDS`], or
+/// [`SLAB_LAYERS_FIELD`], record.
 pub fn element_layers_from_fields(
     fields: &[(String, InstanceField)],
 ) -> Option<crate::ifc::ElementLayers> {
-    let float = |wanted: &str| {
-        fields.iter().find_map(|(name, value)| match value {
-            InstanceField::Float { value, .. } if name == wanted => Some(*value),
-            _ => None,
-        })
+    let field = |wanted: &str| {
+        fields
+            .iter()
+            .find_map(|(name, value)| (name == wanted).then_some(value))
+    };
+    if let Some(layers) = field(SLAB_LAYERS_FIELD).and_then(layer_bands_from_field) {
+        return Some(crate::ifc::ElementLayers {
+            exterior_normal: [0.0, 0.0],
+            layers,
+            stacked: true,
+        });
+    }
+    let float = |wanted: &str| match field(wanted) {
+        Some(InstanceField::Float { value, .. }) => Some(*value),
+        _ => None,
     };
     let [x, y] = WALL_EXTERIOR_FIELDS.map(float);
-    let layers = fields.iter().find_map(|(name, value)| match value {
-        InstanceField::Vector(items) if name == WALL_LAYERS_FIELD => items
-            .iter()
-            .map(|item| match item {
-                InstanceField::Vector(parts) => match parts.as_slice() {
-                    [
-                        InstanceField::Float { value: width, .. },
-                        InstanceField::Integer { value: colour, .. },
-                        InstanceField::Float {
-                            value: transparency,
-                            ..
-                        },
-                    ] => Some(crate::ifc::LayerBand {
-                        width_feet: *width,
-                        color_packed: u32::try_from(*colour).ok(),
-                        transparency: *transparency,
-                    }),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect::<Option<Vec<_>>>(),
-        _ => None,
-    })?;
-    (!layers.is_empty()).then_some(crate::ifc::ElementLayers {
+    let layers = field(WALL_LAYERS_FIELD).and_then(layer_bands_from_field)?;
+    Some(crate::ifc::ElementLayers {
         exterior_normal: [x?, y?],
         layers,
+        stacked: false,
     })
 }
 
@@ -821,37 +884,15 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         } else {
             [-dy, dx]
         };
-        let bands: Vec<InstanceField> = type_layers
-            .iter()
-            .filter(|layer| layer.width_feet > 0.0)
-            .map(|layer| {
-                let appearance = layer.material.and_then(|m| appearances.get(&m));
-                InstanceField::Vector(vec![
-                    InstanceField::Float {
-                        value: layer.width_feet,
-                        size: 8,
-                    },
-                    InstanceField::Integer {
-                        value: appearance.map_or(-1, |a| i64::from(a.color_packed())),
-                        signed: true,
-                        size: 8,
-                    },
-                    InstanceField::Float {
-                        value: appearance.map_or(0.0, |a| f64::from(a.transparency)),
-                        size: 8,
-                    },
-                ])
-            })
-            .collect();
-        if bands.is_empty() {
+        let bands = layer_bands_field(type_layers, &appearances);
+        if matches!(&bands, InstanceField::Vector(items) if items.is_empty()) {
             continue;
         }
         for (name, value) in WALL_EXTERIOR_FIELDS.iter().zip(exterior) {
             wall.fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
-        wall.fields
-            .push((WALL_LAYERS_FIELD.into(), InstanceField::Vector(bands)));
+        wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
     }
 }
 
@@ -2080,6 +2121,83 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
                 size: 8,
             },
         ));
+    }
+}
+
+/// Classes whose type's layers stack from the top down (RE-57).
+pub const STACKED_LAYER_CLASSES: &[&str] = &["Floor", "BuildingPad", "Roof", "Ceiling"];
+
+/// How closely a slab's type layers must add up to its record box's height
+/// for them to be its layers, feet.
+pub const SLAB_LAYER_HEIGHT_TOLERANCE_FEET: f64 = 1e-4;
+
+/// Give each floor, building pad, roof and ceiling its type's layers, top
+/// first, each with its material's shading (RE-57), where they add up to its
+/// record box's height: the plate is then exactly its layers. A roof drawn
+/// along its slope (RE-56) is left out.
+fn attach_slab_layers(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    mut elements: Vec<&mut DecodedElement>,
+) {
+    use crate::partition_compound_structure as pcs;
+    if !pcs::COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    elements.retain(|element| {
+        STACKED_LAYER_CLASSES.contains(&element.class.as_str())
+            && type_of(element).is_some()
+            && roof_slope_from_fields(&element.fields).is_none()
+    });
+    if elements.is_empty() {
+        return;
+    }
+    let types: BTreeSet<u32> = elements
+        .iter()
+        .filter_map(|element| type_of(element))
+        .collect();
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_type_records::OST_MATERIALS,
+        &declared,
+    )
+    .unwrap_or_default()
+    .iter()
+    .map(|record| record.element_id)
+    .collect();
+    let (Ok(layers), Ok(appearances)) = (
+        pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
+        crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
+    ) else {
+        return;
+    };
+    for element in elements {
+        let Some(type_layers) = type_of(element).and_then(|id| layers.get(&id)) else {
+            continue;
+        };
+        let height = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == "m_bboxHeight" => Some(*value),
+            _ => None,
+        });
+        let total: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
+        if !height.is_some_and(|h| (h - total).abs() <= SLAB_LAYER_HEIGHT_TOLERANCE_FEET) {
+            continue;
+        }
+        let bands = layer_bands_field(type_layers, &appearances);
+        if matches!(&bands, InstanceField::Vector(items) if !items.is_empty()) {
+            element.fields.push((SLAB_LAYERS_FIELD.into(), bands));
+        }
     }
 }
 

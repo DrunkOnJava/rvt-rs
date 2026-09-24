@@ -279,6 +279,15 @@
       "user_impact": "In the viewer and exported glTF, walls show their construction: each layer as a band in its material's colour instead of one grey block."
     },
     {
+      "id": "element-record-slab-layers",
+      "area": "elements",
+      "name": "Floors, roofs and ceilings drawn as their layers stacked top first in their materials' colours (glTF and viewer, Revit 2024 and 2025)",
+      "status": "partial",
+      "evidence": "partition_schema_mvp::attach_slab_layers (SLAB_LAYERS_FIELD) and element_layers_from_fields; ifc::ElementLayers::stacked; ifc::body_geometry::stacked_extrusion_meshes; ifc::gltf per-layer nodes; tools/re/slab_layers_vs_ifc.py; examples/probe_re53_wall_layers.rs; reports/element-framing/RE-57-slab-layers.md",
+      "notes": "A floor, building pad, roof or ceiling with a type (RE-44) gets its type's layers (RE-53; roof types framed behind their name, RE-56), top first, where they add up to its record box's height within 1e-4 ft; the glTF export cuts its extruded body into one prism per layer from the top down. Measured end to end against Revit's own IFC4 exports (IfcOpenShell 0.8.5): Snowdon Towers (local only) 236 compared slabs with every layer's bottom and top within 1.4e-6 ft and 358 of 358 colours equal; 2024_Core_Interior 68 of 68 floors within 3.4e-6 ft, 69 of 69 colours; RE1 Architecture's 8 floors and ceilings (2025) cannot be measured by height because Revit styles each body with one material, and their 8 colours equal Revit's in its layer order. Status is partial: slabs whose layers do not add up to their box (tapered insulation, floors with taller boxes) and sloped roofs stay whole; material names are not read, so the IFC export writes no layer sets (#355).",
+      "user_impact": "In the viewer and exported glTF, floors, roofs and ceilings show their build-up: finish, structure and insulation as coloured bands."
+    },
+    {
       "id": "element-record-wall-centreline-bodies",
       "area": "elements",
       "name": "Wall bodies from their centreline at their type's thickness (Revit 2024 and 2025)",
