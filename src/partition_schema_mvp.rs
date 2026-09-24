@@ -269,6 +269,12 @@ pub fn recover_partition_schema_mvp(
             .chain(out.products.iter_mut())
             .collect(),
     );
+    // --- System families' names (RE-63) ---
+    attach_system_family_names(
+        rf,
+        revit_version,
+        &mut [&mut out.walls, &mut out.slabs, &mut out.products],
+    );
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -831,25 +837,121 @@ pub fn element_layers_from_fields(
     })
 }
 
-/// The Revit system family a record-backed element's type belongs to when
-/// the type has compound layers (RE-61). Revit derives the name rather than
-/// storing it. Only one system family per category has compound layers, so
-/// the category gives it: a wall is a Basic Wall (not a Curtain or Stacked
-/// Wall), a ceiling a Compound Ceiling (not a Basic Ceiling) and a roof a
-/// Basic Roof (not Sloped Glazing).
+/// The Revit system family of a record-backed element's type (RE-61,
+/// RE-63). Revit derives the name rather than storing it, from the type's
+/// kind, and the category gives it where only one system family fits:
+/// - a curtain wall (RE-46) is a Curtain Wall, and a railing a Railing;
+/// - a floor is a Floor, and a building pad a Pad;
+/// - a wall, ceiling or roof whose type has compound layers (`has_layers`)
+///   is a Basic Wall, a Compound Ceiling or a Basic Roof, since a Curtain
+///   or Stacked Wall, a Basic Ceiling and Sloped Glazing have none.
 ///
 /// Measured against the `Family:Type:ElementId` names Revit's own IFC
 /// export gives the same elements, on every record-backed wall, floor,
 /// ceiling, roof and building pad of Snowdon Towers, Core Interior and RE1
 /// Architecture: 1,444 walls, 283 floors, 74 ceilings, 20 roofs and 1 pad.
-pub fn layered_system_family(class: &str) -> Option<&'static str> {
-    match class {
-        "Wall" => Some("Basic Wall"),
-        "Floor" => Some("Floor"),
-        "Ceiling" => Some("Compound Ceiling"),
-        "Roof" => Some("Basic Roof"),
-        "BuildingPad" => Some("Pad"),
+pub fn system_family(class: &str, has_layers: bool) -> Option<&'static str> {
+    match (class, has_layers) {
+        (CURTAIN_WALL_CLASS, _) => Some("Curtain Wall"),
+        ("Railing", _) => Some("Railing"),
+        ("Floor", _) => Some("Floor"),
+        ("BuildingPad", _) => Some("Pad"),
+        ("Wall", true) => Some("Basic Wall"),
+        ("Ceiling", true) => Some("Compound Ceiling"),
+        ("Roof", true) => Some("Basic Roof"),
         _ => None,
+    }
+}
+
+/// Field recording that [`FAMILY_NAME_FIELD`] is a system family's name
+/// derived by [`system_family`], not read from the file (RE-63).
+pub const FAMILY_NAME_SOURCE_FIELD: &str = "m_family_name_source";
+
+/// Value of [`FAMILY_NAME_SOURCE_FIELD`].
+pub const SYSTEM_FAMILY_SOURCE: &str = "system_family_by_category";
+
+/// Give each system-family element with a type name (#322) its system
+/// family's name ([`system_family`]), so it is named `Family:Type:ElementId`
+/// as Revit names it (RE-63). Whether a wall's, ceiling's or roof's type has
+/// compound layers is the type's: an element of the type drawn in layers
+/// shows it, and otherwise the type's own data is read
+/// ([`crate::partition_compound_structure::scan_type_layers`]).
+fn attach_system_family_names(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: &mut [&mut Vec<DecodedElement>],
+) {
+    use crate::partition_compound_structure as pcs;
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let shows_layers = |element: &DecodedElement| {
+        element.fields.iter().any(|(name, _)| {
+            name == WALL_LAYERS_FIELD
+                || name == SLAB_LAYERS_FIELD
+                || name == ROOF_TYPE_THICKNESS_FIELD
+        })
+    };
+    let mut layered: BTreeSet<u32> = elements
+        .iter()
+        .flat_map(|list| list.iter())
+        .filter(|element| shows_layers(element))
+        .filter_map(type_of)
+        .collect();
+    let pending: BTreeSet<u32> = elements
+        .iter()
+        .flat_map(|list| list.iter())
+        .filter(|element| matches!(element.class.as_str(), "Wall" | "Ceiling" | "Roof"))
+        .filter_map(type_of)
+        .filter(|id| !layered.contains(id))
+        .collect();
+    if !pending.is_empty()
+        && pcs::COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
+    {
+        if let Ok(records) = crate::elem_table::parse_records(rf) {
+            let declared = crate::elem_table::declared_ids(&records);
+            let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
+                rf,
+                revit_version,
+                crate::partition_type_records::OST_MATERIALS,
+                &declared,
+            )
+            .unwrap_or_default()
+            .iter()
+            .map(|record| record.element_id)
+            .collect();
+            if let Ok(types) =
+                pcs::scan_type_layers(rf, revit_version, &pending, &materials, &declared)
+            {
+                layered.extend(
+                    types
+                        .into_iter()
+                        .filter(|(_, layers)| !layers.is_empty())
+                        .map(|(id, _)| id),
+                );
+            }
+        }
+    }
+    for element in elements.iter_mut().flat_map(|list| list.iter_mut()) {
+        let has = |field: &str| element.fields.iter().any(|(name, _)| name == field);
+        if !has(TYPE_NAME_FIELD) || has(FAMILY_NAME_FIELD) {
+            continue;
+        }
+        let has_layers = type_of(element).is_some_and(|id| layered.contains(&id));
+        let Some(family) = system_family(&element.class, has_layers) else {
+            continue;
+        };
+        element.fields.push((
+            FAMILY_NAME_FIELD.into(),
+            InstanceField::String(family.into()),
+        ));
+        element.fields.push((
+            FAMILY_NAME_SOURCE_FIELD.into(),
+            InstanceField::String(SYSTEM_FAMILY_SOURCE.into()),
+        ));
     }
 }
 
