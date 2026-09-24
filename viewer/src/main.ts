@@ -561,6 +561,12 @@ interface PanelMaterial {
   name: string;
   element_count: number;
 }
+interface PanelLayers {
+  name: string;
+  order?: string | null;
+  rows: PanelRow[];
+  total: string;
+}
 interface ElementInfoPanel {
   name: string;
   ifc_type: string;
@@ -570,6 +576,7 @@ interface ElementInfoPanel {
   placement_rows?: PanelRow[];
   extent_rows?: PanelRow[];
   material?: PanelMaterial | null;
+  layers?: PanelLayers | null;
   property_group?: PanelPropertyGroup | null;
   further_property_groups?: PanelPropertyGroup[];
   host?: RelatedElement | null;
@@ -1414,6 +1421,16 @@ function renderElementPanel(panel: ElementInfoPanel): void {
 
   if (panel.storey) infoEl.appendChild(storeyGroup(panel.storey));
   if (panel.material) infoEl.appendChild(materialGroup(panel.material));
+  if (panel.layers && panel.layers.rows.length > 0) {
+    const layers = panel.layers;
+    const box = infoGroup(
+      'layers',
+      layers.order ? `Layers · ${layers.name} · ${layers.order}` : `Layers · ${layers.name}`,
+    );
+    for (const row of layers.rows) box.appendChild(infoRow(row.label, row.value, true));
+    box.appendChild(infoRow('Total', layers.total, true));
+    infoEl.appendChild(box);
+  }
 
   const placement = panel.placement_rows ?? [];
   if (placement.length > 0) {

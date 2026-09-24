@@ -378,6 +378,7 @@ fuzz_target!(|input: FuzzInput| {
         representation_maps: Vec::new(),
         global_ids: Default::default(),
         element_layers: Default::default(),
+        material_layer_usages: Default::default(),
     };
 
     let opts = StepOptions {

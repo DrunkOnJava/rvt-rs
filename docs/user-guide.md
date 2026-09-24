@@ -88,10 +88,11 @@ and is not yet written onto the exported wall (#88, RE-28). Still blocked
 (RE-19 / RE-20 negative on magnetar corpora): schema-field Walls, typed
 Door/Window host binding, room boundary polygons — RE-29 measured that
 negative, a room record carries no sketch — door and window bodies, the
-profile of the 20 rotated shading plates, and compound-layer thicknesses,
-which this corpus cannot even witness because the reference export is a
-`ReferenceView_V1.2` file with no `IfcMaterialLayerSet` in it at all
-(#88, RE-28). See [status.md](status.md) and
+profile of the 20 rotated shading plates. Compound layers are read from
+each type's own data (RE-53) and written as layer sets with their
+material names (RE-58); the reference export is a `ReferenceView_V1.2`
+file with no `IfcMaterialLayerSet` in it, so they are scored against the
+faces its bodies style with each material. See [status.md](status.md) and
 [supported-profile.md](supported-profile.md).
 
 The viewer can show a scene, categories, element info, schedule summary, export

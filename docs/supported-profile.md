@@ -45,17 +45,14 @@ The first real-model conversion profile is intentionally narrow:
   thickness (#212, RE-22).
 - Floor/Room storey assignment via Level ElementIds (RE-20 negative — `Level`
   absent from Formats; bind plumbing stays fail-closed / idle).
-- Compound wall-layer thicknesses, and slab extrusion depth on any path
-  other than the Revit 2024 element records. The wall *type* itself is
-  recovered — a bbox-less record with placement kind `0xffff8080`, which
-  every one of the 360 exported wall instances names exactly once, giving
-  the `IfcWallType` Revit assigns on 360 of 360 (#88, RE-28) — but that
-  join is library-side and is not yet a property on the emitted wall, and
-  the layer thicknesses are not near the record. They are also not
-  witnessable on this corpus: the paired reference export is a
-  `ReferenceView_V1.2` file with zero `IfcMaterialLayerSet`, zero
-  `IfcMaterialLayer` and zero `IfcMaterialLayerSetUsage`, so no layer is
-  emitted and none is invented.
+- Slab extrusion depth on any path other than the Revit 2024 element
+  records. Compound layers are read from each type's own data (RE-53)
+  and written as `IfcMaterialLayerSetUsage` with their material names
+  (RE-58). Elements drawn whole or sloped get no layer set, and on this
+  corpus the walls' types are single layers by category, so only its 88
+  floors and shading devices carry one. The paired reference export is a
+  `ReferenceView_V1.2` file with no layer sets of its own, so they are
+  scored against the faces its bodies style with each material.
 - Recovered family profiles / wall location curves for the Revit 2024
   element-record path: bodies there are the record's own bounding box,
   except for a slab's plan profile (#31, RE-25), a wall's join-trimmed run

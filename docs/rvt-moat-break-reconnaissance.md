@@ -2003,4 +2003,27 @@ single material, so only its colours can be compared there.
 
 Report: `reports/element-framing/RE-57-slab-layers.md`.
 
+## Addendum — RE-58 material names and IFC layer sets (2026-09-23)
+
+A material's name is in its own object. Usually it is the field right
+after the class tag. Where that field holds parameter entries first
+(strings and integers, keyed by BuiltInParameter id), the name follows
+them and ends with `ff ff ff ff` and a release tag, `17 0c` on 2024 and
+`6b 0c` on 2025.
+
+Read that way, with the framed string and name-parameter entries as
+fallbacks:
+- Snowdon names 219 of 220 materials and Core Interior 78 of 86;
+- RE1, Projeto1, teste_export_2025 and the tutorial house name every
+  material;
+- every one that Revit's export styles by name has Revit's colour for it.
+
+The IFC export now writes layered walls, floors, roofs and ceilings as an
+`IfcMaterialLayerSetUsage` over an `IfcMaterialLayerSet`. The layer names
+are Revit's, in Revit's order, and the sets sit on Revit's bodies within
+0.001 ft on 1,196 of 1,207 Snowdon elements, all 88 on Core Interior and
+all 15 on RE1. RE1's 2025 export writes the same four sets itself.
+
+Report: `reports/element-framing/RE-58-material-layer-sets.md`.
+
 **End of report.**

@@ -1413,20 +1413,27 @@ impl StepWriter {
         for lset in &model.material_layer_sets {
             let mut layer_ids: Vec<usize> = Vec::with_capacity(lset.layers.len());
             for layer in &lset.layers {
-                // Clamp material_index to stay within bounds. Out-of-range
-                // indices get the first material as a defensive fallback;
+                // A layer with no material writes `$` (IFC4 makes
+                // IfcMaterialLayer.Material optional). An out-of-range
+                // index gets the first material as a defensive fallback;
                 // losing the layer would be worse.
-                let mat_id = material_ids
-                    .get(layer.material_index)
-                    .copied()
-                    .or_else(|| material_ids.first().copied())
-                    .unwrap_or(0);
-                if mat_id == 0 {
-                    // No materials at all — skip this layer. IFC4 allows
-                    // IfcMaterialLayerSet with zero layers, so the set
-                    // will still emit below, just empty.
-                    continue;
-                }
+                let material_slot = match layer.material_index {
+                    None => "$".to_string(),
+                    Some(index) => {
+                        let mat_id = material_ids
+                            .get(index)
+                            .copied()
+                            .or_else(|| material_ids.first().copied())
+                            .unwrap_or(0);
+                        if mat_id == 0 {
+                            // No materials at all — skip this layer. IFC4
+                            // allows IfcMaterialLayerSet with zero layers,
+                            // so the set will still emit below, just empty.
+                            continue;
+                        }
+                        format!("#{mat_id}")
+                    }
+                };
                 let layer_id = self.id();
                 // IfcMaterialLayer(Material, LayerThickness, IsVentilated=$,
                 //                  Category=$, Priority=$, Name=$, Description=$)
@@ -1438,7 +1445,9 @@ impl StepWriter {
                 };
                 self.emit_entity(
                     layer_id,
-                    format!("IFCMATERIALLAYER(#{mat_id},{thickness_m:.6},$,$,$,{name_slot},$)"),
+                    format!(
+                        "IFCMATERIALLAYER({material_slot},{thickness_m:.6},$,$,$,{name_slot},$)"
+                    ),
                 );
                 layer_ids.push(layer_id);
             }
@@ -1986,20 +1995,33 @@ impl StepWriter {
                     && if let Some(ls_idx) = material_layer_set_index {
                         if let Some(&ls_id) = layer_set_ids.get(*ls_idx) {
                             let usage_id = self.id();
-                            // IfcMaterialLayerSetUsage(ForLayerSet, LayerSetDirection=.AXIS2.,
-                            //   DirectionSense=.POSITIVE., OffsetFromReferenceLine=0.0)
-                            // .AXIS2. = Y axis of the extrusion (wall
-                            // thickness direction). .POSITIVE. = stack
-                            // outward from the reference line. These are
-                            // the IFC4 defaults most exporters emit; Revit
-                            // wall-type-specific offsets would override.
+                            // IfcMaterialLayerSetUsage(ForLayerSet, LayerSetDirection,
+                            //   DirectionSense, OffsetFromReferenceLine, ReferenceExtent).
+                            // The element's own usage when the model states
+                            // one (RE-58); otherwise .AXIS2. (the extrusion's
+                            // Y axis, a wall's thickness), .POSITIVE. from 0,
+                            // the IFC4 defaults most exporters emit.
+                            // ReferenceExtent stays `$` — undecoded, but its
+                            // slot is still written (#214).
+                            let usage = model.material_layer_usages.get(&entity_idx);
+                            let direction = match usage.map(|u| u.direction) {
+                                Some(super::entities::LayerSetDirection::Axis1) => ".AXIS1.",
+                                Some(super::entities::LayerSetDirection::Axis3) => ".AXIS3.",
+                                _ => ".AXIS2.",
+                            };
+                            let sense = if usage.is_none_or(|u| u.positive) {
+                                ".POSITIVE."
+                            } else {
+                                ".NEGATIVE."
+                            };
+                            let offset = usage.map_or_else(
+                                || "0.".to_string(),
+                                |u| format!("{:.6}", u.offset_feet * 0.3048),
+                            );
                             self.emit_entity(
                                 usage_id,
-                                // ReferenceExtent (the fifth, IFC4-only
-                                // attribute) stays `$` — undecoded, but
-                                // its slot is still written (#214).
                                 format!(
-                                    "IFCMATERIALLAYERSETUSAGE(#{ls_id},.AXIS2.,.POSITIVE.,0.,$)"
+                                    "IFCMATERIALLAYERSETUSAGE(#{ls_id},{direction},{sense},{offset},$)"
                                 ),
                             );
                             let rel_id = self.id();
@@ -2467,6 +2489,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -2492,6 +2515,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -2559,6 +2583,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -2686,6 +2711,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         assert!(
@@ -2898,6 +2924,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -3329,12 +3356,12 @@ mod tests {
                 description: None,
                 layers: vec![
                     MaterialLayer {
-                        material_index: 0,
+                        material_index: Some(0),
                         thickness_feet: 5.0 / 8.0 / 12.0, // 5/8" gypsum
                         name: Some("Finish".into()),
                     },
                     MaterialLayer {
-                        material_index: 1,
+                        material_index: Some(1),
                         thickness_feet: 6.0 / 12.0, // 6" insulation
                         name: Some("Core".into()),
                     },
@@ -3344,6 +3371,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCMATERIALLAYER("), "IFCMATERIALLAYER missing");
@@ -3413,6 +3441,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         assert!(
@@ -3472,7 +3501,7 @@ mod tests {
                 name: "Coincidental".into(),
                 description: None,
                 layers: vec![MaterialLayer {
-                    material_index: 0,
+                    material_index: Some(0),
                     thickness_feet: 0.5,
                     name: None,
                 }],
@@ -3489,6 +3518,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         // Both layer set AND profile set entities exist because
@@ -3547,6 +3577,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         }
     }
 
@@ -3684,6 +3715,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         }
     }
 
@@ -3837,6 +3869,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         // solid_shape path fires:
@@ -4045,6 +4078,7 @@ mod tests {
             }],
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         // Exactly ONE IfcRepresentationMap — that's the whole point
@@ -4129,6 +4163,7 @@ mod tests {
             }],
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         // IFCMAPPEDITEM must be emitted; no inline body extrusion
@@ -4194,6 +4229,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         // No mapped item, no extrusion, no brep — just an element
@@ -4228,6 +4264,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)"));
@@ -4265,6 +4302,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         // Conversion chain: IFCSIUNIT base + IFCMEASUREWITHUNIT +
@@ -4314,6 +4352,7 @@ mod tests {
             representation_maps: Vec::new(),
             global_ids: Default::default(),
             element_layers: Default::default(),
+            material_layer_usages: Default::default(),
         };
         let s = write_step(&model);
         // Length from the caller (feet).

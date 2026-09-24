@@ -720,10 +720,15 @@ fn layer_bands_from_field(value: &InstanceField) -> Option<Vec<crate::ifc::Layer
                         value: transparency,
                         ..
                     },
+                    rest @ ..,
                 ] => Some(crate::ifc::LayerBand {
                     width_feet: *width,
                     color_packed: u32::try_from(*colour).ok(),
                     transparency: *transparency,
+                    name: match rest {
+                        [InstanceField::String(name)] => Some(name.clone()),
+                        _ => None,
+                    },
                 }),
                 _ => None,
             },
@@ -733,11 +738,13 @@ fn layer_bands_from_field(value: &InstanceField) -> Option<Vec<crate::ifc::Layer
     (!bands.is_empty()).then_some(bands)
 }
 
-/// The field form of a type's layers, each with its material's shading;
-/// membranes, which have no width, are left out.
+/// The field form of a type's layers, each with its material's shading and,
+/// where it is read, its name (RE-58); membranes, which have no width, are
+/// left out.
 fn layer_bands_field(
     layers: &[crate::partition_compound_structure::CompoundLayer],
     appearances: &std::collections::BTreeMap<u32, crate::partition_materials::MaterialAppearance>,
+    names: &std::collections::BTreeMap<u32, String>,
 ) -> InstanceField {
     InstanceField::Vector(
         layers
@@ -745,7 +752,7 @@ fn layer_bands_field(
             .filter(|layer| layer.width_feet > 0.0)
             .map(|layer| {
                 let appearance = layer.material.and_then(|m| appearances.get(&m));
-                InstanceField::Vector(vec![
+                let mut band = vec![
                     InstanceField::Float {
                         value: layer.width_feet,
                         size: 8,
@@ -759,7 +766,11 @@ fn layer_bands_field(
                         value: appearance.map_or(0.0, |a| f64::from(a.transparency)),
                         size: 8,
                     },
-                ])
+                ];
+                if let Some(name) = layer.material.and_then(|m| names.get(&m)) {
+                    band.push(InstanceField::String(name.clone()));
+                }
+                InstanceField::Vector(band)
             })
             .collect(),
     )
@@ -839,11 +850,12 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     .iter()
     .map(|record| record.element_id)
     .collect();
-    let (Ok(layers), Ok(orientations), Ok(lines), Ok(appearances)) = (
+    let (Ok(layers), Ok(orientations), Ok(lines), Ok(appearances), Ok(names)) = (
         pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
         pcs::scan_wall_orientations(rf, revit_version, &wall_ids),
         pcs::scan_wall_lines(rf, revit_version, &wall_ids),
         crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
+        crate::partition_materials::scan_material_names(rf, revit_version, &declared),
     ) else {
         return;
     };
@@ -884,7 +896,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         } else {
             [-dy, dx]
         };
-        let bands = layer_bands_field(type_layers, &appearances);
+        let bands = layer_bands_field(type_layers, &appearances, &names);
         if matches!(&bands, InstanceField::Vector(items) if items.is_empty()) {
             continue;
         }
@@ -2176,9 +2188,10 @@ fn attach_slab_layers(
     .iter()
     .map(|record| record.element_id)
     .collect();
-    let (Ok(layers), Ok(appearances)) = (
+    let (Ok(layers), Ok(appearances), Ok(names)) = (
         pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
         crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
+        crate::partition_materials::scan_material_names(rf, revit_version, &declared),
     ) else {
         return;
     };
@@ -2194,7 +2207,7 @@ fn attach_slab_layers(
         if !height.is_some_and(|h| (h - total).abs() <= SLAB_LAYER_HEIGHT_TOLERANCE_FEET) {
             continue;
         }
-        let bands = layer_bands_field(type_layers, &appearances);
+        let bands = layer_bands_field(type_layers, &appearances, &names);
         if matches!(&bands, InstanceField::Vector(items) if !items.is_empty()) {
             element.fields.push((SLAB_LAYERS_FIELD.into(), bands));
         }

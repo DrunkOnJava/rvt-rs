@@ -8,6 +8,30 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Material names, and layer sets in the IFC export (RE-58).** A
+  material's name is now read from its own data, by ElementId:
+  - 219 of Snowdon Towers' 220 materials and 78 of Core Interior's 86;
+  - every material of RE1 Architecture, Projeto1, teste_export_2025 and
+    the Autodesk tutorial house, saved in 2024 and in 2025.
+
+  Every one that Revit's own export styles by name has Revit's colour for
+  it, 174 of 174.
+  - The IFC export writes the layers of walls, floors, roofs and ceilings
+    as an `IfcMaterialLayerSetUsage` over an `IfcMaterialLayerSet`, each
+    layer with its material and thickness.
+  - Against Revit's own exports, the layer names are Revit's, in Revit's
+    order, on 3,321 of Snowdon's 3,322 layers and on all of Core
+    Interior's and RE1's.
+  - The sets sit on Revit's bodies within 0.001 ft on 1,196 of 1,207
+    Snowdon elements, 88 of 88 on Core Interior and 15 of 15 on RE1. The
+    11 Snowdon exceptions are soffit walls whose stud layer Revit cuts
+    back.
+  - RE1's 2025 export writes layer sets of its own, and rvt-rs writes the
+    same four, with the same thicknesses in the same order.
+  - Selecting a wall, floor, roof or ceiling in the viewer lists its
+    layers, exterior or top first, each with its material and thickness.
+  - `tools/re/layer_sets_vs_ifc.py` scores the layer sets, and
+    `examples/probe_re58_material_names.rs` lists a file's material names.
 - **Floors, roofs and ceilings are drawn as their layers (RE-57).** In the
   glTF export and the viewer, a Revit 2024 or 2025 floor, building pad, flat
   roof or ceiling is now its type's layers, stacked top first in their
@@ -69,8 +93,8 @@ All notable changes will be documented here. This project follows
     Snowdon, mostly soffit wraps and profiled walls) is drawn whole.
   - Floors, roofs and ceilings: their layers are read but not drawn. Revit
     2025 walls are not drawn in layers, because their location lines are
-    not read. The IFC export writes no layer sets until material names are
-    read (#355).
+    not read. (RE-55 and RE-57 draw them, and RE-58 writes the layers into
+    the IFC export.)
   - The viewer's File status reports the walls whose layers are read under
     Materials, and the export diagnostics carry the count as
     `exported.layered_element_count`.

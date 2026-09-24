@@ -79,11 +79,19 @@ use rvt::ifc::scene_graph::{
     `IFCBUILDINGSTOREY` scene node, so the viewer can jump to it.
   - `material: Option<PanelMaterial { index, name, element_count }>`
     resolves `material_index` and counts the elements sharing it.
+  - `layers: Option<PanelLayers { name, order, rows, total }>`
+    is the element's material layer set (RE-58): `rows` are
+    `PanelRow { label, value }` pairs of material name (or
+    `Material not read`) and thickness in feet, in the set's order;
+    `order` says which side comes first (`exterior first` for a wall,
+    `top first` for a floor, roof or ceiling); `total` adds them up.
   - `property_group: Option<PanelPropertyGroup { name, properties }>`
-  - `further_property_groups: Vec<PanelPropertyGroup>`: the element's standard property sets beside its own, such as `Pset_StairCommon` (RE-47); empty when there are none
     is the element's property set as one titled group of
     `PanelProperty { name, value, kind, numeric }` rows — values
     carry their unit, booleans read as `Yes` / `No`.
+  - `further_property_groups: Vec<PanelPropertyGroup>`: the element's
+    standard property sets beside its own, such as `Pset_StairCommon`
+    (RE-47); empty when there are none.
   - `placement_rows` / `extent_rows` are `PanelRow { label, value }`
     lists in feet (location X/Y/Z, rotation in degrees, extrusion
     width/depth/height plus the profile shape).
