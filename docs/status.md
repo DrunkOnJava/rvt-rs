@@ -418,6 +418,10 @@ Compound Ceiling, Basic Roof or Pad by its category. The names equal
 Revit's on all 1,210 Snowdon elements and on every Core Interior and
 RE1 element
 (`reports/element-framing/RE-61-system-family-names.md`).
+**RE-62 (2026-09-24)** gives a curtain-wall part whose record names no
+wall the curtain wall whose record box contains it. That is Revit's parent
+for all 89 such mullions on Snowdon
+(`reports/element-framing/RE-62-curtain-part-containment.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

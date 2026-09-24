@@ -1265,6 +1265,12 @@ fn attach_beam_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [Deco
 /// Architecture the one; no other wall is named by a mullion. Walls named
 /// only by a panel are basic walls used as a panel's infill, which Revit
 /// exports as `IfcWall`, so a panel alone does not make a curtain wall.
+///
+/// Some parts name no wall at all, only their sibling mullions: on Snowdon,
+/// the mullions of the "Solar Panels" curtain walls. Such a part takes the
+/// one curtain wall whose record box contains its own (RE-62). That is
+/// Revit's parent for all 89 such mullions and the 3 such panels that
+/// Revit's export aggregates.
 fn attach_curtain_walls(
     rf: &mut RevitFile,
     walls: &mut [DecodedElement],
@@ -1301,6 +1307,13 @@ fn attach_curtain_walls(
             wall.class = CURTAIN_WALL_CLASS.into();
         }
     }
+    // RE-62: the record boxes of the curtain walls, for parts whose record
+    // names none.
+    let wall_boxes: Vec<(u32, [f64; 6])> = walls
+        .iter()
+        .filter_map(|wall| Some((wall.id?, element_record_bbox(wall)?)))
+        .filter(|(id, _)| curtain_walls.contains(id))
+        .collect();
     for (product, list) in products.iter_mut().zip(references) {
         let Some(list) = list else {
             continue;
@@ -1310,14 +1323,38 @@ fn attach_curtain_walls(
             .filter_map(|&id| u32::try_from(id).ok())
             .filter(|id| curtain_walls.contains(id) && Some(*id) != product.id)
             .collect();
-        if named.len() == 1 {
-            let whole = *named.iter().next().expect("one curtain wall");
+        let whole = match named.len() {
+            1 => named.iter().next().copied(),
+            0 => element_record_bbox(product).and_then(|part| {
+                let mut inside = wall_boxes
+                    .iter()
+                    .filter(|(_, wall)| box_contains(wall, &part, CURTAIN_PART_BOX_TOLERANCE_FEET))
+                    .map(|(id, _)| *id);
+                let first = inside.next()?;
+                inside.next().is_none().then_some(first)
+            }),
+            _ => None,
+        };
+        if let Some(whole) = whole {
             product.fields.push((
                 AGGREGATE_WHOLE_FIELD.into(),
                 InstanceField::ElementId { tag: 0, id: whole },
             ));
         }
     }
+}
+
+/// How far past a curtain wall's record box a part's box may reach and
+/// still lie inside it (RE-62): 0.05 ft places every measured part, and
+/// 0.01 ft misses mullions whose profile reaches past the wall's box.
+const CURTAIN_PART_BOX_TOLERANCE_FEET: f64 = 0.05;
+
+/// `inner` lies inside `outer`, both `[min x, min y, min z, max x, max y,
+/// max z]`, within `tolerance` on every side.
+fn box_contains(outer: &[f64; 6], inner: &[f64; 6], tolerance: f64) -> bool {
+    (0..3).all(|axis| {
+        inner[axis] >= outer[axis] - tolerance && inner[axis + 3] <= outer[axis + 3] + tolerance
+    })
 }
 
 /// Placed instances of every

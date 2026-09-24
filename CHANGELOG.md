@@ -8,6 +8,11 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Curtain-wall parts whose record names no wall join the curtain wall
+  that contains them (RE-62).** On Snowdon Towers, the mullions of the
+  "Solar Panels" curtain walls name only one another. Each now takes the
+  one curtain wall whose record box contains it, which is Revit's parent
+  for all 89 of them. Parts with Revit's parent rise from 1,967 to 2,057.
 - **Highlight a layer's material from the element panel.** Each layer
   row of a selected wall, floor, roof or ceiling is a toggle: it lights
   up every element using that material, directly or as one of its layers.
