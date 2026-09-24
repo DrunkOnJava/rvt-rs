@@ -463,6 +463,178 @@ pub fn scan_run_types(
     Ok(settled(out))
 }
 
+/// Stair types, landing types and support types are serialised as run
+/// types are (RE-52): `01 00 00 00 · u64 id`, with [`RUN_TYPE_OBJECT_TAG`]
+/// at [`RUN_TYPE_TAG_OFFSET`]. Each kind keeps its system family and name
+/// at its own offsets from the id (RE-65, Revit 2024, Snowdon Towers).
+///
+/// A stair type's construction, `u32`: 0 on the types of all 23 stairs
+/// Revit's export names Assembled Stair, 1 on all 3 it names Cast-In-Place
+/// Stair. 2 is on the type named "Precast Stair", which no stair uses.
+pub const STAIR_TYPE_CONSTRUCTION_OFFSET: usize = 0x129;
+/// A stair type's component types: seven `u64` ElementId slots, 8 bytes
+/// apart, unset as all ones. On Snowdon's stair types the first is the run
+/// type, the second the landing type and the rest support types (two side
+/// stringers, then carriages).
+pub const STAIR_TYPE_COMPONENTS_OFFSET: usize = 0xc9;
+/// How many slots [`STAIR_TYPE_COMPONENTS_OFFSET`] holds.
+pub const STAIR_TYPE_COMPONENT_SLOTS: usize = 7;
+/// A stair type's parameter entries: `u32` count, then per entry an `i64`
+/// BuiltInParameter and a string (`u32` length, UTF-16), such as the
+/// Uniformat description "Interiors". The type's name follows them.
+pub const STAIR_TYPE_PARAMETERS_OFFSET: usize = 0x13f;
+/// A landing type's one-byte flag: 0 on the one type Snowdon's landings use,
+/// which Revit names Non-Monolithic Landing, 1 on two unused types.
+pub const LANDING_TYPE_MONOLITHIC_OFFSET: usize = 0x95;
+/// A landing type's name, `u32` length and UTF-16.
+pub const LANDING_TYPE_NAME_OFFSET: usize = 0x98;
+/// A support type's one-byte flag: 0 on the two types Revit names Stringer,
+/// 1 on the two it names Carriage.
+pub const SUPPORT_TYPE_CARRIAGE_OFFSET: usize = 0x89;
+/// A support type's name, `u32` length and UTF-16.
+pub const SUPPORT_TYPE_NAME_OFFSET: usize = 0x92;
+
+/// The kinds of stair component type [`component_type_at`] reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComponentKind {
+    /// A stair's own type (`OST_Stairs`).
+    Stair,
+    /// A landing's type (`OST_StairsLandings`).
+    Landing,
+    /// A stringer's or carriage's type (`OST_StairsStringerCarriage`).
+    Support,
+}
+
+/// A stair, landing or support type's system family and name (RE-65).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentType {
+    /// Revit's system family for the type, where the type's flag has a
+    /// value measured against Revit's own export; `None` otherwise.
+    pub family: Option<&'static str>,
+    /// The type's name.
+    pub name: String,
+    /// A stair type's run, landing and support types
+    /// ([`STAIR_TYPE_COMPONENTS_OFFSET`]); empty for other kinds.
+    pub components: BTreeSet<u32>,
+}
+
+fn type_name_text(name: String) -> Option<String> {
+    (!name.trim().is_empty() && !name.chars().any(char::is_control)).then_some(name)
+}
+
+/// A stair type's name: the string after its parameter entries.
+fn stair_type_name(buf: &[u8], at: usize) -> Option<String> {
+    let count = read_u32(buf, at)?;
+    if count > 16 {
+        return None;
+    }
+    let mut at = at + 4;
+    for _ in 0..count {
+        let parameter = i64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?);
+        if parameter >= 0 {
+            return None;
+        }
+        let length = usize::try_from(read_u32(buf, at + 8)?).ok()?;
+        if length > 256 {
+            return None;
+        }
+        at += 12 + 2 * length;
+    }
+    utf16_at(buf, at)
+}
+
+/// The stair component type of `kind` whose ElementId starts at `id_at`, or
+/// `None` when the tag is missing, a flag has a value not seen or the name
+/// does not read.
+pub fn component_type_at(buf: &[u8], id_at: usize, kind: ComponentKind) -> Option<ComponentType> {
+    let tag_at = id_at.checked_add(RUN_TYPE_TAG_OFFSET)?;
+    if buf.get(tag_at..tag_at + RUN_TYPE_OBJECT_TAG.len())? != RUN_TYPE_OBJECT_TAG {
+        return None;
+    }
+    let mut components = BTreeSet::new();
+    let (family, name) = match kind {
+        ComponentKind::Stair => {
+            // Every slot is an ElementId or unset. Type 54873 (on Snowdon and
+            // on the MIT house, whose stair has no runs, landings or
+            // supports) holds f64 values there instead, and is not read.
+            for slot in 0..STAIR_TYPE_COMPONENT_SLOTS {
+                let at = id_at + STAIR_TYPE_COMPONENTS_OFFSET + 8 * slot;
+                let id = u64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?);
+                if id == u64::MAX {
+                    continue;
+                }
+                components.insert(u32::try_from(id).ok()?);
+            }
+            let family = match read_u32(buf, id_at + STAIR_TYPE_CONSTRUCTION_OFFSET)? {
+                0 => Some("Assembled Stair"),
+                1 => Some("Cast-In-Place Stair"),
+                2 => None,
+                _ => return None,
+            };
+            (
+                family,
+                stair_type_name(buf, id_at + STAIR_TYPE_PARAMETERS_OFFSET)?,
+            )
+        }
+        ComponentKind::Landing => {
+            let family = if flag(buf, id_at + LANDING_TYPE_MONOLITHIC_OFFSET)? {
+                None
+            } else {
+                Some("Non-Monolithic Landing")
+            };
+            (family, utf16_at(buf, id_at + LANDING_TYPE_NAME_OFFSET)?)
+        }
+        ComponentKind::Support => {
+            let family = if flag(buf, id_at + SUPPORT_TYPE_CARRIAGE_OFFSET)? {
+                "Carriage"
+            } else {
+                "Stringer"
+            };
+            (
+                Some(family),
+                utf16_at(buf, id_at + SUPPORT_TYPE_NAME_OFFSET)?,
+            )
+        }
+    };
+    Some(ComponentType {
+        family,
+        name: type_name_text(name)?,
+        components,
+    })
+}
+
+/// Each stair component type of `kind` in `ids`, read from every
+/// partition. A type whose copies disagree is dropped; the map is empty for
+/// a release this layout is not measured on.
+pub fn scan_component_types(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    kind: ComponentKind,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, ComponentType>> {
+    let mut out: BTreeMap<u32, Option<ComponentType>> = BTreeMap::new();
+    if !supports_revit_version(revit_version) || ids.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for &id in ids {
+            let mut pattern = [0u8; 12];
+            pattern[0] = 1;
+            pattern[4..].copy_from_slice(&u64::from(id).to_le_bytes());
+            for at in memchr::memmem::find_iter(buf, &pattern) {
+                if let Some(found) = component_type_at(buf, at + 4, kind) {
+                    merge(&mut out, id, found);
+                }
+            }
+        }
+    }
+    Ok(settled(out))
+}
+
 /// Every bounded line in the data of each run in `runs`, in data order,
 /// where every copy of the data holds the same lines. Empty for a release
 /// this layout is not measured on.

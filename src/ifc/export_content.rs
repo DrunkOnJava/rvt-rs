@@ -248,12 +248,22 @@ pub fn append_typed_production_elements(
             })
             .or(effective.predefined_type);
 
-        let name = match (decoded.id, family_and_type(&decoded)) {
+        // RE-65: a stair and its parts carry the name Revit gives them.
+        let own_name = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(text)
+                if name == crate::partition_schema_mvp::ELEMENT_NAME_FIELD =>
+            {
+                Some(text.clone())
+            }
+            _ => None,
+        });
+        let name = match (own_name, decoded.id, family_and_type(&decoded)) {
+            (Some(name), _, _) => name,
             // RE-38: `Family:Type:ElementId`, the name Revit's own export
             // gives the element.
-            (Some(id), Some((family, type_name))) => format!("{family}:{type_name}:{id}"),
-            (Some(id), None) => format!("{}-{}", decoded.class, id),
-            (None, _) => format!("{}-unnamed", decoded.class),
+            (None, Some(id), Some((family, type_name))) => format!("{family}:{type_name}:{id}"),
+            (None, Some(id), None) => format!("{}-{}", decoded.class, id),
+            (None, None, _) => format!("{}-unnamed", decoded.class),
         };
         let type_guid = decoded.id.map(|id| id.to_string());
 
