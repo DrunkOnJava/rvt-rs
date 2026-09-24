@@ -1533,6 +1533,14 @@ pub const WALL_JOIN_LAYER_REACH_FIELDS: [&str; 2] = [
     "m_wall_join_start_layer_reaches",
     "m_wall_join_end_layer_reaches",
 ];
+/// Fields holding, at an angled join, how far past the start and the end of
+/// its centreline each of a wall's layers reaches along its exterior-side
+/// and its interior-side edge, exterior first, two values per layer, feet
+/// (RE-74).
+pub const WALL_JOIN_LAYER_EDGE_REACH_FIELDS: [&str; 2] = [
+    "m_wall_join_start_layer_edge_reaches",
+    "m_wall_join_end_layer_edge_reaches",
+];
 /// Fields holding whether a wall runs through that join (true) or stops at
 /// it (false) (RE-70).
 pub const WALL_JOIN_THROUGH_FIELDS: [&str; 2] =
@@ -1579,14 +1587,17 @@ pub struct WallLayerEnds {
     pub exterior: [f64; 2],
     /// The layers' widths, exterior first, feet.
     pub widths: Vec<f64>,
-    /// How far past its start and its end each layer reaches, exterior
-    /// first, where a layered join decides it.
-    pub reach_feet: [Option<Vec<f64>>; 2],
+    /// How far past its start and its end each layer reaches along its
+    /// exterior-side and its interior-side edge, exterior first, where a
+    /// layered or angled join decides it. The two are equal where the end
+    /// is square.
+    pub reach_feet: [Option<Vec<[f64; 2]>>; 2],
 }
 
-/// The [`WALL_JOIN_LAYER_REACH_FIELDS`] a wall carries, with its layers'
-/// widths and exterior side. `None` without a layered join at either end,
-/// or where a reach list does not match the layers.
+/// The [`WALL_JOIN_LAYER_EDGE_REACH_FIELDS`] or
+/// [`WALL_JOIN_LAYER_REACH_FIELDS`] a wall carries, with its layers' widths
+/// and exterior side. `None` without a layered or angled join at either
+/// end, or where a reach list does not match the layers.
 pub fn wall_layer_ends_from_fields(fields: &[(String, InstanceField)]) -> Option<WallLayerEnds> {
     let floats = |wanted: &str| {
         fields.iter().find_map(|(name, value)| match value {
@@ -1600,8 +1611,9 @@ pub fn wall_layer_ends_from_fields(fields: &[(String, InstanceField)]) -> Option
             _ => None,
         })
     };
-    let reach_feet = WALL_JOIN_LAYER_REACH_FIELDS.map(floats);
-    if reach_feet.iter().all(Option::is_none) {
+    let square = WALL_JOIN_LAYER_REACH_FIELDS.map(floats);
+    let slanted = WALL_JOIN_LAYER_EDGE_REACH_FIELDS.map(floats);
+    if square.iter().chain(&slanted).all(Option::is_none) {
         return None;
     }
     let widths: Vec<f64> = fields
@@ -1613,13 +1625,23 @@ pub fn wall_layer_ends_from_fields(fields: &[(String, InstanceField)]) -> Option
         .iter()
         .map(|band| band.width_feet)
         .collect();
-    if reach_feet
+    if square
         .iter()
         .flatten()
         .any(|reach| reach.len() != widths.len())
+        || slanted
+            .iter()
+            .flatten()
+            .any(|reach| reach.len() != 2 * widths.len())
     {
         return None;
     }
+    let [start, end] = [0, 1].map(|slot| match (&slanted[slot], &square[slot]) {
+        (Some(edges), _) => Some(edges.chunks(2).map(|pair| [pair[0], pair[1]]).collect()),
+        (None, Some(reaches)) => Some(reaches.iter().map(|reach| [*reach, *reach]).collect()),
+        (None, None) => None,
+    });
+    let reach_feet = [start, end];
     let float = |wanted: &str| {
         fields.iter().find_map(|(name, value)| match value {
             InstanceField::Float { value, .. } if name == wanted => Some(*value),
@@ -2065,6 +2087,21 @@ fn attach_wall_butt_joins(
                         value: reach,
                         size: 8,
                     },
+                ));
+            }
+            if let Some(edges) = &join.layer_edge_reach_feet {
+                wall.fields.push((
+                    WALL_JOIN_LAYER_EDGE_REACH_FIELDS[slot].into(),
+                    InstanceField::Vector(
+                        edges
+                            .iter()
+                            .flatten()
+                            .map(|value| InstanceField::Float {
+                                value: *value,
+                                size: 8,
+                            })
+                            .collect(),
+                    ),
                 ));
             }
             if let Some(reaches) = &join.layer_reach_feet {

@@ -502,6 +502,13 @@ joints as a clean stop at the face, which nothing read predicts, and 13
 Snowdon walls lose an end they had. Against RE1's export, which writes each
 wall as one rectangle, 3 of its 7 do
 (`reports/element-framing/RE-73-wall-tee-joins.md`).
+**RE-74 (2026-09-24)** ends walls that meet at an angle on slanted lines:
+RE-70's, RE-71's and RE-73's joins apply at 45 to 135 degrees, each layer
+ending where its two edges meet the other wall's line. On Snowdon Towers
+34 of 102 angled walls have both of Revit's ends (18 before) and 689 of 976
+axis-parallel walls (675). Every angled L join drawn is right along every
+layer edge, and 18 of 22 angled T joints; one wall gets worse
+(`reports/element-framing/RE-74-angled-wall-joins.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

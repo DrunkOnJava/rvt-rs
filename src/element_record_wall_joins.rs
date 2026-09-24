@@ -312,6 +312,12 @@ pub fn join_trims(records: &[PartitionElementRecord]) -> BTreeMap<u32, WallJoinT
 /// within `1e-12`.
 pub const PERPENDICULAR_EPS: f64 = 1e-6;
 
+/// The largest `|cos|` of the angle between two walls at which an angled
+/// join is read: 45 to 135 degrees. On Snowdon Towers Revit butt-joins walls
+/// whose corner is 82.5 to 114.5 degrees, and none of the 14 ends at sharper
+/// corners (7.5 and 24.5 degrees) or shallower bends (148 to 172.5 degrees).
+pub const ANGLED_JOIN_MAX_COSINE: f64 = std::f64::consts::FRAC_1_SQRT_2;
+
 /// A wall's centreline, its type's thickness and layers, its exterior side
 /// and its elevation range, which is what [`butt_joins`] reads.
 #[derive(Debug, Clone, PartialEq)]
@@ -354,6 +360,11 @@ pub struct ButtJoin {
     /// where both walls are layered alike (RE-71) or where this wall is
     /// layered and stops at a T joint (RE-73). `None` otherwise.
     pub layer_reach_feet: Option<Vec<f64>>,
+    /// Where the two walls meet at an angle, how far past the line's end
+    /// each layer reaches along its exterior-side and its interior-side
+    /// edge, exterior first: its end is a slanted line (RE-74). A
+    /// single-layer wall has one pair, its two faces. `None` otherwise.
+    pub layer_edge_reach_feet: Option<Vec<[f64; 2]>>,
 }
 
 /// The butt join at each end of each wall, keyed by ElementId,
@@ -384,6 +395,10 @@ pub struct ButtJoin {
 ///
 /// An end no other wall's centreline ends at is read as a T joint where it
 /// lies part way along another wall's centreline ([`tee_join`], RE-73).
+///
+/// Two walls that meet at 45 to 135 degrees, rather than at a right angle,
+/// are read the same way, and their ends slant along the other
+/// wall's lines ([`angled_layer_edges`], [`angled_tee_edges`], RE-74).
 pub fn butt_joins(
     walls: &[WallLine],
     partners: &BTreeMap<u32, BTreeSet<u32>>,
@@ -442,7 +457,7 @@ pub fn butt_joins(
             let cosine = (along[0] * (other.end[0] - other.start[0])
                 + along[1] * (other.end[1] - other.start[1]))
                 / other_run;
-            if cosine.abs() > PERPENDICULAR_EPS {
+            if cosine.abs() > PERPENDICULAR_EPS && cosine.abs() > ANGLED_JOIN_MAX_COSINE {
                 continue;
             }
             let runs_through = match (names(wall, other), names(other, wall)) {
@@ -450,6 +465,22 @@ pub fn butt_joins(
                 (false, true) => false,
                 _ => continue,
             };
+            if cosine.abs() > PERPENDICULAR_EPS {
+                joins[slot] = Some(ButtJoin {
+                    partner: other.element_id,
+                    runs_through,
+                    reach_feet: None,
+                    layer_reach_feet: None,
+                    layer_edge_reach_feet: angled_layer_edges(
+                        wall,
+                        other,
+                        point,
+                        into,
+                        runs_through,
+                    ),
+                });
+                continue;
+            }
             let half = other.thickness_feet * 0.5;
             let single = wall.layers.len() == 1 && other.layers.len() == 1;
             joins[slot] = Some(ButtJoin {
@@ -457,6 +488,7 @@ pub fn butt_joins(
                 runs_through,
                 reach_feet: single.then_some(if runs_through { half } else { -half }),
                 layer_reach_feet: layer_reaches(wall, other, point, into, runs_through),
+                layer_edge_reach_feet: None,
             });
         }
         if joins.iter().any(Option::is_some) {
@@ -482,8 +514,9 @@ pub fn butt_joins(
 /// clean stop at the face, as it does at all three on RE1 (Revit 2025).
 ///
 /// `None` unless exactly one other wall overlapping it in elevation has
-/// `point` on its centreline, perpendicular to `wall`, far enough from its
-/// ends that all of `wall`'s width meets its side. Where the other wall ends
+/// `point` on its centreline, at 45 to 135 degrees to `wall` (a slanted
+/// end below a right angle, [`angled_tee_edges`]), far enough from its ends
+/// that all of `wall`'s width meets its side. Where the other wall ends
 /// within that width, Revit stops `wall` at the other wall's face or does
 /// not join the two at all (Core Interior's 8), so it is left alone.
 pub fn tee_join(
@@ -509,7 +542,12 @@ pub fn tee_join(
             let offset = [point[0] - other.start[0], point[1] - other.start[1]];
             let at = dot(offset, axis);
             let across = dot(offset, [-axis[1], axis[0]]);
-            let clear = wall.thickness_feet * 0.5 - JOIN_EPS_FEET;
+            // At an angle the wall's width meets more of the other's side.
+            let sine = (1.0 - dot(into, axis).powi(2)).max(0.0).sqrt();
+            if sine <= 0.0 {
+                return false;
+            }
+            let clear = wall.thickness_feet * 0.5 / sine - JOIN_EPS_FEET;
             at > clear && at < run - clear && across.abs() <= JOIN_EPS_FEET
         })
         .collect();
@@ -524,8 +562,17 @@ pub fn tee_join(
             (host.end[1] - host.start[1]) / run,
         ],
     );
-    if cosine.abs() > PERPENDICULAR_EPS || wall.layers.is_empty() || host.layers.is_empty() {
+    if cosine.abs() > ANGLED_JOIN_MAX_COSINE || wall.layers.is_empty() || host.layers.is_empty() {
         return None;
+    }
+    if cosine.abs() > PERPENDICULAR_EPS {
+        return Some(ButtJoin {
+            partner: host.element_id,
+            runs_through: false,
+            reach_feet: None,
+            layer_reach_feet: None,
+            layer_edge_reach_feet: Some(angled_tee_edges(wall, host, point, into)?),
+        });
     }
     let half = host.thickness_feet * 0.5;
     if wall.layers.len() == 1 {
@@ -534,6 +581,7 @@ pub fn tee_join(
             runs_through: false,
             reach_feet: Some(-half),
             layer_reach_feet: None,
+            layer_edge_reach_feet: None,
         });
     }
     // The host's layers from the face `wall` meets: its exterior faces
@@ -560,7 +608,194 @@ pub fn tee_join(
         runs_through: false,
         reach_feet: None,
         layer_reach_feet: Some(reaches),
+        layer_edge_reach_feet: None,
     })
+}
+
+/// Where the line through `from` along `direction` meets the line through
+/// `on` along `along`, as a multiple of `direction`. `None` for parallel
+/// lines.
+fn meet(from: [f64; 2], direction: [f64; 2], on: [f64; 2], along: [f64; 2]) -> Option<f64> {
+    let cross = direction[0] * along[1] - direction[1] * along[0];
+    if cross.abs() < 1e-12 {
+        return None;
+    }
+    let gap = [on[0] - from[0], on[1] - from[1]];
+    Some((gap[0] * along[1] - gap[1] * along[0]) / cross)
+}
+
+/// How far past `point` each of `wall`'s layers reaches along its two edges,
+/// exterior first, where every edge of layer `i` stops on the line
+/// `targets[i]` (a point on it and its direction). `into` points from
+/// `point` along `wall`.
+fn edge_reaches(
+    wall: &WallLine,
+    point: [f64; 2],
+    into: [f64; 2],
+    targets: &[([f64; 2], [f64; 2])],
+) -> Option<Vec<[f64; 2]>> {
+    if targets.len() != wall.layers.len() {
+        return None;
+    }
+    let mut edge = wall.thickness_feet * 0.5;
+    let mut out = Vec::with_capacity(targets.len());
+    for ((width, _), (on, along)) in wall.layers.iter().zip(targets) {
+        let mut pair = [0.0; 2];
+        for (side, offset) in [edge, edge - width].into_iter().enumerate() {
+            let from = [
+                point[0] + wall.exterior[0] * offset,
+                point[1] + wall.exterior[1] * offset,
+            ];
+            let reach = -meet(from, into, *on, *along)?;
+            if !reach.is_finite() {
+                return None;
+            }
+            pair[side] = reach;
+        }
+        out.push(pair);
+        edge -= width;
+    }
+    Some(out)
+}
+
+/// The lines `other`'s layer boundaries lie on, from the face
+/// `side_normal` points out of: its offsets from `other`'s centreline along
+/// `side_normal`, with its layers in that order.
+fn boundaries_from(other: &WallLine, side_normal: [f64; 2]) -> (Vec<f64>, Vec<(f64, u32)>) {
+    let layers: Vec<(f64, u32)> =
+        if other.exterior[0] * side_normal[0] + other.exterior[1] * side_normal[1] > 0.0 {
+            other.layers.clone()
+        } else {
+            other.layers.iter().rev().copied().collect()
+        };
+    let mut at = other.thickness_feet * 0.5;
+    let mut offsets = vec![at];
+    for (width, _) in &layers {
+        at -= width;
+        offsets.push(at);
+    }
+    (offsets, layers)
+}
+
+/// The slanted end `wall` takes at an angled butt join with `other`, whose
+/// centreline ends at `point` too (RE-74). Each of its layers ends on one of
+/// `other`'s boundary lines, along both of its edges:
+/// - between single-layer walls, the wall that runs through reaches the
+///   other's far face and the other stops at its near face (RE-70);
+/// - between layered walls whose layers match from the outside of the
+///   corner and which share their base and top, layer `i` of the wall that
+///   runs through reaches the outer edge of the other's layer `i`, and
+///   layer `i` of the wall that stops, its inner edge (RE-71).
+///
+/// `into` points from `point` along `wall`. `None` for any other pair.
+pub fn angled_layer_edges(
+    wall: &WallLine,
+    other: &WallLine,
+    point: [f64; 2],
+    into: [f64; 2],
+    runs_through: bool,
+) -> Option<Vec<[f64; 2]>> {
+    let dot = |a: [f64; 2], b: [f64; 2]| a[0] * b[0] + a[1] * b[1];
+    let far = if (other.start[0] - point[0]).hypot(other.start[1] - point[1]) <= JOIN_EPS_FEET {
+        other.end
+    } else {
+        other.start
+    };
+    let run = (far[0] - point[0]).hypot(far[1] - point[1]);
+    if !(run.is_finite() && run > 1e-9) {
+        return None;
+    }
+    let away = [(far[0] - point[0]) / run, (far[1] - point[1]) / run];
+    // Each wall's outer side faces away from the other wall.
+    let normal = [-away[1], away[0]];
+    let outer = if dot(normal, into) < 0.0 {
+        normal
+    } else {
+        [-normal[0], -normal[1]]
+    };
+    let (offsets, theirs) = boundaries_from(other, outer);
+    let line = |offset: f64| {
+        (
+            [point[0] + outer[0] * offset, point[1] + outer[1] * offset],
+            away,
+        )
+    };
+    let exterior_outside = dot(wall.exterior, away) < 0.0;
+    let targets: Vec<([f64; 2], [f64; 2])> = if wall.layers.len() == 1 && other.layers.len() == 1 {
+        vec![line(if runs_through { offsets[0] } else { offsets[1] })]
+    } else {
+        if wall.layers.len() < 2
+            || other.layers.len() != wall.layers.len()
+            || (wall.base_feet - other.base_feet).abs() > LAYER_JOIN_HEIGHT_EPS_FEET
+            || (wall.top_feet - other.top_feet).abs() > LAYER_JOIN_HEIGHT_EPS_FEET
+        {
+            return None;
+        }
+        let ours: Vec<u32> = if exterior_outside {
+            wall.layers.iter().map(|(_, f)| *f).collect()
+        } else {
+            wall.layers.iter().rev().map(|(_, f)| *f).collect()
+        };
+        let theirs: Vec<u32> = theirs.iter().map(|(_, f)| *f).collect();
+        if ours != theirs {
+            return None;
+        }
+        let from_corner: Vec<([f64; 2], [f64; 2])> = (0..wall.layers.len())
+            .map(|rank| line(offsets[if runs_through { rank } else { rank + 1 }]))
+            .collect();
+        if exterior_outside {
+            from_corner
+        } else {
+            from_corner.into_iter().rev().collect()
+        }
+    };
+    edge_reaches(wall, point, into, &targets)
+}
+
+/// The slanted end `wall` takes where it stops against `host` at an angled
+/// T joint (RE-74): each of its layers ends, along both of its edges, on
+/// the host boundary line RE-73's layer priorities give, counted from the
+/// face it meets. A single-layer wall stops at that face.
+pub fn angled_tee_edges(
+    wall: &WallLine,
+    host: &WallLine,
+    point: [f64; 2],
+    into: [f64; 2],
+) -> Option<Vec<[f64; 2]>> {
+    let run = (host.end[0] - host.start[0]).hypot(host.end[1] - host.start[1]);
+    let axis = [
+        (host.end[0] - host.start[0]) / run,
+        (host.end[1] - host.start[1]) / run,
+    ];
+    let normal = [-axis[1], axis[0]];
+    let near = if normal[0] * into[0] + normal[1] * into[1] > 0.0 {
+        normal
+    } else {
+        [-normal[0], -normal[1]]
+    };
+    let (offsets, near_first) = boundaries_from(host, near);
+    let targets: Vec<([f64; 2], [f64; 2])> = wall
+        .layers
+        .iter()
+        .map(|(_, function)| {
+            let passed = if wall.layers.len() == 1 {
+                0
+            } else {
+                near_first
+                    .iter()
+                    .take_while(|(_, other)| other > function)
+                    .count()
+            };
+            (
+                [
+                    point[0] + near[0] * offsets[passed],
+                    point[1] + near[1] * offsets[passed],
+                ],
+                axis,
+            )
+        })
+        .collect();
+    edge_reaches(wall, point, into, &targets)
 }
 
 /// How far past the joint `point` each of `wall`'s layers reaches, exterior

@@ -19,8 +19,9 @@
 //!   width left out);
 //! - `ends`, at the start and the end, the wall it joins, whether it runs
 //!   through, and how far past the centreline's end its body (`reach`) or
-//!   each of its layers (`layer_reaches`, exterior first) reaches, feet, or
-//!   `null` where no join is decided;
+//!   each of its layers reaches, feet: `layer_reaches`, exterior first, one
+//!   pair per layer for its exterior-side and interior-side edge (equal
+//!   where the end is square, RE-74). `null` where no join is decided;
 //! - `box`, the wall's element-record box.
 //!
 //! Usage:
@@ -130,7 +131,10 @@ fn main() -> rvt::Result<()> {
                 .as_ref()
                 .and_then(|ends| ends.reach_feet[slot].as_ref())
                 .map_or("null".to_owned(), |reaches| {
-                    let items: Vec<String> = reaches.iter().map(f64::to_string).collect();
+                    let items: Vec<String> = reaches
+                        .iter()
+                        .map(|[outer, inner]| format!("[{outer},{inner}]"))
+                        .collect();
                     format!("[{}]", items.join(","))
                 });
             let _ = write!(
