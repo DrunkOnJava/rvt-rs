@@ -288,6 +288,8 @@ pub fn recover_partition_schema_mvp(
         revit_version,
         &mut [&mut out.walls, &mut out.slabs, &mut out.products],
     );
+    // --- Stairs and their parts named as Revit names them (RE-65) ---
+    attach_stair_names(rf, revit_version, &mut out.products);
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -663,7 +665,9 @@ fn record_references(rf: &mut RevitFile, element: &DecodedElement) -> Option<(Ve
 /// reference list names (#323). On Snowdon Towers every run, landing and
 /// stringer Revit aggregates under a stair, but one stringer, names that
 /// stair in its reference list. A part that names none, or more than one,
-/// stays a standalone element.
+/// stays a standalone element here; [`attach_stair_names`] joins one that
+/// names several when exactly one of them has a type listing the part's
+/// type (RE-65).
 fn attach_aggregate_wholes(rf: &mut RevitFile, products: &mut [DecodedElement]) {
     let stairs: BTreeSet<u32> = products
         .iter()
@@ -692,6 +696,334 @@ fn attach_aggregate_wholes(rf: &mut RevitFile, products: &mut [DecodedElement]) 
                 InstanceField::ElementId { tag: 0, id: whole },
             ));
         }
+    }
+}
+
+/// Field holding an element's IFC `Name` where Revit's export does not name
+/// it `Family:Type:ElementId`: a stair and its parts (RE-65).
+pub const ELEMENT_NAME_FIELD: &str = "m_element_name";
+
+/// Value of [`FAMILY_NAME_SOURCE_FIELD`] for a stair component's family,
+/// read from its type's construction flag (RE-65).
+pub const TYPE_KIND_FAMILY_SOURCE: &str = "system_family_by_type_kind";
+
+/// The word Revit's export puts before a stair part's number (RE-65).
+fn stair_part_word(class: &str) -> Option<&'static str> {
+    match class {
+        "StairsRun" => Some("Run"),
+        "StairsLanding" => Some("Landing"),
+        "StairsStringer" => Some("Stringer"),
+        _ => None,
+    }
+}
+
+/// Name stairs and their parts as Revit's export names them (RE-65).
+///
+/// - A stair's system family is its type's construction (Assembled or
+///   Cast-In-Place Stair), and Revit names the stair `Family:Stair:ElementId`.
+/// - A run's family is Monolithic or Non-Monolithic Run, by its run type's
+///   monolithic flag (RE-52); a landing's is Non-Monolithic Landing; a
+///   stringer's or carriage's is Stringer or Carriage
+///   ([`crate::partition_stairs::component_type_at`]). With the type's name
+///   these give the part's `ObjectType`.
+/// - A part is named after its stair, `<stair> Run 2`, numbered in ElementId
+///   order among every record of its category that names the stair,
+///   exported or not.
+///
+/// A stair type lists its run, landing and support types
+/// ([`crate::partition_stairs::STAIR_TYPE_COMPONENTS_OFFSET`]). When a
+/// part's reference list names several types of its category, or several
+/// stairs, the one pair its stair's type lists decides both, and the part
+/// joins that stair (#323).
+///
+/// Measured on Snowdon Towers only (Revit 2024): the other oracles have no
+/// stairs.
+fn attach_stair_names(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_element_records as per;
+    use crate::partition_stairs as ps;
+    use crate::partition_type_records as ptr;
+    use std::collections::BTreeMap;
+    if !ps::supports_revit_version(revit_version) || !ptr::supports_revit_version(revit_version) {
+        return;
+    }
+    let has = |element: &DecodedElement, field: &str| {
+        element.fields.iter().any(|(name, _)| name == field)
+    };
+    let id_field = |element: &DecodedElement, field: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == field => Some(*id),
+            _ => None,
+        })
+    };
+    if !products.iter().any(|element| element.class == "Stair") {
+        return;
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let type_ids = |rf: &mut RevitFile, category: i64| {
+        ptr::type_definition_ids(
+            &ptr::scan_type_records(rf, revit_version, category, &declared).unwrap_or_default(),
+        )
+    };
+    let named = |references: &[u64], set: &BTreeSet<u32>| -> BTreeSet<u32> {
+        references
+            .iter()
+            .filter_map(|&slot| u32::try_from(slot).ok())
+            .filter(|id| set.contains(id))
+            .collect()
+    };
+
+    // Stairs: their type, family and name.
+    let stair_type_ids = type_ids(rf, per::OST_STAIRS);
+    let mut stair_type_of: BTreeMap<u32, u32> = BTreeMap::new();
+    for element in products.iter() {
+        let (Some(id), "Stair") = (element.id, element.class.as_str()) else {
+            continue;
+        };
+        if let Some((references, _)) = record_references(rf, element) {
+            if let Some(type_id) = ptr::unique_type_reference(&references, &stair_type_ids) {
+                stair_type_of.insert(id, type_id);
+            }
+        }
+    }
+    let stair_types = ps::scan_component_types(
+        rf,
+        revit_version,
+        ps::ComponentKind::Stair,
+        &stair_type_of.values().copied().collect(),
+    )
+    .unwrap_or_default();
+    let stair_ids: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "Stair")
+        .filter_map(|element| element.id)
+        .collect();
+    let components_of = |stair: u32| {
+        stair_type_of
+            .get(&stair)
+            .and_then(|type_id| stair_types.get(type_id))
+            .map(|found| &found.components)
+    };
+
+    // Parts: their type, and their stair where the list names several.
+    let part_kinds = [
+        ("StairsRun", per::OST_STAIRS_RUNS, None),
+        (
+            "StairsLanding",
+            per::OST_STAIRS_LANDINGS,
+            Some(ps::ComponentKind::Landing),
+        ),
+        (
+            "StairsStringer",
+            per::OST_STAIRS_STRINGER_CARRIAGE,
+            Some(ps::ComponentKind::Support),
+        ),
+    ];
+    let mut part_type: BTreeMap<usize, u32> = BTreeMap::new();
+    let mut joins: Vec<(usize, u32)> = Vec::new();
+    for (class, category, _) in part_kinds {
+        let own_types = type_ids(rf, category);
+        for (index, element) in products.iter().enumerate() {
+            if element.class != class {
+                continue;
+            }
+            let Some((references, _)) = record_references(rf, element) else {
+                continue;
+            };
+            let candidates = match id_field(element, TYPE_ID_FIELD) {
+                Some(id) => BTreeSet::from([id]),
+                None => named(&references, &own_types),
+            };
+            let stairs: Vec<u32> = match id_field(element, AGGREGATE_WHOLE_FIELD) {
+                Some(stair) => vec![stair],
+                None => named(&references, &stair_ids)
+                    .into_iter()
+                    .filter(|id| Some(*id) != element.id)
+                    .collect(),
+            };
+            let pairs: Vec<(u32, u32)> = stairs
+                .iter()
+                .flat_map(|&stair| candidates.iter().map(move |&type_id| (stair, type_id)))
+                .filter(|(stair, type_id)| {
+                    components_of(*stair).is_some_and(|listed| listed.contains(type_id))
+                })
+                .collect();
+            let chosen_type = match (candidates.len(), pairs.as_slice()) {
+                (1, _) => candidates.iter().next().copied(),
+                (_, [(_, type_id)]) => Some(*type_id),
+                _ => None,
+            };
+            if let Some(type_id) = chosen_type {
+                part_type.insert(index, type_id);
+            }
+            if let ([_, _, ..], [(stair, _)]) = (stairs.as_slice(), pairs.as_slice()) {
+                joins.push((index, *stair));
+            }
+        }
+    }
+    for (index, stair) in joins {
+        products[index].fields.push((
+            AGGREGATE_WHOLE_FIELD.into(),
+            InstanceField::ElementId { tag: 0, id: stair },
+        ));
+    }
+
+    // Families and type names.
+    let mut found: BTreeMap<usize, (Option<&'static str>, Option<String>)> = BTreeMap::new();
+    for (index, element) in products.iter().enumerate() {
+        if let (Some(id), "Stair") = (element.id, element.class.as_str()) {
+            if let Some(stair_type) = stair_type_of.get(&id).and_then(|t| stair_types.get(t)) {
+                found.insert(index, (stair_type.family, Some(stair_type.name.clone())));
+            }
+        }
+    }
+    for (class, _, kind) in part_kinds {
+        let ids: BTreeSet<u32> = part_type
+            .iter()
+            .filter(|(index, _)| products[**index].class == class)
+            .map(|(_, id)| *id)
+            .collect();
+        let of_class = part_type
+            .iter()
+            .filter(|(index, _)| products[**index].class == class);
+        match kind {
+            Some(kind) => {
+                let types =
+                    ps::scan_component_types(rf, revit_version, kind, &ids).unwrap_or_default();
+                for (&index, type_id) in of_class {
+                    if let Some(read) = types.get(type_id) {
+                        found.insert(index, (read.family, Some(read.name.clone())));
+                    }
+                }
+            }
+            None => {
+                let types = ps::scan_run_types(rf, revit_version, &ids).unwrap_or_default();
+                for (&index, type_id) in of_class {
+                    if let Some(read) = types.get(type_id) {
+                        let family = if read.monolithic {
+                            "Monolithic Run"
+                        } else {
+                            "Non-Monolithic Run"
+                        };
+                        found.insert(index, (Some(family), read.name.clone()));
+                    }
+                }
+            }
+        }
+    }
+    for (index, (family, name)) in found {
+        let element = &mut products[index];
+        if has(element, FAMILY_NAME_FIELD) {
+            continue;
+        }
+        if let (Some(name), false) = (&name, has(element, TYPE_NAME_FIELD)) {
+            let type_id = part_type
+                .get(&index)
+                .copied()
+                .or_else(|| element.id.and_then(|id| stair_type_of.get(&id).copied()));
+            if let Some(type_id) = type_id {
+                element.fields.push((
+                    TYPE_ID_FIELD.into(),
+                    InstanceField::ElementId {
+                        tag: 0,
+                        id: type_id,
+                    },
+                ));
+            }
+            element
+                .fields
+                .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+        }
+        if let (Some(family), true) = (family, has(element, TYPE_NAME_FIELD)) {
+            element.fields.push((
+                FAMILY_NAME_FIELD.into(),
+                InstanceField::String(family.into()),
+            ));
+            element.fields.push((
+                FAMILY_NAME_SOURCE_FIELD.into(),
+                InstanceField::String(TYPE_KIND_FAMILY_SOURCE.into()),
+            ));
+        }
+    }
+
+    // The stairs' names, then each part's number among the records of its
+    // category that name its stair.
+    let mut stair_names: BTreeMap<u32, String> = BTreeMap::new();
+    for element in products.iter_mut() {
+        let (Some(id), "Stair") = (element.id, element.class.as_str()) else {
+            continue;
+        };
+        let Some(family) = stair_type_of
+            .get(&id)
+            .and_then(|type_id| stair_types.get(type_id))
+            .and_then(|stair_type| stair_type.family)
+        else {
+            continue;
+        };
+        let name = format!("{family}:Stair:{id}");
+        element.fields.push((
+            ELEMENT_NAME_FIELD.into(),
+            InstanceField::String(name.clone()),
+        ));
+        stair_names.insert(id, name);
+    }
+    if stair_names.is_empty() {
+        return;
+    }
+    let Some(marker) = per::bbox_marker(revit_version) else {
+        return;
+    };
+    let assigned = rf.second_prologue_ids();
+    let none = BTreeMap::new();
+    let mut members: BTreeMap<(u32, &'static str), BTreeSet<u32>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let ids = assigned.get(&stream).unwrap_or(&none);
+        for (class, category, _) in part_kinds {
+            let Some(word) = stair_part_word(class) else {
+                continue;
+            };
+            for record in per::find_category_records_assigned(
+                &stream,
+                inflated.bytes(),
+                category,
+                &declared,
+                &marker,
+                ids,
+            ) {
+                for stair in named(&record.references, &stair_ids) {
+                    if stair_names.contains_key(&stair) {
+                        members
+                            .entry((stair, word))
+                            .or_default()
+                            .insert(record.element_id);
+                    }
+                }
+            }
+        }
+    }
+    for element in products.iter_mut() {
+        let (Some(id), Some(word)) = (element.id, stair_part_word(&element.class)) else {
+            continue;
+        };
+        let Some(stair) = id_field(element, AGGREGATE_WHOLE_FIELD) else {
+            continue;
+        };
+        let (Some(stair_name), Some(ids)) = (stair_names.get(&stair), members.get(&(stair, word)))
+        else {
+            continue;
+        };
+        let Some(rank) = ids.iter().position(|member| *member == id) else {
+            continue;
+        };
+        element.fields.push((
+            ELEMENT_NAME_FIELD.into(),
+            InstanceField::String(format!("{stair_name} {word} {}", rank + 1)),
+        ));
     }
 }
 

@@ -434,6 +434,13 @@ names, and slab edges and ramps take their only system family. On Snowdon,
 18 of 18 panel walls and 59 of 59 slab edges carry Revit's name, and both
 ramps its `ObjectType`
 (`reports/element-framing/RE-64-panel-walls-slab-edges-ramps.md`).
+**RE-65 (2026-09-24)** names stairs `Family:Stair:ElementId` and their
+runs, landings and supports after them ("Assembled Stair:Stair:620883 Run
+1"), with `ObjectType` from each type's name and a flag in its own object
+(Assembled or Cast-In-Place Stair, Monolithic or Non-Monolithic Run,
+Stringer or Carriage). On Snowdon all 256 stair elements carry Revit's name
+and `ObjectType`. Measured on Snowdon only, as no other oracle has stairs
+(`reports/element-framing/RE-65-stair-names.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

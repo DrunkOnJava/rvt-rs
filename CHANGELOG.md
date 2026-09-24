@@ -8,6 +8,20 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Stairs and their parts are named as Revit names them (RE-65).**
+  - A stair is "Assembled Stair:Stair:620883", and its parts are
+    "Assembled Stair:Stair:620883 Run 1", "… Landing 1" and "… Stringer
+    2", numbered in ElementId order among the stair's parts.
+  - `ObjectType` gives each type's family and name, such as
+    "Non-Monolithic Run:1/4" Tread 1" Nosing 1/4" Riser". The family is
+    read from a flag in the type's own object: Assembled or Cast-In-Place
+    Stair, Monolithic or Non-Monolithic Run, Stringer or Carriage.
+  - A stair type lists its component types. That list settles a part
+    whose record names two types or two stairs, and joins one more
+    carriage to its stair.
+  - On Snowdon Towers, all 26 stairs, 43 runs, 17 landings and 170
+    stringers and carriages carry Revit's `Name` and `ObjectType`.
+
 - **Curtain panels that are walls, slab edges and ramps are named as Revit
   names them (RE-64).**
   - A curtain grid cell can hold a basic wall. Its record keeps the panel
