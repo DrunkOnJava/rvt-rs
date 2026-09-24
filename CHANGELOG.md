@@ -8,6 +8,10 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Highlight a layer's material from the element panel.** Each layer
+  row of a selected wall, floor, roof or ceiling is a toggle: it lights
+  up every element using that material, directly or as one of its layers.
+  The panel's material counts now include use in layers.
 - **Layer sets are named `Family:Type`, as Revit names them (RE-61).** A
   wall's set is now "Basic Wall:Exterior - Brick on Mtl. Stud" rather than
   the type name alone.

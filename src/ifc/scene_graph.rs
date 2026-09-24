@@ -242,19 +242,29 @@ pub struct PanelMaterial {
     pub element_count: usize,
 }
 
+/// One layer of a [`PanelLayers`]: its material's name, or `"Material not
+/// read"` where the file's material name was not found, its thickness, and
+/// the material as a highlight target where it is known.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PanelLayer {
+    pub label: String,
+    pub value: String,
+    #[serde(default)]
+    pub material: Option<PanelMaterial>,
+}
+
 /// An element's material layers (RE-58), in the order its layer set lists
-/// them. Each row is a layer: its material's name, or `"Material not
-/// read"` where the file's material name was not found, and its thickness.
+/// them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PanelLayers {
-    /// The layer set's name: the element's type name.
+    /// The layer set's name: `Family:Type` (RE-61), or the type name.
     pub name: String,
     /// Which side the first row is on: `"exterior first"` for a layer set
     /// used across an element's placement (a wall), `"top first"` for one
     /// used along its height (a floor, roof or ceiling). `None` when the
     /// model states no usage for the element.
     pub order: Option<String>,
-    pub rows: Vec<PanelRow>,
+    pub rows: Vec<PanelLayer>,
     /// The layers' thicknesses added up.
     pub total: String,
 }
@@ -404,9 +414,19 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
                 .map(|layer| {
                     let material = layer
                         .material_index
-                        .and_then(|i| model.materials.get(i))
-                        .map_or("Material not read", |m| m.name.as_str());
-                    PanelRow::new(material, format_feet(layer.thickness_feet))
+                        .and_then(|i| model.materials.get(i).map(|m| (i, m)))
+                        .map(|(index, m)| PanelMaterial {
+                            index,
+                            name: m.name.clone(),
+                            element_count: count_elements_using_material(model, index),
+                        });
+                    PanelLayer {
+                        label: material
+                            .as_ref()
+                            .map_or_else(|| "Material not read".into(), |m| m.name.clone()),
+                        value: format_feet(layer.thickness_feet),
+                        material,
+                    }
                 })
                 .collect(),
             total: format_feet(set.layers.iter().map(|layer| layer.thickness_feet).sum()),
@@ -495,20 +515,27 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
     })
 }
 
-/// How many `BuildingElement`s associate with `material_index` —
-/// the population the viewer's material highlight lights up.
+/// How many `BuildingElement`s use `material_index`, directly or as one of
+/// their layers (RE-58) — the population the viewer's material highlight
+/// lights up.
 fn count_elements_using_material(model: &IfcModel, material_index: usize) -> usize {
+    let in_set = |set: &usize| {
+        model.material_layer_sets.get(*set).is_some_and(|set| {
+            set.layers
+                .iter()
+                .any(|layer| layer.material_index == Some(material_index))
+        })
+    };
     model
         .entities
         .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                IfcEntity::BuildingElement {
-                    material_index: Some(m),
-                    ..
-                } if *m == material_index
-            )
+        .filter(|e| match e {
+            IfcEntity::BuildingElement {
+                material_index: direct,
+                material_layer_set_index: set,
+                ..
+            } => *direct == Some(material_index) || set.as_ref().is_some_and(in_set),
+            _ => false,
         })
         .count()
 }

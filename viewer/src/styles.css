@@ -1111,6 +1111,31 @@ header .export-btn:active:not(:disabled) {
   cursor: pointer;
   transition: background-color var(--sx-duration-fast) var(--sx-ease-standard);
 }
+.info-layer {
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  font-size: var(--sx-fs-xs);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--sx-color-border-subtle);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background-color var(--sx-duration-fast) var(--sx-ease-standard);
+}
+.info-layer .k {
+  color: var(--sx-color-link);
+}
+.info-layer:hover {
+  background: var(--sx-color-selected-hover);
+}
+.info-layer[aria-pressed='true'] {
+  background: var(--sx-color-selected);
+}
+.info-layer[aria-pressed='true'] .k {
+  color: var(--sx-color-text);
+}
 .info-relation:hover {
   background: var(--sx-color-selected-hover);
 }

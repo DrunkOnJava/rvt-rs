@@ -78,11 +78,14 @@ use rvt::ifc::scene_graph::{
     resolves `storey_index`; `index` addresses the same
     `IFCBUILDINGSTOREY` scene node, so the viewer can jump to it.
   - `material: Option<PanelMaterial { index, name, element_count }>`
-    resolves `material_index` and counts the elements sharing it.
+    resolves `material_index` and counts the elements using it, directly
+    or as one of their layers.
   - `layers: Option<PanelLayers { name, order, rows, total }>`
     is the element's material layer set (RE-58): `rows` are
-    `PanelRow { label, value }` pairs of material name (or
-    `Material not read`) and thickness in feet, in the set's order;
+    `PanelLayer { label, value, material }`, each a material name (or
+    `Material not read`), its thickness in feet and, where the material
+    is known, `PanelMaterial { index, name, element_count }` to highlight
+    it by, in the set's order;
     `order` says which side comes first (`exterior first` for a wall,
     `top first` for a floor, roof or ceiling); `total` adds them up.
   - `property_group: Option<PanelPropertyGroup { name, properties }>`

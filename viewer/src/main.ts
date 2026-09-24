@@ -275,14 +275,25 @@ function highlightByMaterial(materialIndex: number): number {
 }
 
 /**
- * Entities associated with a material. The model is already in
- * memory on this thread, so the lookup needs no worker round-trip.
+ * Entities associated with a material, directly or as one of their
+ * layers (RE-58). The model is already in memory on this thread, so the
+ * lookup needs no worker round-trip.
  */
 function entityIndicesWithMaterial(materialIndex: number): Set<number> {
   const out = new Set<number>();
+  const sets = model?.material_layer_sets ?? [];
+  const setsWithMaterial = new Set<number>();
+  sets.forEach((set, index) => {
+    if (set.layers.some((layer) => layer.material_index === materialIndex)) {
+      setsWithMaterial.add(index);
+    }
+  });
   const entities = model?.entities ?? [];
   for (let i = 0; i < entities.length; i += 1) {
-    if (entities[i]?.material_index === materialIndex) out.add(i);
+    const entity = entities[i];
+    if (entity?.material_index === materialIndex) out.add(i);
+    const set = entity?.material_layer_set_index;
+    if (set !== undefined && set !== null && setsWithMaterial.has(set)) out.add(i);
   }
   return out;
 }
@@ -524,11 +535,13 @@ interface IfcModel {
   description?: string;
   building_storeys?: Array<{ name: string; elevation_feet?: number }>;
   materials?: Array<{ name: string; color_packed?: number; transparency?: number }>;
+  material_layer_sets?: Array<{ layers: Array<{ material_index?: number | null }> }>;
   entities?: Array<{
     name: string;
     ifc_type: string;
     guid?: string;
     material_index?: number | null;
+    material_layer_set_index?: number | null;
   }>;
 }
 interface RelatedElement {
@@ -561,10 +574,15 @@ interface PanelMaterial {
   name: string;
   element_count: number;
 }
+interface PanelLayer {
+  label: string;
+  value: string;
+  material?: PanelMaterial | null;
+}
 interface PanelLayers {
   name: string;
   order?: string | null;
-  rows: PanelRow[];
+  rows: PanelLayer[];
   total: string;
 }
 interface ElementInfoPanel {
@@ -1277,6 +1295,55 @@ function storeyGroup(storey: PanelStorey): HTMLElement {
  * share it and a toggle that lights all of them in the 3-D view.
  * The affordance only appears when the scene has tintable meshes.
  */
+/**
+ * An element's layers, one row each. Where the scene can tint, a layer's
+ * row is a toggle that lights up every element using its material,
+ * directly or as a layer.
+ */
+function layersGroup(layers: PanelLayers): HTMLElement {
+  const box = infoGroup(
+    'layers',
+    layers.order ? `Layers · ${layers.name} · ${layers.order}` : `Layers · ${layers.name}`,
+  );
+  const tintable = sceneSupportsHighlight();
+  for (const layer of layers.rows) {
+    const material = layer.material;
+    if (!material || !tintable) {
+      box.appendChild(infoRow(layer.label, layer.value, true));
+      continue;
+    }
+    const shared = `${material.element_count} element${material.element_count === 1 ? '' : 's'}`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'info-row info-layer';
+    btn.setAttribute('aria-label', `Highlight the ${shared} using ${material.name} in the 3-D view`);
+    btn.setAttribute('aria-pressed', 'false');
+    btn.dataset.materialIndex = String(material.index);
+    const k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = layer.label;
+    const v = document.createElement('span');
+    v.className = 'v num';
+    v.textContent = layer.value;
+    btn.append(k, v);
+    btn.addEventListener('click', () => {
+      for (const other of box.querySelectorAll('.info-layer')) {
+        if (other !== btn) other.setAttribute('aria-pressed', 'false');
+      }
+      if (activeMaterialHighlight === material.index) {
+        clearHighlight();
+        btn.setAttribute('aria-pressed', 'false');
+        return;
+      }
+      const lit = highlightByMaterial(material.index);
+      btn.setAttribute('aria-pressed', lit > 0 ? 'true' : 'false');
+    });
+    box.appendChild(btn);
+  }
+  box.appendChild(infoRow('Total', layers.total, true));
+  return box;
+}
+
 function materialGroup(material: PanelMaterial): HTMLElement {
   const box = infoGroup('material', 'Material');
   const shared = `${material.element_count} element${material.element_count === 1 ? '' : 's'}`;
@@ -1421,16 +1488,7 @@ function renderElementPanel(panel: ElementInfoPanel): void {
 
   if (panel.storey) infoEl.appendChild(storeyGroup(panel.storey));
   if (panel.material) infoEl.appendChild(materialGroup(panel.material));
-  if (panel.layers && panel.layers.rows.length > 0) {
-    const layers = panel.layers;
-    const box = infoGroup(
-      'layers',
-      layers.order ? `Layers · ${layers.name} · ${layers.order}` : `Layers · ${layers.name}`,
-    );
-    for (const row of layers.rows) box.appendChild(infoRow(row.label, row.value, true));
-    box.appendChild(infoRow('Total', layers.total, true));
-    infoEl.appendChild(box);
-  }
+  if (panel.layers && panel.layers.rows.length > 0) infoEl.appendChild(layersGroup(panel.layers));
 
   const placement = panel.placement_rows ?? [];
   if (placement.length > 0) {
