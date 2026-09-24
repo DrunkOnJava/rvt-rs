@@ -449,14 +449,9 @@ pub fn scan_run_types(
             continue;
         };
         let buf = inflated.bytes();
-        for &id in ids {
-            let mut pattern = [0u8; 12];
-            pattern[0] = 1;
-            pattern[4..].copy_from_slice(&u64::from(id).to_le_bytes());
-            for at in memchr::memmem::find_iter(buf, &pattern) {
-                if let Some(found) = run_type_at(buf, at + 4) {
-                    merge(&mut out, id, found);
-                }
+        for (id, id_at) in crate::partition_id_objects::find_id_objects(buf, ids) {
+            if let Some(found) = run_type_at(buf, id_at) {
+                merge(&mut out, id, found);
             }
         }
     }
@@ -621,14 +616,9 @@ pub fn scan_component_types(
             continue;
         };
         let buf = inflated.bytes();
-        for &id in ids {
-            let mut pattern = [0u8; 12];
-            pattern[0] = 1;
-            pattern[4..].copy_from_slice(&u64::from(id).to_le_bytes());
-            for at in memchr::memmem::find_iter(buf, &pattern) {
-                if let Some(found) = component_type_at(buf, at + 4, kind) {
-                    merge(&mut out, id, found);
-                }
+        for (id, id_at) in crate::partition_id_objects::find_id_objects(buf, ids) {
+            if let Some(found) = component_type_at(buf, id_at, kind) {
+                merge(&mut out, id, found);
             }
         }
     }

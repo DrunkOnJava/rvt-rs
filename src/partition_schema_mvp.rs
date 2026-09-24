@@ -1012,18 +1012,23 @@ fn attach_stair_names(rf: &mut RevitFile, revit_version: u32, products: &mut [De
             continue;
         };
         let ids = assigned.get(&stream).unwrap_or(&none);
-        for (class, category, _) in part_kinds {
+        let categories: Vec<i64> = part_kinds
+            .iter()
+            .map(|(_, category, _)| *category)
+            .collect();
+        let found = per::find_categories_records_assigned(
+            &stream,
+            inflated.bytes(),
+            &categories,
+            &declared,
+            &marker,
+            ids,
+        );
+        for ((class, _, _), records) in part_kinds.iter().zip(found) {
             let Some(word) = stair_part_word(class) else {
                 continue;
             };
-            for record in per::find_category_records_assigned(
-                &stream,
-                inflated.bytes(),
-                category,
-                &declared,
-                &marker,
-                ids,
-            ) {
+            for record in records {
                 for stair in named(&record.references, &stair_ids) {
                     if stair_names.contains_key(&stair) {
                         members

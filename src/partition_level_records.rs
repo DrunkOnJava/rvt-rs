@@ -503,19 +503,22 @@ pub fn find_name_blocks_with(
     declared_ids: &BTreeSet<u32>,
     marker: &[u8],
 ) -> Vec<NameElevationBlock> {
+    // Each run of `0xff` at least OWNER_SENTINEL_RUN_LEN long, decoded at
+    // the run's first byte. The search jumps to the next such run rather
+    // than stepping every byte; walking back from the hit finds where the
+    // run starts, never before the previous run's end.
     let mut out = Vec::new();
+    let run = [0xffu8; OWNER_SENTINEL_RUN_LEN];
+    let finder = memchr::memmem::Finder::new(&run);
     let mut index = 0usize;
-    while index < buf.len() {
-        if buf[index] != 0xff {
-            index += 1;
-            continue;
+    while let Some(found) = finder.find(&buf[index..]) {
+        let mut run_start = index + found;
+        while run_start > index && buf[run_start - 1] == 0xff {
+            run_start -= 1;
         }
-        let run_start = index;
+        index = run_start;
         while index < buf.len() && buf[index] == 0xff {
             index += 1;
-        }
-        if index - run_start < OWNER_SENTINEL_RUN_LEN {
-            continue;
         }
         if let Some(block) = decode_name_block_at_with(buf, run_start, declared_ids, marker) {
             out.push(block);
@@ -524,22 +527,13 @@ pub fn find_name_blocks_with(
     out
 }
 
+/// First occurrence of `needle` in `haystack`, vectorised (as
+/// `partition_element_records` searches).
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
     }
-    let first = needle[0];
-    let last = haystack.len() - needle.len();
-    let mut index = 0usize;
-    while index <= last {
-        let delta = haystack[index..=last].iter().position(|b| *b == first)?;
-        let start = index + delta;
-        if &haystack[start..start + needle.len()] == needle {
-            return Some(start);
-        }
-        index = start + 1;
-    }
-    None
+    memchr::memmem::find(haystack, needle)
 }
 
 /// The Levels of `level_ids` whose name block names an owner: the
@@ -549,26 +543,20 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// inside other elements, neither of them a storey of Revit's export.
 pub fn owned_level_ids(buf: &[u8], level_ids: &BTreeSet<u32>) -> BTreeSet<u32> {
     let mut out = BTreeSet::new();
-    for &id in level_ids {
-        let mut needle = [0u8; 12];
-        needle[..4].copy_from_slice(&1u32.to_le_bytes());
-        needle[4..].copy_from_slice(&u64::from(id).to_le_bytes());
-        for hit in memchr::memmem::find_iter(buf, &needle) {
-            let owner_at = hit + 4;
-            let value = owner_at + OWNER_OFFSET_BEFORE_NAME;
-            let Some(chars) = read_u32(buf, value - LENGTH_PREFIX_OFFSET_BEFORE_NAME) else {
-                continue;
-            };
-            if !(1..=MAX_NAME_CHARS as u32).contains(&chars) {
-                continue;
-            }
-            let sentinel = buf.get(owner_at + 8..owner_at + 16);
-            let owner = read_u64(buf, owner_at + 16);
-            if sentinel.is_some_and(|run| run.iter().all(|b| *b == 0xff))
-                && owner.is_some_and(|o| o != 0 && o < u64::from(u32::MAX))
-            {
-                out.insert(id);
-            }
+    for (id, owner_at) in crate::partition_id_objects::find_id_objects(buf, level_ids) {
+        let value = owner_at + OWNER_OFFSET_BEFORE_NAME;
+        let Some(chars) = read_u32(buf, value - LENGTH_PREFIX_OFFSET_BEFORE_NAME) else {
+            continue;
+        };
+        if !(1..=MAX_NAME_CHARS as u32).contains(&chars) {
+            continue;
+        }
+        let sentinel = buf.get(owner_at + 8..owner_at + 16);
+        let owner = read_u64(buf, owner_at + 16);
+        if sentinel.is_some_and(|run| run.iter().all(|b| *b == 0xff))
+            && owner.is_some_and(|o| o != 0 && o < u64::from(u32::MAX))
+        {
+            out.insert(id);
         }
     }
     out

@@ -183,12 +183,18 @@ pub fn find_room_parameters(
     rooms: &BTreeSet<u32>,
 ) -> Vec<RoomParameters> {
     let mut out = Vec::new();
-    if buf.len() < 8 || rooms.is_empty() {
+    let (Some(&low), Some(&high)) = (rooms.first(), rooms.last()) else {
+        return out;
+    };
+    if buf.len() < 8 {
         return out;
     }
+    // Most offsets hold no room id; the range test settles them before
+    // the set lookup.
+    let (low, high) = (u64::from(low), u64::from(high));
     for owner_at in 0..=(buf.len() - 8) {
         let raw = u64::from_le_bytes(buf[owner_at..owner_at + 8].try_into().expect("8 bytes"));
-        if raw == 0 || raw > u64::from(u32::MAX) {
+        if raw == 0 || raw < low || raw > high {
             continue;
         }
         let element_id = raw as u32;

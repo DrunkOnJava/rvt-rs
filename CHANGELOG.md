@@ -6,6 +6,16 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Large projects open about twice as fast.** The partition scans each
+  searched every partition once per element category, once per Level and
+  once per type they looked for. They now make one pass for all of them.
+  `rvt-ifc` on Core Interior takes 2.75 s instead of 5.3 s, and on the 95 MB
+  Snowdon Towers sample 10.1 s instead of 17.9 s. In the browser viewer,
+  where WebAssembly searches without SIMD, Snowdon Towers opens in 24
+  seconds instead of 56. Output is byte-identical.
+
 ### Added
 
 - **Railings whose type has no element data are named as Revit names

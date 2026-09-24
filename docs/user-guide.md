@@ -147,6 +147,16 @@ same file decodes in **about 3 seconds**, measured on the deployed site,
 where it used to take about 28. Nothing about the decode changed — only how
 many times the same bytes were decompressed.
 
+The partition scans that later releases added each searched every partition
+once per thing they looked for: once per element category, once per Level,
+once per type. They now make one pass for all of them. `rvt-ifc` on Core
+Interior went from 5.3 s to **2.75 s**, and on Autodesk's 95 MB Snowdon
+Towers sample from 17.9 s to **10.1 s**, with the same peak memory (Apple
+Silicon, `/usr/bin/time -l`, both builds measured back to back). The browser
+viewer gains more, since WebAssembly searches without SIMD: Snowdon Towers
+now opens in **24 seconds** instead of 56. The IFC and the diagnostics are
+byte-identical on all 14 local test files.
+
 ## Inspect A File From The Command Line
 
 Use `rvt-inspect` when you want a shareable support report:
