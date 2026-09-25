@@ -70,6 +70,22 @@ pub fn scan_wall_lines(
     crate::partition_beam_axes::scan_first_bounded_lines(rf, revit_version, walls)
 }
 
+/// Each curved wall's location arc, by ElementId, where its data's first
+/// curve record is an arc (RE-75), on the releases [`scan_wall_lines`]
+/// reads. Like the line, it is the wall's centreline: Revit's IFC4 body lies
+/// half the type's thickness either side of it on 21 of Snowdon Towers' 24
+/// curved walls.
+pub fn scan_wall_arcs(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, crate::partition_beam_axes::BoundedArc>> {
+    if !WALL_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    crate::partition_beam_axes::scan_first_bounded_arcs(rf, revit_version, walls)
+}
+
 /// Bytes per layer record.
 pub const LAYER_RECORD_LEN: usize = 37;
 

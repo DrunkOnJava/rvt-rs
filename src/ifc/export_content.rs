@@ -824,6 +824,45 @@ pub const WALL_CENTRELINE_BODY_SOURCE: &str = "partition_wall_centreline";
 /// its layered butt joins put them (RE-71).
 pub const WALL_LAYER_JOIN_BODY_SOURCE: &str = "partition_wall_centreline_layer_joins";
 
+/// `BodySource` of a curved wall drawn as the ring sector its arc makes
+/// (RE-75).
+pub const WALL_ARC_BODY_SOURCE: &str = "partition_wall_arc";
+
+/// How far a curved wall's drawn outline may stray inside its arcs, feet.
+pub const WALL_ARC_TOLERANCE_FEET: f64 = 0.0005;
+
+/// A curved wall's plan outline: the ring sector between its arc's radius
+/// less and plus half its thickness, from its start angle to its end angle,
+/// each arc drawn as chords that stray at most [`WALL_ARC_TOLERANCE_FEET`]
+/// inside it. `None` for a degenerate arc or one thicker than its radius.
+fn wall_arc_outline(arc: &crate::partition_schema_mvp::WallArc) -> Option<Vec<(f64, f64)>> {
+    let half = arc.thickness_feet * 0.5;
+    let sweep = arc.angles[1] - arc.angles[0];
+    let outer = arc.radius + half;
+    if !(sweep.is_finite() && sweep > 0.0 && sweep <= std::f64::consts::TAU)
+        || !(half.is_finite() && half > 0.0 && arc.radius > half)
+    {
+        return None;
+    }
+    let step = 2.0
+        * (1.0 - WALL_ARC_TOLERANCE_FEET / outer)
+            .clamp(-1.0, 1.0)
+            .acos();
+    let count = ((sweep / step).ceil() as usize).clamp(2, 512);
+    let angle = |index: usize| arc.angles[0] + sweep * index as f64 / count as f64;
+    let mut points: Vec<(f64, f64)> = (0..=count)
+        .map(|index| {
+            let [x, y] = arc.point(angle(index), half);
+            (x, y)
+        })
+        .collect();
+    points.extend((0..=count).rev().map(|index| {
+        let [x, y] = arc.point(angle(index), -half);
+        (x, y)
+    }));
+    Some(points)
+}
+
 /// `ThicknessSource` of a wall whose thickness is its type's layers summed
 /// (RE-54).
 pub const WALL_TYPE_THICKNESS_SOURCE: &str = "wall_type_compound_structure";
@@ -1287,9 +1326,19 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             entities::ProfileDef::ArbitraryWithVoids { points, voids }
         }
     };
+    // RE-75: a curved wall is the ring sector its arc and its type's
+    // thickness make.
+    let wall_arc = if class == "Wall" {
+        crate::partition_schema_mvp::wall_arc_from_fields(&decoded.fields)
+            .as_ref()
+            .and_then(wall_arc_outline)
+    } else {
+        None
+    };
     let profile_override = profile
         .as_ref()
-        .map(|profile| relative(&profile.outer_xy, &profile.inner_xy));
+        .map(|profile| relative(&profile.outer_xy, &profile.inner_xy))
+        .or_else(|| wall_arc.as_ref().map(|outline| relative(outline, &[])));
     // RE-56: a shed roof whose slope reproduces its record box rises along
     // it.
     let roof_slope = if class == "Roof" {
@@ -1358,6 +1407,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .as_ref()
                     .map(|_| WALL_LAYER_JOIN_BODY_SOURCE.into())
                     .or_else(|| wall_centreline.map(|_| WALL_CENTRELINE_BODY_SOURCE.into()))
+                    .or_else(|| wall_arc.as_ref().map(|_| WALL_ARC_BODY_SOURCE.into()))
                     .or_else(|| wall_body_source.clone())
                     .or_else(|| column_body_source.clone())
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
@@ -1373,7 +1423,8 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     || type_section.is_some()
                     || beam.is_some()
                     || stair_run.is_some()
-                    || wall_centreline.is_some(),
+                    || wall_centreline.is_some()
+                    || wall_arc.is_some(),
             ),
         },
         Property {

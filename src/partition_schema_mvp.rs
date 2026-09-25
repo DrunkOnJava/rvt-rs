@@ -1516,6 +1516,22 @@ pub const WALL_LAYERS_FIELD: &str = "m_wall_layers";
 pub const WALL_AXIS_START_FIELDS: [&str; 2] = ["m_wall_axis_start_x", "m_wall_axis_start_y"];
 /// See [`WALL_AXIS_START_FIELDS`].
 pub const WALL_AXIS_END_FIELDS: [&str; 2] = ["m_wall_axis_end_x", "m_wall_axis_end_y"];
+/// Fields holding a curved wall's location arc (RE-75), in plan: its centre
+/// `x` and `y`, radius, start and end angle (radians), and the `x` and `y`
+/// of its unit X and Y axes. The arc runs from
+/// `centre + radius · (cos a · X + sin a · Y)` at the start angle to the end
+/// angle.
+pub const WALL_ARC_FIELDS: [&str; 9] = [
+    "m_wall_arc_centre_x",
+    "m_wall_arc_centre_y",
+    "m_wall_arc_radius",
+    "m_wall_arc_start_angle",
+    "m_wall_arc_end_angle",
+    "m_wall_arc_x_axis_x",
+    "m_wall_arc_x_axis_y",
+    "m_wall_arc_y_axis_x",
+    "m_wall_arc_y_axis_y",
+];
 /// Field holding a wall's thickness, its type's layers summed (RE-54).
 pub const WALL_TYPE_THICKNESS_FIELD: &str = "m_wall_type_thickness";
 /// Fields holding how far past the start and the end of its centreline a
@@ -1577,6 +1593,54 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
         end: [ex?, ey?],
         thickness_feet: float(WALL_TYPE_THICKNESS_FIELD)?,
         join_reach_feet: WALL_JOIN_REACH_FIELDS.map(float),
+    })
+}
+
+/// A curved wall's location arc and its type's thickness (RE-75).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WallArc {
+    /// Plan centre, model feet.
+    pub centre: [f64; 2],
+    /// Radius, feet.
+    pub radius: f64,
+    /// Start and end angle, radians.
+    pub angles: [f64; 2],
+    /// Plan unit X axis.
+    pub x_axis: [f64; 2],
+    /// Plan unit Y axis.
+    pub y_axis: [f64; 2],
+    /// The type's layers summed, feet.
+    pub thickness_feet: f64,
+}
+
+impl WallArc {
+    /// The plan point `offset` feet out from the arc (away from its centre)
+    /// at `angle`.
+    pub fn point(&self, angle: f64, offset: f64) -> [f64; 2] {
+        let (sin, cos) = angle.sin_cos();
+        let radius = self.radius + offset;
+        [0, 1].map(|axis| {
+            self.centre[axis] + radius * (cos * self.x_axis[axis] + sin * self.y_axis[axis])
+        })
+    }
+}
+
+/// The arc [`WALL_ARC_FIELDS`] and [`WALL_TYPE_THICKNESS_FIELD`] record.
+pub fn wall_arc_from_fields(fields: &[(String, InstanceField)]) -> Option<WallArc> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [cx, cy, radius, start, end, xx, xy, yx, yy] = WALL_ARC_FIELDS.map(float);
+    Some(WallArc {
+        centre: [cx?, cy?],
+        radius: radius?,
+        angles: [start?, end?],
+        x_axis: [xx?, xy?],
+        y_axis: [yx?, yy?],
+        thickness_feet: float(WALL_TYPE_THICKNESS_FIELD)?,
     })
 }
 
@@ -1938,10 +2002,11 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     .iter()
     .map(|record| record.element_id)
     .collect();
-    let (Ok(layers), Ok(orientations), Ok(lines), Ok(appearances), Ok(names)) = (
+    let (Ok(layers), Ok(orientations), Ok(lines), Ok(arcs), Ok(appearances), Ok(names)) = (
         pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
         pcs::scan_wall_orientations(rf, revit_version, &wall_ids),
         pcs::scan_wall_lines(rf, revit_version, &wall_ids),
+        pcs::scan_wall_arcs(rf, revit_version, &wall_ids),
         crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
         crate::partition_materials::scan_material_names(rf, revit_version, &declared),
     ) else {
@@ -1951,34 +2016,68 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         let (Some(id), Some(type_id)) = (wall.id, type_of(wall)) else {
             continue;
         };
-        let (Some(type_layers), Some(orientation), Some(line)) =
-            (layers.get(&type_id), orientations.get(&id), lines.get(&id))
+        let (Some(type_layers), Some(orientation)) = (layers.get(&type_id), orientations.get(&id))
         else {
             continue;
         };
-        let (start, end) = (line.start(), line.end());
-        let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
-        let length = dx.hypot(dy);
-        if !length.is_finite() || length <= 1e-9 {
-            continue;
-        }
         let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
-        if orientation.word == 1 && thickness.is_finite() && thickness > 0.0 {
-            for (names, point) in [(WALL_AXIS_START_FIELDS, start), (WALL_AXIS_END_FIELDS, end)] {
-                for (name, value) in names.iter().zip(point) {
-                    wall.fields
-                        .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        let centred = orientation.word == 1 && thickness.is_finite() && thickness > 0.0;
+        let float = |value: f64| InstanceField::Float { value, size: 8 };
+        // The direction the exterior side is taken from: the line's, or the
+        // arc's tangent at its middle (RE-75).
+        let (dx, dy) = if let Some(line) = lines.get(&id) {
+            let (start, end) = (line.start(), line.end());
+            let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
+            let length = dx.hypot(dy);
+            if !length.is_finite() || length <= 1e-9 {
+                continue;
+            }
+            if centred {
+                for (names, point) in [(WALL_AXIS_START_FIELDS, start), (WALL_AXIS_END_FIELDS, end)]
+                {
+                    for (name, value) in names.iter().zip(point) {
+                        wall.fields.push(((*name).into(), float(value)));
+                    }
                 }
             }
-            wall.fields.push((
-                WALL_TYPE_THICKNESS_FIELD.into(),
-                InstanceField::Float {
-                    value: thickness,
-                    size: 8,
-                },
-            ));
+            (dx / length, dy / length)
+        } else if let Some(arc) = arcs.get(&id) {
+            if arc.x_axis[2].abs() > 1e-9 || arc.y_axis[2].abs() > 1e-9 {
+                continue;
+            }
+            if centred {
+                let values = [
+                    arc.centre[0],
+                    arc.centre[1],
+                    arc.radius,
+                    arc.start_angle,
+                    arc.end_angle,
+                    arc.x_axis[0],
+                    arc.x_axis[1],
+                    arc.y_axis[0],
+                    arc.y_axis[1],
+                ];
+                for (name, value) in WALL_ARC_FIELDS.iter().zip(values) {
+                    wall.fields.push(((*name).into(), float(value)));
+                }
+            }
+            let (sin, cos) = ((arc.start_angle + arc.end_angle) * 0.5).sin_cos();
+            let tangent = [
+                -sin * arc.x_axis[0] + cos * arc.y_axis[0],
+                -sin * arc.x_axis[1] + cos * arc.y_axis[1],
+            ];
+            let length = tangent[0].hypot(tangent[1]);
+            if !length.is_finite() || length <= 1e-9 {
+                continue;
+            }
+            (tangent[0] / length, tangent[1] / length)
+        } else {
+            continue;
+        };
+        if centred {
+            wall.fields
+                .push((WALL_TYPE_THICKNESS_FIELD.into(), float(thickness)));
         }
-        let (dx, dy) = (dx / length, dy / length);
         let exterior = if orientation.flip {
             [dy, -dx]
         } else {
