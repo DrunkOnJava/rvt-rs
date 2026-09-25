@@ -509,6 +509,13 @@ ending where its two edges meet the other wall's line. On Snowdon Towers
 axis-parallel walls (675). Every angled L join drawn is right along every
 layer edge, and 18 of 22 angled T joints; one wall gets worse
 (`reports/element-framing/RE-74-angled-wall-joins.md`).
+**RE-75 (2026-09-25)** draws curved walls along their arc. The record RE-49
+reads as a line is an arc where the `u64` before it is 1, with its angles,
+axes, radius and centre. On Snowdon Towers the 24 curved walls Revit draws
+with an arc axis have Revit's centre and radius, and each is now the ring
+sector its arc and thickness make: faces Revit's on 23 (0 before), and a
+median footprint overlap of 0.95 (0.03 before). Their ends are not yet
+trimmed at joins (`reports/element-framing/RE-75-curved-walls.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

@@ -133,9 +133,113 @@ pub fn bounded_line_at(buf: &[u8], at: usize) -> Option<BoundedLine> {
     })
 }
 
-/// The first bounded line in `data`.
+/// The first bounded line in `data`. `None` where the data's first curve
+/// record is an arc ([`bounded_arc_at`]): its axes would read as a line.
 pub fn first_bounded_line(data: &[u8]) -> Option<BoundedLine> {
+    let first = memchr::memmem::find(data, &BOUNDED_LINE_TAG)?;
+    if bounded_arc_at(data, first).is_some() {
+        return None;
+    }
     memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG).find_map(|at| bounded_line_at(data, at))
+}
+
+/// A circular arc record (RE-75): the [`BOUNDED_LINE_TAG`] record preceded
+/// by a `u64` 1 where a line's is 0, and laid out
+///
+/// ```text
+/// -8   u64 1         the record is an arc
+/// +0   04 00 08 01   BOUNDED_LINE_TAG
+/// +4   f64           start angle, radians
+/// +12  f64           end angle, radians
+/// +20  f64 × 3       unit X axis
+/// +44  f64 × 3       unit Y axis, square to X
+/// +68  f64           radius, feet
+/// +76  f64 × 3       centre, model feet
+/// ```
+///
+/// The arc runs from `centre + radius · (cos a · X + sin a · Y)` at the
+/// start angle to the end angle. On Autodesk's Snowdon Towers 2024
+/// architectural sample it is the first curve record of 32 walls, and on
+/// the 24 of them Revit's IFC4 export draws with an arc axis, its centre and
+/// radius are that axis's to 1e-5 ft.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BoundedArc {
+    pub start_angle: f64,
+    pub end_angle: f64,
+    pub x_axis: [f64; 3],
+    pub y_axis: [f64; 3],
+    pub radius: f64,
+    pub centre: [f64; 3],
+}
+
+impl BoundedArc {
+    /// The point at `angle` on the arc, model feet.
+    pub fn point(&self, angle: f64) -> [f64; 3] {
+        let (sin, cos) = angle.sin_cos();
+        [0, 1, 2].map(|axis| {
+            self.centre[axis] + self.radius * (cos * self.x_axis[axis] + sin * self.y_axis[axis])
+        })
+    }
+}
+
+/// The arc whose tag starts at `at`: the `u64` before it is 1, the values
+/// are finite, the axes are unit and square to each other, the radius is
+/// positive and the start angle is below the end one.
+pub fn bounded_arc_at(buf: &[u8], at: usize) -> Option<BoundedArc> {
+    if buf.get(at..at.checked_add(4)?)? != BOUNDED_LINE_TAG {
+        return None;
+    }
+    let kind = buf
+        .get(at.checked_sub(8)?..at)
+        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))?;
+    if kind != 1 {
+        return None;
+    }
+    let mut values = [0.0f64; 12];
+    for (index, value) in values.iter_mut().enumerate() {
+        *value = read_f64(buf, at + 4 + 8 * index)?;
+    }
+    if !values.iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let [
+        start_angle,
+        end_angle,
+        xx,
+        xy,
+        xz,
+        yx,
+        yy,
+        yz,
+        radius,
+        cx,
+        cy,
+        cz,
+    ] = values;
+    let unit = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2] - 1.0).abs() <= 1e-9;
+    let (x_axis, y_axis) = ([xx, xy, xz], [yx, yy, yz]);
+    if !unit(x_axis)
+        || !unit(y_axis)
+        || (xx * yx + xy * yy + xz * yz).abs() > 1e-9
+        || radius <= 0.0
+        || start_angle >= end_angle
+    {
+        return None;
+    }
+    Some(BoundedArc {
+        start_angle,
+        end_angle,
+        x_axis,
+        y_axis,
+        radius,
+        centre: [cx, cy, cz],
+    })
+}
+
+/// The arc a wall's data stores where its first curve record is one
+/// ([`bounded_arc_at`]).
+pub fn first_bounded_arc(data: &[u8]) -> Option<BoundedArc> {
+    bounded_arc_at(data, memchr::memmem::find(data, &BOUNDED_LINE_TAG)?)
 }
 
 /// The first bounded line in the element data of each id in `ids` (a
@@ -162,10 +266,32 @@ pub fn scan_first_bounded_lines(
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedLine>> {
+    scan_first_records(rf, revit_version, ids, first_bounded_line)
+}
+
+/// The arc in the element data of each id in `ids` whose first curve record
+/// is one ([`first_bounded_arc`]), read as [`scan_first_bounded_lines`]
+/// reads lines (RE-75).
+pub fn scan_first_bounded_arcs(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, BoundedArc>> {
+    scan_first_records(rf, revit_version, ids, first_bounded_arc)
+}
+
+/// What `read` finds in the element data of each id in `ids`, from every
+/// partition. An id whose copies disagree is dropped.
+fn scan_first_records<T: PartialEq>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+    read: fn(&[u8]) -> Option<T>,
+) -> Result<BTreeMap<u32, T>> {
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
         return Ok(BTreeMap::new());
     };
-    let mut found: BTreeMap<u32, Option<BoundedLine>> = BTreeMap::new();
+    let mut found: BTreeMap<u32, Option<T>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -190,7 +316,7 @@ pub fn scan_first_bounded_lines(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(BEAM_DATA_WINDOW))
                 .min(buf.len());
-            let Some(line) = buf.get(id_at + 8..end).and_then(first_bounded_line) else {
+            let Some(line) = buf.get(id_at + 8..end).and_then(read) else {
                 continue;
             };
             match found.get_mut(&id) {

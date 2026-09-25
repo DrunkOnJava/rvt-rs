@@ -34,6 +34,16 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Curved walls are drawn along their arc (RE-75, #358).** A wall's data
+  stores its location arc in the record rvt-rs read as a line, and the word
+  before the record says which it is. rvt-rs read an arc's axes as a line,
+  rejected it and drew the wall's box. Each curved wall is now the ring
+  sector its arc and its type's thickness make. On Snowdon Towers the 24
+  curved walls Revit draws with an arc axis have Revit's centre and radius
+  within 0.001 ft, and their faces are Revit's on 23 of them (0 before).
+  Their footprints overlap Revit's by a median 0.95, from 0.03. Their ends
+  are the arc's own, not yet trimmed at joins, and are all within 0.625 ft
+  of Revit's.
 - **Walls that meet at an angle end on slanted lines, as Revit draws them
   (RE-74, #358).** RE-70's butt joins, RE-71's layered corners and RE-73's
   T joints now apply where two walls meet at 45 to 135 degrees, not only
