@@ -14,6 +14,10 @@ workflow fits your file.
 | **crates.io** (`rvt`) | **Not published** — `cargo install rvt` fails until a successful `cargo publish`; build from source instead |
 | **docs.rs** (`rvt`) | **Not available** (404) until the crate exists on crates.io |
 
+**0.3.0 is prepared, not published.** `main` carries version 0.3.0 and the
+GitHub Release v0.3.0 is a draft with no assets. Until it is published, every
+channel above still serves 0.2.0; building from source gives you 0.3.0.
+
 ## Browser Viewer
 
 No install is required for the hosted viewer:

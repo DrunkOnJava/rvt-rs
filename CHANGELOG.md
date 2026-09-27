@@ -6,8 +6,18 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-27
+
+Trustworthy Revit 2024 and 2025 export: generated GlobalIds stable between
+exports, the SI units the values are written in, the whole schema, each
+element's Revit class and type parameters, MEP devices, and a count of the
+bodies that are still boxes.
+
 ### Changed
 
+- **The viewer shows the version it was built from** (#405), under the drop
+  zone, from its package version, which now follows the crate's (it was
+  0.1.0).
 - **Three per-release constants are class tags in the file's own schema
   (RE-80).** The number opening `Global/ElemTable` is the tag of the class
   `ElemTable`; the element-record marker is the tags of `Outline` and

@@ -26,6 +26,7 @@ const viewport = $('viewport');
 const dropzone = $('dropzone');
 const fileInput = $('file-input') as HTMLInputElement;
 const pickBtn = $('pick-file');
+$('app-version').textContent = `rvt-rs ${__RVT_VIEWER_VERSION__}`;
 const statusEl = $('status');
 const fileMetaEl = $('file-meta');
 const treeEl = $('tree');
