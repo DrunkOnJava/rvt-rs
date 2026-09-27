@@ -49,6 +49,19 @@ STEP_TO_IFCOPENSHELL = {
 }
 
 
+def schema_entity_name(schema: str, step_type: str):
+    """The schema's own spelling of a STEP entity name, or None when the
+    schema declares no such entity. A class the table above does not list
+    (a newly exported one) is still checked, not refused."""
+    try:
+        declaration = ifcopenshell.ifcopenshell_wrapper.schema_by_name(schema).declaration_by_name(
+            step_type
+        )
+    except (RuntimeError, IndexError):
+        return None
+    return declaration.name()
+
+
 def fail(message: str) -> None:
     raise AssertionError(f"real-project IFC validation failed: {message}")
 
@@ -117,9 +130,11 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
         fail("diagnostics exported.by_ifc_type is empty for the real project")
 
     for step_type, expected in sorted(by_ifc_type.items()):
-        ifc_class = STEP_TO_IFCOPENSHELL.get(step_type)
+        ifc_class = STEP_TO_IFCOPENSHELL.get(step_type) or schema_entity_name(
+            model.schema, step_type
+        )
         if ifc_class is None:
-            fail(f"no validator mapping for diagnostics entity class {step_type}")
+            fail(f"diagnostics entity class {step_type} is not an IFC4 entity")
         got = count(model, ifc_class)
         if got != expected:
             fail(f"{ifc_class} count regressed: IfcOpenShell saw {got}, diagnostics saw {expected}")
