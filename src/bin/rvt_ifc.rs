@@ -724,6 +724,7 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
 fn ifc_type_display(upper: &str) -> String {
     const NAMES: &[&str] = &[
         "IfcAirTerminal",
+        "IfcAlarm",
         "IfcBeam",
         "IfcBuildingElementProxy",
         "IfcColumn",

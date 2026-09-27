@@ -3284,6 +3284,42 @@ fn select_instance_records(
             by_id.insert(record.element_id, record);
         }
     }
+    without_nested_components(by_id)
+}
+
+/// `by_id` without the shared nested components of MEP devices (#96): a
+/// nested device and its parent, in the same
+/// [`crate::partition_element_records::NESTED_COMPONENT_CATEGORIES`]
+/// category, each list the other among their references, and the nested
+/// one, created after its parent, has the larger ElementId. On RE1
+/// Electrical each receptacle, switch and junction-box symbol nested in a
+/// device is such a pair, and Revit's export leaves the nested one out
+/// (21 of 21). Other categories are left alone: joined walls and connected
+/// fittings reference each other too.
+fn without_nested_components(
+    mut by_id: BTreeMap<u32, crate::partition_element_records::PartitionElementRecord>,
+) -> BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
+    use crate::partition_element_records::NESTED_COMPONENT_CATEGORIES;
+    let nested: Vec<u32> = by_id
+        .values()
+        .filter(|child| NESTED_COMPONENT_CATEGORIES.contains(&child.builtin_category))
+        .filter(|child| {
+            child.references.iter().any(|&reference| {
+                u32::try_from(reference)
+                    .ok()
+                    .filter(|&parent| parent < child.element_id)
+                    .and_then(|parent| by_id.get(&parent))
+                    .is_some_and(|parent| {
+                        parent.builtin_category == child.builtin_category
+                            && parent.references.contains(&u64::from(child.element_id))
+                    })
+            })
+        })
+        .map(|child| child.element_id)
+        .collect();
+    for id in nested {
+        by_id.remove(&id);
+    }
     by_id
 }
 

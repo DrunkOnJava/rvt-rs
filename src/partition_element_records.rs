@@ -151,6 +151,32 @@ pub const OST_SKETCH_LINES: i64 = -2_000_045;
 // exports (see `PRODUCT_RECORD_CATEGORIES`). The names are the public
 // `BuiltInCategory` enum members.
 
+// #96: MEP device and equipment categories, scored the same way on the
+// four RE1 models (Revit 2025, MIT) against Revit's own exports of them.
+
+/// Autodesk `BuiltInCategory.OST_LightingDevices`: switches, sensors.
+pub const OST_LIGHTING_DEVICES: i64 = -2_008_087;
+/// Autodesk `BuiltInCategory.OST_FireAlarmDevices`.
+pub const OST_FIRE_ALARM_DEVICES: i64 = -2_008_085;
+/// Autodesk `BuiltInCategory.OST_DataDevices`.
+pub const OST_DATA_DEVICES: i64 = -2_008_083;
+/// Autodesk `BuiltInCategory.OST_ElectricalFixtures`: receptacles, junction
+/// boxes.
+pub const OST_ELECTRICAL_FIXTURES: i64 = -2_001_060;
+/// Autodesk `BuiltInCategory.OST_ElectricalEquipment`: panels, controllers.
+pub const OST_ELECTRICAL_EQUIPMENT: i64 = -2_001_040;
+/// Autodesk `BuiltInCategory.OST_MechanicalEquipment`.
+pub const OST_MECHANICAL_EQUIPMENT: i64 = -2_001_140;
+
+/// Device categories whose shared nested components are element records of
+/// their own that Revit's export leaves out (#96): a switch or receptacle
+/// family nests a symbol of its own category.
+pub const NESTED_COMPONENT_CATEGORIES: [i64; 3] = [
+    OST_LIGHTING_DEVICES,
+    OST_ELECTRICAL_FIXTURES,
+    OST_ELECTRICAL_EQUIPMENT,
+];
+
 /// Autodesk `BuiltInCategory.OST_Furniture`.
 pub const OST_FURNITURE: i64 = -2_000_080;
 /// Autodesk `BuiltInCategory.OST_Casework`.
@@ -276,7 +302,7 @@ pub const OST_EDGE_SLAB: i64 = -2_001_392;
 /// RE-39 adds stairs with their runs, landings and stringers, and roofs.
 /// RE-40 adds slab edges, once elements in non-primary design options are
 /// left out: all 59 exported on Snowdon Towers are Revit's.
-pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 32] = [
+pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 38] = [
     (OST_FURNITURE, "Furniture"),
     (OST_CASEWORK, "Casework"),
     (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
@@ -309,6 +335,12 @@ pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 32] = [
     (OST_STAIRS_STRINGER_CARRIAGE, "StairsStringer"),
     (OST_ROOFS, "Roof"),
     (OST_EDGE_SLAB, "SlabEdge"),
+    (OST_LIGHTING_DEVICES, "LightingDevice"),
+    (OST_FIRE_ALARM_DEVICES, "FireAlarmDevice"),
+    (OST_DATA_DEVICES, "DataDevice"),
+    (OST_ELECTRICAL_FIXTURES, "ElectricalFixture"),
+    (OST_ELECTRICAL_EQUIPMENT, "ElectricalEquipment"),
+    (OST_MECHANICAL_EQUIPMENT, "MechanicalEquipment"),
 ];
 
 /// Smallest bounding-box extent, in feet, a placed instance needs on every
@@ -1173,7 +1205,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// The categories the exporter recovers instances of, with the class name
 /// each is decoded as: the architectural core plus
 /// [`PRODUCT_RECORD_CATEGORIES`].
-pub const RECOVERED_CATEGORIES: [(i64, &str); 39] = [
+pub const RECOVERED_CATEGORIES: [(i64, &str); 45] = [
     (OST_WALLS, "Wall"),
     (OST_DOORS, "Door"),
     (OST_WINDOWS, "Window"),
@@ -1213,6 +1245,12 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 39] = [
     (OST_STAIRS_STRINGER_CARRIAGE, "StairsStringer"),
     (OST_ROOFS, "Roof"),
     (OST_EDGE_SLAB, "SlabEdge"),
+    (OST_LIGHTING_DEVICES, "LightingDevice"),
+    (OST_FIRE_ALARM_DEVICES, "FireAlarmDevice"),
+    (OST_DATA_DEVICES, "DataDevice"),
+    (OST_ELECTRICAL_FIXTURES, "ElectricalFixture"),
+    (OST_ELECTRICAL_EQUIPMENT, "ElectricalEquipment"),
+    (OST_MECHANICAL_EQUIPMENT, "MechanicalEquipment"),
 ];
 
 /// Placed-instance frames in `buf`, per category, that carry the bbox
