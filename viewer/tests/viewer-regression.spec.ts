@@ -527,10 +527,14 @@ projectSampleTest(
     // (was 41). Keep in sync with tests/fixtures/project-counts/revit-ifc5-einhoven.json.
     await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 42');
     await expect(page.locator('#diagnostics-json')).toContainText('lack recovered thickness');
-    // ArcWalls are storey-assigned, and rooms and floors come from element
-    // records only, so no element is left without a Level.
-    await expect(page.locator('#diagnostics-json')).not.toContainText(
-      'unsupported_geometry_missing_level',
+    // ArcWalls are storey-assigned. The 13 elements from 2023 element records
+    // (RE-81) carry no storey, because 2023 storeys are not decoded, and the
+    // diagnostics say so instead of guessing one.
+    await expect(page.locator('#diagnostics-json')).toContainText(
+      'unsupported_geometry_missing_level=13',
+    );
+    await expect(page.locator('#diagnostics-json')).toContainText(
+      'Revit 2023: elements come from their records',
     );
 
     const firstCategory = page.locator('.category-toggle').first();
