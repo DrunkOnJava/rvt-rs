@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Three per-release constants are class tags in the file's own schema
+  (RE-80).** The number opening `Global/ElemTable` is the tag of the class
+  `ElemTable`; the element-record marker is the tags of `Outline` and
+  `ElementParents` with four `0xFF` bytes between them; the record-chain
+  header constant is the tag of `ElementHeader`. Measured on every release
+  from 2016 to 2026, which shows the marker a reader needs for any release
+  comes from the schema, not a table. Documentation and a probe; the export
+  is unchanged. Credit: jakobhirn-bit (Discussion #112).
+
 - **The crate's own documentation says what it does today.** The docs.rs
   front page had called IFC export a scaffold and the schema "100% classified";
   it now states the supported profile and shows three runnable entry points
