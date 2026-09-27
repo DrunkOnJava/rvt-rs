@@ -549,6 +549,20 @@ All notable changes will be documented here. This project follows
   metre, square metre, cubic metre, radian, kilogram and second; Revit's
   display units stay in the export diagnostics
   (`recovered_unit_identifiers`), which describe the source model.
+- **The whole embedded schema is read (#410).** `Formats/Latest` is stored in
+  checksum pages like the database streams, but it was inflated without the
+  page strip, so it drifted after about 140 KB while still decoding without
+  an error, and schema parsing stopped at 64 KB to keep the drift out. With
+  the strip, every file of one Revit release inflates to the byte-identical
+  schema, family or project, and rvt-rs reads all of it: 4,126 classes and
+  11,562 fields on Revit 2024 instead of 395 and 1,114, and 122,107 fields
+  across the 11 sample releases instead of 13,570. 9 to 12 field encodings
+  per release are not classified yet and the coverage gate lists them. The
+  earlier "100% field classification" covered the first 64 KB only. No IFC
+  output changes: exports of Core Interior, the four RE1 models, Einhoven and
+  Snowdon Towers are identical. RE-20's note that `Level` is absent from the
+  schema was an artifact of the 64 KB scan. Credit: STE1200's checksum-page
+  finding and schema grammar (Discussion #112).
 
 - **Empty curtain panels are left out, as Revit's export leaves them out
   (#309).** A curtain panel of the "Empty System Panel" family fills a grid

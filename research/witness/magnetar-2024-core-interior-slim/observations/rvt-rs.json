@@ -704,8 +704,7 @@
   ],
   "warnings": [
     "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
-    "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match.",
-    "Formats/Latest multipage integrity uncertain (checksum-page strip disabled; RVT_FORMATS_MULTIPAGE_UNVERIFIED)."
+    "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
   ],
   "witness_id": "rvt-rs",
   "witness_version": "0.2.0"

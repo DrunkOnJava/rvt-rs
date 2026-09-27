@@ -136,10 +136,10 @@ fn exact_one_page_boundary_bare_fails_gated_strip_passes() {
         inflate_stream_at("Partitions/46", &exact, 0).ok(),
         inflate_at(clean_page, 0).ok()
     );
-    // Formats stays ungated — same outcome as bare inflate on the paged buffer.
+    // Formats/Latest is paged too (#410).
     assert_eq!(
         inflate_stream_at("Formats/Latest", &exact, 0).ok(),
-        inflate_at(&exact, 0).ok()
+        inflate_at(clean_page, 0).ok()
     );
 }
 
@@ -177,12 +177,10 @@ fn multi_page_bare_inflate_does_not_round_trip_gated_does() {
     let gated = inflate_stream_at("Partitions/46", &paged, 0).expect("gated");
     assert_eq!(gated, payload);
 
-    // Formats/Latest deliberately ungated — must not round-trip via strip.
+    // Formats/Latest is paged too (#410).
     assert_eq!(
-        inflate_stream_at("Formats/Latest", &paged, 0)
-            .err()
-            .map(|e| e.to_string()),
-        inflate_at(&paged, 0).err().map(|e| e.to_string())
+        inflate_stream_at("Formats/Latest", &paged, 0).expect("gated"),
+        payload
     );
 }
 
@@ -230,17 +228,13 @@ fn prepare_stream_for_inflate_gates_on_path() {
     let (payload, gzip) = compressible_payload(REVIT_PAGE_PAYLOAD_BYTES + 2_000);
     let paged = inject_page_checksums(&gzip);
 
-    // Wave 2 narrowed gate: Partitions strip; Formats/Latest does not.
+    // Partitions, Global and (since #410) Formats/Latest strip.
     let prepared_part = prepare_stream_for_inflate("Partitions/46", &paged);
     assert_eq!(inflate_at(prepared_part.as_ref(), 0).unwrap(), payload);
 
     let prepared_fmt = prepare_stream_for_inflate("Formats/Latest", &paged);
-    assert_eq!(
-        prepared_fmt.as_ref(),
-        paged.as_slice(),
-        "Formats/Latest must remain ungated by default"
-    );
-    assert!(!is_checksum_paged_stream("Formats/Latest"));
+    assert_eq!(inflate_at(prepared_fmt.as_ref(), 0).unwrap(), payload);
+    assert!(is_checksum_paged_stream("Formats/Latest"));
     assert!(is_revit_paged_loader_candidate("Formats/Latest"));
 
     // Non-paged paths must leave trailers in place (writer/metadata safety).
@@ -301,7 +295,7 @@ fn synthetic_multi_member_partition_chunk_count_recovers_with_strip() {
     );
     assert_ne!(control_total, experiment_total);
 
-    // Formats path must behave like bare inflate (ungated).
+    // Formats/Latest is paged too (#410).
     let formats_chunks = inflate_all_chunks_for_stream("Formats/Latest", &paged);
-    assert_eq!(formats_chunks.len(), control.len());
+    assert_eq!(formats_chunks.len(), expected_members.len());
 }
