@@ -1386,6 +1386,59 @@ impl StepWriter {
             profile_set_ids.push(set_id);
         }
 
+        // RE-82: family instances' material constituent sets, as Revit's
+        // export writes them: unnamed, one constituent per material named
+        // after it, in the category "Materials".
+        let mut constituent_set_ids: Vec<Option<usize>> =
+            Vec::with_capacity(model.material_constituent_sets.len());
+        for cset in &model.material_constituent_sets {
+            let mut constituent_ids = Vec::with_capacity(cset.material_indices.len());
+            for &material_index in &cset.material_indices {
+                let (Some(&mat_id), Some(material)) = (
+                    material_ids.get(material_index),
+                    model.materials.get(material_index),
+                ) else {
+                    continue;
+                };
+                let constituent_id = self.id();
+                // IfcMaterialConstituent(Name, Description, Material,
+                //   Fraction, Category)
+                self.emit_entity(
+                    constituent_id,
+                    format!(
+                        "IFCMATERIALCONSTITUENT('{}',$,#{mat_id},$,'Materials')",
+                        escape(&material.name)
+                    ),
+                );
+                constituent_ids.push(constituent_id);
+            }
+            if constituent_ids.is_empty() {
+                constituent_set_ids.push(None);
+                continue;
+            }
+            let set_id = self.id();
+            // IfcMaterialConstituentSet(Name, Description, MaterialConstituents)
+            self.emit_entity(
+                set_id,
+                format!(
+                    "IFCMATERIALCONSTITUENTSET($,$,({}))",
+                    constituent_ids
+                        .iter()
+                        .map(|id| format!("#{id}"))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+            );
+            constituent_set_ids.push(Some(set_id));
+        }
+        let constituent_set_of: HashMap<usize, usize> = model
+            .material_constituent_sets
+            .iter()
+            .enumerate()
+            .flat_map(|(set, cset)| cset.elements.iter().map(move |&entity| (entity, set)))
+            .collect();
+        let mut element_constituent_pairs: Vec<(usize, usize)> = Vec::new();
+
         // IFC-21: emit IfcRepresentationMap entities up-front. Each
         // map carries its shape representation (emitted once) and an
         // IFCAXIS2PLACEMENT3D mapping origin; instances reference
@@ -1913,6 +1966,8 @@ impl StepWriter {
                         if *m_idx < material_ids.len() {
                             element_material_pairs.push((el_id, *m_idx));
                         }
+                    } else if let Some(&set) = constituent_set_of.get(&entity_idx) {
+                        element_constituent_pairs.push((el_id, set));
                     }
                 }
                 if let Some(pset) = property_set {
@@ -2147,6 +2202,42 @@ impl StepWriter {
         // gets one IfcRelAssociatesMaterial (rather than N, where N
         // is the number of elements using it).
         let mut by_material: Vec<Vec<usize>> = vec![Vec::new(); material_ids.len()];
+        // RE-82: one association per constituent set, keyed by its
+        // materials' names so its GlobalId does not depend on file order.
+        let mut by_constituent_set: Vec<Vec<usize>> =
+            vec![Vec::new(); model.material_constituent_sets.len()];
+        for (el_id, set) in &element_constituent_pairs {
+            by_constituent_set[*set].push(*el_id);
+        }
+        for (set, elements) in by_constituent_set.iter().enumerate() {
+            let Some(Some(set_id)) = constituent_set_ids.get(set) else {
+                continue;
+            };
+            if elements.is_empty() {
+                continue;
+            }
+            let names: Vec<&str> = model.material_constituent_sets[set]
+                .material_indices
+                .iter()
+                .filter_map(|&index| model.materials.get(index).map(|m| m.name.as_str()))
+                .collect();
+            let mut key = vec!["material-constituents"];
+            key.extend(names);
+            let rel_id = self.id();
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,({}),#{set_id})",
+                    gid(&key),
+                    elements
+                        .iter()
+                        .map(|id| format!("#{id}"))
+                        .collect::<Vec<_>>()
+                        .join(","),
+                ),
+            );
+        }
+
         for (el_id, m_idx) in &element_material_pairs {
             by_material[*m_idx].push(*el_id);
         }
@@ -2365,6 +2456,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -2391,6 +2484,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -2459,6 +2554,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -2561,6 +2658,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         assert!(
@@ -2774,6 +2873,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -3222,6 +3323,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCMATERIALLAYER("), "IFCMATERIALLAYER missing");
@@ -3292,6 +3395,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         assert!(
@@ -3369,6 +3474,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         // Both layer set AND profile set entities exist because
@@ -3428,6 +3535,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         }
     }
 
@@ -3566,6 +3675,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         }
     }
 
@@ -3720,6 +3831,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         // solid_shape path fires:
@@ -3929,6 +4042,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         // Exactly ONE IfcRepresentationMap — that's the whole point
@@ -4014,6 +4129,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         // IFCMAPPEDITEM must be emitted; no inline body extrusion
@@ -4080,6 +4197,8 @@ mod tests {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         };
         let s = write_step(&model);
         // No mapped item, no extrusion, no brep — just an element

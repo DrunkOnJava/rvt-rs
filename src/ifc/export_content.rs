@@ -45,6 +45,9 @@ pub struct TypedProductionAppend {
     pub level_elementid_binds: usize,
     /// Layered elements' layers, by ElementId (RE-53).
     pub element_layers: BTreeMap<u32, super::ElementLayers>,
+    /// The materials each element's type draws its geometry in, by
+    /// ElementId (RE-82).
+    pub element_type_materials: BTreeMap<u32, Vec<String>>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -191,6 +194,25 @@ pub fn append_typed_production_elements(
                     crate::partition_schema_mvp::system_family(&decoded.class, true)
                         .map(String::from);
                 out.element_layers.insert(id, layers);
+            }
+        }
+
+        // RE-82: the materials the element's type draws its geometry in.
+        if let Some(id) = decoded.id {
+            let names: Vec<String> = decoded
+                .fields
+                .iter()
+                .filter_map(|(name, value)| match value {
+                    InstanceField::String(text)
+                        if name == crate::partition_schema_mvp::TYPE_MATERIAL_FIELD =>
+                    {
+                        Some(text.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            if !names.is_empty() {
+                out.element_type_materials.insert(id, names);
             }
         }
 
