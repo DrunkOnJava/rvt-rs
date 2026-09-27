@@ -530,6 +530,17 @@ pub struct ExportedModelDiagnostics {
     /// one in its layers where they add up to its body's thickness.
     #[serde(default)]
     pub layered_element_count: usize,
+    /// Exported bodies by how they were derived: each record-backed
+    /// element's `BodySource` property (#409), such as
+    /// `partition_wall_centreline` or `partition_element_record_bbox`.
+    #[serde(default)]
+    pub body_sources: std::collections::BTreeMap<String, usize>,
+    /// Bodies that are only the element record's bounding box: a
+    /// `partition_element_record_bbox` body with no recovered plan profile.
+    /// They are placed and sized correctly but are not the element's shape
+    /// (#409).
+    #[serde(default)]
+    pub bounding_box_bodies: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -2596,6 +2607,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         })
         .collect();
     let mut building_elements_carried_by_parts = 0usize;
+    let mut body_sources = std::collections::BTreeMap::<String, usize>::new();
+    let mut bounding_box_bodies = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -2604,9 +2617,28 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             solid_shape,
             representation_map_index,
             storey_index,
+            property_set,
             ..
         } = entity
         {
+            let properties = property_set.iter().flat_map(|set| &set.properties);
+            let mut source = None;
+            let mut profile_resolved = false;
+            for property in properties {
+                match (property.name.as_str(), &property.value) {
+                    ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
+                    ("ProfileResolved", entities::PropertyValue::Boolean(true)) => {
+                        profile_resolved = true
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(source) = source {
+                *body_sources.entry(source.clone()).or_insert(0) += 1;
+                if source == export_content::RECORD_BBOX_BODY_SOURCE && !profile_resolved {
+                    bounding_box_bodies += 1;
+                }
+            }
             building_elements += 1;
             *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
             if storey_index.is_some() {
@@ -2653,6 +2685,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             .map(|m| m.name.clone())
             .collect(),
         layered_element_count: model.element_layers.len(),
+        body_sources,
+        bounding_box_bodies,
     }
 }
 
@@ -3773,6 +3807,8 @@ mod tests {
             storey_bound_elements: 0,
             material_names_sample: Vec::new(),
             layered_element_count: 0,
+            body_sources: Default::default(),
+            bounding_box_bodies: 0,
         }
     }
 

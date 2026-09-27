@@ -687,6 +687,8 @@ interface ExportDiagnostics {
     storey_names?: string[];
     material_names_sample?: string[];
     layered_element_count?: number;
+    body_sources?: Record<string, number>;
+    bounding_box_bodies?: number;
   };
   unsupported_features?: string[];
   warnings?: string[];
@@ -2367,6 +2369,24 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
           layered > 0
             ? `${materialCount} · ${named} · layers and colours read for ${layered} ${layered === 1 ? 'element' : 'elements'}`
             : `${materialCount} · ${named} (names only; no compound layers)`,
+        ),
+      );
+    }
+    // #409: how much of the model is drawn from the element's own data and
+    // how much is a stand-in box.
+    const bodyTotal = Object.values(exported.body_sources ?? {}).reduce(
+      (sum, n) => sum + n,
+      0,
+    );
+    const boxBodies = exported.bounding_box_bodies ?? 0;
+    if (bodyTotal > 0) {
+      statusPanelEl.appendChild(
+        statusRow(
+          'Shapes',
+          boxBodies > 0 ? 'warn' : 'ok',
+          boxBodies > 0
+            ? `${bodyTotal - boxBodies} of ${bodyTotal} drawn from the element's own data; ${boxBodies} are the element's bounding box, placed and sized with its shape not decoded`
+            : `all ${bodyTotal} drawn from the element's own data`,
         ),
       );
     }
