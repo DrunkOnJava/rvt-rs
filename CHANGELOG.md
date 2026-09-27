@@ -8,6 +8,11 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Revit 2023 element records are located (RE-81, #421).** A 2023 record
+  sits behind the schema-derived marker with its ElementId at marker -52 and
+  its category at -38; the instance rule finds every element of Revit's own
+  export of two 2023 projects. A probe and a report; the exporter does not
+  read 2023 records yet.
 - **The install guide and status page describe v0.3.0 as released** (#405),
   each channel checked from its published artifacts.
 - **`rvt` 0.3.0 is on crates.io and docs.rs** (#406). The install guide

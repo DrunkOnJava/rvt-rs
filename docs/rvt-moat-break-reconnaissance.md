@@ -2060,3 +2060,7 @@ Report: `reports/element-framing/RE-60-hosted-levels.md`.
 ## Addendum — RE-80 per-release constants are schema class tags (2026-09-27)
 
 Three numbers carried as per-release constants are serialization tags of classes in the file's own `Formats/Latest` (a tag being the class's definition ordinal, RE-76): the `u16` opening `Global/ElemTable` is the tag of `ElemTable`; the element-record marker is `[Outline][0xFF x 4][ElementParents]`, the box written as an `Outline` and the reference lists as `ElementParents`; and the record-chain header constant is the tag of `ElementHeader`. The first two hold on every release from 2016 to 2026 (14 files, every marker followed by a well-formed box); the chain exists from 2024. Report: `reports/element-framing/RE-80-schema-tag-constants.md`; probe: `examples/probe_re80_schema_tag_constants.rs`.
+
+## Addendum — RE-81 Revit 2023 element records (2026-09-27)
+
+A 2023 record sits behind the RE-80 marker (`3c 01 ff ff ff ff 82 05`) with its ElementId as a `u32` at marker -52 and its `BuiltInCategory` at -38; container and placement kind are where 2024 has them. RE-21's instance rule then finds every element Tag of Revit's IFC4 export on two 2023 projects (45 of 45, 37 of 37), with nothing else on one and 14 nested generic models on the other. Report: `reports/element-framing/RE-81-2023-element-records.md`.
