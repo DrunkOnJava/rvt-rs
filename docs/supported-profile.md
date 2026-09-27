@@ -16,7 +16,8 @@ apart:
    read. Every Revit release from 2016 to 2026.
 2. **Elements identified.** Each element is found with its Revit ElementId and
    category, and the set equals the one Revit's own IFC export holds. Revit
-   2024 and 2025 project files.
+   2024 and 2025 project files, and Revit 2023 ones with their bounding boxes
+   only (RE-81).
 3. **Geometry.** An element's body. Exact where the element's data is decoded
    (the table below), otherwise its bounding box, and the export diagnostics
    say which.
@@ -29,7 +30,8 @@ apart:
 |---|---|---|---|---|
 | Revit 2024 and 2025 project (`.rvt`) | yes | yes, measured on Core Interior, the four RE1 models, Snowdon Towers, Projeto1 and `teste_export_2025` | see below | see below |
 | Revit 2026 project | yes | no: the element-record marker is predicted (RE-32) but unmeasured | none | metadata |
-| Revit 2023 and earlier project | yes | no (2023 arc walls only) | none | metadata |
+| Revit 2023 project | yes | yes, measured on two 2023 projects against Revit's IFC4 exports (RE-81); components nested in doors and windows are left out | the element's bounding box | ElementId and category only |
+| Revit 2022 and earlier project | yes | no | none | metadata |
 | Family (`.rfa`) or template (`.rte`, `.rft`) | yes | family metadata and OmniClass only | none | none |
 
 A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an
@@ -76,7 +78,7 @@ Revit leaves them out.
 ## Not supported
 
 - Converting an arbitrary Revit model to IFC with Revit-grade fidelity.
-- Element records of releases other than 2024 and 2025.
+- Element records of releases other than 2023, 2024 and 2025; on 2023, anything beyond identity, category and box.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
 - Door/Window typing from the opening-index rows (RE-19) and Level ElementIds

@@ -260,10 +260,12 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
     assert_eq!(floors.len(), 0, "must not invent Floor on Einhoven 2023");
     assert_eq!(rooms.len(), 0, "must not invent Room on Einhoven 2023");
 
-    // Door/Window: fail closed — do not invent typed Door/Window from
-    // 2023 Einhoven (no ArcWallRectOpening envelope on this file).
-    assert_eq!(doors.len(), 0, "must not invent Door on Einhoven 2023");
-    assert_eq!(windows.len(), 0, "must not invent Window on Einhoven 2023");
+    // Doors and windows come only from 2023 element records (RE-81), whose
+    // OST_Windows instances are exactly Revit's windows on two 2023
+    // projects with Revit exports: Einhoven's records hold no door and two
+    // windows. Nothing comes from the opening index, which 2023 lacks.
+    assert_eq!(doors.len(), 0, "Einhoven 2023 has no door records");
+    assert_eq!(windows.len(), 2, "Einhoven 2023's two window records");
     assert_eq!(
         openings.len(),
         0,

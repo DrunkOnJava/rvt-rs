@@ -27,6 +27,20 @@ All notable changes will be documented here. This project follows
 - **`rvt` 0.3.0 is on crates.io and docs.rs** (#406). The install guide
   documents `cargo install rvt --locked` and links the API documentation.
 
+### Added
+
+- **Revit 2023 projects export their elements (RE-81, #421).** Walls, doors,
+  windows, floors, roofs, columns, beams, foundations, rooms and the other
+  recovered categories come from their 2023 element records, typed, under
+  Revit's own ElementIds, each drawn as its bounding box. Against Revit's
+  IFC4 exports of two 2023 projects: 37 of 37 elements and 37 of 45, with
+  none outside either export; the 8 missing are window trims nested in the
+  windows, left out because Revit keeps some nested components (frames,
+  cuts) and drops others (mullion patterns) by a rule not yet decoded.
+  Names, types, storeys, joins, opening hosts, design options, parameters
+  and IFC export overrides are not read for 2023, and the export
+  diagnostics say so.
+
 ## [0.3.0] — 2026-09-27
 
 Trustworthy Revit 2024 and 2025 export: generated GlobalIds stable between
