@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The crate's own documentation says what it does today.** The docs.rs
+  front page had called IFC export a scaffold and the schema "100% classified";
+  it now states the supported profile and shows three runnable entry points
+  (read a file's identity, list a project's elements with the export
+  diagnostics, write IFC4 and glTF). The crates.io description and
+  `documentation` link (docs.rs) are updated to match (#406).
+
 - **GlobalIds rvt-rs generates no longer shift when the model changes
   (#400).** Entities Revit's export gives no GlobalId (openings, the
   further pieces of a slab, site, building, relationships, property sets)
