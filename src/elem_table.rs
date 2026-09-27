@@ -46,9 +46,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElemTableHeader {
     /// Named for what it was assumed to be, but not a count of elements:
-    /// the same value on every file of a release, project or family (1370
-    /// on 2023, 1411 on 2024, 1451 on 2025, 1481 on 2026). For the declared
-    /// ElementIds use [`declared_element_ids`].
+    /// the serialization tag of the class `ElemTable` in the file's own
+    /// schema (RE-80), so the same on every file of a release (1174 on
+    /// 2016, 1411 on 2024, 1481 on 2026). For the declared ElementIds use
+    /// [`declared_element_ids`].
     pub element_count: u16,
     /// Declared number of records (may differ if some elements have multiple
     /// records, e.g. versioned entries).
