@@ -88,13 +88,12 @@ fn clean_stream_path(path: &str) -> &str {
 
 /// Whether production inflate wrappers strip checksum-page trailers.
 ///
-/// **Wave 2 narrowed gate** (issue #151 / Discussion #112, judge: *narrow*):
-/// enable strip for large multi-member `Partitions/*` and listed `Global/*`
-/// database streams where redistributable corpus evidence shows member-recovery
-/// benefit. **`Formats/Latest` is excluded by default** — naive strip regresses
-/// opportunistic `class_names` (e.g. 9579→8575 on Core Interior) while
-/// structured SchemaTable stays flat; Formats ~48% schema recovery was **not**
-/// reproduced on redistributable samples.
+/// `Partitions/*`, the listed `Global/*` streams and, since #410,
+/// `Formats/Latest` (issue #151 / Discussion #112). `Formats/Latest` was left
+/// out at first because stripping it lowered an opportunistic class-name
+/// count; that count was drift garbage. With the strip, every file of one
+/// Revit release inflates to the byte-identical schema, family or project,
+/// and without it no two do (`examples/probe_schema_page_strip.rs`).
 ///
 /// `ProjectInformation`, `PartAtom`, `BasicFileInfo`, and preview streams are
 /// never gated — they are not routed through the paged gzip reader.
@@ -104,7 +103,6 @@ fn clean_stream_path(path: &str) -> &str {
 /// [`inflate_stream_auto`] / [`inflate_all_chunks_for_stream`] consult this gate.
 pub fn is_checksum_paged_stream(path: &str) -> bool {
     let clean = clean_stream_path(path);
-    // Formats/Latest intentionally omitted — see module docs above.
     if let Some(rest) = clean
         .strip_prefix("Partitions/")
         .or_else(|| clean.strip_prefix("partitions/"))
@@ -113,7 +111,8 @@ pub fn is_checksum_paged_stream(path: &str) -> bool {
     }
     matches!(
         clean,
-        "Global/ContentDocuments"
+        "Formats/Latest"
+            | "Global/ContentDocuments"
             | "Global/DocumentIncrementTable"
             | "Global/ElemTable"
             | "Global/History"
@@ -254,7 +253,8 @@ impl InflatedStream {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChecksumTailStripping {
-    /// Finding 1 **narrow** gate: Formats/Latest never strips by default.
+    /// No longer produced for `Formats/Latest` (#410); kept for readers of
+    /// older diagnostics.
     Disabled,
     Enabled,
 }
@@ -333,50 +333,64 @@ impl FormatsLatestIntegrity {
     }
 }
 
-/// Diagnose `Formats/Latest` stored bytes without enabling strip.
-///
-/// Reuses [`inflate_stream_at`] / page-size helpers. Respects the narrow
-/// Finding 1 gate: [`FormatsLatestIntegrity::checksum_tail_stripping`] is
-/// always [`ChecksumTailStripping::Disabled`].
+/// Diagnose `Formats/Latest`: its size, whether it spans checksum pages,
+/// and whether it inflates once they are stripped (#410).
 pub fn diagnose_formats_latest_integrity(stored: &[u8]) -> FormatsLatestIntegrity {
-    debug_assert!(
-        !is_checksum_paged_stream(crate::streams::FORMATS_LATEST),
-        "Formats/Latest must stay ungated (Finding 1 narrow)"
-    );
     let stored_bytes = stored.len();
     let page_boundary_detected = stored_bytes >= REVIT_STORED_PAGE_BYTES;
     let inflate = inflate_stream_at(crate::streams::FORMATS_LATEST, stored, 0);
     let inflated_bytes = inflate.as_ref().ok().map(|b| b.len());
-
-    // Multipage: completeness is unverified while strip stays disabled — even
-    // when bare inflate returns Ok (silent drift risk; #151 residual).
-    let (integrity_status, diagnostic_code) = if page_boundary_detected {
-        (
+    // The stream ends in a real gzip trailer: after the strip its CRC32 and
+    // ISIZE verify on every file measured (#410), so a stream is `Ok` only
+    // when they do. Accepting the strip on that condition is rosejn's (#255).
+    let (integrity_status, diagnostic_code) = match &inflate {
+        Err(_) => (FormatsIntegrityStatus::Incomplete, None),
+        Ok(_)
+            if gzip_trailer_verifies(&prepare_stream_for_inflate(
+                crate::streams::FORMATS_LATEST,
+                stored,
+            )) =>
+        {
+            (FormatsIntegrityStatus::Ok, None)
+        }
+        Ok(_) => (
             FormatsIntegrityStatus::Uncertain,
             Some(RVT_FORMATS_MULTIPAGE_UNVERIFIED.to_string()),
-        )
-    } else if inflate.is_ok() {
-        (FormatsIntegrityStatus::Ok, None)
-    } else {
-        (FormatsIntegrityStatus::Incomplete, None)
+        ),
     };
-
-    // Schema parsing caps its scan at SCHEMA_SCAN_LIMIT (#188); record that the
-    // cap will apply so callers can tell "the schema fit" from "we stopped".
-    let schema_scanned_bytes = inflated_bytes.map(|n| n.min(crate::formats::SCHEMA_SCAN_LIMIT));
-    let schema_scan_truncated =
-        inflated_bytes.is_some_and(|n| n > crate::formats::SCHEMA_SCAN_LIMIT);
+    let schema_scanned_bytes = inflated_bytes;
+    let schema_scan_truncated = false;
 
     FormatsLatestIntegrity {
         stream: crate::streams::FORMATS_LATEST.to_string(),
         stored_bytes,
         inflated_bytes,
         page_boundary_detected,
-        checksum_tail_stripping: ChecksumTailStripping::Disabled,
+        checksum_tail_stripping: ChecksumTailStripping::Enabled,
         integrity_status,
         diagnostic_code,
         schema_scan_truncated,
         schema_scanned_bytes,
+    }
+}
+
+/// True when `data` is one gzip member whose CRC32 and ISIZE trailer match
+/// what it inflates to, within [`DEFAULT_MAX_INFLATE_BYTES`].
+fn gzip_trailer_verifies(data: &[u8]) -> bool {
+    let mut decoder = flate2::read::GzDecoder::new(data);
+    let mut buf = [0u8; 8192];
+    let mut total = 0usize;
+    loop {
+        match std::io::Read::read(&mut decoder, &mut buf) {
+            Ok(0) => return true,
+            Ok(n) => {
+                total = total.saturating_add(n);
+                if total > DEFAULT_MAX_INFLATE_BYTES {
+                    return false;
+                }
+            }
+            Err(_) => return false,
+        }
     }
 }
 
@@ -924,9 +938,9 @@ mod tests {
 
     #[test]
     fn checksum_paged_stream_paths() {
-        // Narrowed Wave 2 gate: Partitions + Global DB streams only.
-        assert!(!is_checksum_paged_stream("Formats/Latest"));
-        assert!(!is_checksum_paged_stream("/Formats/Latest"));
+        // Partitions, Global DB streams and (#410) Formats/Latest.
+        assert!(is_checksum_paged_stream("Formats/Latest"));
+        assert!(is_checksum_paged_stream("/Formats/Latest"));
         assert!(is_revit_paged_loader_candidate("Formats/Latest"));
         assert!(is_checksum_paged_stream("Global/Latest"));
         assert!(is_checksum_paged_stream("Global/ElemTable"));
@@ -1053,14 +1067,10 @@ mod tests {
             payload
         );
 
-        // Formats/Latest is deliberately ungated (class_names regression on
-        // redistributable corpus; Formats ~48% not reproduced).
+        // Formats/Latest is paged too (#410).
         assert_eq!(
-            inflate_stream_at("Formats/Latest", &paged, 0)
-                .err()
-                .map(|e| e.to_string()),
-            inflate_at(&paged, 0).err().map(|e| e.to_string()),
-            "Formats/Latest must not strip by default"
+            inflate_stream_at("Formats/Latest", &paged, 0).unwrap(),
+            payload
         );
 
         // Small non-paged streams stay identity under prepare.
@@ -1096,33 +1106,41 @@ mod tests {
         out
     }
 
-    #[test]
-    fn formats_integrity_single_page_ok_without_claiming_multipage() {
-        let gzip = truncated_gzip_encode(b"formats-single-page").unwrap();
-        assert!(gzip.len() < REVIT_STORED_PAGE_BYTES);
-        let diag = diagnose_formats_latest_integrity(&gzip);
-        assert_eq!(diag.stream, "Formats/Latest");
-        assert_eq!(diag.stored_bytes, gzip.len());
-        assert_eq!(diag.inflated_bytes, Some(b"formats-single-page".len()));
-        assert!(!diag.page_boundary_detected);
-        assert_eq!(
-            diag.checksum_tail_stripping,
-            ChecksumTailStripping::Disabled
-        );
-        assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Ok);
-        assert!(diag.diagnostic_code.is_none());
-        assert!(!diag.schema_scan_truncated);
-        assert_eq!(
-            diag.schema_scanned_bytes,
-            Some(b"formats-single-page".len())
-        );
-        assert!(!diag.summary_line().contains("schema scan truncated"));
-        assert!(!is_checksum_paged_stream("Formats/Latest"));
+    /// A gzip member with its CRC32 and ISIZE trailer, as `Formats/Latest`
+    /// carries.
+    fn gzip_with_trailer(payload: &[u8]) -> Vec<u8> {
+        let mut gzip = truncated_gzip_encode(payload).unwrap();
+        let mut crc = flate2::Crc::new();
+        crc.update(payload);
+        gzip.extend_from_slice(&crc.sum().to_le_bytes());
+        gzip.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        gzip
     }
 
     #[test]
-    fn formats_integrity_multipage_uncertain_without_enabling_strip() {
-        // Synthetic multipage detection only — does **not** claim completeness.
+    fn formats_integrity_single_page_ok() {
+        let gzip = gzip_with_trailer(b"formats-single-page");
+        assert!(gzip.len() < REVIT_STORED_PAGE_BYTES);
+        let diag = diagnose_formats_latest_integrity(&gzip);
+        assert_eq!(diag.stream, "Formats/Latest");
+        assert_eq!(diag.inflated_bytes, Some(b"formats-single-page".len()));
+        assert!(!diag.page_boundary_detected);
+        assert_eq!(diag.checksum_tail_stripping, ChecksumTailStripping::Enabled);
+        assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Ok);
+        assert!(diag.diagnostic_code.is_none());
+        assert!(!diag.schema_scan_truncated);
+        // Without its trailer the stream still inflates but is unverified.
+        let bare = diagnose_formats_latest_integrity(&truncated_gzip_encode(b"x").unwrap());
+        assert_eq!(bare.integrity_status, FormatsIntegrityStatus::Uncertain);
+        assert_eq!(
+            bare.diagnostic_code.as_deref(),
+            Some(RVT_FORMATS_MULTIPAGE_UNVERIFIED)
+        );
+    }
+
+    #[test]
+    fn formats_multipage_inflates_to_its_exact_payload() {
+        // #410: Formats/Latest is paged like the database streams.
         let mut state = 0xC0FFEE_u32;
         let payload: Vec<u8> = (0..180_000)
             .map(|_| {
@@ -1130,53 +1148,22 @@ mod tests {
                 (state >> 16) as u8
             })
             .collect();
-        let gzip = truncated_gzip_encode(&payload).unwrap();
+        let gzip = gzip_with_trailer(&payload);
         let paged = inject_page_checksums(&gzip);
         assert!(
             paged.len() >= REVIT_STORED_PAGE_BYTES,
             "fixture must cross a page boundary"
         );
-
+        assert!(is_checksum_paged_stream("Formats/Latest"));
+        assert_eq!(
+            inflate_stream_at("Formats/Latest", &paged, 0).unwrap(),
+            payload
+        );
         let diag = diagnose_formats_latest_integrity(&paged);
-        assert_eq!(diag.stream, "Formats/Latest");
-        assert_eq!(diag.stored_bytes, paged.len());
         assert!(diag.page_boundary_detected);
-        assert_eq!(
-            diag.checksum_tail_stripping,
-            ChecksumTailStripping::Disabled
-        );
-        assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Uncertain);
-        assert_eq!(
-            diag.diagnostic_code.as_deref(),
-            Some(RVT_FORMATS_MULTIPAGE_UNVERIFIED)
-        );
-        // Gate must remain off — diagnose must not flip production strip.
-        assert!(!is_checksum_paged_stream("Formats/Latest"));
-        let prepared = prepare_stream_for_inflate("Formats/Latest", &paged);
-        assert_eq!(
-            prepared.as_ref(),
-            paged.as_slice(),
-            "diagnose must not enable Formats strip"
-        );
-    }
-
-    #[test]
-    fn formats_integrity_reports_schema_scan_truncation_past_limit() {
-        // Highly compressible payload: stored stays under one page while the
-        // inflated stream runs past the schema scan limit (#188).
-        let payload = vec![0u8; crate::formats::SCHEMA_SCAN_LIMIT + 4096];
-        let gzip = truncated_gzip_encode(&payload).unwrap();
-        assert!(gzip.len() < REVIT_STORED_PAGE_BYTES);
-
-        let diag = diagnose_formats_latest_integrity(&gzip);
         assert_eq!(diag.inflated_bytes, Some(payload.len()));
         assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Ok);
-        assert!(diag.schema_scan_truncated);
-        assert_eq!(
-            diag.schema_scanned_bytes,
-            Some(crate::formats::SCHEMA_SCAN_LIMIT)
-        );
-        assert!(diag.summary_line().contains("schema scan truncated"));
+        assert!(diag.diagnostic_code.is_none());
     }
 
     #[test]
@@ -1186,11 +1173,6 @@ mod tests {
         assert!(!diag.page_boundary_detected);
         assert_eq!(diag.integrity_status, FormatsIntegrityStatus::Incomplete);
         assert!(diag.inflated_bytes.is_none());
-        assert!(!diag.schema_scan_truncated);
         assert!(diag.schema_scanned_bytes.is_none());
-        assert_eq!(
-            diag.checksum_tail_stripping,
-            ChecksumTailStripping::Disabled
-        );
     }
 }

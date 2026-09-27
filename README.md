@@ -28,8 +28,8 @@ Rust 2024 edition (MSRV 1.85). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`
 | `BasicFileInfo` metadata | ✓ | Version, build, GUID, original path, plus the `Key: value` block every release 2016-2026 writes: worksharing state, central model path, last-saved-by user, save counter, single-user-cloud flag (`rvt-info`, `rvt::metadata`) |
 | `PartAtom` XML | ✓ | Title, OmniClass code, taxonomies |
 | Stream preview extraction | ✓ | Clean PNG, wrapper stripped |
-| `Formats/Latest` schema parse | ✓ | 395 classes, 13,570 fields |
-| Field-type classification | ✓ | **100% over `rac_basic_sample_family` 11-release corpus** — CI regression gate |
+| `Formats/Latest` schema parse | ✓ | the whole page-stripped schema: 4,126 classes and 11,562 fields on Revit 2024, 122,107 fields across the 11 releases (#410) |
+| Field-type classification | ✓ | 9 to 12 fields per release unclassified out of 10,000 to 12,000, all listed in the CI gate (`tests/field_type_coverage.rs`, #410); the 100% figure before #410 covered only the first 64 KB of each schema |
 | Cross-release tag-drift table | ✓ | First public 122×11 dataset |
 | Layer 5a ADocument walker | partial | Reliable on Revit 2024–2026; 2016–2023 entry-point detection pending |
 | Stream-level modifying writer | ✓ | 13/13 streams byte-preserving; `rvt-write` CLI + JSON patch manifests |
@@ -96,11 +96,11 @@ Core Interior and the RE1 models are licensed test files and run in CI. Snowdon 
 
 The openBIM community — anchored by [buildingSMART International](https://www.buildingsmart.org/) and the IFC standard — has spent years working on Revit interoperability. Autodesk's own [revit-ifc](https://github.com/Autodesk/revit-ifc) exporter runs **inside** Revit using the Revit API, so it can only emit what the API surfaces. Real-world IFC exports from Revit are described, routinely and publicly, as *"very limited"* (thinkmoult.com), *"data loss"* (Reddit r/bim), and *"out of the box, just crap"* (the [OSArch Wiki's guide to Revit for openBIM](https://wiki.osarch.org/index.php?title=Revit_setup_for_OpenBIM)).
 
-The schema work here — decoding `Formats/Latest` and classifying 100% of field encodings across 11 Revit releases — is the dictionary a byte-level reader needs. Once the partition-stream decoder work in [`TODO.md`](TODO.md) lands, the resulting IFC export can carry more than what the Revit API chooses to expose. That is the thesis. It is not yet the delivered product.
+The schema work here — decoding the whole of `Formats/Latest` and classifying all but about ten field encodings per release across 11 Revit releases — is the dictionary a byte-level reader needs. Once the partition-stream decoder work in [`TODO.md`](TODO.md) lands, the resulting IFC export can carry more than what the Revit API chooses to expose. That is the thesis. It is not yet the delivered product.
 
 If you're building BIM/AEC tooling and want an Apache-2 Revit reader to compose into your stack:
 
-- **Any release, 2016 to 2026** — OLE/CFB open, truncated-gzip decode, metadata, previews, schema introspection (100% field-type classification across the 11-release family corpus), stream-level byte-preserving writes.
+- **Any release, 2016 to 2026** — OLE/CFB open, truncated-gzip decode, metadata, previews, schema introspection (the whole schema, all but about ten field encodings per release classified), stream-level byte-preserving writes.
 - **Revit 2024 and 2025 projects** — typed elements with Revit's ElementIds, names, types, storeys, materials, layers and GlobalIds, as IFC4, glTF 2.0, plan SVG and CSV, each export with a diagnostics sidecar naming what was approximated or left out.
 - **Not yet** — element records of other releases, most parameters, family geometry, and semantic editing of a Revit file.
 
@@ -168,7 +168,7 @@ Running the shipped CLIs against one 400 KB RFA fixture:
 - **Folder inventory**: one row per Revit file under a folder — release, worksharing, last saved — as a table, CSV, JSON or JSON Lines, reading only each file's two identity streams (`rvt-info <folder> -f csv`)
 - **Atom XML**: title, OmniClass code, taxonomies (`rvt-info` parses `PartAtom`)
 - **Preview**: clean PNG thumbnail, 300-byte Revit wrapper stripped (`rvt-info --extract-preview`)
-- **Schema**: 395 classes + 1,114 fields + per-field typed encoding (`rvt-schema`)
+- **Schema**: every class and field of the embedded schema with its typed encoding, 3,490 classes on the 2016 sample to 4,285 on 2026 (`rvt-schema`)
 - **History**: every Revit release that ever saved this file (`rvt-history`)
 - **Bulk strings**: 3,746 length-prefixed UTF-16LE records from Partitions/NN — Autodesk unit/spec/parameter-group identifiers, OmniClass + Uniformat codes, Revit category labels, localized format strings (`rvt-history --partitions`)
 
@@ -278,7 +278,7 @@ cargo build --release
 # Compare two versions of the same file (cross-version byte diff)
 ./target/release/rvt-diff --decompress 2018.rfa 2024.rfa
 
-# Dump the full class schema (395 classes, 13,570 fields)
+# Dump the full class schema (4,126 classes and 11,562 fields on a Revit 2024 file)
 ./target/release/rvt-schema my-project.rvt
 
 # Document upgrade history (which Revit releases have opened this file)
@@ -397,20 +397,20 @@ these streams. The fix is to skip the 10-byte header manually and use
 | 4a · Schema table | Class names + fields + C++ type signatures from `Formats/Latest`; per-class tag + parent + declared field count; cross-release tag-drift map | **Done** |
 | 4b · Schema→data link | Tags from `Formats/Latest` occur at ~340× the noise rate in `Global/Latest`; schema IS the live type dictionary for the object graph | **Done** |
 | 4c.1 · Record framing | Tagged class records in `Formats/Latest` parse into structured records: `{tag, parent, ancestor_tag, declared_field_count}`; HostObjAttr → `{tag=107, parent=Symbol, ancestor_tag=0x0025 → APIVSTAMacroElem, declared_field_count=3}` | **Done** |
-| 4c.2 · Field-body decoding | `FieldType` enum classifies **100%** of schema fields across 8 variants (Primitive, String, Guid, ElementId, ElementIdRef, Pointer, Vector, Container). 11 discriminator bytes mapped, including generalized scalar-base Vector/Container (`{kind} 0x10 ...` / `{kind} 0x50 ...`) and the `0x0d` point-type base. | **Done (100.00% on 13,570 fields across the 11-version corpus; zero `Unknown`)** |
+| 4c.2 · Field-body decoding | `FieldType` enum classifies all but 9 to 12 schema fields per release across 8 variants (Primitive, String, Guid, ElementId, ElementIdRef, Pointer, Vector, Container). 11 discriminator bytes mapped, including generalized scalar-base Vector/Container (`{kind} 0x10 ...` / `{kind} 0x50 ...`) and the `0x0d` point-type base. | **Done (all but 9 to 12 of 10,000 to 12,000 fields per release since #410; the earlier 100.00% on 13,570 fields covered the first 64 KB of each schema; zero `Unknown`)** |
 | 4d · ElemTable | `Global/ElemTable` header parser + rough record enumeration; record semantics remain unresolved pending per-element schema lookup | **Partial** |
 | 5 · IFC4 export | Full spatial tree + per-element IFC entities + `IfcLocalPlacement` + `IfcExtrudedAreaSolid` + compound material layers + typed property sets + `IfcOpeningElement`/`IfcRelVoidsElement`/`IfcRelFillsElement` for doors and windows. Deterministic ISO-10303-21 output. IfcOpenShell + BlenderBIM verified. | **Done** (rectangular profiles; swept / revolved / BRep fallbacks ship but use rectangular in the default emission path — IFC-17/24 is the remaining refinement) |
 | 6 · Write path | Byte-preserving copy for unchanged files; stream-level patching for named OLE streams with atomic temp-file rename, per-stream verification, grow/shrink/multi-stream coverage, and GUID/history preservation checks. Field-level semantic patching is Phase 7. | **Done (stream-level); field-level pending** |
 | 7 · Browser viewer | WebAssembly build of the core + Three.js + Vite + Pages deploy. Zero-upload, in-tab parse, export buttons for glTF/IFC/SVG, URL-state share. Live at <https://drunkonjava.github.io/rvt-rs/>. | **Done** (VW1-01..24) |
 
-All 5 original P0 research questions (Q4-Q7) are **resolved**. Layer 4c.2 reaches **100.00% field-type classification** on the 11-version reference corpus (13,570 total schema fields, zero `Unknown`). IFC4 emission, glTF export, 2D plan view, and the browser viewer all ship. The next frontier is real-world project-file corpus validation (Q-01) — one `.rvt` probe already caught a `gzip_header_len` bounds bug that family files never hit.
+All 5 original P0 research questions (Q4-Q7) are **resolved**. Layer 4c.2 classified 100.00% of the 13,570 fields in the first 64 KB of each schema; #410 found the rest of `Formats/Latest` was being inflated without its page strip, and on the whole schema (122,107 fields across 11 releases) 9 to 12 fields per release remain unclassified. IFC4 emission, glTF export, 2D plan view, and the browser viewer all ship. The next frontier is real-world project-file corpus validation (Q-01) — one `.rvt` probe already caught a `gzip_header_len` bounds bug that family files never hit.
 
 Key findings from this phase:
 
 - **Q4** The u16 "flag" word in each tagged-class preamble is a **class-tag reference** (ancestor / mixin / protocol). 9/9 non-zero values resolve to named classes in the same schema.
 - **Q5** Each field's `type_encoding` is `[byte category][u16 sub_type][optional body]`. 9 category bytes mapped (`0x01` bool, `0x02` u16, `0x04/0x05` u32, `0x06` f32, `0x07` f64, `0x08` string, `0x09` GUID, `0x0b` u64, `0x0e` reference/container).
 - **Q5.1** Coverage extended to 84% of fields.
-- **Q5.2** Coverage reaches **100%** of fields (13,570 across 11 releases). Generalized `{scalar_base} 0x10 ...` / `{scalar_base} 0x50 ...` as vector/container modifiers; added `0x0d` point-type base; added `0x08 0x60 ...` alternate string encoding; added `ElementIdRef { referenced_tag, sub }` for references that carry a specific target-class tag; added deprecated `0x03` i32-alias seen only in 2016–2018. See `docs/rvt-moat-break-reconnaissance.md` §Q5.2.
+- **Q5.2** Coverage reaches **100%** of the fields in the first 64 KB of each schema (13,570 across 11 releases; #410 later read the whole schema). Generalized `{scalar_base} 0x10 ...` / `{scalar_base} 0x50 ...` as vector/container modifiers; added `0x0d` point-type base; added `0x08 0x60 ...` alternate string encoding; added `ElementIdRef { referenced_tag, sub }` for references that carry a specific target-class tag; added deprecated `0x03` i32-alias seen only in 2016–2018. See `docs/rvt-moat-break-reconnaissance.md` §Q5.2.
 - **Q6** `Global/Latest` is **not** an index + heap — it's a flat TLV stream.
 - **Q6.1** Instance data is **schema-directed** (tag-less, protobuf-style). Decoding requires schema-first sequential walk from a known entry point.
 - **Q7** `Partitions/NN` trailer u32 fields are **not** per-chunk offsets. Gzip-magic scan remains correct.

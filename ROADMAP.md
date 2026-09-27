@@ -49,9 +49,9 @@ while the broader registry remains a library building block (see
 | Area | Current state | Next decision point |
 |---|---|---|
 | Container, compression, metadata | Shipped | Maintain compatibility and bounds checks. |
-| `Formats/Latest` schema | Shipped | Keep 100 percent field classification gated in CI. |
+| `Formats/Latest` schema | Shipped | The whole schema is read since #410; classify the 9 to 12 residual field encodings per release with byte evidence, and take class tags from the definition ordinal (#154). |
 | ADocument/document-level walker | Partial | Expand confidence across project releases and older files. |
-| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). Every `DecodedElement` carries M3-07 provenance/confidence (CLI/Python/viewer + default IFC hide below 0.55). RE-19: no Door/Window discriminator / no schema-field Wall. RE-20: no Level ElementId recovery on magnetar corpora (`Level` absent from Formats; Floors/Rooms stay Unassigned). |
+| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). Every `DecodedElement` carries M3-07 provenance/confidence (CLI/Python/viewer + default IFC hide below 0.55). RE-19: no Door/Window discriminator / no schema-field Wall. RE-20: no Level ElementId map in the opening-index bytes; its note that `Level` is absent from Formats was an artifact of the 64 KB schema scan (#410: `Level` is class 2422 of Revit 2024's schema). Storeys come from element records instead (RE-24, RE-27, RE-51). |
 | IFC writer | Partial | Levels/Floors/Rooms/Materials from partition MVP emit honestly; ArcWall geometry on 2023; Door/Window host IFC + slab extrusion still open (blocked on RE-19); Floor/Room storey bind idle (RE-20). |
 | Browser viewer | Partial | File Status lists recovered storey names + material display-name samples + honest Parameters row (empty until AProperty host joins — RE-20: no AProperty carriers on magnetar Global/Latest); scene tree groups under `IFCBUILDINGSTOREY` (ArcWalls by elevation; Floors/Rooms stay Unassigned — RE-20 negative on Level ElementIds). |
 | Python/CLI surface | Partial | Stabilize JSON schemas and one-shot inspect workflow. |
