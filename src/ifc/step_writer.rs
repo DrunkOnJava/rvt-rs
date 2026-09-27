@@ -857,8 +857,9 @@ impl StepWriter {
         self.emit_line("HEADER;");
         self.emit_line("FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');");
         self.emit_line(format!(
-            "FILE_NAME('{project}.ifc','{}',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.1.x','rvt-rs STEP writer','');",
-            iso_timestamp_from(self.timestamp)
+            "FILE_NAME('{project}.ifc','{}',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs {version}','rvt-rs STEP writer','');",
+            iso_timestamp_from(self.timestamp),
+            version = env!("CARGO_PKG_VERSION"),
         ));
         self.emit_line("FILE_SCHEMA(('IFC4'));");
         self.emit_line("ENDSEC;");
@@ -886,7 +887,10 @@ impl StepWriter {
         let application = self.id();
         self.emit_entity(
             application,
-            format!("IFCAPPLICATION(#{org},'0.1.x','rvt-rs','{}')", "rvt_rs"),
+            format!(
+                "IFCAPPLICATION(#{org},'{}','rvt-rs','rvt_rs')",
+                env!("CARGO_PKG_VERSION")
+            ),
         );
         let owner_hist = self.id();
         self.emit_entity(

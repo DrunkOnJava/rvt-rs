@@ -498,6 +498,14 @@ impl RevitFile {
         crate::formats::parse_schema(&decompressed)
     }
 
+    /// Every class of the embedded schema with its serialization tag, read by
+    /// the schema grammar ([`crate::formats::schema_classes`], #154).
+    pub fn schema_classes(&mut self) -> Result<crate::formats::SchemaClasses> {
+        let bytes = self.read_stream(FORMATS_LATEST)?;
+        let decompressed = compression::inflate_stream_at(FORMATS_LATEST, &bytes, 0)?;
+        Ok(crate::formats::schema_classes(&decompressed))
+    }
+
     /// Find the version-specific `Partitions/NN` stream name.
     pub fn partition_stream_name(&self) -> Option<String> {
         self.stream_names()

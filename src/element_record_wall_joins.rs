@@ -896,6 +896,7 @@ mod tests {
             builtin_category: per::OST_WALLS,
             container: per::CONTAINER_NONE,
             placement_kind: per::PLACEMENT_KIND_INSTANCE,
+            class_tag: 0,
             bbox_feet,
             preceding_reference: None,
             owner_reference: None,

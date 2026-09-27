@@ -65,6 +65,18 @@ All notable changes will be documented here. This project follows
   rotated plates); Snowdon Towers: 4,770 of 6,081; RE1 Architecture: 75 of
   85. Each element's own `BodySource` property already said so; now the
   total does too.
+- **Every element carries its Revit class (RE-76, #154, #223).** The schema
+  is now read by its grammar, which gives each class its serialization tag:
+  its definition ordinal in the file's own `Formats/Latest`. An element
+  record names its class by that tag at `+0x4a`, so each record-backed
+  element's property set gets `RevitClass`: `SWall`, `ArcWall` and
+  `FaceWall` for walls, `Floor`, `RoomElem`, `ProfileRoof`, `StairsElement`,
+  `FamilyInstance` and so on. Every exported element on Core Interior,
+  RE1 Architecture and Snowdon Towers resolves (970, 85 and 6,081), and
+  Snowdon's 32 `ArcWall` records are exactly the 32 walls RE-75 found
+  storing an arc. `formats::schema_classes` and `RevitFile::schema_classes`
+  expose the classes. Credit: STE1200 and jakobhirn-bit (Discussion #112),
+  rosejn (#255).
 
 - **Curved walls are drawn along their arc (RE-75, #358).** A wall's data
   stores its location arc in the record rvt-rs read as a line, and the word
@@ -551,6 +563,10 @@ All notable changes will be documented here. This project follows
   `find_type_records_with_marker` take the release's bbox marker.
 
 ### Fixed
+
+- **The IFC header names the rvt-rs version that wrote it.** `FILE_NAME`'s
+  originating system and `IfcApplication.Version` said `0.1.x` whatever the
+  version; they now carry the crate's version.
 
 - **The IFC's units are the units its values are written in (#403).** The
   writer writes every length in metres, but a model with no recovered units

@@ -315,6 +315,15 @@
       "user_impact": "An IFC file from rvt-rs and Revit's own IFC of the same model name every element, room and storey with the same GlobalId, so diffs line up and BCF issues, clash results and federated links carry over between them."
     },
     {
+      "id": "element-record-revit-class",
+      "area": "elements",
+      "name": "Each record-backed element's Revit class, from the schema's definition ordinal (RE-76)",
+      "status": "partial",
+      "evidence": "formats::schema_classes (the Formats/Latest grammar, whole stream since #410); PartitionElementRecord::class_tag (+0x4a); partition_schema_mvp::attach_revit_classes; examples/probe_re76_schema_class_tags.rs; reports/element-framing/RE-76-schema-class-tags.md",
+      "notes": "A class's serialization tag is its definition ordinal in the file's own schema (12 for the first, one more per definition, top-level or inline), and an element record's u16 at +0x4a is its class under that numbering. The grammar reads the whole schema on 2016, 2024, 2025 and 2026 samples (3,792 to 4,690 classes). Every record of ten categories resolves on Core Interior, RE1 Architecture and Snowdon Towers: walls SWall, ArcWall, FaceWall; floors Floor; rooms RoomElem; roofs ProfileRoof; stairs StairsElement; families FamilyInstance or, for type symbols, FamilySymbol. Snowdon's 32 ArcWall records are exactly the 32 walls RE-75 found storing an arc. Status is partial: SchemaTable.tag, class_tag_map and the Global/Latest walker still use the u16 after each class name (#154).",
+      "user_impact": "Every exported element carries RevitClass, so curved walls, face-based walls, in-place families and type symbols can be told apart in the IFC and the viewer."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",
