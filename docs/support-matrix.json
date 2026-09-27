@@ -216,6 +216,15 @@
       "user_impact": "Walls, floors, ceilings, roofs and railings show the type name Revit gives them (for example 8\" Interior Partition 3 Hour or Basement Slab) in the IFC property set and the viewer."
     },
     {
+      "id": "type-text-parameters",
+      "area": "elements",
+      "name": "Type Mark, Description and Fire Rating of element types, on their instances (RE-77)",
+      "status": "partial",
+      "evidence": "partition_type_parameters::type_text_parameters; partition_schema_mvp::attach_type_text_parameters; tools/re/type_parameters_vs_vim.py; tools/re/type_parameters_vs_ifc.py; reports/element-framing/RE-77-type-text-parameters.md",
+      "notes": "Value blocks open [owner u64][56 x 0xff][3 x 0x00]; a type's block holds some text parameters as i64 BuiltInParameter, u32 n, UTF-16 x n. -1001405 Type Mark, -1010103 Description and -1001206 Fire Rating were named by matching values against the VIM export of Snowdon Towers' 2027 edition. Snowdon Towers: Type Mark 1,257 of 1,276 equal to the VIM (the 19 others are empty there), Description 70 of 70, Fire Rating 696 of 696 equal to Revit's IFC4 export; RE1 Architecture Fire Rating 7 of 7. A type with conflicting values gets none. Instance parameters and numbers are not read; recall is partial (696 of 862 rated Snowdon elements).",
+      "user_impact": "Doors, walls and other elements carry their type's Type Mark, Description and Fire Rating in the IFC, the viewer and schedules."
+    },
+    {
       "id": "ifc-export-overrides",
       "area": "ifc",
       "name": "Revit's IFC export overrides (Export to IFC As, IFC Predefined Type, and their type-level twins), from element data",

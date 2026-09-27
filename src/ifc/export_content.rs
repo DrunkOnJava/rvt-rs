@@ -1155,6 +1155,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let mut z = None;
     let mut source_stream = None;
     let mut revit_class = None;
+    let mut type_parameters: Vec<(String, String)> = Vec::new();
     let mut wall_body_source = None;
     let mut wall_thickness = None;
     let mut wall_trim_start = None;
@@ -1249,6 +1250,15 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             ("m_locationZ", InstanceField::Float { value, .. }) => z = Some(*value),
             (crate::partition_schema_mvp::REVIT_CLASS_FIELD, InstanceField::String(value)) => {
                 revit_class = Some(value.clone());
+            }
+            (name, InstanceField::String(value))
+                if name.starts_with(crate::partition_schema_mvp::TYPE_PARAMETER_FIELD_PREFIX) =>
+            {
+                type_parameters.push((
+                    name[crate::partition_schema_mvp::TYPE_PARAMETER_FIELD_PREFIX.len()..]
+                        .to_string(),
+                    value.clone(),
+                ));
             }
             ("m_source_stream", InstanceField::String(value)) => {
                 source_stream = Some(value.clone());
@@ -1627,6 +1637,13 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         properties.push(Property {
             name: "RevitClass".into(),
             value: PropertyValue::Text(class),
+        });
+    }
+    // RE-77: the type's text parameters, under the names Revit shows.
+    for (name, value) in type_parameters {
+        properties.push(Property {
+            name,
+            value: PropertyValue::Text(value),
         });
     }
     // RE-38: the family and type the partition name entries give this

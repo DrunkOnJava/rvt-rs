@@ -339,6 +339,20 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Type text parameters (RE-77, #35) ---
+    let type_parameters = crate::partition_type_parameters::type_text_parameters(rf, revit_version);
+    if !type_parameters.is_empty() {
+        for elements in [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ] {
+            attach_type_text_parameters(&type_parameters, elements);
+        }
+    }
     Ok(out)
 }
 
@@ -972,6 +986,33 @@ fn attach_revit_classes(classes: &crate::formats::SchemaClasses, elements: &mut 
             element.fields.push((
                 REVIT_CLASS_FIELD.into(),
                 InstanceField::String(class.name.clone()),
+            ));
+        }
+    }
+}
+
+/// Prefix of the fields carrying an element's type text parameters (RE-77):
+/// `m_type_parameter:Type Mark` and so on.
+pub const TYPE_PARAMETER_FIELD_PREFIX: &str = "m_type_parameter:";
+
+/// Give each element the text parameters of its type ([`TYPE_ID_FIELD`],
+/// RE-38 and #322), as Revit shows a type's parameters on its instances.
+fn attach_type_text_parameters(
+    parameters: &BTreeMap<u32, BTreeMap<&'static str, String>>,
+    elements: &mut [DecodedElement],
+) {
+    for element in elements.iter_mut() {
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        let Some(values) = type_id.and_then(|id| parameters.get(&id)) else {
+            continue;
+        };
+        for (name, value) in values {
+            element.fields.push((
+                format!("{TYPE_PARAMETER_FIELD_PREFIX}{name}"),
+                InstanceField::String(value.clone()),
             ));
         }
     }
