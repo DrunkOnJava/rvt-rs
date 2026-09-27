@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Held-out validation (#408).** Autodesk's Snowdon Towers Plumbing, HVAC
+  and Electrical samples, never used to develop the decoder, were exported
+  once and compared with the VIM export of the sample
+  (`tools/re/held_out_vs_vim.py`,
+  `reports/validation/held-out-snowdon-mep-2026-09-27.md`): 10,385
+  exported elements in the VIM, every one in the expected category; every
+  instance both hold exported; 8,766 storeys and 10,385 GlobalIds equal.
 - **CI and the local gate no longer run unit tests.** Unit tests are banned
   in this repository. `tools/ci/test-targets.txt` classes every
   `tests/*.rs` target as real-file, CLI, contract or unit, and

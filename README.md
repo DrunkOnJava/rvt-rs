@@ -84,6 +84,8 @@ Across Autodesk's Snowdon Towers architectural sample (Revit 2024), rvt-rs expor
 
 Core Interior and the RE1 models are licensed test files and run in CI. Snowdon Towers has no licence and is measured locally only.
 
+All of the above were used to develop the decoder. Three models that were not, Autodesk's Snowdon Towers Plumbing, HVAC and Electrical samples (2024), were measured once as they are against the VIM export of the sample: every exported element the VIM holds is in the expected category (10,385), every VIM instance both hold is exported, and all storeys and GlobalIds agree ([held-out report](reports/validation/held-out-snowdon-mep-2026-09-27.md), #408). Their bodies are bounding boxes.
+
 ## What does not work yet
 
 | Gap | Status | Evidence |
