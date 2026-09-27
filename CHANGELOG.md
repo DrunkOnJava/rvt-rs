@@ -6,6 +6,11 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The install guide and status page describe v0.3.0 as released** (#405),
+  each channel checked from its published artifacts.
+
 ## [0.3.0] — 2026-09-27
 
 Trustworthy Revit 2024 and 2025 export: generated GlobalIds stable between
