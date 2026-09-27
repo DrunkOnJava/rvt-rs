@@ -4,19 +4,21 @@ This guide covers the supported ways to install or run rvt-rs on a fresh
 machine. Use [user-guide.md](user-guide.md) after installation to decide which
 workflow fits your file.
 
-**Publication status (as of 2026-09-23, release `v0.2.0`):**
+**Publication status (as of 2026-09-27, release `v0.3.0`):**
 
 | Channel | Status |
 |---|---|
-| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.2.0** (wheels for Linux x86_64 with glibc 2.35 or later, macOS Apple Silicon and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
-| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.2.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.2.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
-| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.2.0`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
+| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.3.0** (wheels for Linux x86_64 and aarch64 with glibc 2.17 or later, musl Linux x86_64 and aarch64, macOS Apple Silicon and Intel, and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
+| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.3.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.3.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
+| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.3.0`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
 | **crates.io** (`rvt`) | **Not published** — `cargo install rvt` fails until a successful `cargo publish`; build from source instead |
 | **docs.rs** (`rvt`) | **Not available** (404) until the crate exists on crates.io |
 
-**0.3.0 is prepared, not published.** `main` carries version 0.3.0 and the
-GitHub Release v0.3.0 is a draft with no assets. Until it is published, every
-channel above still serves 0.2.0; building from source gives you 0.3.0.
+Each 0.3.0 channel was checked from what was published: the archives'
+checksums and build attestations, the CLIs on RE1 Electrical (macOS arm64 and
+Intel, Linux x86_64 and aarch64; Windows by the release job's own smoke
+test), the PyPI wheel in a clean environment, the container image, and the
+deployed viewer.
 
 ## Browser Viewer
 
@@ -40,7 +42,7 @@ python -c "import rvt; print(rvt.__version__)"
 
 Each wheel is one `abi3` build for CPython 3.8 and later.
 
-| Platform | 0.2.0 | From the next release |
+| Platform | 0.2.0 | 0.3.0 |
 |---|---|---|
 | Linux x86_64 | glibc 2.35 or later (`manylinux_2_35`) | glibc 2.17 or later (`manylinux2014`) |
 | Linux aarch64 (Graviton, Raspberry Pi 4/5, Docker on Apple Silicon) | none | glibc 2.17 or later |
@@ -50,8 +52,9 @@ Each wheel is one `abi3` build for CPython 3.8 and later.
 | Windows x86_64 | yes | yes |
 
 Where no wheel fits, pip builds the sdist instead, and that needs a Rust
-toolchain (`rustup`, stable). With 0.2.0 that includes RHEL / Rocky / Alma 8
-and 9, Amazon Linux 2023, Debian 11 and Ubuntu 20.04. If `pip install rvt`
+toolchain (`rustup`, stable). With 0.2.0 that included RHEL / Rocky / Alma 8
+and 9, Amazon Linux 2023, Debian 11 and Ubuntu 20.04, which 0.3.0's
+manylinux2014 wheels cover. If `pip install rvt`
 starts compiling Rust, that is why. Install Rust first, or use the prebuilt
 CLI archives or the container image below.
 

@@ -4,7 +4,7 @@ What rvt-rs can be trusted with today, in the terms a BIM user would check.
 The evidence behind every line is in [`support-matrix.json`](support-matrix.json)
 (`rvt-capabilities --matrix -f text` prints it) and in the measured tables of the
 [README](../README.md#what-rvt-rs-reads-from-real-projects). This page
-describes `main`; the latest release, v0.2.0, predates everything under
+describes `main`; the latest release, v0.3.0, predates everything under
 `[Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Four levels of "it works"
