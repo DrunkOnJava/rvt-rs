@@ -77,6 +77,14 @@ All notable changes will be documented here. This project follows
   storing an arc. `formats::schema_classes` and `RevitFile::schema_classes`
   expose the classes. Credit: STE1200 and jakobhirn-bit (Discussion #112),
   rosejn (#255).
+- **Type Mark, Description and Fire Rating (RE-77, #35).** Each element
+  now carries its type's Type Mark, Description and Fire Rating, read from
+  the type's parameter value block. On Snowdon Towers every value rvt-rs
+  writes agrees with Revit's: Type Mark on 1,257 of the 1,276 elements the
+  VIM export can check (the other 19 are empty in that later edition),
+  Description 70 of 70, and Fire Rating 696 of 696 against Revit's own
+  IFC4 export; RE1 Architecture's 7 fire ratings too. Instance parameters
+  and numeric values are not read yet.
 
 - **Curved walls are drawn along their arc (RE-75, #358).** A wall's data
   stores its location arc in the record rvt-rs read as a line, and the word
