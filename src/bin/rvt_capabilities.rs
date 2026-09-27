@@ -15,7 +15,8 @@ use std::process::ExitCode;
     about = "Emit honest rvt-rs capability + relation-domain snapshot (no invented successes)",
     after_help = "Examples:\n  \
         rvt-capabilities\n  \
-        rvt-capabilities -f text"
+        rvt-capabilities -f text\n  \
+        rvt-capabilities --matrix -f text"
 )]
 struct Cli {
     /// Output format.
@@ -25,6 +26,11 @@ struct Cli {
     /// Shorthand for `--format json`.
     #[arg(long, conflicts_with = "format")]
     json: bool,
+
+    /// Print the full support matrix (`docs/support-matrix.json`, built in):
+    /// every capability with its status, evidence and user impact.
+    #[arg(long)]
+    matrix: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -38,6 +44,9 @@ fn main() -> ExitCode {
     let mut cli = Cli::parse();
     if cli.json {
         cli.format = Format::Json;
+    }
+    if cli.matrix {
+        return print_matrix(&cli.format);
     }
     let manifest = CapabilityManifest::honest_snapshot();
     match cli.format {
@@ -78,4 +87,48 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+fn print_matrix(format: &Format) -> ExitCode {
+    let matrix = rvt::capability::SUPPORT_MATRIX_JSON;
+    if let Format::Json = format {
+        print!("{matrix}");
+        return ExitCode::SUCCESS;
+    }
+    let parsed: serde_json::Value = match serde_json::from_str(matrix) {
+        Ok(value) => value,
+        Err(e) => {
+            eprintln!("error: built-in support matrix: {e}");
+            return ExitCode::from(1);
+        }
+    };
+    let text = |value: &serde_json::Value, key: &str| {
+        value
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    println!(
+        "=== rvt-rs support matrix (reviewed {}) ===",
+        text(&parsed, "reviewed")
+    );
+    let empty = Vec::new();
+    let capabilities = parsed
+        .get("capabilities")
+        .and_then(serde_json::Value::as_array)
+        .unwrap_or(&empty);
+    for capability in capabilities {
+        println!(
+            "\n{} [{}]\n  {}",
+            text(capability, "id"),
+            text(capability, "status"),
+            text(capability, "name")
+        );
+        let impact = text(capability, "user_impact");
+        if !impact.is_empty() {
+            println!("  impact: {impact}");
+        }
+    }
+    ExitCode::SUCCESS
 }

@@ -1,71 +1,89 @@
-# Supported MVP Profile
+# Supported profile
 
-This project is useful today for file inspection, metadata/schema extraction,
-diagnostics, and support triage. It is not yet a general Revit model converter.
+What rvt-rs can be trusted with today, in the terms a BIM user would check.
+The evidence behind every line is in [`support-matrix.json`](support-matrix.json)
+(`rvt-capabilities --matrix -f text` prints it) and in the measured tables of the
+[README](../README.md#what-rvt-rs-reads-from-real-projects). This page
+describes `main`; the latest release, v0.2.0, predates everything under
+`[Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md).
 
-## Supported Today
+## Four levels of "it works"
 
-| Area | Supported profile |
-|---|---|
-| File extensions | `.rvt`, `.rfa`, `.rte`, `.rft` containers that use the standard Revit OLE/CFB layout. |
-| Revit versions | Metadata/schema inspection is regression-tested against the 2016-2026 family corpus. |
-| Safe workflows | `rvt-inspect`, `rvt-info`, `rvt-schema`, previews, stream inventory, document metadata, class schema, and diagnostics sidecars (`Formats/Latest` multipage integrity uncertain while strip stays disabled). |
-| IFC output | Spec-valid IFC4 scaffold with project/spatial framework; partition MVP Level storeys and Material names when recovered; typed wall geometry limited to the version-gated 2023 ArcWall path; on Revit 2024, `IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` / `IfcShadingDevice` / `IfcSpace` instances from partition element records with a measured slab thickness (#204 / #211 / #212), slab plan profiles from their sketch lines (#31), wall runs cut back by the joins the record names (351 of 360 world-exact) and column bodies cut by the walls that cut them (256 of 256 world-exact, #239 / RE-29) — exact against Revit's own export on the one recorded edge, not a general converter. On Revit 2024 and 2025 the same records also give furniture, casework, plumbing fixtures, specialty equipment, ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts, pipes and their fittings, as bounding-box bodies, with no element Revit's own export lacks (RE-33), and structural framing, structural columns, foundations and generic models as `IfcBeam` / `IfcColumn` / `IfcFooting` / `IfcBuildingElementProxy` (RE-36), and lighting fixtures, air terminals, food-service equipment, site elements, elevators and ramps (RE-37); Revit 2025 walls, slabs and rooms follow RE-32. |
-| Browser viewer | Zero-upload inspection, File Status (storey names + material samples), a scene tree grouped by storey and category with Revit-style type-first element names and curtain-wall and stair parts under their whole, a typed element info panel (name, type, ElementId, Revit's GlobalId, clickable storey, placement and extents in feet, property sets as unit-carrying rows, host and hosted rows), a schedule grouped by IFC type with per-type scene highlight, and explicit export-readiness labels before download. |
+A Revit file can succeed at one level and not the next, so rvt-rs keeps them
+apart:
 
-## Experimental MVP Target
+1. **Opened.** The OLE container, its streams, metadata, previews and schema
+   read. Every Revit release from 2016 to 2026.
+2. **Elements identified.** Each element is found with its Revit ElementId and
+   category, and the set equals the one Revit's own IFC export holds. Revit
+   2024 and 2025 project files.
+3. **Geometry.** An element's body. Exact where the element's data is decoded
+   (the table below), otherwise its bounding box, and the export diagnostics
+   say which.
+4. **Properties.** Names, types, storey, materials, layers and GlobalIds are
+   read; most other parameters are not (#35, #155).
 
-The first real-model conversion profile is intentionally narrow:
+## By input
 
-| Dimension | Target |
-|---|---|
-| File type | `.rvt` project files before `.rfa` family geometry. |
-| Versions | Revit 2024 and 2025 project files first, because the element-record evidence lives there; 2023 through the ArcWall path. |
-| Discipline | Architectural core before MEP/structure-heavy projects. |
-| Classes | Levels, walls, floors/slabs, doors, windows, rooms/spaces, materials, and common parameters. |
-| Export quality | `rvt-ifc --mode strict` must reject files that cannot meet the requested quality. |
+| Input | Opened | Elements identified | Geometry | Properties |
+|---|---|---|---|---|
+| Revit 2024 and 2025 project (`.rvt`) | yes | yes, measured on Core Interior, the four RE1 models, Snowdon Towers, Projeto1 and `teste_export_2025` | see below | see below |
+| Revit 2026 project | yes | no: the element-record marker is predicted (RE-32) but unmeasured | none | metadata |
+| Revit 2023 and earlier project | yes | no (2023 arc walls only) | none | metadata |
+| Family (`.rfa`) or template (`.rte`, `.rft`) | yes | family metadata and OmniClass only | none | none |
 
-## Unsupported Or Partial
+A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an
+OLE/CFB Revit container is refused with an error, never a partial model.
 
-- Full typed element extraction from arbitrary real `.rvt` files.
-- Schema-field Walls; typed Door vs Window host IFC (RE-19 negative — no
-  reliable discriminator in the opening-index bytes / no schema-field envelope
-  on current magnetar corpora). The Revit 2024 partition element-record path
-  (#211) recovers Wall / Door / Window *instances* from a different carrier,
-  and their host-wall binding is closed on that carrier (#222, RE-23: the
-  `(host wall, filling element)` pair set equals Revit's export on 138 of
-  138). What stays unsupported is a Door/Window host claim from the
-  opening-index rows themselves.
-- The plan profile of the **20 rotated shading plates**: their
-  `OST_SketchLines` boxes are axis-aligned envelopes of diagonal segments, the
-  closure declines them, and they keep the record box rectangle with
-  `ProfileResolved: false`. All 80 exported slabs do carry the boundary
-  polygon their sketch lines close (#31, RE-25, closed 2026-09-19), on top of
-  the exported ElementId set, the model bounding box and a measured extrusion
-  thickness (#212, RE-22).
-- Floor/Room storey assignment via Level ElementIds (RE-20 negative — `Level`
-  absent from Formats; bind plumbing stays fail-closed / idle).
-- Slab extrusion depth on any path other than the Revit 2024 element
-  records. Compound layers are read from each type's own data (RE-53)
-  and written as `IfcMaterialLayerSetUsage` with their material names
-  (RE-58). Elements drawn whole or sloped get no layer set, and on this
-  corpus the walls' types are single layers by category, so only its 88
-  floors and shading devices carry one. The paired reference export is a
-  `ReferenceView_V1.2` file with no layer sets of its own, so they are
-  scored against the faces its bodies style with each material.
-- Recovered family profiles / wall location curves for the Revit 2024
-  element-record path: bodies there are the record's own bounding box,
-  except for a slab's plan profile (#31, RE-25), a wall's join-trimmed run
-  and a column's join-cut prism (#238 / #239, RE-29). Nine wall ends at
-  true L corners are still over-trimmed, recorded as a measured negative
-  with no identified carrier.
-- Reliable geometry for walls/floors/doors/windows outside the narrow
-  research profile.
-- Semantic Revit editing through the stream writer.
-- Revit versions outside the verified corpus without a diagnostics report.
-- Files that are corrupt, zero-byte LFS placeholders, encrypted, or not OLE/CFB
-  Revit containers.
+## Geometry on Revit 2024 and 2025 projects
 
-Use `rvt-inspect <file> --json` or the viewer diagnostics download when a file
-falls outside the supported profile. Those reports are designed to be attached
-to GitHub issues without exposing raw model bytes.
+| Element | What you get | How close |
+|---|---|---|
+| Walls | a body from the wall's centreline and its type's thickness, drawn as its layers in the viewer and glTF, ending as its joins say, along its arc when curved | faces exactly Revit's on 1,014 of Snowdon's 1,078 walls; both ends on 716 |
+| Floors, building pads | the sketched plan outline, holes included, at the measured thickness | Core Interior 80 of 80 outlines |
+| Roofs | the sketched outline; a shed roof along its slope | 11 of 13 outlined Snowdon roofs with Revit's area; hip and gable roofs are boxes (#356) |
+| Columns | the column prism minus what walls cut from it | Core Interior 256 of 256, exact |
+| Beams | along their location line with their section | 923 of 942 Snowdon structural beams on their line |
+| Stairs | aggregates of flights, landings and supports; straight flights as treads and risers | 30 of 34 drawn flights equal to Revit's; other flight kinds are boxes (#357) |
+| Curtain walls | aggregates of panels and mullions placed by their grids | every Snowdon panel and mullion relation Revit's |
+| Doors, windows, openings | the element's box, cutting its host wall | host pairs Revit's; the opening is not Revit's opening profile (#227) |
+| Rooms | `IfcSpace` with number and name | boundaries not decoded (#90) |
+| Furniture, fixtures, equipment, MEP, site | the element's bounding box | placement and extent only; no family geometry |
+
+## Properties on Revit 2024 and 2025 projects
+
+Read: ElementId, category, `Family:Type:ElementId` name, type name, storey,
+material names and layer thicknesses, Revit's GlobalId (other entities get one
+derived from the document and their own identity, stable between exports,
+#400), stair riser and tread dimensions, and Revit's "Export to IFC As"
+override. Not read: most instance and type parameters (#35, #155) and phases
+(#328), so an element Revit's export leaves out because of its phase can still
+appear. Elements in a design-option set's non-primary options are left out, as
+Revit leaves them out.
+
+## What approximations look like in the output
+
+- A body that is the element's bounding box is a correctly placed, correctly
+  sized box. It is never a guess at a shape.
+- Where rvt-rs cannot tell something, it leaves it out rather than guess: an
+  element whose storey is unknown sits in the building, not on a storey; a
+  missing value is absent, not zero.
+- `rvt-ifc --diagnostics out.json` and the viewer's diagnostics download list
+  what was exported, approximated and skipped, and why. `--mode
+  typed-no-geometry`, `geometry` and `strict` refuse a file that does not meet
+  that bar instead of writing a thinner IFC.
+
+## Not supported
+
+- Converting an arbitrary Revit model to IFC with Revit-grade fidelity.
+- Element records of releases other than 2024 and 2025.
+- Semantic editing of a Revit file. `rvt-write` patches whole streams and
+  preserves the rest byte for byte; it does not change model data.
+- Door/Window typing from the opening-index rows (RE-19) and Level ElementIds
+  from the Formats schema (RE-20): both closed negative. Element records supply
+  both instead.
+
+Use `rvt-inspect <file> --json` or the viewer's diagnostics download when a
+file falls outside this profile. Those reports can be attached to a GitHub
+issue without sharing the model; [`CONTRIBUTING.md`](../CONTRIBUTING.md)
+describes how to send a diagnostic instead of a building file.
