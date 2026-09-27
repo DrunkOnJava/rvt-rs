@@ -2374,7 +2374,7 @@ pub fn build_export_diagnostics_with_limits(
     append_geometry_gap_warnings(&mut warnings, &exported, &geometry_gaps);
     if model.units.is_empty() {
         warnings
-            .push("No Revit unit assignment was recovered; STEP output uses default units.".into());
+            .push("No Revit display units were recovered; the IFC declares the SI units its values are written in.".into());
     }
     let mut unmapped_unit_values: Vec<_> = recovered_units
         .unknown_identifiers
