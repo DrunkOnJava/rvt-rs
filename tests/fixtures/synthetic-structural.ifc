@@ -1,7 +1,7 @@
 ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');
-FILE_NAME('Synthetic Structural Project (IFC-44).ifc','2026-09-27T19:31:21',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.1.x','rvt-rs STEP writer','');
+FILE_NAME('Synthetic Structural Project (IFC-44).ifc','2026-09-27T20:22:12',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.2.0','rvt-rs STEP writer','');
 FILE_SCHEMA(('IFC4'));
 ENDSEC;
 /* Second synthetic fixture \X2\2014\X0\ columns / beams / shared doors / faceted-brep furniture \X2\2014\X0\ for regression-proofing the IFC-17 / IFC-20 / IFC-21 / IFC-24 / IFC-30 emission paths. */
@@ -9,8 +9,8 @@ DATA;
 #1=IFCPERSON($,$,'rvt-rs',$,$,$,$,$);
 #2=IFCORGANIZATION($,'rvt-rs','Clean-room Apache-2 Revit reader',$,$);
 #3=IFCPERSONANDORGANIZATION(#1,#2,$);
-#4=IFCAPPLICATION(#2,'0.1.x','rvt-rs','rvt_rs');
-#5=IFCOWNERHISTORY(#3,#4,$,.ADDED.,$,#3,#4,1790537481);
+#4=IFCAPPLICATION(#2,'0.2.0','rvt-rs','rvt_rs');
+#5=IFCOWNERHISTORY(#3,#4,$,.ADDED.,$,#3,#4,1790540532);
 #6=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
 #7=IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.);
 #8=IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.);
