@@ -11,6 +11,12 @@ use crate::evidence::EvidenceTier;
 use crate::relations::{RelationDomain, RelationDomainRegistry};
 use serde::{Deserialize, Serialize};
 
+/// `docs/support-matrix.json` as built into this crate: every capability with
+/// its status ceiling, evidence and user impact. The one list of what rvt-rs
+/// can do; README, `docs/status.md` and `docs/supported-profile.md` summarise
+/// it, and `tests/support_matrix.rs` keeps it honest.
+pub const SUPPORT_MATRIX_JSON: &str = include_str!("../docs/support-matrix.json");
+
 /// Manifest status vocabulary (subset of support-matrix + ES schema).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -35,14 +35,17 @@
 use crate::Result;
 use serde::{Deserialize, Serialize};
 
-/// Maximum number of decompressed `Formats/Latest` bytes [`parse_schema`]
-/// will scan.
+/// How many decompressed `Formats/Latest` bytes [`parse_schema`] scanned
+/// before #410.
 ///
-/// Beyond this offset the stream carries binary object data whose bit
-/// patterns incidentally trip the class-name heuristic, so scanning further
-/// emits false-positive classes. When a stream is larger than this the parse
-/// is a "we stopped here" result, not a complete schema — see
-/// [`SchemaTable::scan_truncated`].
+/// The cap hid a decompression fault rather than a property of the stream:
+/// `Formats/Latest` is checksum-paged, and inflated without the page strip it
+/// drifts after the first page boundary, so the parse past 64 KB produced
+/// garbage classes. Inflated through [`crate::compression::inflate_stream_at`],
+/// which strips the pages, the whole stream is schema: 4,126 classes on
+/// Revit 2024 where the first 64 KB held 395
+/// (`examples/probe_schema_page_strip.rs`). Kept for
+/// [`parse_schema_with_scan_limit`] callers that want the old window.
 pub const SCHEMA_SCAN_LIMIT: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -54,16 +57,15 @@ pub struct SchemaTable {
     /// Raw count of parse-candidates skipped for validation reasons.
     pub skipped_records: usize,
     /// Bytes of the decompressed stream the parser actually scanned —
-    /// `min(total_bytes, SCHEMA_SCAN_LIMIT)`.
+    /// `min(total_bytes, scan limit)`.
     #[serde(default)]
     pub scanned_bytes: usize,
     /// Total decompressed bytes handed to [`parse_schema`].
     #[serde(default)]
     pub total_bytes: usize,
-    /// `true` when the scan stopped at [`SCHEMA_SCAN_LIMIT`] with bytes left
-    /// over. This records that the cap applied — it makes no claim that the
-    /// unscanned tail holds parseable schema (multi-page `Formats/Latest`
-    /// stays tracked under #151 / #154).
+    /// `true` when the scan stopped at a caller's scan limit with bytes left
+    /// over ([`parse_schema_with_scan_limit`]); [`parse_schema`] scans the
+    /// whole stream.
     #[serde(default)]
     pub scan_truncated: bool,
 }
@@ -550,16 +552,16 @@ fn extract_container(kind: u8, body: &[u8]) -> FieldType {
 
 /// Parse the decompressed `Formats/Latest` bytes into a schema table.
 ///
-/// # Caveat
-///
-/// The real schema lives in the first ~64 KB of the decompressed stream.
-/// Beyond that, `Formats/Latest` contains binary object data whose bit
-/// patterns incidentally trip our class-name heuristic. We cap scanning at
-/// [`SCHEMA_SCAN_LIMIT`] to avoid emitting false-positive garbage classes.
-/// When the cap applies, [`SchemaTable::scan_truncated`] is set along with
-/// [`SchemaTable::scanned_bytes`] / [`SchemaTable::total_bytes`] so callers
-/// can tell "the schema fit" from "we stopped looking".
+/// `decompressed` must be the page-stripped stream, as
+/// [`crate::compression::inflate_stream_at`] returns it (#410). The whole
+/// stream is scanned.
 pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
+    parse_schema_with_scan_limit(decompressed, usize::MAX)
+}
+
+/// [`parse_schema`] scanning at most `scan_limit` bytes (#410 measures the
+/// whole page-stripped stream with `usize::MAX`).
+pub fn parse_schema_with_scan_limit(decompressed: &[u8], scan_limit: usize) -> Result<SchemaTable> {
     let mut classes = Vec::new();
     let mut cpp_types = std::collections::BTreeSet::new();
     let mut skipped = 0usize;
@@ -567,9 +569,9 @@ pub fn parse_schema(decompressed: &[u8]) -> Result<SchemaTable> {
     // Schema section is in the early portion of the stream. Scanning
     // beyond this produces false-positive class records from compressed
     // binary noise.
-    let scan_truncated = decompressed.len() > SCHEMA_SCAN_LIMIT;
+    let scan_truncated = decompressed.len() > scan_limit;
     let data = if scan_truncated {
-        &decompressed[..SCHEMA_SCAN_LIMIT]
+        &decompressed[..scan_limit]
     } else {
         decompressed
     };
@@ -1103,7 +1105,7 @@ mod tests {
 
         let mut buf = prefix.clone();
         buf.resize(SCHEMA_SCAN_LIMIT + 4096, 0);
-        let schema = parse_schema(&buf).unwrap();
+        let schema = parse_schema_with_scan_limit(&buf, SCHEMA_SCAN_LIMIT).unwrap();
 
         assert!(schema.scan_truncated);
         assert_eq!(schema.scanned_bytes, SCHEMA_SCAN_LIMIT);

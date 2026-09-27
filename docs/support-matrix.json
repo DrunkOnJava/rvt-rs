@@ -67,8 +67,8 @@
       "area": "compression",
       "name": "Decode Revit truncated-gzip streams",
       "status": "verified",
-      "evidence": "compression; checksum_page_framing; fuzz targets; Finding 1 gated strip on Partitions/Global",
-      "notes": "Formats/Latest stays ungated by default. Writer path has separate audit coverage.",
+      "evidence": "compression; checksum_page_framing; fuzz targets; checksum-page strip on Partitions, Global and (#410) Formats/Latest; examples/probe_schema_page_strip.rs",
+      "notes": "Every paged stream is stripped before inflate. Formats/Latest joined in #410: stripped, every file of one release inflates to the byte-identical schema (2023: 4 files, 2024: 5, 2025: 8); unstripped it drifted after about 140 KB. Writer path has separate audit coverage.",
       "user_impact": "Internal streams can be read safely."
     },
     {
@@ -85,8 +85,8 @@
       "area": "schema",
       "name": "Parse Formats/Latest schema with field classification",
       "status": "verified",
-      "evidence": "100% field classification over 2016-2026 family corpus; CI regression gate",
-      "notes": "Class and field structure for developers. Not per-element instance recovery.",
+      "evidence": "formats::parse_schema over the whole page-stripped stream (#410): 3,490 to 4,285 classes and 9,932 to 12,144 fields per release on the 2016-2026 family corpus, 122,107 fields in all; tests/field_type_coverage.rs gates classification with 9 to 12 fields per release listed as unclassified; examples/probe_schema_page_strip.rs",
+      "notes": "Class and field structure for developers. Not per-element instance recovery. Before #410 only the first 64 KB were parsed (the 395 classes and 13,570 fields previously quoted), because the rest was inflated without its page strip and read as noise. The class tag here is the u16 after each name; the element records name their class by definition ordinal (#154, #223).",
       "user_impact": "Schema introspection works across the verified family band."
     },
     {
@@ -436,7 +436,7 @@
       "area": "elements",
       "name": "Floor/Room storey bind via Level ElementIds",
       "status": "unsupported",
-      "evidence": "RE-20: Level absent from Formats; proximity scans noise-dominated",
+      "evidence": "RE-20: proximity scans noise-dominated. Its premise that Level is absent from Formats was an artifact of the 64 KB schema scan: the whole schema carries Level (class 2422 on Revit 2024, #410). Storeys are bound from element records instead (record-level-storeys, record-level-reference-storey-bind)",
       "notes": "Bind plumbing stays fail-closed / corpus-idle. Floors/Rooms remain Unassigned by evidence.",
       "user_impact": "Scene-tree storey grouping for Floors/Rooms stays Unassigned."
     },
