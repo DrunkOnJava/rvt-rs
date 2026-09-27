@@ -402,6 +402,7 @@ mod tests {
             builtin_category: crate::partition_element_records::OST_FLOORS,
             container: crate::partition_element_records::CONTAINER_NONE,
             placement_kind: crate::partition_element_records::PLACEMENT_KIND_INSTANCE,
+            class_tag: 0,
             bbox_feet: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
             preceding_reference: None,
             owner_reference: None,

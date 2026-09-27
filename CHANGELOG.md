@@ -58,6 +58,18 @@ All notable changes will be documented here. This project follows
   rotated plates); Snowdon Towers: 4,770 of 6,081; RE1 Architecture: 75 of
   85. Each element's own `BodySource` property already said so; now the
   total does too.
+- **Every element carries its Revit class (RE-76, #154, #223).** The schema
+  is now read by its grammar, which gives each class its serialization tag:
+  its definition ordinal in the file's own `Formats/Latest`. An element
+  record names its class by that tag at `+0x4a`, so each record-backed
+  element's property set gets `RevitClass`: `SWall`, `ArcWall` and
+  `FaceWall` for walls, `Floor`, `RoomElem`, `ProfileRoof`, `StairsElement`,
+  `FamilyInstance` and so on. Every exported element on Core Interior,
+  RE1 Architecture and Snowdon Towers resolves (970, 85 and 6,081), and
+  Snowdon's 32 `ArcWall` records are exactly the 32 walls RE-75 found
+  storing an arc. `formats::schema_classes` and `RevitFile::schema_classes`
+  expose the classes. Credit: STE1200 and jakobhirn-bit (Discussion #112),
+  rosejn (#255).
 
 - **Curved walls are drawn along their arc (RE-75, #358).** A wall's data
   stores its location arc in the record rvt-rs read as a line, and the word

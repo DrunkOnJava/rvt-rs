@@ -929,6 +929,252 @@ fn scan_fields_until_next_class_bounded(
     (i, fields)
 }
 
+/// One class of the `Formats/Latest` schema as the grammar reads it (#154).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SchemaClass {
+    /// The class's serialization tag: its definition ordinal, 12 for the
+    /// first class and one more for each further definition, top-level or
+    /// inline. Element records name their class by it (+0x4a, #223).
+    pub tag: u16,
+    pub name: String,
+    /// The tag of the class it derives from, if any.
+    pub base: Option<u16>,
+    pub version: u32,
+    pub field_count: u32,
+}
+
+/// Every class of a page-stripped `Formats/Latest` stream, in definition
+/// order (#154).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SchemaClasses {
+    pub classes: Vec<SchemaClass>,
+    /// Bytes read before the stream ended or a record broke the grammar.
+    pub parsed_bytes: usize,
+    /// Why reading stopped early, `None` when it reached the end.
+    pub stopped: Option<String>,
+}
+
+impl SchemaClasses {
+    /// The class with serialization tag `tag`.
+    pub fn by_tag(&self, tag: u16) -> Option<&SchemaClass> {
+        let first = self.classes.first()?.tag;
+        let class = self.classes.get(usize::from(tag.checked_sub(first)?))?;
+        (class.tag == tag).then_some(class)
+    }
+}
+
+/// Read the class records of a page-stripped `Formats/Latest` stream (#154).
+///
+/// The grammar (STE1200, Discussion #112, measured against 2014 to 2026
+/// schemas): records are separated by a zero u16; a class is a u16-counted
+/// name, a u16 base reference (bit 15 set: the base class is defined inline
+/// right after a zero u16), a u32 version, a u32 field count, the fields
+/// (u32-counted name and a type), and a u32-counted list of 16-byte GUIDs. A
+/// type is a u32 kind word (kind byte, modifier byte): modifier high nibble
+/// 0x10 adds a u32 array count; kind 0x0d adds `01 00 00 00 20` and an inner
+/// type, and a class reference when that inner type has one; kind 0x0e with
+/// a by-value modifier adds a class reference. A class reference is a u16,
+/// bit 15 set meaning the class is defined inline after a zero u16.
+///
+/// The tag is not stored: it is the definition ordinal. Every inline
+/// reference repeats its tag in its low 15 bits, which the reader checks, so
+/// a misread stops the parse instead of shifting every later tag.
+pub fn schema_classes(data: &[u8]) -> SchemaClasses {
+    let mut reader = GrammarReader {
+        data,
+        next_tag: FIRST_SCHEMA_TAG,
+        classes: Vec::new(),
+    };
+    let mut at = 0;
+    let stopped = loop {
+        if at + 2 > data.len() {
+            break None;
+        }
+        if reader.u16(at) != Some(0) {
+            break Some(format!("record separator is not 0 at {at:#x}"));
+        }
+        at += 2;
+        if at >= data.len() || data[at..].iter().all(|&b| b == 0) {
+            at = data.len();
+            break None;
+        }
+        let (tag, count) = (reader.next_tag, reader.classes.len());
+        match reader.class(at, 0) {
+            Ok((_, next)) => at = next,
+            Err(reason) => {
+                reader.classes.truncate(count);
+                reader.next_tag = tag;
+                break Some(reason);
+            }
+        }
+    };
+    reader.classes.sort_by_key(|class| class.tag);
+    SchemaClasses {
+        classes: reader.classes,
+        parsed_bytes: at,
+        stopped,
+    }
+}
+
+const FIRST_SCHEMA_TAG: u16 = 12;
+/// Inline definitions nest; real schemas stay a few levels deep.
+const MAX_SCHEMA_NESTING: usize = 64;
+
+struct GrammarReader<'a> {
+    data: &'a [u8],
+    next_tag: u16,
+    classes: Vec<SchemaClass>,
+}
+
+impl GrammarReader<'_> {
+    fn u16(&self, at: usize) -> Option<u16> {
+        let bytes = self.data.get(at..at.checked_add(2)?)?;
+        Some(u16::from_le_bytes([bytes[0], bytes[1]]))
+    }
+
+    fn u32(&self, at: usize) -> Option<u32> {
+        let bytes = self.data.get(at..at.checked_add(4)?)?;
+        Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+    }
+
+    fn need<T>(value: Option<T>, what: &str, at: usize) -> std::result::Result<T, String> {
+        value.ok_or_else(|| format!("{what} past the end at {at:#x}"))
+    }
+
+    fn name(&self, at: usize, width: usize) -> std::result::Result<(String, usize), String> {
+        let len = if width == 2 {
+            usize::from(Self::need(self.u16(at), "name length", at)?)
+        } else {
+            Self::need(self.u32(at), "name length", at)? as usize
+        };
+        let start = at + width;
+        let raw = (1..=250)
+            .contains(&len)
+            .then(|| self.data.get(start..start + len))
+            .flatten()
+            .ok_or_else(|| format!("bad name length {len} at {at:#x}"))?;
+        if !raw.iter().all(|b| (0x20..0x7f).contains(b)) {
+            return Err(format!("name is not ASCII at {at:#x}"));
+        }
+        Ok((String::from_utf8_lossy(raw).into_owned(), start + len))
+    }
+
+    fn inline_class(
+        &mut self,
+        at: usize,
+        reference: u16,
+        depth: usize,
+    ) -> std::result::Result<(u16, usize), String> {
+        if self.u16(at) != Some(0) {
+            return Err(format!("inline pad is not 0 at {at:#x}"));
+        }
+        let (tag, next) = self.class(at + 2, depth + 1)?;
+        if tag != reference & 0x7fff {
+            return Err(format!(
+                "inline tag {tag} does not match reference {} at {at:#x}",
+                reference & 0x7fff
+            ));
+        }
+        Ok((tag, next))
+    }
+
+    fn class_ref(&mut self, at: usize, depth: usize) -> std::result::Result<(bool, usize), String> {
+        let reference = Self::need(self.u16(at), "class reference", at)?;
+        if reference & 0x8000 == 0 {
+            return Ok((true, at + 2));
+        }
+        let (_, next) = self.inline_class(at + 2, reference, depth)?;
+        Ok((true, next))
+    }
+
+    /// Returns whether the type carries a class reference, and the offset
+    /// after it.
+    fn field_type(
+        &mut self,
+        at: usize,
+        depth: usize,
+    ) -> std::result::Result<(bool, usize), String> {
+        if depth > MAX_SCHEMA_NESTING {
+            return Err(format!("types nest too deep at {at:#x}"));
+        }
+        let word = Self::need(self.u32(at), "type word", at)?;
+        let mut at = at + 4;
+        let (kind, modifier) = ((word & 0xff) as u8, ((word >> 8) & 0xff) as u8);
+        if !matches!(modifier & 0xf0, 0x00 | 0x10 | 0x50 | 0x60) {
+            return Err(format!("unknown modifier {modifier:#04x} at {:#x}", at - 4));
+        }
+        if modifier & 0xf0 == 0x10 {
+            let count = Self::need(self.u32(at), "array count", at)?;
+            if count > 65_536 {
+                return Err(format!("array count {count} at {at:#x}"));
+            }
+            at += 4;
+        }
+        if kind == 0x0d {
+            if self.data.get(at..at + 5) != Some(&[1, 0, 0, 0, 0x20][..]) {
+                return Err(format!("array filler at {at:#x}"));
+            }
+            let (inner_ref, next) = self.field_type(at + 5, depth + 1)?;
+            at = next;
+            if inner_ref {
+                return self.class_ref(at, depth);
+            }
+            return Ok((false, at));
+        }
+        if kind == 0x0e && modifier & 0x0f == 0 {
+            return self.class_ref(at, depth);
+        }
+        Ok((false, at))
+    }
+
+    fn class(&mut self, at: usize, depth: usize) -> std::result::Result<(u16, usize), String> {
+        if depth > MAX_SCHEMA_NESTING {
+            return Err(format!("classes nest too deep at {at:#x}"));
+        }
+        let (name, mut p) = self.name(at, 2)?;
+        let tag = self.next_tag;
+        self.next_tag = tag
+            .checked_add(1)
+            .filter(|next| *next < 0x8000)
+            .ok_or_else(|| format!("too many classes at {at:#x}"))?;
+        let reference = Self::need(self.u16(p), "base reference", p)?;
+        p += 2;
+        let base = if reference & 0x8000 != 0 {
+            let (base, next) = self.inline_class(p, reference, depth)?;
+            p = next;
+            Some(base)
+        } else {
+            (reference != 0).then_some(reference)
+        };
+        let version = Self::need(self.u32(p), "version", p)?;
+        let field_count = Self::need(self.u32(p + 4), "field count", p + 4)?;
+        p += 8;
+        if field_count > 2_000 {
+            return Err(format!("field count {field_count} at {:#x}", p - 4));
+        }
+        for _ in 0..field_count {
+            let (_, next) = self.name(p, 4)?;
+            let (_, next) = self.field_type(next, depth)?;
+            p = next;
+        }
+        let guids = Self::need(self.u32(p), "GUID count", p)? as usize;
+        p += 4;
+        p = guids
+            .checked_mul(16)
+            .and_then(|len| p.checked_add(len))
+            .filter(|end| *end <= self.data.len() && guids <= 60_000)
+            .ok_or_else(|| format!("GUID count {guids} at {:#x}", p - 4))?;
+        self.classes.push(SchemaClass {
+            tag,
+            name,
+            base,
+            version,
+            field_count,
+        });
+        Ok((tag, p))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
