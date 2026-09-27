@@ -10,6 +10,8 @@ All notable changes will be documented here. This project follows
 
 - **The install guide and status page describe v0.3.0 as released** (#405),
   each channel checked from its published artifacts.
+- **`rvt` 0.3.0 is on crates.io and docs.rs** (#406). The install guide
+  documents `cargo install rvt --locked` and links the API documentation.
 
 ## [0.3.0] — 2026-09-27
 

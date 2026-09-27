@@ -636,7 +636,7 @@ prints it from any installed build.
   GlobalIds, materials and layer sets, stable generated GlobalIds, SI units,
   the whole schema, each element's Revit class, type parameters and MEP
   devices.
-- The Rust crate is not on crates.io yet.
+- The Rust crate is on crates.io from 0.3.0, with its API on docs.rs.
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
 task backlog.
