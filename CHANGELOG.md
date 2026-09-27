@@ -536,6 +536,10 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The IFC header names the rvt-rs version that wrote it.** `FILE_NAME`'s
+  originating system and `IfcApplication.Version` said `0.1.x` whatever the
+  version; they now carry the crate's version.
+
 - **The IFC's units are the units its values are written in (#403).** The
   writer writes every length in metres, but a model with no recovered units
   (every synthetic fixture and family file, and any `IfcModel` a caller
