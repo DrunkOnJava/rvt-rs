@@ -89,11 +89,16 @@ Python wheel builds, with the full platform matrix reserved for pushes to
 [#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
 2026-09-19).
 
-Every file under `tests/` runs in CI on every OS (`cargo test --test '*'`),
-with the family corpus on Linux and Windows and again against the magnetar
-project corpus in the tier-2 job, so a new integration test needs no
-workflow edit to be gated. Tests that read a corpus must skip cleanly when
-their environment variable is unset: the macOS and MSRV runs have no corpus.
+**Unit tests are banned.** Do not add them. Changes are verified end to
+end: against real Revit files and Revit's own exports, through the built
+CLIs, and by the contract checks that keep the published claims honest.
+`tools/ci/test-targets.txt` classes every file under `tests/` as `real`,
+`cli`, `contract` or `unit`, and `tools/ci/verify-real-files.sh` runs all
+but `unit`, in CI on every OS (with the family corpus on Linux and Windows)
+and again against the project corpora in the tier-2 job. The script fails
+on a file the manifest does not class, so a new target cannot slip past.
+Targets that read a corpus must skip cleanly when their environment
+variable is unset: the macOS and MSRV runs have no corpus.
 
 ## What's welcome
 
@@ -160,8 +165,9 @@ Open an issue (or a draft PR) before starting work on any of:
 
 - Rust 2024 edition.
 - `cargo fmt` before every commit.
-- `cargo test --release` must pass. The CI in `.github/workflows/`
-  enforces this.
+- `tools/check-local.sh` must pass: fmt, clippy, rustdoc, a build of every
+  target, and the real-file, CLI and contract checks. The CI in
+  `.github/workflows/` enforces the same. No unit tests.
 - **No `unsafe` in the library crate.** If you genuinely need it,
   open an issue first to discuss.
 - **No panics in parsing paths.** Malformed input must return an
@@ -279,7 +285,7 @@ export RVT_SAMPLES_DIR=/tmp/phiag/examples/Autodesk
 git clone https://github.com/magnetar-io/revit-test-datasets /tmp/magnetar
 export RVT_PROJECT_CORPUS_DIR=/tmp/magnetar/Revit
 
-cargo test                                          # full suite
+tools/ci/verify-real-files.sh --profile ci          # real-file, CLI, contract checks
 cargo bench --bench project_file                    # Q-07 multi-MB
 cargo run --release --example probe_latest_framing  # any probe
 ```

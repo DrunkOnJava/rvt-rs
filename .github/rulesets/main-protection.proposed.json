@@ -53,7 +53,7 @@
             "context": "cargo clippy"
           },
           {
-            "context": "cargo test / ubuntu-latest / stable"
+            "context": "build + real files / ubuntu-latest / stable"
           },
           {
             "context": "cargo doc"

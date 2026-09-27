@@ -68,11 +68,14 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
-    # Corpus LFS clones dominate wall-clock. Keep Autodesk sample coverage
-    # on ubuntu-stable (primary) + windows-stable (CFB path-separator
-    # regression). macOS and MSRV run lib/bins/doc only — same unit surface,
-    # no redundant multi-hundred-MB LFS fetch.
-    name: cargo test / ${{ matrix.os }} / ${{ matrix.rust }}
+    # Unit tests are banned (maintainer directive, 2026-09-23): this job
+    # builds every target and runs only what tools/ci/test-targets.txt
+    # classes as real-file, CLI or contract verification. Corpus LFS clones
+    # dominate wall-clock, so the Autodesk family corpus is fetched on
+    # ubuntu-stable (primary) and windows-stable (CFB path-separator
+    # regression); elsewhere the corpus checks skip and the CLI and
+    # contract checks still run.
+    name: build + real files / ${{ matrix.os }} / ${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
     env:
       SCCACHE_GHA_ENABLED: "true"
@@ -146,119 +149,17 @@ jobs:
         # on windows-latest the all-targets build was 181 s of a 4.1 min
         # job.
         run: cargo build --profile ci ${{ runner.os == 'Linux' && '--all-targets' || '--lib --bins --tests' }}
-      - name: Unit tests
-        run: cargo test --profile ci --lib --bins
-      - name: Doc tests
-        run: cargo test --profile ci --doc
-      # Regression-proof the Q5.2 100%-classification claim. Fails if
-      # any field in any release decodes to FieldType::Unknown, or if
-      # any expected corpus file is missing (guarantees non-vacuous
-      # coverage).
-      - name: Coverage gate — 100% field-type classification
-        if: matrix.with_corpus
-        env:
-          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-          RVT_REQUIRE_CORPUS: "1"
-        run: cargo test --profile ci --test field_type_coverage -- --nocapture
-      # Every tests/*.rs file, on every OS. Until 2026-09-22 this job named
-      # its integration tests one at a time (`samples`, `ifc_roundtrip`),
-      # and 21 of the 37 files — the support-matrix and witness-registry
-      # honesty gates, the JSON schema contracts, the binary inventory,
-      # the fuzz regressions, the proptests, every CLI test — ran in no
-      # job at all, so a stale assertion in `rvt_ifc_diagnostics_cli`
-      # stayed red for months unseen. `--test '*'` cannot fall out of date
-      # the way a hand-kept list does. Corpus-gated tests read the family
-      # corpus where this runner fetched it and skip elsewhere; Windows
-      # stays in because CFB stream names historically came back with `\`
-      # there (fixed in reader::stream_names).
-      - name: Integration tests (every tests/*.rs)
+      # Real-file, end-to-end CLI and contract checks only; the manifest
+      # names every tests/*.rs target and the script fails on one it does
+      # not classify, so a new target cannot run or skip unnoticed (#206).
+      # With the family corpus present, a missing release fails the
+      # coverage and ElemTable gates instead of skipping them.
+      - name: Real-file, CLI and contract verification
+        shell: bash
         env:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
-        run: cargo test --profile ci --no-fail-fast --test '*'
-      # #206: `elem_table_corpus` reads both corpora but was named by no CI
-      # job, so it took its skip path on every run — for months, while the
-      # 2024 project record walk was silently one record short. The family
-      # half is gated here (this job has RVT_SAMPLES_DIR); the project half
-      # is gated in `corpus-tier2`.
-      - name: ElemTable record framing (family corpus)
-        if: matrix.with_corpus
-        env:
-          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-          RVT_REQUIRE_CORPUS: "1"
-        run: cargo test --profile ci --test elem_table_corpus -- --nocapture
-
-  ifc-smoke:
-    # IFC-42: run the synthetic-project integration test and assert
-    # the emitted STEP file has the expected entity counts. Catches
-    # regressions where the writer drops elements, the bridge layer
-    # mis-counts openings, or STEP serialisation silently truncates.
-    # Uses the committed fixture at `tests/fixtures/synthetic-project.ifc`
-    # as the reference — any writer change that alters counts must
-    # update this job AND the fixture together.
-    name: IFC synthetic-project smoke
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          save-if: false
-          shared-key: ci-release
-      - name: Build + run synthetic-project integration test
-        run: cargo test --profile ci --test ifc_synthetic_project
-      - name: Assert entity counts in committed fixture
-        run: |
-          set -euo pipefail
-          f=tests/fixtures/synthetic-project.ifc
-          expect() {
-            local pat="$1" want="$2"
-            local got
-            got=$(grep -c "$pat" "$f" || true)
-            if [ "$got" != "$want" ]; then
-              echo "::error::IFC count drift: $pat got $got, want $want"
-              exit 1
-            fi
-            echo "ok: $pat = $got"
-          }
-          expect IFCPROJECT 1
-          expect IFCBUILDINGSTOREY 3
-          expect IFCWALL 4
-          expect IFCSLAB 1
-          expect IFCDOOR 1
-          expect IFCWINDOW 2
-          expect IFCMATERIAL 2
-          expect IFCPROPERTYSET 2
-          expect IFCOPENINGELEMENT 1
-          expect IFCRELVOIDSELEMENT 1
-          expect IFCRELFILLSELEMENT 1
-          expect IFCEXTRUDEDAREASOLID 7
-
-
-  corpus-tier1:
-    # M2-03 Tier 1: always-on redistributable synthetic corpus under
-    # corpus/tier1/. No external Autodesk samples; license sidecars +
-    # known-count manifests are asserted in-repo.
-    name: Corpus health (tier 1 — synthetic)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          save-if: false
-          shared-key: ci-release
-      - name: Tier-one open / schema / known-count inventory
-        env:
-          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: cargo test --profile ci --test corpus_tier1_health -- --nocapture
-      - name: Tier-one known-count manifests
-        env:
-          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: cargo test --profile ci --test project_count_fixtures -- --nocapture
+          RVT_REQUIRE_CORPUS: ${{ matrix.with_corpus && '1' || '' }}
+        run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
 
   corpus-tier2:
     # M2-03 Tier 2: optional external project corpus. Clones the MIT
@@ -309,12 +210,13 @@ jobs:
       # way (26424 of 26425 declared records on the 2024 project). Every
       # tests/*.rs now runs against the project corpus, so a new
       # corpus-reading target is gated the moment it exists.
-      - name: Tier-two gates (every tests/*.rs against the project corpus)
+      - name: Tier-two gates (real-file, CLI and contract targets against the project corpus)
+        shell: bash
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
           RVT_CORPUS_TIER2_LIMIT: "8"
-        run: cargo test --profile ci --no-fail-fast --test '*'
+        run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project
@@ -356,10 +258,9 @@ jobs:
     # IFC-41: load the committed synthetic-project.ifc fixture in
     # IfcOpenShell and assert it opens without errors, carries the
     # right spatial hierarchy, and resolves every IfcRel* link. This
-    # is the independent-validator gate — the Rust-side ifc-smoke
-    # job above counts substrings, but IfcOpenShell actually parses
-    # the STEP file through the full IFC4 schema, so errors the
-    # substring check can't see (dangling refs, wrong attribute
+    # is the independent-validator gate: IfcOpenShell parses the STEP
+    # file through the full IFC4 schema, so errors a substring count
+    # can't see (dangling refs, wrong attribute
     # arity, enum values outside the spec vocabulary) fail here.
     name: IfcOpenShell validates synthetic project
     runs-on: ubuntu-latest
@@ -724,9 +625,9 @@ jobs:
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Always-on pytest (tier1 synthetics) does not need the Autodesk
-      # LFS corpus. Fetch it only on Linux so macOS/Windows wheel jobs
-      # stay fast; corpus-dependent tests skip cleanly without it.
+      # The wheel smoke opens a real Autodesk family on Linux; macOS and
+      # Windows skip the multi-hundred-MB fetch and smoke the tier-one
+      # project file only.
       - name: Fetch phi-ag/rvt sample corpus
         if: runner.os == 'Linux'
         uses: ./.github/actions/fetch-corpus
@@ -756,20 +657,22 @@ jobs:
           command: build
           manylinux: "2014"
           args: --release --out dist
-      # Install into this runner's Python, then run the pytest suite
-      # we ship in tests/python/. This is the real regression gate —
-      # if the wheel doesn't actually import or the bindings return
-      # wrong values, CI fails here.
+      # Install into this runner's Python and run the installed wheel end
+      # to end: open a Revit file and export IFC through the Python API
+      # (tools/ci/wheel-smoke.py, the same smoke the release runs). The
+      # pytest suite in tests/python is unit-level and is not run.
       - name: Install the built wheel
         shell: bash
         run: |
-          python3 -m pip install --upgrade pip pytest
+          python3 -m pip install --upgrade pip
           python3 -m pip install --force-reinstall dist/*.whl
-      - name: Run pytest integration tests
+      - name: Wheel smoke on Revit files
         shell: bash
-        env:
-          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-        run: python3 -m pytest tests/python -v
+        run: |
+          set -euo pipefail
+          python3 tools/ci/wheel-smoke.py corpus/tier1/architectural-2024/architectural-2024.rvt
+          family="_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"
+          if [ -f "$family" ]; then python3 tools/ci/wheel-smoke.py "$family"; fi
       - name: Upload wheel artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

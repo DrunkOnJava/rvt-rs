@@ -18,8 +18,8 @@ Run the normal source checks on the release commit:
 ```bash
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
-cargo test --all-targets
-cargo test --doc
+cargo build --all-targets
+tools/ci/verify-real-files.sh --profile ci   # real-file, CLI, contract checks; no unit tests
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features -p rvt
 ```
 

@@ -42,9 +42,8 @@ Rust (`cargo build --release`), Python (`maturin develop`), and the viewer
 ### Rust: build, test, run the CLIs
 
 ```bash
-cargo build --release                 # 17 CLI binaries land in target/release/
-cargo test --release --lib --bins     # ~755 unit tests
-cargo test --release --doc            # doc tests
+cargo build --release                 # the CLI binaries land in target/release/
+tools/ci/verify-real-files.sh --release   # real-file, CLI and contract checks (unit tests are banned and never run)
 cargo fmt --all -- --check            # matches CI
 cargo clippy --all-targets --all-features -- -D warnings
 ```
@@ -180,7 +179,7 @@ git -C _project_corpus lfs pull
 
 RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk" \
 RVT_PROJECT_CORPUS_DIR="$PWD/_project_corpus/Revit" \
-  cargo test --release
+  tools/ci/verify-real-files.sh --release
 ```
 
 `_corpus/` and `_project_corpus/` are git-ignored. These datasets are Autodesk-

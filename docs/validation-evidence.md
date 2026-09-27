@@ -132,8 +132,8 @@ wired into CI, the evidence trail is:
 ## Reproducing the evidence locally
 
 ```bash
-# Layer 1 + 3: Rust-side tests
-cargo test --release
+# Layer 1 + 3: real-file, CLI and contract checks (unit tests are banned)
+tools/ci/verify-real-files.sh --release
 
 # Layer 2: IfcOpenShell validation (requires Python + pip)
 pip install 'ifcopenshell>=0.8.0,<0.9.0'
