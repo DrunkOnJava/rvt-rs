@@ -227,11 +227,15 @@ fn revit_2025_ducts_and_pipes_are_revits_own() {
     }
 }
 
-/// RE-37 on RE1 Electrical: its 12 lighting fixtures, the only elements
-/// rvt-rs recovers there, are exactly the lighting fixtures among Revit's
-/// 14 `IfcFlowTerminal`s (the other two are data devices, not recovered).
+/// RE-37 and #96 on RE1 Electrical: every element Revit's export holds, and
+/// nothing else. Its 12 lighting fixtures and 2 thermostats (data devices,
+/// IFC4 `IfcElectricAppliance`) are Revit's 14 `IfcFlowTerminal`s, its 5
+/// fire alarm devices (IFC4 `IfcAlarm`) are Revit's
+/// `IfcDistributionControlElement`s, and its switches, sensors, receptacles,
+/// junction boxes and panels are Revit's 30 proxies. The symbols nested in
+/// the switches and receptacles are left out, as Revit leaves them out.
 #[test]
-fn revit_2025_lighting_fixtures_are_revits_own() {
+fn revit_2025_electrical_devices_are_revits_own() {
     let Some((rvt, ifc)) = re1("Electrical") else {
         eprintln!("skipping: RVT_PROJECT_CORPUS_DIR has no RE1-Electrical.rvt/.ifc");
         return;
@@ -241,12 +245,24 @@ fn revit_2025_lighting_fixtures_are_revits_own() {
     assert_eq!(fixtures.len(), 12);
     let terminals = tags(&reference, &["IFCFLOWTERMINAL"]);
     assert_eq!(terminals.len(), 14);
-    assert!(
-        fixtures.is_subset(&terminals),
-        "{:?} not in Revit's export",
-        fixtures.difference(&terminals).collect::<Vec<_>>()
+    assert_eq!(
+        tags(&step, &["IFCLIGHTFIXTURE", "IFCELECTRICAPPLIANCE"]),
+        terminals,
+        "lighting fixtures and data devices"
     );
-    // Every entity carrying a numeric `Tag` is one of those fixtures
+    assert_eq!(
+        tags(&step, &["IFCALARM"]),
+        tags(&reference, &["IFCDISTRIBUTIONCONTROLELEMENT"]),
+        "fire alarm devices"
+    );
+    let proxies = tags(&reference, &["IFCBUILDINGELEMENTPROXY"]);
+    assert_eq!(proxies.len(), 30);
+    assert_eq!(
+        tags(&step, &["IFCBUILDINGELEMENTPROXY"]),
+        proxies,
+        "devices and equipment"
+    );
+    // Every entity carrying a numeric `Tag` is one of those
     // (IfcOwnerHistory's 8th attribute is its creation time, not a Tag).
     let entities: Vec<&str> = step
         .lines()
@@ -260,5 +276,8 @@ fn revit_2025_lighting_fixtures_are_revits_own() {
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    assert_eq!(tags(&step, &entities), fixtures, "nothing else is exported");
+    let mut all = terminals;
+    all.extend(tags(&reference, &["IFCDISTRIBUTIONCONTROLELEMENT"]));
+    all.extend(proxies);
+    assert_eq!(tags(&step, &entities), all, "nothing else is exported");
 }

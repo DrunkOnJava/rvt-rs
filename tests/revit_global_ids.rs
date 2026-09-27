@@ -140,9 +140,9 @@ fn re1_global_ids_are_revits() {
     let mut checked = 0;
     for (model, expected) in [
         ("Architecture", 73),
-        ("Mechanical", 73),
+        ("Mechanical", 74),
         ("Plumbing", 123),
-        ("Electrical", 12),
+        ("Electrical", 49),
     ] {
         let rvt = dir.join(format!("RE1-{model}.rvt"));
         let reference = dir.join(format!("RE1-{model}.ifc"));

@@ -74,6 +74,20 @@ All notable changes will be documented here. This project follows
   rotated plates); Snowdon Towers: 4,770 of 6,081; RE1 Architecture: 75 of
   85. Each element's own `BodySource` property already said so; now the
   total does too.
+- **Electrical and mechanical devices and equipment (RE-79, #96).** Six more
+  categories export from their element records: lighting devices (switches,
+  sensors), fire alarm devices (as `IfcAlarm`), data devices (as
+  `IfcElectricAppliance`), electrical fixtures (receptacles, junction boxes),
+  electrical equipment (panels) and mechanical equipment, the last four as
+  proxies, following Revit's own export. A symbol nested in a switch or
+  receptacle is an element record of its own that Revit's export leaves out;
+  it and its parent reference each other and it has the larger ElementId,
+  so rvt-rs leaves it out too (21 of 21). RE1 Electrical now exports every
+  element Revit's export holds, 49, and nothing else (it was 12), each with
+  Revit's GlobalId; RE1 Mechanical adds its air handler. Electrical
+  equipment, which Revit names by its Panel Name, is named
+  `ElectricalEquipment-<ElementId>` until that parameter is read. Core
+  Interior and Snowdon Towers are unchanged.
 - **Every element carries its Revit class (RE-76, #154, #223).** The schema
   is now read by its grammar, which gives each class its serialization tag:
   its definition ordinal in the file's own `Formats/Latest`. An element

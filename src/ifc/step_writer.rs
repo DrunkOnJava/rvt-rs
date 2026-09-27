@@ -2818,6 +2818,7 @@ mod tests {
     /// the Rust suite fails without a Python toolchain too (#214).
     const IFC4_ELEMENT_ARITY: &[(&str, usize)] = &[
         ("IFCAIRTERMINAL", 9),
+        ("IFCALARM", 9),
         ("IFCBEAM", 9),
         ("IFCBUILDINGELEMENTPROXY", 9),
         ("IFCCOLUMN", 9),

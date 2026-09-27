@@ -257,7 +257,15 @@ pub fn append_typed_production_elements(
             }
             _ => None,
         });
-        let name = match (own_name, decoded.id, family_and_type(&decoded)) {
+        // Revit names electrical equipment `Family:<Panel Name>:ElementId`
+        // (RE1 Electrical: `262416-PANEL:RE-1:428352`), from an instance
+        // parameter rvt-rs does not read, so it gets no `Family:Type` name.
+        let named_by_type = decoded.class != "ElectricalEquipment";
+        let name = match (
+            own_name,
+            decoded.id,
+            family_and_type(&decoded).filter(|_| named_by_type),
+        ) {
             (Some(name), _, _) => name,
             // RE-38: `Family:Type:ElementId`, the name Revit's own export
             // gives the element.

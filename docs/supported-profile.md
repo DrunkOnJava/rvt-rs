@@ -48,7 +48,7 @@ OLE/CFB Revit container is refused with an error, never a partial model.
 | Curtain walls | aggregates of panels and mullions placed by their grids | every Snowdon panel and mullion relation Revit's |
 | Doors, windows, openings | the element's box, cutting its host wall | host pairs Revit's; the opening is not Revit's opening profile (#227) |
 | Rooms | `IfcSpace` with number and name | boundaries not decoded (#90) |
-| Furniture, fixtures, equipment, MEP, site | the element's bounding box | placement and extent only; no family geometry |
+| Furniture, fixtures, equipment, MEP devices, site | the element's bounding box | placement and extent only; no family geometry. MEP devices and equipment are measured on RE1 Electrical and Mechanical only (RE-79) |
 
 ## Properties on Revit 2024 and 2025 projects
 

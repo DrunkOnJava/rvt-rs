@@ -1001,6 +1001,7 @@ function frameBox(box: THREE.Box3): void {
  */
 const IFC_ENTITY_NAMES = [
   'IfcAirTerminal',
+  'IfcAlarm',
   'IfcBeam',
   'IfcBuilding',
   'IfcBuildingElementProxy',

@@ -177,9 +177,9 @@ fn re1_names_are_revits() {
     // own (RE-42).
     for (model, expected) in [
         ("Architecture", 73),
-        ("Mechanical", 42),
+        ("Mechanical", 43),
         ("Plumbing", 61),
-        ("Electrical", 12),
+        ("Electrical", 46),
     ] {
         let rvt = dir.join(format!("RE1-{model}.rvt"));
         let reference = dir.join(format!("RE1-{model}.ifc"));

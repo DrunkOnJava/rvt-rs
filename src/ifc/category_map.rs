@@ -283,17 +283,38 @@ pub const MAPPINGS: &[Mapping] = &[
     },
     Mapping {
         revit_class: "ElectricalEquipment",
-        ifc_type: "IFCELECTRICAPPLIANCE",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
         predefined_type: None,
     },
     Mapping {
         revit_class: "ElectricalFixture",
-        ifc_type: "IFCLIGHTFIXTURE",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
         predefined_type: None,
     },
     Mapping {
         revit_class: "MechanicalEquipment",
-        ifc_type: "IFCFLOWCONTROLLER",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
+        predefined_type: None,
+    },
+    // #96: the IFC4 subtype of what Revit's export of RE1 Electrical (IFC2x3)
+    // writes: fire alarm devices are IfcDistributionControlElement typed
+    // IfcAlarmType, so IfcAlarm; data devices (its thermostats) are
+    // IfcFlowTerminal typed IfcElectricApplianceType, so IfcElectricAppliance.
+    // Lighting devices, electrical fixtures and electrical and mechanical
+    // equipment are proxies there, and stay proxies.
+    Mapping {
+        revit_class: "LightingDevice",
+        ifc_type: "IFCBUILDINGELEMENTPROXY",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "FireAlarmDevice",
+        ifc_type: "IFCALARM",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "DataDevice",
+        ifc_type: "IFCELECTRICAPPLIANCE",
         predefined_type: None,
     },
     Mapping {
