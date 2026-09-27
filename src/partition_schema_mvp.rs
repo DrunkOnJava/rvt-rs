@@ -360,6 +360,21 @@ pub fn recover_partition_schema_mvp(
             attach_type_text_parameters(&type_parameters, elements);
         }
     }
+
+    // --- The materials each family type's geometry uses (RE-82, #355) ---
+    let type_materials = crate::partition_type_materials::type_material_names(rf, revit_version);
+    if !type_materials.is_empty() {
+        for elements in [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ] {
+            attach_type_materials(&type_materials, elements);
+        }
+    }
     Ok(out)
 }
 
@@ -1004,6 +1019,29 @@ pub const TYPE_PARAMETER_FIELD_PREFIX: &str = "m_type_parameter:";
 
 /// Give each element the text parameters of its type ([`TYPE_ID_FIELD`],
 /// RE-38 and #322), as Revit shows a type's parameters on its instances.
+/// Field carrying, once per material, the name of a material an element's
+/// type draws its geometry in (RE-82), in the order the type names them.
+pub const TYPE_MATERIAL_FIELD: &str = "m_type_material";
+
+/// Give each element the materials its type's geometry uses (RE-82).
+fn attach_type_materials(materials: &BTreeMap<u32, Vec<String>>, elements: &mut [DecodedElement]) {
+    for element in elements.iter_mut() {
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        let Some(names) = type_id.and_then(|id| materials.get(&id)) else {
+            continue;
+        };
+        for name in names {
+            element.fields.push((
+                TYPE_MATERIAL_FIELD.into(),
+                InstanceField::String(name.clone()),
+            ));
+        }
+    }
+}
+
 fn attach_type_text_parameters(
     parameters: &BTreeMap<u32, BTreeMap<&'static str, String>>,
     elements: &mut [DecodedElement],

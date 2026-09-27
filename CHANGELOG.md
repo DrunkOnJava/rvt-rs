@@ -41,6 +41,15 @@ All notable changes will be documented here. This project follows
   and IFC export overrides are not read for 2023, and the export
   diagnostics say so.
 
+- **Family instances carry their materials (RE-82, #355).** A family
+  type's parameters hold a map of the materials its geometry is drawn in;
+  each instance now exports them as an `IfcMaterialConstituentSet`, the way
+  Revit's own export writes doors, windows, furniture and fixtures. Elements
+  whose materials equal Revit's: Snowdon Towers 2,533 (from 1,202), Core
+  Interior 220 (from 88), RE1 Architecture 58 (from 15). The differences are
+  families with a nested component (counter tops with an appliance, Core
+  Interior's windows) and planting Revit writes as `<Unnamed>`.
+
 ## [0.3.0] — 2026-09-27
 
 Trustworthy Revit 2024 and 2025 export: generated GlobalIds stable between

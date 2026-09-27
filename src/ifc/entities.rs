@@ -734,6 +734,17 @@ pub enum LayerSetDirection {
     Axis3,
 }
 
+/// A family instance's materials (RE-82): IFC4 `IfcMaterialConstituentSet`,
+/// unnamed, with one `IfcMaterialConstituent` per material, named after it
+/// and in the category "Materials", as Revit's export writes them.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MaterialConstituentSet {
+    /// Indices into `IfcModel.materials`, in name order.
+    pub material_indices: Vec<usize>,
+    /// Indices into `IfcModel.entities` of the elements it is associated with.
+    pub elements: Vec<usize>,
+}
+
 /// How a [`MaterialLayerSet`] lies on one element (IFC4
 /// `IfcMaterialLayerSetUsage`): the axis its layers stack along, whether
 /// they stack towards its positive or negative end, and where the first

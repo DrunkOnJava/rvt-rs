@@ -180,6 +180,16 @@ pub struct IfcModel {
     /// gets the IFC4 defaults.
     #[serde(default)]
     pub material_layer_usages: std::collections::BTreeMap<usize, entities::MaterialLayerSetUsage>,
+    /// The materials each element's type draws its geometry in, by
+    /// ElementId (RE-82).
+    #[serde(default)]
+    pub element_type_materials: std::collections::BTreeMap<u32, Vec<String>>,
+    /// Material constituent sets (RE-82): an element without a layer,
+    /// profile or single material gets the materials its type's geometry
+    /// uses, written as IFC4 `IfcMaterialConstituentSet`, as Revit's
+    /// export writes family instances.
+    #[serde(default)]
+    pub material_constituent_sets: Vec<entities::MaterialConstituentSet>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -766,6 +776,8 @@ impl Exporter for PlaceholderExporter {
             global_ids: Default::default(),
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
+            element_type_materials: Default::default(),
+            material_constituent_sets: Vec::new(),
         })
     }
 }
@@ -982,13 +994,11 @@ fn export_rvt_doc(
     // element entities — we never regress the metadata-only baseline.
     let mut building_storeys = Vec::new();
     let mut materials = Vec::new();
-    let mut element_layers = std::collections::BTreeMap::new();
-    append_production_walker_elements(
+    let (element_layers, element_type_materials) = append_production_walker_elements(
         rf,
         &mut entities,
         &mut building_storeys,
         &mut materials,
-        &mut element_layers,
         policy,
         walker_limits,
     );
@@ -1109,6 +1119,8 @@ fn export_rvt_doc(
     let global_ids = revit_model_global_ids(rf, &entities, &building_storeys);
     let (material_layer_sets, material_layer_usages) =
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
+    let material_constituent_sets =
+        material_constituent_sets_from_types(&entities, &element_type_materials, &mut materials);
 
     Ok(IfcModel {
         project_name,
@@ -1124,7 +1136,69 @@ fn export_rvt_doc(
         global_ids,
         element_layers,
         material_layer_usages,
+        element_type_materials,
+        material_constituent_sets,
     })
+}
+
+/// RE-82: one constituent set per distinct set of type materials, for each
+/// element with no layer set, profile set or single material. Constituents
+/// are in name order, as Revit's export writes them; materials not yet in
+/// `materials` are added by name.
+fn material_constituent_sets_from_types(
+    entities: &[entities::IfcEntity],
+    element_type_materials: &std::collections::BTreeMap<u32, Vec<String>>,
+    materials: &mut Vec<MaterialInfo>,
+) -> Vec<entities::MaterialConstituentSet> {
+    let mut sets: Vec<entities::MaterialConstituentSet> = Vec::new();
+    let mut set_of: std::collections::BTreeMap<Vec<usize>, usize> = Default::default();
+    for (entity_index, entity) in entities.iter().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            type_guid,
+            material_index: None,
+            material_layer_set_index: None,
+            material_profile_set_index: None,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let Some(names) = type_guid
+            .as_deref()
+            .and_then(|tag| tag.parse::<u32>().ok())
+            .and_then(|id| element_type_materials.get(&id))
+        else {
+            continue;
+        };
+        let mut sorted: Vec<&String> = names.iter().collect();
+        sorted.sort();
+        sorted.dedup();
+        let indices: Vec<usize> = sorted
+            .into_iter()
+            .map(
+                |name| match materials.iter().position(|m| &m.name == name) {
+                    Some(found) => found,
+                    None => {
+                        materials.push(MaterialInfo {
+                            name: name.clone(),
+                            color_packed: None,
+                            transparency: None,
+                        });
+                        materials.len() - 1
+                    }
+                },
+            )
+            .collect();
+        let set = *set_of.entry(indices.clone()).or_insert_with(|| {
+            sets.push(entities::MaterialConstituentSet {
+                material_indices: indices,
+                elements: Vec::new(),
+            });
+            sets.len() - 1
+        });
+        sets[set].elements.push(entity_index);
+    }
+    sets
 }
 
 /// How a layered element's layers lie on its extruded body (RE-58): a
@@ -1987,9 +2061,11 @@ fn append_production_walker_elements(
     entities: &mut Vec<entities::IfcEntity>,
     building_storeys: &mut Vec<Storey>,
     materials: &mut Vec<MaterialInfo>,
-    element_layers: &mut std::collections::BTreeMap<u32, ElementLayers>,
     policy: export_content::ExportContentPolicy,
     walker_limits: crate::walker::WalkerLimits,
+) -> (
+    std::collections::BTreeMap<u32, ElementLayers>,
+    std::collections::BTreeMap<u32, Vec<String>>,
 ) {
     if let Ok(decoded_iter) = crate::walker::iter_elements_with_limits(
         rf,
@@ -2006,8 +2082,9 @@ fn append_production_walker_elements(
             policy,
         );
         materials.extend(append.materials);
-        element_layers.extend(append.element_layers);
+        return (append.element_layers, append.element_type_materials);
     }
+    Default::default()
 }
 
 fn append_diagnostic_walker_proxy_candidates(

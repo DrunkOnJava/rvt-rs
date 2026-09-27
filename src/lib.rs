@@ -185,6 +185,7 @@ pub mod partition_room_parameters;
 pub mod partition_scanner;
 pub mod partition_schema_mvp;
 pub mod partition_stairs;
+pub mod partition_type_materials;
 pub mod partition_type_parameters;
 pub mod partition_type_records;
 pub mod partitions;

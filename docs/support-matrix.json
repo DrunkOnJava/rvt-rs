@@ -243,6 +243,15 @@
       "user_impact": "Doors, walls and other elements carry their type's Type Mark, Description and Fire Rating in the IFC, the viewer and schedules."
     },
     {
+      "id": "family-instance-materials",
+      "area": "properties",
+      "name": "Family instances' materials from their type's geometry-material map (RE-82)",
+      "status": "partial",
+      "evidence": "src/partition_type_materials.rs; partition_schema_mvp::attach_type_materials; ifc::material_constituent_sets_from_types; step_writer IfcMaterialConstituentSet; examples/probe_re82_type_material_maps.rs; tools/re/element_materials_vs_ifc.py; reports/element-framing/RE-82-type-material-maps.md",
+      "notes": "A family type's value block holds a counted map of (u32 key, u64 material) pairs, the materials its geometry uses; each instance exports them as an unnamed IfcMaterialConstituentSet, as Revit does. Against Revit's own exports, elements whose material set equals Revit's: Snowdon Towers 2,533 of the 2,574 given materials (1,202 before), Core Interior 220 of 226 (88 before), RE1 Architecture 58 of 58 (15 before). Differences: counter tops whose map carries a nested appliance's materials, planting Revit writes as <Unnamed>, Core Interior's windows. Instance material overrides and 2023 are not read.",
+      "user_impact": "Doors, windows, furniture, fixtures and equipment carry their real materials in the IFC, as Revit's own export does, instead of none."
+    },
+    {
       "id": "ifc-export-overrides",
       "area": "ifc",
       "name": "Revit's IFC export overrides (Export to IFC As, IFC Predefined Type, and their type-level twins), from element data",
