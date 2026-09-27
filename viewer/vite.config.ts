@@ -1,9 +1,19 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
+
+// The viewer shows the release it was built from (#405). Its package
+// version follows the crate's.
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
 
 // Deploys to https://drunkonjava.github.io/rvt-rs/viewer/ — so base must
 // match the trailing subdirectory of the published path.
 export default defineConfig({
   base: './',
+  define: {
+    __RVT_VIEWER_VERSION__: JSON.stringify(version),
+  },
   server: {
     // Viewer is strictly client-side. No proxy, no SSR, no API back-end.
     port: 5173,

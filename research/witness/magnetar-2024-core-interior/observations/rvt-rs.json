@@ -707,5 +707,5 @@
     "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
   ],
   "witness_id": "rvt-rs",
-  "witness_version": "0.2.0"
+  "witness_version": "0.3.0"
 }

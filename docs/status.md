@@ -630,10 +630,13 @@ prints it from any installed build.
 
 - **v0.2.0** (2026-09-23) is the latest release: GitHub Release with Linux,
   macOS and Windows CLI archives, and the `rvt` wheel on PyPI.
-- **v0.3.0** is drafted on GitHub. It carries everything under
-  `[Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md): layered walls and
-  their joins, curved walls, shed roofs, stair treads, Revit's names, storeys
-  and GlobalIds, materials and layer sets.
+- **v0.3.0** is prepared, not published: `main` carries version 0.3.0 and
+  the GitHub Release is a draft with no assets. It carries everything under
+  `[0.3.0]` in [`CHANGELOG.md`](../CHANGELOG.md): layered walls and their
+  joins, curved walls, shed roofs, stair treads, Revit's names, storeys and
+  GlobalIds, materials and layer sets, stable generated GlobalIds, SI units,
+  the whole schema, each element's Revit class, type parameters and MEP
+  devices.
 - The Rust crate is not on crates.io yet.
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
