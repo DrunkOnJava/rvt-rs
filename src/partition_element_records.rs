@@ -388,9 +388,11 @@ pub const REFERENCE_LIST_MAX_ENTRIES: usize = 1024;
 
 /// Marker that precedes the bounding box on Revit 2024 files.
 ///
-/// The marker is per release (RE-32): a `u16`, `0xFF`×4, and a `u16`
-/// equal to the release's `Global/ElemTable` header constant plus 40
-/// (1411 + 40 = `0x05ab` on 2024). Use [`bbox_marker`] for a given
+/// The marker is per release (RE-32): the serialization tags of the
+/// classes `Outline` and `ElementParents` in the file's own schema, with
+/// `0xFF`×4 between them (RE-80): the record writes its box as an
+/// `Outline` and its reference lists as `ElementParents`. On 2024 those
+/// are 326 and 1451 (`0x0146`, `0x05ab`). Use [`bbox_marker`] for a given
 /// release.
 pub const BBOX_MARKER: [u8; 8] = [0x46, 0x01, 0xff, 0xff, 0xff, 0xff, 0xab, 0x05];
 
