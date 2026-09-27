@@ -262,37 +262,38 @@ opening-chain + a property set):
 ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');
-FILE_NAME('Synthetic Test Project.ifc','2026-09-27T19:05:33',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.1.x','rvt-rs STEP writer','');
+FILE_NAME('Synthetic Test Project.ifc','2026-09-27T19:31:21',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.1.x','rvt-rs STEP writer','');
 FILE_SCHEMA(('IFC4'));
 ENDSEC;
 DATA;
-#6=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);
-#16=IFCPROJECT('2DidPPITwEWgzLwN9h$v59',#5,'Synthetic Test Project','End-to-end rvt-rs pipeline smoke test',$,$,$,(#15),#10);
-#22=IFCBUILDINGSTOREY('0ltZd43IADNhrlf$bL6ubE',#5,'Ground Floor',$,$,#21,$,'Ground Floor',.ELEMENT.,0.000000);
-#24=IFCBUILDINGSTOREY('0lbLN7pIw6BuvMw4oqhcdl',#5,'Second Floor',$,$,#23,$,'Second Floor',.ELEMENT.,3.048000);
-#30=IFCMATERIAL('Concrete',$,$);
-#36=IFCMATERIAL('Glass - Tinted',$,$);
-#49=IFCRECTANGLEPROFILEDEF(.AREA.,$,#48,6.096000,0.203200);
-#50=IFCEXTRUDEDAREASOLID(#49,#14,#12,3.048000);
-#51=IFCSHAPEREPRESENTATION(#15,'Body','SweptSolid',(#50));
-#52=IFCPRODUCTDEFINITIONSHAPE($,$,(#51));
-#53=IFCWALL('3xlhuehGY479OIzuhukk6g',#5,'North Wall',$,$,#45,#52,'W-N-001',.NOTDEFINED.);
-#113=IFCDOOR('1UrhkCDyE2zQ7NtI3QeiHF',#5,'Front Entry Door',$,$,#105,#112,'DOOR-001',$,$,.DOOR.,$,$);
-#122=IFCOPENINGELEMENT('2AJs5dPAE0FvFGouvwp3Vn',#5,'Opening for Front Entry Door',$,$,#121,#120,'DOOR-001',.OPENING.);
-#131=IFCRELVOIDSELEMENT('1B$ATe42Q2qu6cp8BLVgI$',#5,$,$,#65,#122);
-#132=IFCRELFILLSELEMENT('0eAjMcQvI1j9WLKGmmjafA',#5,$,$,#122,#113);
-#138=IFCPROPERTYSET('3GcBm_E1I2VOad3eTJ7twk',#5,'Pset_WallCommon',$,(#133,#134,#135,#136,#137));
-#139=IFCRELDEFINESBYPROPERTIES('3zJZfydZY1EASjcyMWrA8y',#5,$,$,(#53),#138);
-#146=IFCRELCONTAINEDINSPATIALSTRUCTURE('2nQIPsGEU2LRIyF4X3hMhW',#5,$,$,(#53,#65,#89,#101,#113,#124,#126,#128),#22);
+#6=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#18=IFCPROJECT('2DidPPITwEWgzLwN9h$v59',#5,'Synthetic Test Project','End-to-end rvt-rs pipeline smoke test',$,$,$,(#17),#12);
+#24=IFCBUILDINGSTOREY('0ltZd43IADNhrlf$bL6ubE',#5,'Ground Floor',$,$,#23,$,'Ground Floor',.ELEMENT.,0.000000);
+#26=IFCBUILDINGSTOREY('0lbLN7pIw6BuvMw4oqhcdl',#5,'Second Floor',$,$,#25,$,'Second Floor',.ELEMENT.,3.048000);
+#32=IFCMATERIAL('Concrete',$,$);
+#38=IFCMATERIAL('Glass - Tinted',$,$);
+#51=IFCRECTANGLEPROFILEDEF(.AREA.,$,#50,6.096000,0.203200);
+#52=IFCEXTRUDEDAREASOLID(#51,#16,#14,3.048000);
+#53=IFCSHAPEREPRESENTATION(#17,'Body','SweptSolid',(#52));
+#54=IFCPRODUCTDEFINITIONSHAPE($,$,(#53));
+#55=IFCWALL('3xlhuehGY479OIzuhukk6g',#5,'North Wall',$,$,#47,#54,'W-N-001',.NOTDEFINED.);
+#115=IFCDOOR('1UrhkCDyE2zQ7NtI3QeiHF',#5,'Front Entry Door',$,$,#107,#114,'DOOR-001',$,$,.DOOR.,$,$);
+#124=IFCOPENINGELEMENT('2AJs5dPAE0FvFGouvwp3Vn',#5,'Opening for Front Entry Door',$,$,#123,#122,'DOOR-001',.OPENING.);
+#133=IFCRELVOIDSELEMENT('1B$ATe42Q2qu6cp8BLVgI$',#5,$,$,#67,#124);
+#134=IFCRELFILLSELEMENT('0eAjMcQvI1j9WLKGmmjafA',#5,$,$,#124,#115);
+#140=IFCPROPERTYSET('3GcBm_E1I2VOad3eTJ7twk',#5,'Pset_WallCommon',$,(#135,#136,#137,#138,#139));
+#141=IFCRELDEFINESBYPROPERTIES('3zJZfydZY1EASjcyMWrA8y',#5,$,$,(#55),#140);
+#148=IFCRELCONTAINEDINSPATIALSTRUCTURE('2nQIPsGEU2LRIyF4X3hMhW',#5,$,$,(#55,#67,#91,#103,#115,#126,#128,#130),#24);
 ENDSEC;
 END-ISO-10303-21;
 ```
 
 Notable properties:
 
-- **Real SI units.** Length in millimetres, area / volume SI. Feet →
-  metres is done on the way through the writer (10 ft → 3.048 m,
-  20 ft → 6.096 m, 8 inches → 0.2032 m).
+- **SI units.** Every value is written in SI units and the
+  `IfcUnitAssignment` says so: metres, square and cubic metres, radians,
+  kilograms, seconds (#403). Feet → metres is done on the way through the
+  writer (10 ft → 3.048 m, 20 ft → 6.096 m, 8 inches → 0.2032 m).
 - **Stable GlobalIds.** An export of a real Revit 2024 or later project
   gives its elements, rooms and storeys the GlobalIds Revit's own exporter
   gives them (RE-48). Everything else, including every entity of this

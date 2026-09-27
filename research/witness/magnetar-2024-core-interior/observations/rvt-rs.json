@@ -17,8 +17,6 @@
       "IFCCARTESIANPOINT": 3613,
       "IFCCOLOURRGB": 78,
       "IFCCOLUMN": 256,
-      "IFCCONVERSIONBASEDUNIT": 4,
-      "IFCDIMENSIONALEXPONENTS": 4,
       "IFCDIRECTION": 1110,
       "IFCDOOR": 132,
       "IFCEXTRUDEDAREASOLID": 1108,
@@ -28,7 +26,6 @@
       "IFCMATERIALLAYER": 5,
       "IFCMATERIALLAYERSET": 4,
       "IFCMATERIALLAYERSETUSAGE": 88,
-      "IFCMEASUREWITHUNIT": 4,
       "IFCOPENINGELEMENT": 138,
       "IFCORGANIZATION": 1,
       "IFCOWNERHISTORY": 1,
@@ -692,7 +689,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "e0698f34a7d15f91ce4648850a17f804224c659945931ebdf0467c2d4e5730c4",
+  "observation_hash_sha256": "a0d9603a4669dc0547e840b94bde753a08be34b25bdca6b763da6ffa12a8b885",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",

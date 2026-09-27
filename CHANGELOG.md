@@ -536,6 +536,20 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The IFC's units are the units its values are written in (#403).** The
+  writer writes every length in metres, but a model with no recovered units
+  (every synthetic fixture and family file, and any `IfcModel` a caller
+  builds) declared millimetres, so IFC viewers drew it 1,000 times too small:
+  IfcOpenShell read the synthetic fixture's 20 ft wall as 6 mm long. Real
+  project exports declared Revit's display units for area, volume, angle and
+  mass (square inches, cubic inches, degrees and pounds on Snowdon Towers;
+  "centi square metres" on Projeto1) over values written in square metres,
+  cubic metres, radians and kilograms. No value in those exports used them
+  yet, so their geometry was unaffected. The unit assignment is now always
+  metre, square metre, cubic metre, radian, kilogram and second; Revit's
+  display units stay in the export diagnostics
+  (`recovered_unit_identifiers`), which describe the source model.
+
 - **Empty curtain panels are left out, as Revit's export leaves them out
   (#309).** A curtain panel of the "Empty System Panel" family fills a grid
   cell with nothing, and Revit never exports one; rvt-rs wrote each as a
