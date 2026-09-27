@@ -16,6 +16,8 @@
 //! Design principle: string-based emission, no external IFC library
 //! dependency, fully `#![deny(unsafe_code)]`-clean.
 
+use std::collections::HashMap;
+
 use super::IfcModel;
 use super::entities::{Extrusion, SolidShape};
 
@@ -1038,6 +1040,8 @@ impl StepWriter {
 
     fn emit_data(&mut self, model: &IfcModel) {
         self.emit_line("DATA;");
+        let document = model.global_ids.document.as_deref().unwrap_or("");
+        let gid = |key: &[&str]| stable_guid(document, key);
 
         // Required framework entities (buildingSMART minimum viable).
         let person = self.id();
@@ -1117,7 +1121,7 @@ impl StepWriter {
             project_id,
             format!(
                 "IFCPROJECT('{}',#{owner_hist},'{}',{},$,$,$,(#{geom_ctx}),#{unit_assignment})",
-                make_guid(project_id),
+                gid(&["project"]),
                 project_name,
                 quoted_or_dollar(&project_desc),
             ),
@@ -1148,7 +1152,7 @@ impl StepWriter {
             site_id,
             format!(
                 "IFCSITE('{}',#{owner_hist},'Default Site',$,$,#{site_placement},$,'Default Site',.ELEMENT.,$,$,$,$,$)",
-                make_guid(site_id),
+                gid(&["site"]),
             ),
         );
 
@@ -1162,7 +1166,7 @@ impl StepWriter {
             building_id,
             format!(
                 "IFCBUILDING('{}',#{owner_hist},'Default Building',$,$,#{building_placement},$,'Default Building',.ELEMENT.,$,$,$)",
-                make_guid(building_id),
+                gid(&["building"]),
             ),
         );
 
@@ -1186,7 +1190,18 @@ impl StepWriter {
         } else {
             model.building_storeys.clone()
         };
+        let mut storey_gids: Vec<String> = Vec::with_capacity(storeys.len());
+        let mut storey_name_counts: HashMap<&str, usize> = HashMap::new();
         for (storey_index, storey) in storeys.iter().enumerate() {
+            let occurrence = storey_name_counts.entry(storey.name.as_str()).or_default();
+            // RE-48: the Level's own GlobalId where the file yields it.
+            let storey_gid = model
+                .global_ids
+                .storeys
+                .get(&storey_index)
+                .cloned()
+                .unwrap_or_else(|| gid(&["storey", &storey.name, &occurrence.to_string()]));
+            *occurrence += 1;
             let placement_id = self.id();
             self.emit_entity(
                 placement_id,
@@ -1203,16 +1218,10 @@ impl StepWriter {
                     // `Elevation` is an IfcLengthMeasure (REAL), so it
                     // needs a decimal point — `0` is an INTEGER literal
                     // and ISO-10303-21 does not admit it here (#214).
-                    "IFCBUILDINGSTOREY('{}',#{owner_hist},'{name_escaped}',$,$,#{placement_id},$,'{name_escaped}',.ELEMENT.,{elevation_m:.6})",
-                    // RE-48: the Level's own GlobalId where the file yields it.
-                    model
-                        .global_ids
-                        .storeys
-                        .get(&storey_index)
-                        .cloned()
-                        .unwrap_or_else(|| make_guid(id)),
+                    "IFCBUILDINGSTOREY('{storey_gid}',#{owner_hist},'{name_escaped}',$,$,#{placement_id},$,'{name_escaped}',.ELEMENT.,{elevation_m:.6})",
                 ),
             );
+            storey_gids.push(storey_gid);
             storey_ids.push(id);
             storey_placements.push(placement_id);
         }
@@ -1229,7 +1238,7 @@ impl StepWriter {
             rel_proj_site,
             format!(
                 "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{project_id},(#{site_id}))",
-                make_guid(rel_proj_site),
+                gid(&["aggregates", "project"]),
             ),
         );
         let rel_site_building = self.id();
@@ -1237,7 +1246,7 @@ impl StepWriter {
             rel_site_building,
             format!(
                 "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{site_id},(#{building_id}))",
-                make_guid(rel_site_building),
+                gid(&["aggregates", "site"]),
             ),
         );
         let rel_building_storey = self.id();
@@ -1250,7 +1259,7 @@ impl StepWriter {
             rel_building_storey,
             format!(
                 "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{building_id},({storey_refs}))",
-                make_guid(rel_building_storey),
+                gid(&["aggregates", "building"]),
             ),
         );
 
@@ -1266,6 +1275,7 @@ impl StepWriter {
         // codes were collected but never emitted; this wires them
         // through the STEP writer so downstream consumers can see
         // them directly.
+        let mut classification_counts: HashMap<(&str, &str), usize> = HashMap::new();
         for classification in &model.classifications {
             let source_name = match &classification.source {
                 super::entities::ClassificationSource::OmniClass => "OmniClass",
@@ -1289,6 +1299,7 @@ impl StepWriter {
             // One IfcClassificationReference per item; collect their
             // ids so we can bundle them into the IfcRelAssociatesClassification.
             let mut ref_ids: Vec<usize> = Vec::with_capacity(classification.items.len());
+            let mut ref_gids: Vec<String> = Vec::with_capacity(classification.items.len());
             for item in &classification.items {
                 let code_escaped = escape(&item.code);
                 let name_str = item
@@ -1308,6 +1319,16 @@ impl StepWriter {
                     ),
                 );
                 ref_ids.push(ref_id);
+                let occurrence = classification_counts
+                    .entry((source_name, item.code.as_str()))
+                    .or_default();
+                ref_gids.push(gid(&[
+                    "classification",
+                    source_name,
+                    &item.code,
+                    &occurrence.to_string(),
+                ]));
+                *occurrence += 1;
             }
 
             if !ref_ids.is_empty() {
@@ -1324,13 +1345,12 @@ impl StepWriter {
                 // project associations. If the project only has one
                 // reference this is exact; when there are multiple,
                 // each gets its own association relationship.
-                for ref_id in &ref_ids {
+                for (ref_id, ref_gid) in ref_ids.iter().zip(&ref_gids) {
                     let rel_id = self.id();
                     self.emit_entity(
                         rel_id,
                         format!(
-                            "IFCRELASSOCIATESCLASSIFICATION('{}',#{owner_hist},$,$,(#{project_id}),#{ref_id})",
-                            make_guid(rel_id),
+                            "IFCRELASSOCIATESCLASSIFICATION('{ref_gid}',#{owner_hist},$,$,(#{project_id}),#{ref_id})",
                         ),
                     );
                 }
@@ -1629,7 +1649,7 @@ impl StepWriter {
         // also BuildingElements (IfcOpeningElement) but they're never
         // contained in a storey — IFC4 treats them as "virtual"
         // elements that only live through IfcRelVoidsElement.
-        let mut void_fill_triples: Vec<(usize, usize, usize)> = Vec::new();
+        let mut void_fill_triples: Vec<(usize, usize, usize, String)> = Vec::new();
         // #323: parts of an aggregate whose whole is a building element
         // reach the spatial structure through that whole, so they are left
         // out of the storey containment below.
@@ -1657,6 +1677,41 @@ impl StepWriter {
             })
             .flatten()
             .collect();
+        // #400: each building element's GlobalId, fixed from what the
+        // element is rather than where it lands in the file. Revit's own
+        // where the file yields it (RE-48); otherwise the element's
+        // ElementId (its `Tag`) and which of the entities sharing that Tag
+        // it is — a slab's further pieces (#331) or a curtain wall's parts
+        // share their element's. An element with no Tag falls back to its
+        // entity type and name. Everything the element owns (its opening,
+        // property sets, material association) derives from this one.
+        let mut element_gids: Vec<Option<String>> = vec![None; model.entities.len()];
+        let mut element_counts: HashMap<(&str, &str, &str), usize> = HashMap::new();
+        for (entity_idx, entity) in model.entities.iter().enumerate() {
+            let super::entities::IfcEntity::BuildingElement {
+                ifc_type,
+                name,
+                type_guid,
+                ..
+            } = entity
+            else {
+                continue;
+            };
+            let key = match type_guid.as_deref() {
+                Some(tag) => ("element", tag, ""),
+                None => ("untagged-element", ifc_type.as_str(), name.as_str()),
+            };
+            let occurrence = element_counts.entry(key).or_default();
+            let element_gid = model
+                .global_ids
+                .elements
+                .get(&entity_idx)
+                .cloned()
+                .unwrap_or_else(|| gid(&[key.0, key.1, key.2, &occurrence.to_string()]));
+            *occurrence += 1;
+            element_gids[entity_idx] = Some(element_gid);
+        }
+        let mut el_id_to_gid: HashMap<usize, &str> = HashMap::new();
         for (entity_idx, entity) in model.entities.iter().enumerate() {
             if let super::entities::IfcEntity::BuildingElement {
                 ifc_type,
@@ -1936,13 +1991,10 @@ impl StepWriter {
                     predefined_type.as_deref(),
                     &long_name_quoted,
                 );
-                // RE-48: Revit's own GlobalId where the file yields it.
-                let global_id = model
-                    .global_ids
-                    .elements
-                    .get(&entity_idx)
-                    .cloned()
-                    .unwrap_or_else(|| make_guid(el_id));
+                let global_id: &str = element_gids[entity_idx]
+                    .as_deref()
+                    .expect("every building element has a GlobalId");
+                el_id_to_gid.insert(el_id, global_id);
                 let line = format!(
                     "{ifc_upper}('{global_id}',#{owner_hist},{name_quoted},$,{object_type_quoted},#{placement_id},{rep_slot},{tail})",
                 );
@@ -1978,7 +2030,7 @@ impl StepWriter {
                             rel_id,
                             format!(
                                 "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,(#{el_id}),#{usage_id})",
-                                make_guid(rel_id),
+                                gid(&["material-association", global_id]),
                             ),
                         );
                         true
@@ -2029,7 +2081,7 @@ impl StepWriter {
                             rel_id,
                             format!(
                                 "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,(#{el_id}),#{usage_id})",
-                                make_guid(rel_id),
+                                gid(&["material-association", global_id]),
                             ),
                         );
                             true
@@ -2114,6 +2166,9 @@ impl StepWriter {
                             format!("IFCLOCALPLACEMENT(#{placement_parent},#{element_axis})"),
                         );
                         let opening_id = self.id();
+                        // #400: an opening exists only because the element
+                        // filling it does, so its identity is that element's.
+                        let opening_gid = gid(&["opening", global_id]);
                         // IfcOpeningElement: (GlobalId, OwnerHist, Name,
                         //   Desc, ObjectType, Placement, Rep, Tag,
                         //   PredefinedType). IFC4 adds PredefinedType.
@@ -2128,12 +2183,11 @@ impl StepWriter {
                         self.emit_entity(
                             opening_id,
                             format!(
-                                "IFCOPENINGELEMENT('{}',#{owner_hist},'Opening for {name_esc}',$,$,#{o_placement},#{o_prod_shape},{tag_quoted},.OPENING.)",
-                                make_guid(opening_id),
+                                "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},'Opening for {name_esc}',$,$,#{o_placement},#{o_prod_shape},{tag_quoted},.OPENING.)",
                                 name_esc = escape(name),
                             ),
                         );
-                        void_fill_triples.push((*h_idx, opening_id, el_id));
+                        void_fill_triples.push((*h_idx, opening_id, el_id, opening_gid));
                     }
                 }
             }
@@ -2153,7 +2207,7 @@ impl StepWriter {
         // once every BuildingElement has been emitted, so resolving
         // inline silently dropped the chain whenever a host happened
         // to sit after its opening in `model.entities`.
-        for (host_entity_idx, opening_id, el_id) in &void_fill_triples {
+        for (host_entity_idx, opening_id, el_id, opening_gid) in &void_fill_triples {
             let Some(host_el_id) = entity_index_to_el_id
                 .get(*host_entity_idx)
                 .and_then(|slot| *slot)
@@ -2165,7 +2219,7 @@ impl StepWriter {
                 voids_rel,
                 format!(
                     "IFCRELVOIDSELEMENT('{}',#{owner_hist},$,$,#{host_el_id},#{opening_id})",
-                    make_guid(voids_rel),
+                    gid(&["voids", opening_gid]),
                 ),
             );
             let fills_rel = self.id();
@@ -2173,7 +2227,7 @@ impl StepWriter {
                 fills_rel,
                 format!(
                     "IFCRELFILLSELEMENT('{}',#{owner_hist},$,$,#{opening_id},#{el_id})",
-                    make_guid(fills_rel),
+                    gid(&["fills", opening_gid]),
                 ),
             );
         }
@@ -2204,7 +2258,7 @@ impl StepWriter {
                 rel_id,
                 format!(
                     "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{whole_el_id},({}))",
-                    make_guid(rel_id),
+                    gid(&["aggregates", el_id_to_gid[&whole_el_id]]),
                     part_refs.join(","),
                 ),
             );
@@ -2227,7 +2281,16 @@ impl StepWriter {
         // properties. Each property becomes an
         // IfcPropertySingleValue, the set wraps them, then an
         // IfcRelDefinesByProperties links the set to its element.
+        let mut pset_counts: HashMap<(usize, &str), usize> = HashMap::new();
         for (el_id, pset) in &element_property_sets {
+            let occurrence = pset_counts.entry((*el_id, pset.name.as_str())).or_default();
+            let set_key = [
+                el_id_to_gid[el_id],
+                pset.name.as_str(),
+                &occurrence.to_string(),
+            ]
+            .join("\u{1f}");
+            *occurrence += 1;
             let mut prop_ids: Vec<usize> = Vec::with_capacity(pset.properties.len());
             for prop in &pset.properties {
                 let p_id = self.id();
@@ -2250,7 +2313,7 @@ impl StepWriter {
                 set_id,
                 format!(
                     "IFCPROPERTYSET('{}',#{owner_hist},'{set_name}',$,({refs}))",
-                    make_guid(set_id)
+                    gid(&["property-set", &set_key])
                 ),
             );
             let rel_id = self.id();
@@ -2258,7 +2321,7 @@ impl StepWriter {
                 rel_id,
                 format!(
                     "IFCRELDEFINESBYPROPERTIES('{}',#{owner_hist},$,$,(#{el_id}),#{set_id})",
-                    make_guid(rel_id)
+                    gid(&["defines-by-properties", &set_key])
                 ),
             );
         }
@@ -2270,7 +2333,12 @@ impl StepWriter {
         for (el_id, m_idx) in &element_material_pairs {
             by_material[*m_idx].push(*el_id);
         }
+        let mut material_name_counts: HashMap<&str, usize> = HashMap::new();
         for (m_idx, elements) in by_material.iter().enumerate() {
+            let material_name = model.materials[m_idx].name.as_str();
+            let occurrence = material_name_counts.entry(material_name).or_default();
+            let material_key = occurrence.to_string();
+            *occurrence += 1;
             if elements.is_empty() {
                 continue;
             }
@@ -2284,7 +2352,7 @@ impl StepWriter {
                 rel_id,
                 format!(
                     "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,({refs_list}),#{})",
-                    make_guid(rel_id),
+                    gid(&["material", material_name, &material_key]),
                     material_ids[m_idx],
                 ),
             );
@@ -2304,9 +2372,9 @@ impl StepWriter {
             if element_ids.is_empty() {
                 continue;
             }
-            let target_storey = match idx {
-                Some(index) => storey_ids[index],
-                None => building_id,
+            let (target_storey, container_gid) = match idx {
+                Some(index) => (storey_ids[index], gid(&["contains", &storey_gids[index]])),
+                None => (building_id, gid(&["contains", "building"])),
             };
             let rel_id = self.id();
             let refs_list = element_ids
@@ -2317,8 +2385,7 @@ impl StepWriter {
             self.emit_entity(
                 rel_id,
                 format!(
-                    "IFCRELCONTAINEDINSPATIALSTRUCTURE('{}',#{owner_hist},$,$,({refs_list}),#{target_storey})",
-                    make_guid(rel_id),
+                    "IFCRELCONTAINEDINSPATIALSTRUCTURE('{container_gid}',#{owner_hist},$,$,({refs_list}),#{target_storey})",
                 ),
             );
         }
@@ -2438,36 +2505,27 @@ fn epoch_to_ymdhms(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
     (y, m, d, hh, mm, ss)
 }
 
-/// IFC4 globally-unique-ID. Format: 22 chars from the IFC-GUID
-/// alphabet (`0-9A-Za-z_$`, 64 symbols). The spec requires these be
-/// unique per file but does not mandate a specific encoding —
-/// `IfcOpenShell` and `buildingSMART` validators accept any 22-char
-/// string in the alphabet.
-///
-/// v1 encoding is deterministic per `index`: a fixed 6-char `"0rvtrs"`
-/// prefix followed by the base-64 big-endian encoding of `index` into
-/// 16 chars. Gives a bijection between `index` and GUID for the first
-/// 64^16 ≈ 7.9 × 10^28 entities — trivially enough. Stable across
-/// runs (same input → same output), which makes STEP text diffs
-/// tractable.
-///
-/// Future: once the walker surfaces real per-element GUIDs from the
-/// Revit file, we'll prefer those (they're already in the correct
-/// format) and fall back to this for entities without a native GUID.
-fn make_guid(index: usize) -> String {
-    const ALPHABET: &[u8; 64] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
-    let mut guid = String::with_capacity(22);
-    guid.push_str("0rvtrs");
-    let mut suffix = [b'0'; 16];
-    let mut n = index;
-    for slot in suffix.iter_mut().rev() {
-        *slot = ALPHABET[n & 63];
-        n >>= 6;
+/// The GlobalId of an entity Revit gives none (#400): SHA-256 over a fixed
+/// namespace, the document's identity and `key` (the entity's role and the
+/// identities it derives from), as an RFC 9562 version-8 UUID in IFC's
+/// 22-character form. It depends on nothing about the entity's position in
+/// the file, so it survives changes elsewhere in the model, and the
+/// namespace keeps it apart from GlobalIds other tools derive.
+fn stable_guid(document: &str, key: &[&str]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(b"rvt-rs ifc GlobalId v1\0");
+    hasher.update(document.as_bytes());
+    for part in key {
+        hasher.update([0x1f]);
+        hasher.update(part.as_bytes());
     }
-    for b in &suffix {
-        guid.push(*b as char);
-    }
-    guid
+    let digest = hasher.finalize();
+    let mut value = [0u8; 16];
+    value.copy_from_slice(&digest[..16]);
+    value[6] = (value[6] & 0x0f) | 0x80;
+    value[8] = (value[8] & 0x3f) | 0x80;
+    crate::revit_global_ids::compress_ifc_guid(value)
 }
 
 #[cfg(test)]
@@ -2657,32 +2715,6 @@ mod tests {
     }
 
     #[test]
-    fn make_guid_is_22_chars_in_alphabet() {
-        let g = make_guid(0);
-        assert_eq!(g.len(), 22, "IFC GUIDs must be exactly 22 characters");
-        const ALPHABET: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
-        for c in g.chars() {
-            assert!(
-                ALPHABET.contains(c),
-                "character {c:?} not in IFC GUID alphabet"
-            );
-        }
-    }
-
-    #[test]
-    fn make_guid_is_deterministic_and_distinct() {
-        // Same input → same output (stable diffs across runs).
-        assert_eq!(make_guid(42), make_guid(42));
-        // Different inputs → different outputs (uniqueness).
-        let g1 = make_guid(1);
-        let g2 = make_guid(2);
-        let g100 = make_guid(100);
-        assert_ne!(g1, g2);
-        assert_ne!(g1, g100);
-        assert_ne!(g2, g100);
-    }
-
-    #[test]
     fn step_emits_omniclass_classification_when_present() {
         use super::super::entities::{Classification, ClassificationItem, ClassificationSource};
         let model = IfcModel {
@@ -2756,19 +2788,19 @@ mod tests {
 
     #[test]
     fn step_guids_are_unique_across_entities() {
-        // The writer assigns each entity a unique GUID by index; the
-        // STEP output should therefore contain no duplicate GUIDs.
-        // We grep for '0rvtrs' (our prefix) and check uniqueness.
+        // Every rooted entity's GlobalId is the first attribute and is
+        // followed by its OwnerHistory reference; none may repeat.
         let model = IfcModel::default();
         let s = write_step(&model);
-        let guids: Vec<_> = s
-            .split("'0rvtrs")
-            .skip(1)
-            .filter_map(|chunk| chunk.split('\'').next())
+        let guids: Vec<&str> = s
+            .lines()
+            .filter_map(|line| line.split_once("('")?.1.split_once("',#"))
+            .map(|(guid, _)| guid)
+            .filter(|guid| guid.len() == 22)
             .collect();
         let mut seen = std::collections::HashSet::new();
         for g in &guids {
-            assert!(seen.insert(*g), "duplicate IFC GUID in output: 0rvtrs{g}");
+            assert!(seen.insert(*g), "duplicate IFC GUID in output: {g}");
         }
         assert!(
             guids.len() >= 7,
