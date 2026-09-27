@@ -1,47 +1,74 @@
 //! # rvt-rs · open reader for Autodesk Revit files
 //!
-//! Parses `.rvt`, `.rfa`, `.rte`, and `.rft` files without any Autodesk
-//! dependency. Verified against 11 Revit releases (2016 through 2026).
+//! Reads `.rvt`, `.rfa`, `.rte` and `.rft` files without Revit or any
+//! Autodesk component: metadata, previews and the embedded schema of every
+//! release from 2016 to 2026, and, on Revit 2024 and 2025 project files, the
+//! building itself (typed elements with Revit's ElementIds, names, types,
+//! storeys, materials, layers, GlobalIds and some type parameters), written
+//! out as IFC4, glTF or plan SVG.
 //!
-//! ## Quickstart
+//! What it recovers is measured against Revit's own IFC export of the same
+//! file, model by model; it is a reader, not a converter for every model.
+//! `docs/supported-profile.md` and `docs/support-matrix.json` in the
+//! repository say exactly what is read on which input, and every export
+//! comes with diagnostics naming what was approximated or left out.
+//!
+//! ## Read a file's identity
 //!
 //! ```no_run
 //! use rvt::RevitFile;
 //!
-//! let mut rf = RevitFile::open("model.rfa")?;
+//! let mut rf = RevitFile::open("model.rvt")?;
 //! let summary = rf.summarize()?;
 //! println!("Revit {} ({})", summary.version, summary.build.as_deref().unwrap_or("—"));
 //! # Ok::<(), rvt::Error>(())
 //! ```
 //!
+//! ## List the elements of a Revit 2024 or 2025 project
+//!
+//! ```no_run
+//! use rvt::RevitFile;
+//! use rvt::ifc::RvtDocExporter;
+//! use rvt::ifc::entities::IfcEntity;
+//!
+//! let mut rf = RevitFile::open("project.rvt")?;
+//! let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+//! for entity in &result.model.entities {
+//!     if let IfcEntity::BuildingElement { ifc_type, name, type_guid, .. } = entity {
+//!         // `type_guid` carries the Revit ElementId (the IFC Tag).
+//!         println!("{ifc_type} {name} {}", type_guid.as_deref().unwrap_or("-"));
+//!     }
+//! }
+//! // What was approximated or left out, as the CLI's --diagnostics writes it.
+//! println!("{}", serde_json::to_string_pretty(&result.diagnostics).unwrap());
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! ## Write IFC4 and glTF
+//!
+//! ```no_run
+//! use rvt::RevitFile;
+//! use rvt::ifc::{Exporter, RvtDocExporter, gltf::model_to_glb, write_step};
+//!
+//! let mut rf = RevitFile::open("project.rvt")?;
+//! let model = RvtDocExporter.export(&mut rf)?;
+//! std::fs::write("project.ifc", write_step(&model))?;
+//! std::fs::write("project.glb", model_to_glb(&model))?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
 //! ## Format overview
 //!
 //! - **Container**: Microsoft Compound File Binary Format 3.0 (`[MS-CFB]`)
-//! - **Compression**: *truncated-gzip* — standard 10-byte gzip header
-//!   followed by raw DEFLATE, but **without** the trailing CRC32+ISIZE
-//!   that conforming gzip writers emit. Standard `gzip` parsers in most
-//!   languages refuse these streams; this crate handles them via raw
-//!   inflate on the post-header bytes (see [`compression::inflate_at`]).
-//! - **Streams**: 12 invariant across every release (2016-2026), plus one
-//!   `Partitions/NN` stream whose `NN` varies per release (58 in 2016;
-//!   60-69 for 2018-2026; 59 is skipped).
-//!
-//! ## Moat layers
-//!
-//! | Layer | Description | Status |
-//! |---|---|---|
-//! | 1 · Container | OLE2 / MS-CFB | **Done** (via `cfb` crate) |
-//! | 2 · Compression | Truncated gzip | **Done** (via `flate2` raw DEFLATE) |
-//! | 3 · Stream framing | Per-stream custom headers | **Done** |
-//! | 4a · Schema table | Class names + fields + tags | **Done** ([`formats`]) |
-//! | 4b · Schema→data link | Tags index instance data at 340× | **Done** |
-//! | 4c · Field decoding | 11 discriminators mapped, **100% coverage** (13,570 fields across the 11-version corpus; zero `Unknown`) | **Done** ([`formats::FieldType`]) |
-//! | 4d · ElemTable records | Header done; body TBD | **Partial** ([`elem_table`]) |
-//! | 5 · IFC export | Scaffold + mapping plan | **Scaffolded** ([`ifc`]) |
-//! | 6 · Write path | Byte-preserving round-trip verified | **Scaffolded** ([`writer`]) |
-//!
-//! Full analysis narrative with 13 dated addenda is in
-//! `docs/rvt-moat-break-reconnaissance.md` in the repo.
+//! - **Compression**: *truncated-gzip*, a 10-byte gzip header followed by raw
+//!   DEFLATE, and, for the database streams and `Formats/Latest`, stored in
+//!   checksum pages that are stripped before inflating
+//!   ([`compression::inflate_stream_at`]).
+//! - **Schema**: `Formats/Latest` declares every serialized class and its
+//!   fields ([`formats::parse_schema`]).
+//! - **Elements**: `Global/ElemTable` declares the ElementIds; each element's
+//!   record in the `Partitions/*` streams carries its category, class,
+//!   bounding box and references ([`partition_element_records`]).
 //!
 //! ## Module overview
 //!
@@ -68,7 +95,7 @@
 //! - [`writer`] — byte-preserving OLE round-trip
 //! - [`redact`] — shared PII scrubbers for all CLIs
 //! - [`cli`] — behaviour shared by the shipped CLIs (quiet exit on a closed pipe)
-//! - [`ifc`] — IFC export scaffold
+//! - [`ifc`] — IFC4 / glTF / plan SVG / CSV export and diagnostics
 //! - [`error`] — [`Error`] + [`Result`] aliases
 //! - [`streams`] — named constants for every invariant OLE stream
 //!
