@@ -37,7 +37,7 @@ Snowdon Towers: 3,789 of 4,744 bounding-box bodies replaced, 2.55 M triangles, 3
 
 ## Residuals, measured
 
-- **Windows** (66 of 68 on Snowdon): the saved mesh is 0.44 ft short on one side and 0.88 ft on the other in plan, the same on every instance of a type. Revit's export draws parts the Fine-detail saved mesh does not.
+- **Windows** (66 of 68 on Snowdon): the saved mesh is 0.44 ft short on one side and 0.88 ft on the other in plan, the same on every instance of a type. Revit's export draws parts the Fine-detail saved mesh does not. Not the detail level: at Coarse and Medium the same 2 windows agree, while doors (127 of 132) and light fixtures (248 and 252 of 388) agree less than at Fine (131, 289), which is why Fine is used.
 - **Light fixtures** (90): the saved mesh is 0.58 ft taller than Revit's export.
 - **Members** (30): exactly Revit's shape, 13.33 ft lower. Probably graphics saved relative to a group; not resolved.
 - **Railings, sanitary terminals, proxies**: 23, 17 and 39 over 1 ft.
