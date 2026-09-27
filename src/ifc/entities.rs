@@ -531,6 +531,16 @@ pub enum SolidShape {
         /// 3-vertex `IfcPolyLoop` per triangle.
         triangles: Vec<BrepTriangle>,
     },
+    /// A triangle mesh written as an IFC4 `IfcTriangulatedFaceSet`: one
+    /// point list and one index list, a few entities per element where a
+    /// [`SolidShape::FacetedBrep`] writes several per triangle. Used for the
+    /// meshes Revit saves for display (#255), which need not be closed.
+    TriangulatedFaceSet {
+        /// Vertex coordinates in element-local space (feet).
+        vertices_feet: Vec<[f64; 3]>,
+        /// Triangles indexing `vertices_feet`.
+        triangles: Vec<BrepTriangle>,
+    },
     /// Simple extruded-area solid via the [`Extrusion`] struct.
     /// Emitted when a caller wants to keep `extrusion` set to
     /// `None` but route through `SolidShape` for uniform geometry

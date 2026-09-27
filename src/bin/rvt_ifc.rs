@@ -74,6 +74,11 @@ struct Args {
     /// validated typed model elements.
     #[arg(long, conflicts_with = "placeholder")]
     diagnostic_proxies: bool,
+    /// Draw doors, windows, furniture and other elements whose body would
+    /// be their record's bounding box from the meshes Revit saved for
+    /// display (#255). Slower on large files.
+    #[arg(long, conflicts_with = "placeholder")]
+    saved_meshes: bool,
     /// Write a JSON diagnostics sidecar for bug reports and support.
     ///
     /// The sidecar includes input metadata, decoded/exported element counts,
@@ -139,8 +144,22 @@ fn run(args: Args) -> anyhow::Result<()> {
             walker_limits,
         )?
     };
-    let model = result.model;
-    let diagnostics = result.diagnostics;
+    let mut model = result.model;
+    let mut diagnostics = result.diagnostics;
+    if args.saved_meshes {
+        // The saved graphics only improve bodies: when they cannot be read,
+        // the export goes ahead with the bodies it has, and says so.
+        match rvt::ifc::saved_meshes::attach(&mut rf, &mut model) {
+            Ok(report) => {
+                rvt::ifc::recount_exported(&mut diagnostics, &model);
+                eprintln!(
+                    "rvt-ifc: {} of {} bounding-box bodies drawn from their saved graphics ({} triangles)",
+                    report.replaced, report.candidates, report.triangles
+                );
+            }
+            Err(e) => eprintln!("rvt-ifc: saved graphics not read, bodies unchanged: {e}"),
+        }
+    }
 
     let out_path = args.output.clone().unwrap_or_else(|| {
         let mut p = args.input.clone();

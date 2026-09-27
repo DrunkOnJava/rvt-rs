@@ -761,6 +761,35 @@ impl StepWriter {
                 );
                 (brep_id, "Brep")
             }
+            SolidShape::TriangulatedFaceSet {
+                vertices_feet,
+                triangles,
+            } => {
+                let points = vertices_feet
+                    .iter()
+                    .map(|[x, y, z]| {
+                        format!("({:.6},{:.6},{:.6})", x * 0.3048, y * 0.3048, z * 0.3048)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let list_id = self.id();
+                self.emit_entity(list_id, format!("IFCCARTESIANPOINTLIST3D(({points}))"));
+                // `CoordIndex` is 1-based; triangles pointing outside the
+                // list are left out rather than written dangling.
+                let count = vertices_feet.len();
+                let indices = triangles
+                    .iter()
+                    .filter(|t| [t.0, t.1, t.2].iter().all(|&i| (i as usize) < count))
+                    .map(|t| format!("({},{},{})", t.0 + 1, t.1 + 1, t.2 + 1))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let set_id = self.id();
+                self.emit_entity(
+                    set_id,
+                    format!("IFCTRIANGULATEDFACESET(#{list_id},$,$,({indices}),$)"),
+                );
+                (set_id, "Tessellation")
+            }
             SolidShape::SweptPath {
                 profile,
                 directrix_points_feet,

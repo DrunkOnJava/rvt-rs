@@ -396,6 +396,15 @@
       "user_impact": "Every exported element carries RevitClass, so curved walls, face-based walls, in-place families and type symbols can be told apart in the IFC and the viewer."
     },
     {
+      "id": "saved-graphics-meshes",
+      "area": "geometry",
+      "name": "Family-instance bodies from the meshes Revit saved for display, opt-in (RE-78)",
+      "status": "experimental",
+      "evidence": "src/native_saved_scene.rs and the native_* reader from #255 (rosejn); src/ifc/saved_meshes.rs; rvt-ifc/rvt-gltf --saved-meshes; tools/re/saved_meshes_vs_ifc.py; reports/element-framing/RE-78-saved-graphics-meshes.md",
+      "notes": "Each body that is only its element record's bounding box is replaced by the element's saved display mesh (Fine detail), written as IfcTriangulatedFaceSet. Per element world box against Revit's own IFC export: Core Interior 158 of 158 doors, windows and shading devices within 0.01 ft; Snowdon Towers 3,332 of 3,736 (the boxes: 1,138). Windows mostly differ (2 of 68 exact on Snowdon: Revit's export draws parts the saved mesh does not), as do 30 members 13.33 ft low and light fixtures 0.58 ft taller. Aggregate wholes keep their parts. Experimental: opt-in, 37 s and a 111 MB IFC on Snowdon, and Revit 2024 only: the reader declines 2025 files (framing unvalidated), which export with their boxes.",
+      "user_impact": "Doors, windows, furniture and fixtures can be exported in their real shape instead of a box."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",

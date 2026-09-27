@@ -49,6 +49,12 @@ struct Cli {
     /// Print element count + output size on success.
     #[arg(long)]
     verbose: bool,
+
+    /// Draw doors, windows, furniture and other elements whose body would
+    /// be their record's bounding box from the meshes Revit saved for
+    /// display (#255). Slower on large files.
+    #[arg(long)]
+    saved_meshes: bool,
 }
 
 fn main() -> ExitCode {
@@ -93,9 +99,14 @@ fn run(cli: &Cli) -> Result<(), String> {
     )?;
     // Open errors from the library already name the file.
     let mut rf = RevitFile::open(&input).map_err(|e| e.to_string())?;
-    let model = RvtDocExporter
+    let mut model = RvtDocExporter
         .export(&mut rf)
         .map_err(|e| format!("export {}: {e}", input.display()))?;
+    if cli.saved_meshes {
+        if let Err(e) = rvt::ifc::saved_meshes::attach(&mut rf, &mut model) {
+            eprintln!("rvt-gltf: saved graphics not read, bodies unchanged: {e}");
+        }
+    }
     let glb = model_to_glb(&model);
     fs::write(&output, &glb).map_err(|e| format!("write {}: {e}", output.display()))?;
     if cli.verbose {

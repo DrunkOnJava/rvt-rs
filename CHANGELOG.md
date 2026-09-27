@@ -8,6 +8,24 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Family instances in their real shape, opt-in (RE-78, #255, #227).**
+  `rvt-ifc --saved-meshes` and `rvt-gltf --saved-meshes` replace each
+  bounding-box body with the mesh Revit saved for the element's display,
+  read by rosejn's native saved-graphics reader from #255 (extracted with
+  their authorship). Measured against Revit's own export, per element world
+  box: on Core Interior every door, window and shading device (158 of 158)
+  is within 0.01 ft, where the box made every door 2.92 ft too deep; on
+  Snowdon Towers 3,332 of the 3,736 replaced bodies are, up from 1,138
+  for their boxes, including 131 of 132 doors, 289 of 388 light fixtures and
+  all 110 columns. Saved meshes are written as `IfcTriangulatedFaceSet`
+  (Snowdon's IFC is 111 MB with them, 12 MB without) and take 37 s on
+  Snowdon, so they stay opt-in. Windows are the exception (2 of 68 on
+  Snowdon): Revit's export draws parts the saved Fine-detail mesh does not.
+  Stairs and curtain walls keep the bodies of their parts. Revit 2024 only:
+  the reader declines 2025 files, which then export with their boxes.
+
+### Added
+
 - **Pipes named as Revit names them (RE-130, #96).** A pipe's type is in
   its record's reference list, but pipe and duct types have no name entry,
   so no type was found. Their name follows the type's ElementId at a fixed
