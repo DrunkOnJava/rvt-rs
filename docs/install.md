@@ -11,8 +11,8 @@ workflow fits your file.
 | **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.3.0** (wheels for Linux x86_64 and aarch64 with glibc 2.17 or later, musl Linux x86_64 and aarch64, macOS Apple Silicon and Intel, and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
 | **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.3.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.3.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` |
 | **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.3.0`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
-| **crates.io** (`rvt`) | **Not published** — `cargo install rvt` fails until a successful `cargo publish`; build from source instead |
-| **docs.rs** (`rvt`) | **Not available** (404) until the crate exists on crates.io |
+| **crates.io** (`rvt`) | **Published** — `cargo install rvt --locked` installs **0.3.0** (the CLIs) and `cargo add rvt` adds the library |
+| **docs.rs** (`rvt`) | **Published** — <https://docs.rs/rvt> |
 
 Each 0.3.0 channel was checked from what was published: the archives'
 checksums and build attestations, the CLIs on RE1 Electrical (macOS arm64 and
@@ -72,11 +72,10 @@ print(json.loads(f.export_diagnostics_json())["confidence"]["level"])
 PY
 ```
 
-## Rust CLI From crates.io (not published yet)
+## Rust CLI From crates.io
 
-The Cargo package name is `rvt`. **It is not on crates.io today**, so
-commands like `cargo install rvt` / `cargo add rvt` will not resolve.
-When a version is successfully published, the expected install path is:
+The Cargo package name is `rvt`, published from 0.3.0 on. It needs a stable
+Rust toolchain (1.85 or later):
 
 ```bash
 cargo install rvt --locked
@@ -84,10 +83,8 @@ rvt-inspect --version
 rvt-ifc --help
 ```
 
-Until then, use [Build From Source](#build-from-source) below. After the
-first crates.io publish, docs.rs should populate automatically at
-<https://docs.rs/rvt> — verify with an HTTP 200 before linking it from
-announcements.
+The library API is documented at <https://docs.rs/rvt>; `cargo add rvt` adds
+it to a project.
 
 ## Prebuilt Binaries (GitHub Releases)
 
