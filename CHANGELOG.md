@@ -50,6 +50,15 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Exports say how much of the model is a stand-in box (#409).** The
+  diagnostics sidecar counts exported bodies by how they were derived
+  (`body_sources`) and how many are only the element record's bounding box
+  (`bounding_box_bodies`); `rvt-ifc` prints it and the viewer's file status
+  has a Shapes row. Core Interior: 274 of 970 (its doors, windows, rooms and
+  rotated plates); Snowdon Towers: 4,770 of 6,081; RE1 Architecture: 75 of
+  85. Each element's own `BodySource` property already said so; now the
+  total does too.
+
 - **Curved walls are drawn along their arc (RE-75, #358).** A wall's data
   stores its location arc in the record rvt-rs read as a line, and the word
   before the record says which it is. rvt-rs read an arc's axes as a line,
