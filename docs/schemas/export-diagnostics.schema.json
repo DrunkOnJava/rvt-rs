@@ -217,6 +217,19 @@
           "type": "integer",
           "minimum": 0,
           "description": "Elements whose compound layers and layer colours were decoded (RE-53); the glTF export draws each in its layers where they add up to its body's thickness."
+        },
+        "body_sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Exported bodies by how they were derived: each record-backed element's BodySource (#409)."
+        },
+        "bounding_box_bodies": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bodies that are only the element record's bounding box, with no recovered plan profile: placed and sized correctly, not the element's shape (#409)."
         }
       }
     },

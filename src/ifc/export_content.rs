@@ -720,6 +720,10 @@ struct RecordGeometry {
     pieces: Vec<Extrusion>,
 }
 
+/// `BodySource` of a body that is the element record's bounding box, where
+/// no carrier refines it (#409).
+pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
+
 /// `BodySource` of a beam whose body runs along its location line (RE-49).
 pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
 
@@ -1413,7 +1417,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
-                    .unwrap_or_else(|| "partition_element_record_bbox".into()),
+                    .unwrap_or_else(|| RECORD_BBOX_BODY_SOURCE.into()),
             ),
         },
         Property {

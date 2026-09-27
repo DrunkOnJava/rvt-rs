@@ -679,6 +679,13 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
             named.push(format!("and {} more type(s)", types.len() - SUMMARY_TYPES));
         }
         lines.push(format!("  {}", named.join(", ")));
+        // #409: say how much of the model is a stand-in box.
+        if exported.bounding_box_bodies > 0 {
+            lines.push(format!(
+                "  {} of the bodies are their element record's bounding box: placed and sized, shape not decoded",
+                exported.bounding_box_bodies
+            ));
+        }
     }
     let left_out: Vec<String> = diagnostics
         .skipped
