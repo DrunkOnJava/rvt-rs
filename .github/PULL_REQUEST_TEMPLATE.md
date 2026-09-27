@@ -22,12 +22,11 @@
 
 ## Testing
 
-- [ ] `cargo test --all` passes locally
-- [ ] `cargo clippy --all-targets --all-features -- -D warnings` passes
-- [ ] `cargo fmt --check` passes
-- [ ] New / changed code has unit tests
-- [ ] If this touches the IFC exporter: `tests/fixtures/synthetic-project.ifc` still produces byte-identical output (or the diff is documented in the PR body with rationale)
-- [ ] If this adds an element decoder: `empty_tolerance`, `wrong_schema_rejected`, and `from_decoded_happy_path` tests are present
+Unit tests are banned in this repository: do not add them. Show the change working end to end on real files instead.
+
+- [ ] `tools/check-local.sh` passes (fmt, clippy, rustdoc, build, real-file / CLI / contract checks)
+- [ ] Verified end to end on real Revit files: the command, the files (and their licence), and the measured result against Revit's own export are in the PR body, with the script or probe that reproduces it
+- [ ] If this touches the IFC exporter: the witness verdicts replay (see CONTRIBUTING.md) or the changed observations are refreshed in this PR
 - [ ] If this is a performance change: reran `tools/bench.sh` and attached the before / after
 
 ## Audit-honesty checklist

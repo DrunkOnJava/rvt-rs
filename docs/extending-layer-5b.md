@@ -130,89 +130,20 @@ The `decoder_class_names_are_unique` test in `src/elements/mod.rs`
 will fail at build time if you accidentally register two decoders
 for the same class — a useful tripwire.
 
-### Step 4 — Write unit tests with synthesized bytes
+### Step 4 — Write down how it can fail
 
-Every decoder gets unit tests against handcrafted bytes so the
-test suite runs without the corpus. Pattern from
-`src/elements/level.rs`:
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::formats::{ClassEntry, FieldEntry, FieldType};
-
-    fn synth_schema() -> ClassEntry {
-        ClassEntry {
-            name: "MyClass".to_string(),
-            fields: vec![
-                FieldEntry {
-                    name: "m_name".to_string(),
-                    cpp_type: Some("String".into()),
-                    field_type: Some(FieldType::String),
-                },
-                FieldEntry {
-                    name: "m_foo".to_string(),
-                    cpp_type: Some("unsigned int".into()),
-                    field_type: Some(FieldType::Primitive { kind: 0x05, size: 4 }),
-                },
-            ],
-            offset: 0,
-            tag: Some(0x1234),
-            parent: None,
-            declared_field_count: Some(2),
-            was_parent_only: false,
-            ancestor_tag: None,
-        }
-    }
-
-    fn synth_bytes() -> Vec<u8> {
-        let mut b = Vec::new();
-        // m_name = "hello" — UTF-16LE length-prefixed
-        let name = "hello";
-        b.extend_from_slice(&(name.chars().count() as u32).to_le_bytes());
-        for ch in name.encode_utf16() {
-            b.extend_from_slice(&ch.to_le_bytes());
-        }
-        // m_foo = 42
-        b.extend_from_slice(&42u32.to_le_bytes());
-        b
-    }
-
-    #[test]
-    fn decodes_all_fields() {
-        let decoded = MyClassDecoder.decode(
-            &synth_bytes(), &synth_schema(), &HandleIndex::new()
-        ).unwrap();
-        assert_eq!(decoded.fields.len(), 2);
-    }
-
-    #[test]
-    fn typed_view() {
-        let decoded = MyClassDecoder.decode(
-            &synth_bytes(), &synth_schema(), &HandleIndex::new()
-        ).unwrap();
-        let v = MyClass::from_decoded(&decoded);
-        assert_eq!(v.name.as_deref(), Some("hello"));
-        assert_eq!(v.foo, Some(42));
-    }
-
-    #[test]
-    fn rejects_wrong_schema() {
-        let wrong = ClassEntry { name: "Wall".to_string(), ..synth_schema() };
-        assert!(MyClassDecoder.decode(&[], &wrong, &HandleIndex::new()).is_err());
-    }
-}
-```
-
-Run them: `cargo test --lib elements::my_class`. Must pass before
-moving on.
+Unit tests are banned in this repository, synthesized-byte tests
+included. Before writing the decoder, list the ways it could go wrong
+on real files: a field that is absent on one release, a record of
+another class that happens to parse, a length that runs past the
+stream, a value that is plausible but wrong. Each one becomes a check
+in the corpus step below, against a real file and Revit's own export
+of it, and the decoder returns an `Error` or nothing (fail closed) in
+each case.
 
 ### Step 5 — Corpus integration test
 
-The unit tests verify your decoder works on bytes shaped exactly
-how you expect. Corpus tests verify it works on bytes Revit
-actually writes — the real test of whether your synth matches
+Corpus tests verify it works on bytes Revit actually writes — the real test of whether your synth matches
 reality.
 
 Add to `tests/elements.rs` (create if not present):
@@ -255,7 +186,7 @@ Add to the `[Unreleased]` section:
 
 - `cargo fmt --all`
 - `cargo clippy --all-targets -- -D warnings`
-- `cargo test --lib elements`
+- `tools/check-local.sh` (fmt, clippy, rustdoc, build, real-file checks)
 - Commit message: `feat(walker): Layer 5b MyClass decoder (#NNN)`
   — reference the GitHub issue (CLASS-xx / M3-xx in `TODO.md`)
 - Open PR referencing the issue

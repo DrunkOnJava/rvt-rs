@@ -1,8 +1,8 @@
 # M2-03: nightly corpus tiers beyond the always-on PR CI surface.
 #
 # PR CI already runs:
-#   - Tier 1 synthetic health (corpus-tier1 job)
-#   - Tier 2 external project health with a small limit (corpus-tier2)
+#   - Tier 2 external project health with a small limit (corpus-tier2),
+#     real-file, CLI and contract targets only (tools/ci/test-targets.txt)
 #   - Writer patch + IfcOpenShell real-project gates
 #
 # This workflow widens Tier 2, re-runs export validation, and compiles

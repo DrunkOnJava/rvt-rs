@@ -2,7 +2,9 @@
 # Developer-friendly local quality gate for rvt-rs.
 #
 # Default (no flags): fmt check, clippy -D warnings, rustdoc -D warnings,
-# and the workspace test suite. Does not require network.
+# a build of every target, and the real-file, CLI and contract checks of
+# tools/ci/test-targets.txt. Unit tests are banned and never run. Does not
+# require network.
 #
 # Optional expensive / environment-dependent checks are opt-in via flags.
 # Prefer this script for day-to-day local verification; use tools/quality.sh
@@ -17,11 +19,13 @@ Required gates (always run):
   cargo fmt --all -- --check
   cargo clippy --workspace --all-targets --all-features -- -D warnings
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
-  cargo test --workspace --all-targets --all-features
+  cargo build --workspace --all-targets --all-features
+  tools/ci/verify-real-files.sh     (real-file, CLI, contract targets only)
 
 Optional gates (opt-in; fail clearly when prerequisites are missing):
   --viewer         viewer/ npm typecheck + build (no network install)
-  --corpus         re-run tests with RVT_SAMPLES_DIR / RVT_PROJECT_CORPUS_DIR
+  --corpus         re-run the real-file checks against the corpora
+                   (RVT_SAMPLES_DIR / RVT_PROJECT_CORPUS_DIR, --profile ci)
   --ifcopenshell   verify the ifcopenshell Python module imports
   --deny           run cargo deny check (requires cargo-deny)
   --audit          run cargo audit (requires cargo-audit)
@@ -104,7 +108,8 @@ cd "$root"
 run cargo fmt --all -- --check
 run cargo clippy --workspace --all-targets --all-features -- -D warnings
 run env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
-run cargo test --workspace --all-targets --all-features
+run cargo build --workspace --all-targets --all-features
+run tools/ci/verify-real-files.sh
 
 # --- optional gates ---------------------------------------------------------
 
@@ -146,10 +151,12 @@ if [[ "$run_corpus" -eq 1 ]]; then
         echo "       RVT_PROJECT_CORPUS_DIR to existing trees. --corpus does not download." >&2
         exit 1
     fi
+    # The optimised `ci` profile: the debug profile takes tens of minutes
+    # to decode the 33.7 MB project.
     run env \
         RVT_SAMPLES_DIR="$samples_dir" \
         RVT_PROJECT_CORPUS_DIR="$project_dir" \
-        cargo test --workspace --all-targets --all-features
+        tools/ci/verify-real-files.sh --profile ci --no-fail-fast
 fi
 
 if [[ "$run_ifcopenshell" -eq 1 ]]; then

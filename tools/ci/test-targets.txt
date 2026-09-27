@@ -1,0 +1,73 @@
+# Which tests/*.rs targets CI and tools/check-local.sh run, and why.
+#
+# Unit tests are banned in this repository (the maintainer's standing
+# directive, 2026-09-23): no new ones, and none run in CI or the local gate.
+# What runs is verification against real Revit files, end-to-end runs of the
+# built CLIs, and contract checks that keep published claims honest. Every
+# tests/*.rs target must appear here exactly once, so a new target cannot
+# silently run or silently skip; tools/ci/verify-real-files.sh fails when one
+# is missing.
+#
+# Format: <class> <target> [skip=<test name substring>,...]
+#   real      reads real Revit files from the corpora and checks what the
+#             reader or exporter gives against the file or Revit's own export
+#   cli       runs the built binaries end to end
+#   contract  checks a published claim (support matrix, binary inventory,
+#             witness verdicts, JSON schemas, field-type coverage) against
+#             the code and artifacts
+#   unit      synthetic-only, property or fuzz-regression tests: kept as
+#             source, not run
+#
+# `skip=` leaves out the synthetic-fixture tests inside a real-file target.
+
+real      arc_wall_corpus
+real      cfb_roundtrip_delta
+real      corpus_tier2_health
+real      curtain_walls
+real      design_options
+real      elem_table_corpus         skip=declared_element_ids_returns_sorted_deduped_set
+real      element_names
+real      element_records_2025
+real      ifc_export_overrides
+real      ifc_roundtrip
+real      iter_elements_typed       skip=production_iter_elements_tier1,decode_instance_prefer_typed_fails_closed
+real      level_names
+real      partition_record_chain
+real      partition_scanner         skip=tier1_,fixture_path_helper_exists
+real      project_corpus_smoke
+real      re15_geometry_invariants
+real      re19_door_window_wall_negative
+real      revit_global_ids
+real      rooms_floors_from_records_only
+real      samples
+real      walker_to_ifc_integration
+
+cli       cli_ergonomics
+cli       rvt_dump_cli
+cli       rvt_ifc_diagnostics_cli
+cli       rvt_info_cli
+cli       rvt_inspect_cli
+cli       rvt_schedule_cli
+
+contract  binary_inventory
+contract  field_type_coverage
+contract  json_schema_contracts
+contract  project_count_fixtures
+contract  support_matrix
+contract  witness_registry
+contract  witness_verdict
+
+unit      cfb_patch_corpus
+unit      checksum_page_framing
+unit      control_cancellation
+unit      corpus_tier1_health
+unit      es_remap_golden
+unit      fuzz_regressions
+unit      gen_fixture_roundtrip
+unit      geometry_recovery
+unit      graceful_degradation
+unit      ifc_export_modes
+unit      ifc_synthetic_project
+unit      ifc_synthetic_structural
+unit      proptest_parsers
+unit      typed_decoders

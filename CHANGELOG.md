@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **CI and the local gate no longer run unit tests.** Unit tests are banned
+  in this repository. `tools/ci/test-targets.txt` classes every
+  `tests/*.rs` target as real-file, CLI, contract or unit, and
+  `tools/ci/verify-real-files.sh` runs all but the unit ones (failing on an
+  unclassified target). The CI build job (now `build + real files`), the
+  tier-two corpus job and `tools/check-local.sh` use it; the library,
+  binary and doc unit suites, the synthetic IFC and tier-one jobs and the
+  pytest suite no longer run, and the Python wheel job smoke-tests the
+  installed wheel on Revit files instead. The test sources are kept.
 - **Revit 2023 element records are located (RE-81, #421).** A 2023 record
   sits behind the schema-derived marker with its ElementId at marker -52 and
   its category at -38; the instance rule finds every element of Revit's own
