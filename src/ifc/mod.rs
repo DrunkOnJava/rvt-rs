@@ -220,6 +220,11 @@ pub struct LayerBand {
 /// [`crate::revit_global_ids`]). Empty when the file does not yield them.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RevitGlobalIds {
+    /// The document's `Unique Document GUID` (BasicFileInfo). The GlobalIds
+    /// the writer generates for entities Revit gives none are derived from
+    /// it (#400), so two documents never share one.
+    #[serde(default)]
+    pub document: Option<String>,
     /// By index in `IfcModel::entities`: building elements and spaces.
     pub elements: std::collections::BTreeMap<usize, String>,
     /// By index in `IfcModel::building_storeys`.
@@ -1299,7 +1304,13 @@ fn revit_model_global_ids(
     entities: &[entities::IfcEntity],
     storeys: &[Storey],
 ) -> RevitGlobalIds {
-    let mut out = RevitGlobalIds::default();
+    let mut out = RevitGlobalIds {
+        document: rf
+            .basic_file_info()
+            .ok()
+            .and_then(|info| info.document_guid().map(str::to_owned)),
+        ..RevitGlobalIds::default()
+    };
     let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
         return out;
     };

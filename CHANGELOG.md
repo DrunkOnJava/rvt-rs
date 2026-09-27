@@ -8,6 +8,22 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **GlobalIds rvt-rs generates no longer shift when the model changes
+  (#400).** Entities Revit's export gives no GlobalId (openings, the
+  further pieces of a slab, site, building, relationships, property sets)
+  were numbered by their position in the STEP file, so drawing one more
+  profile point renumbered everything after it: RE-75's curved walls alone
+  changed the GlobalIds of all 147 openings and 6 slabs on Snowdon Towers,
+  and 12,409 of the file's 20,149 GlobalIds. Each is now a SHA-256 of a
+  fixed namespace, the document's `Unique Document GUID` and the entity's
+  own identity (an element's ElementId and which piece of it it is, an
+  opening's filling element, a relationship's participants), in IFC's
+  22-character form. Exported before and after RE-75, Snowdon Towers now
+  keeps all 20,149. Revit's own GlobalIds are unchanged. **One-time
+  change:** every generated GlobalId differs from the previous release's
+  (on Snowdon Towers, the 155 products without a Revit GlobalId and every
+  relationship and property set), so anything keyed by those needs one
+  re-import. The `0rvtrs` prefix is gone.
 - **IFC length properties no longer end in "Feet".** Their values were
   always `IfcLengthMeasure` / `IfcPositiveLengthMeasure` in the file's
   length unit, metres, so a name ending in "Feet" misread them by a factor
