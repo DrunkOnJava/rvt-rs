@@ -1154,6 +1154,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let mut y = None;
     let mut z = None;
     let mut source_stream = None;
+    let mut revit_class = None;
     let mut wall_body_source = None;
     let mut wall_thickness = None;
     let mut wall_trim_start = None;
@@ -1246,6 +1247,9 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             ("m_locationX", InstanceField::Float { value, .. }) => x = Some(*value),
             ("m_locationY", InstanceField::Float { value, .. }) => y = Some(*value),
             ("m_locationZ", InstanceField::Float { value, .. }) => z = Some(*value),
+            (crate::partition_schema_mvp::REVIT_CLASS_FIELD, InstanceField::String(value)) => {
+                revit_class = Some(value.clone());
+            }
             ("m_source_stream", InstanceField::String(value)) => {
                 source_stream = Some(value.clone());
             }
@@ -1618,6 +1622,13 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::Text(stream),
         });
     }
+    // RE-76: the class the element's record names in the file's own schema.
+    if let Some(class) = revit_class {
+        properties.push(Property {
+            name: "RevitClass".into(),
+            value: PropertyValue::Text(class),
+        });
+    }
     // RE-38: the family and type the partition name entries give this
     // element, the two halves of the `Family:Type` Revit's export uses. A
     // system-family type (#322) has a name but no family in the file, so it
@@ -1782,6 +1793,7 @@ mod tests {
             builtin_category: OST_FLOORS,
             container: CONTAINER_NONE,
             placement_kind: PLACEMENT_KIND_INSTANCE,
+            class_tag: 0,
             bbox_feet: [-11.15, -0.97, 58.0, 11.15, 0.97, 58.42],
             preceding_reference: None,
             owner_reference: None,
@@ -1851,6 +1863,7 @@ mod tests {
             builtin_category: category,
             container: CONTAINER_NONE,
             placement_kind: PLACEMENT_KIND_INSTANCE,
+            class_tag: 0,
             bbox_feet: [0.0, 0.0, 0.0, 10.0, 4.0, 9.0],
             preceding_reference: None,
             owner_reference: None,
@@ -1920,6 +1933,7 @@ mod tests {
             builtin_category: category,
             container: CONTAINER_NONE,
             placement_kind: PLACEMENT_KIND_INSTANCE,
+            class_tag: 0,
             bbox_feet: [0.0, 0.0, 0.0, 10.0, 4.0, 9.0],
             preceding_reference: None,
             owner_reference: None,
@@ -2044,6 +2058,7 @@ mod tests {
             builtin_category: category,
             container: CONTAINER_NONE,
             placement_kind: PLACEMENT_KIND_INSTANCE,
+            class_tag: 0,
             bbox_feet: [0.0, 0.0, 0.0, 10.0, 4.0, 9.0],
             preceding_reference: None,
             owner_reference: None,

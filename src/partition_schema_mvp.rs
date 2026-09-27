@@ -235,6 +235,21 @@ pub fn recover_partition_schema_mvp(
     // --- Roof outlines from their sketch lines (RE-50) ---
     attach_roof_profiles(rf, revit_version, &mut out.products);
 
+    // --- The Revit class each record names at +0x4a (RE-76, #154) ---
+    if let Ok(classes) = rf.schema_classes() {
+        for elements in [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.rooms,
+            &mut out.products,
+        ] {
+            attach_revit_classes(&classes, elements);
+        }
+    }
+
     // --- Family and type names (RE-38) ---
     for elements in [
         &mut out.walls,
@@ -936,6 +951,32 @@ pub const TYPE_ID_FIELD: &str = "m_type_id";
 /// ([`crate::partition_names::resolve_type`] /
 /// [`crate::partition_names::resolve_family`]). An element gets the fields
 /// only when both joins are unique.
+/// Field carrying the class tag an element record holds at `+0x4a` (RE-76).
+pub const CLASS_TAG_FIELD: &str = "m_class_tag";
+/// Field carrying the name of that class in the file's own schema (RE-76).
+pub const REVIT_CLASS_FIELD: &str = "m_revit_class";
+
+/// Name each record-backed element's class (RE-76): the tag its record
+/// holds at `+0x4a` is the definition ordinal of a class in the file's own
+/// schema, `SWall`, `ArcWall`, `Floor`, `FamilyInstance` and so on. An
+/// element whose tag resolves to no class gets no name.
+fn attach_revit_classes(classes: &crate::formats::SchemaClasses, elements: &mut [DecodedElement]) {
+    for element in elements.iter_mut() {
+        let tag = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Integer { value, .. } if name == CLASS_TAG_FIELD => {
+                u16::try_from(*value).ok()
+            }
+            _ => None,
+        });
+        if let Some(class) = tag.and_then(|tag| classes.by_tag(tag)) {
+            element.fields.push((
+                REVIT_CLASS_FIELD.into(),
+                InstanceField::String(class.name.clone()),
+            ));
+        }
+    }
+}
+
 fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
     let names = rf.element_names();
     if names.entries.is_empty() {
@@ -4236,6 +4277,14 @@ fn element_record_decoded(
             },
         ),
         (
+            CLASS_TAG_FIELD.into(),
+            InstanceField::Integer {
+                value: i64::from(record.class_tag),
+                signed: false,
+                size: 2,
+            },
+        ),
+        (
             "m_source".into(),
             InstanceField::String("partition_element_record".into()),
         ),
@@ -4696,6 +4745,7 @@ mod tests {
             builtin_category,
             container: crate::partition_element_records::CONTAINER_NONE,
             placement_kind: crate::partition_element_records::PLACEMENT_KIND_INSTANCE,
+            class_tag: 0,
             bbox_feet,
             preceding_reference: None,
             owner_reference: None,

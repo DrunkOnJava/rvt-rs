@@ -22,8 +22,9 @@
 //! +0x32  u64  container ElementId, 0xffff_ffff_ffff_ffff = none
 //! +0x3a  u64  0xff sentinel (never set on observed records)
 //! +0x42  u32  placement kind: 0xffffef7f placed / 0xffff8000 symbol
-//! +0x46  u32  unattributed (0x0928 / 0x0929 / 0x1929 / 0x09a8 / …)
-//! +0x4a  u16  unattributed (0x0766 / 0x0e55 / 0x0788 / 0x04d6)
+//! +0x46  u32  flags (m_abFlags4Bytes per Discussion #112; not interpreted)
+//! +0x4a  u16  class tag: the element's class as the definition ordinal of
+//!             the file's own Formats/Latest (#223, [`crate::formats::schema_classes`])
 //! +0x4c  u32  0xffffffff on every observed record of this shape
 //! +0x50  8B   bbox marker 46 01 ff ff ff ff ab 05
 //! +0x58  48B  bounding box: min x/y/z, max x/y/z, feet, f64 LE
@@ -337,6 +338,8 @@ pub const PLACEMENT_KIND_INSTANCE: u32 = 0xffff_ef7f;
 /// Placement-kind value carried by a family/type symbol envelope.
 pub const PLACEMENT_KIND_SYMBOL: u32 = 0xffff_8000;
 /// Offset of the bounding-box marker from the record start.
+/// Offset of the class tag (#223).
+pub const CLASS_TAG_OFFSET: usize = 0x4a;
 pub const BBOX_MARKER_OFFSET: usize = 0x50;
 /// Offset of the six bounding-box doubles from the record start.
 pub const BBOX_OFFSET: usize = 0x58;
@@ -391,6 +394,13 @@ pub struct PartitionElementRecord {
     pub container: u64,
     /// Raw placement-kind word at `+0x42`.
     pub placement_kind: u32,
+    /// The element's class at `+0x4a`: the definition ordinal of a class in
+    /// the file's own schema (#223). Core Interior's walls are `SWall`,
+    /// floors `Floor`, rooms `RoomElem`, and door, window and column records
+    /// `FamilyInstance` or, for their type symbols, `FamilySymbol`. Resolve
+    /// it with [`crate::formats::SchemaClasses::by_tag`].
+    #[serde(default)]
+    pub class_tag: u16,
     /// Model bounding box in feet: `[min_x, min_y, min_z, max_x, max_y, max_z]`.
     pub bbox_feet: [f64; 6],
     /// Reference slot immediately before this record's own ElementId
@@ -767,6 +777,10 @@ pub fn decode_frame_as(
         .checked_add(REFERENCE_LIST_OFFSET)
         .and_then(|at| decode_owner_reference(buf, at));
     let design_option = frame_design_option(buf, offset);
+    let class_tag = u16::from_le_bytes([
+        buf[offset + CLASS_TAG_OFFSET],
+        buf[offset + CLASS_TAG_OFFSET + 1],
+    ]);
     Some(PartitionElementRecord {
         stream: stream.to_string(),
         offset,
@@ -775,6 +789,7 @@ pub fn decode_frame_as(
         builtin_category,
         container,
         placement_kind,
+        class_tag,
         bbox_feet,
         preceding_reference,
         owner_reference,
