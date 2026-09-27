@@ -11,8 +11,7 @@ All notable changes will be documented here. This project follows
 Trustworthy Revit 2024 and 2025 export: generated GlobalIds stable between
 exports, the SI units the values are written in, the whole schema, each
 element's Revit class and type parameters, MEP devices, and a count of the
-bodies that are still boxes. Prepared, not yet published; the date is set
-again when the release is published.
+bodies that are still boxes.
 
 ### Changed
 
