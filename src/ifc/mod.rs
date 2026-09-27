@@ -2381,6 +2381,17 @@ pub fn build_export_diagnostics_with_limits(
     }
     if exported.building_elements == 0 {
         warnings.push("No building elements were exported; output is scaffold-only.".into());
+    } else if bfi.as_ref().map(|b| b.version)
+        == Some(crate::partition_element_records_2023::REVIT_2023)
+    {
+        // RE-81: what a 2023 export carries, and what it does not.
+        warnings.push(
+            "Revit 2023: elements come from their records with their ElementId, category and \
+             bounding box only. Names, types, storeys, wall joins and profiles, door and window \
+             hosts, design options, parameters and \"Export to IFC As\" overrides are not read \
+             for 2023, and components nested in doors and windows are left out."
+                .into(),
+        );
     }
     append_geometry_gap_warnings(&mut warnings, &exported, &geometry_gaps);
     if model.units.is_empty() {

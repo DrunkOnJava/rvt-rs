@@ -47,3 +47,24 @@ Revit export Tags not found: 0 on both files. The 8 generic models Revit exports
 
 - The exporter still reads element records on 2024 and 2025 only; admitting 2023 needs the second prologue (RE-30), names and types, storeys and references on this layout (#421).
 - Two files of one author; other 2023 files may differ.
+
+## Implemented (2026-09-27, #421)
+
+`partition_element_records_2023::scan_records` decodes 2023 records with the layout above, requiring a declared ElementId and the `ElementHeader` tag after it. The two reference lists after the box are `u32`-counted lists of `u32` ElementIds (2024 writes `u64`): a window lists the components nested in it and each component lists the window.
+
+`partition_schema_mvp::recover_2023_records` exports each placed instance of a recovered category under the RE-21 rule, with its box as its body. A family instance (schema class `FamilyInstance`, RE-76's tag at the same place on 2023) that a placed door or window names, and that names it back, is nested in it and left out. The class test matters: a host wall and the doors it hosts name each other as well, and without it 10 of `Exemplo_data`'s 17 walls were dropped.
+
+Exported with `rvt-ifc`, Tags against Revit's IFC4 exports:
+
+| file | rvt-rs | Revit | common | outside Revit's export | missing |
+|---|---:|---:|---:|---:|---:|
+| `modelo_bim` | 37 | 37 | 37 | 0 | 0 |
+| `Exemplo_data` | 37 | 45 | 37 | 0 | 8 (window trims) |
+
+The 8 are the frames and sill cuts nested in 4 windows (`M_Moldura-janela-interior-plana:Quadro`, `M_Recorte-Janela-Exterior-Plana:com peitoril`). Revit exports those and leaves out the 16 mullion-pattern components (`M_Padrão do montante_2x2`) nested in the same windows. Their records differ only in their type and their reference lists, so no decoded rule separates them. All 24 are left out rather than guessed.
+
+Entity types are Revit's except for 4 spread footings on `modelo_bim` (`Sapata distribuída - Cônica`), which Revit writes as `IfcSlab .BASESLAB.` and rvt-rs as `IfcFooting`, the category's default. The family most likely carries an "Export to IFC As" override, which is not read on 2023. Rooms: 9 `IfcSpace`, as in Revit's export (IfcSpace carries no Tag).
+
+Einhoven (magnetar, Revit 2023, no Revit export available) goes from 24 walls (the 2023 ArcWall path) to 26 walls, 9 curtain panels and 2 windows. The additions are unverified.
+
+The export diagnostics carry a warning listing what a 2023 export does not read.

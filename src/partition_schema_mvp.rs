@@ -144,6 +144,13 @@ pub fn recover_partition_schema_mvp(
         out.rect_openings = rect_openings_from_partitions(rf, revit_version, limits)?;
     }
 
+    // --- Revit 2023 element records (RE-81, #421): identity, category and
+    // box only; nothing else 2024 decodes on top of records is read. ---
+    if revit_version == crate::partition_element_records_2023::REVIT_2023 {
+        recover_2023_records(rf, &mut out);
+        return Ok(out);
+    }
+
     // --- 2024 partition element records (#204 columns, #211 the rest) ---
     //
     // The `Level` ElementId set costs one partition sweep and is read
@@ -3222,6 +3229,87 @@ fn without_non_primary_options(
     let options = rf.design_options();
     records.retain(|record| !options.excludes(record));
     records
+}
+
+/// Revit 2023 elements from their partition element records (RE-81): each
+/// placed instance of a [`crate::partition_element_records::RECOVERED_CATEGORIES`]
+/// category, with its box as its body, into the bucket its category
+/// feeds. Components nested in doors and windows are left out
+/// ([`nested_in_openings`]). No names, types, storeys, joins, design
+/// options or opening hosts: their 2023 layouts are not decoded.
+fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
+    use crate::partition_element_records as per;
+    let records = crate::partition_element_records_2023::scan_records(
+        rf,
+        crate::partition_element_records_2023::REVIT_2023,
+    );
+    let selected = select_instance_records(records);
+    // Only a family instance can be nested; a host wall and the doors it
+    // hosts name each other too (RE-76's class tag, at the same place on
+    // 2023).
+    let family_instance = rf.schema_classes().ok().and_then(|classes| {
+        classes
+            .classes
+            .iter()
+            .find(|class| class.name == "FamilyInstance")
+            .map(|class| class.tag)
+    });
+    let nested = match family_instance {
+        Some(tag) => nested_in_openings(&selected, tag),
+        None => BTreeSet::new(),
+    };
+    let no_levels = BTreeSet::new();
+    for record in selected.values() {
+        if nested.contains(&record.element_id) {
+            continue;
+        }
+        let Some((_, class)) = per::RECOVERED_CATEGORIES
+            .iter()
+            .find(|(category, _)| *category == record.builtin_category)
+        else {
+            continue;
+        };
+        let decoded = element_record_decoded(record, class, &no_levels);
+        match record.builtin_category {
+            per::OST_WALLS => out.walls.push(decoded),
+            per::OST_DOORS => out.doors.push(decoded),
+            per::OST_WINDOWS => out.windows.push(decoded),
+            per::OST_FLOORS | per::OST_BUILDING_PAD => out.slabs.push(decoded),
+            per::OST_ROOMS => out.rooms.push(decoded),
+            per::OST_COLUMNS => out.columns.push(decoded),
+            _ => out.products.push(decoded),
+        }
+    }
+}
+
+/// ElementIds of the instances in `selected` nested in a door or window
+/// (RE-81): a family instance (class tag `family_instance`) whose
+/// reference list names a placed door or window that names it back. Revit's export writes some of these and leaves out
+/// others, by a rule not decoded (on a 2023 project it keeps a window's
+/// frame and sill cut and drops its mullion pattern), so all are left out
+/// rather than guessed.
+fn nested_in_openings(
+    selected: &BTreeMap<u32, crate::partition_element_records::PartitionElementRecord>,
+    family_instance: u16,
+) -> BTreeSet<u32> {
+    use crate::partition_element_records::{OST_DOORS, OST_WINDOWS};
+    let is_opening = |category: i64| category == OST_DOORS || category == OST_WINDOWS;
+    selected
+        .values()
+        .filter(|child| child.class_tag == family_instance && !is_opening(child.builtin_category))
+        .filter(|child| {
+            child.references.iter().any(|&reference| {
+                u32::try_from(reference)
+                    .ok()
+                    .and_then(|parent| selected.get(&parent))
+                    .is_some_and(|parent| {
+                        is_opening(parent.builtin_category)
+                            && parent.references.contains(&u64::from(child.element_id))
+                    })
+            })
+        })
+        .map(|child| child.element_id)
+        .collect()
 }
 
 /// Instance selection proper: one record per exported ElementId.
