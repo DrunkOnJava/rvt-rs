@@ -94,6 +94,18 @@ All notable changes will be documented here. This project follows
   Description 70 of 70, and Fire Rating 696 of 696 against Revit's own
   IFC4 export; RE1 Architecture's 7 fire ratings too. Instance parameters
   and numeric values are not read yet.
+- **A reference model pack (#407).** `docs/reference-models.md` lists every
+  model rvt-rs's claims are measured on, with its licence, Revit release, how
+  its reference export was made and what a run should show, and explains the
+  export-setting differences (view definition, schema, coordinates) that are
+  not decoding errors. The twelve redistributable files (magnetar Core
+  Interior and Einhoven, the four MIT RE1 models and their exports) are
+  recorded with their origin URLs in `research/witness-registry.json`, and
+  `tools/fetch-reference-models.sh` downloads them and checks every hash.
+  Files with no licence stay local only and are listed, never fetched. The
+  page also gives five tiny models anyone with Revit can make for open
+  questions (hip and gable roofs, wall joins, rooms, openings), and how to
+  report a problem with a model you cannot share.
 
 - **Curved walls are drawn along their arc (RE-75, #358).** A wall's data
   stores its location arc in the record rvt-rs read as a line, and the word

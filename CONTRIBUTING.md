@@ -124,6 +124,12 @@ per-area starting points are in
   are the scarcest input. See [`docs/corpus-intake.md`](docs/corpus-intake.md)
   and the corpus issue form, and never send a file you are not certain you
   may share — a local probe you run yourself is the alternative.
+  [`docs/reference-models.md`](docs/reference-models.md) lists the models
+  every claim is measured on (`tools/fetch-reference-models.sh` fetches the
+  licensed ones), five tiny models anyone with Revit can make for the open
+  geometry questions, and how to report a problem with a model you cannot
+  share: send `rvt-inspect --json` and `rvt-ifc --diagnostics` output, never
+  the building.
 - **Decoder research.** A byte probe under `examples/` plus a dated evidence
   table for one class or partition pattern (decoder issue form; the
   reconnaissance report in `docs/rvt-moat-break-reconnaissance.md` shows the
