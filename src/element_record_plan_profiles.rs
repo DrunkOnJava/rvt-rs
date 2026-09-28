@@ -741,6 +741,125 @@ fn signed_area(points: &[(f64, f64)]) -> f64 {
     total / 2.0
 }
 
+/// Offset of the sketched element's `u64` ElementId in a Sketch element's
+/// data, from the start of its element-data header (RE-97).
+pub const SKETCH_OWNER_OFFSET: usize = 77;
+/// How far into a Sketch element's data its curve list is looked for.
+pub const SKETCH_DATA_WINDOW: usize = 0x4000;
+/// Most curves a sketch's list is read with.
+pub const SKETCH_MAX_CURVES: usize = 4096;
+/// Fewest curves a sketch's list is read with: a lone id after a count of 1
+/// or 2 is too easily met by chance.
+pub const SKETCH_MIN_CURVES: usize = 3;
+
+/// The sketch lines of each sketched element, from its Sketch element's
+/// data (RE-97): the sketched element's ElementId at
+/// [`SKETCH_OWNER_OFFSET`], and a counted list `u32 n · n × (u64 ElementId ·
+/// u32 index)` of at least [`SKETCH_MIN_CURVES`] whose indices rise (a
+/// sketch edited to drop curves leaves gaps) and whose ids are all in
+/// `sketch_lines`. A sketch line's own owner reference names another element
+/// where the sketch was edited, so the list is the sketch's membership. An
+/// element whose copies disagree, or a line two sketches list, is dropped.
+/// Empty for a release this layout is not measured on (Revit 2024 only).
+pub fn scan_sketch_curve_lists(
+    rf: &mut crate::RevitFile,
+    revit_version: u32,
+    sketch_lines: &std::collections::BTreeSet<u32>,
+) -> BTreeMap<u32, Vec<u32>> {
+    if revit_version != 2024 || sketch_lines.is_empty() {
+        return BTreeMap::new();
+    }
+    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+        return BTreeMap::new();
+    };
+    let mut found: BTreeMap<u32, Option<Vec<u32>>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        for (index, &hit) in hits.iter().enumerate() {
+            let end = hits
+                .get(index + 1)
+                .copied()
+                .unwrap_or(buf.len())
+                .min(hit.saturating_add(SKETCH_DATA_WINDOW));
+            let Some(data) = buf.get(hit..end) else {
+                continue;
+            };
+            let Some((owner, curves)) = sketch_curve_list(data, header.len(), sketch_lines) else {
+                continue;
+            };
+            match found.get(&owner) {
+                None => {
+                    found.insert(owner, Some(curves));
+                }
+                Some(held) if held.as_ref() != Some(&curves) => {
+                    found.insert(owner, None);
+                }
+                _ => {}
+            }
+        }
+    }
+    let lists: BTreeMap<u32, Vec<u32>> = found
+        .into_iter()
+        .filter_map(|(owner, curves)| Some((owner, curves?)))
+        .collect();
+    let mut listed: BTreeMap<u32, usize> = BTreeMap::new();
+    for curves in lists.values() {
+        for id in curves {
+            *listed.entry(*id).or_default() += 1;
+        }
+    }
+    lists
+        .into_iter()
+        .filter(|(_, curves)| curves.iter().all(|id| listed[id] == 1))
+        .collect()
+}
+
+/// The sketched element and curve list in one element's data, `data`
+/// starting at its element-data header of `header_len` bytes.
+fn sketch_curve_list(
+    data: &[u8],
+    header_len: usize,
+    sketch_lines: &std::collections::BTreeSet<u32>,
+) -> Option<(u32, Vec<u32>)> {
+    let u64_at = |at: usize| {
+        data.get(at..at.checked_add(8)?)
+            .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+    };
+    let u32_at = |at: usize| {
+        data.get(at..at.checked_add(4)?)
+            .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
+    };
+    let own = u32::try_from(u64_at(header_len)?).ok()?;
+    let owner = u32::try_from(u64_at(SKETCH_OWNER_OFFSET)?).ok()?;
+    if owner == own || sketch_lines.contains(&owner) {
+        return None;
+    }
+    (header_len + 8..data.len()).find_map(|at| {
+        let count = usize::try_from(u32_at(at)?).ok()?;
+        if !(SKETCH_MIN_CURVES..=SKETCH_MAX_CURVES).contains(&count) {
+            return None;
+        }
+        let mut last: Option<u32> = None;
+        let curves: Option<Vec<u32>> = (0..count)
+            .map(|index| {
+                let entry = at + 4 + 12 * index;
+                let id = u32::try_from(u64_at(entry)?).ok()?;
+                let key = u32_at(entry + 8)?;
+                if last.is_some_and(|last| key <= last) || !sketch_lines.contains(&id) {
+                    return None;
+                }
+                last = Some(key);
+                Some(id)
+            })
+            .collect();
+        Some((owner, curves?))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

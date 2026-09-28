@@ -2110,3 +2110,7 @@ A sketch line whose record box is a single point is a zero-length segment: it ca
 ## Addendum — RE-96 a sketch line's curve can be an arc (2026-09-28)
 
 A sketch line's first curve record can hold RE-75's arc layout (angles, unit X and Y axes, radius, centre) with the same preceding bytes a straight line's has, so the record box decides the reading. Read as arcs, 17 more Snowdon Towers slabs close into their outline, 14 of them within 0.1% of Revit's area. Report: `reports/element-framing/RE-96-sketch-arcs.md`; probe: `examples/probe_re96_sketch_arcs.rs`.
+
+## Addendum — RE-97 a Sketch element lists its curves (2026-09-28)
+
+A Sketch element's data names the element it sketches 77 bytes from its element-data header and lists its sketch lines as `u32 n · n × (u64 ElementId · u32 index)`. Its keys rise, with gaps where curves were deleted. On 55 of Snowdon Towers' 447 such sketches the list differs from the lines whose owner reference names the element: an edited sketch's lines keep naming the element they were drawn for. Taking the list as the membership gives 176 of 199 slabs and all 20 roofs an outline. Report: `reports/element-framing/RE-97-sketch-curve-lists.md`; probe: `examples/probe_re97_sketch_curve_lists.rs`.

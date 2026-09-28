@@ -608,6 +608,12 @@ only where it spans its element's record box. On Snowdon Towers 149 of
 199 slabs carry an outline (132 before), and 87 match Revit's area
 within 0.1% (73 before)
 (`reports/element-framing/RE-96-sketch-arcs.md`).
+**RE-97 (2026-09-28)** takes a sketch's lines from its Sketch element's
+curve list, which names the sketched element, where a line's own owner
+reference names another element after an edit. 176 of Snowdon's 199
+slabs and all 20 roofs carry an outline, and 102 slabs match Revit's
+area within 0.1%
+(`reports/element-framing/RE-97-sketch-curve-lists.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

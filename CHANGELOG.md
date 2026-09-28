@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Edited sketches take their lines from the sketch itself (RE-97).** A
+  Sketch element names the element it sketches and lists its curves. Where
+  an edit left a line's owner reference naming another element, the list
+  is now the sketch's membership, and such an outline is kept only where
+  it spans its element's record box. On Snowdon Towers 176 of 199 slabs
+  and all 20 roofs carry their outline (149 and 13 before); 102 slabs
+  match Revit's area within 0.1% (89 before) and 10 roofs (7 before).
+  Snowdon Towers structural gains three; every other local file is
+  byte-identical.
+
 - **Slab outlines with curved edges (RE-96).** A sketch line's curve
   can be an arc, stored in the layout a curved wall's is (RE-75) but
   unmarked, so the line's record box decides whether it reads as an arc.
