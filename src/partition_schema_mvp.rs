@@ -2611,21 +2611,27 @@ fn attach_system_family_names(
         .filter_map(type_of)
         .filter(|id| !layered.contains(id))
         .collect();
-    if !pending.is_empty()
-        && pcs::COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
-    {
+    if !pending.is_empty() && pcs::layer_layout(revit_version).is_some() {
         if let Ok(records) = crate::elem_table::parse_records(rf) {
             let declared = crate::elem_table::declared_ids(&records);
-            let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
-                rf,
-                revit_version,
-                crate::partition_type_records::OST_MATERIALS,
-                &declared,
-            )
-            .unwrap_or_default()
-            .iter()
-            .map(|record| record.element_id)
-            .collect();
+            // Revit 2023 has no type records, and its materials no element
+            // records either: a layer's material is only held to be
+            // declared (RE-112).
+            let materials: BTreeSet<u32> =
+                if revit_version == crate::partition_element_records_2023::REVIT_2023 {
+                    declared.clone()
+                } else {
+                    crate::partition_type_records::scan_type_records(
+                        rf,
+                        revit_version,
+                        crate::partition_type_records::OST_MATERIALS,
+                        &declared,
+                    )
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|record| record.element_id)
+                    .collect()
+                };
             if let Ok(types) =
                 pcs::scan_type_layers(rf, revit_version, &pending, &materials, &declared)
             {

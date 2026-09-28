@@ -16,13 +16,26 @@
 //! +28  9 bytes not read
 //! ```
 //!
+//! On Revit 2023 (RE-112) a record is 29 bytes and its ids are `u32`
+//! ([`layer_layout`]):
+//!
+//! ```text
+//! +0   f64  width, feet
+//! +8   u32  function
+//! +12  u32  not read (ff × 4 or 0)
+//! +16  u32  material ElementId, ff × 4 = by category
+//! +20  u32  deck profile ElementId, ff × 4 = none
+//! +24  5 bytes not read
+//! ```
+//!
 //! The count is framed one of two ways ([`find_layers`]):
 //! - `ff ff ff ff` and a per-release tag, `0x10a6` on Revit 2024 and
-//!   `0x110e` on Revit 2025 ([`layer_frame_tag`]). On 2024 this follows
-//!   the type's name directly.
+//!   `0x110e` on Revit 2025 and `0x106f` on Revit 2023
+//!   ([`layer_frame_tag`]). On 2024 and 2023 this follows a wall type's
+//!   name directly.
 //! - the type's name (`u32 k`, `k` UTF-16 code units), then `u32 0`:
-//!   Revit 2025 floors and ceilings, whose types on RE1 are named "-", and
-//!   Revit 2024 roofs (RE-56).
+//!   Revit 2025 floors and ceilings, whose types on RE1 are named "-",
+//!   Revit 2024 roofs (RE-56), and Revit 2023 floors and roofs.
 //!
 //! Against the materials Revit's own IFC4 export gives the same types:
 //! - Snowdon Towers (2024): 42 of 42 types give Revit's constituent
@@ -86,8 +99,44 @@ pub fn scan_wall_arcs(
     crate::partition_beam_axes::scan_first_bounded_arcs(rf, revit_version, walls)
 }
 
-/// Bytes per layer record.
+/// Bytes per layer record, on Revit 2024 and 2025.
 pub const LAYER_RECORD_LEN: usize = 37;
+
+/// Where a layer record's fields are on a release.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LayerLayout {
+    /// Bytes per record.
+    pub record_len: usize,
+    /// The `u32` function.
+    pub function_at: usize,
+    /// The material ElementId.
+    pub material_at: usize,
+    /// The deck profile ElementId.
+    pub deck_at: usize,
+    /// Whether the ids are `u64` (Revit 2024 and later) rather than `u32`.
+    pub wide_ids: bool,
+}
+
+/// The layer record layout of `revit_version`, where it is measured.
+pub fn layer_layout(revit_version: u32) -> Option<LayerLayout> {
+    match revit_version {
+        2023 => Some(LayerLayout {
+            record_len: 29,
+            function_at: 8,
+            material_at: 16,
+            deck_at: 20,
+            wide_ids: false,
+        }),
+        2024 | 2025 => Some(LayerLayout {
+            record_len: LAYER_RECORD_LEN,
+            function_at: 24,
+            material_at: 8,
+            deck_at: 16,
+            wide_ids: true,
+        }),
+        _ => None,
+    }
+}
 
 /// Most layers a type is taken to have.
 pub const MAX_LAYERS: usize = 32;
@@ -105,6 +154,7 @@ pub const WALL_FLIP_ANCHOR: [u8; 8] = [0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00,
 /// The tag framing a type's layer count on `revit_version`.
 pub fn layer_frame_tag(revit_version: u32) -> Option<[u8; 2]> {
     match revit_version {
+        2023 => Some([0x6f, 0x10]),
         2024 => Some([0xa6, 0x10]),
         2025 => Some([0x0e, 0x11]),
         _ => None,
@@ -134,28 +184,41 @@ fn u64_at(buf: &[u8], at: usize) -> Option<u64> {
 
 /// The layers whose count starts at `count_at`, or `None` unless every
 /// record is one a type can have: a width under 10 ft that is positive (0
-/// only on a membrane), a material in `materials` or by category, a deck
+/// only on a membrane or a structural deck), a material in `materials` or by category, a deck
 /// profile that is none or a declared id, and a known function.
 pub fn layers_at(
     buf: &[u8],
     count_at: usize,
+    layout: LayerLayout,
     materials: &BTreeSet<u32>,
     declared: &BTreeSet<u32>,
 ) -> Option<Vec<CompoundLayer>> {
+    let id_at = |at: usize| -> Option<u64> {
+        if layout.wide_ids {
+            u64_at(buf, at)
+        } else {
+            u32_at(buf, at).map(|id| match id {
+                u32::MAX => u64::MAX,
+                id => u64::from(id),
+            })
+        }
+    };
     let count = usize::try_from(u32_at(buf, count_at)?).ok()?;
     if !(1..=MAX_LAYERS).contains(&count) {
         return None;
     }
     let mut layers = Vec::with_capacity(count);
     for index in 0..count {
-        let at = count_at + 4 + LAYER_RECORD_LEN * index;
+        let at = count_at + 4 + layout.record_len * index;
         let width = f64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?);
-        let material = u64_at(buf, at + 8)?;
-        let deck = u64_at(buf, at + 16)?;
-        let function = u32_at(buf, at + 24)?;
-        let membrane = function == 100;
+        let material = id_at(at + layout.material_at)?;
+        let deck = id_at(at + layout.deck_at)?;
+        let function = u32_at(buf, at + layout.function_at)?;
+        // A membrane has no width, and nor has a structural deck whose
+        // profile is carried by the layer above it (RE-112).
+        let widthless = matches!(function, 100 | 200);
         let width_ok =
-            width.is_finite() && width < 10.0 && (width >= 1e-3 || (membrane && width == 0.0));
+            width.is_finite() && width < 10.0 && (width >= 1e-3 || (widthless && width == 0.0));
         let material = match material {
             u64::MAX => None,
             id => Some(u32::try_from(id).ok().filter(|id| materials.contains(id))?),
@@ -205,12 +268,13 @@ fn framed(buf: &[u8], count_at: usize, tag: [u8; 2]) -> bool {
 pub fn find_layers(
     data: &[u8],
     tag: [u8; 2],
+    layout: LayerLayout,
     materials: &BTreeSet<u32>,
     declared: &BTreeSet<u32>,
 ) -> Option<Vec<CompoundLayer>> {
     (6..data.len().saturating_sub(4))
         .filter(|&at| framed(data, at, tag))
-        .find_map(|at| layers_at(data, at, materials, declared))
+        .find_map(|at| layers_at(data, at, layout, materials, declared))
 }
 
 /// The layers of each type in `types`, by ElementId, from each type's own
@@ -223,9 +287,15 @@ pub fn scan_type_layers(
     materials: &BTreeSet<u32>,
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, Vec<CompoundLayer>>> {
-    let (Some(header), Some(tag)) = (
-        crate::partition_names::element_data_header(revit_version),
+    // Revit 2023's data header frames a `u32` id (RE-111).
+    let header = match revit_version {
+        2023 => Some(crate::partition_names::ELEMENT_DATA_HEADER_2023),
+        _ => crate::partition_names::element_data_header(revit_version),
+    };
+    let (Some(header), Some(tag), Some(layout)) = (
+        header,
         layer_frame_tag(revit_version),
+        layer_layout(revit_version),
     ) else {
         return Ok(BTreeMap::new());
     };
@@ -238,10 +308,12 @@ pub fn scan_type_layers(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = u64_at(buf, id_at)
-                .and_then(|id| u32::try_from(id).ok())
-                .filter(|id| types.contains(id))
-            else {
+            let id = if layout.wide_ids {
+                u64_at(buf, id_at).and_then(|id| u32::try_from(id).ok())
+            } else {
+                u32_at(buf, id_at)
+            };
+            let Some(id) = id.filter(|id| types.contains(id)) else {
                 continue;
             };
             let end = hits
@@ -252,7 +324,7 @@ pub fn scan_type_layers(
                 .min(buf.len());
             let Some(layers) = buf
                 .get(id_at + 8..end)
-                .and_then(|data| find_layers(data, tag, materials, declared))
+                .and_then(|data| find_layers(data, tag, layout, materials, declared))
             else {
                 continue;
             };
