@@ -2548,9 +2548,10 @@ pub fn build_export_diagnostics_with_limits(
         // RE-81: what a 2023 export carries, and what it does not.
         warnings.push(
             "Revit 2023: elements come from their records with their ElementId, category and \
-             bounding box only. Names, types, storeys, wall joins and profiles, door and window \
-             hosts, design options, parameters and \"Export to IFC As\" overrides are not read \
-             for 2023, and components nested in doors and windows are left out."
+             bounding box, and doors and windows with their host wall. Names, types, storeys, \
+             wall joins and profiles, design options, parameters and \"Export to IFC As\" \
+             overrides are not read for 2023, and components nested in doors and windows are \
+             left out."
                 .into(),
         );
     }
