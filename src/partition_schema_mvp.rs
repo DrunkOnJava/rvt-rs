@@ -4220,6 +4220,23 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
             _ => out.products.push(decoded),
         }
     }
+    // --- Walls cut back by the walls they join, by 2024's solver (RE-26,
+    // RE-29): a 2023 record box is the untrimmed wall too, and its
+    // reference list names the walls it joins (RE-120) ---
+    let wall_records: Vec<per::PartitionElementRecord> = out
+        .walls
+        .iter()
+        .filter_map(|wall| wall.id.and_then(|id| selected.get(&id)).cloned())
+        .collect();
+    let trims = crate::element_record_wall_joins::join_trims(&wall_records);
+    for wall in out.walls.iter_mut() {
+        if let Some((record, trim)) = wall
+            .id
+            .and_then(|id| Some((selected.get(&id)?, trims.get(&id)?)))
+        {
+            apply_wall_join_trim(wall, record, trim);
+        }
+    }
     // --- Rooms' numbers and names (RE-117) ---
     let room_ids: BTreeSet<u32> = out.rooms.iter().filter_map(|room| room.id).collect();
     attach_room_parameter_entries(
