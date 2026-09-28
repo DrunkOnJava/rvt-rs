@@ -1,7 +1,11 @@
 version: 2
 updates:
   - package-ecosystem: cargo
-    directory: /
+    # The fuzz workspace has its own lockfile, so a bump to the crate's
+    # dependencies has to reach it too.
+    directories:
+      - /
+      - /fuzz
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
