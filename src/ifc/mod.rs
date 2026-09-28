@@ -3017,13 +3017,14 @@ pub fn build_export_diagnostics_with_limits(
     } else if bfi.as_ref().map(|b| b.version)
         == Some(crate::partition_element_records_2023::REVIT_2023)
     {
-        // RE-81, RE-102, RE-107, RE-109: what a 2023 export carries, and what it does not.
+        // RE-81, RE-102, RE-107, RE-109, RE-111: what a 2023 export carries, and what it does not.
         warnings.push(
             "Revit 2023: elements come from their records with their ElementId, category and \
              bounding box, doors and windows with their host wall, rooms with their outline, \
              and, where its Levels are read, each element on the storey of the Level its \
-             record names; family instances carry their family and type names. System-family \
-             type names, wall joins and profiles, design options, parameters and \
+             record names; family instances carry their family and type names, and walls, \
+             floors and roofs their type's name. Walls' and roofs' system families, wall \
+             joins and profiles, design options, parameters and \
              \"Export to IFC As\" overrides are not read for 2023, and components nested in \
              doors and windows are left out."
                 .into(),

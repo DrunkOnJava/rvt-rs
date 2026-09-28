@@ -170,6 +170,13 @@ pub fn recover_partition_schema_mvp(
         resolve_base_constraint_levels(&level_elevations, &mut record_backed);
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
+        // --- System families' names (RE-63); a wall's, roof's or
+        // ceiling's needs its type's layers, not read on 2023 ---
+        attach_system_family_names(
+            rf,
+            revit_version,
+            &mut [&mut out.walls, &mut out.slabs, &mut out.products],
+        );
         return Ok(out);
     }
 
@@ -4060,6 +4067,7 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
         crate::partition_element_records_2023::REVIT_2023,
     );
     let names = type_and_family_names_2023(rf, &records);
+    let system_types = system_type_names_2023(rf, &records);
     let selected = select_newest_instance_records(records);
     // Only a family instance can be nested; a host wall and the doors it
     // hosts name each other too (RE-76's class tag, at the same place on
@@ -4105,6 +4113,18 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
             decoded.fields.push((
                 FAMILY_NAME_FIELD.into(),
                 InstanceField::String(family_name.clone()),
+            ));
+        } else if let Some((type_id, type_name)) = system_types.get(&record.element_id) {
+            decoded.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: *type_id,
+                },
+            ));
+            decoded.fields.push((
+                TYPE_NAME_FIELD.into(),
+                InstanceField::String(type_name.clone()),
             ));
         }
         match record.builtin_category {
@@ -4227,6 +4247,98 @@ fn select_instance_records(
 /// family is the one id the type's own record references that has a name
 /// entry and no element record. An instance whose type or family is not
 /// unique gets nothing.
+/// Categories whose types are system-family types (RE-111): walls, floors,
+/// roofs and ceilings.
+const SYSTEM_TYPE_CATEGORIES_2023: [i64; 4] = [
+    crate::partition_element_records::OST_WALLS,
+    crate::partition_element_records::OST_FLOORS,
+    -2_000_035,
+    -2_000_038,
+];
+
+/// Each exported 2023 wall's, floor's, roof's and ceiling's type and its
+/// name, by ElementId (RE-111).
+///
+/// A 2023 system-family type has no record and no name entry (RE-109). Its
+/// name is in its element data, read as on 2024
+/// ([`crate::partition_names::find_element_data_names_2023`]). Of the ids
+/// an element's record names that have such a name and neither a record
+/// nor a name entry, the type is the one whose naming records are of a
+/// strict subset of the categories that name each of the others: a wall
+/// type is named by walls and the doors and windows they host, a floor
+/// type by floors, where the document's other named elements are named by
+/// records of more categories. No such one, no type.
+fn system_type_names_2023(
+    rf: &mut RevitFile,
+    records: &[crate::partition_element_records::PartitionElementRecord],
+) -> BTreeMap<u32, (u32, String)> {
+    let Ok(table) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared = crate::elem_table::declared_ids(&table);
+    let entries = crate::partition_names::name_entries_2023(rf, &declared);
+    let recorded: BTreeSet<u32> = records.iter().map(|record| record.element_id).collect();
+    let mut named_by: BTreeMap<u32, BTreeSet<i64>> = BTreeMap::new();
+    for record in records {
+        for &reference in &record.references {
+            if let Ok(id) = u32::try_from(reference) {
+                if !recorded.contains(&id) && !entries.contains_key(&id) {
+                    named_by
+                        .entry(id)
+                        .or_default()
+                        .insert(record.builtin_category);
+                }
+            }
+        }
+    }
+    let wanted: BTreeSet<u32> = named_by.keys().copied().collect();
+    let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        for (id, name) in
+            crate::partition_names::find_element_data_names_2023(inflated.bytes(), &wanted)
+        {
+            match names.get(&id) {
+                None => {
+                    names.insert(id, Some(name));
+                }
+                Some(held) if held.as_deref() != Some(name.as_str()) => {
+                    names.insert(id, None);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    for record in records.iter().filter(|record| {
+        record.is_exported_instance()
+            && SYSTEM_TYPE_CATEGORIES_2023.contains(&record.builtin_category)
+    }) {
+        let candidates: BTreeSet<u32> = record
+            .references
+            .iter()
+            .filter_map(|&reference| u32::try_from(reference).ok())
+            .filter(|id| matches!(names.get(id), Some(Some(_))))
+            .collect();
+        let most_specific = candidates.iter().copied().filter(|id| {
+            candidates.iter().all(|other| {
+                other == id
+                    || (named_by[id].is_subset(&named_by[other]) && named_by[id] != named_by[other])
+            })
+        });
+        let mut picked = most_specific;
+        let (Some(type_id), None) = (picked.next(), picked.next()) else {
+            continue;
+        };
+        if let Some(Some(name)) = names.get(&type_id) {
+            out.insert(record.element_id, (type_id, name.clone()));
+        }
+    }
+    out
+}
+
 fn type_and_family_names_2023(
     rf: &mut RevitFile,
     records: &[crate::partition_element_records::PartitionElementRecord],

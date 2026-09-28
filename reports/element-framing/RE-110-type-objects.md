@@ -46,7 +46,7 @@ Types are grouped by the pair (type ElementId, type entity). Each group becomes 
   - The GlobalId is the type's creating-episode GUID XOR its ElementId, from `Global/ElemTable` as for every element (RE-48; RE-108 on 2023).
   - A type written under two type entities keeps Revit's GlobalId on the first. The second gets one derived from the document (#400), so no GlobalId repeats.
 
-The 2023 walls, slabs and roofs stay untyped because their system-family type names are not read (RE-109). The modelo_bim footing types are `IfcFootingType` because rvt-rs writes those occurrences as `IfcFooting` where Revit writes `IfcSlab`.
+The 2023 walls, slabs and roofs stayed untyped here because their system-family type names were not read (RE-109). Since RE-111 the floors are typed; walls and roofs still lack their system family. The modelo_bim footing types are `IfcFootingType` because rvt-rs writes those occurrences as `IfcFooting` where Revit writes `IfcSlab`.
 
 ## 2. Where Revit differs, measured
 

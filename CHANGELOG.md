@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 walls, floors and roofs carry their type (RE-111, #421).**
+  A 2023 system-family type has no record and no name entry, but its
+  element data opens with `ff ff ff ff c0 02 01 00 00 00` and a `u32`
+  ElementId and names it as 2024's does. Of the named ids an element's
+  record names, its type is the one named by records of the fewest
+  categories, a strict subset of every other's. Every element Revit's
+  export types on the two 2023 projects now carries Revit's type name:
+  Exemplo_data 37 of 37 and modelo_bim 37 of 37 (19 and 31 before). The
+  floors are typed by an `IfcSlabType` with Revit's `Tag` and GlobalId;
+  walls and roofs keep their category's name, since their system family
+  follows from their type's layers, which 2023 does not read. Every 2024
+  and 2025 file is byte-identical.
+
 - **Elements are typed by IFC type objects of their Revit type (RE-110).**
   Every element rvt-rs names `Family:Type` and whose type it reads is now
   typed through `IfcRelDefinesByType` by one IFC4 type object per Revit
@@ -22,7 +35,7 @@ All notable changes will be documented here. This project follows
   several type objects for one type, such as one per column, with
   GlobalIds of its own, so type GlobalIds are Revit's on 438 of Core
   Interior's 854. Railings, openings and spaces are not typed, nor are
-  2023 walls, floors and roofs, whose type names are not read. Both Core
+  2023 walls and roofs, whose system family is not read. Both Core
   Interior witness observations are refreshed.
 
 - **Revit 2023 family instances carry their family and type names
@@ -33,7 +46,7 @@ All notable changes will be documented here. This project follows
   record of its own. Every door, window, column, beam and footing of the
   two 2023 projects with a Revit export now has Revit's own Name and
   ObjectType: 19 of 19 on Exemplo_data and 31 of 31 on modelo_bim.
-  System-family types (walls, floors, roofs) are not named yet. Every
+  System-family types (walls, floors, roofs) are named since RE-111. Every
   2024 and 2025 file is byte-identical.
 
 - **Revit 2023 elements take Revit's own GlobalIds (RE-108, #421).** A
