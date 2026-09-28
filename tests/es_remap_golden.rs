@@ -48,7 +48,7 @@ fn sha256_hex(path: &Path) -> String {
     let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 /// Transition ids the manifest names under `phase2_families:`.

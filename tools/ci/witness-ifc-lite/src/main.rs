@@ -61,7 +61,7 @@ fn sha256_of(path: &Path) -> std::io::Result<String> {
         }
         hasher.update(&buf[..read]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(lower_hex(&hasher.finalize()))
 }
 
 /// Canonical JSON per §7.3 / §8.4: sorted keys, no insignificant whitespace,
@@ -71,7 +71,7 @@ fn sha256_of(path: &Path) -> std::io::Result<String> {
 /// separators=(",", ":"))` for the integer/string payloads emitted here.
 fn canonical_hash(value: &Value) -> String {
     let canonical = serde_json::to_string(value).expect("serialize canonical payload");
-    format!("{:x}", Sha256::digest(canonical.as_bytes()))
+    lower_hex(&Sha256::digest(canonical.as_bytes()))
 }
 
 /// Value of `FILE_SCHEMA` from the STEP header, e.g. `IFC4`. IfcOpenShell
@@ -556,4 +556,9 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// `bytes` as lowercase hex, two digits a byte.
+fn lower_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }

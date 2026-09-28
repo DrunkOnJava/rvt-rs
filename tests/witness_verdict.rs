@@ -25,7 +25,7 @@ fn read_json(path: &Path) -> Value {
 /// hash (`sort_keys=True, separators=(",", ":")`).
 fn canonical_hash(value: &Value) -> String {
     let canonical = serde_json::to_string(value).expect("serialize");
-    format!("{:x}", Sha256::digest(canonical.as_bytes()))
+    hex::encode(Sha256::digest(canonical.as_bytes()))
 }
 
 fn artifact_dirs() -> Vec<PathBuf> {

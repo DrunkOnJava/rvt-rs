@@ -236,7 +236,7 @@ fn write_observation(
 ) -> anyhow::Result<()> {
     use sha2::{Digest, Sha256};
     let bytes = std::fs::read(input)?;
-    let input_hash = format!("{:x}", Sha256::digest(&bytes));
+    let input_hash = lower_hex(&Sha256::digest(&bytes));
     // entity_counts is what an IFC reader would see in the STEP this run
     // wrote — every `#n=IFCTYPE(` constructor, not just the building-element
     // histogram in the diagnostics (which omits units, contexts, rels).
@@ -272,7 +272,7 @@ fn write_observation(
         "deterministic": true,
         "semantic_surface_covered": ["entity_counts", "relations", "storeys"],
         "observation": payload,
-        "observation_hash_sha256": format!("{:x}", Sha256::digest(canonical.as_bytes())),
+        "observation_hash_sha256": lower_hex(&Sha256::digest(canonical.as_bytes())),
         "unsupported_entities": diagnostics.unsupported_features,
         "warnings": diagnostics.warnings,
     });
@@ -776,6 +776,11 @@ fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
              use a layout whose ElementId this release cannot locate and were not exported (RE-30)."
         );
     }
+}
+
+/// `bytes` as lowercase hex, two digits a byte.
+fn lower_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[cfg(test)]
