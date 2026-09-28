@@ -750,11 +750,18 @@ pub struct OpeningCut {
 
 /// A family instance's materials (RE-82): IFC4 `IfcMaterialConstituentSet`,
 /// unnamed, with one `IfcMaterialConstituent` per material, named after it
-/// and in the category "Materials", as Revit's export writes them.
+/// and in the category "Materials", as Revit's export writes them. A wall
+/// whose body is not a layer set has one per layer instead (RE-88).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MaterialConstituentSet {
-    /// Indices into `IfcModel.materials`, in name order.
+    /// Indices into `IfcModel.materials`, one per constituent, in the order
+    /// written: a family instance's in name order, a wall's layers exterior
+    /// first.
     pub material_indices: Vec<usize>,
+    /// Each constituent's name, where it is not its material's (RE-88);
+    /// empty names every constituent after its material.
+    #[serde(default)]
+    pub names: Vec<String>,
     /// Indices into `IfcModel.entities` of the elements it is associated with.
     pub elements: Vec<usize>,
 }

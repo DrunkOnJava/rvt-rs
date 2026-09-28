@@ -1393,7 +1393,7 @@ impl StepWriter {
             Vec::with_capacity(model.material_constituent_sets.len());
         for cset in &model.material_constituent_sets {
             let mut constituent_ids = Vec::with_capacity(cset.material_indices.len());
-            for &material_index in &cset.material_indices {
+            for (position, &material_index) in cset.material_indices.iter().enumerate() {
                 let (Some(&mat_id), Some(material)) = (
                     material_ids.get(material_index),
                     model.materials.get(material_index),
@@ -1407,7 +1407,7 @@ impl StepWriter {
                     constituent_id,
                     format!(
                         "IFCMATERIALCONSTITUENT('{}',$,#{mat_id},$,'Materials')",
-                        escape(&material.name)
+                        escape(cset.names.get(position).unwrap_or(&material.name))
                     ),
                 );
                 constituent_ids.push(constituent_id);
