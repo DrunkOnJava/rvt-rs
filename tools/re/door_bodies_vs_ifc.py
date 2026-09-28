@@ -18,7 +18,9 @@ For each door in both files it reports:
 
 Usage:
 
-    python3 tools/re/door_bodies_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--tol FEET] [--list N]
+    python3 tools/re/door_bodies_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--class IfcWindow] [--tol FEET] [--list N]
+
+`--class` scores another filler class (default `IfcDoor`).
 
 Needs IfcOpenShell (tested with 0.8.5) and NumPy.
 """
@@ -50,8 +52,8 @@ def box(frame, element):
     return np.concatenate([v.min(axis=0), v.max(axis=0)])
 
 
-def doors(path, with_hosts):
-    """Door Tag -> (door box, host wall box or None), in internal feet."""
+def doors(path, with_hosts, cls):
+    """Filler Tag -> (door box, host wall box or None), in internal feet."""
     f = ifcopenshell.open(path)
     frame = site_frame(f)
     host = {}
@@ -62,7 +64,7 @@ def doors(path, with_hosts):
             if wall is not None:
                 host[rel.RelatedBuildingElement.id()] = wall
     out = {}
-    for door in f.by_type("IfcDoor"):
+    for door in f.by_type(cls):
         if not door.Tag:
             continue
         b = box(frame, door)
@@ -75,20 +77,22 @@ def doors(path, with_hosts):
 
 def main(argv):
     args = argv[1:]
-    tol, listing = 0.01, 0
-    for flag in ("--tol", "--list"):
+    tol, listing, cls = 0.01, 0, "IfcDoor"
+    for flag in ("--tol", "--list", "--class"):
         if flag in args:
             i = args.index(flag)
             value = args[i + 1]
             del args[i : i + 2]
             if flag == "--tol":
                 tol = float(value)
+            elif flag == "--class":
+                cls = value
             else:
                 listing = int(value)
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    ours, ref = doors(args[0], True), doors(args[1], False)
+    ours, ref = doors(args[0], True, cls), doors(args[1], False, cls)
     counts, placement, rows = collections.Counter(), collections.Counter(), []
     for tag, (b, wall) in sorted(ours.items()):
         if tag not in ref:
@@ -119,7 +123,7 @@ def main(argv):
         else:
             counts["mirror rule wrong"] += 1
             rows.append((tag, round(offset, 3), np.round(b - r, 3), np.round(mirrored - r, 3)))
-    print(f"{len(ours)} doors in rvt-rs's file; tolerance {tol} ft")
+    print(f"{len(ours)} {cls} in rvt-rs's file; tolerance {tol} ft")
     for key, value in sorted(counts.items()):
         print(f"  {value:5d} {key}")
     for key, value in sorted(placement.items()):

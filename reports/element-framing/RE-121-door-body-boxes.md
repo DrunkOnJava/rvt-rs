@@ -46,7 +46,20 @@ Where the body sits across the wall is a property of the door family's geometry,
 
 So rvt-rs keeps drawing the record box, as the fail-closed rule asks: a centred-body guess would be exact on 145 doors and wrong on 126 with no signal telling them apart.
 
-## 4. Reproduce
+## 4. Windows
+
+The same test on windows (`--class IfcWindow`) is negative too:
+
+| file | hosted windows | mirror rule gives Revit's | Revit's body centred on the wall |
+|---|---:|---:|---:|
+| modelo_bim | 10 | 10 | 10 |
+| Exemplo_data | 9 | 5 | 5 |
+| 2024_Core_Interior | 6 | 0 | 6 |
+| Snowdon Towers Architectural | 68 | 0 | 2 |
+
+Core Interior's windows are centred, yet their boxes reach 0.801 ft past the body on one side and 4.823 ft on the other: they hold more than a swing. Snowdon's differ from the body on every face.
+
+## 5. Reproduce
 
 | file | sha256 |
 |---|---|

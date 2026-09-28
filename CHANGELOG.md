@@ -15,7 +15,7 @@ All notable changes will be documented here. This project follows
   centred: Core Interior 132 of 132, RE1 4 of 4, the 2023 projects 9 of
   11. On Snowdon Towers, whose door frames sit at a wall face, it gives
   0 of 126, and nothing read tells the cases apart, so doors keep their
-  record box. `tools/re/door_bodies_vs_ifc.py` measures it.
+  record box. Windows fail the same test (modelo_bim 10 of 10, Core Interior 0 of 6, Snowdon 0 of 68). `tools/re/door_bodies_vs_ifc.py` measures both.
 
 - **Revit 2023 walls are cut back by the walls they join (RE-120, #421).**
   A 2023 wall's record box is the untrimmed wall, as on 2024: at an L or
