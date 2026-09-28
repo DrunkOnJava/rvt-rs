@@ -1187,6 +1187,10 @@ fn opening_cuts_through_hosts(
         if body.profile_override.is_some() {
             continue;
         }
+        if let Some(cut) = tapered_host_window_cut(entity, &entities[*host]) {
+            cuts.insert(index, cut);
+            continue;
+        }
         let Some(entities::IfcEntity::BuildingElement {
             location_feet: host_location,
             rotation_radians: host_rotation,
@@ -1232,6 +1236,83 @@ fn opening_cuts_through_hosts(
         cuts.insert(index, cut);
     }
     cuts
+}
+
+/// A length property of an element's own property set, feet.
+fn length_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
+    let entities::IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    set.properties
+        .iter()
+        .find_map(|property| match &property.value {
+            entities::PropertyValue::LengthFeet(value) if property.name == wanted => Some(*value),
+            _ => None,
+        })
+}
+
+/// RE-89: a window's opening in a tapered wall (RE-86), as Revit's export
+/// cuts it: a vertical box its host type's thickness deep across the wall,
+/// centred on the window's own origin (RE-87), and the window's width along
+/// it. On Snowdon Towers every Solar Wall window's opening is centred there.
+/// `None` unless the filler is a window turned along its host's line with
+/// its origin read, and the host is tapered with its thickness read.
+fn tapered_host_window_cut(
+    filler: &entities::IfcEntity,
+    host: &entities::IfcEntity,
+) -> Option<entities::OpeningCut> {
+    let entities::IfcEntity::BuildingElement {
+        ifc_type,
+        location_feet: Some(location),
+        rotation_radians: Some(rotation),
+        extrusion: Some(body),
+        ..
+    } = filler
+    else {
+        return None;
+    };
+    let entities::IfcEntity::BuildingElement {
+        location_feet: Some(host_location),
+        rotation_radians: Some(host_rotation),
+        property_set: Some(host_set),
+        ..
+    } = host
+    else {
+        return None;
+    };
+    if !ifc_type.eq_ignore_ascii_case("IfcWindow")
+        || !host_set.properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, entities::PropertyValue::Text(source)
+                    if source == export_content::WALL_TAPERED_BODY_SOURCE)
+        })
+    {
+        return None;
+    }
+    let thickness = length_property(host, "Thickness").filter(|t| t.is_finite() && *t > 0.0)?;
+    let [ox, oy] =
+        export_content::INSTANCE_ORIGIN_PROPERTIES.map(|name| length_property(filler, name));
+    let origin = [ox?, oy?];
+    // The window must run along its host's line, either way.
+    if (rotation - host_rotation).sin().abs() > 1e-6 {
+        return None;
+    }
+    let host_left = [-host_rotation.sin(), host_rotation.cos()];
+    let filler_left = [-rotation.sin(), rotation.cos()];
+    let side = host_left[0] * filler_left[0] + host_left[1] * filler_left[1];
+    let across = |point: [f64; 2]| {
+        (point[0] - host_location[0]) * host_left[0] + (point[1] - host_location[1]) * host_left[1]
+    };
+    let offset = side * (across(origin) - across([location[0], location[1]]));
+    offset.is_finite().then_some(entities::OpeningCut {
+        x_dim_feet: body.width_feet,
+        y_dim_feet: thickness,
+        centre_feet: [0.0, offset],
+    })
 }
 
 /// RE-82: one constituent set per distinct set of type materials, for each

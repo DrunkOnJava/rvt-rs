@@ -784,6 +784,10 @@ pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
 /// the rectangle at its angle whose box is its record box (RE-87).
 pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_box";
 
+/// Properties holding a turned family instance's plan origin from its
+/// transform, model feet (RE-87, RE-89).
+pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
+
 /// Classes whose body another rule draws, which a family instance's turn
 /// leaves alone: columns (their type's section), beams (their line), and
 /// curtain-wall panels and mullions (their grid).
@@ -1729,6 +1733,20 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             name: "TypeSectionDepth".into(),
             value: PropertyValue::LengthFeet(section_depth),
         });
+    }
+    // RE-89: a turned instance reports its origin, which a window's opening
+    // in a tapered wall is centred on.
+    if turned.is_some() {
+        if let Some(origin) =
+            crate::partition_schema_mvp::instance_origin_from_fields(&decoded.fields)
+        {
+            for (name, value) in INSTANCE_ORIGIN_PROPERTIES.iter().zip(origin) {
+                properties.push(Property {
+                    name: (*name).into(),
+                    value: PropertyValue::LengthFeet(value),
+                });
+            }
+        }
     }
     // A wall drawn from its centreline reports its type's thickness
     // (RE-54); one whose joins resolved reports the trim it took and, unless

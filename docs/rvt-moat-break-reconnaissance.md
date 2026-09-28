@@ -2083,3 +2083,7 @@ A family instance's element data holds twelve `f64`: a 3 x 3 rotation stored row
 ## Addendum — RE-88 Revit associates a wall's materials by its type's layers (2026-09-28)
 
 Revit's IFC4 export gives a wall of a one-layer type that layer's `IfcMaterial`, and a wall of a type with several layers an `IfcMaterialConstituentSet` of them, exterior first, each named after its material with a material's k-th occurrence " (k)", whatever its body. On Snowdon Towers that is Revit's association on 143 of 143 and 823 of 824 walls rvt-rs writes a layer set for; applied to walls whose body is not a layer set, 72 of 111 get Revit's association and none a different one. Report: `reports/element-framing/RE-88-wall-materials-without-layer-sets.md`; scorer: `tools/re/wall_materials_vs_ifc.py`.
+
+## Addendum — RE-89 Revit centres a window's opening in a tapered wall on the window's origin (2026-09-28)
+
+Revit's IFC4 export cuts a window's opening in a tapered wall (RE-86) as a vertical box one host type thickness deep, centred across the wall on the window's own transform origin (RE-87), on every Snowdon Towers window in a Solar Wall. A door's opening there is flush with the exterior face at its base instead (3 doors). Report: `reports/element-framing/RE-89-tapered-wall-window-openings.md`.

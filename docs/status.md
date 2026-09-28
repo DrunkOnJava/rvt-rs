@@ -567,6 +567,11 @@ rvt-rs writes a layer set for (143 of 143, 823 of 824); 95 of the 111
 walls that had no material now have Revit's, none a different one,
 including walls whose data does not place them
 (`reports/element-framing/RE-88-wall-materials-without-layer-sets.md`).
+**RE-89 (2026-09-28)** cuts a window's opening in a tapered wall as Revit
+does: a vertical box the host type's thickness deep, centred on the
+window's own origin (RE-87). All 20 such windows on Snowdon Towers now have
+Revit's opening across the wall (none before)
+(`reports/element-framing/RE-89-tapered-wall-window-openings.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
