@@ -6,6 +6,18 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Research
+
+- **Revit 2026 element records (RE-124, #421).** On the public flowbim.ee
+  house (Revit 2026, with Revit's own IFC4X3 export), the records carry the
+  marker RE-32 predicted (`61 01 ff ff ff ff f1 05`, from the file's own
+  schema), and the 2024/2025 decode with the RE-21 instance rule finds 88
+  placed instances, every one in Revit's export, of every class there.
+  Revit 2026 is not admitted yet: in a trial, doors and windows came out as
+  bare openings, storeys were not the model's, and rooms were unnamed.
+  `examples/probe_re124_revit_2026_records.rs` and
+  `tools/re/instances_vs_ifc_tags.py` measure it.
+
 ### Changed
 
 - **Element records are scanned with the marker the file's own schema
