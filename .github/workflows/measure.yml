@@ -1,0 +1,116 @@
+# Measure a ref against Revit's own exports of the redistributable reference
+# models (Core Interior, RE1, Einhoven), on GitHub's hosted runners.
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=main
+#
+# Each side builds rvt-ifc and rvt-gltf at its ref and runs
+# tools/ci/measure-reference-models.sh (taken from the workflow's own ref,
+# so both sides are scored by the same scorers). The results are uploaded
+# as artifacts, and the compare job writes the differences between the two
+# sides to the run summary. Local-only models (Snowdon Towers and others
+# without a redistribution licence) are never fetched here.
+
+name: Measure
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or SHA to measure (default the dispatched ref)
+        required: false
+        default: ""
+      base:
+        description: Ref to compare against (empty for none)
+        required: false
+        default: main
+  # A change to the measurement itself measures its own PR against main.
+  pull_request:
+    paths:
+      - .github/workflows/measure.yml
+      - tools/ci/measure-reference-models.sh
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  measure:
+    name: Measure ${{ matrix.side }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        side: ${{ fromJSON((github.event_name == 'pull_request' || inputs.base != '') && '["head","base"]' || '["head"]') }}
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Measured source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.side == 'base' && (inputs.base || 'main') || (inputs.ref || github.sha) }}
+          path: measured
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: measured
+          shared-key: measure
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install IfcOpenShell
+        run: python -m pip install 'ifcopenshell>=0.8.0,<0.9.0'
+      - name: Build
+        working-directory: measured
+        run: |
+          git log -1 --format='%H %s' > ../measured-commit.txt
+          cargo build --profile ci --bin rvt-ifc --bin rvt-gltf
+      - name: Fetch the reference models
+        run: tools/fetch-reference-models.sh models
+      - name: Measure
+        run: |
+          tools/ci/measure-reference-models.sh measured/target/ci models results
+          cp measured-commit.txt results/commit.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: measure-${{ matrix.side }}
+          path: results
+          if-no-files-found: error
+
+  compare:
+    name: Compare
+    needs: measure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: measure-*
+      - name: Summary
+        run: |
+          {
+            echo "## Measured"
+            echo
+            echo "head: $(cat measure-head/commit.txt)"
+            [ -d measure-base ] && echo "base: $(cat measure-base/commit.txt)"
+            echo
+            if [ -d measure-base ]; then
+              echo "### Models whose IFC differs (export time ignored)"
+              echo
+              for d in measure-head/*/; do
+                m=$(basename "$d")
+                if cmp -s "$d/ifc.sha256" "measure-base/$m/ifc.sha256"; then echo "- $m: identical"; else echo "- $m: **differs**"; fi
+              done
+              echo
+              echo "### Scorer differences (base → head)"
+              echo
+              echo '```diff'
+              diff -r -U0 -x commit.txt -x '*.log' -x ifc.sha256 -x diagnostics.json measure-base measure-head || true
+              echo '```'
+            else
+              echo "No base; the scores are in the measure-head artifact."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
