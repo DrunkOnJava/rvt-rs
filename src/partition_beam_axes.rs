@@ -251,6 +251,55 @@ pub fn first_bounded_arc(data: &[u8]) -> Option<BoundedArc> {
     bounded_arc_at(data, memchr::memmem::find(data, &BOUNDED_LINE_TAG)?)
 }
 
+/// The tag of a full circle's record (RE-100): [`bounded_arc_at`]'s layout
+/// with both angles 0, where a bounded curve's tag ends in 1.
+pub const CIRCLE_TAG: [u8; 4] = [0x04, 0x00, 0x08, 0x00];
+
+/// The full circle in `data`: the first [`CIRCLE_TAG`] record whose angles
+/// are both 0, axes unit and square to each other, and radius positive,
+/// returned as an arc from 0 to a full turn (RE-100).
+pub fn first_circle(data: &[u8]) -> Option<BoundedArc> {
+    memchr::memmem::find_iter(data, &CIRCLE_TAG).find_map(|at| {
+        let mut values = [0.0f64; 12];
+        for (index, value) in values.iter_mut().enumerate() {
+            *value = read_f64(data, at + 4 + 8 * index)?;
+        }
+        if !values.iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        let [a0, a1, xx, xy, xz, yx, yy, yz, radius, cx, cy, cz] = values;
+        let unit = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2] - 1.0).abs() <= 1e-9;
+        let (x_axis, y_axis) = ([xx, xy, xz], [yx, yy, yz]);
+        (a0 == 0.0
+            && a1 == 0.0
+            && unit(x_axis)
+            && unit(y_axis)
+            && (xx * yx + xy * yy + xz * yz).abs() <= 1e-9
+            && radius > 0.0)
+            .then_some(BoundedArc {
+                start_angle: 0.0,
+                end_angle: std::f64::consts::TAU,
+                x_axis,
+                y_axis,
+                radius,
+                centre: [cx, cy, cz],
+            })
+    })
+}
+
+/// The full circle of each sketch line in `ids` ([`first_circle`]), read as
+/// [`scan_bounded_lines`] reads lines (RE-100).
+pub fn scan_sketch_circles(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, BoundedArc>> {
+    if !supports_revit_version(revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    scan_first_records(rf, revit_version, ids, first_circle)
+}
+
 /// A sketch line's curve (RE-96): the first [`BOUNDED_LINE_TAG`] record in
 /// its data that reads as a line or as an arc, with both readings where it
 /// reads as both. A sketch line's record does not say which it is, so the

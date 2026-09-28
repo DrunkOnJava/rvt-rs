@@ -4315,6 +4315,10 @@ fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [
     }
 }
 
+/// One curve of a shaft's sketch as chords, and whether it is a straight
+/// line (RE-100).
+type ShaftCurve = (Vec<[(f64, f64); 2]>, bool);
+
 /// A shaft's plan outline and the bottom and top of its height, feet
 /// (RE-99).
 type ShaftOutline = (Vec<(f64, f64)>, (f64, f64));
@@ -4422,9 +4426,9 @@ fn attach_shaft_voids(
 /// sketch holds its boundary and the symbolic lines drawn across it, the
 /// diagonals of the X Revit shows in plan; lines that cross another of the
 /// sketch's lines are those, and are left out. The rest must be straight
-/// lines read exactly (RE-50) that close into one loop spanning the shaft's
-/// record box. Its lines are those its Sketch lists (RE-97), or else those
-/// naming it.
+/// lines read exactly (RE-50), or a full circle (RE-100), that close into one
+/// loop spanning the shaft's record box. Its lines are those its Sketch
+/// lists (RE-97), or else those naming it.
 fn shaft_outlines(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -4450,7 +4454,10 @@ fn shaft_outlines(
         members.insert(shaft, listed.unwrap_or_else(named));
     }
     let ids: BTreeSet<u32> = members.values().flatten().copied().collect();
-    let Ok(lines) = crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &ids) else {
+    let (Ok(lines), Ok(circles)) = (
+        crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &ids),
+        crate::partition_beam_axes::scan_sketch_circles(rf, revit_version, &ids),
+    ) else {
         return BTreeMap::new();
     };
     let cross = |o: (f64, f64), a: (f64, f64), b: (f64, f64)| {
@@ -4466,22 +4473,39 @@ fn shaft_outlines(
         |[a, b]: [(f64, f64); 2], [c, d]: [(f64, f64); 2]| apart(a, b, c, d) && apart(c, d, a, b);
     let mut out = BTreeMap::new();
     for (shaft, ids) in members {
-        let segments: Option<Vec<[(f64, f64); 2]>> = ids
+        // Each line, or a full circle drawn as chords (RE-100); only lines
+        // can be the crossing diagonals left out.
+        let curves: Option<Vec<ShaftCurve>> = ids
             .iter()
             .map(|id| {
-                let line = lines.get(id)?;
-                let (a, b) = (line.start(), line.end());
-                ((a[2] - b[2]).abs() <= erpp::VERTEX_EPS_FEET)
-                    .then_some([(a[0], a[1]), (b[0], b[1])])
+                if let Some(line) = lines.get(id) {
+                    let (a, b) = (line.start(), line.end());
+                    return ((a[2] - b[2]).abs() <= erpp::VERTEX_EPS_FEET)
+                        .then(|| (vec![[(a[0], a[1]), (b[0], b[1])]], true));
+                }
+                let circle = circles.get(id)?;
+                let flat = circle.x_axis[2].abs() <= erpp::VERTEX_EPS_FEET
+                    && circle.y_axis[2].abs() <= erpp::VERTEX_EPS_FEET;
+                let points = erpp::arc_points(circle).filter(|_| flat)?;
+                let chords = points
+                    .windows(2)
+                    .map(|pair| [(pair[0][0], pair[0][1]), (pair[1][0], pair[1][1])])
+                    .collect();
+                Some((chords, false))
             })
             .collect();
-        let Some(segments) = segments else {
+        let Some(curves) = curves else {
             continue;
         };
-        let boundary: Vec<[f64; 4]> = segments
+        let straight: Vec<[(f64, f64); 2]> = curves
             .iter()
-            .filter(|s| !segments.iter().any(|t| crossing(**s, *t)))
-            .map(|[a, b]| [a.0, a.1, b.0, b.1])
+            .filter(|(_, line)| *line)
+            .flat_map(|(chords, _)| chords.iter().copied())
+            .collect();
+        let boundary: Vec<[f64; 4]> = curves
+            .iter()
+            .filter(|(chords, line)| !*line || !straight.iter().any(|t| crossing(chords[0], *t)))
+            .flat_map(|(chords, _)| chords.iter().map(|[a, b]| [a.0, a.1, b.0, b.1]))
             .collect();
         let Some(profile) = erpp::plan_profile_from_lines(&boundary) else {
             continue;
