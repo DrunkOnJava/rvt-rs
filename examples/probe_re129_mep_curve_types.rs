@@ -82,5 +82,33 @@ fn main() -> rvt::Result<()> {
             }
         }
     }
+    // Which element's data holds each name: the nearest element-data
+    // header (`element_data_header` + ElementId) before it.
+    if let Some(layout) = rvt::partition_names::element_data_layout(version) {
+        for needle in ["221116-WTR", "233113-DUCT-Tees"] {
+            let units: Vec<u8> = needle.encode_utf16().flat_map(u16::to_le_bytes).collect();
+            for stream in rf.partition_stream_names() {
+                let Ok(inflated) = rf.inflated_partition(&stream) else {
+                    continue;
+                };
+                let buf = inflated.bytes();
+                for at in memchr::memmem::find_iter(buf, &units).take(8) {
+                    let owner = memchr::memmem::rfind(&buf[..at], &layout.header).and_then(|hit| {
+                        let id = layout.id_at(buf, hit + layout.header.len())?;
+                        Some((id, at - hit))
+                    });
+                    let after: Vec<String> = buf
+                        [at + units.len()..(at + units.len() + 48).min(buf.len())]
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect();
+                    println!(
+                        "owner {needle:?} @{at}: element {owner:?}; after: {}",
+                        after.join(" ")
+                    );
+                }
+            }
+        }
+    }
     Ok(())
 }
