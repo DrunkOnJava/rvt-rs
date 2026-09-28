@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Steel columns are drawn as their I section (RE-104, #94).** A
+  structural column's flanges run along its instance's X axis. All 40 of
+  Snowdon Towers' steel columns now export as their type's
+  `IfcIShapeProfileDef` turned to it, where the turned section fills the
+  record box. On all 24 its VIM export can score, Revit's own mesh is that
+  I at that turn.
+  - The type-value readers now take a block's owner from every ElementId
+    `Global/ElemTable` declares, secondary ids included (RE-41). That reads
+    W8x31's section, and changes no exported value elsewhere.
+  - Every other local file is byte-identical.
+
 - **Steel beams are drawn as their I section (RE-103, #94).** A framing
   type stores its section's width, depth, web and flange thickness and
   its centroid, and a centroid at the centre both ways marks an I, not a

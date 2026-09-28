@@ -397,7 +397,7 @@ pub fn recover_partition_schema_mvp(
     // --- Each door's rough opening from its type (RE-94, #227), after RE-84
     // marks the doors that are openings alone ---
     attach_door_openings(rf, revit_version, &mut out.doors);
-    // --- Steel beams' I sections from their type (RE-103) ---
+    // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     Ok(out)
 }
@@ -1219,10 +1219,19 @@ pub fn beam_i_section_from_fields(
     })
 }
 
-/// Give each structural-framing element whose type is an I section
-/// ([`crate::partition_type_parameters::type_i_sections`]) that section.
-/// The exporter draws it only where the beam's body along its line is as
-/// wide and as deep as the section.
+/// Fields carrying the plan direction of an I-section structural column's
+/// X axis, from its transform (RE-104): its flanges run along it.
+pub const COLUMN_I_AXIS_FIELDS: [&str; 2] = ["m_i_section_axis_x", "m_i_section_axis_y"];
+
+/// Classes whose type's I section is read (RE-103, RE-104).
+const I_SECTION_CLASSES: [&str; 2] = ["StructuralFraming", "StructuralColumn"];
+
+/// Give each structural-framing element and structural column whose type is
+/// an I section ([`crate::partition_type_parameters::type_i_sections`]) that
+/// section (RE-103, RE-104), and each such upright column its X axis in plan
+/// from its transform. The exporter draws a beam's section only where its
+/// body along its line holds it, and a column's only where the section
+/// turned to that axis fills its record box.
 fn attach_beam_sections(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {
@@ -1232,13 +1241,25 @@ fn attach_beam_sections(rf: &mut RevitFile, revit_version: u32, products: &mut [
     };
     let types: BTreeSet<u32> = products
         .iter()
-        .filter(|element| element.class == "StructuralFraming")
+        .filter(|element| I_SECTION_CLASSES.contains(&element.class.as_str()))
         .filter_map(type_of)
         .collect();
     let sections = crate::partition_type_parameters::type_i_sections(rf, revit_version, &types);
+    let columns: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "StructuralColumn")
+        .filter(|element| type_of(element).is_some_and(|id| sections.contains_key(&id)))
+        .filter_map(|element| element.id)
+        .collect();
+    let transforms = if columns.is_empty() {
+        BTreeMap::new()
+    } else {
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &columns)
+            .unwrap_or_default()
+    };
     for element in products
         .iter_mut()
-        .filter(|element| element.class == "StructuralFraming")
+        .filter(|element| I_SECTION_CLASSES.contains(&element.class.as_str()))
     {
         let Some(section) = type_of(element).and_then(|id| sections.get(&id)).copied() else {
             continue;
@@ -1253,6 +1274,18 @@ fn attach_beam_sections(rf: &mut RevitFile, revit_version: u32, products: &mut [
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        let axis = element
+            .id
+            .and_then(|id| transforms.get(&id))
+            .filter(|transform| transform.is_upright())
+            .and_then(|transform| transform.plan_axis());
+        if let Some(axis) = axis {
+            for (name, value) in COLUMN_I_AXIS_FIELDS.iter().zip(axis) {
+                element
+                    .fields
+                    .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
         }
     }
 }

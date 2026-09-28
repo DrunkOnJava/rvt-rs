@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Check the I-section beams rvt-rs writes, as IfcOpenShell meshes them.
+"""Check the I-section beams and columns rvt-rs writes, as IfcOpenShell
+meshes them.
 
-Research tool for `reports/element-framing/RE-103-beam-i-sections.md` (#94).
-For every IfcBeam whose `SectionShape` property is `I`, it meshes the beam
-with IfcOpenShell and checks:
+Research tool for `reports/element-framing/RE-103-beam-i-sections.md` and
+`RE-104-column-i-sections.md` (#94). For every IfcBeam and IfcColumn whose
+`SectionShape` property is `I`, it meshes the element with IfcOpenShell and
+checks:
 
 - volume: the mesh's volume equals the IfcIShapeProfileDef's area (two
-  flanges and the web between them) times the beam's `AxisLength`;
-- orientation: across the extrusion axis, level, the mesh is the flange
-  width wide, and square to that it is the section's depth.
+  flanges and the web between them) times the beam's `AxisLength`, or the
+  column's height;
+- orientation: a beam is the flange width wide level across its extrusion
+  axis and the section's depth square to that; a column has, in its own
+  placement's axes, a vertex at each outer corner and inner flange tip of
+  the section.
 
 Usage:
 
@@ -21,7 +26,9 @@ import sys, ifcopenshell, ifcopenshell.geom, ifcopenshell.util.element as ue, nu
 f = ifcopenshell.open(sys.argv[1])
 s = ifcopenshell.geom.settings(); s.set("use-world-coords", True)
 c = collections.Counter(); worst = 0.0
-for b in f.by_type("IfcBeam"):
+import ifcopenshell.util.placement
+
+for b in f.by_type("IfcBeam") + f.by_type("IfcColumn"):
     ps = {k: v for p in ue.get_psets(b).values() for k, v in p.items()}
     if ps.get("SectionShape") != "I": continue
     shape = ifcopenshell.geom.create_shape(s, b)
@@ -32,6 +39,18 @@ for b in f.by_type("IfcBeam"):
     a, bb, cc = v[t[:, 0]], v[t[:, 1]], v[t[:, 2]]
     vol = abs(np.einsum("ij,ij->i", a, np.cross(bb, cc)).sum() / 6.0)
     area = 2 * W * tf + (D - 2 * tf) * tw
+    if b.is_a("IfcColumn"):
+        m = ifcopenshell.util.placement.get_local_placement(b.ObjectPlacement)
+        ux, uy, o = m[:3, 0], m[:3, 1], m[:3, 3]
+        local = np.stack([(v - o) @ ux, (v - o) @ uy], axis=1)
+        tip = D / 2 - tf
+        want = [(sx * W / 2, sy * y) for sx in (-1, 1) for sy in (-1, 1) for y in (D / 2, tip)]
+        found = all(np.min(np.hypot(local[:, 0] - a, local[:, 1] - c)) < 1e-4 for a, c in want)
+        c["column: corners and flange tips in its own axes" if found else "column: turned"] += 1
+        length = np.ptp(v[:, 2])
+        rel = abs(vol / area - length) / length
+        c["column: volume = I area x height within 0.1%" if rel < 1e-3 else "column: volume differs"] += 1
+        continue
     rel = abs(vol / area - ps["AxisLength"]) / ps["AxisLength"]
     worst = max(worst, rel)
     c["volume = I area x axis length within 0.1%" if rel < 1e-3 else "volume differs"] += 1
