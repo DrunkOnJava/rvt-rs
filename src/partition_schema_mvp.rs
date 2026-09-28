@@ -5306,10 +5306,38 @@ fn attach_slab_layers(
     ) else {
         return;
     };
+    // RE-115: a layer that takes its category's material takes the one the
+    // document's object styles give the element's category, as a wall's
+    // does (RE-91), where it is set and named.
+    let mut category_materials: BTreeMap<&str, Option<u32>> = BTreeMap::new();
+    for (class, category) in [
+        ("Floor", crate::partition_element_records::OST_FLOORS),
+        ("Roof", crate::partition_element_records::OST_ROOFS),
+        ("Ceiling", crate::partition_element_records::OST_CEILINGS),
+    ] {
+        let material =
+            crate::partition_materials::scan_category_material(rf, revit_version, category)
+                .ok()
+                .flatten()
+                .filter(|id| names.contains_key(id));
+        category_materials.insert(class, material);
+    }
     for element in elements {
         let Some(type_layers) = type_of(element).and_then(|id| layers.get(&id)) else {
             continue;
         };
+        let category_material = category_materials
+            .get(element.class.as_str())
+            .copied()
+            .flatten();
+        let type_layers: Vec<pcs::CompoundLayer> = type_layers
+            .iter()
+            .map(|layer| pcs::CompoundLayer {
+                material: layer.material.or(category_material),
+                ..*layer
+            })
+            .collect();
+        let type_layers = &type_layers;
         let height = element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::Float { value, .. } if name == "m_bboxHeight" => Some(*value),
             _ => None,
