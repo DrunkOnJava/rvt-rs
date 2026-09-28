@@ -784,6 +784,64 @@ pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
 /// the rectangle at its angle whose box is its record box (RE-87).
 pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_box";
 
+/// `BodySource` of a curtain mullion or panel turned or tilted off the
+/// model's axes, drawn as the box along its own axes (RE-106).
+pub const INSTANCE_ORIENTED_BODY_SOURCE: &str = "partition_family_instance_oriented_box";
+
+/// Below this, `|det|` of the axes' absolute components leaves the box along
+/// them undetermined by the record box (RE-106).
+const ORIENTED_BOX_MIN_DET: f64 = 0.1;
+
+/// The half-extents along `axes` (X, Y and Z, each in model coordinates) of
+/// the box whose axis-aligned box is `size` (RE-106): the box centred on the
+/// record box's centre whose extent along each model axis, `sum |a_i| e_i`,
+/// is the record box's. `None` where the axes leave it undetermined or a
+/// half-extent would not be positive.
+fn oriented_box(axes: [[f64; 3]; 3], size: [f64; 3]) -> Option<([[f64; 3]; 3], [f64; 3])> {
+    let m = |row: usize, col: usize| axes[col][row].abs();
+    let det = m(0, 0) * (m(1, 1) * m(2, 2) - m(1, 2) * m(2, 1))
+        - m(0, 1) * (m(1, 0) * m(2, 2) - m(1, 2) * m(2, 0))
+        + m(0, 2) * (m(1, 0) * m(2, 1) - m(1, 1) * m(2, 0));
+    if !det.is_finite() || det.abs() < ORIENTED_BOX_MIN_DET {
+        return None;
+    }
+    let h = size.map(|s| s / 2.0);
+    // Cramer's rule on sum_i |axis_i[row]| e_i = h[row].
+    let solve = |col: usize| {
+        let pick = |row: usize, c: usize| if c == col { h[row] } else { m(row, c) };
+        (pick(0, 0) * (pick(1, 1) * pick(2, 2) - pick(1, 2) * pick(2, 1))
+            - pick(0, 1) * (pick(1, 0) * pick(2, 2) - pick(1, 2) * pick(2, 0))
+            + pick(0, 2) * (pick(1, 0) * pick(2, 1) - pick(1, 1) * pick(2, 0)))
+            / det
+    };
+    let half = [solve(0), solve(1), solve(2)];
+    half.iter()
+        .all(|e| e.is_finite() && *e > 0.0)
+        .then_some((axes, half))
+}
+
+/// The box along `axes` with half-extents `half`, centred on the record
+/// box's centre, `height / 2` above the element's placement: its X by Y
+/// section extruded along its Z.
+fn oriented_box_solid(axes: [[f64; 3]; 3], half: [f64; 3], height: f64) -> entities::SolidShape {
+    let [x, _, z] = axes;
+    let centre = [0.0, 0.0, height / 2.0];
+    entities::SolidShape::PlacedExtrusion {
+        profile: entities::ProfileDef::Rectangle {
+            width_feet: 2.0 * half[0],
+            depth_feet: 2.0 * half[1],
+        },
+        origin_feet: [
+            centre[0] - half[2] * z[0],
+            centre[1] - half[2] * z[1],
+            centre[2] - half[2] * z[2],
+        ],
+        axis: z,
+        ref_direction: x,
+        depth_feet: 2.0 * half[2],
+    }
+}
+
 /// Properties holding a turned family instance's plan origin from its
 /// transform, model feet (RE-87, RE-89).
 pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
@@ -1658,6 +1716,10 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         .or_else(|| wall_arc.as_ref().map(|outline| relative(outline, &[])));
     // RE-87: a family instance turned off the model's axes is the rectangle
     // at its angle that its record box bounds.
+    // RE-106: a curtain mullion or panel turned or tilted off the model's
+    // axes, as the box along its own axes whose world box is its record box.
+    let oriented = crate::partition_schema_mvp::curtain_axes_from_fields(&decoded.fields)
+        .and_then(|axes| oriented_box(axes, [width, depth, height]));
     let turned = if TURNED_BOX_EXCLUDED_CLASSES.contains(&class)
         || profile_override.is_some()
         || stair_run.is_some()
@@ -1753,6 +1815,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
                     .or_else(|| i_column.map(|_| COLUMN_I_SECTION_BODY_SOURCE.into()))
                     .or_else(|| turned.map(|_| INSTANCE_TURNED_BODY_SOURCE.into()))
+                    .or_else(|| oriented.map(|_| INSTANCE_ORIENTED_BODY_SOURCE.into()))
                     .unwrap_or_else(|| RECORD_BBOX_BODY_SOURCE.into()),
             ),
         },
@@ -2128,6 +2191,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     None,
                 ),
                 Some(beam) => (None, record_body, Some(beam_swept_solid(&beam, [x, y, z]))),
+                None if oriented.is_some() => (
+                    None,
+                    record_body,
+                    oriented.map(|(axes, half)| oriented_box_solid(axes, half, height)),
+                ),
                 None if i_column.is_some() => {
                     let (angle, section) = i_column.expect("checked above");
                     (

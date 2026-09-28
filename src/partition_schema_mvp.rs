@@ -272,6 +272,9 @@ pub fn recover_partition_schema_mvp(
         revit_version,
         [&mut out.doors, &mut out.windows, &mut out.products],
     );
+    // --- Curtain mullions and panels turned or tilted off the model's axes,
+    // with their three axes (RE-106) ---
+    attach_curtain_axes(rf, revit_version, &mut out.products);
 
     // --- Family and type names (RE-38) ---
     for elements in [
@@ -1033,6 +1036,80 @@ fn attach_revit_classes(classes: &crate::formats::SchemaClasses, elements: &mut 
                 REVIT_CLASS_FIELD.into(),
                 InstanceField::String(class.name.clone()),
             ));
+        }
+    }
+}
+
+/// Fields holding the three axes of a curtain mullion or panel turned or
+/// tilted off the model's axes (RE-106), from its transform: X, then Y,
+/// then Z, each as model x, y and z.
+pub const CURTAIN_AXES_FIELDS: [&str; 9] = [
+    "m_curtain_axis_xx",
+    "m_curtain_axis_xy",
+    "m_curtain_axis_xz",
+    "m_curtain_axis_yx",
+    "m_curtain_axis_yy",
+    "m_curtain_axis_yz",
+    "m_curtain_axis_zx",
+    "m_curtain_axis_zy",
+    "m_curtain_axis_zz",
+];
+
+/// Classes whose turned or tilted instances carry [`CURTAIN_AXES_FIELDS`] (RE-106).
+pub const CURTAIN_AXES_CLASSES: [&str; 2] = ["CurtainWallMullion", "CurtainWallPanel"];
+
+/// The three axes [`CURTAIN_AXES_FIELDS`] record, X, Y and Z.
+pub fn curtain_axes_from_fields(fields: &[(String, InstanceField)]) -> Option<[[f64; 3]; 3]> {
+    let values = CURTAIN_AXES_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    let mut axes = [[0.0; 3]; 3];
+    for (index, value) in values.into_iter().enumerate() {
+        axes[index / 3][index % 3] = value?;
+    }
+    Some(axes)
+}
+
+/// Give each curtain mullion and panel whose transform (RE-87) turns or
+/// tilts it off the model's axes its three axes (RE-106). One on the
+/// model's axes gets nothing: its record box is already its body's box.
+fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    let ids: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| CURTAIN_AXES_CLASSES.contains(&element.class.as_str()))
+        .filter_map(|element| element.id)
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+    else {
+        return;
+    };
+    for element in products.iter_mut() {
+        let Some(transform) = element.id.and_then(|id| transforms.get(&id)) else {
+            continue;
+        };
+        // On the model's axes: each axis has one component, the other two
+        // within INSTANCE_TURN_MIN_RADIANS of zero.
+        let on_axes = transform.axes.iter().all(|axis| {
+            axis.iter()
+                .filter(|v| v.abs() > INSTANCE_TURN_MIN_RADIANS)
+                .count()
+                == 1
+        });
+        if on_axes {
+            continue;
+        }
+        let values = transform.axes.iter().flatten().copied();
+        for (name, value) in CURTAIN_AXES_FIELDS.iter().zip(values) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
     }
 }
