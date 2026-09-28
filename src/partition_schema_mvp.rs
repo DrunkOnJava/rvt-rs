@@ -6229,14 +6229,14 @@ fn levels_from_storeys_and_names(
     level_names: &[String],
 ) -> Vec<DecodedElement> {
     let recovery = partition_arc_walls::recover_storeys_from_arc_walls(walls, level_names);
+    // A name that no Level's elevation confirms is not a storey: the names
+    // are candidates from partition strings, and on a file whose Levels are
+    // not read they are often not the model's (a Revit 2026 house gave
+    // `Ground floor`, `Level 1` and `Roof`, none of its four Levels, and a
+    // family with no Levels gave `Level 1` and `Roof`), each written at
+    // elevation 0 (RE-124). Such a file has no storeys (fail closed).
     if recovery.storeys.is_empty() {
-        // Elevation-less files: still surface named building storeys as
-        // Level rows with name only (elevation Absent for geometry).
-        return level_names
-            .iter()
-            .enumerate()
-            .map(|(i, name)| level_decoded(name, None, i))
-            .collect();
+        return Vec::new();
     }
     recovery
         .storeys

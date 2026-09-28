@@ -1059,26 +1059,15 @@ impl StepWriter {
             ),
         );
 
-        // Emit one IfcBuildingStorey per Revit Level (or one
-        // placeholder when no Levels have been decoded yet). Every
-        // storey gets its own IfcLocalPlacement; their IDs are later
-        // bundled into a single IfcRelAggregates bound to the
-        // building. The first storey doubles as the default container
-        // for elements that don't carry a level_id hint — Phase 4b+
-        // per-level containment is a follow-up.
+        // Emit one IfcBuildingStorey per Revit Level. Every storey gets
+        // its own IfcLocalPlacement; their IDs are later bundled into a
+        // single IfcRelAggregates bound to the building. A model with no
+        // decoded Levels has no storey: IFC4 does not require one, and an
+        // invented `Level 1` at elevation 0 is not the model's (RE-124).
+        // Elements without a storey are contained in the building.
         let mut storey_ids: Vec<usize> = Vec::new();
         let mut storey_placements: Vec<usize> = Vec::new();
-        let storeys = if model.building_storeys.is_empty() {
-            // Fallback: one placeholder so the IFC spatial hierarchy
-            // remains valid even when the caller hasn't provided any
-            // Levels yet.
-            vec![super::Storey {
-                name: "Level 1".to_string(),
-                elevation_feet: 0.0,
-            }]
-        } else {
-            model.building_storeys.clone()
-        };
+        let storeys = model.building_storeys.clone();
         let mut storey_gids: Vec<String> = Vec::with_capacity(storeys.len());
         let mut storey_name_counts: HashMap<&str, usize> = HashMap::new();
         for (storey_index, storey) in storeys.iter().enumerate() {
@@ -1114,10 +1103,6 @@ impl StepWriter {
             storey_ids.push(id);
             storey_placements.push(placement_id);
         }
-        // First storey stands in as the default container for
-        // BuildingElements that don't yet carry a level reference.
-        let storey_id = storey_ids[0];
-        let storey_placement = storey_placements[0];
 
         // Aggregation relationships — IfcRelAggregates is how the
         // spatial hierarchy binds in IFC4. Each level of the chain
@@ -1138,19 +1123,23 @@ impl StepWriter {
                 gid(&["aggregates", "site"]),
             ),
         );
-        let rel_building_storey = self.id();
-        let storey_refs = storey_ids
-            .iter()
-            .map(|id| format!("#{id}"))
-            .collect::<Vec<_>>()
-            .join(",");
-        self.emit_entity(
-            rel_building_storey,
-            format!(
-                "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{building_id},({storey_refs}))",
-                gid(&["aggregates", "building"]),
-            ),
-        );
+        // IfcRelAggregates needs at least one related object, so a
+        // building with no storey has no aggregation below it.
+        if !storey_ids.is_empty() {
+            let rel_building_storey = self.id();
+            let storey_refs = storey_ids
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            self.emit_entity(
+                rel_building_storey,
+                format!(
+                    "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{building_id},({storey_refs}))",
+                    gid(&["aggregates", "building"]),
+                ),
+            );
+        }
 
         // Classifications — one IfcClassification per source
         // (OmniClass, Uniformat, …), with one IfcClassificationReference
@@ -2534,11 +2523,6 @@ impl StepWriter {
             );
         }
 
-        // Suppress unused-variable warning from the legacy single-
-        // storey fallback — the loop above now consults
-        // storey_placements[idx] instead of this scalar binding.
-        let _ = storey_placement;
-
         for (idx, element_ids) in per_storey_elements
             .iter()
             .enumerate()
@@ -2565,12 +2549,6 @@ impl StepWriter {
                 ),
             );
         }
-        // storey_id from the pre-refactor era is still valid as the
-        // default storey; kept live above so existing tests that
-        // count placements / storeys on the empty-model path keep
-        // passing.
-        let _ = storey_id;
-
         self.emit_line("ENDSEC;");
     }
 
