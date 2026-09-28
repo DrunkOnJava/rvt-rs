@@ -233,6 +233,9 @@ pub fn recover_partition_schema_mvp(
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
     attach_curtain_walls(rf, revit_version, &mut out.walls, &mut out.products);
+    // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
+    bind_opening_hosts(&out.walls, &mut out.doors);
+    bind_opening_hosts(&out.walls, &mut out.windows);
     // --- Stair and flight riser and tread dimensions (RE-47) ---
     attach_stair_dimensions(rf, revit_version, &mut out.products);
     // --- Stair runs' treads and risers, and their run type (RE-52) ---
@@ -3185,24 +3188,34 @@ pub const OPENING_HOST_PROVENANCE_FIELD: &str = "m_host_provenance";
 /// Value of [`OPENING_HOST_PROVENANCE_FIELD`] for the RE-23 carrier.
 pub const OPENING_HOST_PROVENANCE: &str = "partition_element_record_reference_list";
 
+/// Field carrying the exported walls a door's or window's reference list
+/// names, nearest to its own ElementId first (#439). The
+/// host is chosen from them once curtain walls are known
+/// ([`bind_opening_hosts`]); the field is then removed.
+const OPENING_HOST_CANDIDATES_FIELD: &str = "m_hostCandidateIds";
+
 /// Door / window instance selection with the host-wall binding
-/// attached (#222, RE-23).
+/// attached (#222, RE-23, #439).
 ///
-/// The binding is the record's
-/// [`crate::partition_element_records::PartitionElementRecord::preceding_reference`]
-/// — the reference slot immediately before the record's own
-/// ElementId in the counted list at `+0x88` — accepted only when it
-/// is one of `host_candidates`, the ElementIds already selected as
-/// exported wall instances by the same rule. Both halves are
-/// required: the slot is where the byte says the host is, and the
-/// wall-set membership is what makes a wrong read fail closed rather
-/// than invent a host.
+/// The host is a wall the record's counted list at `+0x88` names: one of
+/// `host_candidates`, the ElementIds already selected as exported wall
+/// instances by the same rule. Wall-set membership is what makes a
+/// wrong read fail closed rather than invent a host. The list is in
+/// ascending ElementId order, so RE-23's slot immediately before the
+/// record's own id is only the nearest smaller id; a host with a larger
+/// id than its door comes after it, and families that list their type
+/// (Door-Opening, Schematic Opening Cut) put it between (#439, RE-85).
+/// When the list names several walls, the nearest below the record's
+/// own id is taken, then the nearest above. The partition pass then
+/// skips curtain walls.
 ///
-/// Measured on `2024_Core_Interior.rvt` against Revit's own export
-/// (`IfcRelVoidsElement` ∘ `IfcRelFillsElement`, read with
-/// IfcOpenShell): 138 of 138 `(host wall, filling element)` pairs
-/// reproduced — 132 doors, 6 windows — with no wrong host and no
-/// missing pair, across all 273 records that frame them.
+/// Measured against Revit's own export (`IfcRelVoidsElement` ∘
+/// `IfcRelFillsElement`, read with IfcOpenShell): on
+/// `2024_Core_Interior.rvt` 138 of 138 `(host wall, filling element)`
+/// pairs, as with RE-23's slot. On Snowdon Towers (local only) every
+/// door and window record naming exactly one wall names Revit's host
+/// (235), and each of the 6 naming several takes a wall Revit cuts for
+/// it, 3 of them the one it fills.
 pub fn opening_instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
     class: &str,
@@ -3213,10 +3226,29 @@ pub fn opening_instances_from_records(
         .values()
         .map(|record| {
             let mut decoded = element_record_decoded(record, class, level_ids);
-            if let Some(host) = record
-                .preceding_reference
-                .filter(|id| host_candidates.contains(id))
-            {
+            // The list is in ascending ElementId order. Prefer the nearest
+            // wall below the record's own id, then the nearest above it.
+            let walls: Vec<u32> = record
+                .references
+                .iter()
+                .filter_map(|id| u32::try_from(*id).ok())
+                .filter(|id| *id != record.element_id && host_candidates.contains(id))
+                .collect();
+            let (below, above): (Vec<u32>, Vec<u32>) =
+                walls.iter().partition(|id| **id < record.element_id);
+            let candidates: Vec<u32> = below.into_iter().rev().chain(above).collect();
+            if !candidates.is_empty() {
+                decoded.fields.push((
+                    OPENING_HOST_CANDIDATES_FIELD.into(),
+                    InstanceField::Vector(
+                        candidates
+                            .iter()
+                            .map(|&id| InstanceField::ElementId { tag: 0, id })
+                            .collect(),
+                    ),
+                ));
+            }
+            if let Some(&host) = candidates.first() {
                 decoded.fields.push((
                     OPENING_HOST_FIELD.into(),
                     InstanceField::ElementId { tag: 0, id: host },
@@ -3229,6 +3261,42 @@ pub fn opening_instances_from_records(
             decoded
         })
         .collect()
+}
+
+/// Bind each door or window to the first of its host candidates that is
+/// not a curtain wall, and drop the candidate list (#439). Revit's export
+/// cuts no opening for a door or window whose only candidate is a
+/// curtain wall; such an element keeps no host.
+fn bind_opening_hosts(walls: &[DecodedElement], openings: &mut [DecodedElement]) {
+    let curtain_walls: BTreeSet<u32> = walls
+        .iter()
+        .filter(|wall| wall.class == CURTAIN_WALL_CLASS)
+        .filter_map(|wall| wall.id)
+        .collect();
+    for element in openings.iter_mut() {
+        let candidates = element_ids_field(element, OPENING_HOST_CANDIDATES_FIELD);
+        if candidates.is_empty() {
+            continue;
+        }
+        let host = candidates
+            .into_iter()
+            .find(|id| !curtain_walls.contains(id));
+        element.fields.retain(|(name, _)| {
+            name != OPENING_HOST_CANDIDATES_FIELD
+                && name != OPENING_HOST_FIELD
+                && name != OPENING_HOST_PROVENANCE_FIELD
+        });
+        if let Some(host) = host {
+            element.fields.push((
+                OPENING_HOST_FIELD.into(),
+                InstanceField::ElementId { tag: 0, id: host },
+            ));
+            element.fields.push((
+                OPENING_HOST_PROVENANCE_FIELD.into(),
+                InstanceField::String(OPENING_HOST_PROVENANCE.into()),
+            ));
+        }
+    }
 }
 
 /// Recover door / window instances of one `BuiltInCategory` and bind
