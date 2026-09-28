@@ -8,6 +8,7 @@
 # BIN_DIR holds the rvt-ifc and rvt-gltf to measure; MODELS_DIR is where
 # tools/fetch-reference-models.sh put the models. For each model this
 # writes OUT_DIR/<model>/:
+#   - model.ifc, when KEEP_IFC is set: the exported IFC itself;
 #   - ifc.sha256: the exported IFC's hash without its FILE_NAME and
 #     IFCOWNERHISTORY lines, which carry the export time, so two builds
 #     that write the same model hash the same;
@@ -81,6 +82,7 @@ while IFS='|' read -r name rvt ref; do
     for s in $GLB_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"; done
   fi
   # The bulky outputs stay out of the uploaded results.
-  rm -f "$dir/model.ifc" "$dir/model.glb"
+  rm -f "$dir/model.glb"
+  [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
   echo "::endgroup::"
 done <<< "$MODELS_LIST"
