@@ -242,7 +242,8 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
     for (name, value) in fields {
         match (name.as_str(), value) {
             (PLAN_PROFILE_SOURCE_FIELD, InstanceField::String(text)) => {
-                source_ok = text == PLAN_PROFILE_SOURCE;
+                source_ok = text == PLAN_PROFILE_SOURCE
+                    || text == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE;
             }
             (PLAN_PROFILE_OUTER_FIELD, field) => outer = points_from_field(field),
             (PLAN_PROFILE_INNER_FIELD, InstanceField::Vector(loops)) => {

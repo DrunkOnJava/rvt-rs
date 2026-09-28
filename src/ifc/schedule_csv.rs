@@ -5,13 +5,13 @@
 //! - [`elements_csv`]: every building element — Revit ElementId, IFC type,
 //!   level, material, placement, body size where decoded, the host wall of a
 //!   door or window, and where the body came from.
-//! - [`rooms_csv`]: every `IfcSpace` with its recovered room number and name.
+//! - [`rooms_csv`]: every `IfcSpace` with its recovered room number, name
+//!   and, where the room's outline was read from its stored solid (RE-101),
+//!   its plan area.
 //!
 //! Only decoded values are written; an unknown is an empty cell, never a
-//! guess. The room schedule has no area column: on the files that decode
-//! rooms today the room body is the element record's bounding box
-//! (`BodySource = partition_element_record_bbox`, `ProfileResolved = false`),
-//! and the area of a bounding box is not the area of a room.
+//! guess. A room that keeps its record's bounding box has no area: the area
+//! of a bounding box is not the area of a room.
 //!
 //! Output is RFC 4180 CSV with CRLF line ends. The cells come from an
 //! untrusted file, so a text cell that a spreadsheet would read as a formula
@@ -20,7 +20,7 @@
 //! module and never need it.
 
 use super::IfcModel;
-use super::entities::{IfcEntity, ProfileDef, PropertyValue};
+use super::entities::{Extrusion, IfcEntity, ProfileDef, PropertyValue};
 use super::export_content::{ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY};
 
 const FEET_TO_METRES: f64 = 0.3048;
@@ -48,6 +48,10 @@ impl LengthUnit {
             LengthUnit::Feet => feet,
             LengthUnit::Metres => feet * FEET_TO_METRES,
         }
+    }
+
+    fn convert_area(self, square_feet: f64) -> f64 {
+        self.convert(self.convert(square_feet))
     }
 }
 
@@ -94,6 +98,7 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
         "name".into(),
         "level".into(),
         format!("level_elevation_{u}"),
+        format!("area_{u}2"),
         "body_source".into(),
     ]
 }
@@ -209,7 +214,8 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
 }
 
 /// One row per `IfcSpace`, with the room number and name recovered from the
-/// file (#90, RE-29). No area — see the module docs.
+/// file (#90, RE-29), and the area of the outline read from the room's
+/// stored solid (RE-101) where it was.
 pub fn rooms_csv(model: &IfcModel, options: &CsvOptions) -> String {
     let unit = options.unit;
     let mut rows = Vec::new();
@@ -219,6 +225,7 @@ pub fn rooms_csv(model: &IfcModel, options: &CsvOptions) -> String {
             type_guid,
             storey_index,
             property_set,
+            extrusion,
             ..
         } = entity
         else {
@@ -245,12 +252,39 @@ pub fn rooms_csv(model: &IfcModel, options: &CsvOptions) -> String {
             text(&property(ROOM_NAME_PROPERTY)),
             text(storey.map(|s| s.name.as_str()).unwrap_or_default()),
             number(storey.map(|s| unit.convert(s.elevation_feet))),
+            number(
+                (property("ProfileSource")
+                    == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE)
+                    .then(|| extrusion.as_ref().and_then(outline_area_square_feet))
+                    .flatten()
+                    .map(|area| unit.convert_area(area)),
+            ),
             text(&property("BodySource")),
         ];
         let elevation = storey.map_or(f64::INFINITY, |s| s.elevation_feet);
         rows.push((elevation, natural_key(&number_cell), cells));
     }
     render(room_columns(unit), rows, options)
+}
+
+/// The plan area of a body's polygon profile, its voids taken out.
+fn outline_area_square_feet(extrusion: &Extrusion) -> Option<f64> {
+    let ring = |points: &[(f64, f64)]| {
+        points
+            .iter()
+            .zip(points.iter().cycle().skip(1))
+            .map(|(p, q)| p.0 * q.1 - q.0 * p.1)
+            .sum::<f64>()
+            .abs()
+            / 2.0
+    };
+    match extrusion.profile_override.as_ref()? {
+        ProfileDef::ArbitraryClosed { points } => Some(ring(points)),
+        ProfileDef::ArbitraryWithVoids { points, voids } => {
+            Some(ring(points) - voids.iter().map(|void| ring(void)).sum::<f64>())
+        }
+        _ => None,
+    }
 }
 
 fn render(

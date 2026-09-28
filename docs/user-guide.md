@@ -207,7 +207,7 @@ Excel, Google Sheets and LibreOffice open directly:
 
 ```bash
 rvt-schedule model.rvt                          # model.elements.csv next to the model
-rvt-schedule model.rvt --schedule rooms         # model.rooms.csv: number, name, level
+rvt-schedule model.rvt --schedule rooms         # model.rooms.csv: number, name, level, area
 rvt-schedule model.rvt --metric --excel         # metres, and a BOM so Excel reads non-ASCII names
 rvt-schedule model.rvt -o -                     # print the CSV instead of writing a file
 ```
@@ -216,9 +216,10 @@ The element schedule has one row per decoded building element: Revit
 ElementId, IFC type, level and its elevation, material, placement, body
 size, the host wall of each door and window, and where the body came from
 (`body_source`, `profile_resolved`). A value rvt-rs did not decode is an
-empty cell, never a guess. The room schedule has no area column: today a
-room's body is its bounding box, and the area of a box is not the area of
-a room.
+empty cell, never a guess. The room schedule gives a room's plan area
+where its outline was read from the solid Revit stores for it (RE-101); a
+room that keeps its bounding box has an empty area, since the area of a box
+is not the area of a room.
 
 What the schedules contain is exactly what rvt-rs decodes, so check
 `rvt-inspect model.rvt` first: Revit 2024 project files with element

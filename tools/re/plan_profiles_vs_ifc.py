@@ -12,13 +12,17 @@ faces of the two bodies:
   or ceiling as one solid per layer, stacked, each with the element's
   outline, so every upward face would count each layer);
 - vertices: the largest distance from a vertex of one file's upward faces
-  to the nearest vertex of the other's, both ways, in plan.
+  to the nearest vertex of the other's, both ways, in plan;
+- outline: the largest distance from a vertex of one file's top surface to
+  the other's top-surface outline, both ways, in plan. Revit splits an
+  edge wherever the element bounding it changes, so a room's outline can
+  be the same shape with more vertices.
 
 Usage:
 
     python3 tools/re/plan_profiles_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--class IfcSlab,IfcShadingDevice] [--list N]
 
-Needs IfcOpenShell (tested with 0.8.5) and NumPy.
+Needs IfcOpenShell (tested with 0.8.5), NumPy and Shapely.
 """
 
 import collections
@@ -28,6 +32,8 @@ import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.placement
 import numpy as np
+import shapely
+from shapely.geometry import Polygon
 
 FEET = 0.3048
 
@@ -58,7 +64,9 @@ def tops(path, classes):
     out = {}
     for cls in classes:
         for element in f.by_type(cls):
-            tag = getattr(element, "Tag", None)
+            # IfcSpace declares no Tag; Revit's GlobalId, which rvt-rs
+            # derives the same way, keys it instead.
+            tag = getattr(element, "Tag", None) or element.GlobalId
             if not tag or not element.Representation:
                 continue
             try:
@@ -79,11 +87,17 @@ def tops(path, classes):
                 up &= centre_z >= centre_z[up].max() - 1e-3
             area = float(0.5 * normal[up, 2].sum())
             points = v[np.unique(faces[up].ravel())][:, :2]
+            triangles = [
+                Polygon([tuple(p[:2]) for p in tri]).buffer(1e-7)
+                for tri in zip(a[up], b[up], c[up])
+            ]
+            surface = shapely.union_all(triangles) if triangles else Polygon()
             # A sketch of several pieces is several elements with one Tag.
             if tag in out:
-                held_area, held_points, _ = out[tag]
+                held_area, held_points, _, held_surface = out[tag]
                 area, points = held_area + area, np.vstack([held_points, points])
-            out[tag] = (area, points, element.is_a())
+                surface = shapely.union_all([held_surface, surface])
+            out[tag] = (area, points, element.is_a(), surface)
     return out
 
 
@@ -92,6 +106,13 @@ def spread(p, q):
         return float("inf")
     d = np.linalg.norm(p[:, None, :] - q[None, :, :], axis=2)
     return float(max(d.min(axis=1).max(), d.min(axis=0).max()))
+
+
+def outline_spread(p, q_surface, q, p_surface):
+    if not len(p) or not len(q) or q_surface.is_empty or p_surface.is_empty:
+        return float("inf")
+    far = lambda pts, surface: max(surface.boundary.distance(shapely.Point(x, y)) for x, y in pts)
+    return float(max(far(p, q_surface), far(q, p_surface)))
 
 
 def main(argv):
@@ -111,19 +132,33 @@ def main(argv):
         return 2
     ours, revit = tops(args[0], classes), tops(args[1], classes)
     rows = []
-    for tag, (area, points, cls) in revit.items():
+    for tag, (area, points, cls, surface) in revit.items():
         if tag in ours and area > 0:
-            o_area, o_points, _ = ours[tag]
-            rows.append((abs(o_area - area) / area, spread(o_points, points), tag, cls, area, o_area))
+            o_area, o_points, _, o_surface = ours[tag]
+            rows.append(
+                (
+                    abs(o_area - area) / area,
+                    spread(o_points, points),
+                    tag,
+                    cls,
+                    area,
+                    o_area,
+                    outline_spread(o_points, surface, points, o_surface),
+                )
+            )
     print(f"elements of {','.join(classes)} in both: {len(rows)}")
     counts = collections.Counter()
-    for rel, dist, _, cls, _, _ in rows:
+    for rel, dist, _, cls, _, _, edge in rows:
         counts[(cls, "area within 0.1%" if rel <= 1e-3 else "area off")] += 1
         counts[(cls, "vertices within 0.01 ft" if dist <= 0.01 else "vertices off")] += 1
+        counts[(cls, "outline within 0.01 ft" if edge <= 0.01 else "outline off")] += 1
     for (cls, what), count in sorted(counts.items()):
         print(f"  {cls} {what}: {count}")
-    for rel, dist, tag, cls, area, o_area in sorted(rows, reverse=True)[:listing]:
-        print(f"  {tag} {cls}: area {o_area:.2f} vs {area:.2f} ft2 ({rel:.2%}), vertices {dist:.3f} ft")
+    for rel, dist, tag, cls, area, o_area, edge in sorted(rows, reverse=True)[:listing]:
+        print(
+            f"  {tag} {cls}: area {o_area:.2f} vs {area:.2f} ft2 ({rel:.2%}),"
+            f" vertices {dist:.3f} ft, outline {edge:.3f} ft"
+        )
     return 0
 
 
