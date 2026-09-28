@@ -857,6 +857,34 @@ fn beam_swept_solid(
     }
 }
 
+/// An I-section beam's body (RE-103): its type's I extruded along its
+/// centreline from one end, the profile's X axis level across the line, so
+/// the flanges run across and the web stands upright in the line's vertical
+/// plane. `location` is the element's placement. An extrusion fixes the
+/// profile's axes by its placement; a fixed-reference sweep would leave
+/// them to how a reader projects the reference.
+fn beam_i_solid(
+    beam: &crate::partition_beam_axes::BeamBody,
+    section: &crate::partition_type_parameters::ISection,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    let (a, _) = beam.centreline();
+    let d = beam.direction;
+    let plan = d[0].hypot(d[1]).max(1e-12);
+    entities::SolidShape::PlacedExtrusion {
+        profile: entities::ProfileDef::IShape {
+            overall_width_feet: section.width_feet,
+            overall_depth_feet: section.depth_feet,
+            web_thickness_feet: section.web_feet,
+            flange_thickness_feet: section.flange_feet,
+        },
+        origin_feet: [a[0] - location[0], a[1] - location[1], a[2] - location[2]],
+        axis: d,
+        ref_direction: [-d[1] / plan, d[0] / plan, 0.0],
+        depth_feet: beam.length_feet,
+    }
+}
+
 /// `BodySource` of a stair run drawn as its treads and risers (RE-52).
 pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
 
@@ -1494,6 +1522,22 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // RE-103: a beam whose type is an I section, drawn as it where its body
+    // along its line holds the section.
+    let i_beam = beam.and_then(|beam| {
+        let section = crate::partition_schema_mvp::beam_i_section_from_fields(&decoded.fields)?;
+        let (start, end) = crate::partition_schema_mvp::beam_axis_from_fields(&decoded.fields)?;
+        let bbox = [
+            x - width / 2.0,
+            y - depth / 2.0,
+            z,
+            x + width / 2.0,
+            y + depth / 2.0,
+            z + height,
+        ];
+        crate::partition_beam_axes::i_section_body(beam, &section, bbox, start, end)
+            .map(|body| (body, section))
+    });
     // RE-52: a straight run with separate treads and risers is drawn as
     // them.
     let stair_run = if class == "StairsRun" {
@@ -1910,6 +1954,21 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             });
         }
     }
+    if let Some((_, section)) = i_beam {
+        properties.push(Property {
+            name: "SectionShape".into(),
+            value: PropertyValue::Text("I".into()),
+        });
+        for (name, value) in [
+            ("SectionWebThickness", section.web_feet),
+            ("SectionFlangeThickness", section.flange_feet),
+        ] {
+            properties.push(Property {
+                name: name.into(),
+                value: PropertyValue::LengthFeet(value),
+            });
+        }
+    }
     if let Some(stream) = source_stream {
         properties.push(Property {
             name: "SourceStream".into(),
@@ -2011,6 +2070,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             let (rotation, body, solid) = match beam {
                 // A level beam is its section's plan rectangle along the line,
                 // extruded through its depth from the record box's base.
+                Some(_) if i_beam.is_some() => (
+                    None,
+                    record_body,
+                    i_beam.map(|(body, section)| beam_i_solid(&body, &section, [x, y, z])),
+                ),
                 Some(beam) if beam.is_horizontal() => (
                     Some(beam.plan_angle_radians()),
                     Extrusion::rectangle(beam.length_feet, beam.width_feet, beam.depth_feet),
