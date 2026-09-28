@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **System families are named in the file's saved locale (RE-123).**
+  A system family's name is not stored in a Revit file: Revit's export
+  writes it in the language the file was saved in. On the four files
+  saved as `PTB` (Exemplo_data and modelo_bim, 2023; Projeto1 and
+  teste_export_2025, 2025) Revit names walls `Parede básica`, floors
+  `Piso` and roofs `Telhado básico`, where rvt-rs wrote `Basic Wall`,
+  `Floor` and `Basic Roof`. Elements and material layer sets now carry
+  those names on `PTB` files: 32 of 32 elements' family names as Revit's
+  (0 before). Other families and locales keep the English name;
+  `ENU` files are byte-identical.
+
 - **Revit 2023 beams stop at the columns they frame into (RE-122,
   #421).** A 2023 beam's record box runs to the centres of its end
   columns; Revit's export stops it at their faces. The beam's reference

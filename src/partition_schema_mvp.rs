@@ -2599,6 +2599,25 @@ pub fn system_family(class: &str, has_layers: bool) -> Option<&'static str> {
     }
 }
 
+/// The name Revit's export gives system family `family` in a file saved
+/// in `locale` (`BasicFileInfo`'s "Locale when saved", e.g. `ENU`, `PTB`).
+///
+/// A system family's name is not in the file: Revit supplies it in the
+/// language the file is saved in. Four files saved in `PTB` (two Revit
+/// 2023, two Revit 2025) name their walls, floors and roofs this way
+/// in Revit's own export, 28 walls, 3 floors and 1 roof, and no other
+/// system family occurs in them (RE-123). Every other family, and every
+/// other locale, keeps the `ENU` name [`system_family`] gives, which is
+/// what the `ENU` files measure.
+pub fn localized_system_family(family: &'static str, locale: Option<&str>) -> &'static str {
+    match (locale, family) {
+        (Some("PTB"), "Basic Wall") => "Parede básica",
+        (Some("PTB"), "Floor") => "Piso",
+        (Some("PTB"), "Basic Roof") => "Telhado básico",
+        _ => family,
+    }
+}
+
 /// Field recording that [`FAMILY_NAME_FIELD`] is a system family's name
 /// derived by [`system_family`], not read from the file (RE-63).
 pub const FAMILY_NAME_SOURCE_FIELD: &str = "m_family_name_source";
@@ -2682,6 +2701,7 @@ fn attach_system_family_names(
             }
         }
     }
+    let locale = rf.basic_file_info().ok().and_then(|info| info.locale);
     for element in elements.iter_mut().flat_map(|list| list.iter_mut()) {
         let has = |field: &str| element.fields.iter().any(|(name, _)| name == field);
         if !has(TYPE_NAME_FIELD) || has(FAMILY_NAME_FIELD) {
@@ -2693,7 +2713,7 @@ fn attach_system_family_names(
         };
         element.fields.push((
             FAMILY_NAME_FIELD.into(),
-            InstanceField::String(family.into()),
+            InstanceField::String(localized_system_family(family, locale.as_deref()).into()),
         ));
         element.fields.push((
             FAMILY_NAME_SOURCE_FIELD.into(),
@@ -2717,9 +2737,9 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     {
         return;
     }
-    // Revit 2023 wall joins are not read (RE-114), so a 2023 wall keeps its
-    // record body, which already spans its joins, and takes only its layers
-    // and exterior side.
+    // A 2023 wall keeps its record body, cut back at its joins (RE-120),
+    // and takes only its layers and exterior side: its location line is not
+    // read (RE-114).
     let centreline_bodies = revit_version != crate::partition_element_records_2023::REVIT_2023;
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {
