@@ -2,6 +2,7 @@
 # models (Core Interior, RE1, Einhoven), on GitHub's hosted runners.
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main
+#   gh workflow run measure.yml -f ref=my-branch -f base= -f probe=probe_re70_wall_join_lists
 #
 # Each side builds rvt-ifc and rvt-gltf at its ref and runs
 # tools/ci/measure-reference-models.sh (taken from the workflow's own ref,
@@ -23,6 +24,10 @@ on:
         description: Ref to compare against (empty for none)
         required: false
         default: main
+      probe:
+        description: examples/ probe to run on each model as well (e.g. probe_re70_wall_join_lists), empty for none
+        required: false
+        default: ""
   # A change to the measurement itself measures its own PR against main.
   pull_request:
     paths:
@@ -69,9 +74,14 @@ jobs:
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
           cargo build --profile ci --bin rvt-ifc --bin rvt-gltf
+          if [ -n "$PROBE" ]; then cargo build --profile ci --example "$PROBE"; fi
+        env:
+          PROBE: ${{ inputs.probe }}
       - name: Fetch the reference models
         run: tools/fetch-reference-models.sh models
       - name: Measure
+        env:
+          PROBE: ${{ inputs.probe }}
         run: |
           tools/ci/measure-reference-models.sh measured/target/ci models results
           cp measured-commit.txt results/commit.txt

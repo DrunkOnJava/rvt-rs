@@ -12,7 +12,9 @@
 #     IFCOWNERHISTORY lines, which carry the export time, so two builds
 #     that write the same model hash the same;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
-#     ending with its exit status.
+#     ending with its exit status;
+#   - probe.txt, when PROBE names an examples/ probe already built in
+#     BIN_DIR/examples: its output on the model, ending with its exit status.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
@@ -50,6 +52,10 @@ while IFS='|' read -r name rvt ref; do
   "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
   grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+  if [ -n "${PROBE:-}" ]; then
+    timeout 1200 "$BIN/examples/$PROBE" "$MODELS/$rvt" > "$dir/probe.txt" 2>&1
+    echo "exit $?" >> "$dir/probe.txt"
+  fi
   if [ "$ref" != "-" ]; then
     for s in $IFC_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"; done
     for s in $GLB_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"; done
