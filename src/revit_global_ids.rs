@@ -16,14 +16,16 @@
 //!   ```
 //!
 //! - A 40-byte `Global/ElemTable` record (Revit 2024 and later) holds the
-//!   element's episode number at `+0x18`. The element's episode GUID is
-//!   entry `N - 1 - episode` of the list.
+//!   element's episode number at `+0x18`, and a 28-byte one (Revit 2023) at
+//!   `+0x0c`, after its owner and its two ids (RE-108). The element's
+//!   episode GUID is entry `N - 1 - episode` of the list.
 //!
 //! Measured against Revit's own IFC exports, every element rvt-rs exports
 //! that Revit's export also holds gets the GlobalId Revit gives it:
 //! 854 of 854 on `2024_Core_Interior.rvt`, 281 of 281 on the RE1 models, 10
-//! of 10 on `teste_export_2025` and `Projeto1`, and 5,945 of 5,945 on Snowdon
-//! Towers. Revit also exports parts it synthesises (stair components, a
+//! of 10 on `teste_export_2025` and `Projeto1`, 5,945 of 5,945 on Snowdon
+//! Towers, and on Revit 2023 45 of 45 on `Exemplo_data` and 36 of 37 on
+//! `modelo_bim` (RE-108). Revit also exports parts it synthesises (stair components, a
 //! ramp's flight), with GlobalIds of its own making. rvt-rs does not write
 //! those parts. The ElementId XORed in is the
 //! element's first one: an element whose id has since changed (RE-41) keeps
@@ -42,6 +44,9 @@ pub const EPISODE_ENTRY_LEN: usize = 17;
 pub const EPISODE_TERMINATOR: u8 = 0x28;
 /// Offset of the episode number in a 40-byte `Global/ElemTable` record.
 pub const RECORD_EPISODE_OFFSET: usize = 0x18;
+/// Offset of the episode number in a 28-byte `Global/ElemTable` record
+/// (Revit 2023, RE-108): after a `u32` owner and the record's two ids.
+pub const RECORD_EPISODE_OFFSET_28: usize = 0x0c;
 
 /// The episode GUIDs of a file, in stored order (newest first).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,22 +161,22 @@ fn inflate_history(rf: &mut RevitFile) -> Result<Vec<u8>> {
 /// declares, by ElementId (both of a record's ids). The ElementId XORed in
 /// is the record's first id: on Snowdon Towers the 37 elements whose
 /// ElementId differs from it (RE-41) all match Revit's only that way. Empty when the file's
-/// ElemTable records are not 40 bytes long (Revit 2023 and earlier) or its
-/// history does not parse.
+/// ElemTable records are neither 40 bytes long (Revit 2024 and later) nor
+/// 28 (Revit 2023 and earlier, measured on 2023) or its history does not
+/// parse.
 pub fn revit_global_ids(rf: &mut RevitFile) -> Result<BTreeMap<u32, String>> {
     let records = elem_table::parse_records(rf)?;
-    if records
-        .first()
-        .is_none_or(|record| record.raw.len() != elem_table::RECORD_LEN_40)
-    {
-        return Ok(BTreeMap::new());
-    }
+    let episode_offset = match records.first().map(|record| record.raw.len()) {
+        Some(elem_table::RECORD_LEN_40) => RECORD_EPISODE_OFFSET,
+        Some(28) => RECORD_EPISODE_OFFSET_28,
+        _ => return Ok(BTreeMap::new()),
+    };
     let Some(history) = EpisodeHistory::parse(&inflate_history(rf)?) else {
         return Ok(BTreeMap::new());
     };
     let mut out = BTreeMap::new();
     for record in &records {
-        let Some(episode) = read_u32(&record.raw, RECORD_EPISODE_OFFSET) else {
+        let Some(episode) = read_u32(&record.raw, episode_offset) else {
             continue;
         };
         let Some(guid) = history.episode_guid(episode) else {
