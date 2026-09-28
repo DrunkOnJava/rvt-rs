@@ -10,15 +10,29 @@
 |---|---|---|---|---|
 | Revit 2024 and 2025 projects | yes | typed IFC entities from each element's own record; the ElementId set equals Revit's export on every measured model | measured per category: exact joins, profiles and cuts where decoded, the element's bounding box where not | names, family and type names, storey, materials and layers, Revit's GlobalId, stair dimensions, IFC export overrides; most other parameters not read |
 | Revit 2026 projects | yes | not decoded: the element-record marker is predicted (RE-32) but no 2026 project with a Revit export has been measured | none | metadata only |
-| Revit 2023 projects | yes | typed IFC entities from each element's record (RE-81): on two 2023 projects every element of Revit's export (37 of 37) or all but the 8 window trims nested in windows (37 of 45), none outside it | the element's bounding box, walls cut back by the walls they join (Exemplo_data 17 of 17 and modelo_bim 4 of 4 as Revit's, RE-120), beams stopped at the faces of the columns they frame into (modelo_bim 8 of 8, RE-122); rooms their outline (RE-102) | ElementId, category, each door's and window's host wall (30 of 30 as Revit's, RE-85), and the storeys of Revit's own Levels with each element on the one its record names, a beam on the one at its top (Exemplo_data 37 of 37 and modelo_bim 37 of 37 in Revit's storey, RE-107, RE-119), each family instance's family and type name (50 of 50 as Revit names them, RE-109), each wall's, floor's and roof's type and system family (24 of 24 with Revit's type, RE-111, RE-112), family instances' materials (44 of 45 as Revit's, RE-113), and layer sets, named by their own or their category's material (RE-114, RE-115): Exemplo_data 36 of 37 and modelo_bim 31 of 37 elements with Revit's materials, and materials with Revit's shading colours (20 of 21, none different, RE-116); no joins, design options or IFC export overrides, and the diagnostics say so |
+| Revit 2023 projects | yes | **on `main`, not in 0.3.0:** typed IFC entities from each element's record (RE-81): on two 2023 projects every element of Revit's export (37 of 37) or all but the 8 window trims nested in windows (37 of 45), none outside it | the element's bounding box, walls cut back by the walls they join (Exemplo_data 17 of 17 and modelo_bim 4 of 4 as Revit's, RE-120), beams stopped at the faces of the columns they frame into (modelo_bim 8 of 8, RE-122); rooms their outline (RE-102) | ElementId, category, each door's and window's host wall (30 of 30 as Revit's, RE-85), and the storeys of Revit's own Levels with each element on the one its record names, a beam on the one at its top (Exemplo_data 37 of 37 and modelo_bim 37 of 37 in Revit's storey, RE-107, RE-119), each family instance's family and type name (50 of 50 as Revit names them, RE-109), each wall's, floor's and roof's type and system family (24 of 24 with Revit's type, RE-111, RE-112), family instances' materials (44 of 45 as Revit's, RE-113), and layer sets, named by their own or their category's material (RE-114, RE-115): Exemplo_data 36 of 37 and modelo_bim 31 of 37 elements with Revit's materials, and materials with Revit's shading colours (20 of 21, none different, RE-116); no layered or angled joins, design options or IFC export overrides, and the diagnostics say so |
 | Revit 2022 and earlier projects | yes | not decoded; IFC export is the spatial scaffold plus diagnostics | none | metadata only |
 | Families (`.rfa`) and templates | yes | family metadata, OmniClass, previews; no family geometry | none | none |
 
 **Typical uses:** inventory and audit folders of Revit files without Revit (`rvt-info`); open a 2024 or 2025 model in a browser or in an IFC viewer to check its layout, storeys, types and materials; take element and room schedules into a spreadsheet (`rvt-schedule`); feed IFC or glTF into a coordination, quantity or visualisation pipeline, checking the per-export diagnostics first; and research the format itself with the probes under `examples/`.
 
-For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). Installation paths live in [`docs/install.md`](docs/install.md). The machine-readable capability list, with the evidence behind each entry and an honest status ceiling, is [`docs/support-matrix.json`](docs/support-matrix.json) (`rvt-capabilities --matrix -f text` prints it); [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md) summarise it. This README describes `main`; the latest release is [v0.2.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.2.0), and what has landed since is under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).
+For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-guide.md). Installation paths live in [`docs/install.md`](docs/install.md). The machine-readable capability list, with the evidence behind each entry and an honest status ceiling, is [`docs/support-matrix.json`](docs/support-matrix.json) (`rvt-capabilities --matrix -f text` prints it); [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md) summarise it. This README describes `main`. The latest release is [v0.3.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.3.0) (2026-09-27), on crates.io, PyPI, GitHub Releases and ghcr.io; [what `main` adds](#release-030-and-main) is listed below and under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).
 
-Rust 2024 edition (MSRV 1.85). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus 36 reproducible probes under `examples/`. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+### Release 0.3.0 and main
+
+`cargo install rvt --locked`, `pip install rvt` and the release archives give you 0.3.0. These changes are on `main` but in no release yet:
+
+- **Revit 2023 projects** export typed elements from their records, with storeys, types, layers, materials, wall joins and beam cuts (RE-81 to RE-122). In 0.3.0, 2023 projects export the spatial scaffold and arc walls only.
+- **Rooms** take their real outline from the solid Revit stores (RE-101, RE-102) and carry their number and name on every release (RE-117).
+- **Doors and windows** cut the opening their type specifies (RE-93, RE-94), and turned family instances are drawn turned (RE-87 to RE-91).
+- **Steel beams and columns** are drawn as their I section with a material profile set (RE-103 to RE-105).
+- **Every typed element** is related to an IFC type object of its Revit type (RE-110).
+- **Floors, roofs and ceilings** with curved or edited sketches, and the shafts that cut them, take their sketched outline (RE-95 to RE-100).
+- **System family names** follow the locale the file was saved in (RE-123).
+
+To use these before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+
+Rust 2024 edition (MSRV 1.85). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -157,7 +171,7 @@ The supported end-to-end shell (issue M11-02) is intentionally honest about part
 4. Export IFC / glTF / plan only after checking the export-quality label.
 5. Download diagnostics when the export is scaffold-only or partial.
 
-What still depends on decoder work: element records outside Revit 2023 to 2025, and on 2023 everything beyond identity, category, box, wall joins, door and window hosts, room outlines, Levels and family instances' names; hip and gable roofs, family geometry and opening profiles; most element parameters; phase filtering (#328); compound layers of elements drawn whole or sloped, which get no layer set; and joining family instances to their materials (#34). **RE-19 / RE-20 (2026-08-29) closed negative** on the magnetar corpora: there is no Door vs Window discriminator *in the opening-index bytes* and no recoverable Level ElementId map there, so do not re-probe those without a new corpus or signal. Typed categories come from each element record's `BuiltInCategory` instead (RE-21 onward). On releases other than 2024 and 2025, treat IFC export as scaffold plus diagnostics; see [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md).
+What still depends on decoder work: element records outside Revit 2023 to 2025, and on 2023 geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides; hip and gable roofs, family geometry and opening profiles; most element parameters; phase filtering (#328); compound layers of elements drawn whole or sloped, which get no layer set; and joining family instances to their materials (#34). **RE-19 / RE-20 (2026-08-29) closed negative** on the magnetar corpora: there is no Door vs Window discriminator *in the opening-index bytes* and no recoverable Level ElementId map there, so do not re-probe those without a new corpus or signal. Typed categories come from each element record's `BuiltInCategory` instead (RE-21 onward). On releases other than 2024 and 2025, treat IFC export as scaffold plus diagnostics; see [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md).
 
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 
@@ -302,7 +316,8 @@ cargo build --release
 # IFC4 STEP export — everything decoded; the default mode accepts a scaffold-only result, with warnings
 ./target/release/rvt-ifc my-project.rvt -o out.ifc
 
-# Require a stronger quality gate before writing IFC
+# Require a stronger quality gate before writing IFC: exits non-zero, writing nothing,
+# while the diagnostics list unsupported features (true of every reference model today)
 ./target/release/rvt-ifc my-project.rvt -o out.ifc --mode strict
 
 # IFC4 export with a shareable JSON readiness/support sidecar
@@ -329,11 +344,14 @@ cargo build --release
 # Stream-level write path — patch named OLE streams via JSON manifest
 ./target/release/rvt-write my-project.rvt --patches patches.json -o patched.rvt
 
-# Per-file doc generator (schema + sample-data render for any RVT)
-./target/release/rvt-doc my-project.rvt -o doc.md
+# ADocument's instance fields, as text or JSON
+./target/release/rvt-doc my-project.rvt > doc.txt
 
-# Cross-version corpus analysis (11 releases in one pass)
-./target/release/rvt-corpus /path/to/corpus-dir
+# Cross-version corpus analysis (11 releases in one pass; 3 or more files)
+./target/release/rvt-corpus /path/to/corpus-dir/*.rfa
+
+# Triage a folder of files into failure buckets
+./target/release/rvt-corpus doctor /path/to/corpus-dir --json
 ```
 
 Thirty-six reproducible probes live in `examples/` — one per FACT in the recon report:

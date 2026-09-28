@@ -26,8 +26,8 @@ You need stable Rust 1.85 or newer (`rustup` installs it) and git.
    ```
 
    That runs `cargo fmt --check`, `cargo clippy` with `-D warnings`, rustdoc
-   with `-D warnings`, and the workspace test suite — the same checks a pull
-   request must pass. Green here means your machine is set up.
+   with `-D warnings`, and the integration tests under `tests/` — the same
+   checks a pull request must pass. Green here means your machine is set up.
 
 3. Pick something small. Tasks that fit in an afternoon and need no corpus
    files are labelled
@@ -107,14 +107,17 @@ variable is unset: the macOS and MSRV runs have no corpus.
   go through [`SECURITY.md`](SECURITY.md), not public issues.
 - **Performance regressions** caught by the benchmark harness in
   `tools/bench.sh` — open an issue with a before/after table.
-- **New FACTs** about the file format. The reconnaissance report in
-  `docs/rvt-moat-break-reconnaissance.md` is the canonical place
-  for dated findings. Please mirror any new finding there AND as a
-  reproducible probe under `examples/`.
+- **New facts** about the file format, as a probe under `examples/` and a
+  dated report under `reports/element-framing/` (see
+  [Reverse-engineering findings](#reverse-engineering-findings)).
 - **Documentation improvements.** The README and inline doc comments
   are fair game.
-- **Tests.** More coverage is always welcome, especially for
-  edge-case file layouts.
+- **End-to-end checks.** A test under `tests/` that runs the real entry
+  point (a CLI, the library on a file, the exporter) against a fixture or a
+  corpus file and checks what a user would see. Unit tests are not accepted:
+  CI and `tools/check-local.sh` do not run them, so they would check nothing.
+  For a format fact, the evidence is a probe under `examples/` and its
+  report.
 
 ## Where help is most wanted
 
@@ -124,7 +127,9 @@ per-area starting points are in
 [`docs/contribution-map.md`](docs/contribution-map.md). In short:
 
 - **Small, self-contained tasks** are labelled
-  [good first issue](https://github.com/DrunkOnJava/rvt-rs/labels/good%20first%20issue).
+  [good first issue](https://github.com/DrunkOnJava/rvt-rs/labels/good%20first%20issue)
+  when there are any; the documentation and the tiny reference models below
+  are always a good first contribution.
 - **Corpus.** Redistributable `.rvt` / `.rfa` files with known element counts
   are the scarcest input. See [`docs/corpus-intake.md`](docs/corpus-intake.md)
   and the corpus issue form, and never send a file you are not certain you
@@ -136,13 +141,20 @@ per-area starting points are in
   share: send `rvt-inspect --json` and `rvt-ifc --diagnostics` output, never
   the building.
 - **Decoder research.** A byte probe under `examples/` plus a dated evidence
-  table for one class or partition pattern (decoder issue form; the
-  reconnaissance report in `docs/rvt-moat-break-reconnaissance.md` shows the
-  shape). Generic real-project typed extraction is still mostly unsolved —
-  [`ROADMAP.md`](ROADMAP.md) says what is partial and which paths are known
-  negatives (RE-19, RE-20), so check before spending days on one.
+  table for one class or partition pattern (decoder issue form; the reports
+  under `reports/element-framing/` show the shape). Typed extraction works on Revit 2023 to 2025 projects and not yet
+  on other releases; [`ROADMAP.md`](ROADMAP.md) says what is partial and the
+  reports under `reports/element-framing/` record the known negatives (RE-19,
+  RE-20, RE-121 and others), so check before spending days on one.
 - **Tests that prevent false-positive decode claims**, viewer accessibility,
   and plain-language documentation are always welcome.
+
+## Questions
+
+Questions, ideas and "is this a bug?" belong in
+[Discussions](https://github.com/DrunkOnJava/rvt-rs/discussions); issues track
+work with a definite outcome. If you are not sure where something goes, a
+Discussion is always fine.
 
 ## What needs discussion first
 
@@ -243,13 +255,19 @@ Scopes that appear frequently: `formats`, `object_graph`,
 When you discover something new about the file format:
 
 1. Write a short probe under `examples/<name>.rs` that reproduces
-   the finding from bytes. One self-contained file, runs against
-   the phi-ag/rvt sample corpus.
-2. Add a dated addendum to `docs/rvt-moat-break-reconnaissance.md`
-   with an evidence table and a confidence value.
-3. If the finding is a decoding rule, also add a unit test that
-   pins the byte pattern (see `FieldType::decode` tests in
-   `src/formats.rs` for the pattern).
+   the finding from bytes: one self-contained file whose module doc states
+   the fact it proves and how to check it, with corpus paths taken from
+   arguments or the `RVT_*` environment variables, never hardcoded. The
+   `probe_re*.rs` files are the pattern.
+2. Write a dated report, `reports/element-framing/RE-NN-<topic>.md`: status
+   (positive or negative), the files and their sha256, the reference export
+   measured against, and counts against Revit's own export (matches,
+   misses, tolerance). A negative result is worth reporting; it keeps the
+   next person from repeating the search.
+3. If the finding changes what rvt-rs outputs, measure the change end to end
+   (the scorers under `tools/re/` compare an export with Revit's) and update
+   the public status in the same pull request: `docs/status.md`,
+   `docs/support-matrix.json`, the README and `CHANGELOG.md`.
 
 This keeps every claim independently verifiable, which is the
 whole point of open reverse-engineering work.

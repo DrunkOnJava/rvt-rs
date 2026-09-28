@@ -2,9 +2,17 @@
 
 ## Supported versions
 
-rvt-rs is pre-1.0. Only the `main` branch is security-supported at
-this stage. Once `0.1.0` ships to crates.io, the two most recent
-minor versions will be supported.
+rvt-rs is pre-1.0. The policy is the two most recent minor versions,
+which since `0.3.0` reached crates.io (2026-09-27) means:
+
+| Version | Supported |
+|---|---|
+| `main` | yes |
+| 0.3.x | yes |
+| 0.2.x | yes |
+| 0.1.x and earlier | no |
+
+Fixes land on `main` first.
 
 ## Reporting a vulnerability
 
