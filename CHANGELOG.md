@@ -6,6 +6,18 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Joined-wall lists decide the L corners the join lists leave open
+  (RE-127, #238).** Beside RE-70's join lists, a wall's data lists every
+  wall it is joined to, with a run of values per wall. Where the join
+  lists do not say which of two walls runs through, the one whose entry
+  for the other is a run of consecutive values stops at the other's face,
+  and the other ends at the corner. On Core Interior that settles the last
+  9 ends RE-26 cut the wrong way: wall bodies are 360 of 360 exact against
+  Revit's export (351 before). No other score and no other reference
+  model's IFC changes.
+
 ### Fixed
 
 - **Walls whose data sets a second flag after the flip (RE-126).** A

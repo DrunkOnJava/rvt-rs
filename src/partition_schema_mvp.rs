@@ -2980,7 +2980,15 @@ fn attach_wall_butt_joins(
     ) else {
         return;
     };
-    let found = joins::butt_joins(&lines, &partners);
+    // RE-127: the joined-wall lists decide the L joints the join lists do not.
+    let joined = crate::partition_compound_structure::scan_wall_joined_entries(
+        rf,
+        revit_version,
+        &every,
+        &read,
+    )
+    .unwrap_or_default();
+    let found = joins::butt_joins(&lines, &partners, &joined);
     for wall in walls.iter_mut() {
         let Some(ends) = wall.id.and_then(|id| found.get(&id)) else {
             continue;

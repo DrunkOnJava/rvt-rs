@@ -39,7 +39,7 @@ issue that tracks the remainder:
 
 | IFC type | Recovered | Remaining gap tracked in |
 |---|---|---|
-| `IFCWALL` | Revit 2024 set exact (RE-21); run cut back by the joins the record names (RE-26, RE-29), 351 of 360 world-exact | #238 (9 over-trimmed ends at two true L corners), #23 (2024 ArcWall records) |
+| `IFCWALL` | Revit 2024 set exact (RE-21); run cut back by the joins the record names (RE-26, RE-29), the L corners its join lists leave open decided by its joined-wall lists (RE-127): 360 of 360 world-exact | #23 (2024 ArcWall records) |
 | `IFCDOOR` | Revit 2024 set and host binding exact (RE-21, RE-23) | #227 (opening cut from the wall curve) |
 | `IFCSLAB` | Revit 2024 set with sketch-line profiles, 80 of 80 (RE-22, RE-25); all 80 storey-bound (RE-27), as are the 20 IFCSHADINGDEVICE plates | nothing slab-specific; #219's plate containment is closed |
 | `IFCSPACE` | Revit 2024 room set 116 of 116 with real names, numbers and storeys; body is the record box, equal to the reference envelope on all 116 (RE-29) | #90 (boundary polygon: the record carries no sketch, measured negative) |

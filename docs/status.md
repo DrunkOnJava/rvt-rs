@@ -326,6 +326,10 @@ with 15 walls improved, 345 unchanged and **0 regressed**. The 9 ends
 that remain are a **measured negative, narrowed**: one side of each of
 two *true L corners* (one repeated on eight storeys) where neither run
 continues past the meeting point and Revit cuts exactly one of the pair.
+RE-127 (2026-09-28) reads which one from the lists of walls each wall is
+joined to: the wall whose entry for the other is a run of consecutive
+values is cut. Wall ends are now **720 of 720** and wall bodies **360 of
+360** exact.
 Nothing in the file orders the two sides — the survivor is the thicker
 wall once and an equal-thickness wall once, the higher ElementId once
 and the lower once — so the solver keeps cutting both rather than

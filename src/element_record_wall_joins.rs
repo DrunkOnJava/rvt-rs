@@ -350,11 +350,14 @@ pub struct ButtJoin {
     /// joint, whose centreline the end lies on.
     pub partner: u32,
     /// True where this wall runs on to the partner's far face, false where
-    /// it stops at its near face.
+    /// it stops at its near face or, at a joint only the joined-wall lists
+    /// decide, ends at the joint (RE-127).
     pub runs_through: bool,
     /// How far past the line's end the body reaches, negative where it
     /// stops short: half the partner's thickness. `None` unless both walls
-    /// have a single layer, or, at a T joint, this one has.
+    /// have a single layer, or, at a T joint, this one has; at a joint only
+    /// the joined-wall lists decide, always set, and 0 where it ends at the
+    /// joint (RE-127).
     pub reach_feet: Option<f64>,
     /// How far past the line's end each layer reaches, exterior first,
     /// where both walls are layered alike (RE-71) or where this wall is
@@ -376,8 +379,10 @@ pub struct ButtJoin {
 /// face, and the wall that runs through is the one that names the other
 /// in its join lists (`partners`,
 /// [`crate::partition_compound_structure::scan_wall_join_partners`]) and
-/// is not named back. A pair that name each other or neither, a joint of
-/// three walls and an angled joint stay `None`.
+/// is not named back. A perpendicular pair that name each other or neither
+/// is decided by their joined-wall lists where they can
+/// (RE-127); otherwise it, a joint of three walls and an
+/// angled joint stay `None`.
 ///
 /// Where either wall has several layers the end is still read, but it has
 /// no `reach_feet`. Revit cleans such a join layer by layer and its
@@ -402,6 +407,7 @@ pub struct ButtJoin {
 pub fn butt_joins(
     walls: &[WallLine],
     partners: &BTreeMap<u32, BTreeSet<u32>>,
+    joined: &BTreeMap<u32, BTreeMap<u32, Vec<u32>>>,
 ) -> BTreeMap<u32, [Option<ButtJoin>; 2]> {
     let length = |wall: &WallLine| (wall.end[0] - wall.start[0]).hypot(wall.end[1] - wall.start[1]);
     let lines: Vec<&WallLine> = walls
@@ -463,7 +469,12 @@ pub fn butt_joins(
             let runs_through = match (names(wall, other), names(other, wall)) {
                 (true, false) => true,
                 (false, true) => false,
-                _ => continue,
+                _ => {
+                    if cosine.abs() <= PERPENDICULAR_EPS {
+                        joins[slot] = joined_stop(joined, wall, other);
+                    }
+                    continue;
+                }
             };
             if cosine.abs() > PERPENDICULAR_EPS {
                 joins[slot] = Some(ButtJoin {
@@ -496,6 +507,49 @@ pub fn butt_joins(
         }
     }
     out
+}
+
+/// Whether a joined-wall entry's words are one run of consecutive values.
+fn consecutive(words: Option<&Vec<u32>>) -> bool {
+    words.is_some_and(|words| {
+        words.len() >= 2
+            && words
+                .windows(2)
+                .all(|pair| pair[1] == pair[0].wrapping_add(1))
+    })
+}
+
+/// The end `wall` makes at a perpendicular L joint its join lists leave
+/// undecided, from the two walls' joined-wall entries for each other
+/// (RE-127): where exactly one of the two entries is a run of consecutive
+/// values, that wall stops at the other's near face with every layer and
+/// the other ends at the joint, its line's end. On Core Interior no wall
+/// that runs through at a joint the join lists decide has such an entry
+/// (0 of 122), 111 of the 122 that stop do, and the rule places all 18
+/// undecided ends it reads as Revit's body does.
+fn joined_stop(
+    joined: &BTreeMap<u32, BTreeMap<u32, Vec<u32>>>,
+    wall: &WallLine,
+    other: &WallLine,
+) -> Option<ButtJoin> {
+    let own = joined
+        .get(&wall.element_id)
+        .and_then(|entries| entries.get(&other.element_id));
+    let theirs = joined
+        .get(&other.element_id)
+        .and_then(|entries| entries.get(&wall.element_id));
+    let reach = match (consecutive(own), consecutive(theirs)) {
+        (true, false) => -other.thickness_feet * 0.5,
+        (false, true) => 0.0,
+        _ => return None,
+    };
+    Some(ButtJoin {
+        partner: other.element_id,
+        runs_through: false,
+        reach_feet: Some(reach),
+        layer_reach_feet: (wall.layers.len() > 1).then(|| vec![reach; wall.layers.len()]),
+        layer_edge_reach_feet: None,
+    })
 }
 
 /// The T joint `wall` makes where its centreline ends at `point`, part way
