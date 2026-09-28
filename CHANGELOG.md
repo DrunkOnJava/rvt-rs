@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Family instances are drawn in their material's colour (#355).** In the
+  GLB and so the browser viewer, a family instance whose type draws in
+  exactly one material (RE-82) takes that material's colour when the colour
+  was read, instead of its category's. Checked end to end against Revit's
+  own IFC4 styles: all 290 such instances on Snowdon Towers and all 38 on
+  RE1 Architecture render Revit's material and colour; Core Interior has
+  none. Instances drawn in several materials keep their category's colour.
 - **Revit 2023 doors and windows cut their host wall (#421, RE-85).** The
   2023 reference lists carry the host as 2024's do. On the two 2023
   projects measured, all 30 doors and windows take the wall Revit's filled

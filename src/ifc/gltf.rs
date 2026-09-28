@@ -348,6 +348,30 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
     let mut category_materials: std::collections::BTreeMap<String, usize> = Default::default();
     // Layer colours (RE-53), one material per colour and alpha.
     let mut layer_materials: std::collections::BTreeMap<(u32, u32), usize> = Default::default();
+    // A family instance whose type draws in one material (RE-82) takes that
+    // material's colour, when the colour was read (RE-53). One drawn in
+    // several keeps its category's: a single body cannot show which part is
+    // which.
+    let single_material: std::collections::BTreeMap<usize, usize> = model
+        .material_constituent_sets
+        .iter()
+        .filter_map(|set| match set.material_indices.as_slice() {
+            [material]
+                if model
+                    .materials
+                    .get(*material)
+                    .is_some_and(|info| info.color_packed.is_some()) =>
+            {
+                Some(
+                    set.elements
+                        .iter()
+                        .map(move |&element| (element, *material)),
+                )
+            }
+            _ => None,
+        })
+        .flatten()
+        .collect();
 
     // Per-element: a node carrying the entity's identity, with the
     // shared cube or its own mesh.
@@ -511,16 +535,18 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
         };
         let (mesh, matrix) = match drawn {
             Some(((position, indices), matrix)) => {
-                let material = material_index.or_else(|| {
-                    Some(
-                        *category_materials
-                            .entry(ifc_type.clone())
-                            .or_insert_with(|| {
-                                doc.materials.push(category_material(ifc_type));
-                                doc.materials.len() - 1
-                            }),
-                    )
-                });
+                let material = material_index
+                    .or_else(|| single_material.get(&entity_index).copied())
+                    .or_else(|| {
+                        Some(
+                            *category_materials
+                                .entry(ifc_type.clone())
+                                .or_insert_with(|| {
+                                    doc.materials.push(category_material(ifc_type));
+                                    doc.materials.len() - 1
+                                }),
+                        )
+                    });
                 let mut attributes = std::collections::BTreeMap::new();
                 attributes.insert("POSITION".into(), position);
                 let mesh_idx = doc.meshes.len();
