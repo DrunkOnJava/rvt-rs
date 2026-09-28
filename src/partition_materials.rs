@@ -418,3 +418,101 @@ pub fn scan_category_material(
         .ok()
         .filter(|&id| id != 0 && id != u32::MAX))
 }
+
+/// A Revit 2023 material's class tag (RE-113), [`MATERIAL_TAG_OFFSET_2023`]
+/// past its `u32` ElementId, behind `00 00 00 · ff ff ff ff`: the place
+/// 2024's `0x0a28` has past its `u64` id ([`MATERIAL_TAG_OFFSET`]).
+pub const MATERIAL_TAG_2023: [u8; 2] = [0xfb, 0x09];
+/// See [`MATERIAL_TAG_2023`].
+pub const MATERIAL_TAG_OFFSET_2023: usize = 0x27;
+
+/// Every Revit 2023 material, by ElementId, with its name where it is read
+/// (RE-113). A material is an object `01 00 00 00 · u32 id` carrying
+/// [`MATERIAL_TAG_2023`], whether it opens an element's data or sits inside
+/// another's (a family's own materials); only ids in `declared` count. Its
+/// name is the one its element data gives it
+/// ([`crate::partition_names::find_element_data_names_2023`]), else its
+/// first [`NAME_PARAMETER`] entry, `i32 -1001203 · u32 0 · u32 n · UTF-16 ×
+/// n`, whose value is a name. An id whose copies disagree has no name, and
+/// nor has a name read for two or more materials.
+pub fn scan_materials_2023(
+    rf: &mut RevitFile,
+    declared: &BTreeSet<u32>,
+) -> (BTreeSet<u32>, BTreeMap<u32, String>) {
+    const PREFIX: [u8; 7] = [0, 0, 0, 0xff, 0xff, 0xff, 0xff];
+    let mut entry = i32::try_from(NAME_PARAMETER)
+        .expect("a 32-bit BuiltInParameter")
+        .to_le_bytes()
+        .to_vec();
+    entry.extend_from_slice(&[0, 0, 0, 0]);
+    let mut materials = BTreeSet::new();
+    let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for tag_at in memchr::memmem::find_iter(buf, &MATERIAL_TAG_2023) {
+            let Some(id_at) = tag_at.checked_sub(MATERIAL_TAG_OFFSET_2023) else {
+                continue;
+            };
+            if id_at < 4
+                || buf.get(id_at - 4..id_at) != Some(&[1, 0, 0, 0][..])
+                || buf.get(tag_at - PREFIX.len()..tag_at) != Some(&PREFIX[..])
+            {
+                continue;
+            }
+            let Some(id) = u32_at(buf, id_at).filter(|id| declared.contains(id)) else {
+                continue;
+            };
+            materials.insert(id);
+            let end = id_at.saturating_add(NAME_WINDOW).min(buf.len());
+            let object = &buf[tag_at + 2..end];
+            let name = memchr::memmem::find_iter(object, &entry).find_map(|hit| {
+                let n = u32_at(object, hit + entry.len())?;
+                utf16_name(object, hit + entry.len() + 4, n)
+            });
+            let Some(name) = name else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(name));
+                }
+                Some(held) => {
+                    if held.as_deref() != Some(name.as_str()) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    let mut names: BTreeMap<u32, String> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        if let Ok(inflated) = rf.inflated_partition(&stream) {
+            names.extend(crate::partition_names::find_element_data_names_2023(
+                inflated.bytes(),
+                &materials,
+            ));
+        }
+    }
+    for (id, name) in found {
+        if let Some(name) = name {
+            names.entry(id).or_insert(name);
+        }
+    }
+    let mut uses: BTreeMap<&str, usize> = BTreeMap::new();
+    for name in names.values() {
+        *uses.entry(name.as_str()).or_default() += 1;
+    }
+    let shared: BTreeSet<String> = uses
+        .into_iter()
+        .filter(|(_, count)| *count > 1)
+        .map(|(name, _)| name.to_string())
+        .collect();
+    let names = names
+        .into_iter()
+        .filter(|(_, name)| !shared.contains(name))
+        .collect();
+    (materials, names)
+}

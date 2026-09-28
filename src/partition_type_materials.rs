@@ -12,6 +12,10 @@
 //! families whose map also covers a nested component Revit exports as its
 //! own element (a counter top's appliance) or whose material Revit writes
 //! unnamed (planting).
+//!
+//! On Revit 2023 (RE-113) the block is `[owner u32][28 x 0xff][3 x 0x00]`,
+//! a map entry is `u32 key · u32 material`, and only the block's first map
+//! is the type's ([`type_material_names_2023`]).
 
 use crate::RevitFile;
 use crate::partition_element_records::bbox_marker;
@@ -19,8 +23,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Largest map entry count read.
 const MAX_ENTRIES: usize = 64;
-/// Bytes of one map entry: `u32` key and `u64` material ElementId.
-const ENTRY_LEN: usize = 12;
 /// Bytes read past a value block's start when its next block is far away.
 const MAX_BLOCK_LEN: usize = 200_000;
 
@@ -33,6 +35,46 @@ const VALUE_BLOCK_MARK: [u8; 59] = {
     mark
 };
 
+/// [`VALUE_BLOCK_MARK`] on Revit 2023, where the owner is a `u32`.
+const VALUE_BLOCK_MARK_2023: [u8; 31] = {
+    let mut mark = [0xffu8; 31];
+    mark[28] = 0;
+    mark[29] = 0;
+    mark[30] = 0;
+    mark
+};
+
+/// How a release frames value blocks and their maps.
+#[derive(Clone, Copy)]
+struct BlockLayout {
+    mark: &'static [u8],
+    /// Bytes of the owner id before the mark, and of a map value.
+    id_len: usize,
+    /// Read only the block's first map. A 2023 type's data runs on past
+    /// its map into single-entry lists of other materials (RE-113).
+    first_map_only: bool,
+}
+
+const BLOCK_LAYOUT: BlockLayout = BlockLayout {
+    mark: &VALUE_BLOCK_MARK,
+    id_len: 8,
+    first_map_only: false,
+};
+
+const BLOCK_LAYOUT_2023: BlockLayout = BlockLayout {
+    mark: &VALUE_BLOCK_MARK_2023,
+    id_len: 4,
+    first_map_only: true,
+};
+
+fn id_at(buf: &[u8], at: usize, len: usize) -> Option<u32> {
+    let bytes = buf.get(at..at.checked_add(len)?)?;
+    match len {
+        4 => Some(u32::from_le_bytes(bytes.try_into().ok()?)),
+        _ => u32::try_from(u64::from_le_bytes(bytes.try_into().ok()?)).ok(),
+    }
+}
+
 /// Every owner's map materials in one inflated partition, in the order they
 /// first appear, by the declared ElementId of the value block they are in.
 /// An owner whose value block holds no map is present with no materials.
@@ -41,11 +83,19 @@ pub fn scan_partition(
     declared_ids: &BTreeSet<u32>,
     materials: &BTreeSet<u32>,
 ) -> BTreeMap<u32, Vec<u32>> {
-    let blocks: Vec<(usize, u32)> = memchr::memmem::find_iter(buf, &VALUE_BLOCK_MARK)
-        .filter(|&at| at >= 8 && buf[at - 1] != 0xff)
+    scan_partition_with(buf, declared_ids, materials, BLOCK_LAYOUT)
+}
+
+fn scan_partition_with(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    materials: &BTreeSet<u32>,
+    layout: BlockLayout,
+) -> BTreeMap<u32, Vec<u32>> {
+    let blocks: Vec<(usize, u32)> = memchr::memmem::find_iter(buf, layout.mark)
+        .filter(|&at| at >= layout.id_len && buf[at - 1] != 0xff)
         .filter_map(|at| {
-            let id = u64::from_le_bytes(buf.get(at - 8..at)?.try_into().ok()?);
-            let id = u32::try_from(id).ok()?;
+            let id = id_at(buf, at - layout.id_len, layout.id_len)?;
             declared_ids.contains(&id).then_some((at, id))
         })
         .collect();
@@ -53,17 +103,20 @@ pub fn scan_partition(
     for (index, &(start, owner)) in blocks.iter().enumerate() {
         let end = blocks
             .get(index + 1)
-            .map_or(buf.len(), |next| next.0.saturating_sub(8))
+            .map_or(buf.len(), |next| next.0.saturating_sub(layout.id_len))
             .min(start + MAX_BLOCK_LEN)
             .min(buf.len());
         let list = out.entry(owner).or_default();
-        let mut at = start + VALUE_BLOCK_MARK.len();
+        let mut at = start + layout.mark.len();
         while at + 4 <= end {
-            if let Some(found) = map_at(buf, at, end, materials) {
+            if let Some(found) = map_at(buf, at, end, materials, layout.id_len) {
                 for material in found.materials {
                     if !list.contains(&material) {
                         list.push(material);
                     }
+                }
+                if layout.first_map_only {
+                    break;
                 }
                 at = found.end;
             } else {
@@ -80,22 +133,26 @@ struct MaterialMap {
 }
 
 /// The map at `at`, when every one of its values is a material.
-fn map_at(buf: &[u8], at: usize, end: usize, materials: &BTreeSet<u32>) -> Option<MaterialMap> {
+fn map_at(
+    buf: &[u8],
+    at: usize,
+    end: usize,
+    materials: &BTreeSet<u32>,
+    id_len: usize,
+) -> Option<MaterialMap> {
     let count = u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?) as usize;
     if !(1..=MAX_ENTRIES).contains(&count) {
         return None;
     }
-    let map_end = at + 4 + count * ENTRY_LEN;
+    let entry_len = 4 + id_len;
+    let map_end = at + 4 + count * entry_len;
     if map_end > end {
         return None;
     }
     let mut found = Vec::with_capacity(count);
     for entry in 0..count {
-        let value_at = at + 4 + entry * ENTRY_LEN + 4;
-        let value = u64::from_le_bytes(buf.get(value_at..value_at + 8)?.try_into().ok()?);
-        let material = u32::try_from(value)
-            .ok()
-            .filter(|m| materials.contains(m))?;
+        let value_at = at + 4 + entry * entry_len + 4;
+        let material = id_at(buf, value_at, id_len).filter(|m| materials.contains(m))?;
         found.push(material);
     }
     Some(MaterialMap {
@@ -142,6 +199,47 @@ pub fn type_material_names(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u
                 ids.iter().filter_map(|id| names.get(id).cloned()).collect();
             // A map whose names are not read is not "no materials".
             (ids.is_empty() || !resolved.is_empty()).then_some((owner, resolved))
+        })
+        .collect()
+}
+
+/// [`type_material_names`] on Revit 2023 (RE-113). A map value counts as a
+/// material when it is one of [`crate::partition_materials::scan_materials_2023`];
+/// a type whose map names a material with no name read gets none. Only
+/// owners whose block holds a map are returned: a map missed here must not
+/// read as a type that draws no geometry (RE-84).
+pub fn type_material_names_2023(rf: &mut RevitFile) -> BTreeMap<u32, Vec<String>> {
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let (tagged, names) = crate::partition_materials::scan_materials_2023(rf, &declared);
+    let streams = rf.partition_stream_names();
+    let mut by_owner: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for stream in &streams {
+        let Ok(inflated) = rf.inflated_partition(stream) else {
+            continue;
+        };
+        for (owner, found) in
+            scan_partition_with(inflated.bytes(), &declared, &tagged, BLOCK_LAYOUT_2023)
+        {
+            let list = by_owner.entry(owner).or_default();
+            for material in found {
+                if !list.contains(&material) {
+                    list.push(material);
+                }
+            }
+        }
+    }
+    // A map with a material whose name is not read gives the type nothing:
+    // a partial set would be a wrong one.
+    by_owner
+        .into_iter()
+        .filter(|(_, ids)| !ids.is_empty())
+        .filter_map(|(owner, ids)| {
+            let resolved: Option<Vec<String>> =
+                ids.iter().map(|id| names.get(id).cloned()).collect();
+            resolved.map(|names| (owner, names))
         })
         .collect()
 }
