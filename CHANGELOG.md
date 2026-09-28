@@ -8,6 +8,11 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Round shafts (RE-100).** A full-circle sketch line is read, so a round
+  shaft opening cuts its void too. On Snowdon Towers four more slabs match
+  Revit's area within 0.1% (154), and a roof becomes exact. Every other
+  local file is byte-identical.
+
 - **Shaft openings cut the floors and roofs they pass through (RE-99).**
   A shaft opening's sketch is read, leaving out the diagonals Revit draws
   across it in plan, and its outline becomes a void in each one-piece

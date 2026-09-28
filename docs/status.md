@@ -623,6 +623,10 @@ ceilings within their height, where the shaft lies strictly inside the
 outline. Their sketches' crossing diagonals (the X Revit draws in plan)
 are left out. On Snowdon 7 elements take a shaft void, all closer to
 Revit's area (`reports/element-framing/RE-99-shaft-openings.md`).
+**RE-100 (2026-09-28)** reads a full-circle sketch line (tag `04 00 08 00`,
+the arc layout with both angles 0), which gives round shaft 903725 its
+outline; 154 of Snowdon's slabs now match Revit's area within 0.1%
+(`reports/element-framing/RE-100-sketch-circles.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
