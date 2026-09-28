@@ -57,3 +57,23 @@ python3 tools/re/wall_materials_vs_ifc.py REVIT_EXPORT.ifc main.ifc model.ifc
 - Face walls (16 on Snowdon) and walls with no orientation read have no layers, so no material.
 - A layer that takes its category's material: Revit writes "Default Wall" for it, and where that name comes from is not read.
 - Floors, roofs and ceilings whose body is not a layer set (stacked layers) are not measured.
+
+-----
+
+## 5. Walls their data does not place (2026-09-28)
+
+A wall with no orientation, line or arc in its data (RE-54, RE-49) got no layers: `attach_wall_layers` read a type's layers only for a wall it could place. Its type's layers are still known, and a wall's materials need nothing else. Such a wall now carries its type's layers with no exterior side. The GLB and the layer sets (RE-58) leave it alone, and §2's association applies to it.
+
+| Snowdon Towers' 111 walls without a material on main | §2 | with §5 |
+|---|---:|---:|
+| Revit's constituent set: same materials, order and names | 57 of 59 | 59 of 59 |
+| Revit's single material, same name | 15 of 52 | 36 of 52 |
+| a different association from Revit's | 0 | 0 |
+
+- The 23 are 16 face walls of type "Trellis Member" (one layer, "Iron, Wrought"), 5 concrete core walls and 2 rainscreen walls.
+- What is left is the 15 walls whose layer takes its category's material, and the in-place family.
+- Family and type names are unchanged (`names_vs_ifc.py` gives the same result).
+
+**Core Interior** (`2024_Core_Interior_slim.ifc`, Revit's own export) writes an `IfcMaterial` for all 360 walls. 4 now get Revit's ("Concrete"). The other 356 have layers taking their category's material, which Revit writes as "Default Wall", so they stay without one. "Default Wall" is a material element in both files (id 87 on Core Interior, 18438 on Snowdon). What ties the Walls category to it is not found: its id occurs in many elements' data.
+
+**Snowdon Towers structural:** 58 walls get their type's one material ("Concrete, Cast-in-Place gray" and others). No Revit export of that file is held to check them against.

@@ -1000,14 +1000,15 @@ fn export_rvt_doc(
     // element entities — we never regress the metadata-only baseline.
     let mut building_storeys = Vec::new();
     let mut materials = Vec::new();
-    let (element_layers, element_type_materials) = append_production_walker_elements(
-        rf,
-        &mut entities,
-        &mut building_storeys,
-        &mut materials,
-        policy,
-        walker_limits,
-    );
+    let (element_layers, element_type_materials, unplaced_wall_layers) =
+        append_production_walker_elements(
+            rf,
+            &mut entities,
+            &mut building_storeys,
+            &mut materials,
+            policy,
+            walker_limits,
+        );
     if mode == RvtDocExportMode::DiagnosticProxies {
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
@@ -1130,6 +1131,7 @@ fn export_rvt_doc(
     let layer_constituent_sets = layer_materials_without_layer_sets(
         &mut entities,
         &element_layers,
+        &unplaced_wall_layers,
         &material_constituent_sets,
         &mut materials,
     );
@@ -1333,6 +1335,7 @@ fn layer_material_index(band: &LayerBand, name: &str, materials: &mut Vec<Materi
 fn layer_materials_without_layer_sets(
     entities: &mut [entities::IfcEntity],
     element_layers: &std::collections::BTreeMap<u32, ElementLayers>,
+    unplaced_wall_layers: &std::collections::BTreeMap<u32, Vec<LayerBand>>,
     taken: &[entities::MaterialConstituentSet],
     materials: &mut Vec<MaterialInfo>,
 ) -> Vec<entities::MaterialConstituentSet> {
@@ -1357,16 +1360,17 @@ fn layer_materials_without_layer_sets(
         if material_index.is_some() || taken.contains(&index) {
             continue;
         }
-        let Some(layers) = type_guid
-            .as_deref()
-            .and_then(|tag| tag.parse::<u32>().ok())
+        let id = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok());
+        let Some(layers) = id
             .and_then(|id| element_layers.get(&id))
-            .filter(|layers| !layers.stacked && !layers.layers.is_empty())
+            .filter(|layers| !layers.stacked)
+            .map(|layers| &layers.layers)
+            .or_else(|| id.and_then(|id| unplaced_wall_layers.get(&id)))
+            .filter(|layers| !layers.is_empty())
         else {
             continue;
         };
         let Some(names) = layers
-            .layers
             .iter()
             .map(|band| band.name.clone())
             .collect::<Option<Vec<String>>>()
@@ -1374,7 +1378,6 @@ fn layer_materials_without_layer_sets(
             continue;
         };
         let indices: Vec<usize> = layers
-            .layers
             .iter()
             .zip(&names)
             .map(|(band, name)| layer_material_index(band, name, materials))
@@ -2266,6 +2269,16 @@ fn ifc_mapping_label(emission: &entities::IfcUnitEmission) -> String {
     }
 }
 
+/// What the production walker's elements give beside their entities: each
+/// layered element's layers (RE-53), the materials each element's type
+/// draws in (RE-82), and the layers of walls their data does not place
+/// (RE-88), all by ElementId.
+type WalkerElementData = (
+    std::collections::BTreeMap<u32, ElementLayers>,
+    std::collections::BTreeMap<u32, Vec<String>>,
+    std::collections::BTreeMap<u32, Vec<LayerBand>>,
+);
+
 fn append_production_walker_elements(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
@@ -2273,10 +2286,7 @@ fn append_production_walker_elements(
     materials: &mut Vec<MaterialInfo>,
     policy: export_content::ExportContentPolicy,
     walker_limits: crate::walker::WalkerLimits,
-) -> (
-    std::collections::BTreeMap<u32, ElementLayers>,
-    std::collections::BTreeMap<u32, Vec<String>>,
-) {
+) -> WalkerElementData {
     if let Ok(decoded_iter) = crate::walker::iter_elements_with_limits(
         rf,
         crate::walker::PRODUCTION_ELEMENT_MIN_SCORE,
@@ -2292,7 +2302,11 @@ fn append_production_walker_elements(
             policy,
         );
         materials.extend(append.materials);
-        return (append.element_layers, append.element_type_materials);
+        return (
+            append.element_layers,
+            append.element_type_materials,
+            append.unplaced_wall_layers,
+        );
     }
     Default::default()
 }

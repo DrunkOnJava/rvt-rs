@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Walls their data does not place carry their type's materials (#355,
+  RE-88).** A wall with no orientation, line or arc in its data still
+  takes its type's layers for its materials, with no exterior side, so it
+  is neither drawn in layers nor given a layer set. On Snowdon Towers 95
+  of the 111 walls that had no material now have Revit's association (72
+  before), none a different one. On Core Interior 4 walls get Revit's
+  "Concrete"; its other 356 walls' layers take their category's material,
+  which Revit writes "Default Wall" and rvt-rs does not read.
+
 - **Walls whose body is not a layer set carry their layers' materials
   (#355, RE-88).** Revit's export associates a wall's materials by its
   type's layers: one layer gives its `IfcMaterial`, several an

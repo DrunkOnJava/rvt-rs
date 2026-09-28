@@ -45,6 +45,9 @@ pub struct TypedProductionAppend {
     pub level_elementid_binds: usize,
     /// Layered elements' layers, by ElementId (RE-53).
     pub element_layers: BTreeMap<u32, super::ElementLayers>,
+    /// The layers of walls their data does not place, by ElementId, for
+    /// their materials only (RE-88).
+    pub unplaced_wall_layers: BTreeMap<u32, Vec<super::LayerBand>>,
     /// The materials each element's type draws its geometry in, by
     /// ElementId (RE-82).
     pub element_type_materials: BTreeMap<u32, Vec<String>>,
@@ -196,6 +199,11 @@ pub fn append_typed_production_elements(
                     crate::partition_schema_mvp::system_family(&decoded.class, true)
                         .map(String::from);
                 out.element_layers.insert(id, layers);
+            } else if let (Some(id), Some(bands)) = (
+                decoded.id,
+                crate::partition_schema_mvp::unplaced_wall_layers_from_fields(&decoded.fields),
+            ) {
+                out.unplaced_wall_layers.insert(id, bands);
             }
         }
 
