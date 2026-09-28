@@ -30,7 +30,7 @@ apart:
 |---|---|---|---|---|
 | Revit 2024 and 2025 project (`.rvt`) | yes | yes, measured on Core Interior, the four RE1 models, Snowdon Towers, Projeto1 and `teste_export_2025` | see below | see below |
 | Revit 2026 project | yes | no: the element-record marker is predicted (RE-32) but unmeasured | none | metadata |
-| Revit 2023 project | yes | yes, measured on two 2023 projects against Revit's IFC4 exports (RE-81); components nested in doors and windows are left out | the element's bounding box; rooms their outline (RE-102) | ElementId, category, door and window host walls (RE-85), and Levels as storeys with each element on the one its record names (RE-107) |
+| Revit 2023 project | yes | yes, measured on two 2023 projects against Revit's IFC4 exports (RE-81); components nested in doors and windows are left out | the element's bounding box; rooms their outline (RE-102) | ElementId, category, door and window host walls (RE-85), Levels as storeys with each element on the one its record names (RE-107), and family instances' family and type names (RE-109) |
 | Revit 2022 and earlier project | yes | no | none | metadata |
 | Family (`.rfa`) or template (`.rte`, `.rft`) | yes | family metadata and OmniClass only | none | none |
 
@@ -79,7 +79,7 @@ Revit leaves them out.
 ## Not supported
 
 - Converting an arbitrary Revit model to IFC with Revit-grade fidelity.
-- Element records of releases other than 2023, 2024 and 2025; on 2023, anything beyond identity, category, box, door and window hosts, room outlines and Levels.
+- Element records of releases other than 2023, 2024 and 2025; on 2023, anything beyond identity, category, box, door and window hosts, room outlines, Levels and family instances' names.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
 - Door/Window typing from the opening-index rows (RE-19) and Level ElementIds

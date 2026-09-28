@@ -60,7 +60,8 @@ data is decoded and its bounding box where it is not. It writes that as IFC4,
 glTF, plan SVG and CSV, from the CLIs, Python and the zero-upload browser
 viewer. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), door and window hosts (RE-85), room outlines
-(RE-102), and Levels with the storey each element sits on (RE-107). Every recovery claim is measured against Revit's own IFC export of the
+(RE-102), Levels with the storey each element sits on (RE-107), and
+family instances' family and type names (RE-109). Every recovery claim is measured against Revit's own IFC export of the
 same file; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)

@@ -54,6 +54,61 @@ pub struct ElementNames {
     pub type_family_candidates: BTreeMap<u32, BTreeSet<u32>>,
 }
 
+/// Longest name, in UTF-16 code units, a Revit 2023 name entry is read with
+/// (RE-109).
+pub const NAME_MAX_UNITS_2023: usize = 128;
+
+/// Revit 2023 name entries (RE-109): `01 00 00 00 · u32 ElementId · u32 n
+/// · UTF-16 × n`, with no category after the name as 2024 writes one. Only
+/// a name of printable characters counts: the same shape also frames a
+/// lone `U+FFFF`. The ElementIds of `declared` with exactly one such name.
+pub fn name_entries_2023(rf: &mut RevitFile, declared: &BTreeSet<u32>) -> BTreeMap<u32, String> {
+    let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for at in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
+            let (Some(id), Some(units)) = (read_u32(buf, at + 4), read_u32(buf, at + 8)) else {
+                continue;
+            };
+            let units = units as usize;
+            if !(1..=NAME_MAX_UNITS_2023).contains(&units) || !declared.contains(&id) {
+                continue;
+            }
+            let Some(raw) = buf.get(at + 12..at + 12 + 2 * units) else {
+                continue;
+            };
+            let code: Vec<u16> = raw
+                .chunks_exact(2)
+                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                .collect();
+            let Ok(name) = String::from_utf16(&code) else {
+                continue;
+            };
+            let printable = name.chars().all(|c| {
+                !c.is_control() && !('\u{e000}'..='\u{f8ff}').contains(&c) && c < '\u{fff0}'
+            });
+            if !printable {
+                continue;
+            }
+            names
+                .entry(id)
+                .and_modify(|held| {
+                    if held.as_deref() != Some(name.as_str()) {
+                        *held = None;
+                    }
+                })
+                .or_insert(Some(name));
+        }
+    }
+    names
+        .into_iter()
+        .filter_map(|(id, name)| Some((id, name?)))
+        .collect()
+}
+
 fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
     buf.get(at..at.checked_add(4)?)
         .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
