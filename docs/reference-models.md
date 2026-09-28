@@ -43,7 +43,7 @@ their source by whoever runs the measurement, never committed.
 
 | Model | Revit | Source | sha256 | Why |
 |---|---|---|---|---|
-| AA-SingleDwellingHouse-RVT-CIADD, with its IFC | 2026 | [flowbim.ee](https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.rvt) | `eeff78f3…0a654` (IFC `c9e2986c…67342`) | the first 2026 project with Revit's export: the 2026 element-record gate (#421) |
+| AA-SingleDwellingHouse-RVT-CIADD, with its IFC | 2026 | [flowbim.ee](https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.rvt) | `eeff78f3…0a654` (IFC `c9e2986c…67342`) | the first 2026 project with Revit's export: the 2026 element-record gate (#421); measured in RE-124 (88 placed instances, all in Revit's export) |
 | 02_BIMcollab_Example_STR, with its IFC2X3 | 2015 | the public BIMcollab example project package | `8cd1f122…e193` | the pre-2024 record envelope (#421) |
 | rac_basic_sample_project | 2017 | Autodesk sample | `a1d3d077…5fefb` | the same, with no export |
 | Geberit VariForm washbasin PRO_1833290, two variants | 2018 family | Geberit | `28b9d111…e5e4`, `0d48b22c…fbb9` | DirectShape meshes in a family |
