@@ -2090,3 +2090,7 @@ Revit's IFC4 export cuts a window's opening in a tapered wall (RE-86) as a verti
 ## Addendum — RE-91 the document's object styles hold each category's material (2026-09-28)
 
 Each category's entry is its `BuiltInCategory` as an `i64`, an unset `u64`, `u32 1`, another unset `u64`, then its material as a `u64`. On Core Interior (Revit 2024) Walls holds 87 ("Default Wall") and Roofs 88 ("Default Roof"), the rest unset; Revit's IFC4 export writes "Default Wall" for all 356 walls whose layer takes its category's material. Snowdon Towers and the MIT house hold 0 for Walls. Report: `reports/element-framing/RE-91-category-material.md`.
+
+## Addendum — RE-92 a stair run's data holds its StairsRun fields (2026-09-28)
+
+A stair run's element data holds the StairsRun class's fields in schema order: seven `f64` (bottom elevation, top elevation, extend below base, extend below tread base, run width, left and right stringer width), a `u32` top riser index, then one-byte flags centre mark visible, begin with riser and end with riser. "End with Riser" is 0 on exactly the three Snowdon Towers runs whose riser lines outnumber their risers. A monolithic run's underside lies its type's structural depth below its inner corners, square to the pitch, cut off by the floor. Report: `reports/element-framing/RE-92-stair-run-ends.md`; probe: `examples/probe_re92_run_ends.rs`; scorer: `tools/re/stair_runs_vs_ifc.py`.

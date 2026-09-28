@@ -2660,8 +2660,9 @@ pub fn stair_run_body_from_fields(fields: &[(String, InstanceField)]) -> Option<
 /// Give each straight stair run with separate treads and risers its side
 /// view, from the plan sketch in its own data, its run type and its
 /// stair's riser height (RE-52, [`crate::partition_stairs`]), and each run
-/// whose run type reads that type's id and name. A run whose riser lines
-/// do not number its risers is left to its record box.
+/// whose run type reads that type's id and name. A run ending with a tread
+/// has one riser line more than risers (RE-92); a run whose riser lines do
+/// not number its risers so is left to its record box.
 fn attach_stair_run_bodies(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -2724,6 +2725,11 @@ fn attach_stair_run_bodies(
     ) else {
         return;
     };
+    let sketches: std::collections::BTreeMap<u32, ps::RunSketch> = lines
+        .iter()
+        .filter_map(|(&id, lines)| Some((id, ps::run_sketch(lines)?)))
+        .collect();
+    let ends = ps::scan_run_ends(rf, revit_version, &sketches).unwrap_or_default();
     for index in run_indices {
         let element = &mut products[index];
         let Some(run_type) = type_of.get(&index).and_then(|id| types.get(id)) else {
@@ -2751,15 +2757,20 @@ fn attach_stair_run_bodies(
         ) else {
             continue;
         };
+        let end_with_riser = element
+            .id
+            .and_then(|id| ends.get(&id))
+            .map(|ends| ends.end_with_riser);
+        let riser_lines = risers + i64::from(end_with_riser == Some(false));
         let Some(sketch) = element
             .id
-            .and_then(|id| lines.get(&id))
-            .and_then(|lines| ps::run_sketch(lines))
-            .filter(|sketch| i64::try_from(sketch.risers.len()) == Ok(risers))
+            .and_then(|id| sketches.get(&id))
+            .filter(|sketch| i64::try_from(sketch.risers.len()) == Ok(riser_lines))
         else {
             continue;
         };
-        let Some(profile) = ps::run_side_profile(&sketch, run_type, riser_height) else {
+        let Some(profile) = ps::run_side_profile(sketch, run_type, riser_height, end_with_riser)
+        else {
             continue;
         };
         let scalar = |value: f64| InstanceField::Float { value, size: 8 };

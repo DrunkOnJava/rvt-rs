@@ -109,6 +109,7 @@ Revit's IFC export and rvt-rs's IFC export of the file, both meshed by IfcOpenSh
 ## 5. What this does not do
 
 - Monolithic runs (3 on Snowdon), runs without risers (3), spiral runs (2) and runs whose riser lines outnumber their risers (3) keep their record box.
+  RE-92 (`RE-92-stair-run-ends.md`) reads the run's "End with Riser" setting, which is off on those three, and draws them and the monolithic runs.
 - The nosing profile and landing-start riser in §4.
 - Landings and stringers keep their record boxes.
 - Nothing is read from a release other than 2024 (RE-47's layouts).

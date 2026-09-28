@@ -131,7 +131,7 @@ fn main() -> rvt::Result<()> {
             (Some(t), Some(sketch), Some(h), Some(n)) => {
                 if sketch.risers.len() as i64 != n {
                     format!("{} riser lines for {n} risers", sketch.risers.len())
-                } else if let Some(profile) = run_side_profile(sketch, t, h) {
+                } else if let Some(profile) = run_side_profile(sketch, t, h, Some(true)) {
                     if !json.ends_with('[') {
                         json.push(',');
                     }
