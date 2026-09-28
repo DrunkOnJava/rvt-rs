@@ -57,5 +57,30 @@ fn main() -> rvt::Result<()> {
             println!("    {id} {named}");
         }
     }
+    // Where the type names Revit's export gives RE1's pipes and ducts are
+    // stored: each UTF-16 occurrence, with the declared ids within 64
+    // bytes before it.
+    for needle in ["221116-WTR", "233113-DUCT-Tees"] {
+        let units: Vec<u8> = needle.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        for stream in rf.partition_stream_names() {
+            let Ok(inflated) = rf.inflated_partition(&stream) else {
+                continue;
+            };
+            let buf = inflated.bytes();
+            for at in memchr::memmem::find_iter(buf, &units).take(8) {
+                let from = at.saturating_sub(64);
+                let hex: Vec<String> = buf[from..at].iter().map(|b| format!("{b:02x}")).collect();
+                let ids: Vec<String> = (from..at.saturating_sub(7))
+                    .filter_map(|i| {
+                        let v = u64::from_le_bytes(buf[i..i + 8].try_into().ok()?);
+                        let id = u32::try_from(v).ok()?;
+                        declared.contains(&id).then(|| format!("{id}@-{}", at - i))
+                    })
+                    .collect();
+                println!("name {needle:?} {stream} @{at}: ids {ids:?}");
+                println!("    {}", hex.join(" "));
+            }
+        }
+    }
     Ok(())
 }
