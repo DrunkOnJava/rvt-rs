@@ -67,7 +67,12 @@ def tops(path, classes):
     settings.set("use-world-coords", True)
     out = {}
     for cls in classes:
-        for element in f.by_type(cls):
+        try:
+            elements = f.by_type(cls)
+        except RuntimeError:
+            # Not in this file's schema (IfcShadingDevice in IFC2X3).
+            continue
+        for element in elements:
             # IfcSpace declares no Tag; Revit's GlobalId, which rvt-rs
             # derives the same way, keys it instead.
             tag = getattr(element, "Tag", None) or element.GlobalId
