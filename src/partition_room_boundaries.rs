@@ -5,13 +5,14 @@
 //!
 //! ```text
 //! u64            the room's ElementId
+//! ff ff ff ff    on Revit 2023 only
 //! 04 90 08 00    ROOM_SOLID_TAG
 //! ...            the solid's box, twice, and its topology
 //! ```
 //!
 //! and then its faces, each within [`FACE_GAP`] bytes of the one before
-//! (174 bytes on, or 206 where the face carries more; other records sit
-//! between some of them):
+//! (174 bytes on, or 206 where the face carries more, and 170 on Revit
+//! 2023; other records sit between some of them):
 //!
 //! ```text
 //! +0    04 00 08 00   FACE_TAG
@@ -46,7 +47,7 @@ use crate::{Result, RevitFile};
 pub const ROOM_OUTLINE_SOURCE: &str = "partition_room_solid_faces";
 
 /// Releases this layout is measured on.
-pub const ROOM_SOLID_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+pub const ROOM_SOLID_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025];
 
 /// The bytes after a room's ElementId that open its solid.
 pub const ROOM_SOLID_TAG: [u8; 4] = [0x04, 0x90, 0x08, 0x00];
@@ -151,11 +152,25 @@ pub fn face_at(buf: &[u8], at: usize) -> Option<RoomFace> {
     })
 }
 
+/// Where the solid whose header starts at `header` begins: past its
+/// [`ROOM_SOLID_TAG`], directly after the ElementId or, on Revit 2023,
+/// after `ff ff ff ff`.
+fn solid_start(buf: &[u8], header: usize) -> Option<usize> {
+    let after_id = header.checked_add(8)?;
+    if buf.get(after_id..after_id + 4)? == ROOM_SOLID_TAG {
+        return Some(after_id + 4);
+    }
+    (buf.get(after_id..after_id + 8)? == [0xff, 0xff, 0xff, 0xff, 0x04, 0x90, 0x08, 0x00])
+        .then_some(after_id + 8)
+}
+
 /// The faces of the solid whose header starts at `header`: the first face
 /// within [`ROOM_SOLID_WINDOW`], and each face after it within
 /// [`FACE_GAP`] of the one before.
 pub fn solid_faces(buf: &[u8], header: usize) -> Vec<RoomFace> {
-    let start = header + 12;
+    let Some(start) = solid_start(buf, header) else {
+        return Vec::new();
+    };
     let end = buf.len().min(start + ROOM_SOLID_WINDOW);
     let Some(window) = buf.get(start..end) else {
         return Vec::new();
@@ -212,6 +227,16 @@ pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<Plan
         .then_some(profile)
 }
 
+/// Where the solids of room `room_id` start in `buf`: each place its `u64`
+/// ElementId is followed by [`ROOM_SOLID_TAG`], directly or after
+/// `ff ff ff ff`.
+pub fn solid_headers(buf: &[u8], room_id: u32) -> Vec<usize> {
+    let id = u64::from(room_id).to_le_bytes();
+    memchr::memmem::find_iter(buf, &id)
+        .filter(|&at| solid_start(buf, at).is_some())
+        .collect()
+}
+
 /// Move every end within [`ROOM_VERTEX_TOLERANCE_FEET`] of an earlier one
 /// onto it.
 fn snap_ends(lines: &mut [[f64; 4]]) {
@@ -243,10 +268,8 @@ pub fn room_outline(
 ) -> Result<Option<PlanProfile>> {
     let inflated = rf.inflated_partition(stream)?;
     let buf = inflated.bytes();
-    let mut needle = u64::from(room_id).to_le_bytes().to_vec();
-    needle.extend_from_slice(&ROOM_SOLID_TAG);
     let mut found: Option<PlanProfile> = None;
-    for at in memchr::memmem::find_iter(buf, &needle) {
+    for at in solid_headers(buf, room_id) {
         let Some(profile) = room_outline_at(buf, at, bbox) else {
             continue;
         };

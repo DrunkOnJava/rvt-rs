@@ -149,6 +149,7 @@ pub fn recover_partition_schema_mvp(
     // box only; nothing else 2024 decodes on top of records is read. ---
     if revit_version == crate::partition_element_records_2023::REVIT_2023 {
         recover_2023_records(rf, &mut out);
+        attach_room_outlines(rf, revit_version, &mut out.rooms);
         return Ok(out);
     }
 

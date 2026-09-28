@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Revit 2023 rooms take their outline too (RE-102).** Revit 2023 stores
+  the room's solid as 2024 does, with four `ff` bytes before its tag. All
+  9 of Exemplo_data's rooms now match Revit's own area and outline (6
+  before). `plan_profiles_vs_ifc.py --match centroid` pairs rooms by
+  position where their GlobalIds are not Revit's. Every other local file
+  is byte-identical.
+
 - **Rooms take their real outline (RE-101, #90).** A room's partition
   stores the room's solid as planar faces, and the walls among them close
   into its outline, columns and shafts left out as voids. Rooms export
