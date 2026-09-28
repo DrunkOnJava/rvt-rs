@@ -2087,3 +2087,6 @@ Revit's IFC4 export gives a wall of a one-layer type that layer's `IfcMaterial`,
 ## Addendum — RE-89 Revit centres a window's opening in a tapered wall on the window's origin (2026-09-28)
 
 Revit's IFC4 export cuts a window's opening in a tapered wall (RE-86) as a vertical box one host type thickness deep, centred across the wall on the window's own transform origin (RE-87), on every Snowdon Towers window in a Solar Wall. A door's opening there is flush with the exterior face at its base instead (3 doors). Report: `reports/element-framing/RE-89-tapered-wall-window-openings.md`.
+## Addendum — RE-91 the document's object styles hold each category's material (2026-09-28)
+
+Each category's entry is its `BuiltInCategory` as an `i64`, an unset `u64`, `u32 1`, another unset `u64`, then its material as a `u64`. On Core Interior (Revit 2024) Walls holds 87 ("Default Wall") and Roofs 88 ("Default Roof"), the rest unset; Revit's IFC4 export writes "Default Wall" for all 356 walls whose layer takes its category's material. Snowdon Towers and the MIT house hold 0 for Walls. Report: `reports/element-framing/RE-91-category-material.md`.

@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Walls whose layer takes its category's material get it (#355,
+  RE-91).** The document's object styles hold each category's material.
+  Where the Walls entry is set, a wall layer that takes its category's
+  material takes that one. On Core Interior all 360 walls now carry
+  Revit's material ("Default Wall" on 356, none before): 315 as a
+  one-layer layer set and 45 as the material itself. Its layer sets go
+  from 88 to 403, all on Revit's bodies within 0.001 ft. Snowdon Towers
+  and the MIT house leave the entry unset and are unchanged; so are RE1
+  and Einhoven.
+
 - **Fixtures hosted on ceilings and walls are turned too (#227, RE-90).**
   RE-87 turned only instances whose Z axis is the model's. One with any
   vertical axis takes its plan direction from its first flat axis, which
