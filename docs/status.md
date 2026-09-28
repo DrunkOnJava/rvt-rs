@@ -614,6 +614,10 @@ reference names another element after an edit. 176 of Snowdon's 199
 slabs and all 20 roofs carry an outline, and 102 slabs match Revit's
 area within 0.1%
 (`reports/element-framing/RE-97-sketch-curve-lists.md`).
+**RE-98 (2026-09-28)** gives ceilings their sketch's outline, as roofs
+have: 66 of Snowdon's 68 ceilings and all 6 of RE1 Architecture's match
+Revit's outline within 0.1% of its area (50 and 5 before)
+(`reports/element-framing/RE-98-ceiling-outlines.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
