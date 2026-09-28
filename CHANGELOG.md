@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Core Interior's 20 shading-device plates carry their outline (#233,
+  RE-95).** Each owns one zero-length sketch line: a record whose box is a
+  point, with no line of its own, on an end of two of the others. It is
+  now left out, and the other lines' recorded ends close each plate into
+  Revit's outline exactly (none did). Two slabs in Snowdon Towers
+  structural and one in the MIT house (2024) close the same way; no Revit
+  export of those files is held. Every other local file is byte-identical.
+
 - **Doors Revit cuts at their rough size get that opening (#227, RE-94).**
   Revit's export cuts a door at its type's Rough Width by Rough Height
   exactly where the door's body is Rough Height tall. Such a door now takes

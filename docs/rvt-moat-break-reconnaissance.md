@@ -2102,3 +2102,7 @@ A family type's value block holds its length parameters as `f64 feet · ff × 8 
 ## Addendum — RE-94 a door's body height tells which opening Revit cuts (2026-09-28)
 
 Revit's IFC4 export cuts a Snowdon Towers door at its type's Rough Width × Rough Height exactly where the door's body is Rough Height tall (57 of 126); a door whose body is its frame's height is cut 0.0625 ft inside its frame instead, a size no stored value gives. Opening-only door types do not follow the rough size (RE1's cased opening). Report: `reports/element-framing/RE-94-door-openings.md`; probe: `examples/probe_re94_door_openings.rs`.
+
+## Addendum — RE-95 zero-length sketch lines (2026-09-28)
+
+A sketch line whose record box is a single point is a zero-length segment: it carries no bounded line and adds no edge. Each of Core Interior's 20 shading-device plates has one, on an end of two of its other lines; left out, the other 56 lines' recorded ends close each plate into Revit's outline exactly. Report: `reports/element-framing/RE-95-zero-length-sketch-lines.md`; probe: `examples/probe_re95_zero_length_sketch_lines.rs`; scorer: `tools/re/plan_profiles_vs_ifc.py`.
