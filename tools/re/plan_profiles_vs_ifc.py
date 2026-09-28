@@ -46,7 +46,8 @@ def site_frame(f):
 
 
 def tops(path, classes):
-    """Tag -> (upward plan area, upward-face vertices in plan)."""
+    """Tag -> (upward plan area, upward-face vertices in plan), every
+    element with the Tag (every piece of a sketch) taken together."""
     f = ifcopenshell.open(path)
     frame = site_frame(f)
     settings = ifcopenshell.geom.settings()
@@ -72,6 +73,10 @@ def tops(path, classes):
             up = (length > 1e-12) & (normal[:, 2] > 0.9 * length)
             area = float(0.5 * normal[up, 2].sum())
             points = v[np.unique(faces[up].ravel())][:, :2]
+            # A sketch of several pieces is several elements with one Tag.
+            if tag in out:
+                held_area, held_points, _ = out[tag]
+                area, points = held_area + area, np.vstack([held_points, points])
             out[tag] = (area, points, element.is_a())
     return out
 

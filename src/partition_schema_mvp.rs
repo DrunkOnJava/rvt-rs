@@ -4072,7 +4072,8 @@ pub fn slabs_from_partition_category_records(
 pub const SKETCH_BOX_TOLERANCE_FEET: f64 = 1e-3;
 
 /// Sketched plan profiles of the elements in `owners` (their plan record
-/// boxes, `[min x, min y, max x, max y]`), from their
+/// boxes, `[min x, min y, max x, max y]`), from their Sketch's curve list
+/// where it has one (RE-97) or else the lines naming them, and their
 /// `OST_SketchLines` records: the RE-25 solve over the records' boxes and,
 /// where that does not close, the exact ends each sketch line's own data
 /// carries (RE-50, [`crate::partition_beam_axes::scan_bounded_lines`]). A
@@ -4093,7 +4094,61 @@ fn sketch_plan_profiles(
 ) -> std::collections::BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
+    // RE-97: where an element's Sketch lists its curves, that list is the
+    // sketch's membership; a line's own owner reference names another
+    // element where the sketch was edited.
+    let line_ids: BTreeSet<u32> = sketch_lines.iter().map(|r| r.element_id).collect();
+    let lists: BTreeMap<u32, Vec<u32>> =
+        erpp::scan_sketch_curve_lists(rf, revit_version, &line_ids)
+            .into_iter()
+            .filter(|(owner, _)| owners.contains_key(owner))
+            .collect();
+    let listed: BTreeMap<u32, u32> = lists
+        .iter()
+        .flat_map(|(owner, curves)| curves.iter().map(move |id| (*id, *owner)))
+        .collect();
+    let remapped: Vec<crate::partition_element_records::PartitionElementRecord> = sketch_lines
+        .iter()
+        .filter_map(|record| {
+            let owner = match listed.get(&record.element_id) {
+                Some(owner) => Some(*owner),
+                None => record
+                    .owner_reference
+                    .filter(|owner| !lists.contains_key(owner)),
+            }?;
+            let mut record = record.clone();
+            record.owner_reference = Some(owner);
+            Some(record)
+        })
+        .collect();
+    // An element whose list differs from the lines naming it keeps an outline
+    // only where it spans its record box, as an arc outline does (RE-96).
+    let mut named: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    for record in sketch_lines {
+        if let Some(owner) = record.owner_reference {
+            named.entry(owner).or_default().insert(record.element_id);
+        }
+    }
+    let relisted: BTreeSet<u32> = lists
+        .iter()
+        .filter(|(owner, curves)| {
+            named.get(owner) != Some(&curves.iter().copied().collect::<BTreeSet<u32>>())
+        })
+        .map(|(owner, _)| *owner)
+        .collect();
+    let spans_box = |owner: u32, profile: &erpp::PlanProfile| {
+        owners.get(&owner).is_some_and(|plan_box| {
+            profile.plan_extent_feet().is_some_and(|extent| {
+                extent
+                    .iter()
+                    .zip(plan_box)
+                    .all(|(a, b)| (a - b).abs() <= SKETCH_BOX_TOLERANCE_FEET)
+            })
+        })
+    };
+    let sketch_lines = remapped.as_slice();
     let mut profiles = erpp::plan_profiles_from_sketch_line_records(sketch_lines);
+    profiles.retain(|owner, profile| !relisted.contains(owner) || spans_box(*owner, profile));
     profiles.retain(|owner, _| owners.contains_key(owner));
     let mut unsolved: BTreeMap<u32, BTreeMap<u32, [f64; 6]>> = BTreeMap::new();
     for record in sketch_lines {
@@ -4193,16 +4248,7 @@ fn sketch_plan_profiles(
         };
         // RE-96: an outline with an arc spans the element's own record box,
         // or the sketch holds curves that are not the element's edge.
-        let spans_box = !has_arc
-            || owners.get(&owner).is_some_and(|plan_box| {
-                profile.plan_extent_feet().is_some_and(|extent| {
-                    extent
-                        .iter()
-                        .zip(plan_box)
-                        .all(|(a, b)| (a - b).abs() <= SKETCH_BOX_TOLERANCE_FEET)
-                })
-            });
-        if spans_box {
+        if !(has_arc || relisted.contains(&owner)) || spans_box(owner, &profile) {
             profile.segment_ids = segments.keys().copied().collect();
             profiles.insert(owner, profile);
         }
