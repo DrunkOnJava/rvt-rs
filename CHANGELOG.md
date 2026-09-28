@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Rooms carry their numbers and names on every release (RE-117, #90,
+  #421).** A room's number and name are the parameter entries `-1006901
+  (ROOM_NUMBER) · u32 n · UTF-16` and `-1006900 (ROOM_NAME) · u32 m ·
+  UTF-16` just past its data object, with ids as wide as the release's
+  ElementIds. Read from there, every room carries Revit's number and name:
+  Core Interior 116 of 116 (unchanged), Snowdon Towers 54 of 54 against
+  its VIM export (RE-29's parameter block named 1, wrongly), RE1
+  Architecture 11 of 11 and Exemplo_data 9 of 9 (neither named before).
+  RE-29's block still gives a room's Level, and its number and name where
+  no entries are read.
+
 - **Revit 2023 materials carry their shading colours and names (RE-116,
   #421, #355).** A 2023 material keeps its transparency, 0.5, four
   eight-byte pattern slots (`u32` id, `u32` COLORREF), its shading colour

@@ -252,6 +252,106 @@ pub fn resolve_unique(found: BTreeMap<u32, Vec<RoomParameters>>) -> BTreeMap<u32
     out
 }
 
+/// BuiltInParameter `ROOM_NUMBER` (RE-117).
+pub const ROOM_NUMBER_PARAMETER: i64 = -1_006_901;
+/// BuiltInParameter `ROOM_NAME` (RE-117).
+pub const ROOM_NAME_PARAMETER: i64 = -1_006_900;
+/// How far past a room's object its number and name are looked for.
+pub const ROOM_PARAMETER_ENTRY_WINDOW: usize = 0x400;
+/// Value of `m_room_parameter_source` for a room named by its parameter
+/// entries (RE-117).
+pub const ROOM_PARAMETER_ENTRY_SOURCE: &str = "partition_room_parameter_entries";
+
+/// Each room's number and name from its parameter entries, by ElementId
+/// (RE-117), on a release with an element-data layout
+/// ([`crate::partition_names::element_data_layout`]).
+///
+/// A room's data is an object `01 00 00 00 · id` (a `u32` id on Revit 2023,
+/// a `u64` on 2024 and 2025). Its number and name are the first
+/// `ROOM_NUMBER · u32 n · UTF-16 × n` entry within
+/// [`ROOM_PARAMETER_ENTRY_WINDOW`] past it, immediately followed by
+/// `ROOM_NAME · u32 m · UTF-16 × m`, the parameter ids as wide as the
+/// release's ElementIds: 377 or 389 bytes past the id on Exemplo_data
+/// (2023), 483 to 503 on RE1 Architecture (2025). A room whose copies
+/// disagree gets nothing.
+pub fn scan_room_parameter_entries(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    rooms: &BTreeSet<u32>,
+) -> BTreeMap<u32, (String, String)> {
+    let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
+        return BTreeMap::new();
+    };
+    let (id_len, number_tag, name_tag) = if layout.wide_id {
+        (
+            8,
+            ROOM_NUMBER_PARAMETER.to_le_bytes().to_vec(),
+            ROOM_NAME_PARAMETER.to_le_bytes().to_vec(),
+        )
+    } else {
+        let narrow = |id: i64| i32::try_from(id).expect("a 32-bit BuiltInParameter");
+        (
+            4,
+            narrow(ROOM_NUMBER_PARAMETER).to_le_bytes().to_vec(),
+            narrow(ROOM_NAME_PARAMETER).to_le_bytes().to_vec(),
+        )
+    };
+    let string_at = |buf: &[u8], at: usize, limit: usize| -> Option<(String, usize)> {
+        let n = usize::try_from(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?)).ok()?;
+        if !(1..=limit).contains(&n) {
+            return None;
+        }
+        let units: Vec<u16> = buf
+            .get(at + 4..at + 4 + 2 * n)?
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        let text = String::from_utf16(&units).ok()?;
+        (!text.chars().any(char::is_control)).then_some((text, at + 4 + 2 * n))
+    };
+    let mut found: BTreeMap<u32, Option<(String, String)>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for hit in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
+            let Some(id) = layout.id_at(buf, hit + 4).filter(|id| rooms.contains(id)) else {
+                continue;
+            };
+            let start = hit + 4 + id_len;
+            let end = (start + ROOM_PARAMETER_ENTRY_WINDOW).min(buf.len());
+            let Some(window) = buf.get(start..end) else {
+                continue;
+            };
+            let pair = memchr::memmem::find_iter(window, &number_tag).find_map(|at| {
+                let at = start + at;
+                let (number, after) = string_at(buf, at + number_tag.len(), 64)?;
+                (buf.get(after..after + name_tag.len())? == &name_tag[..]).then_some(())?;
+                let (name, _) = string_at(buf, after + name_tag.len(), 256)?;
+                Some((number, name))
+            });
+            let Some(pair) = pair else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(pair));
+                }
+                Some(held) => {
+                    if held.as_ref() != Some(&pair) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, pair)| pair.map(|p| (id, p)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
