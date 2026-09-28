@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Tapered walls are drawn with their leaning face (#358, RE-86).** A
+  wall type stores three face angles after a fixed frame, and a wall
+  whose orientation word is 2 is tapered by them: its exterior face leans
+  by the type's angle, wider at the base, its interior face is vertical,
+  and at the top it is its type's thickness about its line. Each such wall
+  is now that cross-section extruded along its line (`BodySource`
+  `partition_wall_tapered_section`) instead of its record box. On Snowdon
+  Towers, 19 of the 20 walls Revit tapers match its body to 0.001 ft across
+  the wall at five heights and the 20th to 0.052 ft (on main none was
+  within 0.1 ft, the worst 9.3 ft off). In the GLB, 24 walls score better
+  against Revit's bodies and none worse. Every other local file exports
+  byte-identical IFC. Slanted walls (word 0) keep their box.
+
 - **The viewer is built with pnpm.** `viewer/package.json` pins
   `packageManager` to pnpm 12.6.0 and `viewer/pnpm-lock.yaml` replaces
   `package-lock.json`, imported from it with the same resolved versions.
