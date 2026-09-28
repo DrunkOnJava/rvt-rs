@@ -28,6 +28,10 @@ on:
         description: examples/ probe to run on each model as well (e.g. probe_re70_wall_join_lists), empty for none
         required: false
         default: ""
+      probe_scorer:
+        description: tools/re scorer (no .py) to run on the probe's output and Revit's export, from the measured ref, empty for none
+        required: false
+        default: ""
   # A change to the measurement itself measures its own PR against main.
   pull_request:
     paths:
@@ -82,6 +86,8 @@ jobs:
       - name: Measure
         env:
           PROBE: ${{ inputs.probe }}
+          PROBE_SCORER: ${{ inputs.probe_scorer }}
+          PROBE_SCORER_DIR: measured/tools/re
         run: |
           tools/ci/measure-reference-models.sh measured/target/ci models results
           cp measured-commit.txt results/commit.txt

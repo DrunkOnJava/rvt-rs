@@ -14,7 +14,9 @@
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
 #     ending with its exit status;
 #   - probe.txt, when PROBE names an examples/ probe already built in
-#     BIN_DIR/examples: its output on the model, ending with its exit status.
+#     BIN_DIR/examples: its output on the model, ending with its exit status;
+#   - probe_score.txt, when PROBE_SCORER also names a scorer in
+#     PROBE_SCORER_DIR taking <probe output> <revit-export.ifc>.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
@@ -57,6 +59,9 @@ while IFS='|' read -r name rvt ref; do
     echo "exit $?" >> "$dir/probe.txt"
   fi
   if [ "$ref" != "-" ]; then
+    if [ -n "${PROBE:-}" ] && [ -n "${PROBE_SCORER:-}" ]; then
+      score "$dir/probe_score.txt" "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" "$dir/probe.txt" "$MODELS/$ref" --list
+    fi
     for s in $IFC_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"; done
     for s in $GLB_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"; done
   fi
