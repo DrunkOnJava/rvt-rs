@@ -177,6 +177,17 @@ pub fn recover_partition_schema_mvp(
             revit_version,
             &mut [&mut out.walls, &mut out.slabs, &mut out.products],
         );
+        // --- Walls', floors' and roofs' layers, for their material layer
+        // sets (RE-114) ---
+        attach_wall_layers(rf, revit_version, &mut out.walls);
+        attach_slab_layers(
+            rf,
+            revit_version,
+            out.slabs
+                .iter_mut()
+                .chain(out.products.iter_mut())
+                .collect(),
+        );
         // --- The materials each family type's geometry uses (RE-113). A
         // system type's data holds its layers where a family type's holds
         // its map, and a layer reads as a one-entry map, so the types of
@@ -2701,10 +2712,14 @@ fn attach_system_family_names(
 fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
     use crate::partition_compound_structure as pcs;
     if !pcs::WALL_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
-        || !pcs::COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
+        || pcs::layer_layout(revit_version).is_none()
     {
         return;
     }
+    // Revit 2023 wall joins are not read (RE-114), so a 2023 wall keeps its
+    // record body, which already spans its joins, and takes only its layers
+    // and exterior side.
+    let centreline_bodies = revit_version != crate::partition_element_records_2023::REVIT_2023;
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
@@ -2724,34 +2739,17 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return,
     };
-    let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
-        rf,
-        revit_version,
-        crate::partition_type_records::OST_MATERIALS,
-        &declared,
-    )
-    .unwrap_or_default()
-    .iter()
-    .map(|record| record.element_id)
-    .collect();
-    let (
-        Ok(layers),
-        Ok(orientations),
-        Ok(lines),
-        Ok(arcs),
-        Ok(appearances),
-        Ok(names),
-        Ok(face_angles),
-    ) = (
+    let Some((materials, names)) = materials_and_names(rf, revit_version, &declared) else {
+        return;
+    };
+    let (Ok(layers), Ok(orientations), Ok(lines), Ok(arcs), Ok(appearances), Ok(face_angles)) = (
         pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
         pcs::scan_wall_orientations(rf, revit_version, &wall_ids),
         pcs::scan_wall_lines(rf, revit_version, &wall_ids),
         pcs::scan_wall_arcs(rf, revit_version, &wall_ids),
         crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
-        crate::partition_materials::scan_material_names(rf, revit_version, &declared),
         pcs::scan_wall_type_face_angles(rf, revit_version, &types),
-    )
-    else {
+    ) else {
         return;
     };
     // RE-91: a layer that takes its category's material takes the one the
@@ -2797,7 +2795,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
                 (first == 0.0 && third == 0.0 && exterior > 0.0 && exterior < FRAC_PI_4)
                     .then_some(exterior)
             });
-        let centred = measured && (orientation.word == 1 || taper.is_some());
+        let centred = centreline_bodies && measured && (orientation.word == 1 || taper.is_some());
         let float = |value: f64| InstanceField::Float { value, size: 8 };
         // The direction the exterior side is taken from: the line's, or the
         // arc's tangent at its middle (RE-75).
@@ -2893,7 +2891,9 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         }
         wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
     }
-    attach_wall_butt_joins(rf, revit_version, walls, &layers);
+    if centreline_bodies {
+        attach_wall_butt_joins(rf, revit_version, walls, &layers);
+    }
 }
 
 /// Give each wall with a centreline the wall it butt-joins at each end and
@@ -5234,6 +5234,34 @@ pub const STACKED_LAYER_CLASSES: &[&str] = &["Floor", "BuildingPad", "Roof", "Ce
 /// for them to be its layers, feet.
 pub const SLAB_LAYER_HEIGHT_TOLERANCE_FEET: f64 = 1e-4;
 
+/// The materials layers may name and their names, on `revit_version`:
+/// the `OST_Materials` type records and RE-58's names on 2024 and 2025, and
+/// RE-113's material objects and names on 2023.
+fn materials_and_names(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared: &BTreeSet<u32>,
+) -> Option<(BTreeSet<u32>, BTreeMap<u32, String>)> {
+    if revit_version == crate::partition_element_records_2023::REVIT_2023 {
+        return Some(crate::partition_materials::scan_materials_2023(
+            rf, declared,
+        ));
+    }
+    let materials = crate::partition_type_records::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_type_records::OST_MATERIALS,
+        declared,
+    )
+    .unwrap_or_default()
+    .iter()
+    .map(|record| record.element_id)
+    .collect();
+    let names =
+        crate::partition_materials::scan_material_names(rf, revit_version, declared).ok()?;
+    Some((materials, names))
+}
+
 /// Give each floor, building pad, roof and ceiling its type's layers, top
 /// first, each with its material's shading (RE-57), where they add up to its
 /// record box's height: the plate is then exactly its layers. A roof drawn
@@ -5244,7 +5272,7 @@ fn attach_slab_layers(
     mut elements: Vec<&mut DecodedElement>,
 ) {
     use crate::partition_compound_structure as pcs;
-    if !pcs::COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+    if pcs::layer_layout(revit_version).is_none() {
         return;
     }
     let type_of = |element: &DecodedElement| {
@@ -5269,20 +5297,12 @@ fn attach_slab_layers(
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return,
     };
-    let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
-        rf,
-        revit_version,
-        crate::partition_type_records::OST_MATERIALS,
-        &declared,
-    )
-    .unwrap_or_default()
-    .iter()
-    .map(|record| record.element_id)
-    .collect();
-    let (Ok(layers), Ok(appearances), Ok(names)) = (
+    let Some((materials, names)) = materials_and_names(rf, revit_version, &declared) else {
+        return;
+    };
+    let (Ok(layers), Ok(appearances)) = (
         pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
         crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
-        crate::partition_materials::scan_material_names(rf, revit_version, &declared),
     ) else {
         return;
     };

@@ -67,8 +67,10 @@ pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Releases a wall's location line (RE-49's bounded line) is read on. On
 /// 2025 it is measured by the same house saved in 2024 and 2025, whose 50
-/// walls read the same line, orientation and layers from both (RE-55).
-pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// walls read the same line, orientation and layers from both (RE-55); on
+/// 2023 by the walls of two projects, whose lines are Revit's axes before
+/// joins (RE-114).
+pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025];
 
 /// Each wall's location line, by ElementId, on a release in
 /// [`WALL_LINE_SUPPORTED_REVIT_VERSIONS`]; empty elsewhere.
@@ -385,9 +387,10 @@ pub fn scan_wall_orientations(
     revit_version: u32,
     walls: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, WallOrientation>> {
-    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+    let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
         return Ok(BTreeMap::new());
     };
+    let header = layout.header;
     let mut found: BTreeMap<u32, Option<WallOrientation>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -397,10 +400,7 @@ pub fn scan_wall_orientations(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = u64_at(buf, id_at)
-                .and_then(|id| u32::try_from(id).ok())
-                .filter(|id| walls.contains(id))
-            else {
+            let Some(id) = layout.id_at(buf, id_at).filter(|id| walls.contains(id)) else {
                 continue;
             };
             let end = hits
