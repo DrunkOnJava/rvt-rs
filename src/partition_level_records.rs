@@ -110,8 +110,17 @@
 //! elevation and GlobalId: Snowdon 18 of 18, each RE1 model 2 of 2. See
 //! `reports/element-framing/RE-51-level-names.md`. On Snowdon's structural
 //! model 8 of 19 Levels carry `01` where the three bytes before the name
-//! length are zero on every Level measured; with no export of that model to
-//! read the byte against, its storey set is refused.
+//! length are zero on every other Level measured; it does not decide a
+//! storey, and since RE-118 it is accepted.
+//!
+//! # RE-118: Building Story
+//!
+//! A Level keeps Revit's Building Story setting past its name
+//! ([`BUILDING_STORY_ANCHOR`]), and only a building story is a storey of
+//! Revit's export. On Snowdon's structural model 7 of 19 Levels (Top of
+//! Footing and the six "TOS" Levels) are not, and its storeys are the other
+//! 12, the building stories of its VIM export. See
+//! `reports/element-framing/RE-118-building-story.md`.
 //!
 //! Every name and every elevation equals the `Name` and `Elevation`
 //! of an `IfcBuildingStorey` in Revit's own export of the same file —
@@ -283,6 +292,10 @@ pub struct PartitionLevel {
     pub name: String,
     /// The Level's elevation in feet.
     pub elevation_feet: f64,
+    /// Revit's Building Story setting (RE-118), where it is read: only a
+    /// building story is a storey of Revit's IFC export.
+    #[serde(default)]
+    pub building_story: Option<bool>,
 }
 
 /// Whether this release's Level framing is proven.
@@ -424,6 +437,39 @@ pub struct NameElevationBlock {
     pub name: String,
     /// The elevation in feet, agreed by both copies.
     pub elevation_feet: f64,
+    /// Revit's Building Story setting, read after the name (RE-118,
+    /// [`BUILDING_STORY_ANCHOR`]).
+    pub building_story: Option<bool>,
+}
+
+/// The bytes that open the Level data holding its Building Story setting
+/// (RE-118): an unset `u64`, then `00 01`. An `f64`, a `u64` ElementId and
+/// the setting follow.
+pub const BUILDING_STORY_ANCHOR: [u8; 10] =
+    [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x01];
+
+/// How far past a Level's name its Building Story setting is looked for.
+pub const BUILDING_STORY_WINDOW: usize = 0x200;
+
+/// A Level's Building Story setting (RE-118): the byte after the first
+/// [`BUILDING_STORY_ANCHOR`] past its name (`name_end`), an `f64` (0 on most
+/// Levels) and a `u64` ElementId, 1 for a building story and 0 otherwise.
+/// Against the Building Story parameter of Snowdon Towers' VIM export it is
+/// exact on all 18 architectural and 19 structural Levels (12 stories, 7
+/// not), and it is 1 on Core Interior's 15 and RE1's 2 Levels, every one a
+/// storey of Revit's export. `None` where the frame is not found.
+fn building_story_after(buf: &[u8], name_end: usize) -> Option<bool> {
+    let window = buf.get(name_end..(name_end + BUILDING_STORY_WINDOW).min(buf.len()))?;
+    let anchor = name_end + find_subslice(window, &BUILDING_STORY_ANCHOR)?;
+    let id_at = anchor + BUILDING_STORY_ANCHOR.len() + 8;
+    if read_u64(buf, id_at)? > u64::from(u32::MAX) {
+        return None;
+    }
+    match buf.get(id_at + 8)? {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
 }
 
 /// Decode the block whose `0xff` sentinel run starts at `run_start`.
@@ -485,9 +531,11 @@ fn decode_name_block(
     if !run.iter().all(|byte| *byte == 0xff) {
         return None;
     }
-    // The run must end here: a longer run means this is not the slot.
+    // The run must end here: a longer run means this is not the slot. The
+    // pad's first byte is 1 on 8 of Snowdon Towers' 19 structural Levels,
+    // stories and not alike, and 0 on every other Level measured (RE-118).
     let pad = buf.get(run_start + run_len..value - LENGTH_PREFIX_OFFSET_BEFORE_NAME)?;
-    if !pad.iter().all(|byte| *byte == 0) {
+    if !matches!(pad.first(), Some(0 | 1)) || !pad[1..].iter().all(|byte| *byte == 0) {
         return None;
     }
     let owner = if id_len == 4 {
@@ -529,6 +577,7 @@ fn decode_name_block(
         element_id,
         name,
         elevation_feet,
+        building_story: building_story_after(buf, end),
     })
 }
 
@@ -647,6 +696,7 @@ pub fn levels_from_records_and_blocks(
             element_id: block.element_id,
             name: block.name,
             elevation_feet: block.elevation_feet,
+            building_story: block.building_story,
         };
         match accepted.get(&level.element_id) {
             Some(existing)
@@ -1157,6 +1207,7 @@ mod tests {
             element_id: 20273,
             name: "Basement 2".into(),
             elevation_feet: elevation,
+            building_story: None,
         };
         assert!(levels_from_records_and_blocks(&records, [block(-40.0), block(-20.0)]).is_empty());
         assert_eq!(
@@ -1181,6 +1232,7 @@ mod tests {
             element_id: id,
             name: format!("L{id}"),
             elevation_feet: elevation,
+            building_story: None,
         };
         // One level short of the record count.
         assert!(!recovered_levels_are_a_storey_set(
