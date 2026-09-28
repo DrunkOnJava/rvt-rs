@@ -313,16 +313,40 @@ pub fn find_element_data_names(
     header: &[u8; 10],
     wanted: &BTreeSet<u32>,
 ) -> BTreeMap<u32, String> {
+    element_data_names(buf, header, wanted, |buf, at| {
+        read_u64(buf, at).and_then(|v| u32::try_from(v).ok())
+    })
+}
+
+/// [`ELEMENT_DATA_HEADER`] on Revit 2023 (RE-111): the `u16` is `0x02c0`,
+/// the schema tag of `CellList` on 2023 as `0x02d3` and `0x02ef` are on
+/// 2024 and 2025, and the ElementId after it is a `u32` followed by four
+/// bytes that are not zero.
+pub const ELEMENT_DATA_HEADER_2023: [u8; 10] =
+    [0xff, 0xff, 0xff, 0xff, 0xc0, 0x02, 0x01, 0x00, 0x00, 0x00];
+
+/// [`find_element_data_names`] on Revit 2023 (RE-111): the header is
+/// [`ELEMENT_DATA_HEADER_2023`] and the ElementId a `u32`.
+pub fn find_element_data_names_2023(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, String> {
+    element_data_names(buf, &ELEMENT_DATA_HEADER_2023, wanted, read_u32)
+}
+
+fn element_data_names(
+    buf: &[u8],
+    header: &[u8; 10],
+    wanted: &BTreeSet<u32>,
+    read_id: impl Fn(&[u8], usize) -> Option<u32>,
+) -> BTreeMap<u32, String> {
     let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
     for hit in memchr::memmem::find_iter(buf, header) {
         let id_at = hit + header.len();
-        let Some(id) = read_u64(buf, id_at).and_then(|v| u32::try_from(v).ok()) else {
+        let Some(id) = read_id(buf, id_at) else {
             continue;
         };
         if !wanted.contains(&id) {
             continue;
         }
-        let Some(name) = first_framed_name(buf, id_at + 8) else {
+        let Some(name) = first_framed_name(buf, id_at + 8, header) else {
             continue;
         };
         match found.get_mut(&id) {
@@ -539,7 +563,7 @@ fn railing_type_name_at(buf: &[u8], id_at: usize) -> Option<String> {
 
 /// The first `ff ff ff ff · u16 tag · u32 n · n UTF-16 units` string that
 /// starts in `buf[start..start + ELEMENT_DATA_NAME_WINDOW]`.
-fn first_framed_name(buf: &[u8], start: usize) -> Option<String> {
+fn first_framed_name(buf: &[u8], start: usize, header: &[u8; 10]) -> Option<String> {
     let end = start
         .saturating_add(ELEMENT_DATA_NAME_WINDOW)
         .min(buf.len());
@@ -549,7 +573,9 @@ fn first_framed_name(buf: &[u8], start: usize) -> Option<String> {
         let Some(tag) = buf.get(at + 4..at + 6) else {
             continue;
         };
-        if tag == [0xff, 0xff] {
+        // Another element's data header frames its ElementId, not a name
+        // (RE-111).
+        if tag == [0xff, 0xff] || buf.get(at..at + header.len()) == Some(&header[..]) {
             continue;
         }
         let Some(units) = read_u32(buf, at + 6).map(|n| n as usize) else {

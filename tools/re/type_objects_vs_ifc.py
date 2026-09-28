@@ -14,6 +14,7 @@ import collections
 import sys
 
 import ifcopenshell
+import ifcopenshell.util.element
 
 VERBOSE = "-v" in sys.argv
 if VERBOSE:
@@ -68,6 +69,24 @@ def main():
     print(f"untyped in ours, by class: {dict(by_class)}")
     if wrong:
         print(f"disagreements: {dict(wrong)}")
+    # RE-111: the TypeName property, which an element carries even where
+    # rvt-rs does not know its family, against the type half of Revit's
+    # type Name.
+    type_names = {}
+    for element in ours_file.by_type("IfcElement"):
+        tag = getattr(element, "Tag", None)
+        if not tag:
+            continue
+        for pset in ifcopenshell.util.element.get_psets(element).values():
+            if pset.get("TypeName"):
+                type_names.setdefault(tag, pset["TypeName"])
+    carried = sum(1 for tag in revit if tag in ours_tags and tag in type_names)
+    same = sum(
+        1
+        for tag, (_, _, name, *_) in revit.items()
+        if tag in type_names and name.split(":", 1)[-1] == type_names[tag]
+    )
+    print(f"TypeName carried: {carried} of {exported}; equal to Revit's type: {same}")
     types = {t.Tag for t in ours_file.by_type("IfcTypeObject")}
     print(f"type objects in ours: {len(types)}")
 
