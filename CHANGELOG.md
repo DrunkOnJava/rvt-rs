@@ -8,6 +8,20 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 materials carry their shading colours and names (RE-116,
+  #421, #355).** A 2023 material keeps its transparency, 0.5, four
+  eight-byte pattern slots (`u32` id, `u32` COLORREF), its shading colour
+  and its shininess, where 2024's slots are four bytes, and ends its name
+  before `ff ff ff ff eb 0b` or in its own name field, as RE-58's 2024
+  names do. The 2023 export's material list is now the file's own
+  materials, named and coloured (modelo_bim 108, Exemplo_data 114,
+  Einhoven 36), instead of 146, 155 and 42 partition display strings; their
+  colours and transparency are
+  Revit's on 20 of the 21 materials Revit's exports style, none different,
+  and Exemplo_data's roller door gains Revit's material (36 of its 37
+  elements with Revit's material set). The GLB draws 2023 elements in
+  them. Every 2024 and 2025 file is byte-identical.
+
 - **Revit 2023 object styles give each category its material (RE-115,
   #421).** A 2023 category's object-styles entry is `i32 category · ff ff
   ff ff · u32 1|2 · u32 1 · ff ff ff ff 3f 01 · 8 bytes · i32 -3000010 ·

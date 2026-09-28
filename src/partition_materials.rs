@@ -106,6 +106,39 @@ fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
     })
 }
 
+/// The Revit 2023 shading frame whose colour starts at `at` (RE-116): the
+/// transparency and 0.5 as on 2024, then four pattern slots of `u32`
+/// ElementId (`ff` × 4 when unset) and `u32` COLORREF, eight bytes each
+/// where 2024 keeps four bare COLORREFs, then the shading colour and the
+/// shininess. A material that opens its own data frames it with `ff ff ff
+/// ff 9b 0b`; a family's own material does not, so the frame is known by
+/// its 0.5 and its slots instead.
+fn frame_at_2023(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
+    let transparency = f32_at(buf, at.checked_sub(40)?)?;
+    let second = f32_at(buf, at - 36)?;
+    let plausible = |v: f32| (0.0..=1.0).contains(&v) && (v == 0.0 || v.is_normal());
+    if !plausible(transparency) || second != 0.5 {
+        return None;
+    }
+    for slot in [at - 32, at - 24, at - 16, at - 8] {
+        let id = u32_at(buf, slot)?;
+        if id != u32::MAX && id >= 0x0100_0000 {
+            return None;
+        }
+    }
+    for high in [at - 25, at - 17, at - 9, at - 1, at + 3] {
+        if *buf.get(high)? != 0 {
+            return None;
+        }
+    }
+    let shininess = u32::from_le_bytes(buf.get(at + 4..at + 8)?.try_into().ok()?);
+    Some(MaterialAppearance {
+        rgb: [buf[at], buf[at + 1], buf[at + 2]],
+        transparency,
+        shininess,
+    })
+}
+
 /// The first shading frame after the material ElementId at `id_at`.
 pub fn appearance_at(buf: &[u8], id_at: usize) -> Option<MaterialAppearance> {
     let from = id_at.checked_add(8 + 32)?;
@@ -123,6 +156,9 @@ pub fn scan_material_appearances(
     revit_version: u32,
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, MaterialAppearance>> {
+    if revit_version == 2023 {
+        return Ok(scan_material_appearances_2023(rf, declared));
+    }
     let Some(tag) = material_object_tag(revit_version) else {
         return Ok(BTreeMap::new());
     };
@@ -450,11 +486,17 @@ pub const MATERIAL_TAG_OFFSET_2023: usize = 0x27;
 /// (RE-113). A material is an object `01 00 00 00 · u32 id` carrying
 /// [`MATERIAL_TAG_2023`], whether it opens an element's data or sits inside
 /// another's (a family's own materials); only ids in `declared` count. Its
-/// name is the one its element data gives it
-/// ([`crate::partition_names::find_element_data_names_2023`]), else its
-/// first [`NAME_PARAMETER`] entry, `i32 -1001203 · u32 0 · u32 n · UTF-16 ×
-/// n`, whose value is a name. An id whose copies disagree has no name, and
-/// nor has a name read for two or more materials.
+/// name is its own name field, as RE-58 reads a 2024 one: right after the
+/// tag, two to four zero `u32`s, `u32 n` and the name, where no
+/// BuiltInParameter id follows the zeros (Revit_IFC5_Einhoven); else the
+/// one ending right before the first `ff ff ff ff eb 0b` past the tag, as
+/// RE-58 ends a 2024 name before `ff ff ff ff 17 0c` (RE-116);
+/// else its first [`NAME_PARAMETER`] entry, `i32 -1001203 · u32 0 · u32 n ·
+/// UTF-16 × n`, whose value is a name; else the one its element data gives
+/// it ([`crate::partition_names::find_element_data_names_2023`]), which on
+/// some materials is an appearance asset's file name instead. An id whose
+/// copies disagree has no name, and nor has a name read for two or more
+/// materials.
 pub fn scan_materials_2023(
     rf: &mut RevitFile,
     declared: &BTreeSet<u32>,
@@ -488,10 +530,14 @@ pub fn scan_materials_2023(
             materials.insert(id);
             let end = id_at.saturating_add(NAME_WINDOW).min(buf.len());
             let object = &buf[tag_at + 2..end];
-            let name = memchr::memmem::find_iter(object, &entry).find_map(|hit| {
-                let n = u32_at(object, hit + entry.len())?;
-                utf16_name(object, hit + entry.len() + 4, n)
-            });
+            let name = own_name_field(object)
+                .or_else(|| terminated_name_2023(object))
+                .or_else(|| {
+                    memchr::memmem::find_iter(object, &entry).find_map(|hit| {
+                        let n = u32_at(object, hit + entry.len())?;
+                        utf16_name(object, hit + entry.len() + 4, n)
+                    })
+                });
             let Some(name) = name else {
                 continue;
             };
@@ -507,18 +553,22 @@ pub fn scan_materials_2023(
             }
         }
     }
-    let mut names: BTreeMap<u32, String> = BTreeMap::new();
+    let mut names: BTreeMap<u32, String> = found
+        .into_iter()
+        .filter_map(|(id, name)| name.map(|n| (id, n)))
+        .collect();
+    let unnamed: BTreeSet<u32> = materials
+        .iter()
+        .copied()
+        .filter(|id| !names.contains_key(id))
+        .collect();
     for stream in rf.partition_stream_names() {
         if let Ok(inflated) = rf.inflated_partition(&stream) {
-            names.extend(crate::partition_names::find_element_data_names_2023(
-                inflated.bytes(),
-                &materials,
-            ));
-        }
-    }
-    for (id, name) in found {
-        if let Some(name) = name {
-            names.entry(id).or_insert(name);
+            for (id, name) in
+                crate::partition_names::find_element_data_names_2023(inflated.bytes(), &unnamed)
+            {
+                names.entry(id).or_insert(name);
+            }
         }
     }
     let mut uses: BTreeMap<&str, usize> = BTreeMap::new();
@@ -569,4 +619,100 @@ fn scan_category_material_2023(rf: &mut RevitFile, category: i64) -> Result<Opti
         return Ok(None);
     };
     Ok(Some(material).filter(|&id| id != 0 && id != u32::MAX))
+}
+
+/// [`scan_material_appearances`] on Revit 2023 (RE-116): each material
+/// object of [`scan_materials_2023`]'s shape, and its first
+/// [`frame_at_2023`] frame.
+fn scan_material_appearances_2023(
+    rf: &mut RevitFile,
+    declared: &BTreeSet<u32>,
+) -> BTreeMap<u32, MaterialAppearance> {
+    const PREFIX: [u8; 7] = [0, 0, 0, 0xff, 0xff, 0xff, 0xff];
+    let mut found: BTreeMap<u32, Option<MaterialAppearance>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for tag_at in memchr::memmem::find_iter(buf, &MATERIAL_TAG_2023) {
+            let Some(id_at) = tag_at.checked_sub(MATERIAL_TAG_OFFSET_2023) else {
+                continue;
+            };
+            if id_at < 4
+                || buf.get(id_at - 4..id_at) != Some(&[1, 0, 0, 0][..])
+                || buf.get(tag_at - PREFIX.len()..tag_at) != Some(&PREFIX[..])
+            {
+                continue;
+            }
+            let Some(id) = u32_at(buf, id_at).filter(|id| declared.contains(id)) else {
+                continue;
+            };
+            let to = id_at
+                .saturating_add(APPEARANCE_WINDOW)
+                .min(buf.len().saturating_sub(8));
+            let Some(appearance) = (tag_at + 2 + 40..to).find_map(|at| frame_at_2023(buf, at))
+            else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(appearance));
+                }
+                Some(held) => {
+                    if held.as_ref() != Some(&appearance) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, appearance)| appearance.map(|a| (id, a)))
+        .collect()
+}
+
+/// The name `u32 n · UTF-16 × n` ending right before the first `ff ff ff ff
+/// eb 0b` in `object` (RE-116), where exactly one length fits.
+fn terminated_name_2023(object: &[u8]) -> Option<String> {
+    const TERMINATOR: [u8; 6] = [0xff, 0xff, 0xff, 0xff, 0xeb, 0x0b];
+    let end = memchr::memmem::find(object, &TERMINATOR)?;
+    let mut names = (1..=256u32).filter_map(|n| {
+        let at = end.checked_sub(4 + 2 * n as usize)?;
+        (u32_at(object, at)? == n)
+            .then(|| utf16_name(object, at + 4, n))
+            .flatten()
+    });
+    let name = names.next()?;
+    names.next().is_none().then_some(name)
+}
+
+/// The name `u32 n · UTF-16 × n` after two to four zero `u32`s at the start
+/// of `object`, the bytes right after a 2023 material's class tag (RE-58's
+/// own name field), unless a BuiltInParameter id follows the zeros.
+fn own_name_field(object: &[u8]) -> Option<String> {
+    let mut at = 0;
+    let mut zeros = 0;
+    while zeros < 4 && u32_at(object, at) == Some(0) {
+        at += 4;
+        zeros += 1;
+    }
+    if zeros < 2 {
+        return None;
+    }
+    let n = u32_at(object, at)?;
+    // A slot followed by a BuiltInParameter id is a parameter entry.
+    let parameter = i32::from_le_bytes(object.get(at + 4..at + 8)?.try_into().ok()?);
+    if is_builtin_parameter(i64::from(parameter)) {
+        return None;
+    }
+    // Where the field holds something else, two zeros can still lead to a
+    // "name" of private-use or specials-block units; none is a name
+    // (RE-109 drops them from 2023 name entries the same way).
+    utf16_name(object, at + 4, n).filter(|name| {
+        !name
+            .chars()
+            .any(|c| matches!(c, '\u{e000}'..='\u{f8ff}' | '\u{fff0}'..='\u{ffff}'))
+    })
 }

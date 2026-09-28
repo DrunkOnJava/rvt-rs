@@ -68,14 +68,14 @@
     },
     "materials": {
       "status": "decoder_baseline",
-      "expected": 42,
-      "source": "rvt-rs partition Material-like display names → IfcMaterial on Einhoven 2023 (no compound layers / colors)",
+      "expected": 36,
+      "source": "rvt-rs Revit 2023 material objects (class tag 0x09fb, RE-113) with their names and shading colours (RE-116) → IfcMaterial on Einhoven 2023",
       "decoder_metric": "diagnostics.exported.material_count",
-      "decoder_expected": 42,
-      "decoder_tolerance": 5,
+      "decoder_expected": 36,
+      "decoder_tolerance": 0,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "Display-name Materials only; compound assemblies and color recovery remain open. Baseline 42 after Finding 1 / partition Material recovery (was 41)."
+      "notes": "Since RE-116 the file's own 36 materials, every one named by its own name field and coloured: Default, Default Wall, Default Roof, Glass and the rest. Before, 42 partition display-name strings stood in (41 before Finding 1). No paired export scores them."
     },
     "units": {
       "status": "decoder_baseline",
