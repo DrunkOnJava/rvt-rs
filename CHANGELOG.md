@@ -8,6 +8,23 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Elements are typed by IFC type objects of their Revit type (RE-110).**
+  Every element rvt-rs names `Family:Type` and whose type it reads is now
+  typed through `IfcRelDefinesByType` by one IFC4 type object per Revit
+  type (`IfcWallType`, `IfcDoorType`, `IfcColumnType` and the rest), as
+  Revit's own export types it. Each type object is named `Family:Type`,
+  with the type's ElementId as its `Tag` and the GlobalId the type's
+  UniqueId gives. Before, no type object was written. Measured per `Tag`
+  against Revit's exports: Core Interior 854 of 854 elements typed with
+  Revit's type name, `Tag` and entity; Snowdon Towers 5,803 of 5,812;
+  RE1 Architecture 72 of 73; on Revit 2023, every family instance of
+  Exemplo_data (19) and modelo_bim (31). Revit's exporter often writes
+  several type objects for one type, such as one per column, with
+  GlobalIds of its own, so type GlobalIds are Revit's on 438 of Core
+  Interior's 854. Railings, openings and spaces are not typed, nor are
+  2023 walls, floors and roofs, whose type names are not read. Both Core
+  Interior witness observations are refreshed.
+
 - **Revit 2023 family instances carry their family and type names
   (RE-109, #421).** A 2023 name entry is `01 00 00 00 · u32 id · u32 n ·
   UTF-16`, with no category after it as 2024's has. An instance's type is

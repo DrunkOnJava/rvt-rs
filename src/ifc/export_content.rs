@@ -51,6 +51,8 @@ pub struct TypedProductionAppend {
     /// The materials each element's type draws its geometry in, by
     /// ElementId (RE-82).
     pub element_type_materials: BTreeMap<u32, Vec<String>>,
+    /// Each element's type, by ElementId (RE-110).
+    pub element_type_ids: BTreeMap<u32, u32>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -223,6 +225,17 @@ pub fn append_typed_production_elements(
                 .collect();
             if !names.is_empty() {
                 out.element_type_materials.insert(id, names);
+            }
+            // RE-110: the element's type, which the writer types it by.
+            if let Some(type_id) = decoded.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. }
+                    if name == crate::partition_schema_mvp::TYPE_ID_FIELD =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            }) {
+                out.element_type_ids.insert(id, type_id);
             }
         }
 

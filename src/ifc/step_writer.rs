@@ -163,6 +163,50 @@ fn step_enum_token(raw: &str) -> Option<String> {
     }
 }
 
+/// The IFC4 type entity an occurrence of `ifc_upper` is typed by, and the
+/// attributes that entity declares after `ElementType`, with `predefined`
+/// the occurrence's `PredefinedType` (RE-110). An occurrence and its type
+/// share one enumeration. `None` for entities rvt-rs does not type.
+fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String, String)> {
+    let pt = format!(
+        ".{}.",
+        predefined
+            .and_then(step_enum_token)
+            .unwrap_or_else(|| "NOTDEFINED".into())
+    );
+    let tail = match ifc_upper {
+        "IFCDOOR" | "IFCWINDOW" => format!("{pt},.NOTDEFINED.,$,$"),
+        "IFCFURNITURE" => format!(".NOTDEFINED.,{pt}"),
+        "IFCWALL"
+        | "IFCSLAB"
+        | "IFCBEAM"
+        | "IFCCOLUMN"
+        | "IFCMEMBER"
+        | "IFCPLATE"
+        | "IFCCOVERING"
+        | "IFCCURTAINWALL"
+        | "IFCFOOTING"
+        | "IFCRAMP"
+        | "IFCROOF"
+        | "IFCSTAIR"
+        | "IFCSTAIRFLIGHT"
+        | "IFCSHADINGDEVICE"
+        | "IFCBUILDINGELEMENTPROXY"
+        | "IFCAIRTERMINAL"
+        | "IFCALARM"
+        | "IFCDUCTFITTING"
+        | "IFCDUCTSEGMENT"
+        | "IFCELECTRICAPPLIANCE"
+        | "IFCLIGHTFIXTURE"
+        | "IFCPIPEFITTING"
+        | "IFCPIPESEGMENT"
+        | "IFCSANITARYTERMINAL"
+        | "IFCTRANSPORTELEMENT" => pt,
+        _ => return None,
+    };
+    Some((format!("{ifc_upper}TYPE"), tail))
+}
+
 /// Render the attribute tail for one building element.
 ///
 /// `tag_quoted` and `name_quoted` are already STEP-quoted (`'…'` or
@@ -2379,6 +2423,111 @@ impl StepWriter {
             );
         }
 
+        // RE-110: every element named `Family:Type` whose type is read is
+        // typed by one IFC type object per type, as in Revit's own export:
+        // named `Family:Type`, its `Tag` the type's ElementId and its
+        // GlobalId Revit's.
+        struct TypeGroup {
+            type_id: u32,
+            entity: String,
+            name: String,
+            tail: String,
+            elements: Vec<usize>,
+        }
+        let mut type_groups: Vec<TypeGroup> = Vec::new();
+        for (entity_idx, entity) in model.entities.iter().enumerate() {
+            let super::entities::IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid,
+                predefined_type,
+                property_set,
+                ..
+            } = entity
+            else {
+                continue;
+            };
+            let (Some(el_id), Some(type_id)) = (
+                entity_index_to_el_id[entity_idx],
+                type_guid
+                    .as_deref()
+                    .and_then(|tag| tag.parse::<u32>().ok())
+                    .and_then(|id| model.element_type_ids.get(&id)),
+            ) else {
+                continue;
+            };
+            let property_text = |key: &str| {
+                property_set.as_ref().and_then(|set| {
+                    set.properties.iter().find_map(|p| match &p.value {
+                        super::entities::PropertyValue::Text(text) if p.name == key => {
+                            Some(text.clone())
+                        }
+                        _ => None,
+                    })
+                })
+            };
+            let (Some(family), Some(type_name)) = (
+                property_text(super::export_content::FAMILY_NAME_PROPERTY),
+                property_text(super::export_content::TYPE_NAME_PROPERTY),
+            ) else {
+                continue;
+            };
+            let Some((entity_name, tail)) =
+                type_entity_for(&ifc_type.to_ascii_uppercase(), predefined_type.as_deref())
+            else {
+                continue;
+            };
+            match type_groups
+                .iter_mut()
+                .find(|group| group.type_id == *type_id && group.entity == entity_name)
+            {
+                Some(group) => group.elements.push(el_id),
+                None => type_groups.push(TypeGroup {
+                    type_id: *type_id,
+                    entity: entity_name,
+                    name: format!("{family}:{type_name}"),
+                    tail,
+                    elements: vec![el_id],
+                }),
+            }
+        }
+        let mut typed_ids: std::collections::BTreeSet<u32> = Default::default();
+        for TypeGroup {
+            type_id,
+            entity: entity_name,
+            name,
+            tail,
+            elements,
+        } in &type_groups
+        {
+            let tag = type_id.to_string();
+            // A type split across two entities keeps Revit's GlobalId once.
+            let type_gid = match model.global_ids.types.get(type_id) {
+                Some(global_id) if typed_ids.insert(*type_id) => global_id.clone(),
+                _ => gid(&["type", entity_name, &tag]),
+            };
+            let type_el_id = self.id();
+            self.emit_entity(
+                type_el_id,
+                format!(
+                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,$,$,'{tag}',$,{tail})",
+                    quoted_or_dollar(&escape(name)),
+                ),
+            );
+            let rel_id = self.id();
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELDEFINESBYTYPE('{}',#{owner_hist},$,$,({}),#{type_el_id})",
+                    gid(&["defines-by-type", &type_gid]),
+                    elements
+                        .iter()
+                        .map(|id| format!("#{id}"))
+                        .collect::<Vec<_>>()
+                        .join(","),
+                ),
+            );
+        }
+
         // Suppress unused-variable warning from the legacy single-
         // storey fallback — the loop above now consults
         // storey_placements[idx] instead of this scalar binding.
@@ -2570,6 +2719,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -2599,6 +2749,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -2670,6 +2821,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -2775,6 +2927,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -2991,6 +3144,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -3442,6 +3596,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -3516,6 +3671,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -3597,6 +3753,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -3659,6 +3816,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         }
@@ -3800,6 +3958,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         }
@@ -3957,6 +4116,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -4169,6 +4329,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -4257,6 +4418,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };
@@ -4326,6 +4488,7 @@ mod tests {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         };

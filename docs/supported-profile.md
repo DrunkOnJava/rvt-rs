@@ -56,7 +56,8 @@ OLE/CFB Revit container is refused with an error, never a partial model.
 ## Properties on Revit 2024 and 2025 projects
 
 Read: ElementId, category, `Family:Type:ElementId` name, type name, storey,
-material names and layer thicknesses, family instances' materials (RE-82), Revit's GlobalId (other entities get one
+material names and layer thicknesses, family instances' materials (RE-82), the IFC type
+object of each element's type (RE-110), Revit's GlobalId (other entities get one
 derived from the document and their own identity, stable between exports,
 #400), stair riser and tread dimensions, and Revit's "Export to IFC As"
 override. Not read: most instance and type parameters (#35, #155) and phases
