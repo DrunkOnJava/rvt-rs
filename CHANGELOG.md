@@ -18,6 +18,18 @@ All notable changes will be documented here. This project follows
   `examples/probe_re124_revit_2026_records.rs` and
   `tools/re/instances_vs_ifc_tags.py` measure it.
 
+### Fixed
+
+- **No invented storeys (RE-124).** A file whose Levels are not read got
+  storeys anyway: Level-like strings from its partitions at elevation 0, or
+  a placeholder `Level 1`. On a Revit 2026 house they were `Ground floor`,
+  `Level 1` and `Roof`, none of its four Levels, and every family file had
+  `Level 1` and `Roof` though a family has no Levels. Such a file now has no
+  `IfcBuildingStorey` (IFC4 needs none), and its elements are contained in
+  the `IfcBuilding`. Every project whose Levels are read, 2023 to 2025, is
+  unchanged: Core Interior, Snowdon Towers, the RE1 models, Einhoven and
+  the 255ribeiro projects keep the same storeys.
+
 ### Changed
 
 - **Element records are scanned with the marker the file's own schema

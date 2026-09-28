@@ -148,7 +148,7 @@ Important nested fields:
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
 | `exported.building_elements_carried_by_parts` | integer | Exported elements with no body of their own because their aggregated parts carry it, as in Revit's export: stairs (RE-39) and curtain walls (RE-46). Not counted in `building_elements_with_geometry`. |
 | `exported.storey_names` | array | Recovered building-storey display names, in emission order. |
-| `exported.storey_elevations_feet` | array | Recovered storey elevations in feet, aligned with `storey_names`. An all-zero list means only Level *name* strings were recovered — no elevation evidence was found. |
+| `exported.storey_elevations_feet` | array | Recovered storey elevations in feet, aligned with `storey_names`. |
 | `exported.storey_bound_elements` | integer | Building elements contained in a specific storey. The rest are contained in the `IfcBuilding`, never in a named storey. |
 | `exported.layered_element_count` | integer | Elements whose compound layers and layer colours were read (RE-53). The glTF export draws each in its layers where they add up to its body's thickness; the rest are drawn whole. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
@@ -157,14 +157,14 @@ Important nested fields:
 
 ## Storey provenance
 
-`storey_count` / `storey_names` / `storey_elevations_feet` describe one of two
-different recoveries, and the elevations are how a reader tells them apart.
+`storey_count` / `storey_names` / `storey_elevations_feet` describe storeys
+whose elevation the file gives. A file where no Level's elevation is read
+(family files, and projects of releases whose Level records are not read)
+has no storeys: `storey_count` is 0 and its elements are contained in the
+`IfcBuilding`. Level-like strings alone are not written as storeys. Until
+0.4.0 they were, at elevation 0, and on a Revit 2026 house none of the three
+(`Ground floor`, `Level 1`, `Roof`) was one of its Levels (RE-124).
 
-- **Name-only.** Partition `Level`-like strings were recovered but nothing in
-  the file gave them an elevation, so every entry in
-  `storey_elevations_feet` is `0.0`. The storeys are real names in an
-  arbitrary order; they are not positions, and no element is contained in
-  one.
 - **Measured elevations.** Base elevations were recovered — from 2023 ArcWall
   trailers, or on Revit 2024 from the partition element-record bounding boxes
   (#213) — so `storey_elevations_feet` carries distinct values and
