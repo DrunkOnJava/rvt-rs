@@ -746,6 +746,10 @@ pub struct OpeningCut {
     pub y_dim_feet: f64,
     /// Rectangle centre in the element's local frame, feet.
     pub centre_feet: [f64; 2],
+    /// Where the opening starts above the element's placement and how high
+    /// it is, feet (RE-93). `None` takes the element body's height.
+    #[serde(default)]
+    pub z_range_feet: Option<[f64; 2]>,
 }
 
 /// A family instance's materials (RE-82): IFC4 `IfcMaterialConstituentSet`,

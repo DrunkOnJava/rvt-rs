@@ -17,6 +17,11 @@
 //! parameters such as Mark and Comments are not stored this way and are not
 //! read. A type whose blocks carry two different values for one parameter
 //! gets neither (fail closed).
+//!
+//! A type's length parameters sit in the same blocks as `f64 feet · ff × 8 ·
+//! i64 parameter` (RE-93): a BuiltInParameter's negative id, or the declared
+//! ElementId of a family parameter. [`type_window_openings`] reads the
+//! values a window's opening is built from.
 
 use crate::RevitFile;
 use crate::partition_element_records::bbox_marker;
@@ -48,16 +53,7 @@ pub fn scan_partition(
     buf: &[u8],
     declared_ids: &BTreeSet<u32>,
 ) -> BTreeMap<u32, BTreeMap<&'static str, String>> {
-    // Block starts: the mark, not preceded by a further 0xff (a longer run
-    // of 0xff is padding, not a block), with a declared ElementId before it.
-    let blocks: Vec<(usize, u32)> = memchr::memmem::find_iter(buf, &VALUE_BLOCK_MARK)
-        .filter(|&at| at >= 8 && buf[at - 1] != 0xff)
-        .filter_map(|at| {
-            let id = u64::from_le_bytes(buf[at - 8..at].try_into().ok()?);
-            let id = u32::try_from(id).ok()?;
-            declared_ids.contains(&id).then_some((at, id))
-        })
-        .collect();
+    let blocks = value_blocks(buf, declared_ids);
     let mut values: BTreeMap<(u32, &'static str), Option<String>> = BTreeMap::new();
     for (parameter, name) in TYPE_TEXT_PARAMETERS {
         for at in memchr::memmem::find_iter(buf, &parameter.to_le_bytes()) {
@@ -125,4 +121,190 @@ fn text_at(buf: &[u8], at: usize) -> Option<String> {
         .collect();
     let text = String::from_utf16(&units).ok()?;
     text.chars().all(|c| !c.is_control()).then_some(text)
+}
+
+/// A window type's Width and Height, by BuiltInParameter (RE-93).
+pub const WINDOW_WIDTH_PARAMETER: i64 = -1001301;
+/// See [`WINDOW_WIDTH_PARAMETER`].
+pub const WINDOW_HEIGHT_PARAMETER: i64 = -1001300;
+/// The name of the window family parameter holding a type's default sill
+/// height (RE-93). It is a family parameter, not a BuiltInParameter, so it
+/// is found by its name, as Revit's English templates name it.
+pub const DEFAULT_SILL_HEIGHT_NAME: &str = "Default Sill Height";
+/// From a family parameter's ElementId (after `01 00 00 00`) to its name,
+/// `u32 n · UTF-16 × n`, which a `u32`-counted `revit.local.family:` id
+/// follows (RE-93).
+pub const PARAMETER_NAME_OFFSET: usize = 0x56;
+const FAMILY_PARAMETER_ID_PREFIX: &str = "revit.local.family:";
+/// Largest length value read, feet.
+const MAX_LENGTH_FEET: f64 = 1000.0;
+
+/// The declared family parameters in `buf` named `name` (RE-93).
+pub fn family_parameters_named(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    name: &str,
+) -> BTreeSet<u32> {
+    let units: Vec<u8> = name.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let Ok(count) = u32::try_from(name.encode_utf16().count()) else {
+        return BTreeSet::new();
+    };
+    let mut pattern = count.to_le_bytes().to_vec();
+    pattern.extend_from_slice(&units);
+    memchr::memmem::find_iter(buf, &pattern)
+        .filter(|&at| {
+            text_at(buf, at + pattern.len())
+                .is_some_and(|id| id.starts_with(FAMILY_PARAMETER_ID_PREFIX))
+        })
+        .filter_map(|at| {
+            let id_at = at.checked_sub(PARAMETER_NAME_OFFSET)?;
+            if buf.get(id_at.checked_sub(4)?..id_at)? != [1, 0, 0, 0] {
+                return None;
+            }
+            let id = u64::from_le_bytes(buf.get(id_at..id_at + 8)?.try_into().ok()?);
+            u32::try_from(id)
+                .ok()
+                .filter(|id| declared_ids.contains(id))
+        })
+        .collect()
+}
+
+/// The length values in `buf` of each parameter in `parameters`, by the
+/// declared ElementId of the value block each entry follows. A block that
+/// holds two values for one parameter gets neither.
+pub fn scan_partition_lengths(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    parameters: &BTreeSet<i64>,
+) -> BTreeMap<u32, BTreeMap<i64, f64>> {
+    let blocks = value_blocks(buf, declared_ids);
+    let mut values: BTreeMap<(u32, i64), Option<f64>> = BTreeMap::new();
+    for &parameter in parameters {
+        for at in memchr::memmem::find_iter(buf, &parameter.to_le_bytes()) {
+            let Some(value) = at
+                .checked_sub(16)
+                .and_then(|start| buf.get(start..at))
+                .filter(|entry| entry[8..] == [0xff; 8])
+                .map(|entry| f64::from_le_bytes(entry[..8].try_into().expect("8 bytes")))
+                .filter(|value| value.is_finite() && value.abs() <= MAX_LENGTH_FEET)
+            else {
+                continue;
+            };
+            let index = blocks.partition_point(|(start, _)| *start < at);
+            let Some(&(_, owner)) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
+                continue;
+            };
+            values
+                .entry((owner, parameter))
+                .and_modify(|seen| {
+                    if *seen != Some(value) {
+                        *seen = None;
+                    }
+                })
+                .or_insert(Some(value));
+        }
+    }
+    let mut out: BTreeMap<u32, BTreeMap<i64, f64>> = BTreeMap::new();
+    for ((owner, parameter), value) in values {
+        if let Some(value) = value {
+            out.entry(owner).or_default().insert(parameter, value);
+        }
+    }
+    out
+}
+
+/// What a window's opening is built from, from its type (RE-93), feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WindowTypeOpening {
+    /// The type's Width.
+    pub width_feet: f64,
+    /// The type's Height.
+    pub height_feet: f64,
+    /// The type's Default Sill Height.
+    pub default_sill_feet: f64,
+}
+
+/// The opening of each type in `types` whose Width, Height and Default Sill
+/// Height are read, and agree across every partition (RE-93). Empty for a
+/// release whose element records are not decoded.
+pub fn type_window_openings(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+) -> BTreeMap<u32, WindowTypeOpening> {
+    if bbox_marker(revit_version).is_none() || types.is_empty() {
+        return BTreeMap::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared: BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let streams = rf.partition_stream_names();
+    let mut sills: BTreeSet<i64> = BTreeSet::new();
+    for stream in &streams {
+        if let Ok(inflated) = rf.inflated_partition(stream) {
+            sills.extend(
+                family_parameters_named(inflated.bytes(), &declared, DEFAULT_SILL_HEIGHT_NAME)
+                    .into_iter()
+                    .map(i64::from),
+            );
+        }
+    }
+    let mut parameters = sills.clone();
+    parameters.extend([WINDOW_WIDTH_PARAMETER, WINDOW_HEIGHT_PARAMETER]);
+    let mut values: BTreeMap<u32, BTreeMap<i64, Option<f64>>> = BTreeMap::new();
+    for stream in &streams {
+        let Ok(inflated) = rf.inflated_partition(stream) else {
+            continue;
+        };
+        for (owner, found) in scan_partition_lengths(inflated.bytes(), &declared, &parameters) {
+            if !types.contains(&owner) {
+                continue;
+            }
+            let held = values.entry(owner).or_default();
+            for (parameter, value) in found {
+                held.entry(parameter)
+                    .and_modify(|seen| {
+                        if *seen != Some(value) {
+                            *seen = None;
+                        }
+                    })
+                    .or_insert(Some(value));
+            }
+        }
+    }
+    values
+        .into_iter()
+        .filter_map(|(owner, held)| {
+            let value = |parameter: i64| held.get(&parameter).copied().flatten();
+            let mut sill = sills.iter().filter_map(|&parameter| value(parameter));
+            let default_sill_feet = sill.next()?;
+            if sill.any(|other| other != default_sill_feet) {
+                return None;
+            }
+            let opening = WindowTypeOpening {
+                width_feet: value(WINDOW_WIDTH_PARAMETER)?,
+                height_feet: value(WINDOW_HEIGHT_PARAMETER)?,
+                default_sill_feet,
+            };
+            (opening.width_feet > 0.0
+                && opening.height_feet > 0.0
+                && opening.default_sill_feet >= 0.0)
+                .then_some((owner, opening))
+        })
+        .collect()
+}
+
+/// Value block starts in `buf`: the mark, not preceded by a further 0xff (a
+/// longer run of 0xff is padding, not a block), with a declared ElementId
+/// before it.
+fn value_blocks(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<(usize, u32)> {
+    memchr::memmem::find_iter(buf, &VALUE_BLOCK_MARK)
+        .filter(|&at| at >= 8 && buf[at - 1] != 0xff)
+        .filter_map(|at| {
+            let id = u64::from_le_bytes(buf[at - 8..at].try_into().ok()?);
+            let id = u32::try_from(id).ok()?;
+            declared_ids.contains(&id).then_some((at, id))
+        })
+        .collect()
 }

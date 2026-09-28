@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use super::IfcModel;
-use super::entities::{Extrusion, SolidShape};
+use super::entities::{Extrusion, OpeningCut, SolidShape};
 
 /// Options controlling STEP serialization.
 #[derive(Debug, Clone, Default)]
@@ -174,6 +174,7 @@ fn element_attribute_tail(
     tag_quoted: &str,
     predefined: Option<&str>,
     long_name_quoted: &str,
+    overall_height_width_feet: Option<(f64, f64)>,
 ) -> String {
     let pt = match predefined.and_then(step_enum_token) {
         Some(token) => format!(".{token}."),
@@ -182,10 +183,16 @@ fn element_attribute_tail(
     match element_tail_for(ifc_upper) {
         ElementTail::Tag => tag_quoted.to_string(),
         ElementTail::TagPredefined => format!("{tag_quoted},{pt}"),
-        // OverallHeight / OverallWidth stay `$`: the opening's own
-        // extrusion carries the geometry, and a nominal panel size is
-        // not decoded from the file.
-        ElementTail::Opening => format!("{tag_quoted},$,$,{pt},$,$"),
+        // OverallHeight / OverallWidth are the type's, where read (RE-93),
+        // and otherwise `$`.
+        ElementTail::Opening => match overall_height_width_feet {
+            Some((height, width)) => format!(
+                "{tag_quoted},{:.6},{:.6},{pt},$,$",
+                height * 0.3048,
+                width * 0.3048
+            ),
+            None => format!("{tag_quoted},$,$,{pt},$,$"),
+        },
         // IfcSpace has no Tag attribute — slot 8 is LongName. Before
         // #214 the writer put the type GUID there, which typed as a
         // label but meant the wrong thing; the element's own Name
@@ -213,6 +220,29 @@ struct StepWriter {
 }
 
 impl StepWriter {
+    /// The `Position` and depth, metres, of an opening's extruded solid: the
+    /// shared `solid_position` and the body's `depth_m`, or, for a cut with
+    /// its own height (RE-93), a placement that far above the element's and
+    /// that height.
+    fn opening_solid_position(
+        &mut self,
+        solid_position: usize,
+        cut: Option<&OpeningCut>,
+        depth_m: f64,
+    ) -> (usize, f64) {
+        let Some([z, height]) = cut.and_then(|cut| cut.z_range_feet) else {
+            return (solid_position, depth_m);
+        };
+        let point = self.id();
+        self.emit_entity(
+            point,
+            format!("IFCCARTESIANPOINT((0.,0.,{:.6}))", z * 0.3048),
+        );
+        let position = self.id();
+        self.emit_entity(position, format!("IFCAXIS2PLACEMENT3D(#{point},$,$)"));
+        (position, height * 0.3048)
+    }
+
     fn new(timestamp: i64) -> Self {
         Self {
             out: String::new(),
@@ -1789,11 +1819,13 @@ impl StepWriter {
                     // extrusion sits at the element origin and the
                     // element's own IfcLocalPlacement moves it into
                     // the world exactly once (#232).
+                    let (position, depth) =
+                        self.opening_solid_position(solid_position, own_cut, depth);
                     let solid_id = self.id();
                     self.emit_entity(
                         solid_id,
                         format!(
-                            "IFCEXTRUDEDAREASOLID(#{profile_id},#{solid_position},#{z_axis},{depth:.6})"
+                            "IFCEXTRUDEDAREASOLID(#{profile_id},#{position},#{z_axis},{depth:.6})"
                         ),
                     );
                     // The representation groups the solid inside the
@@ -1878,11 +1910,28 @@ impl StepWriter {
                 // the type, so a reader can index PredefinedType
                 // instead of hitting "index out of range".
                 let ifc_upper = ifc_type.to_ascii_uppercase();
+                // RE-93: a window's OverallHeight and OverallWidth are its
+                // type's Height and Width, which Revit's export writes there.
+                let property_length = |key: &str| {
+                    property_set.as_ref().and_then(|set| {
+                        set.properties.iter().find_map(|p| match &p.value {
+                            super::entities::PropertyValue::PositiveLengthFeet(value)
+                                if p.name == key =>
+                            {
+                                Some(*value)
+                            }
+                            _ => None,
+                        })
+                    })
+                };
+                let [.., width_key, height_key] = super::export_content::WINDOW_OPENING_PROPERTIES;
+                let overall = property_length(height_key).zip(property_length(width_key));
                 let tail = element_attribute_tail(
                     &ifc_upper,
                     &tag_quoted,
                     predefined_type.as_deref(),
                     &long_name_quoted,
+                    overall,
                 );
                 let global_id: &str = element_gids[entity_idx]
                     .as_deref()
@@ -2049,11 +2098,13 @@ impl StepWriter {
                                 "IFCRECTANGLEPROFILEDEF(.AREA.,$,#{o_profile_place},{x_dim:.6},{y_dim:.6})"
                             ),
                         );
+                        let (position, depth_m) =
+                            self.opening_solid_position(solid_position, cut, depth_m);
                         let o_solid = self.id();
                         self.emit_entity(
                             o_solid,
                             format!(
-                                "IFCEXTRUDEDAREASOLID(#{o_profile},#{solid_position},#{z_axis},{depth_m:.6})"
+                                "IFCEXTRUDEDAREASOLID(#{o_profile},#{position},#{z_axis},{depth_m:.6})"
                             ),
                         );
                         let o_rep = self.id();

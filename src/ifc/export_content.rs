@@ -788,6 +788,20 @@ pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_
 /// transform, model feet (RE-87, RE-89).
 pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
 
+/// Properties holding a window's opening from its type and transform
+/// (RE-93, [`crate::partition_schema_mvp::WindowOpening`]): the plan point
+/// it is centred on and the direction of its width, model feet and a unit
+/// vector, then its base elevation, width and height, feet.
+pub const WINDOW_OPENING_PROPERTIES: [&str; 7] = [
+    "OpeningCentreX",
+    "OpeningCentreY",
+    "OpeningAxisX",
+    "OpeningAxisY",
+    "OpeningBaseElevation",
+    "OpeningWidth",
+    "OpeningHeight",
+];
+
 /// Classes whose body another rule draws, which a family instance's turn
 /// leaves alone: columns (their type's section), beams (their line), and
 /// curtain-wall panels and mullions (their grid).
@@ -1746,6 +1760,25 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     value: PropertyValue::LengthFeet(value),
                 });
             }
+        }
+    }
+    // RE-93: a window reports the opening its type and transform give it.
+    if let Some(opening) = crate::partition_schema_mvp::window_opening_from_fields(&decoded.fields)
+    {
+        let values = [
+            PropertyValue::LengthFeet(opening.centre[0]),
+            PropertyValue::LengthFeet(opening.centre[1]),
+            PropertyValue::Real(opening.axis[0]),
+            PropertyValue::Real(opening.axis[1]),
+            PropertyValue::LengthFeet(opening.base_feet),
+            PropertyValue::PositiveLengthFeet(opening.width_feet),
+            PropertyValue::PositiveLengthFeet(opening.height_feet),
+        ];
+        for (name, value) in WINDOW_OPENING_PROPERTIES.iter().zip(values) {
+            properties.push(Property {
+                name: (*name).into(),
+                value,
+            });
         }
     }
     // A wall drawn from its centreline reports its type's thickness

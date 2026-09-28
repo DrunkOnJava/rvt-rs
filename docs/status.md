@@ -588,6 +588,13 @@ ending with a tread. Monolithic runs are drawn as one cast body. 38 of 43
 Snowdon flights are drawn as their steps (34 before), and the 4 added
 equal Revit's geometry but for one nosing edge
 (`reports/element-framing/RE-92-stair-run-ends.md`).
+**RE-93 (2026-09-28)** reads a type's length parameters from its value
+block (`f64 · ff×8 · i64 parameter`). Revit's export cuts a window's
+opening its type's Width by Height, centred on its origin, from 3.0 ft
+above it, which is the type's Default Sill Height where the type stores
+one. 56 of Snowdon's 68 windows now take that opening, each within
+0.001 ft of Revit's (none before), and their `OverallWidth` /
+`OverallHeight` (`reports/element-framing/RE-93-window-openings.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
