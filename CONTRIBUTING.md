@@ -267,7 +267,15 @@ When you discover something new about the file format:
 3. If the finding changes what rvt-rs outputs, measure the change end to end
    (the scorers under `tools/re/` compare an export with Revit's) and update
    the public status in the same pull request: `docs/status.md`,
-   `docs/support-matrix.json`, the README and `CHANGELOG.md`.
+   `docs/support-matrix.json`, the README and `CHANGELOG.md`. The Measure
+   workflow runs every scorer on the licensed reference models for you,
+   before and after, on GitHub's runners, and can run your probe on them
+   too; the differences land in the run summary:
+
+   ```bash
+   gh workflow run measure.yml --ref <branch> -f base=main
+   gh workflow run measure.yml --ref <branch> -f base= -f probe=<example name>
+   ```
 
 This keeps every claim independently verifiable, which is the
 whole point of open reverse-engineering work.
