@@ -103,7 +103,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Releases where this record shape is corpus-proven: 2024 on
 /// `2024_Core_Interior.rvt` against Revit's own export, 2025 on the
 /// `Drshelden/IFC-ECS` RE1 projects (MIT) against theirs (RE-32).
-pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 
 /// Autodesk `BuiltInCategory.OST_Columns` — architectural columns.
 pub const OST_COLUMNS: i64 = -2_000_100;
@@ -404,12 +404,18 @@ pub const BBOX_MARKER: [u8; 8] = [0x46, 0x01, 0xff, 0xff, 0xff, 0xff, 0xab, 0x05
 /// files (RE-32).
 pub const BBOX_MARKER_2025: [u8; 8] = [0x59, 0x01, 0xff, 0xff, 0xff, 0xff, 0xd3, 0x05];
 
+/// The bbox marker of Revit 2026 files: `0x0161`, `0xFF`×4, `0x05f1`
+/// (1481 + 40, as RE-32 predicted), measured on the flowbim.ee
+/// single-dwelling house against Revit's own export (RE-124).
+pub const BBOX_MARKER_2026: [u8; 8] = [0x61, 0x01, 0xff, 0xff, 0xff, 0xff, 0xf1, 0x05];
+
 /// The bbox marker of `revit_version`, or `None` where the record shape
 /// is not proven (fail closed).
 pub fn bbox_marker(revit_version: u32) -> Option<[u8; 8]> {
     match revit_version {
         2024 => Some(BBOX_MARKER),
         2025 => Some(BBOX_MARKER_2025),
+        2026 => Some(BBOX_MARKER_2026),
         _ => None,
     }
 }
@@ -1525,7 +1531,8 @@ mod tests {
     fn bbox_marker_is_chosen_per_release() {
         assert_eq!(bbox_marker(2024), Some(BBOX_MARKER));
         assert_eq!(bbox_marker(2025), Some(BBOX_MARKER_2025));
-        for unproven in [2023, 2026, 2027] {
+        assert_eq!(bbox_marker(2026), Some(BBOX_MARKER_2026));
+        for unproven in [2023, 2027] {
             assert_eq!(bbox_marker(unproven), None);
             assert!(!supports_revit_version(unproven));
         }

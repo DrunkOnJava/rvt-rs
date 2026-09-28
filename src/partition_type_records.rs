@@ -110,7 +110,7 @@ use std::collections::BTreeSet;
 /// Releases where this record shape is corpus-proven: 2024 on Core
 /// Interior and the Snowdon Towers samples, 2025 on the RE1 projects,
 /// whose records carry the 2025 marker and prologue constant (#322).
-pub const PARTITION_TYPE_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+pub const PARTITION_TYPE_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 
 /// Autodesk `BuiltInCategory.OST_Materials`.
 pub const OST_MATERIALS: i64 = -2_000_700;

@@ -100,6 +100,7 @@ fn scan_partition_with(
         })
         .collect();
     let mut out: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    let mut partial: BTreeSet<u32> = BTreeSet::new();
     for (index, &(start, owner)) in blocks.iter().enumerate() {
         let end = blocks
             .get(index + 1)
@@ -110,9 +111,13 @@ fn scan_partition_with(
         let mut at = start + layout.mark.len();
         while at + 4 <= end {
             if let Some(found) = map_at(buf, at, end, materials, layout.id_len) {
-                for material in found.materials {
-                    if !list.contains(&material) {
-                        list.push(material);
+                if found.partial {
+                    partial.insert(owner);
+                } else {
+                    for material in found.materials {
+                        if !list.contains(&material) {
+                            list.push(material);
+                        }
                     }
                 }
                 if layout.first_map_only {
@@ -124,12 +129,19 @@ fn scan_partition_with(
             }
         }
     }
+    // A type whose only maps are partial draws geometry in materials not
+    // read here: leave it out rather than report it as drawing none (RE-84).
+    out.retain(|owner, list| !list.is_empty() || !partial.contains(owner));
     out
 }
 
 struct MaterialMap {
     materials: Vec<u32>,
     end: usize,
+    /// Some entries are unset. Such a map shows the type draws geometry,
+    /// but its materials are not the element's: taken as its set, it gave
+    /// 46 more wrong sets than right ones on Snowdon Towers (RE-124).
+    partial: bool,
 }
 
 /// The map at `at`, when every one of its values is a material.
@@ -150,14 +162,29 @@ fn map_at(
         return None;
     }
     let mut found = Vec::with_capacity(count);
+    let mut unset = 0;
     for entry in 0..count {
         let value_at = at + 4 + entry * entry_len + 4;
+        // An unset value (all `0xff`) is a part with no material of its
+        // own; a 2026 manufacturer door's map holds several (RE-124).
+        if buf
+            .get(value_at..value_at + id_len)?
+            .iter()
+            .all(|&b| b == 0xff)
+        {
+            unset += 1;
+            continue;
+        }
         let material = id_at(buf, value_at, id_len).filter(|m| materials.contains(m))?;
         found.push(material);
+    }
+    if found.is_empty() {
+        return None;
     }
     Some(MaterialMap {
         materials: found,
         end: map_end,
+        partial: unset > 0,
     })
 }
 
@@ -177,6 +204,11 @@ pub fn type_material_names(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u
     else {
         return BTreeMap::new();
     };
+    // Without the file's materials no map can be recognised, and every type
+    // would read as drawing no geometry (RE-84): fail closed instead.
+    if names.is_empty() {
+        return BTreeMap::new();
+    }
     let materials: BTreeSet<u32> = names.keys().copied().collect();
     let mut by_owner: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {

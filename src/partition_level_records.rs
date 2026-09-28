@@ -152,7 +152,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Releases where this framing is corpus-proven: 2024 on Core Interior
 /// (RE-24) and Snowdon Towers, 2025 on RE1 Architecture (RE-51), and 2023
 /// on two projects in its 32-bit form (RE-107).
-pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025];
+pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025, 2026];
 
 /// The release whose Level records and name blocks carry 32-bit
 /// ElementIds (RE-107).
@@ -199,6 +199,7 @@ pub fn elevation_marker(revit_version: u32) -> Option<[u8; 6]> {
     match revit_version {
         2024 => Some([0x05, 0x00, 0x00, 0x00, 0x48, 0x02]),
         2025 => Some([0x05, 0x00, 0x00, 0x00, 0x5d, 0x02]),
+        2026 => Some([0x05, 0x00, 0x00, 0x00, 0x65, 0x02]),
         _ => None,
     }
 }

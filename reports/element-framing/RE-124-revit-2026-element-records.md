@@ -40,3 +40,46 @@ Family and type names and type parameters (Type Mark) do read on 2026.
 cargo run --profile ci --example probe_re124_revit_2026_records -- AA-SingleDwellingHouse-RVT-CIADD.rvt > ids.txt
 python3 tools/re/instances_vs_ifc_tags.py ids.txt AA-SingleDwellingHouse-RVT-CIADD.ifc
 ```
+
+## 5. Addendum: admitted (2026-09-28)
+
+The three blockers of section 3 are resolved, and Revit 2026 is admitted as experimental.
+
+**Every per-release constant is a schema class tag.** Read from each file's own `Formats/Latest`, the constants rvt-rs held per release are:
+
+| constant | class | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|
+| record marker head, tail | `Outline`, `ElementParents` | 0x013c, 0x0582 | 0x0146, 0x05ab | 0x0159, 0x05d3 | 0x0161, 0x05f1 |
+| Level elevation marker | `Plane` | 0x0235 | 0x0248 | 0x025d | 0x0265 |
+| element-data header | `CellList` | 0x02c0 | 0x02d3 | 0x02ef | 0x02fd |
+| layer frame | `VerticalRegionsStructure` | 0x106f | 0x10a6 | 0x110e | 0x1165 |
+| material object | `Material` | 0x09fb | 0x0a28 | 0x0a6b | 0x0a9c |
+| material name frame | `PatternHelper` | 0x013f | 0x0149 | 0x015c | 0x0164 |
+| material name end | `PhysicalParamSet` | 0x0beb | 0x0c17 | 0x0c6b | 0x0cac |
+
+A 2026 layer record is 41 bytes: the 2025 fields at their offsets, then a `u32` repeating the function.
+
+**Storeys and rooms.** The 2026 elevation marker and element-data header give the house's 4 Levels with Revit's names and elevations, and its 13 rooms with Revit's number and name (RE-117).
+
+**Doors and windows.** RE-84 exported them as bare openings for two reasons.
+- Their types' material maps hold unset entries (`ff`×8), which RE-82's map reader refused.
+- A file whose material names were not read made every map unreadable.
+
+A map with unset entries now proves the type draws geometry, but its materials are not taken as the element's. Taken as its set, it gave 22 more right and 46 more wrong sets on Snowdon Towers. A file without material names decides nothing. Every 2023 to 2025 file is byte-identical.
+
+**Measured against Revit's export** (`tools/re/instances_vs_ifc_tags.py` for the ElementIds, IfcOpenShell for the rest):
+
+| | result |
+|---|---|
+| elements | 113 of 115, none outside it; missed 1 window, 1 geographic element |
+| GlobalIds | 113 of 113 Revit's |
+| storeys | 4 of 4, Revit's names and elevations |
+| elements in Revit's storey | 97; the other 16 are in their room's `IfcSpace` in Revit's export, whose storey is theirs |
+| rooms | 13 of 13 Revit's number and name |
+| doors, windows | 13 of 13 and 15 of 16 as `IfcDoor`/`IfcWindow` in their host |
+| wall names | `Family:Type:ElementId` as Revit's (type names from the element data, family from the layers) |
+| layer sets | 26, named and as thick as Revit's to 0.001 ft; layer materials mostly unnamed (32 of 148 material objects unnamed) |
+| element materials | 2 sets Revit's, 26 incomplete (unnamed layers), 4 with a material Revit does not give (3 windows Revit gives none, 1 nested glass part) |
+| wall bodies (oriented) | thickness 59 of 59 within 1 mm, length 35 of 59, height 37 of 59 |
+
+The 2026 family file, which has no elements, now lists its 24 materials as the 2025 family does. Not read on 2026: wall join lists, roof slopes, stairs, beam axes, IFC export overrides and the opening index.

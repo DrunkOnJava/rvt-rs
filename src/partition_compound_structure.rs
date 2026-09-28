@@ -63,14 +63,14 @@ use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases these layouts are measured on.
-pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 
 /// Releases a wall's location line (RE-49's bounded line) is read on. On
 /// 2025 it is measured by the same house saved in 2024 and 2025, whose 50
 /// walls read the same line, orientation and layers from both (RE-55); on
 /// 2023 by the walls of two projects, whose lines are Revit's axes before
 /// joins (RE-114).
-pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025];
+pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025, 2026];
 
 /// Each wall's location line, by ElementId, on a release in
 /// [`WALL_LINE_SUPPORTED_REVIT_VERSIONS`]; empty elsewhere.
@@ -136,6 +136,15 @@ pub fn layer_layout(revit_version: u32) -> Option<LayerLayout> {
             deck_at: 16,
             wide_ids: true,
         }),
+        // Revit 2026 adds a `u32` after the function, repeating it, so a
+        // record is 41 bytes; the fields read keep their offsets (RE-124).
+        2026 => Some(LayerLayout {
+            record_len: LAYER_RECORD_LEN + 4,
+            function_at: 24,
+            material_at: 8,
+            deck_at: 16,
+            wide_ids: true,
+        }),
         _ => None,
     }
 }
@@ -159,6 +168,7 @@ pub fn layer_frame_tag(revit_version: u32) -> Option<[u8; 2]> {
         2023 => Some([0x6f, 0x10]),
         2024 => Some([0xa6, 0x10]),
         2025 => Some([0x0e, 0x11]),
+        2026 => Some([0x65, 0x11]),
         _ => None,
     }
 }

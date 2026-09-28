@@ -285,12 +285,19 @@ pub const ELEMENT_DATA_HEADER: [u8; 10] =
 pub const ELEMENT_DATA_HEADER_2025: [u8; 10] =
     [0xff, 0xff, 0xff, 0xff, 0xef, 0x02, 0x01, 0x00, 0x00, 0x00];
 
+/// [`ELEMENT_DATA_HEADER`] on Revit 2026: the `u16` is `0x02fd`, the tag of
+/// `CellList` in the file's own schema, as `0x02d3` and `0x02ef` are on 2024
+/// and 2025 (RE-124).
+pub const ELEMENT_DATA_HEADER_2026: [u8; 10] =
+    [0xff, 0xff, 0xff, 0xff, 0xfd, 0x02, 0x01, 0x00, 0x00, 0x00];
+
 /// The element-data header of `revit_version`, or `None` where it is not
 /// measured (fail closed).
 pub fn element_data_header(revit_version: u32) -> Option<[u8; 10]> {
     match revit_version {
         2024 => Some(ELEMENT_DATA_HEADER),
         2025 => Some(ELEMENT_DATA_HEADER_2025),
+        2026 => Some(ELEMENT_DATA_HEADER_2026),
         _ => None,
     }
 }
