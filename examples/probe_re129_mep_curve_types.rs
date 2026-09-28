@@ -5,9 +5,15 @@
 //! type rule (`partition_names::resolve_type`) needs exactly one id in the
 //! record's reference list with a name entry of the element's own category.
 //!
-//! This probe prints every name entry of the pipe and duct categories, and
-//! for each pipe and duct record its reference list, each id with its name
-//! entry (name and category) where it has one.
+//! FACT (negative, RE1 Mechanical and Plumbing): nothing read so far links
+//! a pipe or duct to its type. The probe prints:
+//! - every name entry of the pipe and duct categories (none on RE1);
+//! - each pipe and duct record's reference list, each id with its name
+//!   entry (none of them has one);
+//! - where the type names Revit exports ("221116-WTR", "233113-DUCT-Tees")
+//!   are stored, and the element whose data holds each;
+//! - the declared ids named in at least 90% of the pipes' (or ducts') own
+//!   data, and whether each one's data holds a type name (none does).
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re129_mep_curve_types -- MODEL.rvt
