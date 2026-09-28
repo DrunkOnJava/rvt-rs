@@ -8,6 +8,18 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Turned family instances are drawn turned (RE-87).** A family
+  instance's data holds its transform, a 3 x 3 rotation stored row by row
+  and its origin. A door, window, piece of furniture or other family
+  instance turned off the model's axes is now the rectangle at its angle
+  whose box is its record box, and a door's or window's opening turns with
+  it (`BodySource` `partition_family_instance_turned_box`). On Snowdon
+  Towers all 181 such instances are closer to Revit's body along their
+  own axes (median 1.47 ft off before, 0.48 ft now; 55 within 0.01 ft,
+  none before), and the openings of the 27 turned doors and windows are
+  Revit's width along them (none before). Instances square to the model's
+  axes, and Core Interior, RE1, Einhoven and the MIT house, are unchanged.
+
 - **Tapered walls are drawn with their leaning face (#358, RE-86).** A
   wall type stores three face angles after a fixed frame, and a wall
   whose orientation word is 2 is tapered by them: its exterior face leans

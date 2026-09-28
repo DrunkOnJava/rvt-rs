@@ -176,6 +176,7 @@ pub mod partition_element_records;
 pub mod partition_element_records_2023;
 pub mod partition_id_objects;
 pub mod partition_ifc_export_overrides;
+pub mod partition_instance_transforms;
 pub mod partition_level_records;
 pub mod partition_materials;
 pub mod partition_name_candidates;

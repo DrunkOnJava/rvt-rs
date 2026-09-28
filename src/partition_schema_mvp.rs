@@ -261,6 +261,13 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- A turned family instance's plan axis (RE-87) ---
+    attach_instance_axes(
+        rf,
+        revit_version,
+        [&mut out.doors, &mut out.windows, &mut out.products],
+    );
+
     // --- Family and type names (RE-38) ---
     for elements in [
         &mut out.walls,
@@ -1015,6 +1022,80 @@ fn attach_revit_classes(classes: &crate::formats::SchemaClasses, elements: &mut 
             ));
         }
     }
+}
+
+/// Fields holding the plan X axis of a family instance turned off the
+/// model's axes (RE-87), from its transform, where its Z axis is the
+/// model's.
+pub const INSTANCE_X_AXIS_FIELDS: [&str; 2] = ["m_instance_x_axis_x", "m_instance_x_axis_y"];
+
+/// How far off the model's axes a family instance must be turned to be
+/// drawn turned (RE-87): 1e-4 radians, 0.001 ft at 10 ft. RE1 Architecture
+/// holds 34 instances off them by less than 0.001 degrees, round-off rather
+/// than a turn; Snowdon Towers' 628 turned ones are all 0.01 degrees or more
+/// off.
+pub const INSTANCE_TURN_MIN_RADIANS: f64 = 1e-4;
+
+/// Give each upright family instance ([`REVIT_CLASS_FIELD`]
+/// `FamilyInstance`) that is turned off the model's axes by at least
+/// [`INSTANCE_TURN_MIN_RADIANS`] its plan X axis (RE-87). Any other keeps its
+/// record box as it is.
+fn attach_instance_axes(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 3],
+) {
+    let is_instance = |element: &DecodedElement| {
+        element.fields.iter().any(|(name, value)| {
+            name == REVIT_CLASS_FIELD
+                && matches!(value, InstanceField::String(class) if class == "FamilyInstance")
+        })
+    };
+    let ids: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter())
+        .filter(|element| is_instance(element))
+        .filter_map(|element| element.id)
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+    else {
+        return;
+    };
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(transform) = element
+            .id
+            .and_then(|id| transforms.get(&id))
+            .filter(|transform| transform.is_upright())
+        else {
+            continue;
+        };
+        let [x, y, _] = transform.axes[0];
+        let turn = y.abs().atan2(x.abs());
+        if turn.min(std::f64::consts::FRAC_PI_2 - turn) < INSTANCE_TURN_MIN_RADIANS {
+            continue;
+        }
+        for (name, value) in INSTANCE_X_AXIS_FIELDS.iter().zip([x, y]) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+}
+
+/// The plan X axis [`INSTANCE_X_AXIS_FIELDS`] record.
+pub fn instance_x_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [x, y] = INSTANCE_X_AXIS_FIELDS.map(float);
+    Some([x?, y?])
 }
 
 /// Prefix of the fields carrying an element's type text parameters (RE-77):

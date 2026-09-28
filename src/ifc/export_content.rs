@@ -772,6 +772,42 @@ struct RecordGeometry {
 /// no carrier refines it (#409).
 pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
 
+/// `BodySource` of a family instance turned off the model's axes, drawn as
+/// the rectangle at its angle whose box is its record box (RE-87).
+pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_box";
+
+/// Classes whose body another rule draws, which a family instance's turn
+/// leaves alone: columns (their type's section), beams (their line), and
+/// curtain-wall panels and mullions (their grid).
+const TURNED_BOX_EXCLUDED_CLASSES: &[&str] = &[
+    "Column",
+    "StructuralColumn",
+    "StructuralFraming",
+    "CurtainWallPanel",
+    "CurtainWallMullion",
+];
+
+/// The rectangle at the plan angle of `x_axis` whose axis-aligned box is
+/// `width` × `depth` (RE-87): `(angle, along X, along Y)`. A rectangle
+/// `w` × `d` turned by the angle has a box `w|cos| + d|sin|` wide and
+/// `w|sin| + d|cos|` deep, which gives `w` and `d` back unless the angle is
+/// near 45 degrees. `None` there, or where either side would not be
+/// positive.
+fn turned_box(x_axis: [f64; 2], width: f64, depth: f64) -> Option<(f64, f64, f64)> {
+    let length = x_axis[0].hypot(x_axis[1]);
+    if !(length.is_finite() && length > 1e-9) {
+        return None;
+    }
+    let (c, s) = ((x_axis[0] / length).abs(), (x_axis[1] / length).abs());
+    let det = c * c - s * s;
+    if det.abs() < 0.1 {
+        return None;
+    }
+    let along = (width * c - depth * s) / det;
+    let across = (depth * c - width * s) / det;
+    (along > 1e-6 && across > 1e-6).then(|| (x_axis[1].atan2(x_axis[0]), along, across))
+}
+
 /// `BodySource` of a beam whose body runs along its location line (RE-49).
 pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
 
@@ -1508,6 +1544,19 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         .as_ref()
         .map(|profile| relative(&profile.outer_xy, &profile.inner_xy))
         .or_else(|| wall_arc.as_ref().map(|outline| relative(outline, &[])));
+    // RE-87: a family instance turned off the model's axes is the rectangle
+    // at its angle that its record box bounds.
+    let turned = if TURNED_BOX_EXCLUDED_CLASSES.contains(&class)
+        || profile_override.is_some()
+        || stair_run.is_some()
+        || beam.is_some()
+        || matches!(type_profile, (Some(_), Some(_)))
+    {
+        None
+    } else {
+        crate::partition_schema_mvp::instance_x_axis_from_fields(&decoded.fields)
+            .and_then(|axis| turned_box(axis, width, depth))
+    };
     // RE-56: a shed roof whose slope reproduces its record box rises along
     // it.
     let roof_slope = if class == "Roof" {
@@ -1590,6 +1639,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
+                    .or_else(|| turned.map(|_| INSTANCE_TURNED_BODY_SOURCE.into()))
                     .unwrap_or_else(|| RECORD_BBOX_BODY_SOURCE.into()),
             ),
         },
@@ -1892,13 +1942,20 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     None,
                 ),
                 Some(beam) => (None, record_body, Some(beam_swept_solid(&beam, [x, y, z]))),
-                None => {
-                    let solid = stair_run
-                        .as_ref()
-                        .map(|run| stair_run_solid(run, [x, y, z]))
-                        .or(roof_slope);
-                    (None, record_body, solid)
-                }
+                None => match (turned, roof_slope) {
+                    (Some((angle, along, across)), None) => (
+                        Some(angle),
+                        Extrusion::rectangle(along, across, height),
+                        None,
+                    ),
+                    (_, roof_slope) => {
+                        let solid = stair_run
+                            .as_ref()
+                            .map(|run| stair_run_solid(run, [x, y, z]))
+                            .or(roof_slope);
+                        (None, record_body, solid)
+                    }
+                },
             };
             ([x, y, z], rotation, body, solid)
         }
