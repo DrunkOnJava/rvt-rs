@@ -41,6 +41,7 @@ import sys
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.placement
+import ifcopenshell.util.unit
 
 FEET = 0.3048
 COMPONENT = {5121: "B", 5123: "H", 5125: "I", 5126: "f"}
@@ -134,7 +135,9 @@ def site_to_internal(f):
     for points and for directions."""
     site = f.by_type("IfcSite")[0]
     mat = ifcopenshell.util.placement.get_local_placement(site.ObjectPlacement)
-    ox, oy = mat[0][3], mat[1][3]
+    # The placement is in the file's length unit; the meshes are in metres.
+    scale = ifcopenshell.util.unit.calculate_unit_scale(f)
+    ox, oy = mat[0][3] * scale, mat[1][3] * scale
     c, s = mat[0][0], mat[1][0]
 
     def point(x, y):

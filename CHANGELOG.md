@@ -6,6 +6,26 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Walls whose data sets a second flag after the flip (RE-126).** A
+  wall's flip is one byte, and the byte after it is a second flag that is
+  0 or 1. It was read as one `u32` 0 or 1, so a wall setting the flag lost
+  its exterior side, its layers and its centreline body: 35 of the Revit
+  2026 house's 59 walls and 4 of Core Interior's 360. On the house, layer
+  sets go from 26 to 61, all as thick as Revit's with its names, and layer
+  names are Revit's on 320 layers (183 before). Core Interior writes 407
+  layer sets (403), all as thick as Revit's. Its wall bodies, and every
+  RE1, Einhoven and Snowdon Towers output, are unchanged.
+
+### Added
+
+- **Revit 2026 wall join lists (RE-126, #421).** They are laid out as on
+  2025, so 2026 walls are now joined by them. Against the house's
+  CoordinationView export, which draws each wall as one box, 85 of 118
+  wall ends are where Revit puts them (27 of 48 before, on the 24 walls
+  that had a centreline).
+
 ### Added
 
 - **Material names kept after parameter entries (RE-125, #355).** A
