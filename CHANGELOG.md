@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Windows cut Revit's opening, from their type (#227, RE-93).** A
+  type's length parameters are read from its value block. Revit's export
+  cuts a window's opening its type's Width by Height, centred on the
+  window's origin, from its type's Default Sill Height above it. A window
+  whose type stores all three takes that opening where its box holds it,
+  and its `OverallWidth` / `OverallHeight`. On Snowdon Towers 56 of 68
+  windows now match Revit's opening within 0.001 ft (none did); the
+  Double-Hung windows, whose types store no Default Sill Height, keep
+  their box opening. Every other local file is byte-identical.
+
 - **Stair runs ending with a tread, and monolithic runs, are drawn as
   their steps (#357, RE-92).** A run's data holds Revit's "End with
   Riser" setting. It is off on exactly the three Snowdon Towers runs that

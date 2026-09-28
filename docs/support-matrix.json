@@ -261,6 +261,15 @@
       "user_impact": "Doors, windows, furniture and fixtures set at an angle export and display at that angle instead of as the larger box around them."
     },
     {
+      "id": "type-length-parameters-window-openings",
+      "area": "elements",
+      "name": "Window openings from their type's Width, Height and Default Sill Height (RE-93, Revit 2024)",
+      "status": "partial",
+      "evidence": "partition_type_parameters::scan_partition_lengths / family_parameters_named / type_window_openings; partition_schema_mvp::attach_window_openings (WINDOW_OPENING_FIELDS) and window_opening_from_fields; ifc::export_content WINDOW_OPENING_PROPERTIES; ifc::window_type_cut and entities::OpeningCut::z_range_feet; step_writer OverallWidth/OverallHeight; examples/probe_re93_window_openings.rs; tools/re/opening_boxes_vs_ifc.py; reports/element-framing/RE-93-window-openings.md",
+      "notes": "A type's value block (RE-77) holds length parameters as f64 feet, ff x 8, i64 parameter: a BuiltInParameter's negative id (Width -1001301, Height -1001300) or a declared family parameter, whose definition names it 0x56 bytes past its id followed by a revit.local.family id. Revit's IFC4 export cuts a window's opening its type's Width wide, centred on the window's origin (RE-87) along its X axis, and its Height high from 3.0 ft above the origin, on all 66 Snowdon Towers windows whose type stores Width and Height. The 3.0 ft is the type's Default Sill Height where the type stores one; the Double-Hung types store none, so the value Revit uses is the instance's sill, which is not read. A window takes the opening only where its type stores all three and its record box holds the opening with at most 0.5 ft to spare on every side, a guard against a sill moved off the default that no Snowdon window exercises. 56 of Snowdon's 68 windows take it, each within 0.001 ft of Revit's opening (none before), with OverallWidth and OverallHeight equal to Revit's. Double-Hung windows, louvers and doors keep their box opening. Measured on Snowdon Towers only; every other local file is unchanged.",
+      "user_impact": "Most Snowdon windows cut the exact opening Revit's export cuts, and carry their overall size."
+    },
+    {
       "id": "ifc-export-overrides",
       "area": "ifc",
       "name": "Revit's IFC export overrides (Export to IFC As, IFC Predefined Type, and their type-level twins), from element data",

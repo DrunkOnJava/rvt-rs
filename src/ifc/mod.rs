@@ -1187,8 +1187,12 @@ fn opening_cuts_through_hosts(
         if body.profile_override.is_some() {
             continue;
         }
+        let window_cut =
+            |base: Option<entities::OpeningCut>| window_type_cut(entity, base).or(base);
         if let Some(cut) = tapered_host_window_cut(entity, &entities[*host]) {
-            cuts.insert(index, cut);
+            if let Some(cut) = window_cut(Some(cut)) {
+                cuts.insert(index, cut);
+            }
             continue;
         }
         let Some(entities::IfcEntity::BuildingElement {
@@ -1199,11 +1203,15 @@ fn opening_cuts_through_hosts(
         else {
             continue;
         };
-        let Some(host_body) = body_geometry::element_body(&entities[*host], &[]) else {
-            continue;
-        };
-        let host_placement = body_geometry::Placement::new(*host_location, *host_rotation);
-        let Some((outline, _)) = body_geometry::plan_outline(host_body, &host_placement) else {
+        let Some((outline, _)) =
+            body_geometry::element_body(&entities[*host], &[]).and_then(|host_body| {
+                let host_placement = body_geometry::Placement::new(*host_location, *host_rotation);
+                body_geometry::plan_outline(host_body, &host_placement)
+            })
+        else {
+            if let Some(cut) = window_cut(None) {
+                cuts.insert(index, cut);
+            }
             continue;
         };
         let angle = rotation_radians.unwrap_or(0.0);
@@ -1219,21 +1227,25 @@ fn opening_cuts_through_hosts(
         let (x_band, y_band) = (band(axes[0]), band(axes[1]));
         let (x_width, y_width) = (x_band.1 - x_band.0, y_band.1 - y_band.0);
         let cut = if y_width <= MAX_THICKNESS_FEET && y_width < x_width / 2.0 && y_width > 0.0 {
-            entities::OpeningCut {
+            Some(entities::OpeningCut {
                 x_dim_feet: body.width_feet,
                 y_dim_feet: y_width,
                 centre_feet: [0.0, (y_band.0 + y_band.1) / 2.0],
-            }
+                z_range_feet: None,
+            })
         } else if x_width <= MAX_THICKNESS_FEET && x_width < y_width / 2.0 && x_width > 0.0 {
-            entities::OpeningCut {
+            Some(entities::OpeningCut {
                 x_dim_feet: x_width,
                 y_dim_feet: body.depth_feet,
                 centre_feet: [(x_band.0 + x_band.1) / 2.0, 0.0],
-            }
+                z_range_feet: None,
+            })
         } else {
-            continue;
+            None
         };
-        cuts.insert(index, cut);
+        if let Some(cut) = window_cut(cut) {
+            cuts.insert(index, cut);
+        }
     }
     cuts
 }
@@ -1312,7 +1324,132 @@ fn tapered_host_window_cut(
         x_dim_feet: body.width_feet,
         y_dim_feet: thickness,
         centre_feet: [0.0, offset],
+        z_range_feet: None,
     })
+}
+
+/// A real property of an element's own property set.
+fn real_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
+    let entities::IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    set.properties
+        .iter()
+        .find_map(|property| match &property.value {
+            entities::PropertyValue::Real(value) if property.name == wanted => Some(*value),
+            _ => None,
+        })
+}
+
+/// How far a window's record box may reach past the opening its type gives
+/// it on each side, feet (RE-93): the frame and trim around the opening.
+/// On Snowdon Towers it is 0.21 to 0.26 ft; a box further off, or short of
+/// the opening, is a window placed otherwise (a sill moved off its type's
+/// default), which keeps the opening `base` gives it.
+pub const WINDOW_TRIM_MAX_FEET: f64 = 0.5;
+
+/// RE-93: a window's opening as Revit's export cuts it, from its type's
+/// Width and Height and its type's Default Sill Height above its origin,
+/// centred on the origin along the window's X axis. Across the wall it
+/// keeps `base`'s band, or the body's depth. `None` unless the window
+/// reports its opening ([`export_content::WINDOW_OPENING_PROPERTIES`]),
+/// its width runs along one of its body's axes, and its record box holds
+/// the opening with at most [`WINDOW_TRIM_MAX_FEET`] to spare on each
+/// side and at top and bottom.
+fn window_type_cut(
+    filler: &entities::IfcEntity,
+    base: Option<entities::OpeningCut>,
+) -> Option<entities::OpeningCut> {
+    let entities::IfcEntity::BuildingElement {
+        ifc_type,
+        location_feet: Some(location),
+        rotation_radians,
+        extrusion: Some(body),
+        ..
+    } = filler
+    else {
+        return None;
+    };
+    if !ifc_type.eq_ignore_ascii_case("IfcWindow") {
+        return None;
+    }
+    let [cx, cy, ax, ay, base_z, width, height] = export_content::WINDOW_OPENING_PROPERTIES;
+    let centre = [length_property(filler, cx)?, length_property(filler, cy)?];
+    let [ax, ay] = [real_property(filler, ax)?, real_property(filler, ay)?];
+    let base_z = length_property(filler, base_z)?;
+    let width = positive_length_property(filler, width)?;
+    let height = positive_length_property(filler, height)?;
+    let angle = rotation_radians.unwrap_or(0.0);
+    let local_x = [angle.cos(), angle.sin()];
+    let local_y = [-angle.sin(), angle.cos()];
+    let dot = |a: [f64; 2], b: [f64; 2]| a[0] * b[0] + a[1] * b[1];
+    let offset = [centre[0] - location[0], centre[1] - location[1]];
+    let along_x = (dot([ax, ay], local_x).abs() - 1.0).abs() <= 1e-6;
+    let along_y = (dot([ax, ay], local_y).abs() - 1.0).abs() <= 1e-6;
+    let fits = |lo: f64, hi: f64, box_lo: f64, box_hi: f64| {
+        (0.0..=WINDOW_TRIM_MAX_FEET).contains(&(lo - box_lo))
+            && (0.0..=WINDOW_TRIM_MAX_FEET).contains(&(box_hi - hi))
+    };
+    let z0 = base_z - location[2];
+    if !fits(z0, z0 + height, 0.0, body.height_feet) {
+        return None;
+    }
+    // `base` crosses the wall on the axis the window's width does not run
+    // along, or it is not this window's wall.
+    if along_x && base.is_none_or(|cut| cut.x_dim_feet == body.width_feet) {
+        let c = dot(offset, local_x);
+        let half = body.width_feet / 2.0;
+        fits(c - width / 2.0, c + width / 2.0, -half, half).then(|| {
+            let (y_dim_feet, y_centre) = base.map_or((body.depth_feet, 0.0), |cut| {
+                (cut.y_dim_feet, cut.centre_feet[1])
+            });
+            entities::OpeningCut {
+                x_dim_feet: width,
+                y_dim_feet,
+                centre_feet: [c, y_centre],
+                z_range_feet: Some([z0, height]),
+            }
+        })
+    } else if along_y && base.is_none_or(|cut| cut.y_dim_feet == body.depth_feet) {
+        let c = dot(offset, local_y);
+        let half = body.depth_feet / 2.0;
+        fits(c - width / 2.0, c + width / 2.0, -half, half).then(|| {
+            let (x_dim_feet, x_centre) = base.map_or((body.width_feet, 0.0), |cut| {
+                (cut.x_dim_feet, cut.centre_feet[0])
+            });
+            entities::OpeningCut {
+                x_dim_feet,
+                y_dim_feet: width,
+                centre_feet: [x_centre, c],
+                z_range_feet: Some([z0, height]),
+            }
+        })
+    } else {
+        None
+    }
+}
+
+/// A positive length property of an element's own property set, feet.
+fn positive_length_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
+    let entities::IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    set.properties
+        .iter()
+        .find_map(|property| match &property.value {
+            entities::PropertyValue::PositiveLengthFeet(value) if property.name == wanted => {
+                Some(*value)
+            }
+            _ => None,
+        })
 }
 
 /// RE-82: one constituent set per distinct set of type materials, for each

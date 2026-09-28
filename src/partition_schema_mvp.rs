@@ -372,6 +372,9 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Each window's opening from its type and transform (RE-93, #227) ---
+    attach_window_openings(rf, revit_version, &mut out.windows);
+
     // --- The materials each family type's geometry uses (RE-82, #355) ---
     let type_materials = crate::partition_type_materials::type_material_names(rf, revit_version);
     if !type_materials.is_empty() {
@@ -1094,6 +1097,110 @@ fn attach_instance_axes(
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
     }
+}
+
+/// Fields holding a window's opening as Revit's export cuts it (RE-93):
+/// the plan point it is centred on (the window's origin), its plan
+/// direction (the window's X axis), its base elevation (the origin's plus
+/// its type's Default Sill Height), and its type's Width and Height, feet.
+pub const WINDOW_OPENING_FIELDS: [&str; 7] = [
+    "m_window_opening_x",
+    "m_window_opening_y",
+    "m_window_opening_axis_x",
+    "m_window_opening_axis_y",
+    "m_window_opening_base",
+    "m_window_opening_width",
+    "m_window_opening_height",
+];
+
+/// A window's opening as [`WINDOW_OPENING_FIELDS`] records it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WindowOpening {
+    /// Plan point the opening is centred on, model feet.
+    pub centre: [f64; 2],
+    /// Unit plan direction of its width.
+    pub axis: [f64; 2],
+    /// Elevation of its bottom, model feet.
+    pub base_feet: f64,
+    /// Feet.
+    pub width_feet: f64,
+    /// Feet.
+    pub height_feet: f64,
+}
+
+/// Give each upright window whose type's Width, Height and Default Sill
+/// Height are read its opening (RE-93,
+/// [`crate::partition_type_parameters::type_window_openings`]).
+fn attach_window_openings(rf: &mut RevitFile, revit_version: u32, windows: &mut [DecodedElement]) {
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let types: BTreeSet<u32> = windows.iter().filter_map(type_of).collect();
+    let openings =
+        crate::partition_type_parameters::type_window_openings(rf, revit_version, &types);
+    if openings.is_empty() {
+        return;
+    }
+    let ids: BTreeSet<u32> = windows
+        .iter()
+        .filter(|element| type_of(element).is_some_and(|id| openings.contains_key(&id)))
+        .filter_map(|element| element.id)
+        .collect();
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+    else {
+        return;
+    };
+    for element in windows.iter_mut() {
+        let Some((opening, transform)) = type_of(element)
+            .and_then(|id| openings.get(&id))
+            .zip(element.id.and_then(|id| transforms.get(&id)))
+        else {
+            continue;
+        };
+        if !transform.is_upright() {
+            continue;
+        }
+        let Some([ax, ay]) = transform.plan_axis() else {
+            continue;
+        };
+        let [ox, oy, oz] = transform.origin;
+        let values = [
+            ox,
+            oy,
+            ax,
+            ay,
+            oz + opening.default_sill_feet,
+            opening.width_feet,
+            opening.height_feet,
+        ];
+        for (name, value) in WINDOW_OPENING_FIELDS.iter().zip(values) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+}
+
+/// The opening [`WINDOW_OPENING_FIELDS`] record.
+pub fn window_opening_from_fields(fields: &[(String, InstanceField)]) -> Option<WindowOpening> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [x, y, ax, ay, base, width, height] = WINDOW_OPENING_FIELDS.map(float);
+    Some(WindowOpening {
+        centre: [x?, y?],
+        axis: [ax?, ay?],
+        base_feet: base?,
+        width_feet: width?,
+        height_feet: height?,
+    })
 }
 
 /// The plan origin [`INSTANCE_ORIGIN_FIELDS`] record.
