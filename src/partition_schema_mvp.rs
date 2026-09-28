@@ -2578,12 +2578,16 @@ pub fn element_layers_from_fields(
 ///   is a Basic Wall, a Compound Ceiling or a Basic Roof, since a Curtain
 ///   or Stacked Wall, a Basic Ceiling and Sloped Glazing have none;
 /// - a curtain panel whose type is a wall type with layers is a Basic Wall
-///   (RE-64).
+///   (RE-64);
+/// - a pipe is a Pipe Types, Revit's one pipe system family. A duct is
+///   left unnamed: its family (Rectangular, Round or Oval Duct) follows
+///   its type's shape, which is not read.
 ///
 /// Measured against the `Family:Type:ElementId` names Revit's own IFC
 /// export gives the same elements, on every record-backed wall, floor,
 /// ceiling, roof and building pad of Snowdon Towers, Core Interior and RE1
-/// Architecture: 1,444 walls, 283 floors, 74 ceilings, 20 roofs and 1 pad.
+/// Architecture: 1,444 walls, 283 floors, 74 ceilings, 20 roofs and 1 pad;
+/// and on the 69 pipes of RE1 Mechanical and Plumbing.
 pub fn system_family(class: &str, has_layers: bool) -> Option<&'static str> {
     match (class, has_layers) {
         (CURTAIN_WALL_CLASS, _) => Some("Curtain Wall"),
@@ -2592,6 +2596,7 @@ pub fn system_family(class: &str, has_layers: bool) -> Option<&'static str> {
         ("BuildingPad", _) => Some("Pad"),
         ("SlabEdge", _) => Some("Slab Edge"),
         ("Ramp", _) => Some("Ramp"),
+        ("Pipe", _) => Some("Pipe Types"),
         ("Wall" | "CurtainWallPanel", true) => Some("Basic Wall"),
         ("Ceiling", true) => Some("Compound Ceiling"),
         ("Roof", true) => Some("Basic Roof"),
