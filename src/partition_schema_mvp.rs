@@ -1024,9 +1024,10 @@ fn attach_revit_classes(classes: &crate::formats::SchemaClasses, elements: &mut 
     }
 }
 
-/// Fields holding the plan X axis of a family instance turned off the
-/// model's axes (RE-87), from its transform, where its Z axis is the
-/// model's.
+/// Fields holding the plan direction of a family instance turned off the
+/// model's axes (RE-87), from its transform: its X axis where its Z axis is
+/// the model's, or else its first flat axis where one axis is vertical, as
+/// for a fixture hosted on a ceiling or a wall (RE-90).
 pub const INSTANCE_X_AXIS_FIELDS: [&str; 2] = ["m_instance_x_axis_x", "m_instance_x_axis_y"];
 /// Fields holding the plan origin of a turned family instance, model feet,
 /// from its transform (RE-87): the point a window's opening in a tapered
@@ -1040,10 +1041,11 @@ pub const INSTANCE_ORIGIN_FIELDS: [&str; 2] = ["m_instance_origin_x", "m_instanc
 /// off.
 pub const INSTANCE_TURN_MIN_RADIANS: f64 = 1e-4;
 
-/// Give each upright family instance ([`REVIT_CLASS_FIELD`]
-/// `FamilyInstance`) that is turned off the model's axes by at least
-/// [`INSTANCE_TURN_MIN_RADIANS`] its plan X axis (RE-87). Any other keeps its
-/// record box as it is.
+/// Give each family instance ([`REVIT_CLASS_FIELD`] `FamilyInstance`) with
+/// a vertical axis that is turned off the model's axes by at least
+/// [`INSTANCE_TURN_MIN_RADIANS`] its plan direction
+/// ([`crate::partition_instance_transforms::InstanceTransform::plan_axis`],
+/// RE-87, RE-90). Any other keeps its record box as it is.
 fn attach_instance_axes(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -1070,14 +1072,13 @@ fn attach_instance_axes(
         return;
     };
     for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
-        let Some(transform) = element
+        let Some((transform, [x, y])) = element
             .id
             .and_then(|id| transforms.get(&id))
-            .filter(|transform| transform.is_upright())
+            .and_then(|transform| Some((transform, transform.plan_axis()?)))
         else {
             continue;
         };
-        let [x, y, _] = transform.axes[0];
         let turn = y.abs().atan2(x.abs());
         if turn.min(std::f64::consts::FRAC_PI_2 - turn) < INSTANCE_TURN_MIN_RADIANS {
             continue;
