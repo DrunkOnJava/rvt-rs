@@ -2793,6 +2793,12 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             ..
         } = entity
         {
+            // An opening (RE-84) is listed by type but is not a building
+            // element: it has no body of its own, only the void it cuts.
+            if ifc_type == "IFCOPENINGELEMENT" {
+                *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
+                continue;
+            }
             let properties = property_set.iter().flat_map(|set| &set.properties);
             let mut source = None;
             let mut profile_resolved = false;
