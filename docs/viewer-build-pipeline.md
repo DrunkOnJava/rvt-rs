@@ -224,10 +224,12 @@ jobs:
       - run: cargo install wasm-pack
       - run: wasm-pack build --target web --features wasm --no-default-features
              --out-dir viewer/pkg
+      - uses: pnpm/action-setup@v6
+        with: { package_json_file: viewer/package.json }
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - working-directory: viewer
-        run: npm ci && npm run build
+        run: pnpm install --frozen-lockfile && pnpm run build
       - uses: actions/upload-pages-artifact@v3
         with: { path: viewer/dist }
       - uses: actions/deploy-pages@v4

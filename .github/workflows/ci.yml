@@ -717,55 +717,60 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # pnpm at the version `packageManager` pins in viewer/package.json.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: viewer/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
           package-manager-cache: false
-      - name: Locate npm cache
-        id: npm-cache-dir
-        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
-      - name: Restore npm cache
-        id: npm-cache
+      - name: Locate pnpm store
+        id: pnpm-store
+        working-directory: viewer
+        run: echo "dir=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+      - name: Restore pnpm store
+        id: pnpm-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('viewer/package-lock.json') }}
-          restore-keys: node-cache-${{ runner.os }}-x64-npm-
+          path: ${{ steps.pnpm-store.outputs.dir }}
+          key: pnpm-store-${{ runner.os }}-x64-${{ hashFiles('viewer/pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-x64-
       - name: Install viewer dependencies
         working-directory: viewer
-        run: npm ci
-      - name: Audit viewer npm dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Audit viewer dependencies
         working-directory: viewer
         shell: bash
-        # The registry advisory endpoint (POST /-/npm/v1/security/advisories/bulk)
-        # answers 503 during npm maintenance windows, and `npm audit` then exits
-        # non-zero without having measured anything. Retry with backoff, and if
-        # the endpoint is still unreachable record the audit as NOT MEASURED
-        # instead of failing the job on infrastructure. A measured high or
-        # critical advisory still fails it: a measured run always prints valid
-        # JSON with a `vulnerabilities` key, an endpoint failure does not.
+        # The registry advisory endpoint answers 503 during maintenance
+        # windows, and `pnpm audit` then exits non-zero without having
+        # measured anything. Retry with backoff, and if the endpoint is still
+        # unreachable record the audit as NOT MEASURED instead of failing the
+        # job on infrastructure. A measured high or critical advisory still
+        # fails it: a measured run always prints valid JSON with
+        # `metadata.vulnerabilities`, an endpoint failure does not.
         run: |
           for attempt in 1 2 3 4; do
-            if npm audit --audit-level=high --json > audit.json 2> audit.err; then
-              echo "npm audit: no high or critical advisories"
+            if pnpm audit --audit-level high --json > audit.json 2> audit.err; then
+              echo "pnpm audit: no high or critical advisories"
               exit 0
             fi
-            if python3 -c 'import json, sys; sys.exit(0 if "vulnerabilities" in json.load(open("audit.json")) else 1)' 2>/dev/null; then
-              npm audit --audit-level=high || true
+            if python3 -c 'import json, sys; sys.exit(0 if "vulnerabilities" in json.load(open("audit.json")).get("metadata", {}) else 1)' 2>/dev/null; then
+              pnpm audit --audit-level high || true
               echo "::error::viewer dependency audit found high or critical advisories"
               exit 1
             fi
-            echo "npm audit endpoint unavailable (attempt ${attempt}/4): $(head -c 300 audit.err)"
+            echo "pnpm audit endpoint unavailable (attempt ${attempt}/4): $(head -c 300 audit.err)"
             sleep $((attempt * 20))
           done
-          echo "::warning::viewer dependency audit NOT MEASURED: the npm advisory endpoint was unreachable after 4 attempts"
+          echo "::warning::viewer dependency audit NOT MEASURED: the advisory endpoint was unreachable after 4 attempts"
           exit 0
-      - name: Save npm cache
-        if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
+      - name: Save pnpm store
+        if: github.ref == 'refs/heads/main' && steps.pnpm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+          path: ${{ steps.pnpm-store.outputs.dir }}
+          key: ${{ steps.pnpm-cache.outputs.cache-primary-key }}
 
   pii-guard:
     name: PII guard

@@ -24,7 +24,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `npm run preview -- --host 127.0.0.1 --port ${previewPort}`,
+    // `vite` directly, not through `pnpm run`: pnpm does not forward the
+    // stop signal, so the preview server outlived the run and held it open.
+    command: `vite preview --host 127.0.0.1 --port ${previewPort}`,
     url: previewUrl,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

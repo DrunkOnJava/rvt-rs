@@ -68,10 +68,10 @@ Build and load the viewer artifact:
 ```bash
 wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
 cd viewer
-npm ci
-npx playwright install --with-deps chromium
-npm run build
-RVT_VIEWER_SAMPLE="$SAMPLE" npm run test:network
+pnpm install --frozen-lockfile
+pnpm exec playwright install --with-deps chromium
+pnpm run build
+RVT_VIEWER_SAMPLE="$SAMPLE" pnpm run test:network
 cd ..
 ```
 

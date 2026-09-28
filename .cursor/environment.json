@@ -10,7 +10,7 @@
   "terminals": [
     {
       "name": "viewer-dev-server",
-      "command": "cd viewer && npm run dev -- --host",
+      "command": "cd viewer && pnpm run dev --host",
       "description": "Vite dev server for the WASM viewer (http://localhost:5173)."
     }
   ]

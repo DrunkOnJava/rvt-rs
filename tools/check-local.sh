@@ -23,7 +23,7 @@ Required gates (always run):
   tools/ci/verify-real-files.sh     (real-file, CLI, contract targets only)
 
 Optional gates (opt-in; fail clearly when prerequisites are missing):
-  --viewer         viewer/ npm typecheck + build (no network install)
+  --viewer         viewer/ pnpm typecheck + build (no network install)
   --corpus         re-run the real-file checks against the corpora
                    (RVT_SAMPLES_DIR / RVT_PROJECT_CORPUS_DIR, --profile ci)
   --ifcopenshell   verify the ifcopenshell Python module imports
@@ -116,11 +116,11 @@ run tools/ci/verify-real-files.sh
 if [[ "$run_viewer" -eq 1 ]]; then
     if [[ ! -d viewer/node_modules ]]; then
         echo "error: viewer/node_modules is missing." >&2
-        echo "       From viewer/: run 'npm ci' once (network), then re-run with --viewer." >&2
+        echo "       From viewer/: run 'pnpm install --frozen-lockfile' once (network), then re-run with --viewer." >&2
         exit 1
     fi
-    run npm --prefix viewer run typecheck
-    run npm --prefix viewer run build
+    run pnpm --dir viewer run typecheck
+    run pnpm --dir viewer run build
     if command -v wasm-objdump >/dev/null 2>&1 && [[ -f viewer/pkg/rvt_bg.wasm ]]; then
         printf '\n==> wasm network-import audit\n'
         if wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm \
