@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 walls are cut back by the walls they join (RE-120, #421).**
+  A 2023 wall's record box is the untrimmed wall, as on 2024: at an L or
+  T joint it runs to the other wall's centreline, where Revit's export
+  stops it at that wall's face. A 2023 record's reference list names the
+  walls it joins, as 2024's does, so 2024's join solver (RE-26, RE-29)
+  runs on the 2023 records unchanged. Exemplo_data's 17 walls and
+  modelo_bim's 4 now have Revit's box exactly (2 of 17 and 4 of 4
+  before). Einhoven, with no export, has 2 walls trimmed.
+
 - **Revit 2023 beams sit on the storey of the Level at their top (RE-119,
   #421).** A structural framing element's record does not give the Level
   Revit's export puts it on: four beams landed on the storey below it and
@@ -16,8 +25,8 @@ All notable changes will be documented here. This project follows
   four foundation beams spanning -0.8 to 0.0 m on the 0.0 m Level. A 2023
   beam whose record box's top is exactly one Level's elevation is now
   bound to that Level, and modelo_bim has all 37 of its elements in
-  Revit's storey (29 before). Revit 2024 and 2025 are unchanged: no model
-  with a Revit export of either release has beams to measure the rule on.
+  Revit's storey (29 before). Revit 2024 and 2025 are unchanged; the rule
+  is unmeasured there.
 
 - **Only a Level that is a building story becomes a storey (RE-118,
   #219).** A Level keeps Revit's Building Story setting past its name: the
