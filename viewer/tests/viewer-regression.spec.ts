@@ -523,9 +523,10 @@ projectSampleTest(
     await expect(page.locator('#diagnostics-json')).toContainText('"schema_version": 1');
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_names"');
-    // Post Finding 1 / partition Material recovery: einhoven emits 42 materials
-    // (was 41). Keep in sync with tests/fixtures/project-counts/revit-ifc5-einhoven.json.
-    await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 42');
+    // Einhoven's material list is its 36 material objects since RE-116 (42
+    // partition display strings before). Keep in sync with
+    // tests/fixtures/project-counts/revit-ifc5-einhoven.json.
+    await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 36');
     await expect(page.locator('#diagnostics-json')).toContainText('lack recovered thickness');
     // ArcWalls are storey-assigned. The 13 elements from 2023 element records
     // (RE-81) carry no storey, because 2023 storeys are not decoded, and the
@@ -629,8 +630,9 @@ projectSampleTest(
     await expect(selectedStorey).toHaveCount(1);
     await expect(selectedStorey).toContainText(storeyName);
 
-    // Einhoven recovers 42 materials but binds none of them to an
-    // element, so the material band is omitted outright — and because
+    // Einhoven recovers 36 materials but binds none of them to a wall
+    // (only two windows carry a set), so the wall's material band is
+    // omitted outright — and because
     // the diagnostics do not call material a decode gap, the panel
     // must not claim it was "not recovered" either.
     await wallNode.click();
