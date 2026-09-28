@@ -6091,26 +6091,37 @@ fn level_decoded(name: &str, elevation: Option<f64>, index: usize) -> DecodedEle
 
 /// Every material the file declares, from its `OST_Materials` record
 /// (RE-28), with the name (RE-58) and shading colour (RE-53) read from its
-/// own object, in ElementId order. A record whose name is not found is left
-/// out. `None` on a release those layouts are not measured on, where the
-/// partition display-name strings stand in ([`materials_from_names`]).
+/// own object, in ElementId order; on Revit 2023 from its material objects
+/// (RE-113, RE-116). A record whose name is not found is left out. `None`
+/// on a release those layouts are not measured on, where the partition
+/// display-name strings stand in ([`materials_from_names`]).
 fn materials_from_records(rf: &mut RevitFile, revit_version: u32) -> Option<Vec<DecodedElement>> {
     use crate::partition_materials as pm;
-    if !pm::MATERIALS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+    let revit_2023 = revit_version == crate::partition_element_records_2023::REVIT_2023;
+    if !pm::MATERIALS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) && !revit_2023 {
         return None;
     }
     let declared = crate::elem_table::declared_ids(&crate::elem_table::parse_records(rf).ok()?);
-    let ids: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
-        rf,
-        revit_version,
-        crate::partition_type_records::OST_MATERIALS,
-        &declared,
-    )
-    .ok()?
-    .iter()
-    .map(|record| record.element_id)
-    .collect();
-    let names = pm::scan_material_names(rf, revit_version, &declared).ok()?;
+    // Revit 2023 has no material records; its materials are the objects
+    // carrying the 2023 material tag (RE-113).
+    let (ids, names) = if revit_2023 {
+        pm::scan_materials_2023(rf, &declared)
+    } else {
+        let ids: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
+            rf,
+            revit_version,
+            crate::partition_type_records::OST_MATERIALS,
+            &declared,
+        )
+        .ok()?
+        .iter()
+        .map(|record| record.element_id)
+        .collect();
+        (
+            ids,
+            pm::scan_material_names(rf, revit_version, &declared).ok()?,
+        )
+    };
     let appearances = pm::scan_material_appearances(rf, revit_version, &declared).ok()?;
     Some(
         ids.into_iter()

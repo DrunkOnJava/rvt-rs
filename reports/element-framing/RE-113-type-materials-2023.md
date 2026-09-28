@@ -30,8 +30,9 @@ Every 2024 and 2025 file is byte-identical: Core Interior, Snowdon Towers Archit
 ## 2. The materials
 
 **The class tag.** A 2023 material is an object `01 00 00 00 · u32 id` whose class tag `0x09fb` sits 0x27 bytes past the id, behind `00 00 00 · ff ff ff ff`. That is where 2024's `0x0a28` sits past a `u64` id (0x47), with the id and the `ff` run half as wide. The 28 bytes in between are usually `ff`, but not always: a family's own materials sometimes carry a `fc ff ff ff` word there. Found this way (`partition_materials::scan_materials_2023`):
-- Exemplo_data has 103 materials: 64 open their own element data and 39 sit inside a family's.
-- modelo_bim has 109.
+- Exemplo_data has 114 materials: 70 open their own element data and 44 sit inside a family's.
+- modelo_bim has 109: 67 and 42.
+- (Corrected in RE-116: this line first gave 103, 64 and 39 for Exemplo_data, counted by a stricter test than the reader's.)
 
 **Names.** A material is named by its element data's first framed string (RE-111). A family's own material has no data of its own and is named instead by its first BuiltInParameter −1001203 entry: `i32 −1001203 · u32 0 · u32 n · UTF-16`, the 32-bit form of RE-58's `i64` entry. The name must be one: the entry's value is `U+FFFF` where unset.
 
