@@ -2,7 +2,7 @@
 """Score rvt-rs's room plan areas against the room areas of a VIM export.
 
 Research tool for `reports/element-framing/RE-101-room-solids.md` (#90).
-For each IfcSpace rvt-rs writes (its Name is `Room-<ElementId>`), it
+For each IfcSpace rvt-rs writes (its ElementId is the `ElementId` property), it
 measures the space's top surface as `plan_profiles_vs_ifc.py` does and
 compares it with `Vim.Room`'s `Area` for the element of that id.
 
@@ -58,15 +58,20 @@ def main(argv):
     spec.loader.exec_module(profiles)
     import ifcopenshell
 
-    names = {s.GlobalId: s.Name for s in ifcopenshell.open(args[0]).by_type("IfcSpace")}
+    import ifcopenshell.util.element
+
+    element_ids = {}
+    for space in ifcopenshell.open(args[0]).by_type("IfcSpace"):
+        for properties in ifcopenshell.util.element.get_psets(space).values():
+            if isinstance(properties.get("ElementId"), int):
+                element_ids[space.GlobalId] = properties["ElementId"]
     ours = profiles.tops(args[0], ["IfcSpace"])
     vim = vim_room_areas(args[1])
     rows = []
     for gid, (area, _points, _cls, _surface) in ours.items():
-        name = names.get(gid) or ""
-        if not name.startswith("Room-"):
+        element = element_ids.get(gid)
+        if element is None:
             continue
-        element = int(name[len("Room-") :])
         if element in vim and vim[element] > 0:
             rows.append((abs(area - vim[element]) / vim[element], element, area, vim[element]))
     within = sum(1 for rel, *_ in rows if rel <= 1e-3)

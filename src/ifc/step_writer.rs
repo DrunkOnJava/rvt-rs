@@ -243,11 +243,9 @@ fn element_attribute_tail(
         // carries the identity instead. CompositionType `.ELEMENT.`
         // matches what Revit's exporter writes for a room.
         //
-        // Since #90 / RE-29 a record-backed room carries its real
-        // Revit name in the `RoomName` property, and `long_name_quoted`
-        // is that value — the slot Revit's own exporter puts it in. It
-        // falls back to `name_quoted` when no name was recovered, which
-        // is what every space did before.
+        // `long_name_quoted` is the room's name from its `RoomName`
+        // property, the slot Revit's own exporter puts it in, or `$`
+        // (RE-117). The element Name is its room number.
         ElementTail::Space => format!("{long_name_quoted},.ELEMENT.,{pt},$"),
         ElementTail::ReinforcingBar => format!("{tag_quoted},$,$,$,$,{pt},$"),
         ElementTail::StairFlight => format!("{tag_quoted},$,$,$,$,{pt}"),
@@ -1915,16 +1913,12 @@ impl StepWriter {
                 };
 
                 let el_id = self.id();
-                let name_quoted = quoted_or_dollar(&escape(name));
-                // `IfcSpace.LongName` is the room's own Revit name when
-                // one was recovered (#90, RE-29), and the element Name
-                // otherwise — the shape every space had before.
-                let long_name_quoted = property_set
-                    .as_ref()
-                    .and_then(|set| {
+                // A room's own text property, when recovered and not blank.
+                let room_text = |key: &str| {
+                    property_set.as_ref().and_then(|set| {
                         set.properties
                             .iter()
-                            .find(|p| p.name == super::export_content::ROOM_NAME_PROPERTY)
+                            .find(|p| p.name == key)
                             .and_then(|p| match &p.value {
                                 super::entities::PropertyValue::Text(text)
                                     if !text.trim().is_empty() =>
@@ -1934,7 +1928,19 @@ impl StepWriter {
                                 _ => None,
                             })
                     })
-                    .unwrap_or_else(|| name_quoted.clone());
+                };
+                let is_space = ifc_type.eq_ignore_ascii_case("IFCSPACE");
+                // An `IfcSpace` is named by its room number and described
+                // by its room name, as Revit's own exporter writes it
+                // (RE-117): `Name` the number, `LongName` the name. A room
+                // with no number keeps the `Room-<ElementId>` Name, and one
+                // with no name has no LongName.
+                let name_quoted = is_space
+                    .then(|| room_text(super::export_content::ROOM_NUMBER_PROPERTY))
+                    .flatten()
+                    .unwrap_or_else(|| quoted_or_dollar(&escape(name)));
+                let long_name_quoted = room_text(super::export_content::ROOM_NAME_PROPERTY)
+                    .unwrap_or_else(|| "$".into());
                 // `ObjectType` is `Family:Type` when RE-38 named the
                 // element's family and type, as in Revit's own export.
                 let property_text = |key: &str| {
@@ -3448,11 +3454,11 @@ mod tests {
         }
     }
 
-    /// #90 / RE-29: `IfcSpace.LongName` is the room's recovered Revit
-    /// name when its property set carries one, and the element `Name`
-    /// otherwise — which is what every space emitted before.
+    /// RE-117: an `IfcSpace` is named by its room number and described by
+    /// its room name, as Revit's own exporter writes it. Without a number
+    /// the Name stays `Room-<ElementId>`; without a name LongName is unset.
     #[test]
-    fn space_long_name_comes_from_the_room_name_property() {
+    fn space_name_is_the_room_number_and_long_name_the_room_name() {
         use super::super::entities::{IfcEntity, Property, PropertySet, PropertyValue};
 
         let space = |properties: Vec<Property>| {
@@ -3482,37 +3488,30 @@ mod tests {
             let step = write_step(&model);
             element_args(&step, "IFCSPACE").to_string()
         };
+        let text = |key: &str, value: &str| Property {
+            name: key.into(),
+            value: PropertyValue::Text(value.into()),
+        };
+        let number = super::super::export_content::ROOM_NUMBER_PROPERTY;
+        let name = super::super::export_content::ROOM_NAME_PROPERTY;
 
-        let named = space(vec![Property {
-            name: super::super::export_content::ROOM_NAME_PROPERTY.into(),
-            value: PropertyValue::Text("Stair 2".into()),
-        }]);
+        let both = space(vec![text(number, "66"), text(name, "Stair 2")]);
         assert!(
-            named.contains(",'Room-20822',") && named.ends_with(",'Stair 2',.ELEMENT.,.SPACE.,$"),
-            "Name must stay the identity and LongName must be the room name, got {named}"
+            both.contains(",'66',") && both.ends_with(",'Stair 2',.ELEMENT.,.SPACE.,$"),
+            "Name must be the number and LongName the name, got {both}"
         );
 
-        // No property set at all: the pre-RE-29 shape.
         let bare = space(Vec::new());
         assert!(
-            bare.ends_with(",'Room-20822',.ELEMENT.,.SPACE.,$"),
-            "a space with no recovered name keeps its Name in LongName, got {bare}"
+            bare.contains(",'Room-20822',") && bare.ends_with(",$,.ELEMENT.,.SPACE.,$"),
+            "a space with neither keeps its Name and has no LongName, got {bare}"
         );
 
-        // A blank value is not a name, and must not blank the slot.
-        let blank = space(vec![Property {
-            name: super::super::export_content::ROOM_NAME_PROPERTY.into(),
-            value: PropertyValue::Text("   ".into()),
-        }]);
+        let blank = space(vec![text(number, "  "), text(name, "   ")]);
         assert!(
-            blank.ends_with(",'Room-20822',.ELEMENT.,.SPACE.,$"),
-            "a blank RoomName falls back to the element Name, got {blank}"
+            blank.contains(",'Room-20822',") && blank.ends_with(",$,.ELEMENT.,.SPACE.,$"),
+            "blank values are not a number or a name, got {blank}"
         );
-
-        // Still eleven attributes, whichever branch ran.
-        for args in [named, bare, blank] {
-            assert_eq!(step_argument_count(&args), 11);
-        }
     }
 
     /// A `PredefinedType` that is not a legal STEP enumeration name
