@@ -374,13 +374,17 @@ pub struct WallOrientation {
 
 /// A wall's orientation, from its data. `None` without the anchor or with
 /// values a wall does not take.
+///
+/// The flip is one byte. The byte after it is a second flag, 0 followed by
+/// `00 00` or 1 followed by `ff ff` (what it sets is not measured): 35 of
+/// the Revit 2026 house's 59 walls and 4 of Core Interior's 360 set it
+/// (RE-126).
 pub fn wall_orientation(data: &[u8]) -> Option<WallOrientation> {
     let at = memchr::memmem::find(data, &WALL_FLIP_ANCHOR)? + WALL_FLIP_ANCHOR.len();
     let location_line = u32_at(data, at)?;
     let word = u32_at(data, at + 4)?;
-    let flip = match u32_at(data, at + 8)? {
-        0 => false,
-        1 => true,
+    let flip = match data.get(at + 8..at + 12)? {
+        [flip @ (0 | 1), 0, 0, 0] | [flip @ (0 | 1), 1, 0xff, 0xff] => *flip == 1,
         _ => return None,
     };
     (location_line <= 5 && word <= 2).then_some(WallOrientation {
@@ -540,7 +544,7 @@ pub fn scan_wall_type_face_angles(
 pub fn wall_join_count_offset(revit_version: u32) -> Option<usize> {
     match revit_version {
         2024 => Some(12),
-        2025 => Some(16),
+        2025 | 2026 => Some(16),
         _ => None,
     }
 }
