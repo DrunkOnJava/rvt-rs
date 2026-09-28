@@ -8,6 +8,20 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 wall, floor and roof types read their layers, and walls and
+  roofs are typed (RE-112, #421).** A 2023 host type's layers follow its
+  name as on 2024, framed by `ff ff ff ff 6f 10` on a wall type, in 29-byte
+  records: width, function, material and deck profile as `u32` ids. All
+  five host types of the two 2023 projects read Revit's own layer widths,
+  their materials named as Revit names them (the concrete masonry, the
+  cast-in-place concrete and the metal deck). With layers read, walls are
+  Basic Walls and roofs Basic Roofs (RE-63), so every element Revit's
+  export types is now typed on both 2023 projects: Exemplo_data 37 of 37
+  and modelo_bim 37 of 37, each with Revit's type `Tag`, and the walls,
+  floors and roofs with Revit's type GlobalId. A structural deck layer
+  may have no width, as a membrane may. Every 2024 and 2025 file is
+  byte-identical.
+
 - **Revit 2023 walls, floors and roofs carry their type (RE-111, #421).**
   A 2023 system-family type has no record and no name entry, but its
   element data opens with `ff ff ff ff c0 02 01 00 00 00` and a `u32`
