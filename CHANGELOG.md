@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Slab outlines with curved edges (RE-96).** A sketch line's curve
+  can be an arc, stored in the layout a curved wall's is (RE-75) but
+  unmarked, so the line's record box decides whether it reads as an arc.
+  Arcs are drawn as chords within 0.0005 ft, and an outline with an arc is
+  kept only where it spans its element's record box. On Snowdon Towers 17
+  more slabs carry their outline (149 of 199), and 87 match Revit's area
+  within 0.1% (73 before). Snowdon Towers structural gains one; every
+  other local file is byte-identical.
+
 - **Core Interior's 20 shading-device plates carry their outline (#233,
   RE-95).** Each owns one zero-length sketch line: a record whose box is a
   point, with no line of its own, on an end of two of the others. It is
