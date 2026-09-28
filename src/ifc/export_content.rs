@@ -158,6 +158,8 @@ pub fn append_typed_production_elements(
 ) -> TypedProductionAppend {
     let mut out = TypedProductionAppend::default();
     let mut pending_hosts: Vec<(usize, u32)> = Vec::new();
+    // RE-84: doors and windows whose type draws no geometry.
+    let mut without_geometry: std::collections::BTreeSet<usize> = Default::default();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
     // Bodies of aggregate wholes, held back until their parts are known: a
     // whole that no part names keeps its own body.
@@ -389,6 +391,12 @@ pub fn append_typed_production_elements(
         }
         if let Some(host_id) = pending_host_id {
             pending_hosts.push((entity_index, host_id));
+            if decoded.fields.iter().any(|(name, value)| {
+                name == crate::partition_schema_mvp::TYPE_WITHOUT_GEOMETRY_FIELD
+                    && matches!(value, InstanceField::Bool(true))
+            }) {
+                without_geometry.insert(entity_index);
+            }
         }
         if let Some(body) = held_body {
             held_bodies.insert(entity_index, body);
@@ -490,10 +498,20 @@ pub fn append_typed_production_elements(
         for (entity_index, host_id) in pending_hosts {
             if let Some(&host_index) = out.id_to_entity.get(&host_id) {
                 if let Some(entities::IfcEntity::BuildingElement {
-                    host_element_index, ..
+                    ifc_type,
+                    predefined_type,
+                    host_element_index,
+                    ..
                 }) = entities.get_mut(entity_index)
                 {
                     *host_element_index = Some(host_index);
+                    // RE-84: a door or window whose type draws no geometry
+                    // is only the hole it cuts, and Revit's export writes
+                    // that opening alone, with no door or window.
+                    if without_geometry.contains(&entity_index) {
+                        *ifc_type = "IFCOPENINGELEMENT".into();
+                        *predefined_type = Some("OPENING".into());
+                    }
                 }
             }
         }

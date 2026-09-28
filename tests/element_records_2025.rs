@@ -111,21 +111,12 @@ fn revit_2025_walls_slabs_and_rooms_match_revits_export() {
     assert_eq!(count(&reference, "IFCSPACE"), 11);
     assert_eq!(count(&step, "IFCSPACE"), 11, "rooms");
 
-    // Every door Revit exported, plus 417199: a placed Single-Flush door of
-    // another type in its own wall that Revit's export leaves out. Its
-    // frame carries no design option or phase field that would say why
-    // (RE-35 §5), so it is pinned as measured.
+    // Exactly the doors Revit exported. 417199 is a CasedOpening, whose
+    // type draws no geometry: Revit writes it as its opening alone, and so
+    // does rvt-rs since RE-84.
     let doors = tags(&reference, &["IFCDOOR"]);
     assert_eq!(doors.len(), 5);
-    let exported_doors = tags(&step, &["IFCDOOR"]);
-    assert!(exported_doors.is_superset(&doors), "door ElementIds");
-    assert_eq!(
-        exported_doors
-            .difference(&doors)
-            .copied()
-            .collect::<Vec<_>>(),
-        vec![417199]
-    );
+    assert_eq!(tags(&step, &["IFCDOOR"]), doors, "door ElementIds");
 
     // Nothing is left unattributed, so the readiness score is complete.
     assert!(

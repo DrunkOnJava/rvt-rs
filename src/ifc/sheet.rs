@@ -177,6 +177,10 @@ fn collect_footprints(model: &IfcModel) -> Vec<Footprint> {
         else {
             continue;
         };
+        // An opening is a void in its host, not something drawn (RE-84).
+        if ifc_type == "IFCOPENINGELEMENT" {
+            continue;
+        }
         let Some(location) = location_feet else {
             continue;
         };

@@ -1519,7 +1519,7 @@ impl StepWriter {
         // also BuildingElements (IfcOpeningElement) but they're never
         // contained in a storey — IFC4 treats them as "virtual"
         // elements that only live through IfcRelVoidsElement.
-        let mut void_fill_triples: Vec<(usize, usize, usize, String)> = Vec::new();
+        let mut void_fill_triples: Vec<(usize, usize, Option<usize>, String)> = Vec::new();
         // #323: parts of an aggregate whose whole is a building element
         // reach the spatial structure through that whole, so they are left
         // out of the storey containment below.
@@ -1752,8 +1752,17 @@ impl StepWriter {
                     // all extrusions would be possible but muddies
                     // byte-by-byte diff tooling, so pay the ~3-entity
                     // cost for clarity.
+                    // RE-84: an opening standing for a door or window takes
+                    // the same cut to its host's depth as a filled one (#227).
+                    let own_cut = (ifc_type == "IFCOPENINGELEMENT")
+                        .then(|| model.opening_cuts.get(&entity_idx))
+                        .flatten();
+                    let [cx, cy] = own_cut.map_or([0.0, 0.0], |c| c.centre_feet);
                     let profile_origin = self.id();
-                    self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                    self.emit_entity(
+                        profile_origin,
+                        format!("IFCCARTESIANPOINT(({:.6},{:.6}))", cx * 0.3048, cy * 0.3048),
+                    );
                     let profile_x_axis = self.id();
                     self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
                     let profile_placement = self.id();
@@ -1761,7 +1770,21 @@ impl StepWriter {
                         profile_placement,
                         format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
                     );
-                    let profile_id = self.emit_profile_def(ex, profile_placement);
+                    let profile_id = match own_cut {
+                        Some(cut) => {
+                            let profile_id = self.id();
+                            self.emit_entity(
+                                profile_id,
+                                format!(
+                                    "IFCRECTANGLEPROFILEDEF(.AREA.,$,#{profile_placement},{:.6},{:.6})",
+                                    cut.x_dim_feet * 0.3048,
+                                    cut.y_dim_feet * 0.3048,
+                                ),
+                            );
+                            profile_id
+                        }
+                        None => self.emit_profile_def(ex, profile_placement),
+                    };
                     // Solid-local placement: the identity axis, so the
                     // extrusion sits at the element origin and the
                     // element's own IfcLocalPlacement moves it into
@@ -1869,7 +1892,14 @@ impl StepWriter {
                     "{ifc_upper}('{global_id}',#{owner_hist},{name_quoted},$,{object_type_quoted},#{placement_id},{rep_slot},{tail})",
                 );
                 self.emit_entity(el_id, line);
-                if !aggregate_parts.contains(&entity_idx) {
+                // RE-84: an opening standing for a door or window that draws
+                // no geometry voids its host and fills nothing. Like every
+                // opening it lives through that relation, not in a storey.
+                let hosted_opening =
+                    ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some();
+                if let (true, Some(h_idx)) = (hosted_opening, host_element_index) {
+                    void_fill_triples.push((*h_idx, el_id, None, global_id.to_string()));
+                } else if !aggregate_parts.contains(&entity_idx) {
                     match idx {
                         Some(index) => per_storey_elements[index].push(el_id),
                         None => unplaced_elements.push(el_id),
@@ -1980,7 +2010,9 @@ impl StepWriter {
                 // index (points at its parent wall/floor), emit an
                 // IfcOpeningElement matching the shape + the two
                 // binding relationships.
-                if let (Some(h_idx), Some(ex)) = (host_element_index, extrusion) {
+                if let (false, Some(h_idx), Some(ex)) =
+                    (hosted_opening, host_element_index, extrusion)
+                {
                     {
                         // Emit a second extrusion chain — same shape
                         // as the element, placed on the element's
@@ -2066,7 +2098,7 @@ impl StepWriter {
                                 name_esc = escape(name),
                             ),
                         );
-                        void_fill_triples.push((*h_idx, opening_id, el_id, opening_gid));
+                        void_fill_triples.push((*h_idx, opening_id, Some(el_id), opening_gid));
                     }
                 }
             }
@@ -2101,6 +2133,9 @@ impl StepWriter {
                     gid(&["voids", opening_gid]),
                 ),
             );
+            let Some(el_id) = el_id else {
+                continue;
+            };
             let fills_rel = self.id();
             self.emit_entity(
                 fills_rel,

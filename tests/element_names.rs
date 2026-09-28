@@ -174,9 +174,11 @@ fn re1_names_are_revits() {
     let mut checked = 0;
     // Mechanical's 6 "300x150" fittings and Electrical's 12 lighting
     // fixtures have types whose records also name a family nested in their
-    // own (RE-42).
+    // own (RE-42). Architecture's CasedOpening door 417199 is written as
+    // its opening alone since RE-84, as Revit writes it, so it is not a
+    // named element.
     for (model, expected) in [
-        ("Architecture", 73),
+        ("Architecture", 72),
         ("Mechanical", 43),
         ("Plumbing", 61),
         ("Electrical", 46),

@@ -108,6 +108,7 @@ Every exported id Revit's export does not hold is a real element of the category
   - RE-40 found the primary in each set's name entry, and the exporter now leaves the non-primary options out.
   - The other 6 slabs (2287679 to 2287714) carry no option; why Revit leaves them out is not established.
 - **RE1 Architecture:** door 417199, a Single-Flush door of type 381264 in its own wall. Revit exported the file's other five doors.
+  - Update 2026-09-27 (RE-84): its type is CasedOpening, which draws no geometry, and Revit's export writes it as an `IfcOpeningElement` voiding wall 415911, not as a door. rvt-rs now does the same.
 - **RE1 Plumbing:** fixture 442378, a floor-level fixture of type 442362. Neither frame sets any sentinel slot; the cause is not established.
 
 ## 6. Why RE-34 worked where it was measured, and failed where it did not

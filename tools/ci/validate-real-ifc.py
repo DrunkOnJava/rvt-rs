@@ -136,6 +136,14 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
         if ifc_class is None:
             fail(f"diagnostics entity class {step_type} is not an IFC4 entity")
         got = count(model, ifc_class)
+        if ifc_class == "IfcOpeningElement":
+            # The diagnostics list openings that stand for an element whose
+            # type draws no geometry (RE-84). The writer adds one more opening
+            # for each door or window it fills, which the diagnostics count
+            # as that door or window.
+            got -= len(
+                {rel.RelatingOpeningElement.id() for rel in model.by_type("IfcRelFillsElement")}
+            )
         if got != expected:
             fail(f"{ifc_class} count regressed: IfcOpenShell saw {got}, diagnostics saw {expected}")
 
@@ -175,7 +183,13 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
             "IfcRelContainedInSpatialStructure building count regressed: "
             f"got {len(building_rels)}, expected at most 1 (unbound elements)"
         )
-    related_count = sum(len(rel.RelatedElements) for rel in contained)
+    # Parts of an aggregate whose whole is an element reach the spatial
+    # structure through that whole and are not contained themselves (#323).
+    related_count = sum(len(rel.RelatedElements) for rel in contained) + sum(
+        len(rel.RelatedObjects)
+        for rel in model.by_type("IfcRelAggregates")
+        if rel.RelatingObject.is_a("IfcElement")
+    )
     building_elements = int(exported.get("building_elements", 0))
     if related_count < building_elements:
         fail(

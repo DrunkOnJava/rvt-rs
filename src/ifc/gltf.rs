@@ -365,6 +365,10 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
         else {
             continue;
         };
+        // An opening is a void in its host, not a solid (RE-84).
+        if ifc_type == "IFCOPENINGELEMENT" {
+            continue;
+        }
         let placement = Placement::new(*location_feet, *rotation_radians);
         let body = element_body(ent, &model.representation_maps);
         let (c, s) = (placement.cos as f32, placement.sin as f32);

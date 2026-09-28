@@ -1022,6 +1022,10 @@ pub const TYPE_PARAMETER_FIELD_PREFIX: &str = "m_type_parameter:";
 /// Field carrying, once per material, the name of a material an element's
 /// type draws its geometry in (RE-82), in the order the type names them.
 pub const TYPE_MATERIAL_FIELD: &str = "m_type_material";
+/// Field set on an element whose type has a parameter value block with no
+/// geometry-material map: a type that draws no geometry (RE-84). Revit's
+/// export writes such a door or window as its opening alone.
+pub const TYPE_WITHOUT_GEOMETRY_FIELD: &str = "m_type_without_geometry";
 
 /// Give each element the materials its type's geometry uses (RE-82).
 fn attach_type_materials(materials: &BTreeMap<u32, Vec<String>>, elements: &mut [DecodedElement]) {
@@ -1033,6 +1037,12 @@ fn attach_type_materials(materials: &BTreeMap<u32, Vec<String>>, elements: &mut 
         let Some(names) = type_id.and_then(|id| materials.get(&id)) else {
             continue;
         };
+        if names.is_empty() {
+            element.fields.push((
+                TYPE_WITHOUT_GEOMETRY_FIELD.into(),
+                InstanceField::Bool(true),
+            ));
+        }
         for name in names {
             element.fields.push((
                 TYPE_MATERIAL_FIELD.into(),

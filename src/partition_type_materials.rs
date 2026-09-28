@@ -35,6 +35,7 @@ const VALUE_BLOCK_MARK: [u8; 59] = {
 
 /// Every owner's map materials in one inflated partition, in the order they
 /// first appear, by the declared ElementId of the value block they are in.
+/// An owner whose value block holds no map is present with no materials.
 pub fn scan_partition(
     buf: &[u8],
     declared_ids: &BTreeSet<u32>,
@@ -55,10 +56,10 @@ pub fn scan_partition(
             .map_or(buf.len(), |next| next.0.saturating_sub(8))
             .min(start + MAX_BLOCK_LEN)
             .min(buf.len());
+        let list = out.entry(owner).or_default();
         let mut at = start + VALUE_BLOCK_MARK.len();
         while at + 4 <= end {
             if let Some(found) = map_at(buf, at, end, materials) {
-                let list = out.entry(owner).or_default();
                 for material in found.materials {
                     if !list.contains(&material) {
                         list.push(material);
@@ -104,7 +105,8 @@ fn map_at(buf: &[u8], at: usize, end: usize, materials: &BTreeSet<u32>) -> Optio
 }
 
 /// Every type's map materials in the file, by owner ElementId, with the
-/// material names they resolve to (RE-58). Empty for a release whose
+/// material names they resolve to (RE-58). A type whose value block holds no
+/// map is present with no names (RE-84). Empty for a release whose
 /// element records are not decoded, or whose material names are not read.
 pub fn type_material_names(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u32, Vec<String>> {
     if bbox_marker(revit_version).is_none() {
@@ -135,9 +137,11 @@ pub fn type_material_names(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u
     }
     by_owner
         .into_iter()
-        .map(|(owner, ids)| {
-            let resolved = ids.iter().filter_map(|id| names.get(id).cloned()).collect();
-            (owner, resolved)
+        .filter_map(|(owner, ids)| {
+            let resolved: Vec<String> =
+                ids.iter().filter_map(|id| names.get(id).cloned()).collect();
+            // A map whose names are not read is not "no materials".
+            (ids.is_empty() || !resolved.is_empty()).then_some((owner, resolved))
         })
         .collect()
 }
