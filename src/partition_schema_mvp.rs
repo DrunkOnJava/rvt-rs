@@ -4237,6 +4237,30 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
             apply_wall_join_trim(wall, record, trim);
         }
     }
+    // --- Beams stopped at the faces of the columns their records name
+    // (RE-122) ---
+    let framing: Vec<per::PartitionElementRecord> = out
+        .products
+        .iter()
+        .filter(|element| element.class == "StructuralFraming")
+        .filter_map(|element| element.id.and_then(|id| selected.get(&id)).cloned())
+        .collect();
+    let columns: Vec<per::PartitionElementRecord> = selected
+        .values()
+        .filter(|record| {
+            matches!(
+                record.builtin_category,
+                per::OST_COLUMNS | per::OST_STRUCTURAL_COLUMNS
+            ) && !nested.contains(&record.element_id)
+        })
+        .cloned()
+        .collect();
+    let beam_trims = crate::element_record_beam_cuts::beam_column_trims(&framing, &columns);
+    for beam in out.products.iter_mut() {
+        if let Some(trim) = beam.id.and_then(|id| beam_trims.get(&id)) {
+            apply_beam_column_trim(beam, trim);
+        }
+    }
     // --- Rooms' numbers and names (RE-117) ---
     let room_ids: BTreeSet<u32> = out.rooms.iter().filter_map(|room| room.id).collect();
     attach_room_parameter_entries(
@@ -5684,6 +5708,37 @@ fn apply_wall_join_trim(
             value: trim.end_feet,
             size: 8,
         },
+    ));
+}
+
+/// Rewrite a beam's plan centre and extent along its run to the
+/// column-cut body (RE-122).
+fn apply_beam_column_trim(
+    decoded: &mut DecodedElement,
+    trim: &crate::element_record_beam_cuts::BeamColumnTrim,
+) {
+    use crate::element_record_beam_cuts as cuts;
+    let (centre_field, extent_field) = if trim.axis == 0 {
+        ("m_locationX", "m_bboxWidth")
+    } else {
+        ("m_locationY", "m_bboxDepth")
+    };
+    for (name, value) in decoded.fields.iter_mut() {
+        if name == centre_field {
+            *value = InstanceField::Float {
+                value: (trim.low_feet + trim.high_feet) * 0.5,
+                size: 8,
+            };
+        } else if name == extent_field {
+            *value = InstanceField::Float {
+                value: trim.high_feet - trim.low_feet,
+                size: 8,
+            };
+        }
+    }
+    decoded.fields.push((
+        cuts::BEAM_BODY_SOURCE_FIELD.into(),
+        InstanceField::String(cuts::BEAM_BODY_COLUMN_CUT.into()),
     ));
 }
 

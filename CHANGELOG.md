@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 beams stop at the columns they frame into (RE-122,
+  #421).** A 2023 beam's record box runs to the centres of its end
+  columns; Revit's export stops it at their faces. The beam's reference
+  list names the column each end lies in, so an end inside exactly one
+  named column is cut back to that column's near face. modelo_bim's 8
+  beams now have Revit's box exactly (0 before). On Revit 2024 the same
+  columns are named (Snowdon Towers' structural model), but most steel
+  beams stop a stored join cutback short of the face, and when Revit
+  applies it is not decoded, so 2024 beams are unchanged; the report
+  records where the cutbacks are stored.
+
 - **Research: a door's record box does not give its body (RE-121,
   negative, #227).** The box reaches past Revit's door body across the
   wall on one side, by up to 0.9 m. Reflecting its near side about the

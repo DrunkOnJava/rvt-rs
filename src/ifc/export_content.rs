@@ -1495,6 +1495,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let mut wall_trim_start = None;
     let mut wall_trim_end = None;
     let mut column_body_source = None;
+    let mut beam_body_source = None;
     let mut column_cut_walls = None;
     let mut type_symbol_id = None;
     let mut type_profile = (None, None);
@@ -1549,6 +1550,9 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 InstanceField::String(v),
             ) => {
                 column_body_source = Some(v.clone());
+            }
+            (crate::element_record_beam_cuts::BEAM_BODY_SOURCE_FIELD, InstanceField::String(v)) => {
+                beam_body_source = Some(v.clone());
             }
             (
                 crate::element_record_column_cuts::COLUMN_CUT_WALL_COUNT_FIELD,
@@ -1823,6 +1827,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| wall_arc.as_ref().map(|_| WALL_ARC_BODY_SOURCE.into()))
                     .or_else(|| wall_body_source.clone())
                     .or_else(|| column_body_source.clone())
+                    .or_else(|| beam_body_source.clone())
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))

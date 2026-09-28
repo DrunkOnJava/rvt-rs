@@ -2129,6 +2129,7 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
                         if text == RECORD_BBOX_BODY_SOURCE
                             || text == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
                             || text == crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
+                            || text == crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT
                 )
         })
     });
