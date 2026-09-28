@@ -364,8 +364,20 @@ pub fn scan_material_names(
 }
 
 /// Releases a category's material (RE-91) is read on. Measured on Revit
-/// 2024 files; RE1's 2025 files hold no entry in this layout.
-pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+/// 2024 files and, in [`CATEGORY_MATERIAL_FRAME_2023`]'s layout, on Revit
+/// 2023 (RE-115); RE1's 2025 files hold no entry in either layout.
+pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024];
+
+/// A category's object-styles entry on Revit 2023 (RE-115), after its
+/// `BuiltInCategory` (`i32`): an unset `u32`, a `u32` that is 1 or 2 (the
+/// entry is held twice), `u32 1`, `ff ff ff ff 3f 01`, eight bytes, then
+/// [`CATEGORY_MATERIAL_MARK_2023`] and the material (`u32`, `ff` × 4 when
+/// unset). This frame is the bytes from the unset `u32` to the `3f 01`,
+/// with the 1-or-2 word skipped.
+pub const CATEGORY_MATERIAL_FRAME_2023: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
+/// See [`CATEGORY_MATERIAL_FRAME_2023`]: `i32 -3000010`, 26 bytes past the
+/// category, right before the material.
+pub const CATEGORY_MATERIAL_MARK_2023: [u8; 4] = [0x36, 0x39, 0xd2, 0xff];
 
 /// The bytes a category's entry in the document's object styles holds
 /// after its `BuiltInCategory` (`i64`), before its material (`u64`): an
@@ -382,6 +394,11 @@ pub const CATEGORY_MATERIAL_FRAME: [u8; 20] = [
 /// writes "Default Wall" for each of Core Interior's 356 walls whose layer
 /// takes its category's material.
 ///
+/// On Revit 2023 the entry is [`CATEGORY_MATERIAL_FRAME_2023`]'s: on two
+/// projects the Walls, Floors and Roofs entries hold the materials Revit's
+/// own export writes for their layers that take their category's material
+/// (RE-115).
+///
 /// `None` on a release outside [`CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS`],
 /// without the entry, where it is unset (0 or all ones), or where copies
 /// disagree.
@@ -392,6 +409,9 @@ pub fn scan_category_material(
 ) -> Result<Option<u32>> {
     if !CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
         return Ok(None);
+    }
+    if revit_version == 2023 {
+        return scan_category_material_2023(rf, category);
     }
     let mut pattern = category.to_le_bytes().to_vec();
     pattern.extend_from_slice(&CATEGORY_MATERIAL_FRAME);
@@ -515,4 +535,38 @@ pub fn scan_materials_2023(
         .filter(|(_, name)| !shared.contains(name))
         .collect();
     (materials, names)
+}
+
+fn scan_category_material_2023(rf: &mut RevitFile, category: i64) -> Result<Option<u32>> {
+    let Ok(category) = i32::try_from(category) else {
+        return Ok(None);
+    };
+    let mut pattern = category.to_le_bytes().to_vec();
+    pattern.extend_from_slice(&CATEGORY_MATERIAL_FRAME_2023);
+    let mut found: BTreeSet<u32> = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for at in memchr::memmem::find_iter(buf, &pattern) {
+            let entry = |offset: usize, len: usize| buf.get(at + offset..at + offset + len);
+            let word = entry(8, 4).map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")));
+            if !matches!(word, Some(1 | 2))
+                || entry(12, 4) != Some(&[1, 0, 0, 0][..])
+                || entry(16, 6) != Some(&[0xff, 0xff, 0xff, 0xff, 0x3f, 0x01][..])
+                || entry(30, 4) != Some(&CATEGORY_MATERIAL_MARK_2023[..])
+            {
+                continue;
+            }
+            if let Some(material) = u32_at(buf, at + 34) {
+                found.insert(material);
+            }
+        }
+    }
+    let mut values = found.into_iter();
+    let (Some(material), None) = (values.next(), values.next()) else {
+        return Ok(None);
+    };
+    Ok(Some(material).filter(|&id| id != 0 && id != u32::MAX))
 }

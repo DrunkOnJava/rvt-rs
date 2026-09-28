@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 object styles give each category its material (RE-115,
+  #421).** A 2023 category's object-styles entry is `i32 category · ff ff
+  ff ff · u32 1|2 · u32 1 · ff ff ff ff 3f 01 · 8 bytes · i32 -3000010 ·
+  u32 material`. Walls', floors' and roofs' layers that take their
+  category's material take that one, as RE-91's wall layers do on 2024,
+  and floors', roofs' and ceilings' now do so on every release. Exemplo_data's
+  17 walls and its floor carry Revit's own `Material pré-definido de
+  parede` and `Material pré-definido de piso`: 35 of its 37 elements now
+  have Revit's material set (18 before). Every 2024 and 2025 file is
+  byte-identical.
+
 - **Revit 2023 walls and floors carry their material layer sets (RE-114,
   #421).** A 2023 wall's data holds its location line and its orientation
   as 2024's does, read now through one element-data layout per release (a
