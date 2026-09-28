@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Doors Revit cuts at their rough size get that opening (#227, RE-94).**
+  Revit's export cuts a door at its type's Rough Width by Rough Height
+  exactly where the door's body is Rough Height tall. Such a door now takes
+  that opening, centred on its origin, and its `OverallWidth` /
+  `OverallHeight`. On Snowdon Towers 57 of 126 doors: 54 now match
+  Revit's opening within 0.001 ft (none did), and the 3 in tapered walls
+  match along the wall and in height. Doors cut to their frame, and
+  opening-only doors, keep their box opening. Every other local file is
+  byte-identical.
+
 - **Windows cut Revit's opening, from their type (#227, RE-93).** A
   type's length parameters are read from its value block. Revit's export
   cuts a window's opening its type's Width by Height, centred on the

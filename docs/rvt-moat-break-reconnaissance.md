@@ -2098,3 +2098,7 @@ A stair run's element data holds the StairsRun class's fields in schema order: s
 ## Addendum — RE-93 a type's length parameters, and Revit's window openings (2026-09-28)
 
 A family type's value block holds its length parameters as `f64 feet · ff × 8 · i64 parameter`: a BuiltInParameter's negative id (Width −1001301, Height −1001300, Rough Width −1001305, Rough Height −1001304), or a declared family parameter whose definition names it 0x56 bytes past its id. Revit's IFC4 export cuts each Snowdon Towers window's opening its type's Width by Height, centred on its origin along its X axis, from 3.0 ft above the origin; doors are cut at Rough Width × Rough Height on 57 of 126 and at Width + 0.208 ft by Height + 0.104 ft on 66, split within types. Report: `reports/element-framing/RE-93-window-openings.md`; probe: `examples/probe_re93_window_openings.rs`; scorer: `tools/re/opening_boxes_vs_ifc.py`.
+
+## Addendum — RE-94 a door's body height tells which opening Revit cuts (2026-09-28)
+
+Revit's IFC4 export cuts a Snowdon Towers door at its type's Rough Width × Rough Height exactly where the door's body is Rough Height tall (57 of 126); a door whose body is its frame's height is cut 0.0625 ft inside its frame instead, a size no stored value gives. Opening-only door types do not follow the rough size (RE1's cased opening). Report: `reports/element-framing/RE-94-door-openings.md`; probe: `examples/probe_re94_door_openings.rs`.
