@@ -1,11 +1,12 @@
 //! RE-126: a wall's flip is one byte, followed by a second flag.
 //!
-//! FACT: in a wall's element data, after `WALL_FLIP_ANCHOR`, the location
-//! line (`u32`) and the orientation word (`u32`) come one flip byte (0 or
-//! 1) and a second flag byte. The flag is 0 followed by `00 00`, or 1
-//! followed by `ff ff`. On the flowbim.ee Revit 2026 house 35 of 59 walls
-//! set it, and on Core Interior (2024) 4 of 360; RE1 Architecture (2025)
-//! and Snowdon Towers (2024) have none. What the flag sets is not measured.
+//! FACT: in a wall's element data, `WALL_FLIP_ANCHOR` is followed by the
+//! location line (`u32`), the orientation word (`u32`), the flip as one
+//! byte that is 0 or 1, and a second flag byte. The flag is 0 followed by
+//! `00 00`, or 1 followed by `ff ff`. It is set on 35 of the 59 walls of
+//! the flowbim.ee Revit 2026 house and on 4 of Core Interior's 360 (Revit
+//! 2024), and on none in RE1 Architecture (2025) or Snowdon Towers (2024).
+//! What the flag sets is not measured.
 //!
 //! The probe prints the six bytes after the orientation word for each
 //! wall, counted by pattern, and how many of those walls
