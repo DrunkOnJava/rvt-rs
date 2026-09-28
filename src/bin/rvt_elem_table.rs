@@ -121,7 +121,7 @@ fn run() -> anyhow::Result<()> {
 
     let layout_label = match layout.framing {
         elem_table::RecordFraming::Explicit { marker_len } => format!(
-            "Explicit ({} B stride, {marker_len}-byte owner field at record +{})",
+            "Explicit ({} B stride, {marker_len}-byte owner field at record +{}, closing the record before it)",
             layout.stride, layout.marker_offset
         ),
         elem_table::RecordFraming::Implicit => {

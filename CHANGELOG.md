@@ -204,6 +204,18 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **`ElemRecord::owner_id` names the owner of the right record (#152,
+  RE-31 §6).** `Global/ElemTable`'s records start at `0x06` and end with
+  their owner field, so the field that opens the frame rvt-rs parses
+  closes the record before it; `owner_id` paired every owner with the
+  next element. Now the element's own partition reference list names the
+  owner on 21,072 of 21,074 records on Core Interior (86.6 % before) and
+  1,574 of 1,574 on Snowdon Towers (92.4 %), and no record names itself
+  (304 and 1,342 did). Reported, with the self-ownership test that
+  settles it, by STE1200. `rvt-elem-table` and Python's
+  `elem_table_records()` report the corrected owners; nothing in the IFC
+  export used the field.
+
 - **The element schedule names family instances' materials.**
   `rvt-schedule`'s material column now falls back to an element's material
   constituent set (RE-82, RE-88), listing each material once in the IFC's

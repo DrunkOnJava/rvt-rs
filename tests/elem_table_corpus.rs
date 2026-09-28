@@ -151,7 +151,10 @@ fn family_files_use_the_project_layouts() {
             body.iter().all(|r| r.id_primary == r.id_secondary),
             "{year}: id pairs agree"
         );
-        assert_eq!(records[0].owner_id, Some(17), "{year}: record 0's owner");
+        // The 17 at the parsed frame's start closes the record before it,
+        // the table's first, at 0x06 (#152); the first parsed record's own
+        // owner field is unset.
+        assert_eq!(records[0].owner_id, None, "{year}: record 0's owner");
         assert_eq!(header.header_flag, 0x0011, "{year}");
     }
     assert!(
@@ -238,12 +241,13 @@ fn project_2024_file_parses_all_declared_records() {
 }
 
 /// RE-31: the field the layout detector anchors on is an owner ElementId
-/// (`u32` at `+0` on 2023, `u64` at `+4` on 2024), and every value set on
-/// these two files is an ElementId the same table declares.
+/// (`u32` at `+0` on 2023, `u64` at `+4` on 2024) closing the record before
+/// it (#152). Every value set on these two files is an ElementId the same
+/// table declares, and no record names itself.
 #[test]
 fn owner_ids_are_declared_element_ids() {
     for (name, set, parsed) in [
-        ("Revit_IFC5_Einhoven.rvt", 338, 2614),
+        ("Revit_IFC5_Einhoven.rvt", 339, 2614),
         ("2024_Core_Interior.rvt", 22_368, 26_425),
     ] {
         let Some(p) = project_file(name) else {
@@ -259,6 +263,10 @@ fn owner_ids_are_declared_element_ids() {
         assert!(
             owners.iter().all(|id| declared.contains(id)),
             "{name}: every owner is a declared ElementId"
+        );
+        assert!(
+            records.iter().all(|r| r.owner_id != Some(r.id_primary)),
+            "{name}: no record names itself"
         );
     }
 }
