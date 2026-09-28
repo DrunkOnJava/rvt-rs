@@ -44,8 +44,7 @@
 //! reported as non-primary.
 
 use crate::partition_element_records::{
-    CATEGORY_OFFSET, PartitionElementRecord, bbox_marker, partition_record_chain,
-    supports_revit_version,
+    CATEGORY_OFFSET, PartitionElementRecord, partition_record_chain, supports_revit_version,
 };
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -208,7 +207,7 @@ pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
 pub fn compute_design_options(rf: &mut RevitFile) -> Result<DesignOptions> {
     let mut out = DesignOptions::default();
     let version = rf.basic_file_info()?.version;
-    let Some(marker) = bbox_marker(version).filter(|_| supports_revit_version(version)) else {
+    let Some(marker) = crate::partition_element_records::file_bbox_marker(rf, version) else {
         return Ok(out);
     };
     let streams = rf.partition_stream_names();
