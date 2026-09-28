@@ -141,8 +141,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases where this framing is corpus-proven: 2024 on Core Interior
-/// (RE-24) and Snowdon Towers, 2025 on RE1 Architecture (RE-51).
-pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// (RE-24) and Snowdon Towers, 2025 on RE1 Architecture (RE-51), and 2023
+/// on two projects in its 32-bit form (RE-107).
+pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025];
+
+/// The release whose Level records and name blocks carry 32-bit
+/// ElementIds (RE-107).
+pub const REVIT_2023: u32 = 2023;
 
 /// Autodesk `BuiltInCategory.OST_Levels`.
 pub const OST_LEVELS: i64 = -2_000_240;
@@ -187,6 +192,18 @@ pub fn elevation_marker(revit_version: u32) -> Option<[u8; 6]> {
         2025 => Some([0x05, 0x00, 0x00, 0x00, 0x5d, 0x02]),
         _ => None,
     }
+}
+
+/// The elevation marker from the file's own schema (RE-107): `05 00 00 00`
+/// and the tag of its `Plane` class. The `u16` [`elevation_marker`] gives
+/// per release is that tag: `0x0248` on 2024, `0x025d` on 2025, and
+/// `0x0235` on 2023, where no release constant is recorded.
+pub fn schema_elevation_marker(rf: &mut RevitFile) -> Option<[u8; 6]> {
+    let classes = rf.schema_classes().ok()?;
+    let plane = classes.classes.iter().find(|c| c.name == "Plane")?.tag;
+    let mut marker = [0x05, 0x00, 0x00, 0x00, 0x00, 0x00];
+    marker[4..].copy_from_slice(&plane.to_le_bytes());
+    Some(marker)
 }
 
 /// The Level record marker per release: the last six bytes of the
@@ -437,19 +454,47 @@ pub fn decode_name_block_at_with(
     declared_ids: &BTreeSet<u32>,
     marker: &[u8],
 ) -> Option<NameElevationBlock> {
-    let value = run_start.checked_add(OWNER_OFFSET_BEFORE_NAME - 8)?;
-    let owner_at = run_start.checked_sub(8)?;
-    let run = buf.get(run_start..run_start + OWNER_SENTINEL_RUN_LEN)?;
+    decode_name_block(
+        buf,
+        run_start,
+        declared_ids,
+        marker,
+        8,
+        OWNER_SENTINEL_RUN_LEN,
+    )
+}
+
+/// Length of the `0xff` sentinel run of a Revit 2023 name block, whose
+/// owner is a `u32` (RE-107): half of [`OWNER_SENTINEL_RUN_LEN`].
+pub const OWNER_SENTINEL_RUN_LEN_2023: usize = 28;
+
+/// A name block whose owner is `id_len` bytes wide and whose sentinel run
+/// is `run_len` bytes: `u64` and 56 on 2024 and 2025, `u32` and 28 on 2023
+/// (RE-107). Three zero bytes and the name's `u32` length follow the run.
+fn decode_name_block(
+    buf: &[u8],
+    run_start: usize,
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8],
+    id_len: usize,
+    run_len: usize,
+) -> Option<NameElevationBlock> {
+    let value = run_start.checked_add(run_len + 3 + LENGTH_PREFIX_OFFSET_BEFORE_NAME)?;
+    let owner_at = run_start.checked_sub(id_len)?;
+    let run = buf.get(run_start..run_start + run_len)?;
     if !run.iter().all(|byte| *byte == 0xff) {
         return None;
     }
     // The run must end here: a longer run means this is not the slot.
-    let pad =
-        buf.get(run_start + OWNER_SENTINEL_RUN_LEN..value - LENGTH_PREFIX_OFFSET_BEFORE_NAME)?;
+    let pad = buf.get(run_start + run_len..value - LENGTH_PREFIX_OFFSET_BEFORE_NAME)?;
     if !pad.iter().all(|byte| *byte == 0) {
         return None;
     }
-    let owner = read_u64(buf, owner_at)?;
+    let owner = if id_len == 4 {
+        u64::from(read_u32(buf, owner_at)?)
+    } else {
+        read_u64(buf, owner_at)?
+    };
     if owner == 0 || owner > u64::from(u32::MAX) {
         return None;
     }
@@ -503,12 +548,24 @@ pub fn find_name_blocks_with(
     declared_ids: &BTreeSet<u32>,
     marker: &[u8],
 ) -> Vec<NameElevationBlock> {
-    // Each run of `0xff` at least OWNER_SENTINEL_RUN_LEN long, decoded at
-    // the run's first byte. The search jumps to the next such run rather
-    // than stepping every byte; walking back from the hit finds where the
-    // run starts, never before the previous run's end.
+    find_name_blocks_sized(buf, declared_ids, marker, 8, OWNER_SENTINEL_RUN_LEN)
+}
+
+/// [`find_name_blocks_with`] for owners `id_len` bytes wide and sentinel
+/// runs `run_len` bytes long ([`decode_name_block`]).
+fn find_name_blocks_sized(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    marker: &[u8],
+    id_len: usize,
+    run_len: usize,
+) -> Vec<NameElevationBlock> {
+    // Each run of `0xff` at least `run_len` long, decoded at the run's
+    // first byte. The search jumps to the next such run rather than
+    // stepping every byte; walking back from the hit finds where the run
+    // starts, never before the previous run's end.
     let mut out = Vec::new();
-    let run = [0xffu8; OWNER_SENTINEL_RUN_LEN];
+    let run = vec![0xffu8; run_len];
     let finder = memchr::memmem::Finder::new(&run);
     let mut index = 0usize;
     while let Some(found) = finder.find(&buf[index..]) {
@@ -520,7 +577,9 @@ pub fn find_name_blocks_with(
         while index < buf.len() && buf[index] == 0xff {
             index += 1;
         }
-        if let Some(block) = decode_name_block_at_with(buf, run_start, declared_ids, marker) {
+        if let Some(block) =
+            decode_name_block(buf, run_start, declared_ids, marker, id_len, run_len)
+        {
             out.push(block);
         }
     }
@@ -617,17 +676,21 @@ pub fn levels_from_records_and_blocks(
 
 /// Whether a recovered level list is usable as a storey set.
 ///
-/// Fail closed: at least two levels, one block per Level record, and
-/// no two levels sharing an elevation. A partial recovery is not
+/// Fail closed: at least two levels, one block per Level, and no two
+/// levels sharing an elevation. A partial recovery is not
 /// silently emitted as a smaller building.
 pub fn recovered_levels_are_a_storey_set(
     records: &[PartitionLevelRecord],
     levels: &[PartitionLevel],
 ) -> bool {
+    // Distinct Levels: a Level can be written in more than one partition
+    // (RE-107: modelo_bim holds Level 338608 twice).
     let level_records = records
         .iter()
         .filter(|record| record.is_level_element())
-        .count();
+        .map(|record| record.element_id)
+        .collect::<BTreeSet<u32>>()
+        .len();
     if levels.len() < 2 || levels.len() != level_records {
         return false;
     }
@@ -660,6 +723,61 @@ pub fn scan_partition_level_ids(
         .collect())
 }
 
+/// Bytes from a Revit 2023 Level record's `u32` ElementId to its
+/// `BuiltInCategory` (RE-107).
+const ID_BEFORE_CATEGORY_2023: usize = 14;
+/// Bytes from the ElementId to the `ElementHeader` tag, after the `u32` id
+/// and the `u32` record size, as in [`crate::partition_element_records_2023`].
+const HEADER_TAG_AFTER_ID_2023: usize = 8;
+/// Bytes from the category to the container reference.
+const CONTAINER_AFTER_CATEGORY_2023: usize = 8;
+/// Bytes from the category to the placement kind.
+const PLACEMENT_KIND_AFTER_CATEGORY_2023: usize = 24;
+/// Bytes from the category to the record marker.
+const MARKER_AFTER_CATEGORY_2023: usize = 38;
+
+/// Every Revit 2023 `OST_Levels` record in one inflated stream (RE-107).
+/// It is the 2024 record without the 24 sentinel bytes after the
+/// category, opened by the 32-bit chain header 2023's element records
+/// carry (RE-81): a `u32` ElementId, the record size and the
+/// `ElementHeader` tag, 14 bytes before the category; the container
+/// reference 8 bytes after it, the placement kind 24 after it, and the
+/// record `marker` (`ff ff ff ff` and the `ElementParents` tag) 38 after
+/// it.
+pub fn find_level_records_2023(
+    stream: &str,
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    header_tag: u16,
+    marker: &[u8; 6],
+) -> Vec<PartitionLevelRecord> {
+    let needle = (OST_LEVELS as u64).to_le_bytes();
+    memchr::memmem::find_iter(buf, &needle)
+        .filter_map(|category| {
+            let id_at = category.checked_sub(ID_BEFORE_CATEGORY_2023)?;
+            let element_id = read_u32(buf, id_at)?;
+            if element_id == 0 || !declared_ids.contains(&element_id) {
+                return None;
+            }
+            if read_u16(buf, id_at + HEADER_TAG_AFTER_ID_2023)? != header_tag {
+                return None;
+            }
+            let marker_at = category + MARKER_AFTER_CATEGORY_2023;
+            if buf.get(marker_at..marker_at + marker.len())? != marker {
+                return None;
+            }
+            Some(PartitionLevelRecord {
+                stream: stream.to_string(),
+                offset: id_at,
+                element_id,
+                flags: read_u32(buf, id_at + 4)?,
+                container: read_u64(buf, category + CONTAINER_AFTER_CATEGORY_2023)?,
+                placement_kind: read_u32(buf, category + PLACEMENT_KIND_AFTER_CATEGORY_2023)?,
+            })
+        })
+        .collect()
+}
+
 /// Every `OST_Levels` record of every partition, first- and
 /// second-prologue.
 fn level_records(
@@ -667,6 +785,28 @@ fn level_records(
     revit_version: u32,
     declared_ids: &BTreeSet<u32>,
 ) -> Vec<PartitionLevelRecord> {
+    if revit_version == REVIT_2023 {
+        let Some((full, header_tag)) = crate::partition_element_records_2023::record_marker(rf)
+        else {
+            return Vec::new();
+        };
+        let mut marker = [0u8; 6];
+        marker.copy_from_slice(&full[2..]);
+        let mut records = Vec::new();
+        for stream in rf.partition_stream_names() {
+            let Ok(inflated) = rf.inflated_partition(&stream) else {
+                continue;
+            };
+            records.extend(find_level_records_2023(
+                &stream,
+                inflated.bytes(),
+                declared_ids,
+                header_tag,
+                &marker,
+            ));
+        }
+        return records;
+    }
     let (Some(marker), Some(bbox_marker)) = (
         record_marker(revit_version),
         crate::partition_element_records::bbox_marker(revit_version),
@@ -704,7 +844,8 @@ pub fn scan_partition_levels(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let Some(marker) = elevation_marker(revit_version) else {
+    let Some(marker) = elevation_marker(revit_version).or_else(|| schema_elevation_marker(rf))
+    else {
         return Ok(Vec::new());
     };
     let records = level_records(rf, revit_version, declared_ids);
@@ -713,16 +854,49 @@ pub fn scan_partition_levels(
         .filter(|record| record.is_level_element())
         .map(|record| record.element_id)
         .collect();
-    let mut blocks = Vec::new();
+    // Each block with the number of the partition it is in: a Level
+    // edited after an earlier save is rewritten into a higher-numbered
+    // partition and the earlier copy left in place, as every element is
+    // (RE-26 §3), so only its newest partition's blocks are its current
+    // name and elevation (RE-107).
+    let mut numbered: Vec<(u32, NameElevationBlock)> = Vec::new();
     let mut owned = BTreeSet::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
+        let number = stream
+            .rsplit('/')
+            .next()
+            .and_then(|n| n.parse::<u32>().ok())
+            .unwrap_or(0);
+        let mut blocks = Vec::new();
         let buf = inflated.bytes();
-        blocks.extend(find_name_blocks_with(buf, declared_ids, &marker));
-        owned.extend(owned_level_ids(buf, &level_ids));
+        if revit_version == REVIT_2023 {
+            // No Level inside another element is measured on 2023.
+            blocks.extend(find_name_blocks_sized(
+                buf,
+                declared_ids,
+                &marker,
+                4,
+                OWNER_SENTINEL_RUN_LEN_2023,
+            ));
+        } else {
+            blocks.extend(find_name_blocks_with(buf, declared_ids, &marker));
+            owned.extend(owned_level_ids(buf, &level_ids));
+        }
+        numbered.extend(blocks.into_iter().map(|block| (number, block)));
     }
+    let mut newest: BTreeMap<u32, u32> = BTreeMap::new();
+    for (number, block) in &numbered {
+        let held = newest.entry(block.element_id).or_insert(*number);
+        *held = (*held).max(*number);
+    }
+    let blocks: Vec<NameElevationBlock> = numbered
+        .into_iter()
+        .filter(|(number, block)| newest.get(&block.element_id) == Some(number))
+        .map(|(_, block)| block)
+        .collect();
     // A Level inside another element is not a storey: it neither joins
     // the storey set nor counts against it.
     let records: Vec<PartitionLevelRecord> = records
@@ -1026,7 +1200,8 @@ mod tests {
 
     #[test]
     fn unsupported_release_yields_nothing() {
-        assert!(!supports_revit_version(2023));
+        assert!(!supports_revit_version(2022));
+        assert!(supports_revit_version(2023));
         assert!(supports_revit_version(2024));
         assert!(supports_revit_version(2025));
         assert!(elevation_marker(2023).is_none() && record_marker(2023).is_none());
