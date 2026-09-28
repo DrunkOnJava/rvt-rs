@@ -625,6 +625,69 @@ pub fn scan_component_types(
     Ok(settled(out))
 }
 
+/// How far into a run's data its StairsRun record is looked for.
+pub const RUN_ENDS_WINDOW: usize = 0x1000;
+/// Bytes from the record's first `f64` to its flags (RE-92): seven `f64`
+/// and a `u32`.
+pub const RUN_ENDS_FLAGS_OFFSET: usize = 60;
+/// A top riser index at or above this is not one a run has.
+pub const RUN_TOP_RISER_INDEX_LIMIT: u32 = 300;
+
+/// How a run starts and ends (RE-92): its "Begin with Riser" and "End with
+/// Riser" settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RunEnds {
+    /// The run's first step is a riser.
+    pub begin_with_riser: bool,
+    /// The run's last step is a riser. When it is not, the run ends in a
+    /// tread and has one riser line more than risers.
+    pub end_with_riser: bool,
+}
+
+/// The ends of the run whose StairsRun record lies in `data` (RE-92). The
+/// record is seven `f64` (bottom elevation, top elevation, extend below
+/// base, extend below tread base, run width, left and right stringer
+/// width), a `u32` top riser index and three one-byte flags: centre mark
+/// visible, begin with riser, end with riser. It is taken where its bottom
+/// elevation and width are the sketch's, within
+/// [`SKETCH_TOLERANCE_FEET`], and the first such record in the first
+/// [`RUN_ENDS_WINDOW`] bytes wins.
+pub fn run_ends_at(data: &[u8], base_elevation_feet: f64, width_feet: f64) -> Option<RunEnds> {
+    let end = data.len().min(RUN_ENDS_WINDOW);
+    (0..end.saturating_sub(RUN_ENDS_FLAGS_OFFSET + 2)).find_map(|at| {
+        let value = |index: usize| read_f64(data, at + 8 * index);
+        let (bottom, top, width) = (value(0)?, value(1)?, value(4)?);
+        if (bottom - base_elevation_feet).abs() >= SKETCH_TOLERANCE_FEET
+            || (width - width_feet).abs() >= SKETCH_TOLERANCE_FEET
+            || !(top.is_finite() && top > bottom)
+            || read_u32(data, at + 56)? >= RUN_TOP_RISER_INDEX_LIMIT
+        {
+            return None;
+        }
+        let flags = at + RUN_ENDS_FLAGS_OFFSET;
+        flag(data, flags)?;
+        Some(RunEnds {
+            begin_with_riser: flag(data, flags + 1)?,
+            end_with_riser: flag(data, flags + 2)?,
+        })
+    })
+}
+
+/// The ends of each run in `sketches`, from the StairsRun record in its
+/// data, matched against the run's sketch (RE-92). Empty for a release this
+/// layout is not measured on.
+pub fn scan_run_ends(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    sketches: &BTreeMap<u32, RunSketch>,
+) -> Result<BTreeMap<u32, RunEnds>> {
+    let runs: BTreeSet<u32> = sketches.keys().copied().collect();
+    scan_run_data(rf, revit_version, &runs, |id, data| {
+        let sketch = sketches.get(&id)?;
+        run_ends_at(data, sketch.origin[2], sketch.width_feet)
+    })
+}
+
 /// Every bounded line in the data of each run in `runs`, in data order,
 /// where every copy of the data holds the same lines. Empty for a release
 /// this layout is not measured on.
@@ -633,12 +696,30 @@ pub fn scan_run_lines(
     revit_version: u32,
     runs: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, Vec<BoundedLine>>> {
-    use crate::partition_beam_axes::{BEAM_DATA_WINDOW, BOUNDED_LINE_TAG, bounded_line_at};
+    use crate::partition_beam_axes::{BOUNDED_LINE_TAG, bounded_line_at};
+    scan_run_data(rf, revit_version, runs, |_, data| {
+        let lines: Vec<BoundedLine> = memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG)
+            .filter_map(|at| bounded_line_at(data, at))
+            .collect();
+        (!lines.is_empty()).then_some(lines)
+    })
+}
+
+/// What `read` finds in each run of `runs`, from every partition's copy of
+/// the run's data. A run whose copies disagree is dropped; the map is empty
+/// for a release this layout is not measured on.
+fn scan_run_data<T: PartialEq>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    runs: &BTreeSet<u32>,
+    mut read: impl FnMut(u32, &[u8]) -> Option<T>,
+) -> Result<BTreeMap<u32, T>> {
+    use crate::partition_beam_axes::BEAM_DATA_WINDOW;
     let header = match crate::partition_names::element_data_header(revit_version) {
         Some(header) if supports_revit_version(revit_version) => header,
         _ => return Ok(BTreeMap::new()),
     };
-    let mut out: BTreeMap<u32, Option<Vec<BoundedLine>>> = BTreeMap::new();
+    let mut out: BTreeMap<u32, Option<T>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -664,22 +745,24 @@ pub fn scan_run_lines(
             let Some(data) = buf.get(id_at + 8..end) else {
                 continue;
             };
-            let lines: Vec<BoundedLine> = memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG)
-                .filter_map(|at| bounded_line_at(data, at))
-                .collect();
-            if !lines.is_empty() {
-                merge(&mut out, id, lines);
+            if let Some(found) = read(id, data) {
+                merge(&mut out, id, found);
             }
         }
     }
     Ok(settled(out))
 }
 
-/// The side view of a run with separate treads and risers (RE-52): one
-/// closed outline in the run's vertical plane, as `[along, up]` feet from
-/// the sketch origin, counter-clockwise. The run has as many risers as
-/// riser lines and a tread between each two; the last riser meets the
-/// landing or floor above.
+/// The side view of a run (RE-52, RE-92): one closed outline in the run's
+/// vertical plane, as `[along, up]` feet from the sketch origin,
+/// counter-clockwise. `end_with_riser` is the run's setting where it is
+/// read ([`run_ends_at`]).
+///
+/// A run with separate treads and risers that ends with a riser has as many
+/// risers as riser lines and a tread between each two; the last riser meets
+/// the landing or floor above. One that ends with a tread (RE-92) has one
+/// riser fewer, and its last tread runs to the last riser line. A
+/// monolithic run is drawn by [`monolithic_side_profile`].
 ///
 /// Riser `k` stands at riser line `k`, behind the nosing. Two
 /// constructions are measured, and only those are drawn:
@@ -689,13 +772,22 @@ pub fn scan_run_lines(
 /// - an upright riser that runs down behind the tread below, which stops
 ///   against it.
 ///
-/// `None` for a monolithic run, a run without treads or risers, the other
-/// two constructions, and dimensions a real run cannot have.
+/// `None` for a run without treads or risers, the other two constructions,
+/// a slanted run ending with a tread, and dimensions a real run cannot
+/// have. Where `end_with_riser` is not read, a run with separate treads
+/// and risers is taken to end with a riser, and a monolithic run is not
+/// drawn.
 pub fn run_side_profile(
     sketch: &RunSketch,
     run_type: &RunType,
     riser_height_feet: f64,
+    end_with_riser: Option<bool>,
 ) -> Option<Vec<[f64; 2]>> {
+    if run_type.monolithic {
+        return end_with_riser
+            .and_then(|_| monolithic_side_profile(sketch, run_type, riser_height_feet));
+    }
+    let end_with_riser = end_with_riser.unwrap_or(true);
     let (h, t, rt, n) = (
         riser_height_feet,
         run_type.tread_thickness_feet,
@@ -715,6 +807,9 @@ pub fn run_side_profile(
         return None;
     }
     let slanted = run_type.slanted_risers;
+    if slanted && !end_with_riser {
+        return None;
+    }
     // Where a riser's front meets the underside of the tread above it,
     // past that tread's front edge, and the riser's horizontal thickness.
     // A slanted riser leans back by the nosing over one riser height, so
@@ -728,9 +823,9 @@ pub fn run_side_profile(
     if u.windows(2).any(|pair| pair[1] - pair[0] <= n + rh) {
         return None;
     }
-    let count = u.len();
+    let count = if end_with_riser { u.len() } else { u.len() - 1 };
     let rise = |k: usize| k as f64 * h;
-    let mut ring: Vec<[f64; 2]> = Vec::with_capacity(6 * count);
+    let mut ring: Vec<[f64; 2]> = Vec::with_capacity(6 * count + 3);
     // Up the steps' faces: each riser's front from the tread below (or the
     // floor), then the front and top of the tread it carries. A slanted
     // riser and its tread are one folded plate, so the tread's front is the
@@ -738,7 +833,7 @@ pub fn run_side_profile(
     for k in 1..=count {
         let a = u[k - 1];
         ring.push([a + n, rise(k - 1)]);
-        if k < count {
+        if k < count || !end_with_riser {
             if !slanted {
                 ring.push([a + top_front, rise(k) - t]);
                 ring.push([a, rise(k) - t]);
@@ -748,6 +843,13 @@ pub fn run_side_profile(
             ring.push([a + top_front, rise(k) - t]);
             ring.push([a + top_front + rh, rise(k) - t]);
         }
+    }
+    // A run ending with a tread: the top tread runs to the last riser line,
+    // and under it back to the last riser.
+    if !end_with_riser {
+        ring.push([u[count], rise(count)]);
+        ring.push([u[count], rise(count) - t]);
+        ring.push([u[count - 1] + n + rh, rise(count) - t]);
     }
     // Down their backs: each riser's back to the tread below, then under
     // that tread to the riser below. A slanted riser's back runs on through
@@ -763,6 +865,72 @@ pub fn run_side_profile(
         ring.push([u[k - 2] + top_front + rh, rise(k - 1) - t]);
     }
     ring.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-12 && (a[1] - b[1]).abs() < 1e-12);
+    let area: f64 = ring
+        .iter()
+        .zip(ring.iter().cycle().skip(1))
+        .map(|(p, q)| p[0] * q[1] - q[0] * p[1])
+        .sum();
+    if area < 0.0 {
+        ring.reverse();
+    }
+    Some(ring)
+}
+
+/// The side view of a monolithic run (RE-92), as [`run_side_profile`]
+/// draws one: a riser less than riser lines, whichever way the run ends.
+/// Each riser leans from the step's inner corner, the nosing length behind
+/// the riser line, up to its nosing on the line, and each tread runs from
+/// its nosing to the next inner corner; the last runs to the last riser
+/// line. The underside is parallel to the line through the inner corners,
+/// the type's structural depth below it measured square to the pitch, and
+/// is cut off by the floor the run starts on. The last riser line closes
+/// the run with a vertical face.
+///
+/// `None` unless the type is monolithic with slanted risers and no separate
+/// treads or risers, the one construction measured, or for dimensions a
+/// real run cannot have.
+pub fn monolithic_side_profile(
+    sketch: &RunSketch,
+    run_type: &RunType,
+    riser_height_feet: f64,
+) -> Option<Vec<[f64; 2]>> {
+    let (h, n, depth) = (
+        riser_height_feet,
+        run_type.nosing_length_feet,
+        run_type.structural_depth_feet,
+    );
+    if !run_type.monolithic
+        || !run_type.slanted_risers
+        || run_type.treads
+        || run_type.risers
+        || !(h.is_finite() && h > 0.0)
+        || !(depth.is_finite() && depth > 0.0)
+        || n < 0.0
+    {
+        return None;
+    }
+    let u = &sketch.risers;
+    if u.windows(2).any(|pair| pair[1] - pair[0] <= n) {
+        return None;
+    }
+    let count = u.len() - 1;
+    let rise = |k: usize| k as f64 * h;
+    let pitch = rise(count) / (u[count] - u[0]);
+    // How far below the inner corners the underside lies, vertically.
+    let drop = depth * pitch.hypot(1.0);
+    let mut ring: Vec<[f64; 2]> = Vec::with_capacity(2 * count + 3);
+    for k in 1..=count {
+        ring.push([u[k - 1] + n, rise(k - 1)]);
+        ring.push([u[k - 1], rise(k)]);
+    }
+    ring.push([u[count], rise(count)]);
+    let end = (u[count] - u[0] - n) * pitch - drop;
+    if end > 0.0 {
+        ring.push([u[count], end]);
+        ring.push([u[0] + n + drop / pitch, 0.0]);
+    } else {
+        ring.push([u[count], 0.0]);
+    }
     let area: f64 = ring
         .iter()
         .zip(ring.iter().cycle().skip(1))
@@ -979,7 +1147,7 @@ mod tests {
         let sketch = run_sketch(&run_621141_lines()).expect("sketch");
         let run_type = upright_type();
         let h = 0.570_833;
-        let ring = run_side_profile(&sketch, &run_type, h).expect("profile");
+        let ring = run_side_profile(&sketch, &run_type, h, Some(true)).expect("profile");
         // Nine treads, each over its going and the nosing, and ten risers:
         // the first from the floor to the first tread, the others from the
         // underside of the tread below to the underside of the next.
@@ -996,7 +1164,7 @@ mod tests {
         let buf = run_type_613941();
         let run_type = run_type_at(&buf, 4).expect("run type");
         let h = 11.0 / 19.0;
-        let ring = run_side_profile(&sketch, &run_type, h).expect("profile");
+        let ring = run_side_profile(&sketch, &run_type, h, Some(true)).expect("profile");
         let (t, n) = (0.25 / 12.0, 1.0 / 12.0);
         let rh = (0.25 / 12.0) * h.hypot(n) / h;
         let near = |p: [f64; 2]| {
@@ -1023,17 +1191,20 @@ mod tests {
         let h = 0.57;
         let mut monolithic = upright_type();
         monolithic.monolithic = true;
-        assert_eq!(run_side_profile(&sketch, &monolithic, h), None);
+        assert_eq!(run_side_profile(&sketch, &monolithic, h, Some(true)), None);
         let mut no_risers = upright_type();
         no_risers.risers = false;
-        assert_eq!(run_side_profile(&sketch, &no_risers, h), None);
+        assert_eq!(run_side_profile(&sketch, &no_risers, h, Some(true)), None);
         // A slanted riser behind the tread below is not a construction any
         // measured type has.
         let mut unmeasured = upright_type();
         unmeasured.slanted_risers = true;
-        assert_eq!(run_side_profile(&sketch, &unmeasured, h), None);
+        assert_eq!(run_side_profile(&sketch, &unmeasured, h, Some(true)), None);
         // Treads thicker than a riser is high cannot be.
-        assert_eq!(run_side_profile(&sketch, &upright_type(), 0.1), None);
+        assert_eq!(
+            run_side_profile(&sketch, &upright_type(), 0.1, Some(true)),
+            None
+        );
     }
 
     #[test]

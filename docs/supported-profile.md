@@ -46,7 +46,7 @@ OLE/CFB Revit container is refused with an error, never a partial model.
 | Roofs | the sketched outline; a shed roof along its slope | 11 of 13 outlined Snowdon roofs with Revit's area; hip and gable roofs are boxes (#356) |
 | Columns | the column prism minus what walls cut from it | Core Interior 256 of 256, exact |
 | Beams | along their location line with their section | 923 of 942 Snowdon structural beams on their line |
-| Stairs | aggregates of flights, landings and supports; straight flights as treads and risers | 30 of 34 drawn flights equal to Revit's; other flight kinds are boxes (#357) |
+| Stairs | aggregates of flights, landings and supports; straight flights as their steps, monolithic ones included | 33 of 38 drawn flights equal to Revit's; spiral and riserless flights are boxes (#357) |
 | Curtain walls | aggregates of panels and mullions placed by their grids | every Snowdon panel and mullion relation Revit's |
 | Doors, windows, openings | the element's box, turned with the instance where it is turned (RE-87); its opening is as deep as the host wall | host is Revit's on 138 of 138 (Core Interior) and 192 of 194 (Snowdon; the other 2 in another wall Revit cuts, RE-85); the opening is within 0.25 ft of Revit's on Core Interior, not Revit's opening profile (#227, RE-83) |
 | Rooms | `IfcSpace` with number and name | boundaries not decoded (#90) |

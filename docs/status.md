@@ -580,6 +580,14 @@ material`). Where the Walls entry is set, a wall layer taking its category's
 material takes it: Core Interior's 356 such walls carry "Default Wall", as
 Revit's export does, and its layer sets go from 88 to 403
 (`reports/element-framing/RE-91-category-material.md`).
+**RE-92 (2026-09-28)** reads a stair run's StairsRun record (seven
+`f64`, a `u32` top riser index, then centre mark, begin with riser and
+end with riser flags). "End with Riser" is 0 on exactly the three
+Snowdon runs with one riser line more than risers, which are now drawn
+ending with a tread. Monolithic runs are drawn as one cast body. 38 of 43
+Snowdon flights are drawn as their steps (34 before), and the 4 added
+equal Revit's geometry but for one nosing edge
+(`reports/element-framing/RE-92-stair-run-ends.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Stair runs ending with a tread, and monolithic runs, are drawn as
+  their steps (#357, RE-92).** A run's data holds Revit's "End with
+  Riser" setting. It is off on exactly the three Snowdon Towers runs that
+  have one riser line more than risers, so those are drawn with their
+  last tread running to the last riser line. Monolithic runs are drawn as
+  one cast body, its underside the type's structural depth below the
+  steps and cut off by the floor. 38 of Snowdon's 43 flights are drawn
+  as their steps (34 before), and the 4 added equal Revit's own geometry
+  but for one nosing edge. Every other local file is byte-identical.
+
 - **Walls whose layer takes its category's material get it (#355,
   RE-91).** The document's object styles hold each category's material.
   Where the Walls entry is set, a wall layer that takes its category's
