@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Openings are as deep as the wall they cut (#227, RE-83).** A door's or
+  window's `IfcOpeningElement` took the element's whole box, standing up to
+  4.9 ft out of the wall. Its depth now comes from the host wall's plan
+  outline, measured along the element's own axes; width and height stay the
+  element's box. Against Revit's export
+  (`tools/re/openings_vs_ifc.py`): Core Interior 138 of 138 within 0.25 ft
+  (none before), Snowdon Towers 72 of 110 within 0.26 ft (none before). In
+  walls that are not straight extrusions the opening stays the element's
+  box. Three Snowdon hosts differ from Revit's (#439); the docs no longer say
+  every host pairs.
 - **Held-out validation (#408).** Autodesk's Snowdon Towers Plumbing, HVAC
   and Electrical samples, never used to develop the decoder, were exported
   once and compared with the VIM export of the sample

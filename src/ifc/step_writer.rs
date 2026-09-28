@@ -1991,11 +1991,18 @@ impl StepWriter {
                         // same reason it does on the filling element
                         // (#232) — the opening's IfcLocalPlacement
                         // below already carries `element_axis`.
-                        let x_dim = ex.width_feet * 0.3048;
-                        let y_dim = ex.depth_feet * 0.3048;
+                        // #227: cut to the host wall's thickness where it is
+                        // known, else the element's own body.
+                        let cut = model.opening_cuts.get(&entity_idx);
+                        let x_dim = cut.map_or(ex.width_feet, |c| c.x_dim_feet) * 0.3048;
+                        let y_dim = cut.map_or(ex.depth_feet, |c| c.y_dim_feet) * 0.3048;
+                        let [cx, cy] = cut.map_or([0.0, 0.0], |c| c.centre_feet);
                         let depth_m = ex.height_feet * 0.3048;
                         let o_profile_origin = self.id();
-                        self.emit_entity(o_profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                        self.emit_entity(
+                            o_profile_origin,
+                            format!("IFCCARTESIANPOINT(({:.6},{:.6}))", cx * 0.3048, cy * 0.3048),
+                        );
                         let o_profile_x = self.id();
                         self.emit_entity(o_profile_x, "IFCDIRECTION((1.,0.))");
                         let o_profile_place = self.id();
@@ -2458,6 +2465,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.starts_with("ISO-10303-21;\n"));
@@ -2486,6 +2494,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let opts = StepOptions {
             timestamp: Some(1_700_000_000), // 2023-11-14T22:13:20
@@ -2556,6 +2565,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("Griffin''s Building"));
@@ -2660,6 +2670,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         assert!(
@@ -2875,6 +2886,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         // Each element's IFC4 entity constructor appears in the output.
@@ -3325,6 +3337,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         assert!(s.contains("IFCMATERIALLAYER("), "IFCMATERIALLAYER missing");
@@ -3397,6 +3410,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         assert!(
@@ -3476,6 +3490,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         // Both layer set AND profile set entities exist because
@@ -3537,6 +3552,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         }
     }
 
@@ -3677,6 +3693,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         }
     }
 
@@ -3833,6 +3850,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         // solid_shape path fires:
@@ -4044,6 +4062,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         // Exactly ONE IfcRepresentationMap — that's the whole point
@@ -4131,6 +4150,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         // IFCMAPPEDITEM must be emitted; no inline body extrusion
@@ -4199,6 +4219,7 @@ mod tests {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         };
         let s = write_step(&model);
         // No mapped item, no extrusion, no brep — just an element
