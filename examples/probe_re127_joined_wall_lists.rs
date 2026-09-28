@@ -2,10 +2,10 @@
 //! joined to, beside RE-70's join lists.
 //!
 //! OBSERVATION being tested: besides RE-70's lists (`07 00 00 00 · tag ·
-//! 02 · count · count × (u32 · u64 ElementId · u32)`), a wall's element
-//! data holds frames `u32 word · u32 tag · 02 00 00 00 · 00 00 00 00 ·
-//! u32 count` whose entries are variable length: `u64 ElementId · u32 n ·
-//! n × u32`. On the flowbim.ee Revit 2026 house the tag is the join lists'
+//! 02 · count · count × (u32 · u64 ElementId · u32)`, with a zero `u32`
+//! before the count from Revit 2025), a wall's element data holds frames
+//! `u32 word · u32 tag · 02 00 00 00 · count` in the same layout whose
+//! entries are variable length: `u64 ElementId · u32 n · n × u32`. On the flowbim.ee Revit 2026 house the tag is the join lists'
 //! tag + 2. Whether they carry the join decision RE-70 cannot read (#238)
 //! is what this probe's output is scored for.
 //!
@@ -40,31 +40,32 @@ fn wall_id(b: &[u8], at: usize, walls: &BTreeSet<u32>) -> Option<u32> {
         .filter(|id| walls.contains(id))
 }
 
-/// Every frame at `at` = `word · tag · 2 · 0 · count · entries` whose
+/// Every frame at `at` = `word · tag · 2 · (0) · count · entries` whose
 /// entries all name a wall, as a JSON object.
-fn frames(data: &[u8], walls: &BTreeSet<u32>) -> Vec<String> {
+fn frames(data: &[u8], walls: &BTreeSet<u32>, count_at: usize) -> Vec<String> {
     let mut out = Vec::new();
     let mut at = 0;
-    while at + 20 <= data.len() {
-        let (Some(word), Some(tag), Some(2), Some(zero), Some(count)) = (
+    while at + count_at + 4 <= data.len() {
+        let (Some(word), Some(tag), Some(two), Some(count)) = (
             u32_at(data, at),
             u32_at(data, at + 4),
             u32_at(data, at + 8),
-            u32_at(data, at + 12),
-            u32_at(data, at + 16),
+            u32_at(data, at + count_at),
         ) else {
             break;
         };
+        // Revit 2025 and later put a zero `u32` before the count.
+        let zero = count_at == 12 || u32_at(data, at + 12) == Some(0);
         let count = count as usize;
-        if tag < 0x100 || count == 0 || count > MAX_ENTRIES {
+        if two != 2 || !zero || tag < 0x100 || count == 0 || count > MAX_ENTRIES {
             at += 1;
             continue;
         }
-        // RE-70 join list (2025 and later put a zero before the count).
-        if word == 7 && zero == 0 {
+        // RE-70 join list.
+        if word == 7 {
             let entries: Option<Vec<String>> = (0..count)
                 .map(|index| {
-                    let entry = at + 20 + index * 16;
+                    let entry = at + count_at + 4 + index * 16;
                     Some(format!(
                         "[{},{},{}]",
                         u32_at(data, entry)?,
@@ -78,12 +79,12 @@ fn frames(data: &[u8], walls: &BTreeSet<u32>) -> Vec<String> {
                     "{{\"kind\":\"join\",\"word\":{word},\"tag\":{tag},\"at\":{at},\"entries\":[{}]}}",
                     entries.join(",")
                 ));
-                at += 20;
+                at += count_at + 4;
                 continue;
             }
         }
-        if zero == 0 {
-            let mut cursor = at + 20;
+        {
+            let mut cursor = at + count_at + 4;
             let mut entries = Vec::new();
             for _ in 0..count {
                 let Some(id) = wall_id(data, cursor, walls) else {
@@ -122,6 +123,7 @@ fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
+    let count_at = rvt::partition_compound_structure::wall_join_count_offset(version).unwrap_or(16);
     let Some(header) = rvt::partition_names::element_data_header(version) else {
         eprintln!("Revit {version}: element data is not read on this release");
         return Ok(());
@@ -161,7 +163,10 @@ fn main() -> rvt::Result<()> {
                 .min(hit.saturating_add(WINDOW))
                 .min(buf.len());
             if let Some(data) = buf.get(id_at + 8..end) {
-                lists.entry(id).or_default().extend(frames(data, &walls));
+                lists
+                    .entry(id)
+                    .or_default()
+                    .extend(frames(data, &walls, count_at));
             }
         }
     }
