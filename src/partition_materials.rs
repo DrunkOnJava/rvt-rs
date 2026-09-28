@@ -326,9 +326,30 @@ pub fn name_at(buf: &[u8], id_at: usize, revit_version: u32) -> Option<String> {
     }
     let mut entry = NAME_PARAMETER.to_le_bytes().to_vec();
     entry.extend_from_slice(&[0, 0, 0, 0]);
-    memchr::memmem::find_iter(object, &entry).find_map(|hit| {
+    let parameter = memchr::memmem::find_iter(object, &entry).find_map(|hit| {
         let n = u32_at(object, hit + entry.len())?;
         utf16_name(object, hit + entry.len() + 4, n)
+    });
+    parameter.or_else(|| closed_name(object))
+}
+
+/// Last resort (RE-125): the first string in the object that is closed by
+/// eight zero bytes, a `u64` ElementId and `0xff`×8. A material whose own
+/// name field is a run of shared-parameter entries (a manufacturer's product,
+/// supplier, standard, URL) keeps its name there, after the entries. On the
+/// 2026 flowbim.ee house it names the 32 materials no other rule reads, every
+/// one a material Revit's export names; it is tried last because on nine
+/// other objects it lands on an earlier string.
+fn closed_name(object: &[u8]) -> Option<String> {
+    (MATERIAL_TAG_OFFSET + 2..object.len().saturating_sub(4)).find_map(|at| {
+        let n = u32_at(object, at)?;
+        let name = utf16_name(object, at + 4, n)?;
+        let after = at + 4 + 2 * usize::try_from(n).ok()?;
+        let id = u64::from_le_bytes(object.get(after + 8..after + 16)?.try_into().ok()?);
+        (object.get(after..after + 8) == Some(&[0u8; 8][..])
+            && object.get(after + 16..after + 24) == Some(&[0xffu8; 8][..])
+            && u32::try_from(id).is_ok_and(|id| id > 0))
+        .then_some(name)
     })
 }
 

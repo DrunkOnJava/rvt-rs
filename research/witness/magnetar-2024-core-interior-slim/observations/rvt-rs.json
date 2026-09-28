@@ -15,7 +15,7 @@
       "IFCBUILDING": 1,
       "IFCBUILDINGSTOREY": 15,
       "IFCCARTESIANPOINT": 5479,
-      "IFCCOLOURRGB": 78,
+      "IFCCOLOURRGB": 86,
       "IFCCOLUMN": 256,
       "IFCCOLUMNTYPE": 1,
       "IFCDIRECTION": 1110,
@@ -24,7 +24,7 @@
       "IFCEXTRUDEDAREASOLID": 1108,
       "IFCGEOMETRICREPRESENTATIONCONTEXT": 1,
       "IFCLOCALPLACEMENT": 1125,
-      "IFCMATERIAL": 78,
+      "IFCMATERIAL": 86,
       "IFCMATERIALCONSTITUENT": 4,
       "IFCMATERIALCONSTITUENTSET": 2,
       "IFCMATERIALLAYER": 8,
@@ -36,7 +36,7 @@
       "IFCPERSON": 1,
       "IFCPERSONANDORGANIZATION": 1,
       "IFCPOLYLINE": 278,
-      "IFCPRESENTATIONSTYLEASSIGNMENT": 78,
+      "IFCPRESENTATIONSTYLEASSIGNMENT": 86,
       "IFCPRODUCTDEFINITIONSHAPE": 1108,
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 970,
@@ -57,9 +57,9 @@
       "IFCSLAB": 80,
       "IFCSLABTYPE": 5,
       "IFCSPACE": 116,
-      "IFCSTYLEDITEM": 78,
-      "IFCSURFACESTYLE": 78,
-      "IFCSURFACESTYLERENDERING": 78,
+      "IFCSTYLEDITEM": 86,
+      "IFCSURFACESTYLE": 86,
+      "IFCSURFACESTYLERENDERING": 86,
       "IFCUNITASSIGNMENT": 1,
       "IFCWALL": 360,
       "IFCWALLTYPE": 4,
@@ -75,7 +75,7 @@
       "IFCWALL": 360,
       "IFCWINDOW": 6
     },
-    "material_count": 78,
+    "material_count": 86,
     "relations": {
       "IFCRELFILLSELEMENT": [
         [
@@ -698,7 +698,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "097167b94e587f25693a86c92832bb380c537dd461ad6b456ccfc2b06ad1b51f",
+  "observation_hash_sha256": "a6003ee89962c62d92179cc9c9f2edc774004d11efe0b6aa7e2557751c992f47",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",

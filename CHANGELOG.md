@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Material names kept after parameter entries (RE-125, #355).** A
+  material whose name field holds shared parameters (a manufacturer's
+  product, supplier, URL, classification) keeps its name after them,
+  closed by eight zero bytes, an ElementId and `0xff`×8. Read as a last
+  resort, it names every material on the Revit 2026 house (148 of 148,
+  from 116), Core Interior (86 of 86, from 78) and Snowdon Towers (220 of
+  220). On the house, layer names are Revit's on 183 layers (13 before)
+  and 65 of 67 elements have Revit's material set (5 of 19). Element
+  material sets on Core Interior and Snowdon are unchanged; their
+  material lists gain the names.
+
+### Added
+
 - **Revit 2026 projects export typed elements (RE-124, #421).** Every
   per-release constant rvt-rs reads is the tag of a class in the file's own
   schema, and on a Revit 2026 project those tags give the 2026 values:

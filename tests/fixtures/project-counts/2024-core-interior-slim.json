@@ -134,11 +134,11 @@
       "source_ifc_type": "IFCMATERIAL",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.material_count",
-      "decoder_expected": 78,
+      "decoder_expected": 86,
       "decoder_tolerance": 0,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "rvt-rs writes the file's own materials: each OST_Materials record (-2000700, the bbox-less type-record shape, 86 on this .rvt, RE-28) whose name its object gives (RE-58), with its shading colour (RE-53) - 78 of the 86. On Revit 2024 and 2025 this replaced the partition display-name heuristic, which gave 102. The export writes 10 IfcMaterial (9 named, plus '<Unnamed>') and 150 IfcMaterialConstituentSet / 309 IfcMaterialConstituent, only for the materials its exported elements use. All 9 named are among rvt-rs's 78, with Revit's colours, so the count stays a known gap by design rather than by misreading. Of the 86, 8 family materials have no name found and are left out. Family instances are not joined to their materials; layered floors and shading devices are, through their layer sets (88, RE-58); this export is a ReferenceView_V1.2 file with no IfcMaterialLayerSet, so those are scored against the faces its bodies style with each material. See reports/element-framing/RE-58-material-layer-sets.md and RE-28-wall-type-records.md."
+      "notes": "Changed 2026-09-28 (RE-125): 78 -> 86, every OST_Materials record named; the 8 added (Terrazzo, Chair Fabric, Material 2/4/4 (2)/6/8/10) keep their name after a run of parameter entries, closed by eight zero bytes, a u64 ElementId and 0xff x8. rvt-rs writes the file's own materials: each OST_Materials record (-2000700, the bbox-less type-record shape, 86 on this .rvt, RE-28) whose name its object gives (RE-58), with its shading colour (RE-53) - 78 of the 86. On Revit 2024 and 2025 this replaced the partition display-name heuristic, which gave 102. The export writes 10 IfcMaterial (9 named, plus '<Unnamed>') and 150 IfcMaterialConstituentSet / 309 IfcMaterialConstituent, only for the materials its exported elements use. All 9 named are among rvt-rs's 78, with Revit's colours, so the count stays a known gap by design rather than by misreading. Of the 86, 8 family materials have no name found and are left out. Family instances are not joined to their materials; layered floors and shading devices are, through their layer sets (88, RE-58); this export is a ReferenceView_V1.2 file with no IfcMaterialLayerSet, so those are scored against the faces its bodies style with each material. See reports/element-framing/RE-58-material-layer-sets.md and RE-28-wall-type-records.md."
     },
     "units": {
       "status": "known",
