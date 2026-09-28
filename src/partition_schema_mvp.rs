@@ -45,6 +45,7 @@ use crate::rect_opening_index::ArcWallRectOpeningIndex;
 use crate::walker::{DecodedElement, ElementProvenance, InstanceField, WalkerLimits};
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
+use std::f64::consts::FRAC_PI_4;
 
 /// Bundle of partition-derived MVP `DecodedElement`s.
 #[derive(Debug, Clone, Default)]
@@ -1674,6 +1675,10 @@ pub const WALL_ARC_FIELDS: [&str; 9] = [
 ];
 /// Field holding a wall's thickness, its type's layers summed (RE-54).
 pub const WALL_TYPE_THICKNESS_FIELD: &str = "m_wall_type_thickness";
+/// Field holding how far a tapered wall's exterior face leans from
+/// vertical, radians, wider at the base (RE-86). Its line and
+/// [`WALL_TYPE_THICKNESS_FIELD`] give the body at the wall's top.
+pub const WALL_EXTERIOR_FACE_ANGLE_FIELD: &str = "m_wall_exterior_face_angle";
 /// Fields holding how far past the start and the end of its centreline a
 /// wall's body reaches at a butt join, feet, negative where it stops short
 /// (RE-70), or at a T joint (RE-73). Absent at an end neither decides.
@@ -1763,6 +1768,40 @@ impl WallArc {
             self.centre[axis] + radius * (cos * self.x_axis[axis] + sin * self.y_axis[axis])
         })
     }
+}
+
+/// A tapered wall's exterior face (RE-86).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WallTaper {
+    /// How far the exterior face leans from vertical, radians, wider at
+    /// the base.
+    pub angle_radians: f64,
+    /// Plan unit vector towards the exterior face.
+    pub exterior: [f64; 2],
+}
+
+/// Whether the wall carries [`WALL_EXTERIOR_FACE_ANGLE_FIELD`], so its line
+/// alone does not give its body.
+pub fn wall_is_tapered(fields: &[(String, InstanceField)]) -> bool {
+    fields
+        .iter()
+        .any(|(name, _)| name == WALL_EXTERIOR_FACE_ANGLE_FIELD)
+}
+
+/// The [`WALL_EXTERIOR_FACE_ANGLE_FIELD`] and [`WALL_EXTERIOR_FIELDS`]
+/// record; `None` without either.
+pub fn wall_taper_from_fields(fields: &[(String, InstanceField)]) -> Option<WallTaper> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [x, y] = WALL_EXTERIOR_FIELDS.map(float);
+    Some(WallTaper {
+        angle_radians: float(WALL_EXTERIOR_FACE_ANGLE_FIELD)?,
+        exterior: [x?, y?],
+    })
 }
 
 /// The arc [`WALL_ARC_FIELDS`] and [`WALL_TYPE_THICKNESS_FIELD`] record.
@@ -2142,14 +2181,24 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     .iter()
     .map(|record| record.element_id)
     .collect();
-    let (Ok(layers), Ok(orientations), Ok(lines), Ok(arcs), Ok(appearances), Ok(names)) = (
+    let (
+        Ok(layers),
+        Ok(orientations),
+        Ok(lines),
+        Ok(arcs),
+        Ok(appearances),
+        Ok(names),
+        Ok(face_angles),
+    ) = (
         pcs::scan_type_layers(rf, revit_version, &types, &materials, &declared),
         pcs::scan_wall_orientations(rf, revit_version, &wall_ids),
         pcs::scan_wall_lines(rf, revit_version, &wall_ids),
         pcs::scan_wall_arcs(rf, revit_version, &wall_ids),
         crate::partition_materials::scan_material_appearances(rf, revit_version, &declared),
         crate::partition_materials::scan_material_names(rf, revit_version, &declared),
-    ) else {
+        pcs::scan_wall_type_face_angles(rf, revit_version, &types),
+    )
+    else {
         return;
     };
     for wall in walls.iter_mut() {
@@ -2161,7 +2210,18 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
             continue;
         };
         let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
-        let centred = orientation.word == 1 && thickness.is_finite() && thickness > 0.0;
+        let measured = thickness.is_finite() && thickness > 0.0;
+        // RE-86: a wall with word 2 whose type leans only its exterior face
+        // is tapered; its line is still its centreline at the top. Only a
+        // straight tapered wall is measured.
+        let taper = face_angles
+            .get(&type_id)
+            .filter(|_| orientation.word == 2 && lines.contains_key(&id))
+            .and_then(|&[first, exterior, third]| {
+                (first == 0.0 && third == 0.0 && exterior > 0.0 && exterior < FRAC_PI_4)
+                    .then_some(exterior)
+            });
+        let centred = measured && (orientation.word == 1 || taper.is_some());
         let float = |value: f64| InstanceField::Float { value, size: 8 };
         // The direction the exterior side is taken from: the line's, or the
         // arc's tangent at its middle (RE-75).
@@ -2217,6 +2277,10 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         if centred {
             wall.fields
                 .push((WALL_TYPE_THICKNESS_FIELD.into(), float(thickness)));
+            if let Some(angle) = taper {
+                wall.fields
+                    .push((WALL_EXTERIOR_FACE_ANGLE_FIELD.into(), float(angle)));
+            }
         }
         let exterior = if orientation.flip {
             [dy, -dx]

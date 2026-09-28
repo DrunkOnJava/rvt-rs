@@ -358,6 +358,100 @@ pub fn scan_wall_orientations(
         .collect())
 }
 
+/// Releases a wall type's face angles are read on (RE-86). Only Snowdon
+/// Towers (Revit 2024) stores them; no 2025 file measured holds the record.
+pub const WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// The bytes a wall type's three face angles follow (RE-86): `u32 2`, eight
+/// zero bytes, an `f64` 0.7 and a count of 3. The word before them varies
+/// by document.
+pub const WALL_FACE_ANGLES_FRAME: [u8; 24] = [
+    0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x66, 0x66, 0x66, 0x66,
+    0x66, 0x66, 0xe6, 0x3f, 0x03, 0x00, 0x00, 0x00,
+];
+
+/// The three `f64` a wall type's data stores after
+/// [`WALL_FACE_ANGLES_FRAME`], radians. On Snowdon Towers all three are 0
+/// on 40 of its 43 exported wall types. The three "Solar Wall" types store
+/// 10 degrees in the middle one, and each of their 21 exported walls is
+/// tapered: its exterior face leans 10.000 degrees from vertical, wider at
+/// the base, and its interior face is vertical (RE-86). What the first and
+/// third angle set is not measured.
+///
+/// `None` without the frame, with it more than once, or with an angle that
+/// is neither 0 nor between 1e-9 radians and a right angle either way (the
+/// frame's bytes also occur by chance in other elements' data).
+pub fn wall_type_face_angles(data: &[u8]) -> Option<[f64; 3]> {
+    let mut frames = memchr::memmem::find_iter(data, &WALL_FACE_ANGLES_FRAME);
+    let at = frames.next()? + WALL_FACE_ANGLES_FRAME.len();
+    if frames.next().is_some() {
+        return None;
+    }
+    let angle = |index: usize| {
+        data.get(at + 8 * index..at + 8 * index + 8)
+            .map(|b| f64::from_le_bytes(b.try_into().expect("8 bytes")))
+            .filter(|value| {
+                *value == 0.0 || (1e-9..std::f64::consts::FRAC_PI_2).contains(&value.abs())
+            })
+    };
+    Some([angle(0)?, angle(1)?, angle(2)?])
+}
+
+/// Each type in `types` whose data stores [`wall_type_face_angles`], by
+/// ElementId; a type whose copies disagree is dropped. Empty on a release
+/// outside [`WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS`].
+pub fn scan_wall_type_face_angles(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, [f64; 3]>> {
+    let Some(header) = crate::partition_names::element_data_header(revit_version)
+        .filter(|_| WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS.contains(&revit_version))
+    else {
+        return Ok(BTreeMap::new());
+    };
+    let mut found: BTreeMap<u32, Option<[f64; 3]>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        for (index, &hit) in hits.iter().enumerate() {
+            let id_at = hit + header.len();
+            let Some(id) = u64_at(buf, id_at)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| types.contains(id))
+            else {
+                continue;
+            };
+            let end = hits
+                .get(index + 1)
+                .copied()
+                .unwrap_or(buf.len())
+                .min(hit.saturating_add(LAYER_WINDOW))
+                .min(buf.len());
+            let Some(angles) = buf.get(id_at + 8..end).and_then(wall_type_face_angles) else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(angles));
+                }
+                Some(held) => {
+                    if *held != Some(angles) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    Ok(found
+        .into_iter()
+        .filter_map(|(id, angles)| angles.map(|a| (id, a)))
+        .collect())
+}
+
 /// Where a join list's count sits past its opening word on
 /// `revit_version`: Revit 2025 puts a zero `u32` before it (RE-70).
 /// `None` where the layout is not measured.

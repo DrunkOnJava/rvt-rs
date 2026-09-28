@@ -872,6 +872,10 @@ fn roof_slope_solid(
 /// centreline (RE-54).
 pub const WALL_CENTRELINE_BODY_SOURCE: &str = "partition_wall_centreline";
 
+/// `BodySource` of a tapered wall drawn as its cross-section along its
+/// centreline (RE-86).
+pub const WALL_TAPERED_BODY_SOURCE: &str = "partition_wall_tapered_section";
+
 /// `BodySource` of a wall drawn from its centreline whose layers end where
 /// its layered butt joins put them (RE-71).
 pub const WALL_LAYER_JOIN_BODY_SOURCE: &str = "partition_wall_centreline_layer_joins";
@@ -1049,6 +1053,92 @@ fn wall_centreline_body(
         depth_feet: thickness,
         thickness_feet: thickness,
         join_reach_feet: axis.join_reach_feet,
+    })
+}
+
+/// A tapered wall's plan footprint as a [`WallCentrelineBody`] (RE-86): the
+/// rectangle between its interior face and its exterior face at the base,
+/// `height` × tan(angle) further out than at the top. It is checked against
+/// the record box as a vertical wall of that width would be, on the line
+/// moved half that much towards the exterior. Its `thickness_feet` stays
+/// the type's, at the top.
+fn tapered_wall_body(
+    axis: crate::partition_schema_mvp::WallAxis,
+    taper: crate::partition_schema_mvp::WallTaper,
+    centre: [f64; 2],
+    width: f64,
+    depth: f64,
+    height: f64,
+) -> Option<WallCentrelineBody> {
+    let spread = height * taper.angle_radians.tan();
+    if !(spread.is_finite() && spread > 0.0) {
+        return None;
+    }
+    let [ex, ey] = taper.exterior.map(|value| value * spread / 2.0);
+    let shifted = crate::partition_schema_mvp::WallAxis {
+        start: [axis.start[0] + ex, axis.start[1] + ey],
+        end: [axis.end[0] + ex, axis.end[1] + ey],
+        thickness_feet: axis.thickness_feet + spread,
+        ..axis
+    };
+    wall_centreline_body(shifted, centre, width, depth).map(|body| WallCentrelineBody {
+        thickness_feet: axis.thickness_feet,
+        ..body
+    })
+}
+
+/// A tapered wall's solid (RE-86): its cross-section, the type's thickness
+/// about the line at the top and wider towards the exterior at the base,
+/// extruded along the line through `body`'s run. It is placed in the frame
+/// of the line's direction, centred on `body`.
+fn tapered_wall_solid(
+    body: &WallCentrelineBody,
+    axis: &crate::partition_schema_mvp::WallAxis,
+    taper: crate::partition_schema_mvp::WallTaper,
+    height: f64,
+) -> Option<entities::SolidShape> {
+    let [sx, sy] = axis.start;
+    let length = (axis.end[0] - sx).hypot(axis.end[1] - sy);
+    if !(length.is_finite() && length > 1e-9) {
+        return None;
+    }
+    let along = [(axis.end[0] - sx) / length, (axis.end[1] - sy) / length];
+    // The body's run: the rectangle's width, unless an axis-parallel body
+    // runs along the model's Y axis.
+    let run = if body.rotation.is_none() && along[1].abs() > 1e-9 {
+        body.depth_feet
+    } else {
+        body.width_feet
+    };
+    let left = [-along[1], along[0]];
+    let side = if taper.exterior[0] * left[0] + taper.exterior[1] * left[1] >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    let half = axis.thickness_feet / 2.0;
+    let spread = height * taper.angle_radians.tan();
+    let inner = -side * (half + spread / 2.0);
+    let mut points = vec![
+        (inner, 0.0),
+        (side * (half + spread / 2.0), 0.0),
+        (side * (half - spread / 2.0), height),
+        (inner, height),
+    ];
+    let area: f64 = points
+        .iter()
+        .zip(points.iter().cycle().skip(1))
+        .map(|(p, q)| p.0 * q.1 - q.0 * p.1)
+        .sum();
+    if area < 0.0 {
+        points.reverse();
+    }
+    (run > 0.0 && height > 0.0).then(|| entities::SolidShape::PlacedExtrusion {
+        profile: entities::ProfileDef::ArbitraryClosed { points },
+        origin_feet: [-run / 2.0, 0.0, 0.0],
+        axis: [1.0, 0.0, 0.0],
+        ref_direction: [0.0, 1.0, 0.0],
+        depth_feet: run,
     })
 }
 
@@ -1357,14 +1447,27 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // RE-86: a tapered wall is its type's thickness about its line at its
+    // top and wider towards its exterior below. Without its exterior side
+    // it is not drawn from its line at all.
+    let wall_taper = wall_axis
+        .and_then(|_| crate::partition_schema_mvp::wall_taper_from_fields(&decoded.fields));
+    let wall_axis = wall_axis.filter(|_| {
+        wall_taper.is_some() || !crate::partition_schema_mvp::wall_is_tapered(&decoded.fields)
+    });
     // RE-71: a wall whose layered butt joins end each layer on its own line
     // is the staircase they make.
     let layer_ends = wall_axis
+        .filter(|_| wall_taper.is_none())
         .and_then(|_| crate::partition_schema_mvp::wall_layer_ends_from_fields(&decoded.fields));
     let wall_centreline = wall_axis
-        .and_then(|axis| wall_centreline_body(axis, [x, y], width, depth))
+        .and_then(|axis| match wall_taper {
+            Some(taper) => tapered_wall_body(axis, taper, [x, y], width, depth, height),
+            None => wall_centreline_body(axis, [x, y], width, depth),
+        })
         .filter(|body| {
             layer_ends.is_some()
+                || wall_taper.is_some()
                 || body.rotation.is_some()
                 || (body.centre[0] - x).abs() > 1e-9
                 || (body.centre[1] - y).abs() > 1e-9
@@ -1472,7 +1575,15 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 wall_profile
                     .as_ref()
                     .map(|_| WALL_LAYER_JOIN_BODY_SOURCE.into())
-                    .or_else(|| wall_centreline.map(|_| WALL_CENTRELINE_BODY_SOURCE.into()))
+                    .or_else(|| {
+                        wall_centreline.map(|_| {
+                            if wall_taper.is_some() {
+                                WALL_TAPERED_BODY_SOURCE.into()
+                            } else {
+                                WALL_CENTRELINE_BODY_SOURCE.into()
+                            }
+                        })
+                    })
                     .or_else(|| wall_arc.as_ref().map(|_| WALL_ARC_BODY_SOURCE.into()))
                     .or_else(|| wall_body_source.clone())
                     .or_else(|| column_body_source.clone())
@@ -1749,7 +1860,17 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         height_feet: height,
         profile_override,
     };
+    let tapered = match (wall_centreline, wall_axis, wall_taper) {
+        (Some(body), Some(axis), Some(taper)) => tapered_wall_solid(&body, &axis, taper, height),
+        _ => None,
+    };
     let (location, rotation, body, solid) = match (beam, wall_centreline) {
+        (_, Some(wall)) if tapered.is_some() => (
+            [wall.centre[0], wall.centre[1], z],
+            wall_axis.map(|axis| (axis.end[1] - axis.start[1]).atan2(axis.end[0] - axis.start[0])),
+            Extrusion::rectangle(wall.width_feet, wall.depth_feet, height),
+            tapered,
+        ),
         (_, Some(wall)) => (
             [wall.centre[0], wall.centre[1], z],
             wall.rotation,

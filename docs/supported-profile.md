@@ -41,7 +41,7 @@ OLE/CFB Revit container is refused with an error, never a partial model.
 
 | Element | What you get | How close |
 |---|---|---|
-| Walls | a body from the wall's centreline and its type's thickness, drawn as its layers in the viewer and glTF, ending as its joins say, along its arc when curved | faces exactly Revit's on 1,014 of Snowdon's 1,078 walls; both ends on 716 |
+| Walls | a body from the wall's centreline and its type's thickness, drawn as its layers in the viewer and glTF, ending as its joins say, along its arc when curved, leaning on its exterior face when tapered | faces exactly Revit's on 1,030 of Snowdon's 1,078 walls; both ends on 724 |
 | Floors, building pads | the sketched plan outline, holes included, at the measured thickness | Core Interior 80 of 80 outlines |
 | Roofs | the sketched outline; a shed roof along its slope | 11 of 13 outlined Snowdon roofs with Revit's area; hip and gable roofs are boxes (#356) |
 | Columns | the column prism minus what walls cut from it | Core Interior 256 of 256, exact |

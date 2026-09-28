@@ -540,6 +540,15 @@ with an arc axis have Revit's centre and radius, and each is now the ring
 sector its arc and thickness make: faces Revit's on 23 (0 before), and a
 median footprint overlap of 0.95 (0.03 before). Their ends are not yet
 trimmed at joins (`reports/element-framing/RE-75-curved-walls.md`).
+**RE-86 (2026-09-27)** draws tapered walls. A wall type stores three face
+angles after a fixed frame (`u32 2`, eight zero bytes, `f64` 0.7, a count
+of 3), and a wall whose orientation word is 2 is tapered by them. On
+Snowdon Towers every such wall Revit tapers leans its exterior face by the
+type's 10 degrees and keeps its interior face vertical, and is its type's
+thickness about its line at the top. Each is now that cross-section along
+its line: 19 of the 20 within 0.001 ft of Revit's body across the wall at
+five heights (none within 0.1 ft before), and 24 walls better in the GLB,
+none worse (`reports/element-framing/RE-86-tapered-walls.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
