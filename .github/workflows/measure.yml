@@ -2,7 +2,7 @@
 # models (Core Interior, RE1, Einhoven), on GitHub's hosted runners.
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main
-#   gh workflow run measure.yml -f ref=my-branch -f base= -f probe=probe_re70_wall_join_lists
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f probe=probe_re70_wall_join_lists
 #
 # Each side builds rvt-ifc and rvt-gltf at its ref and runs
 # tools/ci/measure-reference-models.sh (taken from the workflow's own ref,
@@ -21,7 +21,7 @@ on:
         required: false
         default: ""
       base:
-        description: Ref to compare against (empty for none)
+        description: Ref to compare against, or none
         required: false
         default: main
       probe:
@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        side: ${{ fromJSON((github.event_name == 'pull_request' || inputs.base != '') && '["head","base"]' || '["head"]') }}
+        side: ${{ fromJSON((github.event_name == 'pull_request' || (inputs.base != '' && inputs.base != 'none')) && '["head","base"]' || '["head"]') }}
     steps:
       - name: Workflow tools
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,7 +78,10 @@ jobs:
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
           cargo build --profile ci --bin rvt-ifc --bin rvt-gltf
-          if [ -n "$PROBE" ]; then cargo build --profile ci --example "$PROBE"; fi
+          # A base older than the probe has no such example; it is skipped there.
+          if [ -n "$PROBE" ] && [ -f "examples/$PROBE.rs" ]; then
+            cargo build --profile ci --example "$PROBE"
+          fi
         env:
           PROBE: ${{ inputs.probe }}
       - name: Fetch the reference models

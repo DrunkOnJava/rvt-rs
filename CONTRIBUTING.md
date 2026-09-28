@@ -274,7 +274,7 @@ When you discover something new about the file format:
 
    ```bash
    gh workflow run measure.yml --ref <branch> -f base=main
-   gh workflow run measure.yml --ref <branch> -f base= -f probe=<example name>
+   gh workflow run measure.yml --ref <branch> -f base=none -f probe=<example name>
    ```
 
 This keeps every claim independently verifiable, which is the

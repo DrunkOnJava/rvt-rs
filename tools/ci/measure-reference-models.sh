@@ -54,12 +54,12 @@ while IFS='|' read -r name rvt ref; do
   "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
   grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
-  if [ -n "${PROBE:-}" ]; then
+  if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
     timeout 1200 "$BIN/examples/$PROBE" "$MODELS/$rvt" > "$dir/probe.txt" 2>&1
     echo "exit $?" >> "$dir/probe.txt"
   fi
   if [ "$ref" != "-" ]; then
-    if [ -n "${PROBE:-}" ] && [ -n "${PROBE_SCORER:-}" ]; then
+    if [ -f "$dir/probe.txt" ] && [ -n "${PROBE_SCORER:-}" ] && [ -f "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" ]; then
       score "$dir/probe_score.txt" "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" "$dir/probe.txt" "$MODELS/$ref" --list
     fi
     for s in $IFC_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"; done
