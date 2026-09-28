@@ -2068,3 +2068,7 @@ A 2023 record sits behind the RE-80 marker (`3c 01 ff ff ff ff 82 05`) with its 
 ## Addendum — RE-84 doors and windows whose type draws no geometry (2026-09-27)
 
 A family type whose parameter value block (RE-77) holds no geometry-material map (RE-82) draws no geometry: its doors and windows only cut their host. Revit's IFC4 export writes each as an `IfcOpeningElement` voiding the host, Tagged with the element's ElementId, and no door or window. On Snowdon Towers, Core Interior and RE1 Architecture, 48 of 48 such elements are opening-only in Revit's export and 343 of 343 others are exported as elements. Report: `reports/element-framing/RE-84-void-only-doors-windows.md`; probe: `examples/probe_re84_void_only_families.rs`.
+
+## Addendum — RE-85 a door's or window's host is the wall its reference list names (2026-09-27)
+
+A door or window record's first counted reference list (`+0x88`) is in ascending ElementId order. RE-23's host, the slot just before the record's own id, is only the nearest smaller id: a host with a larger id comes after the record's own id, and families that list their type put it between. Taking the nearest exported wall the list names, below the record's id first and skipping curtain walls, gives Revit's host on every Snowdon Towers record that names one wall (235) and a wall Revit cuts on the 6 that name several; Core Interior and RE1 are unchanged. Report: `reports/element-framing/RE-85-opening-host-candidates.md`; probe: `examples/probe_re85_opening_host_candidates.rs`.

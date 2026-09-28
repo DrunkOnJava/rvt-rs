@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Doors and windows find their host wall anywhere in their reference
+  list (#439, RE-85).** RE-23 took the slot just before the record's own
+  ElementId. The list is in ascending ElementId order, so a host with a
+  larger id than its door comes after it, and families that list their
+  type put it between. The host is now the nearest exported wall the list
+  names, below the record's own id first, skipping curtain walls. On
+  Snowdon Towers, 192 of the 194 doors and windows Revit fills an opening
+  for take its host (107 before; the other 2 take another wall Revit also
+  cuts), none takes a wall Revit does not cut, and the 11 opening-cut doors
+  and windows left over by RE-84 are now openings. Core Interior and RE1
+  are unchanged.
 - **Doors and windows whose type draws no geometry export as their opening
   (#309, RE-84).** Families that only cut their host ("Door-Opening",
   "Schematic Opening Cut", "CasedOpening") have a type value block with no
