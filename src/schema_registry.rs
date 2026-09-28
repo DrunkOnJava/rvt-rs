@@ -217,10 +217,11 @@ impl<'a> Reader<'a> {
             "schema opaque trailer budget exceeded"
         );
         let opaque_entries_offset = self.pos;
-        let opaque_entries_sha256 = format!(
-            "{:x}",
+        let opaque_entries_sha256 =
             Sha256::digest(self.take(opaque_16byte_entry_count as usize * 16)?)
-        );
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>();
         self.classes[ordinal] = Some(Class {
             tag,
             name,
@@ -266,7 +267,10 @@ pub fn parse(bytes: &[u8]) -> Result<Registry> {
         .collect::<Option<Vec<_>>>()
         .ok_or_else(|| anyhow::anyhow!("incomplete schema definition"))?;
     Ok(Registry {
-        source_sha256: format!("{:x}", Sha256::digest(bytes)),
+        source_sha256: Sha256::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>(),
         consumed_bytes: r.pos,
         reference_count: r.references,
         terminator_offset,

@@ -112,7 +112,10 @@ pub fn walk(
                 );
                 stats.trailing_padding_bytes = tail.iter().take_while(|&&v| v == 0).count();
                 stats.opaque_terminal_bytes = tail.len();
-                stats.opaque_terminal_sha256 = format!("{:x}", Sha256::digest(tail));
+                stats.opaque_terminal_sha256 = Sha256::digest(tail)
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect::<String>();
                 return Ok(stats);
             }
             stats.content_sections += 1;

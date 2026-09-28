@@ -147,7 +147,10 @@ fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvel
             member_offset: offset,
             member_bytes: compressed.len() - suffix.len(),
             opaque_suffix_bytes: suffix.len(),
-            opaque_suffix_sha256: format!("{:x}", Sha256::digest(suffix)),
+            opaque_suffix_sha256: Sha256::digest(suffix)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>(),
             suffix_interpreted: suffix.is_empty(),
         },
     ))
@@ -528,7 +531,10 @@ fn extract_records(
                             group: source.clone(),
                             group_record_offset: offset,
                             body_bytes: body.len(),
-                            body_sha256: format!("{:x}", Sha256::digest(body)),
+                            body_sha256: Sha256::digest(body)
+                                .iter()
+                                .map(|b| format!("{b:02x}"))
+                                .collect::<String>(),
                         },
                         graph,
                         saved_metadata,

@@ -122,7 +122,7 @@ pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
     }
     Ok((
         catalog,
-        json!({"stream":"Global/Latest","inflated_sha256":format!("{:x}",Sha256::digest(bytes)),"graph_bytes":end,"stream_bytes":bytes.len(),"fixed_footer":0,"root_class":"ADocument","app_info_object_index":manager,"storage_object_index":storages[0],"storage_start":storage.start,"storage_end":storage.fields_end,"complete_global_graph":true,"scope":"Owned file-local schemas; general nonzero fixed footers remain unqualified"}),
+        json!({"stream":"Global/Latest","inflated_sha256":Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect::<String>(),"graph_bytes":end,"stream_bytes":bytes.len(),"fixed_footer":0,"root_class":"ADocument","app_info_object_index":manager,"storage_object_index":storages[0],"storage_start":storage.start,"storage_end":storage.fields_end,"complete_global_graph":true,"scope":"Owned file-local schemas; general nonzero fixed footers remain unqualified"}),
     ))
 }
 fn string(v: &Value, key: &str) -> Result<String> {
