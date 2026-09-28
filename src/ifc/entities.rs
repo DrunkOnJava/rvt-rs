@@ -734,6 +734,20 @@ pub enum LayerSetDirection {
     Axis3,
 }
 
+/// The opening a door or window cuts in its host wall (#227), in the
+/// filling element's own frame: its body's rectangle with the axis across
+/// the wall set to the wall's thickness band. The writer emits it in place
+/// of a copy of the filling element's body, which reaches past the wall by
+/// the door's swing.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct OpeningCut {
+    /// Rectangle size along the element's local X and Y, feet.
+    pub x_dim_feet: f64,
+    pub y_dim_feet: f64,
+    /// Rectangle centre in the element's local frame, feet.
+    pub centre_feet: [f64; 2],
+}
+
 /// A family instance's materials (RE-82): IFC4 `IfcMaterialConstituentSet`,
 /// unnamed, with one `IfcMaterialConstituent` per material, named after it
 /// and in the category "Materials", as Revit's export writes them.

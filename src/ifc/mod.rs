@@ -190,6 +190,11 @@ pub struct IfcModel {
     /// export writes family instances.
     #[serde(default)]
     pub material_constituent_sets: Vec<entities::MaterialConstituentSet>,
+    /// Openings cut to their host wall's thickness (#227), by index into
+    /// `entities` of the filling door or window. A filling element with no
+    /// entry gets an opening the shape of its own body.
+    #[serde(default)]
+    pub opening_cuts: std::collections::BTreeMap<usize, entities::OpeningCut>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -778,6 +783,7 @@ impl Exporter for PlaceholderExporter {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             material_constituent_sets: Vec::new(),
+            opening_cuts: Default::default(),
         })
     }
 }
@@ -1121,6 +1127,7 @@ fn export_rvt_doc(
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
     let material_constituent_sets =
         material_constituent_sets_from_types(&entities, &element_type_materials, &mut materials);
+    let opening_cuts = opening_cuts_through_hosts(&entities);
 
     Ok(IfcModel {
         project_name,
@@ -1138,7 +1145,84 @@ fn export_rvt_doc(
         material_layer_usages,
         element_type_materials,
         material_constituent_sets,
+        opening_cuts,
     })
+}
+
+/// #227: each door or window whose body is a plain rectangular extrusion
+/// cuts its host wall exactly through the wall's thickness. The host's plan
+/// outline is measured along both axes of the filling element's frame; the
+/// axis on which it is thin (at most 3 ft, and under half its extent on the
+/// other axis) crosses the wall, and the opening takes the band the outline
+/// covers there. The other axis and the height keep the body's size. A host
+/// at an angle to the element, or curved, is thick on both axes and keeps
+/// the body-shaped opening.
+fn opening_cuts_through_hosts(
+    entities: &[entities::IfcEntity],
+) -> std::collections::BTreeMap<usize, entities::OpeningCut> {
+    const MAX_THICKNESS_FEET: f64 = 3.0;
+    let mut cuts = std::collections::BTreeMap::new();
+    for (index, entity) in entities.iter().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            host_element_index: Some(host),
+            extrusion: Some(body),
+            solid_shape: None,
+            representation_map_index: None,
+            location_feet: Some(location),
+            rotation_radians,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if body.profile_override.is_some() {
+            continue;
+        }
+        let Some(entities::IfcEntity::BuildingElement {
+            location_feet: host_location,
+            rotation_radians: host_rotation,
+            ..
+        }) = entities.get(*host)
+        else {
+            continue;
+        };
+        let Some(host_body) = body_geometry::element_body(&entities[*host], &[]) else {
+            continue;
+        };
+        let host_placement = body_geometry::Placement::new(*host_location, *host_rotation);
+        let Some((outline, _)) = body_geometry::plan_outline(host_body, &host_placement) else {
+            continue;
+        };
+        let angle = rotation_radians.unwrap_or(0.0);
+        let axes = [[angle.cos(), angle.sin()], [-angle.sin(), angle.cos()]];
+        let band = |axis: [f64; 2]| {
+            outline
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &(x, y)| {
+                    let v = (x - location[0]) * axis[0] + (y - location[1]) * axis[1];
+                    (lo.min(v), hi.max(v))
+                })
+        };
+        let (x_band, y_band) = (band(axes[0]), band(axes[1]));
+        let (x_width, y_width) = (x_band.1 - x_band.0, y_band.1 - y_band.0);
+        let cut = if y_width <= MAX_THICKNESS_FEET && y_width < x_width / 2.0 && y_width > 0.0 {
+            entities::OpeningCut {
+                x_dim_feet: body.width_feet,
+                y_dim_feet: y_width,
+                centre_feet: [0.0, (y_band.0 + y_band.1) / 2.0],
+            }
+        } else if x_width <= MAX_THICKNESS_FEET && x_width < y_width / 2.0 && x_width > 0.0 {
+            entities::OpeningCut {
+                x_dim_feet: x_width,
+                y_dim_feet: body.depth_feet,
+                centre_feet: [(x_band.0 + x_band.1) / 2.0, 0.0],
+            }
+        } else {
+            continue;
+        };
+        cuts.insert(index, cut);
+    }
+    cuts
 }
 
 /// RE-82: one constituent set per distinct set of type materials, for each
