@@ -5,15 +5,16 @@
   "type": "module",
   "description": "In-browser Revit viewer powered by rvt-rs compiled to WebAssembly. Zero upload — every byte stays in the tab.",
   "license": "Apache-2.0",
+  "packageManager": "pnpm@12.6.0",
   "scripts": {
     "stage:demos": "node scripts/stage-demos.mjs",
-    "predev": "npm run stage:demos",
+    "predev": "pnpm run stage:demos",
     "dev": "vite",
-    "prebuild": "npm run stage:demos",
+    "prebuild": "pnpm run stage:demos",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:browser": "playwright test --config playwright.config.ts",
-    "test:network": "npm run test:browser",
+    "test:network": "pnpm run test:browser",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

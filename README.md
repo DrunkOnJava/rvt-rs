@@ -467,7 +467,7 @@ the checked-in `corpus/tier1/` synthetic fixtures drive the default gates, and
 corpus-backed tests skip themselves while `RVT_PROJECT_CORPUS_DIR` is unset.
 
 - **Build:** stable Rust 1.85 or newer, then `cargo build`. Viewer:
-  `cd viewer && npm ci`. Python bindings: [`docs/python.md`](docs/python.md).
+  `cd viewer && pnpm install --frozen-lockfile`. Python bindings: [`docs/python.md`](docs/python.md).
 - **Gate:** `tools/check-local.sh` runs what CI requires — `cargo fmt --check`,
   `cargo clippy -D warnings`, rustdoc with `-D warnings`, and the workspace
   tests (1,074 as of 2026-08-30). `--viewer`, `--corpus`, `--deny`, `--audit`

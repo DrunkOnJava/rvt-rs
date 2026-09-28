@@ -26,31 +26,32 @@ There are currently no ignored RustSec advisories.
 
 ## Viewer JavaScript Dependencies
 
-The viewer has a separate dependency tree under `viewer/package-lock.json`.
+The viewer has a separate dependency tree, installed with pnpm (the version
+`packageManager` pins in `viewer/package.json`) from `viewer/pnpm-lock.yaml`.
 CI runs:
 
 ```bash
 cd viewer
-npm ci
-npm audit --audit-level=high
+pnpm install --frozen-lockfile
+pnpm audit --audit-level high
 ```
 
-High and critical npm advisories fail CI. If npm reports a lower-severity
+High and critical advisories fail CI. If the audit reports a lower-severity
 advisory that still affects the zero-upload/privacy posture, treat it as
-release-blocking even if `npm audit --audit-level=high` does not fail.
+release-blocking even if `pnpm audit --audit-level high` does not fail.
 
-The registry's bulk advisory endpoint answers 503 during npm maintenance
-windows, and `npm audit` then exits non-zero without having measured
+The registry's advisory endpoint answers 503 during maintenance windows, and
+`pnpm audit` then exits non-zero without having measured
 anything. The `viewer dependency audit` job retries up to four times with
 increasing backoff and, if the endpoint is still unreachable, emits a
 `NOT MEASURED` workflow warning and passes rather than failing on
 infrastructure (#258). The two cases are told apart by the output, not by the
-exit code: a measured run prints JSON containing a `vulnerabilities` key, an
+exit code: a measured run prints JSON whose `metadata` has a `vulnerabilities` key, an
 endpoint failure does not, so a measured high or critical advisory still
 fails the job. A `NOT MEASURED` run is not evidence that the dependencies are
 clean — re-run the job once the registry recovers before cutting a release.
 
-Dependabot checks `/viewer` weekly for npm updates.
+Dependabot checks `/viewer` weekly for updates (its `npm` ecosystem reads `pnpm-lock.yaml`).
 
 ## GitHub Actions
 

@@ -73,13 +73,13 @@ tools/check-local.sh --all-optional    # enable every optional gate
 `tools/quality.sh` is the fuller pre-push path (optional supply-chain tools
 when installed, plus `--full` bench compile); set `RVT_REQUIRE_AUDIT=1` or
 `RVT_REQUIRE_DENY=1` there when missing tools should fail. Supply-chain rules
-for Rust crates, viewer npm dependencies, advisory ignores, and GitHub Actions
+for Rust crates, viewer pnpm dependencies, advisory ignores, and GitHub Actions
 pinning are documented in
 [`docs/supply-chain-policy.md`](docs/supply-chain-policy.md).
 
 Two CI behaviours are worth knowing before you read a red or amber check.
-The `viewer dependency audit` job retries `npm audit --audit-level=high` and
-reports `NOT MEASURED` as a warning, passing the job, when the npm advisory
+The `viewer dependency audit` job retries `pnpm audit --audit-level high` and
+reports `NOT MEASURED` as a warning, passing the job, when the advisory
 endpoint is unreachable — a measured high or critical advisory still fails it
 (#258). And CI on a pull request is deliberately narrower than on `main`: the
 bench compile-check builds with `--profile ci`, the macOS and Windows test jobs

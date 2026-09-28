@@ -5,7 +5,7 @@
 # Sets up all three buildable components:
 #   1. Rust core library + CLI binaries (needs Rust >= 1.85 for edition 2024)
 #   2. Python bindings (maturin + pyo3, built into a local venv)
-#   3. WebAssembly viewer (wasm-pack -> viewer/pkg + Vite/npm)
+#   3. WebAssembly viewer (wasm-pack -> viewer/pkg + Vite/pnpm)
 #
 # Safe to re-run: every step converges to the same state and skips work that
 # is already done. Runs after the repository is checked out.
@@ -93,12 +93,17 @@ deactivate
 log "Build WASM package into viewer/pkg"
 wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
 
-log "Viewer npm dependencies + type check + build"
+log "Viewer pnpm dependencies + type check + build"
 (
   cd viewer
-  npm ci
-  npm run typecheck
-  npm run build
+  # pnpm at the version viewer/package.json pins in `packageManager`.
+  if ! command -v pnpm >/dev/null 2>&1; then
+    corepack enable pnpm 2>/dev/null \
+      || npm install -g "$(node -p 'require("./package.json").packageManager')"
+  fi
+  pnpm install --frozen-lockfile
+  pnpm run typecheck
+  pnpm run build
 )
 
 # --- 7. Self-verification smoke -------------------------------------------

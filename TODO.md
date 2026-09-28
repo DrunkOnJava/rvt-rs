@@ -51,7 +51,7 @@ Definition of Done for any implementation PR:
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
   passes on the supported toolchain.
 - `cargo test --workspace --all-targets` passes.
-- If viewer code changed: `npm run typecheck` and `npm run build`
+- If viewer code changed: `pnpm run typecheck` and `pnpm run build`
   pass in `viewer/`.
 - If IFC changed: committed synthetic IFC fixtures either remain
   byte-stable or the fixture diff is documented and independently
@@ -1019,7 +1019,7 @@ Labels: `priority:P1`, `type:security`, `area:ci`
 
 - Keep `cargo deny check` green.
 - Keep RustSec advisory checks green.
-- Review JS viewer dependencies separately with npm audit or a
+- Review JS viewer dependencies separately with pnpm audit or a
   documented alternative.
 - Pin or justify GitHub Actions versions.
 

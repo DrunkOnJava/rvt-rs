@@ -45,7 +45,7 @@ const samplePath = resolveSamplePath();
 
 test.skip(
   samplePath === null,
-  'Set RVT_VIEWER_SAMPLE, run npm run stage:demos, or check out phi-ag/rvt under ../_corpus to run the viewer network invariant test.',
+  'Set RVT_VIEWER_SAMPLE, run pnpm run stage:demos, or check out phi-ag/rvt under ../_corpus to run the viewer network invariant test.',
 );
 
 test('opens a sample without external or post-open network requests', async ({ page, baseURL }) => {

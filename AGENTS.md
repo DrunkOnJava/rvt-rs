@@ -37,7 +37,7 @@ bash .cursor/install.sh
 
 This is idempotent and safe to re-run. It builds all three components:
 Rust (`cargo build --release`), Python (`maturin develop`), and the viewer
-(WASM + `npm ci` + `npm run build`).
+(WASM + `pnpm install --frozen-lockfile` + `pnpm run build`).
 
 ### Rust: build, test, run the CLIs
 
@@ -87,21 +87,21 @@ artifact and is git-ignored (`*.so`). Do not commit it.
 ### Viewer (WASM + Vite)
 
 Rebuild the WASM package whenever the Rust `wasm` surface (`src/wasm.rs`)
-changes, then use the standard npm scripts:
+changes, then use the viewer's pnpm scripts (pnpm at the version `packageManager` pins in `viewer/package.json`):
 
 ```bash
 # From the repo root — build WASM into viewer/pkg/
 wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
 
 cd viewer
-npm ci
-npm run typecheck
-npm run build          # static site -> viewer/dist
-npm run dev -- --host  # dev server on port 5173 (the viewer-dev-server terminal)
+pnpm install --frozen-lockfile
+pnpm run typecheck
+pnpm run build         # static site -> viewer/dist
+pnpm run dev --host    # dev server on port 5173 (the viewer-dev-server terminal)
 ```
 
 The Cloud environment exposes port `5173` (`ports` in `.cursor/environment.json`)
-and the `viewer-dev-server` terminal runs `npm run dev -- --host`, so the viewer
+and the `viewer-dev-server` terminal runs `pnpm run dev --host`, so the viewer
 is reachable via the Cloud preview. `vite.config.ts` pins `strictPort: true`, so
 if `5173` is taken the server fails fast instead of silently moving ports.
 
@@ -117,7 +117,7 @@ wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm \
 ### Driving the viewer for manual testing
 
 The dev server runs in the `viewer-dev-server` terminal (or start it with
-`cd viewer && npm run dev`). To demonstrate it end-to-end:
+`cd viewer && pnpm run dev`). To demonstrate it end-to-end:
 
 1. Generate a fixture (see the `gen-fixture` command above), e.g.
    `/tmp/rvt-demo/demo.rvt`.

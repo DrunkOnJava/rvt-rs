@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The viewer is built with pnpm.** `viewer/package.json` pins
+  `packageManager` to pnpm 12.6.0 and `viewer/pnpm-lock.yaml` replaces
+  `package-lock.json`, imported from it with the same resolved versions.
+  CI, the viewer deploy, the release workflow, `tools/check-local.sh
+  --viewer`, the Cursor Cloud installer and the docs install with
+  `pnpm install --frozen-lockfile`. The dependency audit runs
+  `pnpm audit --audit-level high` with the same retry and NOT MEASURED
+  handling.
 - **Family instances are drawn in their material's colour (#355).** In the
   GLB and so the browser viewer, a family instance whose type draws in
   exactly one material (RE-82) takes that material's colour when the colour

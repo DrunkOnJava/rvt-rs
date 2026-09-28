@@ -36,14 +36,14 @@ Install and local build paths are documented in
 
 # 2. Install node deps
 cd viewer
-npm install
+pnpm install --frozen-lockfile
 
 # 3. Serve with Vite (localhost:5173)
-npm run dev
+pnpm run dev
 ```
 
 Drop a Revit file onto the page, or open a redistributable demo from the
-gallery (staged from `docs/viewer-demos.json` via `npm run stage:demos`).
+gallery (staged from `docs/viewer-demos.json` via `pnpm run stage:demos`).
 Nothing is sent anywhere.
 
 ## Supported MVP workflow
@@ -55,7 +55,7 @@ Nothing is sent anywhere.
 5. Download diagnostics for scaffold or partial exports.
 
 Tier1 redistributable demos (`architectural-2024`, `structural-2023`,
-`mep-2024`) are staged from `corpus/tier1/` via `npm run stage:demos`.
+`mep-2024`) are staged from `corpus/tier1/` via `pnpm run stage:demos`.
 They open cleanly but report scaffold ~25% confidence — that is expected.
 Reliable typed levels/doors/windows from arbitrary projects still depend on
 Rust decoder / partition-stream work outside this viewer shell.
@@ -67,7 +67,7 @@ by the `gen-fixture` binary, so build it from the repo root first:
 cargo build --release --bin gen-fixture
 ```
 
-`npm run stage:demos` (also run by `predev` / `prebuild`) looks for the
+`pnpm run stage:demos` (also run by `predev` / `prebuild`) looks for the
 binary on `PATH`, in `target/release/`, and in `target/debug/`. If it finds
 none it runs that cargo build itself; when cargo is unavailable it warns
 `synthetic-mvp: missing (gen-fixture not found …)` and the gallery marks the

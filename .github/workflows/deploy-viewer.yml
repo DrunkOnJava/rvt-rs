@@ -95,6 +95,11 @@ jobs:
             exit 1
           fi
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
+        with:
+          package_json_file: viewer/package.json
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
@@ -103,7 +108,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: viewer
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Restore native build cache (shared with CI)
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
@@ -119,25 +124,25 @@ jobs:
           # release profile's full LTO rebuilt the crate from scratch here
           # (39 s per run). The stager finds the binary on PATH.
           cargo build --profile ci --bin gen-fixture
-          PATH="$(pwd)/../target/ci:$PATH" npm run stage:demos
+          PATH="$(pwd)/../target/ci:$PATH" pnpm run stage:demos
 
       - name: Install Playwright Chromium
         working-directory: viewer
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Typecheck
         working-directory: viewer
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Build viewer
         working-directory: viewer
-        run: npm run build
+        run: pnpm run build
 
       - name: Browser regression tests
         working-directory: viewer
         env:
           RVT_VIEWER_SAMPLE: ../_project_corpus/Revit/Revit_IFC5_Einhoven.rvt
-        run: npm run test:browser
+        run: pnpm run test:browser
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0

@@ -218,13 +218,14 @@ The viewer needs a WASM package and Node dependencies:
 ```bash
 wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
 cd viewer
-npm install
-npm run typecheck
-npm run build
+pnpm install --frozen-lockfile
+pnpm run typecheck
+pnpm run build
 ```
 
-`npm run build` writes the static site to `viewer/dist`. Use
-`npm run dev` for local development.
+`pnpm run build` writes the static site to `viewer/dist`. Use
+`pnpm run dev` for local development. pnpm is the version `packageManager`
+pins in `viewer/package.json`.
 
 ## Post-Publish Verification
 
