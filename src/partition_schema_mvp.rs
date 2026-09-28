@@ -4071,7 +4071,8 @@ pub fn slabs_from_partition_category_records(
 /// carries (RE-50, [`crate::partition_beam_axes::scan_bounded_lines`]). A
 /// line counts only when it is level and both its ends lie in its own
 /// record's box; an element any of whose lines does not count keeps no
-/// profile.
+/// profile, except that a zero-length line on one of the others' ends is
+/// left out (RE-95).
 fn sketch_plan_profiles(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -4106,9 +4107,26 @@ fn sketch_plan_profiles(
         return profiles;
     };
     let eps = erpp::VERTEX_EPS_FEET;
+    // RE-95: a sketch line whose box is a single point is a zero-length
+    // segment with no line of its own. It adds no edge, and is dropped where
+    // its point ends another of the sketch's lines.
+    let is_point = |bbox: &[f64; 6]| (0..3).all(|axis| (bbox[axis + 3] - bbox[axis]).abs() <= eps);
     for (owner, segments) in unsolved {
+        let ends: Vec<[f64; 3]> = segments
+            .keys()
+            .filter_map(|id| lines.get(id))
+            .flat_map(|line| [line.start(), line.end()])
+            .collect();
         let exact: Option<Vec<[f64; 4]>> = segments
             .iter()
+            .filter(|(id, bbox)| {
+                let point = [bbox[0], bbox[1], bbox[2]];
+                !(is_point(bbox)
+                    && !lines.contains_key(id)
+                    && ends
+                        .iter()
+                        .any(|end| (0..3).all(|axis| (end[axis] - point[axis]).abs() <= eps)))
+            })
             .map(|(id, bbox)| {
                 let line = lines.get(id)?;
                 let (a, b) = (line.start(), line.end());

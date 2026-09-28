@@ -163,10 +163,12 @@ slab profiles are exact** — 122 loops (80 outer plus 42 rectangular
 voids), worst vertex deviation 1.563e-12 ft, tolerance 1e-3 ft — so 42
 perimeter plates emit `IfcArbitraryProfileDefWithVoids` (a 26-vertex
 outer ring around one rectangular courtyard void) and 38 emit
-`IfcArbitraryClosedProfileDef`. The 20 shading devices are rotated
-plates whose sketch-line boxes are axis-aligned envelopes of diagonal
-segments; the closure declines them, and they keep the record box
-rectangle with `ProfileResolved: false`. The pre-RE-25 plan-loop scan is
+`IfcArbitraryClosedProfileDef`. The 20 shading devices are plates
+whose sketch-line boxes are axis-aligned envelopes of diagonal
+segments, which the box closure declines. Since RE-95 they close from
+their lines' recorded ends (RE-50), once the one zero-length sketch
+line each carries is left out, and all 20 equal Revit's outline
+(`reports/element-framing/RE-95-zero-length-sketch-lines.md`). The pre-RE-25 plan-loop scan is
 a measured dead end for this: 2317 closed plan-polyline candidates
 across all eight inflated partitions, none with the plan bounds of any
 recovered plate, and no ordered vertex run of the export's polygon
@@ -632,10 +634,9 @@ candidate scans on these corpora (#35 host joins idle). Floor↔ElemTable id bin
 slab set (every record-backed slab carries its ElementId), slab
 extrusion thickness is measured from the record bbox, and the slab
 *profile* is the boundary polygon its `OST_SketchLines` records close
-on **80 of 80** exported slabs (#31, RE-25, closed 2026-09-19). What is
-still a bounding-box rectangle there is the profile of the 20 rotated
-shading plates, which the closure declines and which carry
-`ProfileResolved: false`. Eighty-one per-class
+on **80 of 80** exported slabs (#31, RE-25, closed 2026-09-19), and
+since RE-95 the 20 shading plates carry theirs too, each equal to
+Revit's. Eighty-one per-class
 decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
 `iter_elements`.
 

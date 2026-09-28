@@ -573,15 +573,15 @@ fn core_interior_2024_storey_containment_is_evidence_backed() {
 }
 
 /// #31 / RE-25: every recovered slab carries the plan profile its
-/// `OST_SketchLines` records close, and the plates whose sketch does
-/// not close carry none.
+/// `OST_SketchLines` records close.
 ///
 /// The join is by ElementId only — the last slot of the second
-/// counted reference list at `+0x88` — so this asserts an exact
-/// partition of the 100 record-backed plates: the 80 the reference
-/// export writes as `IfcSlab` resolve a profile, the 20 it writes as
-/// `IfcShadingDevice` (rotated plates, whose sketch-line boxes are
-/// axis-aligned envelopes of diagonal segments) resolve none.
+/// counted reference list at `+0x88` — so this asserts all 100
+/// record-backed plates: the 80 the reference export writes as `IfcSlab`
+/// resolve a profile from their boxes, and the 20 it writes as
+/// `IfcShadingDevice` (whose sketch-line boxes are axis-aligned envelopes
+/// of diagonal segments) from their lines' recorded ends, once the one
+/// zero-length sketch line each carries is left out (RE-50, RE-95).
 #[test]
 fn core_interior_2024_slab_plan_profiles() {
     let Some(project_dir) = project_dir() else {
@@ -594,7 +594,7 @@ fn core_interior_2024_slab_plan_profiles() {
         return;
     }
     // The twenty `IFCSHADINGDEVICE` `Tag` values — the plates whose
-    // sketch does not close from bounding boxes alone.
+    // sketch closes only from its lines' recorded ends.
     const SHADING_DEVICE_IDS: &[u32] = &[
         20953, 64160, 64227, 64292, 64358, 64423, 64488, 64553, 64618, 64683, 70366, 71171, 71231,
         71291, 71351, 71411, 71471, 71531, 71591, 71651,
@@ -612,6 +612,7 @@ fn core_interior_2024_slab_plan_profiles() {
     assert_eq!(mvp.slabs.len(), 100);
 
     let mut without: Vec<u32> = Vec::new();
+    let mut zigzag = Vec::new();
     let mut ring = 0usize;
     let mut rectangle = 0usize;
     for slab in &mvp.slabs {
@@ -645,6 +646,7 @@ fn core_interior_2024_slab_plan_profiles() {
         );
         match (profile.outer_xy.len(), profile.inner_xy.len()) {
             (26, 1) => ring += 1,
+            (28, 1) => zigzag.push(id),
             (4, 0) => rectangle += 1,
             other => panic!("slab {id}: unexpected profile shape {other:?}"),
         }
@@ -661,10 +663,14 @@ fn core_interior_2024_slab_plan_profiles() {
             }
         }
     }
-    without.sort_unstable();
+    assert!(
+        without.is_empty(),
+        "plates without a closed sketch: {without:?}"
+    );
+    zigzag.sort_unstable();
     assert_eq!(
-        without, SHADING_DEVICE_IDS,
-        "the plates without a closed sketch must be exactly the export's \
+        zigzag, SHADING_DEVICE_IDS,
+        "the 28-vertex plates with a void must be exactly the export's \
          IFCSHADINGDEVICE Tag set"
     );
     assert_eq!(
