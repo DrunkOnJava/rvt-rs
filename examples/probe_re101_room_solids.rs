@@ -9,6 +9,9 @@
 //! floor have plan edges that close into
 //! the outline Revit's IFC4 export gives the room, for all 116 rooms.
 //!
+//! Revit 2023 writes `ff ff ff ff` between the ElementId and `04 90 08 00`,
+//! and its faces are 170 bytes apart.
+//!
 //! The probe reports, for each room rvt-rs exports, how many solids name it
 //! in its own partition and elsewhere, how many faces and wall faces the
 //! first one has, and whether an outline is kept ([`room_outline`]), with
@@ -18,7 +21,7 @@
 //!   cargo run --profile ci --example probe_re101_room_solids -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_room_boundaries::{ROOM_SOLID_TAG, room_outline, solid_faces};
+use rvt::partition_room_boundaries::{room_outline, solid_faces, solid_headers};
 use std::collections::BTreeMap;
 
 fn area(ring: &[(f64, f64)]) -> f64 {
@@ -37,11 +40,12 @@ fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
-    let rooms: Vec<_> = rvt::partition_schema_mvp::rooms_from_partition_category_records(
+    let rooms = rvt::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         version,
-        &Default::default(),
-    )?;
+        rvt::walker::WalkerLimits::default(),
+    )?
+    .rooms;
     let streams: Vec<String> = rf
         .stream_names()
         .into_iter()
@@ -84,12 +88,10 @@ fn main() -> rvt::Result<()> {
             cy + dy / 2.0,
             z + dz,
         ];
-        let mut needle = u64::from(id).to_le_bytes().to_vec();
-        needle.extend_from_slice(&ROOM_SOLID_TAG);
         let (mut own, mut elsewhere, mut first) = (0, 0, None);
         for name in &streams {
             let inflated = rf.inflated_partition(name)?;
-            for at in memchr::memmem::find_iter(inflated.bytes(), &needle) {
+            for at in solid_headers(inflated.bytes(), id) {
                 if *name == stream {
                     own += 1;
                     if first.is_none() {

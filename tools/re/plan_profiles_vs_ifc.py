@@ -20,7 +20,11 @@ faces of the two bodies:
 
 Usage:
 
-    python3 tools/re/plan_profiles_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--class IfcSlab,IfcShadingDevice] [--list N]
+    python3 tools/re/plan_profiles_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--class IfcSlab,IfcShadingDevice] [--list N] [--match centroid]
+
+`--match centroid` pairs each rvt-rs element with the Revit one whose top
+surface's centroid is nearest, for a file whose rooms do not carry Revit's
+GlobalId (Revit 2023).
 
 Needs IfcOpenShell (tested with 0.8.5), NumPy and Shapely.
 """
@@ -127,10 +131,23 @@ def main(argv):
         i = args.index("--list")
         listing = int(args[i + 1])
         del args[i : i + 2]
+    by_centroid = False
+    if "--match" in args:
+        i = args.index("--match")
+        by_centroid = args[i + 1] == "centroid"
+        del args[i : i + 2]
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
     ours, revit = tops(args[0], classes), tops(args[1], classes)
+    if by_centroid and revit:
+        paired = {}
+        for held in ours.values():
+            nearest = min(
+                revit.items(), key=lambda item: item[1][3].centroid.distance(held[3].centroid)
+            )[0]
+            paired[nearest] = held
+        ours = paired
     rows = []
     for tag, (area, points, cls, surface) in revit.items():
         if tag in ours and area > 0:
