@@ -1752,8 +1752,17 @@ impl StepWriter {
                     // all extrusions would be possible but muddies
                     // byte-by-byte diff tooling, so pay the ~3-entity
                     // cost for clarity.
+                    // RE-84: an opening standing for a door or window takes
+                    // the same cut to its host's depth as a filled one (#227).
+                    let own_cut = (ifc_type == "IFCOPENINGELEMENT")
+                        .then(|| model.opening_cuts.get(&entity_idx))
+                        .flatten();
+                    let [cx, cy] = own_cut.map_or([0.0, 0.0], |c| c.centre_feet);
                     let profile_origin = self.id();
-                    self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                    self.emit_entity(
+                        profile_origin,
+                        format!("IFCCARTESIANPOINT(({:.6},{:.6}))", cx * 0.3048, cy * 0.3048),
+                    );
                     let profile_x_axis = self.id();
                     self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
                     let profile_placement = self.id();
@@ -1761,7 +1770,21 @@ impl StepWriter {
                         profile_placement,
                         format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
                     );
-                    let profile_id = self.emit_profile_def(ex, profile_placement);
+                    let profile_id = match own_cut {
+                        Some(cut) => {
+                            let profile_id = self.id();
+                            self.emit_entity(
+                                profile_id,
+                                format!(
+                                    "IFCRECTANGLEPROFILEDEF(.AREA.,$,#{profile_placement},{:.6},{:.6})",
+                                    cut.x_dim_feet * 0.3048,
+                                    cut.y_dim_feet * 0.3048,
+                                ),
+                            );
+                            profile_id
+                        }
+                        None => self.emit_profile_def(ex, profile_placement),
+                    };
                     // Solid-local placement: the identity axis, so the
                     // extrusion sits at the element origin and the
                     // element's own IfcLocalPlacement moves it into

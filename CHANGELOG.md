@@ -8,6 +8,18 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Doors and windows whose type draws no geometry export as their opening
+  (#309, RE-84).** Families that only cut their host ("Door-Opening",
+  "Schematic Opening Cut", "CasedOpening") have a type value block with no
+  geometry-material map. Revit's export writes each as an
+  `IfcOpeningElement` voiding the host, Tagged with the element's
+  ElementId, and no door or window; rvt-rs now does the same wherever it
+  binds the host. On Snowdon Towers, Core Interior and RE1 Architecture,
+  48 of 48 such elements and 343 of 343 others follow the rule in Revit's
+  export; 36 Snowdon and 1 RE1 openings are now written this way with
+  Revit's Tag and host. The 11 whose host is not bound yet stay doors and
+  windows (#439). Openings are not drawn in the GLB or plan SVG and are not
+  counted as building elements in the export diagnostics.
 - **Openings are as deep as the wall they cut (#227, RE-83).** A door's or
   window's `IfcOpeningElement` took the element's whole box, standing up to
   4.9 ft out of the wall. Its depth now comes from the host wall's plan

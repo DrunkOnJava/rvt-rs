@@ -2064,3 +2064,7 @@ Three numbers carried as per-release constants are serialization tags of classes
 ## Addendum — RE-81 Revit 2023 element records (2026-09-27)
 
 A 2023 record sits behind the RE-80 marker (`3c 01 ff ff ff ff 82 05`) with its ElementId as a `u32` at marker -52 and its `BuiltInCategory` at -38; container and placement kind are where 2024 has them. RE-21's instance rule then finds every element Tag of Revit's IFC4 export on two 2023 projects (45 of 45, 37 of 37), with nothing else on one and 14 nested generic models on the other. Report: `reports/element-framing/RE-81-2023-element-records.md`.
+
+## Addendum — RE-84 doors and windows whose type draws no geometry (2026-09-27)
+
+A family type whose parameter value block (RE-77) holds no geometry-material map (RE-82) draws no geometry: its doors and windows only cut their host. Revit's IFC4 export writes each as an `IfcOpeningElement` voiding the host, Tagged with the element's ElementId, and no door or window. On Snowdon Towers, Core Interior and RE1 Architecture, 48 of 48 such elements are opening-only in Revit's export and 343 of 343 others are exported as elements. Report: `reports/element-framing/RE-84-void-only-doors-windows.md`; probe: `examples/probe_re84_void_only_families.rs`.

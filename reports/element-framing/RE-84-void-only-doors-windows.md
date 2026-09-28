@@ -40,10 +40,12 @@ Against Revit's export:
 | RE1 Architecture | 1 | 1 | 1 | 0 |
 | Core Interior | 0 | — | 0 | 0 |
 
+Shape: each such opening takes #227's cut (RE-83), the element's box across and in height and the host wall's depth through it. Revit extrudes these openings 10 ft (3048 mm) through the wall, centred on it, so their boxes differ in depth by design; the cut they make in the wall is what matters. Of the 36 on Snowdon, 31 lie inside Revit's opening with the same sill and head heights (within 0.26 ft); the other 5, all in wall 1534218, keep the element's uncut box and stand up to 1.2 ft out of Revit's across the wall. RE1's one lies inside Revit's.
+
 The 11 Snowdon elements left are void-only doors and windows RE-23 does not bind to a host: their host wall is in their reference list but not in the slot before their own ElementId (#439). Without a host there is no wall to cut, so they stay the element for now.
 
 ## Not claimed
 
 - Void-only doors and windows with no bound host (#439).
 - Revit's further unfilled openings where one door or window cuts several walls (215 on Snowdon beyond the 47 above).
-- The opening's size: it is the element's box, cut to the host's depth where #227's rule applies.
+- Revit's opening profile, and its 10 ft depth: the opening is the element's box cut to the host's depth where #227's rule applies.
