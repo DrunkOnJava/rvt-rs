@@ -77,6 +77,30 @@ pub const VERTEX_EPS_FEET: f64 = 1e-6;
 /// Relative cross-product below which three vertices are collinear.
 pub const COLLINEAR_EPS: f64 = 1e-9;
 
+/// Largest distance a sketch arc's chords may stray from the arc, feet
+/// (RE-96), as a curved wall's are drawn (RE-75).
+pub const SKETCH_ARC_TOLERANCE_FEET: f64 = 0.0005;
+
+/// A sketch arc drawn as points from its start to its end, each chord
+/// within [`SKETCH_ARC_TOLERANCE_FEET`] of the arc (RE-96). `None` for an arc
+/// sweeping no angle or more than a full turn.
+pub fn arc_points(arc: &crate::partition_beam_axes::BoundedArc) -> Option<Vec<[f64; 3]>> {
+    let sweep = arc.end_angle - arc.start_angle;
+    if !(sweep.is_finite() && sweep > 0.0 && sweep <= std::f64::consts::TAU) {
+        return None;
+    }
+    let step = 2.0
+        * (1.0 - SKETCH_ARC_TOLERANCE_FEET / arc.radius)
+            .clamp(-1.0, 1.0)
+            .acos();
+    let count = ((sweep / step).ceil() as usize).clamp(1, 512);
+    Some(
+        (0..=count)
+            .map(|index| arc.point(arc.start_angle + sweep * index as f64 / count as f64))
+            .collect(),
+    )
+}
+
 /// Value of [`PLAN_PROFILE_SOURCE_FIELD`] for this carrier.
 pub const PLAN_PROFILE_SOURCE: &str = "partition_element_record_sketch_lines";
 
@@ -147,6 +171,20 @@ impl PlanProfile {
             });
         }
         bounds
+    }
+
+    /// Plan extent of every piece's outer loop, `[min x, min y, max x,
+    /// max y]` feet (RE-96).
+    pub fn plan_extent_feet(&self) -> Option<[f64; 4]> {
+        self.outer_xy
+            .iter()
+            .chain(self.pieces.iter().flat_map(|piece| piece.outer_xy.iter()))
+            .fold(None, |bounds, &(x, y)| {
+                Some(match bounds {
+                    None => [x, y, x, y],
+                    Some(b) => [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)],
+                })
+            })
     }
 
     /// The `DecodedElement` fields carrying this profile.

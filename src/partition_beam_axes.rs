@@ -195,6 +195,15 @@ pub fn bounded_arc_at(buf: &[u8], at: usize) -> Option<BoundedArc> {
     if kind != 1 {
         return None;
     }
+    arc_values_at(buf, at)
+}
+
+/// The record at `at` read as an arc ([`bounded_arc_at`]'s layout), whatever
+/// the `u64` before it: a sketch line's arc is not marked (RE-96).
+pub fn arc_values_at(buf: &[u8], at: usize) -> Option<BoundedArc> {
+    if buf.get(at..at.checked_add(4)?)? != BOUNDED_LINE_TAG {
+        return None;
+    }
     let mut values = [0.0f64; 12];
     for (index, value) in values.iter_mut().enumerate() {
         *value = read_f64(buf, at + 4 + 8 * index)?;
@@ -240,6 +249,43 @@ pub fn bounded_arc_at(buf: &[u8], at: usize) -> Option<BoundedArc> {
 /// ([`bounded_arc_at`]).
 pub fn first_bounded_arc(data: &[u8]) -> Option<BoundedArc> {
     bounded_arc_at(data, memchr::memmem::find(data, &BOUNDED_LINE_TAG)?)
+}
+
+/// A sketch line's curve (RE-96): the first [`BOUNDED_LINE_TAG`] record in
+/// its data that reads as a line or as an arc, with both readings where it
+/// reads as both. A sketch line's record does not say which it is, so the
+/// caller keeps the reading its record box holds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SketchCurve {
+    /// The record read as a line.
+    pub line: Option<BoundedLine>,
+    /// The record read as an arc.
+    pub arc: Option<BoundedArc>,
+}
+
+/// See [`SketchCurve`].
+pub fn first_sketch_curve(data: &[u8]) -> Option<SketchCurve> {
+    memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG).find_map(|at| {
+        let curve = SketchCurve {
+            line: bounded_line_at(data, at),
+            arc: arc_values_at(data, at),
+        };
+        (curve.line.is_some() || curve.arc.is_some()).then_some(curve)
+    })
+}
+
+/// The curve of each sketch line in `ids` ([`first_sketch_curve`]), read as
+/// [`scan_bounded_lines`] reads lines (RE-96). Empty for a release this
+/// layout is not measured on.
+pub fn scan_sketch_curves(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, SketchCurve>> {
+    if !supports_revit_version(revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    scan_first_records(rf, revit_version, ids, first_sketch_curve)
 }
 
 /// The first bounded line in the element data of each id in `ids` (a

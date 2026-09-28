@@ -4033,14 +4033,16 @@ pub fn slabs_from_partition_category_records(
         .filter(|record| record.builtin_category == per::OST_SKETCH_LINES)
         .cloned()
         .collect();
-    let plates: BTreeSet<u32> = scanned
-        .iter()
-        .filter(|record| {
-            record.builtin_category == per::OST_FLOORS
-                || record.builtin_category == per::OST_BUILDING_PAD
-        })
-        .map(|record| record.element_id)
-        .collect();
+    let mut plates: std::collections::BTreeMap<u32, [f64; 4]> = Default::default();
+    for record in scanned.iter().filter(|record| {
+        record.builtin_category == per::OST_FLOORS
+            || record.builtin_category == per::OST_BUILDING_PAD
+    }) {
+        let b = record.bbox_feet;
+        plates
+            .entry(record.element_id)
+            .or_insert([b[0], b[1], b[3], b[4]]);
+    }
     let profiles = sketch_plan_profiles(rf, revit_version, &sketch_lines, &plates);
 
     let mut out = Vec::new();
@@ -4065,30 +4067,40 @@ pub fn slabs_from_partition_category_records(
     Ok(out)
 }
 
-/// Sketched plan profiles of the elements in `owners`, from their
+/// How closely an outline read from its sketch lines' own curves must span
+/// its element's record box (RE-96), feet.
+pub const SKETCH_BOX_TOLERANCE_FEET: f64 = 1e-3;
+
+/// Sketched plan profiles of the elements in `owners` (their plan record
+/// boxes, `[min x, min y, max x, max y]`), from their
 /// `OST_SketchLines` records: the RE-25 solve over the records' boxes and,
 /// where that does not close, the exact ends each sketch line's own data
 /// carries (RE-50, [`crate::partition_beam_axes::scan_bounded_lines`]). A
 /// line counts only when it is level and both its ends lie in its own
 /// record's box; an element any of whose lines does not count keeps no
 /// profile, except that a zero-length line on one of the others' ends is
-/// left out (RE-95).
+/// left out (RE-95). A sketch line's curve may be an arc instead (RE-96,
+/// [`crate::partition_beam_axes::scan_sketch_curves`]): it counts where it
+/// lies in a horizontal plane and every point of it, drawn as chords, lies
+/// in its record's box, and where its record does not also hold as a line.
+/// An outline with an arc is kept only where it spans its element's record
+/// box.
 fn sketch_plan_profiles(
     rf: &mut RevitFile,
     revit_version: u32,
     sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
-    owners: &BTreeSet<u32>,
+    owners: &std::collections::BTreeMap<u32, [f64; 4]>,
 ) -> std::collections::BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
     let mut profiles = erpp::plan_profiles_from_sketch_line_records(sketch_lines);
-    profiles.retain(|owner, _| owners.contains(owner));
+    profiles.retain(|owner, _| owners.contains_key(owner));
     let mut unsolved: BTreeMap<u32, BTreeMap<u32, [f64; 6]>> = BTreeMap::new();
     for record in sketch_lines {
         let Some(owner) = record.owner_reference else {
             continue;
         };
-        if owners.contains(&owner) && !profiles.contains_key(&owner) {
+        if owners.contains_key(&owner) && !profiles.contains_key(&owner) {
             unsolved
                 .entry(owner)
                 .or_default()
@@ -4103,9 +4115,16 @@ fn sketch_plan_profiles(
         .values()
         .flat_map(|lines| lines.keys().copied())
         .collect();
-    let Ok(lines) = crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &ids) else {
+    let (Ok(lines), Ok(curves)) = (
+        crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &ids),
+        crate::partition_beam_axes::scan_sketch_curves(rf, revit_version, &ids),
+    ) else {
         return profiles;
     };
+    let arcs: BTreeMap<u32, crate::partition_beam_axes::BoundedArc> = curves
+        .iter()
+        .filter_map(|(&id, curve)| Some((id, curve.arc?)))
+        .collect();
     let eps = erpp::VERTEX_EPS_FEET;
     // RE-95: a sketch line whose box is a single point is a zero-length
     // segment with no line of its own. It adds no edge, and is dropped where
@@ -4116,29 +4135,74 @@ fn sketch_plan_profiles(
             .keys()
             .filter_map(|id| lines.get(id))
             .flat_map(|line| [line.start(), line.end()])
+            .chain(
+                segments
+                    .keys()
+                    .filter_map(|id| arcs.get(id))
+                    .flat_map(|arc| [arc.point(arc.start_angle), arc.point(arc.end_angle)]),
+            )
             .collect();
-        let exact: Option<Vec<[f64; 4]>> = segments
+        let exact: Option<(Vec<[f64; 4]>, bool)> = segments
             .iter()
             .filter(|(id, bbox)| {
                 let point = [bbox[0], bbox[1], bbox[2]];
                 !(is_point(bbox)
                     && !lines.contains_key(id)
+                    && !arcs.contains_key(id)
                     && ends
                         .iter()
                         .any(|end| (0..3).all(|axis| (end[axis] - point[axis]).abs() <= eps)))
             })
             .map(|(id, bbox)| {
-                let line = lines.get(id)?;
-                let (a, b) = (line.start(), line.end());
                 let inside = |p: [f64; 3]| {
                     (0..3)
                         .all(|axis| p[axis] >= bbox[axis] - eps && p[axis] <= bbox[axis + 3] + eps)
                 };
-                (inside(a) && inside(b) && (a[2] - b[2]).abs() <= eps)
-                    .then_some([a[0], a[1], b[0], b[1]])
+                let line = lines.get(id).and_then(|line| {
+                    let (a, b) = (line.start(), line.end());
+                    (inside(a) && inside(b) && (a[2] - b[2]).abs() <= eps)
+                        .then(|| vec![[a[0], a[1], b[0], b[1]]])
+                });
+                let arc = arcs.get(id).and_then(|arc| {
+                    let points = erpp::arc_points(arc)?;
+                    let flat = arc.x_axis[2].abs() <= eps && arc.y_axis[2].abs() <= eps;
+                    (flat && points.iter().all(|&p| inside(p))).then(|| {
+                        points
+                            .windows(2)
+                            .map(|pair| [pair[0][0], pair[0][1], pair[1][0], pair[1][1]])
+                            .collect::<Vec<_>>()
+                    })
+                });
+                match (line, arc) {
+                    (Some(chords), None) => Some((chords, false)),
+                    (None, Some(chords)) => Some((chords, true)),
+                    _ => None,
+                }
             })
-            .collect();
-        if let Some(mut profile) = exact.and_then(|exact| erpp::plan_profile_from_lines(&exact)) {
+            .collect::<Option<Vec<(Vec<[f64; 4]>, bool)>>>()
+            .map(|curves| {
+                let has_arc = curves.iter().any(|(_, arc)| *arc);
+                let chords: Vec<[f64; 4]> =
+                    curves.into_iter().flat_map(|(chords, _)| chords).collect();
+                (chords, has_arc)
+            });
+        let Some((mut profile, has_arc)) = exact
+            .and_then(|(chords, has_arc)| Some((erpp::plan_profile_from_lines(&chords)?, has_arc)))
+        else {
+            continue;
+        };
+        // RE-96: an outline with an arc spans the element's own record box,
+        // or the sketch holds curves that are not the element's edge.
+        let spans_box = !has_arc
+            || owners.get(&owner).is_some_and(|plan_box| {
+                profile.plan_extent_feet().is_some_and(|extent| {
+                    extent
+                        .iter()
+                        .zip(plan_box)
+                        .all(|(a, b)| (a - b).abs() <= SKETCH_BOX_TOLERANCE_FEET)
+                })
+            });
+        if spans_box {
             profile.segment_ids = segments.keys().copied().collect();
             profiles.insert(owner, profile);
         }
@@ -4151,10 +4215,29 @@ fn sketch_plan_profiles(
 /// slope is attached later ([`attach_roof_slopes`], RE-56).
 fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     use crate::partition_element_records as per;
-    let roofs: BTreeSet<u32> = products
+    let float = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let roofs: std::collections::BTreeMap<u32, [f64; 4]> = products
         .iter()
         .filter(|element| element.class == "Roof")
-        .filter_map(|element| element.id)
+        .filter_map(|element| {
+            let (x, y) = (
+                float(element, "m_locationX")?,
+                float(element, "m_locationY")?,
+            );
+            let (w, d) = (
+                float(element, "m_bboxWidth")?,
+                float(element, "m_bboxDepth")?,
+            );
+            Some((
+                element.id?,
+                [x - w / 2.0, y - d / 2.0, x + w / 2.0, y + d / 2.0],
+            ))
+        })
         .collect();
     if roofs.is_empty() || !per::supports_revit_version(revit_version) {
         return;

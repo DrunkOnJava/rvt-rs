@@ -2106,3 +2106,7 @@ Revit's IFC4 export cuts a Snowdon Towers door at its type's Rough Width × Roug
 ## Addendum — RE-95 zero-length sketch lines (2026-09-28)
 
 A sketch line whose record box is a single point is a zero-length segment: it carries no bounded line and adds no edge. Each of Core Interior's 20 shading-device plates has one, on an end of two of its other lines; left out, the other 56 lines' recorded ends close each plate into Revit's outline exactly. Report: `reports/element-framing/RE-95-zero-length-sketch-lines.md`; probe: `examples/probe_re95_zero_length_sketch_lines.rs`; scorer: `tools/re/plan_profiles_vs_ifc.py`.
+
+## Addendum — RE-96 a sketch line's curve can be an arc (2026-09-28)
+
+A sketch line's first curve record can hold RE-75's arc layout (angles, unit X and Y axes, radius, centre) with the same preceding bytes a straight line's has, so the record box decides the reading. Read as arcs, 17 more Snowdon Towers slabs close into their outline, 14 of them within 0.1% of Revit's area. Report: `reports/element-framing/RE-96-sketch-arcs.md`; probe: `examples/probe_re96_sketch_arcs.rs`.

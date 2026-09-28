@@ -602,6 +602,12 @@ Height where its body is Rough Height tall, which on Snowdon is exactly
 the 57 doors Revit cuts that way; 54 now match Revit's opening within
 0.001 ft (none before), and all 57 carry Revit's `OverallWidth` /
 `OverallHeight` (`reports/element-framing/RE-94-door-openings.md`).
+**RE-96 (2026-09-28)** reads a sketch line's arc, stored in RE-75's arc
+layout without the marker a curved wall's has, and keeps an arc outline
+only where it spans its element's record box. On Snowdon Towers 149 of
+199 slabs carry an outline (132 before), and 87 match Revit's area
+within 0.1% (73 before)
+(`reports/element-framing/RE-96-sketch-arcs.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
