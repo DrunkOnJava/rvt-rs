@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Fixtures hosted on ceilings and walls are turned too (#227, RE-90).**
+  RE-87 turned only instances whose Z axis is the model's. One with any
+  vertical axis takes its plan direction from its first flat axis, which
+  agrees with Revit's placement on every such family instance on Snowdon
+  Towers. 58 more instances are drawn turned (44 proxies, 14 light
+  fixtures): 44 closer to Revit's body, none further. Every other local
+  file is byte-identical.
+
 - **Windows in tapered walls get Revit's opening (#227, RE-89).** Revit
   cuts a window's opening in a tapered wall as a vertical box the host
   type's thickness deep, centred on the window's own origin. rvt-rs cut

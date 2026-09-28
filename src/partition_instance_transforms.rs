@@ -43,6 +43,24 @@ impl InstanceTransform {
             && (z[2] - 1.0).abs() <= ROTATION_TOLERANCE
     }
 
+    /// The unit plan direction of the instance's first horizontal axis,
+    /// where one of its axes is vertical (up or down): the X axis of an
+    /// upright instance, and of one hosted on a ceiling or a wall, the axis
+    /// that lies flat. `None` for an instance tilted off the vertical.
+    pub fn plan_axis(&self) -> Option<[f64; 2]> {
+        let flat = |axis: &[f64; 3]| axis[2].abs() <= ROTATION_TOLERANCE;
+        if !self
+            .axes
+            .iter()
+            .any(|axis| (axis[2].abs() - 1.0).abs() <= ROTATION_TOLERANCE)
+        {
+            return None;
+        }
+        let axis = self.axes.iter().find(|axis| flat(axis))?;
+        let length = axis[0].hypot(axis[1]);
+        (length > 0.5).then(|| [axis[0] / length, axis[1] / length])
+    }
+
     /// The plan angle of the X axis, radians.
     pub fn plan_angle(&self) -> f64 {
         self.axes[0][1].atan2(self.axes[0][0])
