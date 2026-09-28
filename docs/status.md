@@ -402,7 +402,8 @@ and ceilings as an `IfcMaterialLayerSetUsage` over an
   order, on 3,321 of Snowdon's 3,322 layers and all of Core Interior's
   and RE1's.
 - The sets sit on Revit's bodies within 0.001 ft on 1,196 of 1,207
-  Snowdon elements, 88 of 88 on Core Interior and 15 of 15 on RE1, whose
+  Snowdon elements, 403 of 403 on Core Interior (88 before RE-91) and 15
+  of 15 on RE1, whose
   2025 export writes the same four sets
   (`reports/element-framing/RE-58-material-layer-sets.md`).
 
@@ -414,8 +415,9 @@ among them, except two on Snowdon.
 
 Core Interior's reference export is a Reference View file with no layer
 set in it. There the layers are scored against the faces Revit's body
-styles with each material, and its walls, single layers by category, get
-none.
+styles with each material. Its walls' single layers take their category's
+material, and since RE-91 they carry the one the document's object styles
+give walls, "Default Wall", as Revit's export does.
 
 **RE-59 (2026-09-23)** contains an element whose record names two Levels,
 its base and top constraint, in the base constraint: the higher of the two
@@ -572,6 +574,12 @@ does: a vertical box the host type's thickness deep, centred on the
 window's own origin (RE-87). All 20 such windows on Snowdon Towers now have
 Revit's opening across the wall (none before)
 (`reports/element-framing/RE-89-tapered-wall-window-openings.md`).
+**RE-91 (2026-09-28)** reads each category's material from the document's
+object styles (`i64 BuiltInCategory · ff×8 · u32 1 · ff×8 · u64
+material`). Where the Walls entry is set, a wall layer taking its category's
+material takes it: Core Interior's 356 such walls carry "Default Wall", as
+Revit's export does, and its layer sets go from 88 to 403
+(`reports/element-framing/RE-91-category-material.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

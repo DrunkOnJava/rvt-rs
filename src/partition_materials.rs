@@ -362,3 +362,59 @@ pub fn scan_material_names(
         .filter(|(_, name)| !shared.contains(name))
         .collect())
 }
+
+/// Releases a category's material (RE-91) is read on. Measured on Revit
+/// 2024 files; RE1's 2025 files hold no entry in this layout.
+pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// The bytes a category's entry in the document's object styles holds
+/// after its `BuiltInCategory` (`i64`), before its material (`u64`): an
+/// unset `u64`, `u32 1` and another unset `u64` (RE-91).
+pub const CATEGORY_MATERIAL_FRAME: [u8; 20] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff,
+];
+
+/// The material the document's object styles give `category` (RE-91): the
+/// `u64` after its `BuiltInCategory` and [`CATEGORY_MATERIAL_FRAME`]. On
+/// Core Interior the Walls entry holds 87, "Default Wall", and Roofs 88,
+/// "Default Roof", and every other category is unset; Revit's IFC4 export
+/// writes "Default Wall" for each of Core Interior's 356 walls whose layer
+/// takes its category's material.
+///
+/// `None` on a release outside [`CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS`],
+/// without the entry, where it is unset (0 or all ones), or where copies
+/// disagree.
+pub fn scan_category_material(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    category: i64,
+) -> Result<Option<u32>> {
+    if !CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return Ok(None);
+    }
+    let mut pattern = category.to_le_bytes().to_vec();
+    pattern.extend_from_slice(&CATEGORY_MATERIAL_FRAME);
+    let mut found: BTreeSet<u64> = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for at in memchr::memmem::find_iter(buf, &pattern) {
+            if let Some(material) = buf
+                .get(at + pattern.len()..at + pattern.len() + 8)
+                .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
+            {
+                found.insert(material);
+            }
+        }
+    }
+    let mut values = found.into_iter();
+    let (Some(material), None) = (values.next(), values.next()) else {
+        return Ok(None);
+    };
+    Ok(u32::try_from(material)
+        .ok()
+        .filter(|&id| id != 0 && id != u32::MAX))
+}

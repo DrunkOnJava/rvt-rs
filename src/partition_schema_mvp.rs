@@ -2322,6 +2322,29 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     else {
         return;
     };
+    // RE-91: a layer that takes its category's material takes the one the
+    // document's object styles give walls, where it is set and named.
+    let category_material = crate::partition_materials::scan_category_material(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_WALLS,
+    )
+    .ok()
+    .flatten()
+    .filter(|id| names.contains_key(id));
+    let layers: std::collections::BTreeMap<u32, Vec<pcs::CompoundLayer>> = layers
+        .into_iter()
+        .map(|(type_id, type_layers)| {
+            let type_layers = type_layers
+                .into_iter()
+                .map(|layer| pcs::CompoundLayer {
+                    material: layer.material.or(category_material),
+                    ..layer
+                })
+                .collect();
+            (type_id, type_layers)
+        })
+        .collect();
     for wall in walls.iter_mut() {
         let (Some(id), Some(type_id)) = (wall.id, type_of(wall)) else {
             continue;
