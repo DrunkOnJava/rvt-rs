@@ -101,6 +101,7 @@ fn writes_next_to_the_input_and_to_stdout() {
             "name",
             "level",
             "level_elevation_m",
+            "area_m2",
             "body_source"
         ]
     );
@@ -119,6 +120,8 @@ fn a_missing_input_is_one_named_error() {
 /// Counts measured against Revit's own full-project export (RE-21 walls,
 /// doors, windows, columns; RE-22 slabs; RE-29 rooms): 970 building
 /// elements of which 116 are rooms, and every door and window hosted.
+/// Every room's outline is read from its stored solid (RE-101), so every
+/// room has an area.
 #[test]
 fn core_interior_schedules_match_the_measured_counts() {
     let Some(model) = core_interior() else {
@@ -169,6 +172,10 @@ fn core_interior_schedules_match_the_measured_counts() {
         rooms[1..]
             .iter()
             .all(|r| !r[1].is_empty() && !r[2].is_empty())
+    );
+    assert!(
+        rooms[1..].iter().all(|r| !r[5].is_empty()),
+        "a Core Interior room with no area"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

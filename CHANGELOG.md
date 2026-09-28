@@ -8,6 +8,20 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Rooms take their real outline (RE-101, #90).** A room's partition
+  stores the room's solid as planar faces, and the walls among them close
+  into its outline, columns and shafts left out as voids. Rooms export
+  with that outline instead of their bounding box:
+  - Core Interior: all 116 at Revit's own area and outline (76 before).
+  - RE1 Architecture: all 11 keep theirs.
+  - Snowdon Towers: 45 of 54 at the area its VIM export gives (10 before).
+    The 7 whose solids do not close at the floor keep their box.
+
+  `rvt-schedule --schedule rooms` gains an area column, filled for rooms
+  whose outline was read. `plan_profiles_vs_ifc.py` also measures each
+  outline against the other file's, as Revit splits edges at every
+  bounding element. Every other local file is byte-identical.
+
 - **Round shafts (RE-100).** A full-circle sketch line is read, so a round
   shaft opening cuts its void too. On Snowdon Towers four more slabs match
   Revit's area within 0.1% (154), and a roof becomes exact. Every other

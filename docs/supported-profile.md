@@ -49,7 +49,7 @@ OLE/CFB Revit container is refused with an error, never a partial model.
 | Stairs | aggregates of flights, landings and supports; straight flights as their steps, monolithic ones included | 33 of 38 drawn flights equal to Revit's; spiral and riserless flights are boxes (#357) |
 | Curtain walls | aggregates of panels and mullions placed by their grids | every Snowdon panel and mullion relation Revit's |
 | Doors, windows, openings | the element's box, turned with the instance where it is turned (RE-87); its opening is as deep as the host wall | host is Revit's on 138 of 138 (Core Interior) and 192 of 194 (Snowdon; the other 2 in another wall Revit cuts, RE-85); the opening is within 0.25 ft of Revit's on Core Interior; a window whose type stores Width, Height and Default Sill Height takes Revit's opening exactly (56 of 68 on Snowdon, RE-93), and a door whose body is its type's Rough Height tall its rough opening (57 of 126, RE-94); otherwise not Revit's opening profile (#227, RE-83) |
-| Rooms | `IfcSpace` with number and name | boundaries not decoded (#90) |
+| Rooms | `IfcSpace` with number, name and the outline of the room's stored solid (RE-101) | Revit's own area and outline on all 116 Core Interior and 11 RE1 Architecture rooms; 45 of 54 Snowdon Towers rooms at the area its VIM export gives, the other 7 whose solids do not close keeping their box (#90) |
 | Furniture, fixtures, equipment, MEP devices, site | the element's bounding box, turned with the instance where it is turned (RE-87) | placement and extent only; no family geometry. MEP devices and equipment are measured on RE1 Electrical and Mechanical only (RE-79) |
 
 ## Properties on Revit 2024 and 2025 projects

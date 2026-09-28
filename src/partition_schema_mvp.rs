@@ -205,6 +205,8 @@ pub fn recover_partition_schema_mvp(
     // floor-to-ceiling extent, a number, a name and a host Level, none
     // of which a partition *string* can supply.
     out.rooms = rooms_from_partition_category_records(rf, revit_version, &level_ids)?;
+    // Their outlines from the faces of their stored solids (RE-101).
+    attach_room_outlines(rf, revit_version, &mut out.rooms);
 
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
@@ -3359,6 +3361,62 @@ pub fn rooms_from_partition_category_records(
         crate::partition_room_parameters::scan_room_parameters(rf, revit_version, &room_ids)
             .unwrap_or_default();
     Ok(room_instances_from_records(records, &parameters, level_ids))
+}
+
+/// Give each room the outline of its stored solid (RE-101,
+/// [`crate::partition_room_boundaries`]), read from the partition of the
+/// room's own record and kept only where it spans the record's box. A room
+/// whose solid does not close keeps its box.
+fn attach_room_outlines(rf: &mut RevitFile, revit_version: u32, rooms: &mut [DecodedElement]) {
+    use crate::partition_room_boundaries as prb;
+    if !prb::ROOM_SOLID_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    for room in rooms.iter_mut() {
+        let (Some(id), Some(stream)) = (room.id, room_source_stream(room)) else {
+            continue;
+        };
+        let float = |wanted: &str| {
+            room.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                _ => None,
+            })
+        };
+        let (Some(cx), Some(cy), Some(z), Some(dx), Some(dy), Some(dz)) = (
+            float("m_locationX"),
+            float("m_locationY"),
+            float("m_locationZ"),
+            float("m_bboxWidth"),
+            float("m_bboxDepth"),
+            float("m_bboxHeight"),
+        ) else {
+            continue;
+        };
+        let bbox = [
+            cx - dx / 2.0,
+            cy - dy / 2.0,
+            z,
+            cx + dx / 2.0,
+            cy + dy / 2.0,
+            z + dz,
+        ];
+        if let Ok(Some(profile)) = prb::room_outline(rf, &stream, id, bbox) {
+            let mut fields = profile.fields();
+            for (name, value) in fields.iter_mut() {
+                if name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD {
+                    *value = InstanceField::String(prb::ROOM_OUTLINE_SOURCE.into());
+                }
+            }
+            room.fields.extend(fields);
+        }
+    }
+}
+
+fn room_source_stream(room: &DecodedElement) -> Option<String> {
+    room.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::String(stream) if name == "m_source_stream" => Some(stream.clone()),
+        _ => None,
+    })
 }
 
 /// Field carrying a recovered room number.

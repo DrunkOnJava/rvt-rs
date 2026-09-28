@@ -1708,7 +1708,23 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         properties.push(Property {
             name: "ProfileSource".into(),
             value: PropertyValue::Text(
-                crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE.into(),
+                decoded
+                    .fields
+                    .iter()
+                    .find_map(|(name, value)| {
+                        match value {
+                        InstanceField::String(source)
+                            if name
+                                == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD =>
+                        {
+                            Some(source.clone())
+                        }
+                        _ => None,
+                    }
+                    })
+                    .unwrap_or_else(|| {
+                        crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE.into()
+                    }),
             ),
         });
         properties.push(Property {

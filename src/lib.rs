@@ -182,6 +182,7 @@ pub mod partition_materials;
 pub mod partition_name_candidates;
 pub mod partition_names;
 pub mod partition_roof_slopes;
+pub mod partition_room_boundaries;
 pub mod partition_room_parameters;
 pub mod partition_scanner;
 pub mod partition_schema_mvp;
