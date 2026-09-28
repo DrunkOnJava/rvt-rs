@@ -6,6 +6,17 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Revit 2023 Levels and storeys (RE-107, #421).** Revit 2023 projects
+  export with their real Levels as storeys, and each element on the
+  storey of the Level its record names, by the same rules as 2024's. The
+  elevation marker's `u16` is the schema's `Plane` tag on every release.
+  A Level's newest partition holds its current name and elevation.
+  - Exemplo_data: 2 of 2 storeys and 37 of 37 elements as Revit's.
+  - modelo_bim: 4 of 4 storeys and 29 of 37 elements as Revit's.
+  - Every 2024 and 2025 file is byte-identical.
+
 ### Fixed
 
 - **The element schedule names family instances' materials.**

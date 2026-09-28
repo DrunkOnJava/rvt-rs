@@ -150,6 +150,26 @@ pub fn recover_partition_schema_mvp(
     if revit_version == crate::partition_element_records_2023::REVIT_2023 {
         recover_2023_records(rf, &mut out);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
+        // --- Storeys from the Levels the records name (RE-107), by the
+        // same rules as 2024's (RE-59, RE-68) ---
+        let level_elevations: std::collections::BTreeMap<u32, f64> =
+            crate::partition_level_records::recover_partition_levels(rf, revit_version)
+                .unwrap_or_default()
+                .iter()
+                .map(|level| (level.element_id, level.elevation_feet))
+                .collect();
+        let mut record_backed = [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.rooms,
+            &mut out.products,
+        ];
+        resolve_base_constraint_levels(&level_elevations, &mut record_backed);
+        resolve_base_at_level(&level_elevations, &mut record_backed);
+        resolve_remaining_levels(&level_elevations, &mut record_backed);
         return Ok(out);
     }
 
@@ -4030,15 +4050,16 @@ fn without_non_primary_options(
 /// category, with its box as its body, into the bucket its category
 /// feeds. Components nested in doors and windows are left out
 /// ([`nested_in_openings`]). Doors and windows bind to their host wall by
-/// the 2024 rule (RE-85) on 2023's reference lists. No names, types,
-/// storeys, joins or design options: their 2023 layouts are not decoded.
+/// the 2024 rule (RE-85) on 2023's reference lists, and every element to
+/// the one Level its list names (RE-107). No names, types, joins or design
+/// options: their 2023 layouts are not decoded.
 fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
     use crate::partition_element_records as per;
     let records = crate::partition_element_records_2023::scan_records(
         rf,
         crate::partition_element_records_2023::REVIT_2023,
     );
-    let selected = select_instance_records(records);
+    let selected = select_newest_instance_records(records);
     // Only a family instance can be nested; a host wall and the doors it
     // hosts name each other too (RE-76's class tag, at the same place on
     // 2023).
@@ -4053,7 +4074,10 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
         Some(tag) => nested_in_openings(&selected, tag),
         None => BTreeSet::new(),
     };
-    let no_levels = BTreeSet::new();
+    // Each record names its Level in its reference list, as on 2024
+    // (RE-107).
+    let level_ids = level_element_ids(rf, crate::partition_element_records_2023::REVIT_2023)
+        .unwrap_or_default();
     for record in selected.values() {
         if nested.contains(&record.element_id) {
             continue;
@@ -4064,7 +4088,7 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
         else {
             continue;
         };
-        let decoded = element_record_decoded(record, class, &no_levels);
+        let decoded = element_record_decoded(record, class, &level_ids);
         match record.builtin_category {
             per::OST_WALLS => out.walls.push(decoded),
             per::OST_DOORS => out.doors.push(decoded),
@@ -4172,6 +4196,41 @@ fn select_instance_records(
             }
         };
         if better {
+            by_id.insert(record.element_id, record);
+        }
+    }
+    without_nested_components(by_id)
+}
+
+/// [`select_instance_records`] for Revit 2023 (RE-107): of an element's
+/// frames, the newest, in the highest-numbered partition and then the
+/// latest in it. A 2023 project's frames can disagree about their height,
+/// where a Level moved after an earlier save: on modelo_bim four columns
+/// run from -13.12 ft in `Partitions/1` and from -5.58 ft in
+/// `Partitions/2`, and Revit's export draws them from -1.7 m (-5.58 ft),
+/// on the Level the newer frame names. The greatest extent would keep the
+/// stale one.
+fn select_newest_instance_records(
+    records: Vec<crate::partition_element_records::PartitionElementRecord>,
+) -> std::collections::BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
+    use crate::partition_element_records::PartitionElementRecord;
+    let partition = |record: &PartitionElementRecord| {
+        record
+            .stream
+            .rsplit('/')
+            .next()
+            .and_then(|n| n.parse::<u32>().ok())
+            .unwrap_or(0)
+    };
+    let mut by_id: BTreeMap<u32, PartitionElementRecord> = BTreeMap::new();
+    for record in records {
+        if !record.is_exported_instance() || !record.has_volume() {
+            continue;
+        }
+        let newer = by_id.get(&record.element_id).is_none_or(|held| {
+            (partition(&record), record.offset) > (partition(held), held.offset)
+        });
+        if newer {
             by_id.insert(record.element_id, record);
         }
     }

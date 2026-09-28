@@ -15,9 +15,10 @@
 //! Measured on two 2023 projects against Revit's own IFC4 exports: every
 //! element Tag of each export is a placed instance here
 //! (`reports/element-framing/RE-81-2023-element-records.md`). What 2024
-//! decodes on top of the records (names, types, joins, storeys, design
-//! options) is not established for 2023 and is not read. Door and window
-//! hosts are: the reference lists carry them as on 2024 (RE-85).
+//! decodes on top of the records (names, types, joins, design options) is
+//! not established for 2023 and is not read. Door and window hosts are:
+//! the reference lists carry them as on 2024 (RE-85), and so they carry
+//! each element's Level (RE-107).
 
 use crate::RevitFile;
 use crate::partition_element_records::{
