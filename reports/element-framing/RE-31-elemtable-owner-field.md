@@ -129,3 +129,51 @@ in their own partition reference list (87.0 %). On Snowdon it is 1,509 of
 1,630 (92.6 %). What a self-reference means is not claimed.
 `ElemRecord::owner_id` reports it as read, so callers that want a different
 element should skip `owner_id == Some(id_primary)`.
+
+## 6. Correction: the owner belongs to the record before (2026-09-28, #152)
+
+STE1200 reported on #152 that the table's records start at `0x06`, not at
+the `0x1E` frame this parser reads, and that each record ends with its owner
+field. The field that opens a parsed frame therefore closes the record
+before it, and §2 to §5 paired each owner with the next element. The check
+STE1200 proposed separates the two readings: an ownership tree has no
+self-owned record and no cycle.
+
+| file | frame's own field: self-owned / in a cycle | the record before: self-owned / in a cycle |
+|---|---:|---:|
+| Core Interior | 304 / 331 | 0 / 0 |
+| Snowdon Towers Architectural | 1,342 / 1,356 | 0 / 0 |
+| RE1 Architecture | 26 / 28 | 0 / 0 |
+| Einhoven | 7 / 7 | 0 / 0 |
+
+§2's independent oracle agrees. `examples/probe_re31_owner_frame.rs` checks,
+for every record naming another element that has a partition element
+record, whether the element's own reference list names that owner:
+
+| file | frame's own field | the record before |
+|---|---:|---:|
+| Core Interior | 18,131 of 20,932 (86.6 %) | 21,072 of 21,074 (100.0 %) |
+| Snowdon Towers Architectural | 1,479 of 1,600 (92.4 %) | 1,574 of 1,574 (100.0 %) |
+
+`ElemRecord::owner_id` now reports, for each record, the field that follows
+it; the last record's lies in the table's tail and is kept only when it
+names a declared element. §3's pairs with that pairing, on Core Interior
+(counts ≥ 50):
+
+| holder | named element | count |
+|---|---|---:|
+| `OST_CurtainWallMullions` | `OST_Walls` | 6,160 |
+| `OST_CurtainWallPanels` | `OST_Walls` | 5,431 |
+| `OST_CurtainGridsWall` | `OST_Walls` | 5,112 |
+| `OST_Walls` | `OST_IOSModelGroups` | 849 |
+| `OST_Rooms` | `OST_IOSModelGroups` | 161 |
+| `OST_Columns` | `OST_IOSModelGroups` | 119 |
+| `OST_Doors` | `OST_IOSModelGroups` | 53 |
+
+The unattributed wall→wall, floor→floor and symbol→symbol pairs of §3 and
+the self-references of §5 were artefacts of the shift and are gone. §3's
+sketch-line pairs are not re-counted here. The table's first record, at
+`0x06`, is still not parsed, so its owner (the `0x0011` that `header_flag`
+reports, ElementId 17 on family files) is not attributed to an element.
+Einhoven reports 339 owners, one more than before: the last record's, from
+the tail.

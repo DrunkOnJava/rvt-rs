@@ -36,8 +36,9 @@
 //!
 //! What `parse_header` reports as `header_flag = 0x0011` (at `0x1E` on
 //! 28-byte tables, `0x22` on 40-byte ones) is not a header field: it is
-//! record 0's owner field, which names ElementId 17 on family files and is
-//! unset on project files. The name is kept for compatibility.
+//! the owner field that closes the table's first record, at `0x06`, before
+//! the frame this parser reads (#152). It names ElementId 17 on family files
+//! and is unset on project files. The name is kept for compatibility.
 
 use crate::{Error, Result, RevitFile, compression, streams::GLOBAL_ELEM_TABLE};
 use serde::{Deserialize, Serialize};
@@ -55,7 +56,8 @@ pub struct ElemTableHeader {
     /// records, e.g. versioned entries).
     pub record_count: u16,
     /// The `0x0011` found at `0x1E` / `0x22` on family files, 0 elsewhere.
-    /// It is record 0's owner field (ElementId 17), not a header field.
+    /// It is the owner field of the table's first record (ElementId 17 on
+    /// family files), not a header field (#152).
     pub header_flag: u16,
     /// Decompressed stream size, for diagnostics.
     pub decompressed_bytes: usize,
@@ -102,18 +104,19 @@ pub struct ElemRecord {
     /// ElementId as its partition record and Revit's own IFC export carry
     /// it (RE-41, [`declared_ids`]).
     pub id_secondary: u32,
-    /// The element this record's element belongs to, read from the field
-    /// the layout detector anchors on (`u64` at `+4` on the 40-byte layout,
-    /// `u32` at `+0` on the 28-byte one); `None` when it holds its unset
-    /// value, all `0xFF`. On `2024_Core_Interior.rvt` it is set on 22,368
-    /// of 26,425 records, every value is a declared ElementId, and 87 % of
-    /// them also appear in the element's own partition reference list:
-    /// curtain panels, mullions and grids name their curtain wall, sketch
-    /// lines their sketch, grouped elements their model group (RE-31).
-    /// A few records name themselves (304 on Core Interior); that value is
-    /// reported as read. `0` is treated as unset too: family files leave the
-    /// field at `0` where project files write `0xFF`. Always `None` on the
-    /// implicit fallback layout.
+    /// The element this record's element belongs to (RE-31); `None` when
+    /// the field holds its unset value, all `0xFF`. It is the field the
+    /// layout detector anchors on (`u64` at `+4` on the 40-byte layout,
+    /// `u32` at `+0` on the 28-byte one) of the **following** frame: the
+    /// table's records start at `0x06`, 24 bytes before the frame this
+    /// parser reads, and each ends with its owner, so a frame opens with
+    /// the owner of the record before it (#152, reported by STE1200). Read
+    /// that way no record owns itself and no owner chain loops, on Core
+    /// Interior, Snowdon Towers, RE1 Architecture and Einhoven, where the
+    /// frame's own field gave 304, 1,342, 26 and 7 self-owned records. `0`
+    /// is treated as unset too: family files leave the field at `0` where
+    /// project files write `0xFF`. Always `None` on the implicit fallback
+    /// layout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_id: Option<u32>,
     /// Raw record bytes (including the marker on project files).
@@ -419,6 +422,25 @@ pub fn parse_records_from_bytes(
         });
         i = record_end;
     }
+    // The owner field a record's frame opens with closes the record before
+    // it (#152): a record's own owner is the field that follows it, and the
+    // last record's lies in the bytes after the last full frame.
+    if let RecordFraming::Explicit { marker_len } = layout.framing {
+        // The tail is trusted only to name an element the table declares.
+        let tail = d
+            .get(i..)
+            .and_then(|rest| owner_field(rest, layout.marker_offset, marker_len))
+            .filter(|owner| records.iter().any(|r| r.id_primary == *owner));
+        let following: Vec<Option<u32>> = records
+            .iter()
+            .skip(1)
+            .map(|record| record.owner_id)
+            .chain(std::iter::once(tail))
+            .collect();
+        for (record, owner) in records.iter_mut().zip(following) {
+            record.owner_id = owner;
+        }
+    }
     records
 }
 
@@ -624,8 +646,8 @@ mod tests {
             assert_eq!(records.len(), RECORDS);
             assert_eq!(records[0].id_primary, 1);
             assert_eq!(records[1].id_primary, 3);
-            assert_eq!(records[0].owner_id, Some(17));
-            assert!(records[1..].iter().all(|r| r.owner_id.is_none()));
+            // The 17 closes the record before the parsed frame (#152).
+            assert!(records.iter().all(|r| r.owner_id.is_none()));
         }
     }
 
@@ -760,7 +782,7 @@ mod tests {
             .iter()
             .map(|r| r.owner_id)
             .collect();
-        assert_eq!(owners, [None, Some(786_352), None]);
+        assert_eq!(owners, [Some(786_352), None, None]);
     }
 
     /// 28-byte layout: `u32` at `+0`. Family files have no owner field.
@@ -783,7 +805,7 @@ mod tests {
             .iter()
             .map(|r| r.owner_id)
             .collect();
-        assert_eq!(owners, [None, None, Some(7)]);
+        assert_eq!(owners, [None, Some(7), None]);
 
         let family = ElemTableLayout {
             start: 0x30,
