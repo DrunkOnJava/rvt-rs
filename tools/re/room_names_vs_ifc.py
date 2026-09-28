@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Score rvt-rs's room numbers and names against Revit's (RE-117).
 
-rvt-rs writes a room's name as `IfcSpace.LongName` and its number as the
-`RoomNumber` property. The reference is either Revit's own IFC export,
-matched by GlobalId (its `IfcSpace.Name` is the number and `LongName` the
-name), or a VIM export (`.vim`), matched by the ElementId in rvt-rs's
-`Room-<ElementId>` Name, whose `Vim.Room.Number` is the number and whose
-element Name is Revit's display name, `<name> <number>`.
+rvt-rs writes a room's number as `IfcSpace.Name` and its name as
+`IfcSpace.LongName`, as Revit's own exporter does, and its ElementId as the
+`ElementId` property. The reference is either Revit's own IFC export,
+matched by GlobalId, or a VIM export (`.vim`), matched by that ElementId,
+whose `Vim.Room.Number` is the number and whose element Name is Revit's
+display name, `<name> <number>`.
 
 Usage:
     python3 tools/re/room_names_vs_ifc.py OURS.ifc REVIT.ifc
@@ -23,10 +23,10 @@ import ifcopenshell.util.element
 def ours(path):
     out = {}
     for space in ifcopenshell.open(path).by_type("IfcSpace"):
-        number = None
+        element_id = None
         for properties in ifcopenshell.util.element.get_psets(space).values():
-            number = properties.get("RoomNumber") or number
-        out[space] = (number, space.LongName)
+            element_id = properties.get("ElementId", element_id)
+        out[space] = (space.Name, space.LongName, element_id)
     return out
 
 
@@ -66,8 +66,8 @@ def main():
     same = differ = absent = 0
     if sys.argv[2].endswith(".vim"):
         reference = vim_rooms(sys.argv[2])
-        for space, (number, name) in rooms.items():
-            candidates = reference.get(int(space.Name.split("-")[1]))
+        for space, (number, name, element_id) in rooms.items():
+            candidates = reference.get(element_id)
             if not candidates:
                 absent += 1
             elif (number, f"{name} {number}") in candidates:
@@ -77,7 +77,8 @@ def main():
                 print(f"  {space.Name}: ours {(number, name)} VIM {sorted(candidates)}")
     else:
         reference = {s.GlobalId: (s.Name, s.LongName) for s in ifcopenshell.open(sys.argv[2]).by_type("IfcSpace")}
-        for space, pair in rooms.items():
+        for space, (number, name, _) in rooms.items():
+            pair = (number, name)
             theirs = reference.get(space.GlobalId)
             if theirs is None:
                 absent += 1

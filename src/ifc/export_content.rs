@@ -115,7 +115,15 @@ pub const SLAB_THICKNESS_CLASSES: &[&str] = &["Floor", "BuildingPad"];
 pub const RECORD_BBOX_THICKNESS_SOURCE: &str = "partition_element_record_bbox_z_extent";
 
 /// Property carrying a recovered room number (#90, RE-29).
+///
+/// The STEP writer reads this back as `IfcSpace.Name`, as Revit's own
+/// exporter writes it.
 pub const ROOM_NUMBER_PROPERTY: &str = "RoomNumber";
+
+/// Property carrying a room's Revit ElementId. `IfcSpace` declares no
+/// `Tag`, the attribute every other element carries it in, and its `Name`
+/// is the room number, so the id is written here.
+pub const ROOM_ELEMENT_ID_PROPERTY: &str = "ElementId";
 
 /// Property carrying a recovered room name (#90, RE-29).
 ///
@@ -2054,10 +2062,18 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         });
     }
     // A room's number and name, when its own parameter block carried
-    // them (#90, RE-29). `RoomName` is what the writer puts in
-    // `IfcSpace.LongName`, which is the slot Revit's own exporter uses
-    // for it; the element `Name` keeps the `Room-<ElementId>` identity
-    // every other class uses, because `IfcSpace` declares no `Tag`.
+    // them (#90, RE-29, RE-117). The writer puts the number in
+    // `IfcSpace.Name` and the name in `IfcSpace.LongName`, as Revit's own
+    // exporter does; the ElementId, which an `IfcSpace` has no `Tag` for,
+    // is its own property.
+    if class == "Room" {
+        if let Some(id) = decoded.id {
+            properties.push(Property {
+                name: ROOM_ELEMENT_ID_PROPERTY.into(),
+                value: PropertyValue::Integer(i64::from(id)),
+            });
+        }
+    }
     if let Some(number) = room_number {
         properties.push(Property {
             name: ROOM_NUMBER_PROPERTY.into(),

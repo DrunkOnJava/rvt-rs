@@ -229,6 +229,20 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **`IfcSpace.Name` is the room number, as in Revit's export (RE-117).**
+  A space was named `Room-<ElementId>`, with the room name in
+  `LongName`. Revit's exporter writes the number in `Name` and the name
+  in `LongName`, and now so does rvt-rs; the ElementId, which an
+  `IfcSpace` has no `Tag` for, is the new `ElementId` property. Every
+  room's `Name` and `LongName` equal Revit's on Core Interior (116),
+  RE1 Architecture (11) and Exemplo_data (9), and Snowdon Towers' 54
+  against its VIM export. A room without a number keeps the
+  `Room-<ElementId>` Name, and one without a name has no `LongName`
+  (it repeated the `Name` before). GlobalIds are unchanged. **Upgrade:**
+  anything that read a room's ElementId out of its IFC `Name` reads the
+  `ElementId` property instead. glTF node names, the viewer and the
+  room schedule are unchanged.
+
 - **Turned and tilted curtain mullions and panels are drawn along their
   own axes (RE-106).** The box along an instance's transform axes whose
   axis-aligned box is its record box follows from three linear equations.
