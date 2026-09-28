@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Shaft openings cut the floors and roofs they pass through (RE-99).**
+  A shaft opening's sketch is read, leaving out the diagonals Revit draws
+  across it in plan, and its outline becomes a void in each one-piece
+  floor, roof or ceiling within its height that holds it strictly inside.
+  On Snowdon Towers 7 elements take a shaft void, all closer to Revit's
+  area, two of them now exact. A shaft on an element's edge is not cut
+  yet. Every other local file is byte-identical.
+
 - **Ceilings carry their sketch's outline (RE-98).** Ceilings take the
   outline their sketch closes, as roofs do, instead of their record box.
   66 of Snowdon Towers' 68 ceilings (50 before) and all 6 of RE1

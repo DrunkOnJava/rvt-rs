@@ -245,6 +245,8 @@ pub fn recover_partition_schema_mvp(
     attach_beam_axes(rf, revit_version, &mut out.products);
     // --- Roof outlines from their sketch lines (RE-50) ---
     attach_roof_profiles(rf, revit_version, &mut out.products);
+    // --- Shaft openings cut the outlines within their height (RE-99) ---
+    attach_shaft_voids(rf, revit_version, [&mut out.slabs, &mut out.products]);
 
     // --- The Revit class each record names at +0x4a (RE-76, #154) ---
     if let Ok(classes) = rf.schema_classes() {
@@ -4311,6 +4313,190 @@ fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [
             roof.fields.extend(profile.fields());
         }
     }
+}
+
+/// A shaft's plan outline and the bottom and top of its height, feet
+/// (RE-99).
+type ShaftOutline = (Vec<(f64, f64)>, (f64, f64));
+
+/// Cross product (square feet) below which a line's end counts as on
+/// another line when testing whether two sketch lines cross (RE-99).
+pub const SHAFT_CROSSING_EPS: f64 = 1e-6;
+
+/// How far an element may reach past a shaft's height and still be cut by it
+/// (RE-99), feet.
+pub const SHAFT_HEIGHT_TOLERANCE_FEET: f64 = 1e-3;
+
+/// Cut each shaft opening's outline from the floors, roofs and ceilings its
+/// height passes through (RE-99). A shaft (`OST_ShaftOpening`) is sketched
+/// as a floor is, and its record box spans its height. An element whose
+/// outline is one piece, lies within the shaft's height, and holds the
+/// shaft's outline strictly inside its outer loop and clear of its voids
+/// takes the outline as a void. An element the shaft only partly overlaps
+/// is left as it is.
+fn attach_shaft_voids(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    use crate::element_record_plan_profiles as erpp;
+    use crate::partition_element_records as per;
+    if !per::supports_revit_version(revit_version) {
+        return;
+    }
+    let declared = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let Ok(scanned) = per::scan_category_records_multi(
+        rf,
+        revit_version,
+        &[per::OST_SHAFT_OPENING, per::OST_SKETCH_LINES],
+        &declared,
+    ) else {
+        return;
+    };
+    let mut boxes: std::collections::BTreeMap<u32, [f64; 4]> = Default::default();
+    let mut heights: std::collections::BTreeMap<u32, (f64, f64)> = Default::default();
+    for record in scanned
+        .iter()
+        .filter(|record| record.builtin_category == per::OST_SHAFT_OPENING)
+    {
+        let b = record.bbox_feet;
+        boxes
+            .entry(record.element_id)
+            .or_insert([b[0], b[1], b[3], b[4]]);
+        heights.entry(record.element_id).or_insert((b[2], b[5]));
+    }
+    if boxes.is_empty() {
+        return;
+    }
+    let sketch_lines: Vec<per::PartitionElementRecord> = scanned
+        .into_iter()
+        .filter(|record| record.builtin_category == per::OST_SKETCH_LINES)
+        .collect();
+    let shafts: Vec<ShaftOutline> = shaft_outlines(rf, revit_version, &sketch_lines, &boxes)
+        .into_iter()
+        .filter_map(|(id, outline)| Some((outline, *heights.get(&id)?)))
+        .collect();
+    let float = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(profile) = erpp::plan_profile_from_fields(&element.fields) else {
+            continue;
+        };
+        let (Some(base), Some(height)) = (
+            float(element, "m_locationZ"),
+            float(element, "m_bboxHeight"),
+        ) else {
+            continue;
+        };
+        if !profile.pieces.is_empty() {
+            continue;
+        }
+        let eps = SHAFT_HEIGHT_TOLERANCE_FEET;
+        let voids: Vec<Vec<(f64, f64)>> = shafts
+            .iter()
+            .filter(|(outline, (bottom, top))| {
+                base >= bottom - eps
+                    && base + height <= top + eps
+                    && erpp::loop_within(&profile.outer_xy, outline)
+                    && profile
+                        .inner_xy
+                        .iter()
+                        .all(|void| erpp::loops_disjoint(void, outline))
+            })
+            .map(|(outline, _)| outline.clone())
+            .collect();
+        if !voids.is_empty() {
+            erpp::add_voids_to_fields(&mut element.fields, &voids);
+        }
+    }
+}
+
+/// Each shaft's outline (RE-99), `shafts` its plan record boxes. A shaft's
+/// sketch holds its boundary and the symbolic lines drawn across it, the
+/// diagonals of the X Revit shows in plan; lines that cross another of the
+/// sketch's lines are those, and are left out. The rest must be straight
+/// lines read exactly (RE-50) that close into one loop spanning the shaft's
+/// record box. Its lines are those its Sketch lists (RE-97), or else those
+/// naming it.
+fn shaft_outlines(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
+    shafts: &std::collections::BTreeMap<u32, [f64; 4]>,
+) -> std::collections::BTreeMap<u32, Vec<(f64, f64)>> {
+    use crate::element_record_plan_profiles as erpp;
+    use std::collections::BTreeMap;
+    let line_ids: BTreeSet<u32> = sketch_lines.iter().map(|r| r.element_id).collect();
+    let lists = erpp::scan_sketch_curve_lists(rf, revit_version, &line_ids);
+    let mut members: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    for &shaft in shafts.keys() {
+        let listed = lists
+            .get(&shaft)
+            .map(|curves| curves.iter().copied().collect());
+        let named = || {
+            sketch_lines
+                .iter()
+                .filter(|r| r.owner_reference == Some(shaft))
+                .map(|r| r.element_id)
+                .collect()
+        };
+        members.insert(shaft, listed.unwrap_or_else(named));
+    }
+    let ids: BTreeSet<u32> = members.values().flatten().copied().collect();
+    let Ok(lines) = crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &ids) else {
+        return BTreeMap::new();
+    };
+    let cross = |o: (f64, f64), a: (f64, f64), b: (f64, f64)| {
+        (a.0 - o.0) * (b.1 - o.1) - (a.1 - o.1) * (b.0 - o.0)
+    };
+    // Strictly across: each end of one line clearly off the other, so lines
+    // meeting at a corner, whose ends agree only to round-off, do not count.
+    let apart = |o: (f64, f64), p: (f64, f64), q: (f64, f64), r: (f64, f64)| {
+        let (c1, c2) = (cross(o, p, q), cross(o, p, r));
+        c1 * c2 < 0.0 && c1.abs() > SHAFT_CROSSING_EPS && c2.abs() > SHAFT_CROSSING_EPS
+    };
+    let crossing =
+        |[a, b]: [(f64, f64); 2], [c, d]: [(f64, f64); 2]| apart(a, b, c, d) && apart(c, d, a, b);
+    let mut out = BTreeMap::new();
+    for (shaft, ids) in members {
+        let segments: Option<Vec<[(f64, f64); 2]>> = ids
+            .iter()
+            .map(|id| {
+                let line = lines.get(id)?;
+                let (a, b) = (line.start(), line.end());
+                ((a[2] - b[2]).abs() <= erpp::VERTEX_EPS_FEET)
+                    .then_some([(a[0], a[1]), (b[0], b[1])])
+            })
+            .collect();
+        let Some(segments) = segments else {
+            continue;
+        };
+        let boundary: Vec<[f64; 4]> = segments
+            .iter()
+            .filter(|s| !segments.iter().any(|t| crossing(**s, *t)))
+            .map(|[a, b]| [a.0, a.1, b.0, b.1])
+            .collect();
+        let Some(profile) = erpp::plan_profile_from_lines(&boundary) else {
+            continue;
+        };
+        let spans = profile.plan_extent_feet().is_some_and(|extent| {
+            extent
+                .iter()
+                .zip(&shafts[&shaft])
+                .all(|(a, b)| (a - b).abs() <= SKETCH_BOX_TOLERANCE_FEET)
+        });
+        if spans && profile.inner_xy.is_empty() && profile.pieces.is_empty() {
+            out.insert(shaft, profile.outer_xy);
+        }
+    }
+    out
 }
 
 /// Fields holding the plan start and end of the one roof edge that defines

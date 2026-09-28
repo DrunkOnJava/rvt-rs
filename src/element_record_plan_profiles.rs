@@ -860,6 +860,72 @@ fn sketch_curve_list(
     })
 }
 
+/// Whether an edge of loop `a` touches or crosses an edge of loop `b`.
+fn edges_meet(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    let edges = |points: &[(f64, f64)]| -> Vec<((f64, f64), (f64, f64))> {
+        (0..points.len())
+            .map(|index| (points[index], points[(index + 1) % points.len()]))
+            .collect()
+    };
+    let cross = |o: (f64, f64), p: (f64, f64), q: (f64, f64)| {
+        (p.0 - o.0) * (q.1 - o.1) - (p.1 - o.1) * (q.0 - o.0)
+    };
+    let (edges_a, edges_b) = (edges(a), edges(b));
+    edges_a.iter().any(|&(p, q)| {
+        edges_b.iter().any(|&(r, t)| {
+            cross(p, q, r) * cross(p, q, t) <= 0.0 && cross(r, t, p) * cross(r, t, q) <= 0.0
+        })
+    })
+}
+
+/// Whether the loop `inner` lies strictly inside the loop `outer`: every
+/// vertex of `inner` inside `outer`, no vertex of `outer` inside `inner`,
+/// and no edge of one touching an edge of the other (RE-99).
+pub fn loop_within(outer: &[(f64, f64)], inner: &[(f64, f64)]) -> bool {
+    outer.len() >= 3
+        && inner.len() >= 3
+        && inner.iter().all(|&point| inside(outer, point))
+        && !outer.iter().any(|&point| inside(inner, point))
+        && !edges_meet(outer, inner)
+}
+
+/// Whether loops `a` and `b` are apart: neither has a vertex inside the
+/// other and no edges touch (RE-99).
+pub fn loops_disjoint(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    !a.iter().any(|&point| inside(b, point))
+        && !b.iter().any(|&point| inside(a, point))
+        && !edges_meet(a, b)
+}
+
+/// Add `voids` to the plan profile `fields` record (RE-99), clockwise, with
+/// every void kept largest first. `false`, changing nothing, where the fields
+/// hold no profile.
+pub fn add_voids_to_fields(
+    fields: &mut [(String, InstanceField)],
+    voids: &[Vec<(f64, f64)>],
+) -> bool {
+    let Some(profile) = plan_profile_from_fields(fields) else {
+        return false;
+    };
+    let mut inner = profile.inner_xy;
+    for void in voids {
+        let mut ring = void.clone();
+        if signed_area(&ring) > 0.0 {
+            ring.reverse();
+        }
+        inner.push(ring);
+    }
+    inner.sort_by(|a, b| signed_area(b).abs().total_cmp(&signed_area(a).abs()));
+    let Some((_, field)) = fields
+        .iter_mut()
+        .find(|(name, _)| name == PLAN_PROFILE_INNER_FIELD)
+    else {
+        return false;
+    };
+    *field = InstanceField::Vector(inner.iter().map(|ring| loop_field(ring)).collect());
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

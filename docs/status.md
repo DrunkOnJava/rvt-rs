@@ -618,6 +618,11 @@ area within 0.1%
 have: 66 of Snowdon's 68 ceilings and all 6 of RE1 Architecture's match
 Revit's outline within 0.1% of its area (50 and 5 before)
 (`reports/element-framing/RE-98-ceiling-outlines.md`).
+**RE-99 (2026-09-28)** cuts shaft openings from the floors, roofs and
+ceilings within their height, where the shaft lies strictly inside the
+outline. Their sketches' crossing diagonals (the X Revit draws in plan)
+are left out. On Snowdon 7 elements take a shaft void, all closer to
+Revit's area (`reports/element-framing/RE-99-shaft-openings.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
