@@ -22,7 +22,8 @@
 //! i64 parameter` (RE-93): a BuiltInParameter's negative id, or the declared
 //! ElementId of a family parameter. [`type_window_openings`] and
 //! [`type_door_openings`] read the values a window's and a door's opening
-//! are built from.
+//! are built from, and [`type_i_sections`] a steel framing type's I section
+//! (RE-103).
 
 use crate::RevitFile;
 use crate::partition_element_records::bbox_marker;
@@ -314,6 +315,90 @@ pub fn type_door_openings(
             };
             (opening.rough_width_feet > 0.0 && opening.rough_height_feet > 0.0)
                 .then_some((owner, opening))
+        })
+        .collect()
+}
+
+/// A structural section type's Width, by BuiltInParameter (RE-103).
+pub const SECTION_WIDTH_PARAMETER: i64 = -1_005_502;
+/// A structural section type's Height (RE-103).
+pub const SECTION_HEIGHT_PARAMETER: i64 = -1_005_503;
+/// An I-shaped section type's web thickness (RE-103).
+pub const SECTION_WEB_THICKNESS_PARAMETER: i64 = -1_005_525;
+/// An I-shaped section type's flange thickness (RE-103).
+pub const SECTION_FLANGE_THICKNESS_PARAMETER: i64 = -1_005_524;
+/// A section type's centroid, from its left edge (RE-103).
+pub const SECTION_CENTROID_HORIZONTAL_PARAMETER: i64 = -1_005_508;
+/// A section type's centroid, from its bottom edge (RE-103).
+pub const SECTION_CENTROID_VERTICAL_PARAMETER: i64 = -1_005_509;
+
+/// How closely an I section's centroid must sit at its centre, feet.
+pub const SECTION_CENTROID_TOLERANCE_FEET: f64 = 1e-4;
+
+/// An I-shaped structural section (RE-103), feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ISection {
+    /// The flanges' width.
+    pub width_feet: f64,
+    /// The section's overall depth.
+    pub depth_feet: f64,
+    /// The web's thickness.
+    pub web_feet: f64,
+    /// Each flange's thickness.
+    pub flange_feet: f64,
+}
+
+/// The I section of each type in `types` (RE-103): a type whose Width,
+/// Height, web thickness and flange thickness are read and whose centroid
+/// sits at its centre both ways, as only a doubly symmetric section's does.
+/// A channel or a tee stores the same four values with its centroid off
+/// centre, and an angle with neither thickness, so neither is read as an I.
+pub fn type_i_sections(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+) -> BTreeMap<u32, ISection> {
+    if bbox_marker(revit_version).is_none() || types.is_empty() {
+        return BTreeMap::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared: BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let parameters = BTreeSet::from([
+        SECTION_WIDTH_PARAMETER,
+        SECTION_HEIGHT_PARAMETER,
+        SECTION_WEB_THICKNESS_PARAMETER,
+        SECTION_FLANGE_THICKNESS_PARAMETER,
+        SECTION_CENTROID_HORIZONTAL_PARAMETER,
+        SECTION_CENTROID_VERTICAL_PARAMETER,
+    ]);
+    type_lengths(rf, &declared, types, &parameters)
+        .into_iter()
+        .filter_map(|(owner, held)| {
+            let value = |parameter: i64| held.get(&parameter).copied();
+            let section = ISection {
+                width_feet: value(SECTION_WIDTH_PARAMETER)?,
+                depth_feet: value(SECTION_HEIGHT_PARAMETER)?,
+                web_feet: value(SECTION_WEB_THICKNESS_PARAMETER)?,
+                flange_feet: value(SECTION_FLANGE_THICKNESS_PARAMETER)?,
+            };
+            let centred = |centroid: f64, extent: f64| {
+                (centroid - extent / 2.0).abs() <= SECTION_CENTROID_TOLERANCE_FEET
+            };
+            (section.web_feet > 0.0
+                && section.flange_feet > 0.0
+                && section.web_feet < section.width_feet
+                && 2.0 * section.flange_feet < section.depth_feet
+                && centred(
+                    value(SECTION_CENTROID_HORIZONTAL_PARAMETER)?,
+                    section.width_feet,
+                )
+                && centred(
+                    value(SECTION_CENTROID_VERTICAL_PARAMETER)?,
+                    section.depth_feet,
+                ))
+            .then_some((owner, section))
         })
         .collect()
 }

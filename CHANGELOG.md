@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Steel beams are drawn as their I section (RE-103, #94).** A framing
+  type stores its section's width, depth, web and flange thickness and
+  its centroid, and a centroid at the centre both ways marks an I, not a
+  channel. 377 of Snowdon Towers' structural beams now export as an
+  `IfcIShapeProfileDef` along their line (none before), placed on the
+  box's bottom where the beam is set down from its line. On all 271 of
+  them its VIM export can score, Revit's own mesh is that I in that place.
+  Every other local file is byte-identical.
+
 - **Revit 2023 rooms take their outline too (RE-102).** Revit 2023 stores
   the room's solid as 2024 does, with four `ff` bytes before its tag. All
   9 of Exemplo_data's rooms now match Revit's own area and outline (6

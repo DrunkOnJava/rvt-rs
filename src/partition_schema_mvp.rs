@@ -397,6 +397,8 @@ pub fn recover_partition_schema_mvp(
     // --- Each door's rough opening from its type (RE-94, #227), after RE-84
     // marks the doors that are openings alone ---
     attach_door_openings(rf, revit_version, &mut out.doors);
+    // --- Steel beams' I sections from their type (RE-103) ---
+    attach_beam_sections(rf, revit_version, &mut out.products);
     Ok(out)
 }
 
@@ -1190,6 +1192,71 @@ pub const DOOR_ROUGH_HEIGHT_TOLERANCE_FEET: f64 = 1e-3;
 /// [`crate::partition_type_parameters::type_door_openings`]). On Snowdon
 /// Towers every door Revit cuts at its rough opening has a body that tall,
 /// and every other door a body its frame's height instead.
+/// Fields carrying a beam's I section from its type (RE-103): flange
+/// width, overall depth, web thickness and flange thickness, feet.
+pub const BEAM_I_SECTION_FIELDS: [&str; 4] = [
+    "m_i_section_width",
+    "m_i_section_depth",
+    "m_i_section_web",
+    "m_i_section_flange",
+];
+
+/// The I section [`BEAM_I_SECTION_FIELDS`] record.
+pub fn beam_i_section_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<crate::partition_type_parameters::ISection> {
+    let [width, depth, web, flange] = BEAM_I_SECTION_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some(crate::partition_type_parameters::ISection {
+        width_feet: width?,
+        depth_feet: depth?,
+        web_feet: web?,
+        flange_feet: flange?,
+    })
+}
+
+/// Give each structural-framing element whose type is an I section
+/// ([`crate::partition_type_parameters::type_i_sections`]) that section.
+/// The exporter draws it only where the beam's body along its line is as
+/// wide and as deep as the section.
+fn attach_beam_sections(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let types: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "StructuralFraming")
+        .filter_map(type_of)
+        .collect();
+    let sections = crate::partition_type_parameters::type_i_sections(rf, revit_version, &types);
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StructuralFraming")
+    {
+        let Some(section) = type_of(element).and_then(|id| sections.get(&id)).copied() else {
+            continue;
+        };
+        let values = [
+            section.width_feet,
+            section.depth_feet,
+            section.web_feet,
+            section.flange_feet,
+        ];
+        for (name, value) in BEAM_I_SECTION_FIELDS.iter().zip(values) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+}
+
 fn attach_door_openings(rf: &mut RevitFile, revit_version: u32, doors: &mut [DecodedElement]) {
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {

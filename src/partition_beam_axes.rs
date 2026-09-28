@@ -472,6 +472,45 @@ impl BeamBody {
     }
 }
 
+/// How closely a beam's body must be as wide and as deep as its type's I
+/// section, and its line lie on its record box's top, feet (RE-103).
+pub const I_SECTION_TOLERANCE_FEET: f64 = 0.01;
+
+/// The body of a beam whose type is an I section `section` (RE-103): its
+/// body along its line where that is as wide and as deep as the section.
+/// A level beam set down from its line has a record box that runs from the
+/// line, on the box's top, down to the steel's bottom: where the box is as
+/// wide as the section and deeper, and both ends of the line lie on its
+/// top, the section sits on the box's bottom. Otherwise `None`.
+pub fn i_section_body(
+    body: BeamBody,
+    section: &crate::partition_type_parameters::ISection,
+    bbox: [f64; 6],
+    start: [f64; 3],
+    end: [f64; 3],
+) -> Option<BeamBody> {
+    let near = |a: f64, b: f64| (a - b).abs() <= I_SECTION_TOLERANCE_FEET;
+    if !near(body.width_feet, section.width_feet) {
+        return None;
+    }
+    if near(body.depth_feet, section.depth_feet) {
+        return Some(body);
+    }
+    let set_down = body.is_horizontal()
+        && body.depth_feet > section.depth_feet
+        && near(start[2], bbox[5])
+        && near(end[2], bbox[5]);
+    set_down.then(|| BeamBody {
+        centre: [
+            body.centre[0],
+            body.centre[1],
+            bbox[2] + section.depth_feet / 2.0,
+        ],
+        depth_feet: section.depth_feet,
+        ..body
+    })
+}
+
 /// The box along the line from `start` to `end` whose axis-aligned extent is
 /// the record box `bbox` (`[min x, min y, min z, max x, max y, max z]`, model
 /// feet), or `None` when the line leaves the box, is too steep for a
