@@ -4,8 +4,8 @@ What rvt-rs can be trusted with today, in the terms a BIM user would check.
 The evidence behind every line is in [`support-matrix.json`](support-matrix.json)
 (`rvt-capabilities --matrix -f text` prints it) and in the measured tables of the
 [README](../README.md#what-rvt-rs-reads-from-real-projects). This page
-describes `main`; the latest release, v0.3.0, predates everything under
-`[Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md).
+describes `main`; the latest release is v0.4.0, and what has landed since
+is under `[Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Four levels of "it works"
 
@@ -80,7 +80,7 @@ Revit leaves them out.
 ## Not supported
 
 - Converting an arbitrary Revit model to IFC with Revit-grade fidelity.
-- Element records of releases other than 2023, 2024 and 2025. On 2023 (on `main`, not in 0.3.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
+- Element records of releases other than 2023, 2024 and 2025. On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
 - Door/Window typing from the opening-index rows (RE-19) and Level ElementIds
