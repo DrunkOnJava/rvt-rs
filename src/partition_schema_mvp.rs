@@ -167,6 +167,7 @@ pub fn recover_partition_schema_mvp(
             &mut out.rooms,
             &mut out.products,
         ];
+        resolve_framing_top_levels(&level_elevations, &mut record_backed);
         resolve_base_constraint_levels(&level_elevations, &mut record_backed);
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
@@ -5708,6 +5709,51 @@ fn resolve_base_constraint_levels(
 }
 
 /// Give a record-backed element `level` as its host Level, recording how.
+/// Value of the level-bind source field for a beam bound by its top
+/// (`resolve_framing_top_levels`).
+pub const FRAMING_TOP_LEVEL_SOURCE: &str = "structural_framing_top_level";
+
+/// Bind each Revit 2023 structural framing element to the one Level at its
+/// record box's top, in place of the Level its record names (RE-119). A
+/// beam sits under its reference Level: on a 2023 project Revit's export
+/// puts four beams spanning 3.2 to 4.0 m on the 4.0 m Level, and four
+/// foundation beams spanning -0.8 to 0.0 m on the 0.0 m Level, where their
+/// records name the 0.0 m Level and none. Nothing changes where no Level, or
+/// more than one, is at the top.
+fn resolve_framing_top_levels(
+    elevations: &std::collections::BTreeMap<u32, f64>,
+    elements: &mut [&mut Vec<DecodedElement>],
+) {
+    use crate::element_record_level_refs as refs;
+    const TOLERANCE_FEET: f64 = 1e-3;
+    for element in elements.iter_mut().flat_map(|list| list.iter_mut()) {
+        if element.class != "StructuralFraming" {
+            continue;
+        }
+        let float = |wanted: &str| {
+            element.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                _ => None,
+            })
+        };
+        let (Some(base), Some(height)) = (float("m_locationZ"), float("m_bboxHeight")) else {
+            continue;
+        };
+        let top = base + height;
+        let mut at_top = elevations
+            .iter()
+            .filter(|(_, elevation)| (**elevation - top).abs() <= TOLERANCE_FEET)
+            .map(|(id, _)| *id);
+        let (Some(level), None) = (at_top.next(), at_top.next()) else {
+            continue;
+        };
+        element.fields.retain(|(name, _)| {
+            name != refs::LEVEL_REFERENCE_FIELD && name != refs::LEVEL_BIND_SOURCE_FIELD
+        });
+        bind_record_level(element, level, FRAMING_TOP_LEVEL_SOURCE);
+    }
+}
+
 fn bind_record_level(element: &mut DecodedElement, level: u32, source: &str) {
     use crate::element_record_level_refs as refs;
     for (name, value) in element.fields.iter_mut() {
