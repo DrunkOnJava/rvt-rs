@@ -3597,7 +3597,57 @@ pub fn rooms_from_partition_category_records(
     let parameters =
         crate::partition_room_parameters::scan_room_parameters(rf, revit_version, &room_ids)
             .unwrap_or_default();
-    Ok(room_instances_from_records(records, &parameters, level_ids))
+    let mut rooms = room_instances_from_records(records, &parameters, level_ids);
+    // RE-117: a room's number and name are the ones its parameter entries
+    // give it; RE-29's block stands in where they are not read, and still
+    // gives the Level. On Snowdon Towers the block names 1 of 54 rooms, and
+    // that one wrongly.
+    attach_room_parameter_entries(rf, revit_version, &room_ids, &mut rooms);
+    Ok(rooms)
+}
+
+/// Give each room in `rooms` the number and name its parameter entries
+/// hold (RE-117), in place of any read before that differs; a room whose
+/// block agrees keeps the block as its source.
+fn attach_room_parameter_entries(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    room_ids: &BTreeSet<u32>,
+    rooms: &mut [DecodedElement],
+) {
+    let entries =
+        crate::partition_room_parameters::scan_room_parameter_entries(rf, revit_version, room_ids);
+    for room in rooms.iter_mut() {
+        let Some((number, name)) = room.id.and_then(|id| entries.get(&id)) else {
+            continue;
+        };
+        let text = |wanted: &str| {
+            room.fields.iter().find_map(|(field, value)| match value {
+                InstanceField::String(text) if field == wanted => Some(text.clone()),
+                _ => None,
+            })
+        };
+        // Where RE-29's block already agrees, it keeps its provenance.
+        if text("m_name").as_ref() == Some(name) && text(ROOM_NUMBER_FIELD).as_ref() == Some(number)
+        {
+            continue;
+        }
+        room.fields.retain(|(field, _)| {
+            field != "m_name" && field != ROOM_NUMBER_FIELD && field != ROOM_PARAMETER_SOURCE_FIELD
+        });
+        room.fields
+            .push(("m_name".into(), InstanceField::String(name.clone())));
+        room.fields.push((
+            ROOM_NUMBER_FIELD.into(),
+            InstanceField::String(number.clone()),
+        ));
+        room.fields.push((
+            ROOM_PARAMETER_SOURCE_FIELD.into(),
+            InstanceField::String(
+                crate::partition_room_parameters::ROOM_PARAMETER_ENTRY_SOURCE.into(),
+            ),
+        ));
+    }
 }
 
 /// Give each room the outline of its stored solid (RE-101,
@@ -4169,6 +4219,14 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
             _ => out.products.push(decoded),
         }
     }
+    // --- Rooms' numbers and names (RE-117) ---
+    let room_ids: BTreeSet<u32> = out.rooms.iter().filter_map(|room| room.id).collect();
+    attach_room_parameter_entries(
+        rf,
+        crate::partition_element_records_2023::REVIT_2023,
+        &room_ids,
+        &mut out.rooms,
+    );
     let wall_ids: BTreeSet<u32> = out.walls.iter().filter_map(|wall| wall.id).collect();
     for element in out.doors.iter_mut().chain(out.windows.iter_mut()) {
         if let Some(record) = element.id.and_then(|id| selected.get(&id)) {
