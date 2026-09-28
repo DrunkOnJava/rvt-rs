@@ -16,7 +16,8 @@
 //! element Tag of each export is a placed instance here
 //! (`reports/element-framing/RE-81-2023-element-records.md`). What 2024
 //! decodes on top of the records (names, types, joins, storeys, design
-//! options, opening hosts) is not established for 2023 and is not read.
+//! options) is not established for 2023 and is not read. Door and window
+//! hosts are: the reference lists carry them as on 2024 (RE-85).
 
 use crate::RevitFile;
 use crate::partition_element_records::{

@@ -8,6 +8,11 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Revit 2023 doors and windows cut their host wall (#421, RE-85).** The
+  2023 reference lists carry the host as 2024's do. On the two 2023
+  projects measured, all 30 doors and windows take the wall Revit's filled
+  opening voids (none had a host before), and 15 of the 30 openings equal
+  Revit's within 0.01 ft.
 - **Doors and windows find their host wall anywhere in their reference
   list (#439, RE-85).** RE-23 took the slot just before the record's own
   ElementId. The list is in ascending ElementId order, so a host with a

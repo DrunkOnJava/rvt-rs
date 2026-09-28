@@ -43,6 +43,8 @@ RE-21's rule (placed, no container, a box with volume), applied to the 2023 fiel
 
 Revit export Tags not found: 0 on both files. The 8 generic models Revit exports are window trims and cuts nested in the windows (`M_Moldura-janela-interior-plana`, `M_Recorte-Janela-Exterior-Plana`); the 14 it leaves out are other nested pieces of the same windows, with 13 references where the exported ones have 11. RE-79's mutual-reference rule does not separate them in 2023, because the reference lists are not decoded.
 
+Update 2026-09-27 (RE-85): 2023's reference lists carry door and window hosts as 2024's do. The nearest exported wall a door's or window's list names binds it: 19 of 19 on `Exemplo_data` and 11 of 11 on `modelo_bim` take the wall Revit's filled opening voids, and with RE-83's cut 15 of the 30 openings equal Revit's within 0.01 ft (all but one within 1 ft).
+
 ## Not claimed
 
 - The exporter still reads element records on 2024 and 2025 only; admitting 2023 needs the second prologue (RE-30), names and types, storeys and references on this layout (#421).

@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | Revit 2024 and 2025 projects | yes | typed IFC entities from each element's own record; the ElementId set equals Revit's export on every measured model | measured per category: exact joins, profiles and cuts where decoded, the element's bounding box where not | names, family and type names, storey, materials and layers, Revit's GlobalId, stair dimensions, IFC export overrides; most other parameters not read |
 | Revit 2026 projects | yes | not decoded: the element-record marker is predicted (RE-32) but no 2026 project with a Revit export has been measured | none | metadata only |
-| Revit 2023 projects | yes | typed IFC entities from each element's record (RE-81): on two 2023 projects every element of Revit's export (37 of 37) or all but the 8 window trims nested in windows (37 of 45), none outside it | the element's bounding box | ElementId and category only: no names, types, storeys, joins, opening hosts, design options or IFC export overrides, and the diagnostics say so |
+| Revit 2023 projects | yes | typed IFC entities from each element's record (RE-81): on two 2023 projects every element of Revit's export (37 of 37) or all but the 8 window trims nested in windows (37 of 45), none outside it | the element's bounding box | ElementId, category, and each door's and window's host wall (30 of 30 as Revit's, RE-85): no names, types, storeys, joins, design options or IFC export overrides, and the diagnostics say so |
 | Revit 2022 and earlier projects | yes | not decoded; IFC export is the spatial scaffold plus diagnostics | none | metadata only |
 | Families (`.rfa`) and templates | yes | family metadata, OmniClass, previews; no family geometry | none | none |
 
