@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Windows in tapered walls get Revit's opening (#227, RE-89).** Revit
+  cuts a window's opening in a tapered wall as a vertical box the host
+  type's thickness deep, centred on the window's own origin. rvt-rs cut
+  none there (the wall's base is wider than RE-83's limit); now all 20
+  such windows on Snowdon Towers have Revit's opening across the wall
+  (0.77 and 0.13 ft off before). A turned family instance reports its
+  origin (`InstanceOriginX`, `InstanceOriginY`). Doors, which Revit cuts
+  flush with the exterior face, keep their box.
 - **Walls their data does not place carry their type's materials (#355,
   RE-88).** A wall with no orientation, line or arc in its data still
   takes its type's layers for its materials, with no exterior side, so it

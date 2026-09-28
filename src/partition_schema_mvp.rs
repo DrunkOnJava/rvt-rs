@@ -1028,6 +1028,10 @@ fn attach_revit_classes(classes: &crate::formats::SchemaClasses, elements: &mut 
 /// model's axes (RE-87), from its transform, where its Z axis is the
 /// model's.
 pub const INSTANCE_X_AXIS_FIELDS: [&str; 2] = ["m_instance_x_axis_x", "m_instance_x_axis_y"];
+/// Fields holding the plan origin of a turned family instance, model feet,
+/// from its transform (RE-87): the point a window's opening in a tapered
+/// wall is centred on (RE-89).
+pub const INSTANCE_ORIGIN_FIELDS: [&str; 2] = ["m_instance_origin_x", "m_instance_origin_y"];
 
 /// How far off the model's axes a family instance must be turned to be
 /// drawn turned (RE-87): 1e-4 radians, 0.001 ft at 10 ft. RE1 Architecture
@@ -1078,12 +1082,29 @@ fn attach_instance_axes(
         if turn.min(std::f64::consts::FRAC_PI_2 - turn) < INSTANCE_TURN_MIN_RADIANS {
             continue;
         }
-        for (name, value) in INSTANCE_X_AXIS_FIELDS.iter().zip([x, y]) {
+        let [ox, oy, _] = transform.origin;
+        for (name, value) in INSTANCE_X_AXIS_FIELDS
+            .iter()
+            .zip([x, y])
+            .chain(INSTANCE_ORIGIN_FIELDS.iter().zip([ox, oy]))
+        {
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
     }
+}
+
+/// The plan origin [`INSTANCE_ORIGIN_FIELDS`] record.
+pub fn instance_origin_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [x, y] = INSTANCE_ORIGIN_FIELDS.map(float);
+    Some([x?, y?])
 }
 
 /// The plan X axis [`INSTANCE_X_AXIS_FIELDS`] record.
