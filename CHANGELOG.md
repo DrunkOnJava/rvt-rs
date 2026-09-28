@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Research: a door's record box does not give its body (RE-121,
+  negative, #227).** The box reaches past Revit's door body across the
+  wall on one side, by up to 0.9 m. Reflecting its near side about the
+  wall's centreline gives Revit's body exactly where the body is
+  centred: Core Interior 132 of 132, RE1 4 of 4, the 2023 projects 9 of
+  11. On Snowdon Towers, whose door frames sit at a wall face, it gives
+  0 of 126, and nothing read tells the cases apart, so doors keep their
+  record box. `tools/re/door_bodies_vs_ifc.py` measures it.
+
 - **Revit 2023 walls are cut back by the walls they join (RE-120, #421).**
   A 2023 wall's record box is the untrimmed wall, as on 2024: at an L or
   T joint it runs to the other wall's centreline, where Revit's export
