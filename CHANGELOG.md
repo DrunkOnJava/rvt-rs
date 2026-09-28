@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Steel members carry their section as a material profile (RE-105,
+  #94).** The 417 beams and columns drawn as their I section are written
+  with an `IfcMaterialProfileSetUsage`, one set per type pairing its
+  material with that I, instead of a constituent set.
+  - `IfcMaterialProfile` now writes the real profile where the model has
+    one, rather than a 1 × 1 m rectangle stand-in.
+  - `rvt-schedule` names these members' material (Steel).
+  - The GLB and every other local file are byte-identical.
+
 - **Steel columns are drawn as their I section (RE-104, #94).** A
   structural column's flanges run along its instance's X axis. All 40 of
   Snowdon Towers' steel columns now export as their type's

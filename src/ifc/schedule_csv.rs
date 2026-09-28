@@ -131,9 +131,16 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
         let storey = storey_index.and_then(|i| model.building_storeys.get(i));
         // Same precedence as the STEP writer: profile set > layer set >
         // single material.
+        // A profile set names its section; its one material is the material.
         let material = material_profile_set_index
             .and_then(|i| model.material_profile_sets.get(i))
-            .map(|m| m.name.clone())
+            .map(|set| match set.profiles.as_slice() {
+                [profile] => model
+                    .materials
+                    .get(profile.material_index)
+                    .map_or_else(|| set.name.clone(), |m| m.name.clone()),
+                _ => set.name.clone(),
+            })
             .or_else(|| {
                 material_layer_set_index
                     .and_then(|i| model.material_layer_sets.get(i))

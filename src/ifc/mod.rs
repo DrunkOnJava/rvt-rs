@@ -1136,6 +1136,8 @@ fn export_rvt_doc(
         &mut materials,
     );
     material_constituent_sets.extend(layer_constituent_sets);
+    let material_profile_sets =
+        material_profile_sets_from_sections(&mut entities, &mut material_constituent_sets);
     let opening_cuts = opening_cuts_through_hosts(&entities);
 
     Ok(IfcModel {
@@ -1147,7 +1149,7 @@ fn export_rvt_doc(
         building_storeys,
         materials,
         material_layer_sets,
-        material_profile_sets: Vec::new(),
+        material_profile_sets,
         representation_maps: Vec::new(),
         global_ids,
         element_layers,
@@ -1457,6 +1459,99 @@ fn positive_length_property(entity: &entities::IfcEntity, wanted: &str) -> Optio
 /// element with no layer set, profile set or single material. Constituents
 /// are in name order, as Revit's export writes them; materials not yet in
 /// `materials` are added by name.
+/// Material profile sets for the steel members drawn as their type's I
+/// section (RE-103, RE-104, RE-105): one per type, named after it, pairing
+/// its one material with the I its body is. Each such member takes the
+/// profile set in place of its material constituent set, so it is written
+/// with an `IfcMaterialProfileSetUsage`. A member whose constituent set holds
+/// other than one material keeps it.
+fn material_profile_sets_from_sections(
+    entities: &mut [entities::IfcEntity],
+    constituent_sets: &mut Vec<entities::MaterialConstituentSet>,
+) -> Vec<entities::MaterialProfileSet> {
+    let mut sets: Vec<entities::MaterialProfileSet> = Vec::new();
+    for (entity_index, entity) in entities.iter_mut().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            property_set: Some(property_set),
+            extrusion,
+            solid_shape,
+            material_profile_set_index,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let text = |wanted: &str| {
+            property_set
+                .properties
+                .iter()
+                .find_map(|property| match &property.value {
+                    entities::PropertyValue::Text(text) if property.name == wanted => {
+                        Some(text.clone())
+                    }
+                    _ => None,
+                })
+        };
+        if text("SectionShape").as_deref() != Some("I") {
+            continue;
+        }
+        let Some(type_name) = text("TypeName") else {
+            continue;
+        };
+        let profile = match (solid_shape.as_ref(), extrusion.as_ref()) {
+            (
+                Some(entities::SolidShape::PlacedExtrusion {
+                    profile: profile @ entities::ProfileDef::IShape { .. },
+                    ..
+                }),
+                _,
+            ) => profile.clone(),
+            (
+                None,
+                Some(entities::Extrusion {
+                    profile_override: Some(profile @ entities::ProfileDef::IShape { .. }),
+                    ..
+                }),
+            ) => profile.clone(),
+            _ => continue,
+        };
+        let Some(constituents) = constituent_sets
+            .iter_mut()
+            .find(|set| set.elements.contains(&entity_index))
+        else {
+            continue;
+        };
+        let [material_index] = constituents.material_indices[..] else {
+            continue;
+        };
+        constituents
+            .elements
+            .retain(|&element| element != entity_index);
+        let existing = sets.iter().position(|set| {
+            set.name == type_name
+                && set.profiles.iter().all(|held| {
+                    held.material_index == material_index && held.profile.as_ref() == Some(&profile)
+                })
+        });
+        let index = existing.unwrap_or_else(|| {
+            sets.push(entities::MaterialProfileSet {
+                name: type_name.clone(),
+                description: None,
+                profiles: vec![entities::MaterialProfile {
+                    material_index,
+                    profile_name: type_name.clone(),
+                    description: None,
+                    profile: Some(profile.clone()),
+                }],
+            });
+            sets.len() - 1
+        });
+        *material_profile_set_index = Some(index);
+    }
+    constituent_sets.retain(|set| !set.elements.is_empty());
+    sets
+}
+
 fn material_constituent_sets_from_types(
     entities: &[entities::IfcEntity],
     element_type_materials: &std::collections::BTreeMap<u32, Vec<String>>,

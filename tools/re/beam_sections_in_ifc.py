@@ -13,7 +13,9 @@ checks:
 - orientation: a beam is the flange width wide level across its extrusion
   axis and the section's depth square to that; a column has, in its own
   placement's axes, a vertex at each outer corner and inner flange tip of
-  the section.
+  the section;
+- material (RE-105): the element's material is an IfcMaterialProfileSetUsage
+  whose one profile is an IfcIShapeProfileDef equal to the body's.
 
 Usage:
 
@@ -35,6 +37,17 @@ for b in f.by_type("IfcBeam") + f.by_type("IfcColumn"):
     v = np.array(shape.geometry.verts).reshape(-1, 3)
     t = np.array(shape.geometry.faces).reshape(-1, 3)
     prof = next(it for it in f.traverse(b.Representation) if it.is_a("IfcIShapeProfileDef"))
+    usage = ue.get_material(b, should_skip_usage=False)
+    held = (
+        usage.ForProfileSet.MaterialProfiles[0].Profile
+        if usage is not None and usage.is_a("IfcMaterialProfileSetUsage")
+        else None
+    )
+    same = held is not None and held.is_a("IfcIShapeProfileDef") and all(
+        abs(getattr(held, a) - getattr(prof, a)) < 1e-9
+        for a in ("OverallWidth", "OverallDepth", "WebThickness", "FlangeThickness")
+    )
+    c["material profile = body's I" if same else "no material profile of its I"] += 1
     W, D, tw, tf = prof.OverallWidth, prof.OverallDepth, prof.WebThickness, prof.FlangeThickness
     a, bb, cc = v[t[:, 0]], v[t[:, 1]], v[t[:, 2]]
     vol = abs(np.einsum("ij,ij->i", a, np.cross(bb, cc)).sum() / 6.0)

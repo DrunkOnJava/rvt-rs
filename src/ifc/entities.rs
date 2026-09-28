@@ -608,7 +608,7 @@ pub enum SolidShape {
 /// | Beam (tee) | `TShape` |
 /// | Curtain mullion | `ArbitraryClosed` |
 /// | Wall / slab / roof / ceiling | `Rectangle` (default, no override) |
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProfileDef {
     /// `IFCRectangleProfileDef` — the default if `profile_override`
     /// is `None`. Kept as an explicit variant so callers can round-
@@ -806,6 +806,10 @@ pub struct MaterialProfile {
     /// Optional per-profile descriptive text.
     #[serde(default)]
     pub description: Option<String>,
+    /// The cross-section itself, written as the material profile's
+    /// `IfcProfileDef` (RE-105). `None` writes a 1 × 1 m rectangle stand-in.
+    #[serde(default)]
+    pub profile: Option<ProfileDef>,
 }
 
 /// An ordered set of [`MaterialProfile`]s for a structural

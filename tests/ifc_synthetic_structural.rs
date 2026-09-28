@@ -60,6 +60,7 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
             material_index: 0,
             profile_name: "W12x26".into(),
             description: None,
+            profile: None,
         }],
     };
 

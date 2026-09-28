@@ -1363,17 +1363,38 @@ impl StepWriter {
                 if mat_id == 0 {
                     continue;
                 }
-                // Profile itself (IfcRectangleProfileDef placeholder
-                // with 1x1 metre box — real cross-section shape lands
-                // with IFC-24). IfcMaterialProfile requires a profile
-                // def reference, so we emit a minimal stand-in so the
-                // material-profile chain validates.
-                let profile_def_id = self.id();
-                let profile_def_name = escape(&profile.profile_name);
-                self.emit_entity(
-                    profile_def_id,
-                    format!("IFCRECTANGLEPROFILEDEF(.AREA.,'{profile_def_name}',$,1.,1.)"),
-                );
+                // The profile itself where the model carries it (RE-105);
+                // otherwise a 1 x 1 m IfcRectangleProfileDef stand-in, as
+                // IfcMaterialProfile requires a profile def reference.
+                let profile_def_id = match &profile.profile {
+                    Some(def) => {
+                        let origin = self.id();
+                        self.emit_entity(origin, "IFCCARTESIANPOINT((0.,0.))");
+                        let x_axis = self.id();
+                        self.emit_entity(x_axis, "IFCDIRECTION((1.,0.))");
+                        let placement = self.id();
+                        self.emit_entity(
+                            placement,
+                            format!("IFCAXIS2PLACEMENT2D(#{origin},#{x_axis})"),
+                        );
+                        let wrap = Extrusion {
+                            width_feet: 0.0,
+                            depth_feet: 0.0,
+                            height_feet: 0.0,
+                            profile_override: Some(def.clone()),
+                        };
+                        self.emit_profile_def(&wrap, placement)
+                    }
+                    None => {
+                        let profile_def_id = self.id();
+                        let profile_def_name = escape(&profile.profile_name);
+                        self.emit_entity(
+                            profile_def_id,
+                            format!("IFCRECTANGLEPROFILEDEF(.AREA.,'{profile_def_name}',$,1.,1.)"),
+                        );
+                        profile_def_id
+                    }
+                };
                 let profile_id = self.id();
                 let profile_name = escape(&profile.profile_name);
                 let desc_slot = match &profile.description {
@@ -1965,12 +1986,10 @@ impl StepWriter {
                     if let Some(&ps_id) = profile_set_ids.get(*ps_idx) {
                         let usage_id = self.id();
                         // IfcMaterialProfileSetUsage(ForProfileSet,
-                        //   CardinalPoint=5 (bottom-left reference), ReferenceExtent=$)
-                        // CardinalPoint=5 is the IFC4 convention for
-                        // "bottom-left of the bounding box", which aligns
-                        // with Revit's extrusion origin for structural
-                        // framing. Downstream tools that care about
-                        // cardinal-point semantics can override.
+                        //   CardinalPoint=5, ReferenceExtent=$). In IFC4's
+                        // IfcCardinalPointReference, 5 is the mid-depth
+                        // centre: the profile is centred on the member's
+                        // axis, as every profile the exporter writes is.
                         self.emit_entity(
                             usage_id,
                             format!("IFCMATERIALPROFILESETUSAGE(#{ps_id},5,$)"),
@@ -3489,6 +3508,7 @@ mod tests {
                     material_index: 0,
                     profile_name: "W12x26".into(),
                     description: None,
+                    profile: None,
                 }],
             }],
             representation_maps: Vec::new(),
@@ -3569,6 +3589,7 @@ mod tests {
                     material_index: 0,
                     profile_name: "W12x26".into(),
                     description: None,
+                    profile: None,
                 }],
             }],
             representation_maps: Vec::new(),
