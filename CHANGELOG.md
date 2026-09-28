@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 beams sit on the storey of the Level at their top (RE-119,
+  #421).** A structural framing element's record does not give the Level
+  Revit's export puts it on: four beams landed on the storey below it and
+  four foundation beams on no storey. Revit's export puts each beam on the
+  Level at its top: four beams spanning 3.2 to 4.0 m on the 4.0 m Level,
+  four foundation beams spanning -0.8 to 0.0 m on the 0.0 m Level. A 2023
+  beam whose record box's top is exactly one Level's elevation is now
+  bound to that Level, and modelo_bim has all 37 of its elements in
+  Revit's storey (29 before). Revit 2024 and 2025 are unchanged: no model
+  with a Revit export of either release has beams to measure the rule on.
+
 - **Only a Level that is a building story becomes a storey (RE-118,
   #219).** A Level keeps Revit's Building Story setting past its name: the
   first `ff × 8 · 00 01`, an `f64`, a `u64` ElementId, then 1 or 0. It is

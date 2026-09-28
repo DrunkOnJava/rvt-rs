@@ -62,7 +62,8 @@ glTF, plan SVG and CSV, from the CLIs, Python and the zero-upload browser
 viewer. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), door and window hosts (RE-85), room outlines
 (RE-102) with their numbers and names (RE-117, which names every
-release's rooms), Levels with the storey each element sits on (RE-107), and
+release's rooms), Levels with the storey each element sits on (RE-107;
+beams by the Level at their top, RE-119), and
 family instances' family and type names, with their IFC type objects
 (RE-109, RE-110), walls', floors' and roofs' types and layers
 (RE-111, RE-112), family instances' materials (RE-113), and walls' and
