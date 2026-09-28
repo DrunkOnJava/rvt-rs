@@ -549,6 +549,16 @@ thickness about its line at the top. Each is now that cross-section along
 its line: 19 of the 20 within 0.001 ft of Revit's body across the wall at
 five heights (none within 0.1 ft before), and 24 walls better in the GLB,
 none worse (`reports/element-framing/RE-86-tapered-walls.md`).
+**RE-87 (2026-09-28)** reads a family instance's transform: twelve `f64` in
+its data, a 3 x 3 rotation stored row by row and its origin. On Snowdon
+Towers, of the 1,956 upright transforms in Revit's export, 1,951 point X
+along Revit's placement X, against it or square to it (the 5 others are
+walls); RE1 Architecture's 49 all do. A family instance turned off the
+model's axes is now the rectangle at its angle whose box is its record box:
+all 181 turned Snowdon instances are closer to Revit's body along their own
+axes (median 1.47 ft off before, 0.48 ft now), and the openings of the 27
+turned doors and windows are Revit's width along them
+(`reports/element-framing/RE-87-instance-transforms.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
