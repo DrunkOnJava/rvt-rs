@@ -729,21 +729,17 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.3.0** (2026-09-27) is the latest release: GitHub Release with Linux,
-  macOS and Windows CLI archives, the `rvt` wheel on PyPI, and the
-  container image. It carries everything under
-  `[0.3.0]` in [`CHANGELOG.md`](../CHANGELOG.md): layered walls and their
-  joins, curved walls, shed roofs, stair treads, Revit's names, storeys and
-  GlobalIds, materials and layer sets, stable generated GlobalIds, SI units,
-  the whole schema, each element's Revit class, type parameters and MEP
-  devices.
-- The Rust crate is on crates.io from 0.3.0, with its API on docs.rs.
-- `main` is ahead of v0.3.0 by everything under `[Unreleased]`: Revit 2023
-  projects' typed elements (RE-81 to RE-122), room outlines and room numbers
-  and names, door and window openings from their types, turned family
-  instances, steel sections, IFC type objects, sketched outlines and shafts,
-  and system family names in the file's locale. None of it is in a release
-  yet; the README lists it under "Release 0.3.0 and main".
+- **v0.4.0** (2026-09-28) is the latest release: crates.io and docs.rs,
+  the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
+  Windows, the container image, and the deployed viewer, each verified from
+  its published artifacts. It carries everything under `[0.4.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md): Revit 2023 projects' typed elements,
+  room outlines and Revit's room numbers and names, door and window
+  openings from their types, turned family instances, steel sections, IFC
+  type objects and system family names in the file's locale. Its
+  "Upgrading from 0.3" section lists the changes a 0.3 user will notice.
+- **v0.3.0** (2026-09-27) is the previous release.
+- `main` is ahead of v0.4.0 by what is under `[Unreleased]`.
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
 task backlog.
