@@ -110,14 +110,17 @@ fn main() -> rvt::Result<()> {
             }
         }
     }
-    // Where each pipe's and duct's own element data names the elements
-    // holding the type names: offsets of those ids as u64 in the data.
-    let owners: [u32; 2] = [179_830, 434_017];
+    // Declared ids in every pipe's (and every duct's) own element data, and
+    // whether each such id's own data holds a type name.
     if let Some(layout) = rvt::partition_names::element_data_layout(version) {
-        let ids: std::collections::BTreeSet<u32> =
-            records.iter().map(|record| record.element_id).collect();
-        let mut hits: std::collections::BTreeMap<(u32, usize), usize> = Default::default();
-        let mut seen: std::collections::BTreeSet<u32> = Default::default();
+        let category_of: std::collections::BTreeMap<u32, i64> = records
+            .iter()
+            .map(|record| (record.element_id, record.builtin_category))
+            .collect();
+        let mut named: std::collections::BTreeMap<i64, std::collections::BTreeMap<u32, usize>> =
+            Default::default();
+        let mut counted: std::collections::BTreeMap<i64, usize> = Default::default();
+        let mut data_of: std::collections::BTreeMap<u32, Vec<u8>> = Default::default();
         for stream in rf.partition_stream_names() {
             let Ok(inflated) = rf.inflated_partition(&stream) else {
                 continue;
@@ -126,30 +129,57 @@ fn main() -> rvt::Result<()> {
             let starts: Vec<usize> = memchr::memmem::find_iter(buf, &layout.header).collect();
             for (index, &hit) in starts.iter().enumerate() {
                 let id_at = hit + layout.header.len();
-                let Some(id) = layout.id_at(buf, id_at).filter(|id| ids.contains(id)) else {
+                let Some(id) = layout.id_at(buf, id_at) else {
                     continue;
                 };
-                seen.insert(id);
                 let end = starts
                     .get(index + 1)
                     .copied()
                     .unwrap_or(buf.len())
                     .min(hit + 0x1_0000);
                 let data = &buf[id_at + 8..end];
-                for at in 0..data.len().saturating_sub(8) {
-                    let value = u64::from_le_bytes(data[at..at + 8].try_into().expect("8 bytes"));
-                    if let Some(owner) = owners.iter().find(|o| u64::from(**o) == value) {
-                        *hits.entry((*owner, at)).or_default() += 1;
-                        println!("data {id} names {owner} at +{at}");
-                    }
+                data_of.entry(id).or_insert_with(|| data.to_vec());
+                let Some(category) = category_of.get(&id) else {
+                    continue;
+                };
+                *counted.entry(*category).or_default() += 1;
+                let found: std::collections::BTreeSet<u32> = (0..data.len().saturating_sub(8))
+                    .filter_map(|at| {
+                        let v = u64::from_le_bytes(data[at..at + 8].try_into().ok()?);
+                        u32::try_from(v).ok().filter(|id| declared.contains(id))
+                    })
+                    .collect();
+                for other in found {
+                    *named
+                        .entry(*category)
+                        .or_default()
+                        .entry(other)
+                        .or_default() += 1;
                 }
             }
         }
-        println!(
-            "element data found for {} of {} records; offsets {hits:?}",
-            seen.len(),
-            ids.len()
-        );
+        for (category, ids) in &named {
+            let total = counted[category];
+            for (id, n) in ids {
+                if *n * 10 < total * 9 {
+                    continue;
+                }
+                let holds: Vec<&str> = ["221116-WTR", "233113-DUCT-Tees"]
+                    .into_iter()
+                    .filter(|needle| {
+                        let units: Vec<u8> =
+                            needle.encode_utf16().flat_map(u16::to_le_bytes).collect();
+                        data_of
+                            .get(id)
+                            .is_some_and(|d| memchr::memmem::find(d, &units).is_some())
+                    })
+                    .collect();
+                let name = names.entries.get(id).map(|e| e.name.clone());
+                println!(
+                    "common {category} {id} in {n} of {total}; name entry {name:?}; data holds {holds:?}"
+                );
+            }
+        }
     }
     Ok(())
 }
