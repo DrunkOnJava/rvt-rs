@@ -1,6 +1,6 @@
 # RE-86 — Tapered walls
 
-**Date:** 2026-09-27
+**Date:** 2026-09-27 (word counts corrected 2026-09-28)
 **Issues:** #358, #227
 **Result:**
 - A wall type's data stores three face angles, in radians, after a fixed frame. The frame is `u32 2`, eight zero bytes, an `f64` 0.7 and a count of 3, and it follows a word that varies by document.
@@ -51,9 +51,9 @@ The word, on Snowdon Towers architectural's 1,112 walls with an orientation:
 
 | word | walls | Revit's body |
 |---:|---:|---|
-| 1 | 1,089 | vertical; 23 are more than 0.05 ft wider at the base than at the top, which the word does not mark |
+| 1 | 1,082 | vertical; 23 are more than 0.05 ft wider at the base than at the top, which the word does not mark |
 | 2 | 21 | tapered, 20; 1054762's base trimmed by Revit |
-| 0 | 2 | slanted 22 degrees (1 of them also wider at the base) |
+| 0 | 9 | 2 exported, slanted 22 degrees (1 of them also wider at the base); the other 7 are in neither Revit's export nor rvt-rs's |
 
 `tapered_walls_vs_ifc.py` cuts every straight Revit wall at 1 and 99 per cent of its height. A wall is tapered where its base cut is more than 0.05 ft wider than its top cut. It then measures each face's lean between the two cuts:
 
@@ -111,7 +111,7 @@ python3 tools/re/wall_bodies_vs_ifc.py model.glb REVIT_EXPORT.ifc
 
 ## 4. Open
 
-- **Slanted walls.** Word 0 marks them (2 on Snowdon), and the slant is in the wall's own data: -0.383972 rad (22 degrees) at 3,024 and 2,820 bytes past the orientation anchor, on 1618833 and 1483746. Two walls are too few to fix its frame.
+- **Slanted walls.** Word 0 marks them (9 on Snowdon, 2 of them exported), and the slant is in the wall's own data: -0.383972 rad (22 degrees) at 3,024 and 2,820 bytes past the orientation anchor, on 1618833 and 1483746. It is the `f64` 24 bytes before the wall's location-line record (`ff`×8, `u64` 0, `04 00 08 01`, RE-49 and RE-75), which is 0 on all 574 vertical walls whose first 8 KB of data hold that frame. Two walls of one type are too few to draw the lean from.
 - **Openings in tapered walls** (#227). The windows these walls host are still drawn as boxes along the model's axes, not turned with their wall, so the cut does not apply to them.
   - Revit's openings are not boxes through the wall. On 1055806, the opening for window 1055807 spans 2.04 ft across, from 0.46 ft inside the line to 1.58 ft outside it, over the window's height.
   - The wall's interior face is 1.02 ft inside the line, so Revit's opening does not reach it. Its shape follows the leaning face and is not read here.
