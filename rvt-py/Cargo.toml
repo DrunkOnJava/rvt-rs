@@ -33,3 +33,8 @@ pyo3 = { version = "0.29", features = ["extension-module", "abi3-py38"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
+
+[build-dependencies]
+# Adds `-undefined dynamic_lookup` to the cdylib's link on macOS, as maturin
+# does, so a plain `cargo build --workspace` (tools/check-local.sh) links it.
+pyo3-build-config = "0.29"
