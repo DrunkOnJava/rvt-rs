@@ -126,7 +126,7 @@ If you're building BIM/AEC tooling and want an Apache-2 Revit reader to compose 
 - **Revit 2023 projects** — typed elements with Revit's ElementIds and categories, each drawn as its bounding box (RE-81), walls cut back at their joins (RE-120), beams at their columns (RE-122), rooms as their outline (RE-102), on the storeys of Revit's own Levels (RE-107), family instances named as Revit names them (RE-109), walls, floors and roofs with their type, read from its layers (RE-111, RE-112).
 - **Not yet** — element records of 2022 and earlier and of 2026, most parameters, family geometry, and semantic editing of a Revit file.
 
-[`tests/fixtures/synthetic-project.ifc`](tests/fixtures/synthetic-project.ifc) is a committed IFC from synthesized inputs, useful for testing a consumer without a Revit file. The browser viewer at <https://drunkonjava.github.io/rvt-rs/> runs the same pipeline in the tab: drop a 2024 or 2025 project and Export IFC writes its typed elements; other releases give the metadata and spatial scaffold.
+[`tests/fixtures/synthetic-project.ifc`](tests/fixtures/synthetic-project.ifc) is a committed IFC from synthesized inputs, useful for testing a consumer without a Revit file. The browser viewer at <https://drunkonjava.github.io/rvt-rs/> runs the same pipeline in the tab: drop a 2023, 2024 or 2025 project and Export IFC writes its typed elements; other releases give the metadata and spatial scaffold. The viewer is built from `main`, so it already has what 0.3.0 does not (Revit 2023 elements among them).
 
 ## Quick demo
 
