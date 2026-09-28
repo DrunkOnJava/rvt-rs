@@ -383,9 +383,10 @@ fn scan_first_records<T: PartialEq>(
     ids: &BTreeSet<u32>,
     read: fn(&[u8]) -> Option<T>,
 ) -> Result<BTreeMap<u32, T>> {
-    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+    let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
         return Ok(BTreeMap::new());
     };
+    let header = layout.header;
     let mut found: BTreeMap<u32, Option<T>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -395,11 +396,7 @@ fn scan_first_records<T: PartialEq>(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
-                .and_then(|id| u32::try_from(id).ok())
-            else {
+            let Some(id) = layout.id_at(buf, id_at) else {
                 continue;
             };
             if !ids.contains(&id) {

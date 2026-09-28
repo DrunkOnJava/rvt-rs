@@ -64,7 +64,8 @@ and bounding box (RE-81), door and window hosts (RE-85), room outlines
 (RE-102), Levels with the storey each element sits on (RE-107), and
 family instances' family and type names, with their IFC type objects
 (RE-109, RE-110), walls', floors' and roofs' types and layers
-(RE-111, RE-112), and family instances' materials (RE-113). Every recovery claim is measured against Revit's own IFC export of the
+(RE-111, RE-112), family instances' materials (RE-113), and walls' and
+floors' material layer sets (RE-114). Every recovery claim is measured against Revit's own IFC export of the
 same file; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)

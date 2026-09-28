@@ -325,6 +325,43 @@ pub fn find_element_data_names(
 pub const ELEMENT_DATA_HEADER_2023: [u8; 10] =
     [0xff, 0xff, 0xff, 0xff, 0xc0, 0x02, 0x01, 0x00, 0x00, 0x00];
 
+/// How an element's serialised data opens on a release: its header and the
+/// width of the ElementId after it (RE-111). On every release the data
+/// proper starts 8 bytes past the id's first byte: a `u64` id, or a `u32`
+/// id and four more bytes on Revit 2023.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ElementDataLayout {
+    /// The header, ending in `01 00 00 00`.
+    pub header: [u8; 10],
+    /// Whether the id is a `u64` (Revit 2024 and later) rather than a `u32`.
+    pub wide_id: bool,
+}
+
+impl ElementDataLayout {
+    /// The ElementId at `at`, right after the header.
+    pub fn id_at(&self, buf: &[u8], at: usize) -> Option<u32> {
+        if self.wide_id {
+            read_u64(buf, at).and_then(|id| u32::try_from(id).ok())
+        } else {
+            read_u32(buf, at)
+        }
+    }
+}
+
+/// The [`ElementDataLayout`] of `revit_version`, where it is measured.
+pub fn element_data_layout(revit_version: u32) -> Option<ElementDataLayout> {
+    match revit_version {
+        2023 => Some(ElementDataLayout {
+            header: ELEMENT_DATA_HEADER_2023,
+            wide_id: false,
+        }),
+        _ => element_data_header(revit_version).map(|header| ElementDataLayout {
+            header,
+            wide_id: true,
+        }),
+    }
+}
+
 /// [`find_element_data_names`] on Revit 2023 (RE-111): the header is
 /// [`ELEMENT_DATA_HEADER_2023`] and the ElementId a `u32`.
 pub fn find_element_data_names_2023(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, String> {

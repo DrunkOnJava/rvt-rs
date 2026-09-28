@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 walls and floors carry their material layer sets (RE-114,
+  #421).** A 2023 wall's data holds its location line and its orientation
+  as 2024's does, read now through one element-data layout per release (a
+  `u32` id on 2023). 2023 walls, floors and roofs take RE-53's and RE-57's
+  layers, named by RE-113's materials, and are written with an
+  `IfcMaterialLayerSetUsage`: modelo_bim's 4 walls with Revit's layer and
+  thickness, and its floor with its concrete layer (Revit also writes the
+  zero-width metal deck). Walls keep their record body, since 2023 wall
+  joins are not read, and layers that take their category's material stay
+  unnamed on 2023. Every 2024 and 2025 file is byte-identical.
+
 - **Revit 2023 family instances carry their materials (RE-113, #421,
   #355).** A 2023 family type's value block is `[owner u32][28 x ff][3 x
   00]` and its first map `u32 n · n × (u32 key · u32 material)` names the
