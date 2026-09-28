@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 family instances carry their family and type names
+  (RE-109, #421).** A 2023 name entry is `01 00 00 00 · u32 id · u32 n ·
+  UTF-16`, with no category after it as 2024's has. An instance's type is
+  the one same-category type record its list names that has a name, and
+  its family is the one named id its type's record references with no
+  record of its own. Every door, window, column, beam and footing of the
+  two 2023 projects with a Revit export now has Revit's own Name and
+  ObjectType: 19 of 19 on Exemplo_data and 31 of 31 on modelo_bim.
+  System-family types (walls, floors, roofs) are not named yet. Every
+  2024 and 2025 file is byte-identical.
+
 - **Revit 2023 elements take Revit's own GlobalIds (RE-108, #421).** A
   2023 `Global/ElemTable` record holds the element's creating episode at
   `+0x0c`, where 2024's 40-byte record has it at `+0x18`. Every element,

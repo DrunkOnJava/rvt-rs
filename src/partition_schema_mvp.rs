@@ -4059,6 +4059,7 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
         rf,
         crate::partition_element_records_2023::REVIT_2023,
     );
+    let names = type_and_family_names_2023(rf, &records);
     let selected = select_newest_instance_records(records);
     // Only a family instance can be nested; a host wall and the doors it
     // hosts name each other too (RE-76's class tag, at the same place on
@@ -4088,7 +4089,24 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
         else {
             continue;
         };
-        let decoded = element_record_decoded(record, class, &level_ids);
+        let mut decoded = element_record_decoded(record, class, &level_ids);
+        if let Some((type_id, type_name, family_name)) = names.get(&record.element_id) {
+            decoded.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: *type_id,
+                },
+            ));
+            decoded.fields.push((
+                TYPE_NAME_FIELD.into(),
+                InstanceField::String(type_name.clone()),
+            ));
+            decoded.fields.push((
+                FAMILY_NAME_FIELD.into(),
+                InstanceField::String(family_name.clone()),
+            ));
+        }
         match record.builtin_category {
             per::OST_WALLS => out.walls.push(decoded),
             per::OST_DOORS => out.doors.push(decoded),
@@ -4200,6 +4218,75 @@ fn select_instance_records(
         }
     }
     without_nested_components(by_id)
+}
+
+/// Each Revit 2023 family instance's type ElementId, type name and family
+/// name (RE-109), by ElementId. Its type is the one id in its reference
+/// list, wherever it sits, that is a symbol record of its own category with
+/// a 2023 name entry ([`crate::partition_names::name_entries_2023`]). Its
+/// family is the one id the type's own record references that has a name
+/// entry and no element record. An instance whose type or family is not
+/// unique gets nothing.
+fn type_and_family_names_2023(
+    rf: &mut RevitFile,
+    records: &[crate::partition_element_records::PartitionElementRecord],
+) -> BTreeMap<u32, (u32, String, String)> {
+    use crate::partition_element_records::PLACEMENT_KIND_SYMBOL;
+    let Ok(table) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let names =
+        crate::partition_names::name_entries_2023(rf, &crate::elem_table::declared_ids(&table));
+    let recorded: BTreeSet<u32> = records.iter().map(|record| record.element_id).collect();
+    let mut symbols: BTreeMap<i64, BTreeSet<u32>> = BTreeMap::new();
+    let mut symbol_records: BTreeMap<
+        u32,
+        &crate::partition_element_records::PartitionElementRecord,
+    > = BTreeMap::new();
+    for record in records
+        .iter()
+        .filter(|record| record.placement_kind == PLACEMENT_KIND_SYMBOL)
+    {
+        symbols
+            .entry(record.builtin_category)
+            .or_default()
+            .insert(record.element_id);
+        symbol_records.insert(record.element_id, record);
+    }
+    let family_of = |type_id: u32| {
+        let record = symbol_records.get(&type_id)?;
+        let mut families = record.references.iter().filter_map(|&reference| {
+            let id = u32::try_from(reference).ok()?;
+            (id != type_id && !recorded.contains(&id))
+                .then(|| names.get(&id))
+                .flatten()
+        });
+        let family = families.next()?;
+        families.next().is_none().then(|| family.clone())
+    };
+    let mut out = BTreeMap::new();
+    for record in records
+        .iter()
+        .filter(|record| record.is_exported_instance())
+    {
+        // The type is anywhere in the list: a type made after the instance
+        // has the larger id, and another type can sit between them.
+        let Some(set) = symbols.get(&record.builtin_category) else {
+            continue;
+        };
+        let mut types = record.references.iter().filter_map(|&reference| {
+            let id = u32::try_from(reference).ok()?;
+            (set.contains(&id) && names.contains_key(&id)).then_some(id)
+        });
+        let (Some(type_id), None) = (types.next(), types.next()) else {
+            continue;
+        };
+        let (Some(type_name), Some(family_name)) = (names.get(&type_id), family_of(type_id)) else {
+            continue;
+        };
+        out.insert(record.element_id, (type_id, type_name.clone(), family_name));
+    }
+    out
 }
 
 /// [`select_instance_records`] for Revit 2023 (RE-107): of an element's
