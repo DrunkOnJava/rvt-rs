@@ -6,129 +6,113 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-28
+
+Revit 2023 projects now export typed elements, as 2024 and 2025 projects
+do: storeys, types, layers, materials, GlobalIds, wall joins and beam cuts,
+measured against Revit's own exports of two 2023 projects. On every
+supported release, rooms take their real outline and Revit's number and
+name, doors and windows cut the opening their type specifies, turned
+family instances are drawn turned, steel members carry their I section,
+and every typed element is related to an IFC type object of its Revit
+type. Every figure is measured against Revit's own export of the same
+model; the reports under `reports/element-framing/` hold the inputs.
+
+### Upgrading from 0.3
+
+- **`IfcSpace.Name` is the room number** (RE-117). It was
+  `Room-<ElementId>`. The room name stays in `LongName`, and the ElementId,
+  which an `IfcSpace` has no `Tag` for, is the new `ElementId` property.
+  Anything that read a room's ElementId from its IFC `Name` reads that
+  property instead. A room without a number keeps the `Room-<ElementId>`
+  Name; one without a name now has no `LongName` (it repeated the Name).
+  glTF node names, the viewer and the room schedule are unchanged.
+- **Only building-story Levels are storeys** (RE-118). A Level whose
+  Building Story setting is off is no longer written as an
+  `IfcBuildingStorey`, as in Revit's export. Of the models measured, only
+  Snowdon Towers' structural model changes: its Top of Footing and TOS
+  Levels are not storeys, and its 12 building stories now are.
+- **System family names follow the file's saved locale** (RE-123). On a
+  file saved as `PTB`, walls, floors and roofs are `Parede básica`, `Piso`
+  and `Telhado básico` in `Name`, `ObjectType` and material layer set
+  names, where 0.3 wrote `Basic Wall`, `Floor` and `Basic Roof`. Files
+  saved in other locales are unchanged.
+- **`ElemRecord::owner_id` values change** (#152). Each record now reports
+  its own owner; 0.3 reported the next record's. This reaches
+  `rvt-elem-table --json` and Python's `elem_table_records()`. The IFC
+  export does not use it.
+- **Rust API:** public structs gained fields, among them
+  `ifc::IfcModel::element_type_ids` and
+  `partition_level_records::PartitionLevel::building_story`. Code that
+  builds them with struct literals needs the new fields or
+  `..Default::default()` where the type has one.
+- **Element bodies and IFC entity counts change** wherever geometry is
+  newly decoded (openings, turned instances, rooms, sketched outlines,
+  steel sections) and where type objects are added. GlobalIds of existing
+  elements, rooms and storeys are unchanged.
+
 ### Added
 
-- **System families are named in the file's saved locale (RE-123).**
-  A system family's name is not stored in a Revit file: Revit's export
-  writes it in the language the file was saved in. On the four files
-  saved as `PTB` (Exemplo_data and modelo_bim, 2023; Projeto1 and
-  teste_export_2025, 2025) Revit names walls `Parede básica`, floors
-  `Piso` and roofs `Telhado básico`, where rvt-rs wrote `Basic Wall`,
-  `Floor` and `Basic Roof`. Elements and material layer sets now carry
-  those names on `PTB` files: 32 of 32 elements' family names as Revit's
-  (0 before). Other families and locales keep the English name;
-  `ENU` files are byte-identical.
+#### Revit 2023 projects
 
-- **Revit 2023 beams stop at the columns they frame into (RE-122,
-  #421).** A 2023 beam's record box runs to the centres of its end
-  columns; Revit's export stops it at their faces. The beam's reference
-  list names the column each end lies in, so an end inside exactly one
-  named column is cut back to that column's near face. modelo_bim's 8
-  beams now have Revit's box exactly (0 before). On Revit 2024 the same
-  columns are named (Snowdon Towers' structural model), but most steel
-  beams stop a stored join cutback short of the face, and when Revit
-  applies it is not decoded, so 2024 beams are unchanged; the report
-  records where the cutbacks are stored.
+- **Revit 2023 projects export their elements (RE-81, #421).** Walls, doors,
+  windows, floors, roofs, columns, beams, foundations, rooms and the other
+  recovered categories come from their 2023 element records, typed, under
+  Revit's own ElementIds, each drawn as its bounding box. Against Revit's
+  IFC4 exports of two 2023 projects: 37 of 37 elements and 37 of 45, with
+  none outside either export; the 8 missing are window trims nested in the
+  windows, left out because Revit keeps some nested components (frames,
+  cuts) and drops others (mullion patterns) by a rule not yet decoded.
+  Names, types, storeys, joins, opening hosts, design options, parameters
+  and IFC export overrides are not read for 2023, and the export
+  diagnostics say so.
 
-- **Research: a door's record box does not give its body (RE-121,
-  negative, #227).** The box reaches past Revit's door body across the
-  wall on one side, by up to 0.9 m. Reflecting its near side about the
-  wall's centreline gives Revit's body exactly where the body is
-  centred: Core Interior 132 of 132, RE1 4 of 4, the 2023 projects 9 of
-  11. On Snowdon Towers, whose door frames sit at a wall face, it gives
-  0 of 126, and nothing read tells the cases apart, so doors keep their
-  record box. Windows fail the same test (modelo_bim 10 of 10, Core Interior 0 of 6, Snowdon 0 of 68). `tools/re/door_bodies_vs_ifc.py` measures both.
+- **Revit 2023 element records are located (RE-81, #421).** A 2023 record
+  sits behind the schema-derived marker with its ElementId at marker -52 and
+  its category at -38; the instance rule finds every element of Revit's own
+  export of two 2023 projects. A probe and a report; the exporter does not
+  read 2023 records yet.
 
-- **Revit 2023 walls are cut back by the walls they join (RE-120, #421).**
-  A 2023 wall's record box is the untrimmed wall, as on 2024: at an L or
-  T joint it runs to the other wall's centreline, where Revit's export
-  stops it at that wall's face. A 2023 record's reference list names the
-  walls it joins, as 2024's does, so 2024's join solver (RE-26, RE-29)
-  runs on the 2023 records unchanged. Exemplo_data's 17 walls and
-  modelo_bim's 4 now have Revit's box exactly (2 of 17 and 4 of 4
-  before). Einhoven, with no export, has 2 walls trimmed.
+- **Revit 2023 Levels and storeys (RE-107, #421).** Revit 2023 projects
+  export with their real Levels as storeys, and each element on the
+  storey of the Level its record names, by the same rules as 2024's. The
+  elevation marker's `u16` is the schema's `Plane` tag on every release.
+  A Level's newest partition holds its current name and elevation.
+  - Exemplo_data: 2 of 2 storeys and 37 of 37 elements as Revit's.
+  - modelo_bim: 4 of 4 storeys and 29 of 37 elements as Revit's.
+  - Every 2024 and 2025 file is byte-identical.
 
-- **Revit 2023 beams sit on the storey of the Level at their top (RE-119,
-  #421).** A structural framing element's record does not give the Level
-  Revit's export puts it on: four beams landed on the storey below it and
-  four foundation beams on no storey. Revit's export puts each beam on the
-  Level at its top: four beams spanning 3.2 to 4.0 m on the 4.0 m Level,
-  four foundation beams spanning -0.8 to 0.0 m on the 0.0 m Level. A 2023
-  beam whose record box's top is exactly one Level's elevation is now
-  bound to that Level, and modelo_bim has all 37 of its elements in
-  Revit's storey (29 before). Revit 2024 and 2025 are unchanged; the rule
-  is unmeasured there.
-
-- **Only a Level that is a building story becomes a storey (RE-118,
-  #219).** A Level keeps Revit's Building Story setting past its name: the
-  first `ff × 8 · 00 01`, an `f64`, a `u64` ElementId, then 1 or 0. It is
-  exact against the "Building Story" parameter of Snowdon Towers' VIM
-  export on all 37 architectural and structural Levels, and 1 on Core
-  Interior's and RE1's, each a storey of Revit's IFC. A pad byte of 1
-  before the name length no longer refuses a Level. Snowdon Towers'
-  structural model, whose Levels were refused, now has its 12 building
-  stories as storeys, their names and elevations the VIM's, with 208 of
-  the 210 elements on them in their storey; its Top of Footing and TOS
-  Levels are not storeys. Every other model's IFC is byte-identical.
-
-- **Rooms carry their numbers and names on every release (RE-117, #90,
-  #421).** A room's number and name are the parameter entries `-1006901
-  (ROOM_NUMBER) · u32 n · UTF-16` and `-1006900 (ROOM_NAME) · u32 m ·
-  UTF-16` just past its data object, with ids as wide as the release's
-  ElementIds. Read from there, every room carries Revit's number and name:
-  Core Interior 116 of 116 (unchanged), Snowdon Towers 54 of 54 against
-  its VIM export (RE-29's parameter block named 1, wrongly), RE1
-  Architecture 11 of 11 and Exemplo_data 9 of 9 (neither named before).
-  RE-29's block still gives a room's Level, and its number and name where
-  no entries are read.
-
-- **Revit 2023 materials carry their shading colours and names (RE-116,
-  #421, #355).** A 2023 material keeps its transparency, 0.5, four
-  eight-byte pattern slots (`u32` id, `u32` COLORREF), its shading colour
-  and its shininess, where 2024's slots are four bytes, and ends its name
-  before `ff ff ff ff eb 0b` or in its own name field, as RE-58's 2024
-  names do. The 2023 export's material list is now the file's own
-  materials, named and coloured (modelo_bim 108, Exemplo_data 114,
-  Einhoven 36), instead of 146, 155 and 42 partition display strings; their
-  colours and transparency are
-  Revit's on 20 of the 21 materials Revit's exports style, none different,
-  and Exemplo_data's roller door gains Revit's material (36 of its 37
-  elements with Revit's material set). The GLB draws 2023 elements in
-  them. Every 2024 and 2025 file is byte-identical.
-
-- **Revit 2023 object styles give each category its material (RE-115,
-  #421).** A 2023 category's object-styles entry is `i32 category · ff ff
-  ff ff · u32 1|2 · u32 1 · ff ff ff ff 3f 01 · 8 bytes · i32 -3000010 ·
-  u32 material`. Walls', floors' and roofs' layers that take their
-  category's material take that one, as RE-91's wall layers do on 2024,
-  and floors', roofs' and ceilings' now do so on every release. Exemplo_data's
-  17 walls and its floor carry Revit's own `Material pré-definido de
-  parede` and `Material pré-definido de piso`: 35 of its 37 elements now
-  have Revit's material set (18 before). Every 2024 and 2025 file is
+- **Revit 2023 elements take Revit's own GlobalIds (RE-108, #421).** A
+  2023 `Global/ElemTable` record holds the element's creating episode at
+  `+0x0c`, where 2024's 40-byte record has it at `+0x18`. Every element,
+  room and storey rvt-rs exports from the two 2023 projects with a Revit
+  export now carries the GlobalId Revit gives it: Exemplo_data 37, 9 and
+  2, modelo_bim 37 and 4 (none before). Every 2024 and 2025 file is
   byte-identical.
 
-- **Revit 2023 walls and floors carry their material layer sets (RE-114,
-  #421).** A 2023 wall's data holds its location line and its orientation
-  as 2024's does, read now through one element-data layout per release (a
-  `u32` id on 2023). 2023 walls, floors and roofs take RE-53's and RE-57's
-  layers, named by RE-113's materials, and are written with an
-  `IfcMaterialLayerSetUsage`: modelo_bim's 4 walls with Revit's layer and
-  thickness, and its floor with its concrete layer (Revit also writes the
-  zero-width metal deck). Walls keep their record body, since 2023 wall
-  joins are not read, and layers that take their category's material stay
-  unnamed on 2023. Every 2024 and 2025 file is byte-identical.
+- **Revit 2023 family instances carry their family and type names
+  (RE-109, #421).** A 2023 name entry is `01 00 00 00 · u32 id · u32 n ·
+  UTF-16`, with no category after it as 2024's has. An instance's type is
+  the one same-category type record its list names that has a name, and
+  its family is the one named id its type's record references with no
+  record of its own. Every door, window, column, beam and footing of the
+  two 2023 projects with a Revit export now has Revit's own Name and
+  ObjectType: 19 of 19 on Exemplo_data and 31 of 31 on modelo_bim.
+  System-family types (walls, floors, roofs) are named since RE-111. Every
+  2024 and 2025 file is byte-identical.
 
-- **Revit 2023 family instances carry their materials (RE-113, #421,
-  #355).** A 2023 family type's value block is `[owner u32][28 x ff][3 x
-  00]` and its first map `u32 n · n × (u32 key · u32 material)` names the
-  materials its geometry uses, as RE-82's does on 2024. A 2023 material is
-  found by its class tag `0x09fb` 0x27 bytes past its `u32` id, and named
-  by its element data or, inside a family's data, by a `-1001203`
-  parameter entry. 2023 doors, windows, columns and beams are now written
-  with their type's `IfcMaterialConstituentSet`, where no 2023 element had
-  a material before: Revit's own set on 17 of Exemplo_data's 18 and all 27
-  of modelo_bim's. A type whose map names a material with no name read gets
-  none. Every 2024 and 2025 file is byte-identical.
+- **Revit 2023 walls, floors and roofs carry their type (RE-111, #421).**
+  A 2023 system-family type has no record and no name entry, but its
+  element data opens with `ff ff ff ff c0 02 01 00 00 00` and a `u32`
+  ElementId and names it as 2024's does. Of the named ids an element's
+  record names, its type is the one named by records of the fewest
+  categories, a strict subset of every other's. Every element Revit's
+  export types on the two 2023 projects now carries Revit's type name:
+  Exemplo_data 37 of 37 and modelo_bim 37 of 37 (19 and 31 before). The
+  floors are typed by an `IfcSlabType` with Revit's `Tag` and GlobalId;
+  walls and roofs keep their category's name, since their system family
+  follows from their type's layers, which 2023 does not read. Every 2024
+  and 2025 file is byte-identical.
 
 - **Revit 2023 wall, floor and roof types read their layers, and walls and
   roofs are typed (RE-112, #421).** A 2023 host type's layers follow its
@@ -144,18 +128,99 @@ All notable changes will be documented here. This project follows
   may have no width, as a membrane may. Every 2024 and 2025 file is
   byte-identical.
 
-- **Revit 2023 walls, floors and roofs carry their type (RE-111, #421).**
-  A 2023 system-family type has no record and no name entry, but its
-  element data opens with `ff ff ff ff c0 02 01 00 00 00` and a `u32`
-  ElementId and names it as 2024's does. Of the named ids an element's
-  record names, its type is the one named by records of the fewest
-  categories, a strict subset of every other's. Every element Revit's
-  export types on the two 2023 projects now carries Revit's type name:
-  Exemplo_data 37 of 37 and modelo_bim 37 of 37 (19 and 31 before). The
-  floors are typed by an `IfcSlabType` with Revit's `Tag` and GlobalId;
-  walls and roofs keep their category's name, since their system family
-  follows from their type's layers, which 2023 does not read. Every 2024
-  and 2025 file is byte-identical.
+- **Revit 2023 family instances carry their materials (RE-113, #421,
+  #355).** A 2023 family type's value block is `[owner u32][28 x ff][3 x
+  00]` and its first map `u32 n · n × (u32 key · u32 material)` names the
+  materials its geometry uses, as RE-82's does on 2024. A 2023 material is
+  found by its class tag `0x09fb` 0x27 bytes past its `u32` id, and named
+  by its element data or, inside a family's data, by a `-1001203`
+  parameter entry. 2023 doors, windows, columns and beams are now written
+  with their type's `IfcMaterialConstituentSet`, where no 2023 element had
+  a material before: Revit's own set on 17 of Exemplo_data's 18 and all 27
+  of modelo_bim's. A type whose map names a material with no name read gets
+  none. Every 2024 and 2025 file is byte-identical.
+
+- **Revit 2023 walls and floors carry their material layer sets (RE-114,
+  #421).** A 2023 wall's data holds its location line and its orientation
+  as 2024's does, read now through one element-data layout per release (a
+  `u32` id on 2023). 2023 walls, floors and roofs take RE-53's and RE-57's
+  layers, named by RE-113's materials, and are written with an
+  `IfcMaterialLayerSetUsage`: modelo_bim's 4 walls with Revit's layer and
+  thickness, and its floor with its concrete layer (Revit also writes the
+  zero-width metal deck). Walls keep their record body, since 2023 wall
+  joins are not read, and layers that take their category's material stay
+  unnamed on 2023. Every 2024 and 2025 file is byte-identical.
+
+- **Revit 2023 object styles give each category its material (RE-115,
+  #421).** A 2023 category's object-styles entry is `i32 category · ff ff
+  ff ff · u32 1|2 · u32 1 · ff ff ff ff 3f 01 · 8 bytes · i32 -3000010 ·
+  u32 material`. Walls', floors' and roofs' layers that take their
+  category's material take that one, as RE-91's wall layers do on 2024,
+  and floors', roofs' and ceilings' now do so on every release. Exemplo_data's
+  17 walls and its floor carry Revit's own `Material pré-definido de
+  parede` and `Material pré-definido de piso`: 35 of its 37 elements now
+  have Revit's material set (18 before). Every 2024 and 2025 file is
+  byte-identical.
+
+- **Revit 2023 materials carry their shading colours and names (RE-116,
+  #421, #355).** A 2023 material keeps its transparency, 0.5, four
+  eight-byte pattern slots (`u32` id, `u32` COLORREF), its shading colour
+  and its shininess, where 2024's slots are four bytes, and ends its name
+  before `ff ff ff ff eb 0b` or in its own name field, as RE-58's 2024
+  names do. The 2023 export's material list is now the file's own
+  materials, named and coloured (modelo_bim 108, Exemplo_data 114,
+  Einhoven 36), instead of 146, 155 and 42 partition display strings; their
+  colours and transparency are
+  Revit's on 20 of the 21 materials Revit's exports style, none different,
+  and Exemplo_data's roller door gains Revit's material (36 of its 37
+  elements with Revit's material set). The GLB draws 2023 elements in
+  them. Every 2024 and 2025 file is byte-identical.
+
+- **Revit 2023 doors and windows cut their host wall (#421, RE-85).** The
+  2023 reference lists carry the host as 2024's do. On the two 2023
+  projects measured, all 30 doors and windows take the wall Revit's filled
+  opening voids (none had a host before), and 15 of the 30 openings equal
+  Revit's within 0.01 ft.
+
+- **Revit 2023 rooms take their outline too (RE-102).** Revit 2023 stores
+  the room's solid as 2024 does, with four `ff` bytes before its tag. All
+  9 of Exemplo_data's rooms now match Revit's own area and outline (6
+  before). `plan_profiles_vs_ifc.py --match centroid` pairs rooms by
+  position where their GlobalIds are not Revit's. Every other local file
+  is byte-identical.
+
+- **Revit 2023 beams sit on the storey of the Level at their top (RE-119,
+  #421).** A structural framing element's record does not give the Level
+  Revit's export puts it on: four beams landed on the storey below it and
+  four foundation beams on no storey. Revit's export puts each beam on the
+  Level at its top: four beams spanning 3.2 to 4.0 m on the 4.0 m Level,
+  four foundation beams spanning -0.8 to 0.0 m on the 0.0 m Level. A 2023
+  beam whose record box's top is exactly one Level's elevation is now
+  bound to that Level, and modelo_bim has all 37 of its elements in
+  Revit's storey (29 before). Revit 2024 and 2025 are unchanged; the rule
+  is unmeasured there.
+
+- **Revit 2023 walls are cut back by the walls they join (RE-120, #421).**
+  A 2023 wall's record box is the untrimmed wall, as on 2024: at an L or
+  T joint it runs to the other wall's centreline, where Revit's export
+  stops it at that wall's face. A 2023 record's reference list names the
+  walls it joins, as 2024's does, so 2024's join solver (RE-26, RE-29)
+  runs on the 2023 records unchanged. Exemplo_data's 17 walls and
+  modelo_bim's 4 now have Revit's box exactly (2 of 17 and 4 of 4
+  before). Einhoven, with no export, has 2 walls trimmed.
+
+- **Revit 2023 beams stop at the columns they frame into (RE-122,
+  #421).** A 2023 beam's record box runs to the centres of its end
+  columns; Revit's export stops it at their faces. The beam's reference
+  list names the column each end lies in, so an end inside exactly one
+  named column is cut back to that column's near face. modelo_bim's 8
+  beams now have Revit's box exactly (0 before). On Revit 2024 the same
+  columns are named (Snowdon Towers' structural model), but most steel
+  beams stop a stored join cutback short of the face, and when Revit
+  applies it is not decoded, so 2024 beams are unchanged; the report
+  records where the cutbacks are stored.
+
+#### Every supported release
 
 - **Elements are typed by IFC type objects of their Revit type (RE-110).**
   Every element rvt-rs names `Family:Type` and whose type it reads is now
@@ -174,33 +239,351 @@ All notable changes will be documented here. This project follows
   2023 walls and roofs, whose system family is not read. Both Core
   Interior witness observations are refreshed.
 
-- **Revit 2023 family instances carry their family and type names
-  (RE-109, #421).** A 2023 name entry is `01 00 00 00 · u32 id · u32 n ·
-  UTF-16`, with no category after it as 2024's has. An instance's type is
-  the one same-category type record its list names that has a name, and
-  its family is the one named id its type's record references with no
-  record of its own. Every door, window, column, beam and footing of the
-  two 2023 projects with a Revit export now has Revit's own Name and
-  ObjectType: 19 of 19 on Exemplo_data and 31 of 31 on modelo_bim.
-  System-family types (walls, floors, roofs) are named since RE-111. Every
-  2024 and 2025 file is byte-identical.
+- **Rooms carry their numbers and names on every release (RE-117, #90,
+  #421).** A room's number and name are the parameter entries `-1006901
+  (ROOM_NUMBER) · u32 n · UTF-16` and `-1006900 (ROOM_NAME) · u32 m ·
+  UTF-16` just past its data object, with ids as wide as the release's
+  ElementIds. Read from there, every room carries Revit's number and name:
+  Core Interior 116 of 116 (unchanged), Snowdon Towers 54 of 54 against
+  its VIM export (RE-29's parameter block named 1, wrongly), RE1
+  Architecture 11 of 11 and Exemplo_data 9 of 9 (neither named before).
+  RE-29's block still gives a room's Level, and its number and name where
+  no entries are read.
 
-- **Revit 2023 elements take Revit's own GlobalIds (RE-108, #421).** A
-  2023 `Global/ElemTable` record holds the element's creating episode at
-  `+0x0c`, where 2024's 40-byte record has it at `+0x18`. Every element,
-  room and storey rvt-rs exports from the two 2023 projects with a Revit
-  export now carries the GlobalId Revit gives it: Exemplo_data 37, 9 and
-  2, modelo_bim 37 and 4 (none before). Every 2024 and 2025 file is
+- **Rooms take their real outline (RE-101, #90).** A room's partition
+  stores the room's solid as planar faces, and the walls among them close
+  into its outline, columns and shafts left out as voids. Rooms export
+  with that outline instead of their bounding box:
+  - Core Interior: all 116 at Revit's own area and outline (76 before).
+  - RE1 Architecture: all 11 keep theirs.
+  - Snowdon Towers: 45 of 54 at the area its VIM export gives (10 before).
+    The 7 whose solids do not close at the floor keep their box.
+
+  `rvt-schedule --schedule rooms` gains an area column, filled for rooms
+  whose outline was read. `plan_profiles_vs_ifc.py` also measures each
+  outline against the other file's, as Revit splits edges at every
+  bounding element. Every other local file is byte-identical.
+
+- **Family instances carry their materials (RE-82, #355).** A family
+  type's parameters hold a map of the materials its geometry is drawn in;
+  each instance now exports them as an `IfcMaterialConstituentSet`, the way
+  Revit's own export writes doors, windows, furniture and fixtures. Elements
+  whose materials equal Revit's: Snowdon Towers 2,533 (from 1,202), Core
+  Interior 220 (from 88), RE1 Architecture 58 (from 15). The differences are
+  families with a nested component (counter tops with an appliance, Core
+  Interior's windows) and planting Revit writes as `<Unnamed>`.
+
+- **Family instances are drawn in their material's colour (#355).** In the
+  GLB and so the browser viewer, a family instance whose type draws in
+  exactly one material (RE-82) takes that material's colour when the colour
+  was read, instead of its category's. Checked end to end against Revit's
+  own IFC4 styles: all 290 such instances on Snowdon Towers and all 38 on
+  RE1 Architecture render Revit's material and colour; Core Interior has
+  none. Instances drawn in several materials keep their category's colour.
+
+- **Walls whose layer takes its category's material get it (#355,
+  RE-91).** The document's object styles hold each category's material.
+  Where the Walls entry is set, a wall layer that takes its category's
+  material takes that one. On Core Interior all 360 walls now carry
+  Revit's material ("Default Wall" on 356, none before): 315 as a
+  one-layer layer set and 45 as the material itself. Its layer sets go
+  from 88 to 403, all on Revit's bodies within 0.001 ft. Snowdon Towers
+  and the MIT house leave the entry unset and are unchanged; so are RE1
+  and Einhoven.
+
+- **Walls their data does not place carry their type's materials (#355,
+  RE-88).** A wall with no orientation, line or arc in its data still
+  takes its type's layers for its materials, with no exterior side, so it
+  is neither drawn in layers nor given a layer set. On Snowdon Towers 95
+  of the 111 walls that had no material now have Revit's association (72
+  before), none a different one. On Core Interior 4 walls get Revit's
+  "Concrete"; its other 356 walls' layers take their category's material,
+  which Revit writes "Default Wall" and rvt-rs does not read.
+
+- **Walls whose body is not a layer set carry their layers' materials
+  (#355, RE-88).** Revit's export associates a wall's materials by its
+  type's layers: one layer gives its `IfcMaterial`, several an
+  `IfcMaterialConstituentSet` of the layers, exterior first, a material's
+  k-th occurrence named " (k)". That is Revit's association on every
+  Snowdon wall rvt-rs writes a layer set for (143 of 143, 823 of 824).
+  Tapered, curved, cut and profiled walls, which got no material, now get
+  it where their layers are read: on Snowdon Towers 72 of the 111, all
+  equal to Revit's (57 constituent sets, 15 materials), none different.
+  In the GLB a wall with one material takes its colour. Every other local
+  file exports byte-identical IFC.
+
+- **Steel beams are drawn as their I section (RE-103, #94).** A framing
+  type stores its section's width, depth, web and flange thickness and
+  its centroid, and a centroid at the centre both ways marks an I, not a
+  channel. 377 of Snowdon Towers' structural beams now export as an
+  `IfcIShapeProfileDef` along their line (none before), placed on the
+  box's bottom where the beam is set down from its line. On all 271 of
+  them its VIM export can score, Revit's own mesh is that I in that place.
+  Every other local file is byte-identical.
+
+- **Steel columns are drawn as their I section (RE-104, #94).** A
+  structural column's flanges run along its instance's X axis. All 40 of
+  Snowdon Towers' steel columns now export as their type's
+  `IfcIShapeProfileDef` turned to it, where the turned section fills the
+  record box. On all 24 its VIM export can score, Revit's own mesh is that
+  I at that turn.
+  - The type-value readers now take a block's owner from every ElementId
+    `Global/ElemTable` declares, secondary ids included (RE-41). That reads
+    W8x31's section, and changes no exported value elsewhere.
+  - Every other local file is byte-identical.
+
+- **Steel members carry their section as a material profile (RE-105,
+  #94).** The 417 beams and columns drawn as their I section are written
+  with an `IfcMaterialProfileSetUsage`, one set per type pairing its
+  material with that I, instead of a constituent set.
+  - `IfcMaterialProfile` now writes the real profile where the model has
+    one, rather than a 1 × 1 m rectangle stand-in.
+  - `rvt-schedule` names these members' material (Steel).
+  - The GLB and every other local file are byte-identical.
+
+- **Windows cut Revit's opening, from their type (#227, RE-93).** A
+  type's length parameters are read from its value block. Revit's export
+  cuts a window's opening its type's Width by Height, centred on the
+  window's origin, from its type's Default Sill Height above it. A window
+  whose type stores all three takes that opening where its box holds it,
+  and its `OverallWidth` / `OverallHeight`. On Snowdon Towers 56 of 68
+  windows now match Revit's opening within 0.001 ft (none did); the
+  Double-Hung windows, whose types store no Default Sill Height, keep
+  their box opening. Every other local file is byte-identical.
+
+- **Doors Revit cuts at their rough size get that opening (#227, RE-94).**
+  Revit's export cuts a door at its type's Rough Width by Rough Height
+  exactly where the door's body is Rough Height tall. Such a door now takes
+  that opening, centred on its origin, and its `OverallWidth` /
+  `OverallHeight`. On Snowdon Towers 57 of 126 doors: 54 now match
+  Revit's opening within 0.001 ft (none did), and the 3 in tapered walls
+  match along the wall and in height. Doors cut to their frame, and
+  opening-only doors, keep their box opening. Every other local file is
   byte-identical.
 
-- **Revit 2023 Levels and storeys (RE-107, #421).** Revit 2023 projects
-  export with their real Levels as storeys, and each element on the
-  storey of the Level its record names, by the same rules as 2024's. The
-  elevation marker's `u16` is the schema's `Plane` tag on every release.
-  A Level's newest partition holds its current name and elevation.
-  - Exemplo_data: 2 of 2 storeys and 37 of 37 elements as Revit's.
-  - modelo_bim: 4 of 4 storeys and 29 of 37 elements as Revit's.
-  - Every 2024 and 2025 file is byte-identical.
+- **Slab outlines with curved edges (RE-96).** A sketch line's curve
+  can be an arc, stored in the layout a curved wall's is (RE-75) but
+  unmarked, so the line's record box decides whether it reads as an arc.
+  Arcs are drawn as chords within 0.0005 ft, and an outline with an arc is
+  kept only where it spans its element's record box. On Snowdon Towers 17
+  more slabs carry their outline (149 of 199), and 87 match Revit's area
+  within 0.1% (73 before). Snowdon Towers structural gains one; every
+  other local file is byte-identical.
+
+- **Edited sketches take their lines from the sketch itself (RE-97).** A
+  Sketch element names the element it sketches and lists its curves. Where
+  an edit left a line's owner reference naming another element, the list
+  is now the sketch's membership, and such an outline is kept only where
+  it spans its element's record box. On Snowdon Towers 176 of 199 slabs
+  and all 20 roofs carry their outline (149 and 13 before); 102 slabs
+  match Revit's area within 0.1% (89 before) and 10 roofs (7 before).
+  Snowdon Towers structural gains three; every other local file is
+  byte-identical.
+
+- **Ceilings carry their sketch's outline (RE-98).** Ceilings take the
+  outline their sketch closes, as roofs do, instead of their record box.
+  66 of Snowdon Towers' 68 ceilings (50 before) and all 6 of RE1
+  Architecture's (5 before) now match Revit's outline within 0.1% of its
+  area. `plan_profiles_vs_ifc.py` measures each element's top surface, so
+  Revit's stacked layer solids count once.
+
+- **Shaft openings cut the floors and roofs they pass through (RE-99).**
+  A shaft opening's sketch is read, leaving out the diagonals Revit draws
+  across it in plan, and its outline becomes a void in each one-piece
+  floor, roof or ceiling within its height that holds it strictly inside.
+  On Snowdon Towers 7 elements take a shaft void, all closer to Revit's
+  area, two of them now exact. A shaft on an element's edge is not cut
+  yet. Every other local file is byte-identical.
+
+- **Round shafts (RE-100).** A full-circle sketch line is read, so a round
+  shaft opening cuts its void too. On Snowdon Towers four more slabs match
+  Revit's area within 0.1% (154), and a roof becomes exact. Every other
+  local file is byte-identical.
+
+- **Core Interior's 20 shading-device plates carry their outline (#233,
+  RE-95).** Each owns one zero-length sketch line: a record whose box is a
+  point, with no line of its own, on an end of two of the others. It is
+  now left out, and the other lines' recorded ends close each plate into
+  Revit's outline exactly (none did). Two slabs in Snowdon Towers
+  structural and one in the MIT house (2024) close the same way; no Revit
+  export of those files is held. Every other local file is byte-identical.
+
+- **Stair runs ending with a tread, and monolithic runs, are drawn as
+  their steps (#357, RE-92).** A run's data holds Revit's "End with
+  Riser" setting. It is off on exactly the three Snowdon Towers runs that
+  have one riser line more than risers, so those are drawn with their
+  last tread running to the last riser line. Monolithic runs are drawn as
+  one cast body, its underside the type's structural depth below the
+  steps and cut off by the floor. 38 of Snowdon's 43 flights are drawn
+  as their steps (34 before), and the 4 added equal Revit's own geometry
+  but for one nosing edge. Every other local file is byte-identical.
+
+- **Held-out validation (#408).** Autodesk's Snowdon Towers Plumbing, HVAC
+  and Electrical samples, never used to develop the decoder, were exported
+  once and compared with the VIM export of the sample
+  (`tools/re/held_out_vs_vim.py`,
+  `reports/validation/held-out-snowdon-mep-2026-09-27.md`): 10,385
+  exported elements in the VIM, every one in the expected category; every
+  instance both hold exported; 8,766 storeys and 10,385 GlobalIds equal.
+
+- **Research: a door's record box does not give its body (RE-121,
+  negative, #227).** The box reaches past Revit's door body across the
+  wall on one side, by up to 0.9 m. Reflecting its near side about the
+  wall's centreline gives Revit's body exactly where the body is
+  centred: Core Interior 132 of 132, RE1 4 of 4, the 2023 projects 9 of
+  11. On Snowdon Towers, whose door frames sit at a wall face, it gives
+  0 of 126, and nothing read tells the cases apart, so doors keep their
+  record box. Windows fail the same test (modelo_bim 10 of 10, Core Interior 0 of 6, Snowdon 0 of 68). `tools/re/door_bodies_vs_ifc.py` measures both.
+
+### Changed
+
+- **`IfcSpace.Name` is the room number, as in Revit's export (RE-117).**
+  A space was named `Room-<ElementId>`, with the room name in
+  `LongName`. Revit's exporter writes the number in `Name` and the name
+  in `LongName`, and now so does rvt-rs; the ElementId, which an
+  `IfcSpace` has no `Tag` for, is the new `ElementId` property. Every
+  room's `Name` and `LongName` equal Revit's on Core Interior (116),
+  RE1 Architecture (11) and Exemplo_data (9), and Snowdon Towers' 54
+  against its VIM export. A room without a number keeps the
+  `Room-<ElementId>` Name, and one without a name has no `LongName`
+  (it repeated the `Name` before). GlobalIds are unchanged. **Upgrade:**
+  anything that read a room's ElementId out of its IFC `Name` reads the
+  `ElementId` property instead. glTF node names, the viewer and the
+  room schedule are unchanged.
+
+- **Only a Level that is a building story becomes a storey (RE-118,
+  #219).** A Level keeps Revit's Building Story setting past its name: the
+  first `ff × 8 · 00 01`, an `f64`, a `u64` ElementId, then 1 or 0. It is
+  exact against the "Building Story" parameter of Snowdon Towers' VIM
+  export on all 37 architectural and structural Levels, and 1 on Core
+  Interior's and RE1's, each a storey of Revit's IFC. A pad byte of 1
+  before the name length no longer refuses a Level. Snowdon Towers'
+  structural model, whose Levels were refused, now has its 12 building
+  stories as storeys, their names and elevations the VIM's, with 208 of
+  the 210 elements on them in their storey; its Top of Footing and TOS
+  Levels are not storeys. Every other model's IFC is byte-identical.
+
+- **System families are named in the file's saved locale (RE-123).**
+  A system family's name is not stored in a Revit file: Revit's export
+  writes it in the language the file was saved in. On the four files
+  saved as `PTB` (Exemplo_data and modelo_bim, 2023; Projeto1 and
+  teste_export_2025, 2025) Revit names walls `Parede básica`, floors
+  `Piso` and roofs `Telhado básico`, where rvt-rs wrote `Basic Wall`,
+  `Floor` and `Basic Roof`. Elements and material layer sets now carry
+  those names on `PTB` files: 32 of 32 elements' family names as Revit's
+  (0 before). Other families and locales keep the English name;
+  `ENU` files are byte-identical.
+
+- **Turned family instances are drawn turned (RE-87).** A family
+  instance's data holds its transform, a 3 x 3 rotation stored row by row
+  and its origin. A door, window, piece of furniture or other family
+  instance turned off the model's axes is now the rectangle at its angle
+  whose box is its record box, and a door's or window's opening turns with
+  it (`BodySource` `partition_family_instance_turned_box`). On Snowdon
+  Towers all 181 such instances are closer to Revit's body along their
+  own axes (median 1.47 ft off before, 0.48 ft now; 55 within 0.01 ft,
+  none before), and the openings of the 27 turned doors and windows are
+  Revit's width along them (none before). Instances square to the model's
+  axes, and Core Interior, RE1, Einhoven and the MIT house, are unchanged.
+
+- **Fixtures hosted on ceilings and walls are turned too (#227, RE-90).**
+  RE-87 turned only instances whose Z axis is the model's. One with any
+  vertical axis takes its plan direction from its first flat axis, which
+  agrees with Revit's placement on every such family instance on Snowdon
+  Towers. 58 more instances are drawn turned (44 proxies, 14 light
+  fixtures): 44 closer to Revit's body, none further. Every other local
+  file is byte-identical.
+
+- **Turned and tilted curtain mullions and panels are drawn along their
+  own axes (RE-106).** The box along an instance's transform axes whose
+  axis-aligned box is its record box follows from three linear equations.
+  1,019 of Snowdon Towers' mullions and panels turned or tilted off the
+  model's axes now export as that box instead of their record box. On
+  every one, Revit's own mesh has its extents and centre along those axes
+  (to 0.0000 ft). Every other local file is byte-identical.
+
+- **Tapered walls are drawn with their leaning face (#358, RE-86).** A
+  wall type stores three face angles after a fixed frame, and a wall
+  whose orientation word is 2 is tapered by them: its exterior face leans
+  by the type's angle, wider at the base, its interior face is vertical,
+  and at the top it is its type's thickness about its line. Each such wall
+  is now that cross-section extruded along its line (`BodySource`
+  `partition_wall_tapered_section`) instead of its record box. On Snowdon
+  Towers, 19 of the 20 walls Revit tapers match its body to 0.001 ft across
+  the wall at five heights and the 20th to 0.052 ft (on main none was
+  within 0.1 ft, the worst 9.3 ft off). In the GLB, 24 walls score better
+  against Revit's bodies and none worse. Every other local file exports
+  byte-identical IFC. Slanted walls (word 0) keep their box.
+
+- **Windows in tapered walls get Revit's opening (#227, RE-89).** Revit
+  cuts a window's opening in a tapered wall as a vertical box the host
+  type's thickness deep, centred on the window's own origin. rvt-rs cut
+  none there (the wall's base is wider than RE-83's limit); now all 20
+  such windows on Snowdon Towers have Revit's opening across the wall
+  (0.77 and 0.13 ft off before). A turned family instance reports its
+  origin (`InstanceOriginX`, `InstanceOriginY`). Doors, which Revit cuts
+  flush with the exterior face, keep their box.
+
+- **Openings are as deep as the wall they cut (#227, RE-83).** A door's or
+  window's `IfcOpeningElement` took the element's whole box, standing up to
+  4.9 ft out of the wall. Its depth now comes from the host wall's plan
+  outline, measured along the element's own axes; width and height stay the
+  element's box. Against Revit's export
+  (`tools/re/openings_vs_ifc.py`): Core Interior 138 of 138 within 0.25 ft
+  (none before), Snowdon Towers 72 of 110 within 0.26 ft (none before). In
+  walls that are not straight extrusions the opening stays the element's
+  box. Three Snowdon hosts differ from Revit's (#439); the docs no longer say
+  every host pairs.
+
+- **Doors and windows whose type draws no geometry export as their opening
+  (#309, RE-84).** Families that only cut their host ("Door-Opening",
+  "Schematic Opening Cut", "CasedOpening") have a type value block with no
+  geometry-material map. Revit's export writes each as an
+  `IfcOpeningElement` voiding the host, Tagged with the element's
+  ElementId, and no door or window; rvt-rs now does the same wherever it
+  binds the host. On Snowdon Towers, Core Interior and RE1 Architecture,
+  48 of 48 such elements and 343 of 343 others follow the rule in Revit's
+  export; 36 Snowdon and 1 RE1 openings are now written this way with
+  Revit's Tag and host. The 11 whose host is not bound yet stay doors and
+  windows (#439). Openings are not drawn in the GLB or plan SVG and are not
+  counted as building elements in the export diagnostics.
+
+- **Doors and windows find their host wall anywhere in their reference
+  list (#439, RE-85).** RE-23 took the slot just before the record's own
+  ElementId. The list is in ascending ElementId order, so a host with a
+  larger id than its door comes after it, and families that list their
+  type put it between. The host is now the nearest exported wall the list
+  names, below the record's own id first, skipping curtain walls. On
+  Snowdon Towers, 192 of the 194 doors and windows Revit fills an opening
+  for take its host (107 before; the other 2 take another wall Revit also
+  cuts), none takes a wall Revit does not cut, and the 11 opening-cut doors
+  and windows left over by RE-84 are now openings. Core Interior and RE1
+  are unchanged.
+
+- **The viewer is built with pnpm.** `viewer/package.json` pins
+  `packageManager` to pnpm 12.6.0 and `viewer/pnpm-lock.yaml` replaces
+  `package-lock.json`, imported from it with the same resolved versions.
+  CI, the viewer deploy, the release workflow, `tools/check-local.sh
+  --viewer`, the Cursor Cloud installer and the docs install with
+  `pnpm install --frozen-lockfile`. The dependency audit runs
+  `pnpm audit --audit-level high` with the same retry and NOT MEASURED
+  handling.
+
+- **CI and the local gate no longer run unit tests.** Unit tests are banned
+  in this repository. `tools/ci/test-targets.txt` classes every
+  `tests/*.rs` target as real-file, CLI, contract or unit, and
+  `tools/ci/verify-real-files.sh` runs all but the unit ones (failing on an
+  unclassified target). The CI build job (now `build + real files`), the
+  tier-two corpus job and `tools/check-local.sh` use it; the library,
+  binary and doc unit suites, the synthetic IFC and tier-one jobs and the
+  pytest suite no longer run, and the Python wheel job smoke-tests the
+  installed wheel on Revit files instead. The test sources are kept.
+
+- **The install guide and status page describe v0.3.0 as released** (#405),
+  each channel checked from its published artifacts.
+
+- **`rvt` 0.3.0 is on crates.io and docs.rs** (#406). The install guide
+  documents `cargo install rvt --locked` and links the API documentation.
 
 ### Fixed
 
@@ -226,330 +609,6 @@ All notable changes will be documented here. This project follows
   - RE1 Architecture 15 → 58.
 
   No other column changes.
-
-### Changed
-
-- **`IfcSpace.Name` is the room number, as in Revit's export (RE-117).**
-  A space was named `Room-<ElementId>`, with the room name in
-  `LongName`. Revit's exporter writes the number in `Name` and the name
-  in `LongName`, and now so does rvt-rs; the ElementId, which an
-  `IfcSpace` has no `Tag` for, is the new `ElementId` property. Every
-  room's `Name` and `LongName` equal Revit's on Core Interior (116),
-  RE1 Architecture (11) and Exemplo_data (9), and Snowdon Towers' 54
-  against its VIM export. A room without a number keeps the
-  `Room-<ElementId>` Name, and one without a name has no `LongName`
-  (it repeated the `Name` before). GlobalIds are unchanged. **Upgrade:**
-  anything that read a room's ElementId out of its IFC `Name` reads the
-  `ElementId` property instead. glTF node names, the viewer and the
-  room schedule are unchanged.
-
-- **Turned and tilted curtain mullions and panels are drawn along their
-  own axes (RE-106).** The box along an instance's transform axes whose
-  axis-aligned box is its record box follows from three linear equations.
-  1,019 of Snowdon Towers' mullions and panels turned or tilted off the
-  model's axes now export as that box instead of their record box. On
-  every one, Revit's own mesh has its extents and centre along those axes
-  (to 0.0000 ft). Every other local file is byte-identical.
-
-- **Steel members carry their section as a material profile (RE-105,
-  #94).** The 417 beams and columns drawn as their I section are written
-  with an `IfcMaterialProfileSetUsage`, one set per type pairing its
-  material with that I, instead of a constituent set.
-  - `IfcMaterialProfile` now writes the real profile where the model has
-    one, rather than a 1 × 1 m rectangle stand-in.
-  - `rvt-schedule` names these members' material (Steel).
-  - The GLB and every other local file are byte-identical.
-
-- **Steel columns are drawn as their I section (RE-104, #94).** A
-  structural column's flanges run along its instance's X axis. All 40 of
-  Snowdon Towers' steel columns now export as their type's
-  `IfcIShapeProfileDef` turned to it, where the turned section fills the
-  record box. On all 24 its VIM export can score, Revit's own mesh is that
-  I at that turn.
-  - The type-value readers now take a block's owner from every ElementId
-    `Global/ElemTable` declares, secondary ids included (RE-41). That reads
-    W8x31's section, and changes no exported value elsewhere.
-  - Every other local file is byte-identical.
-
-- **Steel beams are drawn as their I section (RE-103, #94).** A framing
-  type stores its section's width, depth, web and flange thickness and
-  its centroid, and a centroid at the centre both ways marks an I, not a
-  channel. 377 of Snowdon Towers' structural beams now export as an
-  `IfcIShapeProfileDef` along their line (none before), placed on the
-  box's bottom where the beam is set down from its line. On all 271 of
-  them its VIM export can score, Revit's own mesh is that I in that place.
-  Every other local file is byte-identical.
-
-- **Revit 2023 rooms take their outline too (RE-102).** Revit 2023 stores
-  the room's solid as 2024 does, with four `ff` bytes before its tag. All
-  9 of Exemplo_data's rooms now match Revit's own area and outline (6
-  before). `plan_profiles_vs_ifc.py --match centroid` pairs rooms by
-  position where their GlobalIds are not Revit's. Every other local file
-  is byte-identical.
-
-- **Rooms take their real outline (RE-101, #90).** A room's partition
-  stores the room's solid as planar faces, and the walls among them close
-  into its outline, columns and shafts left out as voids. Rooms export
-  with that outline instead of their bounding box:
-  - Core Interior: all 116 at Revit's own area and outline (76 before).
-  - RE1 Architecture: all 11 keep theirs.
-  - Snowdon Towers: 45 of 54 at the area its VIM export gives (10 before).
-    The 7 whose solids do not close at the floor keep their box.
-
-  `rvt-schedule --schedule rooms` gains an area column, filled for rooms
-  whose outline was read. `plan_profiles_vs_ifc.py` also measures each
-  outline against the other file's, as Revit splits edges at every
-  bounding element. Every other local file is byte-identical.
-
-- **Round shafts (RE-100).** A full-circle sketch line is read, so a round
-  shaft opening cuts its void too. On Snowdon Towers four more slabs match
-  Revit's area within 0.1% (154), and a roof becomes exact. Every other
-  local file is byte-identical.
-
-- **Shaft openings cut the floors and roofs they pass through (RE-99).**
-  A shaft opening's sketch is read, leaving out the diagonals Revit draws
-  across it in plan, and its outline becomes a void in each one-piece
-  floor, roof or ceiling within its height that holds it strictly inside.
-  On Snowdon Towers 7 elements take a shaft void, all closer to Revit's
-  area, two of them now exact. A shaft on an element's edge is not cut
-  yet. Every other local file is byte-identical.
-
-- **Ceilings carry their sketch's outline (RE-98).** Ceilings take the
-  outline their sketch closes, as roofs do, instead of their record box.
-  66 of Snowdon Towers' 68 ceilings (50 before) and all 6 of RE1
-  Architecture's (5 before) now match Revit's outline within 0.1% of its
-  area. `plan_profiles_vs_ifc.py` measures each element's top surface, so
-  Revit's stacked layer solids count once.
-
-- **Edited sketches take their lines from the sketch itself (RE-97).** A
-  Sketch element names the element it sketches and lists its curves. Where
-  an edit left a line's owner reference naming another element, the list
-  is now the sketch's membership, and such an outline is kept only where
-  it spans its element's record box. On Snowdon Towers 176 of 199 slabs
-  and all 20 roofs carry their outline (149 and 13 before); 102 slabs
-  match Revit's area within 0.1% (89 before) and 10 roofs (7 before).
-  Snowdon Towers structural gains three; every other local file is
-  byte-identical.
-
-- **Slab outlines with curved edges (RE-96).** A sketch line's curve
-  can be an arc, stored in the layout a curved wall's is (RE-75) but
-  unmarked, so the line's record box decides whether it reads as an arc.
-  Arcs are drawn as chords within 0.0005 ft, and an outline with an arc is
-  kept only where it spans its element's record box. On Snowdon Towers 17
-  more slabs carry their outline (149 of 199), and 87 match Revit's area
-  within 0.1% (73 before). Snowdon Towers structural gains one; every
-  other local file is byte-identical.
-
-- **Core Interior's 20 shading-device plates carry their outline (#233,
-  RE-95).** Each owns one zero-length sketch line: a record whose box is a
-  point, with no line of its own, on an end of two of the others. It is
-  now left out, and the other lines' recorded ends close each plate into
-  Revit's outline exactly (none did). Two slabs in Snowdon Towers
-  structural and one in the MIT house (2024) close the same way; no Revit
-  export of those files is held. Every other local file is byte-identical.
-
-- **Doors Revit cuts at their rough size get that opening (#227, RE-94).**
-  Revit's export cuts a door at its type's Rough Width by Rough Height
-  exactly where the door's body is Rough Height tall. Such a door now takes
-  that opening, centred on its origin, and its `OverallWidth` /
-  `OverallHeight`. On Snowdon Towers 57 of 126 doors: 54 now match
-  Revit's opening within 0.001 ft (none did), and the 3 in tapered walls
-  match along the wall and in height. Doors cut to their frame, and
-  opening-only doors, keep their box opening. Every other local file is
-  byte-identical.
-
-- **Windows cut Revit's opening, from their type (#227, RE-93).** A
-  type's length parameters are read from its value block. Revit's export
-  cuts a window's opening its type's Width by Height, centred on the
-  window's origin, from its type's Default Sill Height above it. A window
-  whose type stores all three takes that opening where its box holds it,
-  and its `OverallWidth` / `OverallHeight`. On Snowdon Towers 56 of 68
-  windows now match Revit's opening within 0.001 ft (none did); the
-  Double-Hung windows, whose types store no Default Sill Height, keep
-  their box opening. Every other local file is byte-identical.
-
-- **Stair runs ending with a tread, and monolithic runs, are drawn as
-  their steps (#357, RE-92).** A run's data holds Revit's "End with
-  Riser" setting. It is off on exactly the three Snowdon Towers runs that
-  have one riser line more than risers, so those are drawn with their
-  last tread running to the last riser line. Monolithic runs are drawn as
-  one cast body, its underside the type's structural depth below the
-  steps and cut off by the floor. 38 of Snowdon's 43 flights are drawn
-  as their steps (34 before), and the 4 added equal Revit's own geometry
-  but for one nosing edge. Every other local file is byte-identical.
-
-- **Walls whose layer takes its category's material get it (#355,
-  RE-91).** The document's object styles hold each category's material.
-  Where the Walls entry is set, a wall layer that takes its category's
-  material takes that one. On Core Interior all 360 walls now carry
-  Revit's material ("Default Wall" on 356, none before): 315 as a
-  one-layer layer set and 45 as the material itself. Its layer sets go
-  from 88 to 403, all on Revit's bodies within 0.001 ft. Snowdon Towers
-  and the MIT house leave the entry unset and are unchanged; so are RE1
-  and Einhoven.
-
-- **Fixtures hosted on ceilings and walls are turned too (#227, RE-90).**
-  RE-87 turned only instances whose Z axis is the model's. One with any
-  vertical axis takes its plan direction from its first flat axis, which
-  agrees with Revit's placement on every such family instance on Snowdon
-  Towers. 58 more instances are drawn turned (44 proxies, 14 light
-  fixtures): 44 closer to Revit's body, none further. Every other local
-  file is byte-identical.
-
-- **Windows in tapered walls get Revit's opening (#227, RE-89).** Revit
-  cuts a window's opening in a tapered wall as a vertical box the host
-  type's thickness deep, centred on the window's own origin. rvt-rs cut
-  none there (the wall's base is wider than RE-83's limit); now all 20
-  such windows on Snowdon Towers have Revit's opening across the wall
-  (0.77 and 0.13 ft off before). A turned family instance reports its
-  origin (`InstanceOriginX`, `InstanceOriginY`). Doors, which Revit cuts
-  flush with the exterior face, keep their box.
-- **Walls their data does not place carry their type's materials (#355,
-  RE-88).** A wall with no orientation, line or arc in its data still
-  takes its type's layers for its materials, with no exterior side, so it
-  is neither drawn in layers nor given a layer set. On Snowdon Towers 95
-  of the 111 walls that had no material now have Revit's association (72
-  before), none a different one. On Core Interior 4 walls get Revit's
-  "Concrete"; its other 356 walls' layers take their category's material,
-  which Revit writes "Default Wall" and rvt-rs does not read.
-
-- **Walls whose body is not a layer set carry their layers' materials
-  (#355, RE-88).** Revit's export associates a wall's materials by its
-  type's layers: one layer gives its `IfcMaterial`, several an
-  `IfcMaterialConstituentSet` of the layers, exterior first, a material's
-  k-th occurrence named " (k)". That is Revit's association on every
-  Snowdon wall rvt-rs writes a layer set for (143 of 143, 823 of 824).
-  Tapered, curved, cut and profiled walls, which got no material, now get
-  it where their layers are read: on Snowdon Towers 72 of the 111, all
-  equal to Revit's (57 constituent sets, 15 materials), none different.
-  In the GLB a wall with one material takes its colour. Every other local
-  file exports byte-identical IFC.
-- **Turned family instances are drawn turned (RE-87).** A family
-  instance's data holds its transform, a 3 x 3 rotation stored row by row
-  and its origin. A door, window, piece of furniture or other family
-  instance turned off the model's axes is now the rectangle at its angle
-  whose box is its record box, and a door's or window's opening turns with
-  it (`BodySource` `partition_family_instance_turned_box`). On Snowdon
-  Towers all 181 such instances are closer to Revit's body along their
-  own axes (median 1.47 ft off before, 0.48 ft now; 55 within 0.01 ft,
-  none before), and the openings of the 27 turned doors and windows are
-  Revit's width along them (none before). Instances square to the model's
-  axes, and Core Interior, RE1, Einhoven and the MIT house, are unchanged.
-
-- **Tapered walls are drawn with their leaning face (#358, RE-86).** A
-  wall type stores three face angles after a fixed frame, and a wall
-  whose orientation word is 2 is tapered by them: its exterior face leans
-  by the type's angle, wider at the base, its interior face is vertical,
-  and at the top it is its type's thickness about its line. Each such wall
-  is now that cross-section extruded along its line (`BodySource`
-  `partition_wall_tapered_section`) instead of its record box. On Snowdon
-  Towers, 19 of the 20 walls Revit tapers match its body to 0.001 ft across
-  the wall at five heights and the 20th to 0.052 ft (on main none was
-  within 0.1 ft, the worst 9.3 ft off). In the GLB, 24 walls score better
-  against Revit's bodies and none worse. Every other local file exports
-  byte-identical IFC. Slanted walls (word 0) keep their box.
-
-- **The viewer is built with pnpm.** `viewer/package.json` pins
-  `packageManager` to pnpm 12.6.0 and `viewer/pnpm-lock.yaml` replaces
-  `package-lock.json`, imported from it with the same resolved versions.
-  CI, the viewer deploy, the release workflow, `tools/check-local.sh
-  --viewer`, the Cursor Cloud installer and the docs install with
-  `pnpm install --frozen-lockfile`. The dependency audit runs
-  `pnpm audit --audit-level high` with the same retry and NOT MEASURED
-  handling.
-- **Family instances are drawn in their material's colour (#355).** In the
-  GLB and so the browser viewer, a family instance whose type draws in
-  exactly one material (RE-82) takes that material's colour when the colour
-  was read, instead of its category's. Checked end to end against Revit's
-  own IFC4 styles: all 290 such instances on Snowdon Towers and all 38 on
-  RE1 Architecture render Revit's material and colour; Core Interior has
-  none. Instances drawn in several materials keep their category's colour.
-- **Revit 2023 doors and windows cut their host wall (#421, RE-85).** The
-  2023 reference lists carry the host as 2024's do. On the two 2023
-  projects measured, all 30 doors and windows take the wall Revit's filled
-  opening voids (none had a host before), and 15 of the 30 openings equal
-  Revit's within 0.01 ft.
-- **Doors and windows find their host wall anywhere in their reference
-  list (#439, RE-85).** RE-23 took the slot just before the record's own
-  ElementId. The list is in ascending ElementId order, so a host with a
-  larger id than its door comes after it, and families that list their
-  type put it between. The host is now the nearest exported wall the list
-  names, below the record's own id first, skipping curtain walls. On
-  Snowdon Towers, 192 of the 194 doors and windows Revit fills an opening
-  for take its host (107 before; the other 2 take another wall Revit also
-  cuts), none takes a wall Revit does not cut, and the 11 opening-cut doors
-  and windows left over by RE-84 are now openings. Core Interior and RE1
-  are unchanged.
-- **Doors and windows whose type draws no geometry export as their opening
-  (#309, RE-84).** Families that only cut their host ("Door-Opening",
-  "Schematic Opening Cut", "CasedOpening") have a type value block with no
-  geometry-material map. Revit's export writes each as an
-  `IfcOpeningElement` voiding the host, Tagged with the element's
-  ElementId, and no door or window; rvt-rs now does the same wherever it
-  binds the host. On Snowdon Towers, Core Interior and RE1 Architecture,
-  48 of 48 such elements and 343 of 343 others follow the rule in Revit's
-  export; 36 Snowdon and 1 RE1 openings are now written this way with
-  Revit's Tag and host. The 11 whose host is not bound yet stay doors and
-  windows (#439). Openings are not drawn in the GLB or plan SVG and are not
-  counted as building elements in the export diagnostics.
-- **Openings are as deep as the wall they cut (#227, RE-83).** A door's or
-  window's `IfcOpeningElement` took the element's whole box, standing up to
-  4.9 ft out of the wall. Its depth now comes from the host wall's plan
-  outline, measured along the element's own axes; width and height stay the
-  element's box. Against Revit's export
-  (`tools/re/openings_vs_ifc.py`): Core Interior 138 of 138 within 0.25 ft
-  (none before), Snowdon Towers 72 of 110 within 0.26 ft (none before). In
-  walls that are not straight extrusions the opening stays the element's
-  box. Three Snowdon hosts differ from Revit's (#439); the docs no longer say
-  every host pairs.
-- **Held-out validation (#408).** Autodesk's Snowdon Towers Plumbing, HVAC
-  and Electrical samples, never used to develop the decoder, were exported
-  once and compared with the VIM export of the sample
-  (`tools/re/held_out_vs_vim.py`,
-  `reports/validation/held-out-snowdon-mep-2026-09-27.md`): 10,385
-  exported elements in the VIM, every one in the expected category; every
-  instance both hold exported; 8,766 storeys and 10,385 GlobalIds equal.
-- **CI and the local gate no longer run unit tests.** Unit tests are banned
-  in this repository. `tools/ci/test-targets.txt` classes every
-  `tests/*.rs` target as real-file, CLI, contract or unit, and
-  `tools/ci/verify-real-files.sh` runs all but the unit ones (failing on an
-  unclassified target). The CI build job (now `build + real files`), the
-  tier-two corpus job and `tools/check-local.sh` use it; the library,
-  binary and doc unit suites, the synthetic IFC and tier-one jobs and the
-  pytest suite no longer run, and the Python wheel job smoke-tests the
-  installed wheel on Revit files instead. The test sources are kept.
-- **Revit 2023 element records are located (RE-81, #421).** A 2023 record
-  sits behind the schema-derived marker with its ElementId at marker -52 and
-  its category at -38; the instance rule finds every element of Revit's own
-  export of two 2023 projects. A probe and a report; the exporter does not
-  read 2023 records yet.
-- **The install guide and status page describe v0.3.0 as released** (#405),
-  each channel checked from its published artifacts.
-- **`rvt` 0.3.0 is on crates.io and docs.rs** (#406). The install guide
-  documents `cargo install rvt --locked` and links the API documentation.
-
-### Added
-
-- **Revit 2023 projects export their elements (RE-81, #421).** Walls, doors,
-  windows, floors, roofs, columns, beams, foundations, rooms and the other
-  recovered categories come from their 2023 element records, typed, under
-  Revit's own ElementIds, each drawn as its bounding box. Against Revit's
-  IFC4 exports of two 2023 projects: 37 of 37 elements and 37 of 45, with
-  none outside either export; the 8 missing are window trims nested in the
-  windows, left out because Revit keeps some nested components (frames,
-  cuts) and drops others (mullion patterns) by a rule not yet decoded.
-  Names, types, storeys, joins, opening hosts, design options, parameters
-  and IFC export overrides are not read for 2023, and the export
-  diagnostics say so.
-
-- **Family instances carry their materials (RE-82, #355).** A family
-  type's parameters hold a map of the materials its geometry is drawn in;
-  each instance now exports them as an `IfcMaterialConstituentSet`, the way
-  Revit's own export writes doors, windows, furniture and fixtures. Elements
-  whose materials equal Revit's: Snowdon Towers 2,533 (from 1,202), Core
-  Interior 220 (from 88), RE1 Architecture 58 (from 15). The differences are
-  families with a nested component (counter tops with an appliance, Core
-  Interior's windows) and planting Revit writes as `<Unnamed>`.
 
 ## [0.3.0] — 2026-09-27
 
