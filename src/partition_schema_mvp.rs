@@ -1635,14 +1635,16 @@ fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedEleme
         else {
             continue;
         };
-        let Some(family_id) = crate::partition_names::resolve_family(&names, type_id) else {
+        let Some(type_entry) = names.entries.get(&type_id) else {
             continue;
         };
-        let (Some(type_entry), Some(family_entry)) =
-            (names.entries.get(&type_id), names.entries.get(&family_id))
-        else {
+        // A system family's type has no family element to name it; its
+        // family comes from `attach_system_family_names` instead.
+        let family_entry = crate::partition_names::resolve_family(&names, type_id)
+            .and_then(|family_id| names.entries.get(&family_id));
+        if family_entry.is_none() && system_family(&element.class, false).is_none() {
             continue;
-        };
+        }
         element.fields.push((
             TYPE_ID_FIELD.into(),
             InstanceField::ElementId {
@@ -1654,10 +1656,12 @@ fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedEleme
             TYPE_NAME_FIELD.into(),
             InstanceField::String(type_entry.name.clone()),
         ));
-        element.fields.push((
-            FAMILY_NAME_FIELD.into(),
-            InstanceField::String(family_entry.name.clone()),
-        ));
+        if let Some(family_entry) = family_entry {
+            element.fields.push((
+                FAMILY_NAME_FIELD.into(),
+                InstanceField::String(family_entry.name.clone()),
+            ));
+        }
     }
 }
 
