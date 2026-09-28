@@ -197,9 +197,23 @@ pub fn append_typed_production_elements(
                 decoded.id,
                 crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields),
             ) {
-                layers.system_family =
-                    crate::partition_schema_mvp::system_family(&decoded.class, true)
-                        .map(String::from);
+                // The element's own system family name, localized
+                // (RE-123), where one was given; else the class's.
+                layers.system_family = decoded
+                    .fields
+                    .iter()
+                    .find_map(|(name, value)| match value {
+                        InstanceField::String(family)
+                            if name == crate::partition_schema_mvp::FAMILY_NAME_FIELD =>
+                        {
+                            Some(family.clone())
+                        }
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        crate::partition_schema_mvp::system_family(&decoded.class, true)
+                            .map(String::from)
+                    });
                 out.element_layers.insert(id, layers);
             } else if let (Some(id), Some(bands)) = (
                 decoded.id,
