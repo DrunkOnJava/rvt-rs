@@ -17,8 +17,10 @@
       "IFCCARTESIANPOINT": 5479,
       "IFCCOLOURRGB": 78,
       "IFCCOLUMN": 256,
+      "IFCCOLUMNTYPE": 1,
       "IFCDIRECTION": 1110,
       "IFCDOOR": 132,
+      "IFCDOORTYPE": 3,
       "IFCEXTRUDEDAREASOLID": 1108,
       "IFCGEOMETRICREPRESENTATIONCONTEXT": 1,
       "IFCLOCALPLACEMENT": 1125,
@@ -44,20 +46,25 @@
       "IFCRELASSOCIATESMATERIAL": 407,
       "IFCRELCONTAINEDINSPATIALSTRUCTURE": 13,
       "IFCRELDEFINESBYPROPERTIES": 970,
+      "IFCRELDEFINESBYTYPE": 16,
       "IFCRELFILLSELEMENT": 138,
       "IFCRELVOIDSELEMENT": 138,
       "IFCSHADINGDEVICE": 20,
+      "IFCSHADINGDEVICETYPE": 2,
       "IFCSHAPEREPRESENTATION": 1108,
       "IFCSITE": 1,
       "IFCSIUNIT": 6,
       "IFCSLAB": 80,
+      "IFCSLABTYPE": 5,
       "IFCSPACE": 116,
       "IFCSTYLEDITEM": 78,
       "IFCSURFACESTYLE": 78,
       "IFCSURFACESTYLERENDERING": 78,
       "IFCUNITASSIGNMENT": 1,
       "IFCWALL": 360,
-      "IFCWINDOW": 6
+      "IFCWALLTYPE": 4,
+      "IFCWINDOW": 6,
+      "IFCWINDOWTYPE": 1
     },
     "exported_building_elements": {
       "IFCCOLUMN": 256,
@@ -691,7 +698,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "8345d7348762371725243cdfd2fc4d89dc852ebd8dd8479f5fa5fff6e865f36e",
+  "observation_hash_sha256": "c04e89728c44789a9def3e4240128faec18d26b12ee333af5153b173b5cd7663",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",

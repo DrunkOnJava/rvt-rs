@@ -380,6 +380,7 @@ fuzz_target!(|input: FuzzInput| {
         element_layers: Default::default(),
         material_layer_usages: Default::default(),
         element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
         material_constituent_sets: Vec::new(),
         opening_cuts: Default::default(),
     };

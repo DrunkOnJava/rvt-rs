@@ -54,14 +54,16 @@ Coordination mirror: [Discussion #112 notes](disc-112-coordination.md).
 
 rvt-rs opens every Revit file from 2016 to 2026 and reads its metadata,
 previews and embedded schema. On Revit 2024 and 2025 project files it reads
-the building: each element's ElementId, category, name, type, storey,
-materials, layers and GlobalId, and a body that is exact where the element's
+the building: each element's ElementId, category, name, type (written as
+an IFC type object of its Revit type, RE-110), storey, materials, layers and
+GlobalId, and a body that is exact where the element's
 data is decoded and its bounding box where it is not. It writes that as IFC4,
 glTF, plan SVG and CSV, from the CLIs, Python and the zero-upload browser
 viewer. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), door and window hosts (RE-85), room outlines
 (RE-102), Levels with the storey each element sits on (RE-107), and
-family instances' family and type names (RE-109). Every recovery claim is measured against Revit's own IFC export of the
+family instances' family and type names, with their IFC type objects
+(RE-109, RE-110). Every recovery claim is measured against Revit's own IFC export of the
 same file; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)

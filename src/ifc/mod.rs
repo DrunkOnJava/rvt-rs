@@ -184,6 +184,10 @@ pub struct IfcModel {
     /// ElementId (RE-82).
     #[serde(default)]
     pub element_type_materials: std::collections::BTreeMap<u32, Vec<String>>,
+    /// Each element's Revit type, by ElementId (RE-110). The writer types
+    /// every element named `Family:Type` by an IFC type object of its type.
+    #[serde(default)]
+    pub element_type_ids: std::collections::BTreeMap<u32, u32>,
     /// Material constituent sets (RE-82): an element without a layer,
     /// profile or single material gets the materials its type's geometry
     /// uses, written as IFC4 `IfcMaterialConstituentSet`, as Revit's
@@ -244,6 +248,10 @@ pub struct RevitGlobalIds {
     pub elements: std::collections::BTreeMap<usize, String>,
     /// By index in `IfcModel::building_storeys`.
     pub storeys: std::collections::BTreeMap<usize, String>,
+    /// By the type's ElementId: the types of `IfcModel::element_type_ids`
+    /// (RE-110).
+    #[serde(default)]
+    pub types: std::collections::BTreeMap<u32, String>,
 }
 
 /// A single building storey derived from a Revit `Level` element.
@@ -782,6 +790,7 @@ impl Exporter for PlaceholderExporter {
             element_layers: Default::default(),
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
+            element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
         })
@@ -1000,7 +1009,7 @@ fn export_rvt_doc(
     // element entities — we never regress the metadata-only baseline.
     let mut building_storeys = Vec::new();
     let mut materials = Vec::new();
-    let (element_layers, element_type_materials, unplaced_wall_layers) =
+    let (element_layers, element_type_materials, unplaced_wall_layers, element_type_ids) =
         append_production_walker_elements(
             rf,
             &mut entities,
@@ -1123,7 +1132,7 @@ fn export_rvt_doc(
     }
 
     let recovered_units = recover_project_units(rf);
-    let global_ids = revit_model_global_ids(rf, &entities, &building_storeys);
+    let global_ids = revit_model_global_ids(rf, &entities, &building_storeys, &element_type_ids);
     let (material_layer_sets, material_layer_usages) =
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
     let mut material_constituent_sets =
@@ -1155,6 +1164,7 @@ fn export_rvt_doc(
         element_layers,
         material_layer_usages,
         element_type_materials,
+        element_type_ids,
         material_constituent_sets,
         opening_cuts,
     })
@@ -1915,6 +1925,7 @@ fn revit_model_global_ids(
     rf: &mut crate::RevitFile,
     entities: &[entities::IfcEntity],
     storeys: &[Storey],
+    element_type_ids: &std::collections::BTreeMap<u32, u32>,
 ) -> RevitGlobalIds {
     let mut out = RevitGlobalIds {
         document: rf
@@ -1958,6 +1969,11 @@ fn revit_model_global_ids(
         }
         if let Some(global_id) = ids.get(&id) {
             out.elements.insert(index, global_id.clone());
+        }
+    }
+    for type_id in element_type_ids.values() {
+        if let Some(global_id) = ids.get(type_id) {
+            out.types.insert(*type_id, global_id.clone());
         }
     }
     out
@@ -2591,6 +2607,7 @@ type WalkerElementData = (
     std::collections::BTreeMap<u32, ElementLayers>,
     std::collections::BTreeMap<u32, Vec<String>>,
     std::collections::BTreeMap<u32, Vec<LayerBand>>,
+    std::collections::BTreeMap<u32, u32>,
 );
 
 fn append_production_walker_elements(
@@ -2620,6 +2637,7 @@ fn append_production_walker_elements(
             append.element_layers,
             append.element_type_materials,
             append.unplaced_wall_layers,
+            append.element_type_ids,
         );
     }
     Default::default()

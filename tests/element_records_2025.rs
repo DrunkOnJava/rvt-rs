@@ -254,7 +254,8 @@ fn revit_2025_electrical_devices_are_revits_own() {
         "devices and equipment"
     );
     // Every entity carrying a numeric `Tag` is one of those
-    // (IfcOwnerHistory's 8th attribute is its creation time, not a Tag).
+    // (IfcOwnerHistory's 8th attribute is its creation time, not a Tag, and
+    // a type object's is its type's ElementId, RE-110).
     let entities: Vec<&str> = step
         .lines()
         .filter_map(|line| {
@@ -263,7 +264,7 @@ fn revit_2025_electrical_devices_are_revits_own() {
                 .split_once('(')
                 .map(|(e, _)| e.trim())
         })
-        .filter(|entity| *entity != "IFCOWNERHISTORY")
+        .filter(|entity| *entity != "IFCOWNERHISTORY" && !entity.ends_with("TYPE"))
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
