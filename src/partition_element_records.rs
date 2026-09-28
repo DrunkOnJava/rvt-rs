@@ -144,6 +144,9 @@ pub const OST_ROOMS: i64 = -2_000_160;
 /// name the sketched element in
 /// [`PartitionElementRecord::owner_reference`] (#31, RE-25).
 pub const OST_SKETCH_LINES: i64 = -2_000_045;
+/// `BuiltInCategory::OST_ShaftOpening`: a shaft cut through the floors,
+/// roofs and ceilings within its height (RE-99).
+pub const OST_SHAFT_OPENING: i64 = -2_000_996;
 
 // RE-33: categories whose element records export as typed products.
 // Each was found the way `OST_Rooms` was: a census of every decodable
