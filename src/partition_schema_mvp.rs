@@ -4256,9 +4256,14 @@ fn sketch_plan_profiles(
     profiles
 }
 
-/// Give each roof the plan outline its sketch lines close (RE-50), as a
-/// floor has (RE-25). The body is the record box's height; a shed roof's
-/// slope is attached later ([`attach_roof_slopes`], RE-56).
+/// Classes whose plan outline is their sketch's: roofs (RE-50) and, since
+/// RE-98, ceilings.
+pub const SKETCHED_PRODUCT_CLASSES: &[&str] = &["Roof", "Ceiling"];
+
+/// Give each roof and ceiling the plan outline its sketch lines close
+/// (RE-50, RE-98), as a floor has (RE-25). The body is the record box's
+/// height; a shed roof's slope is attached later ([`attach_roof_slopes`],
+/// RE-56).
 fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     use crate::partition_element_records as per;
     let float = |element: &DecodedElement, wanted: &str| {
@@ -4269,7 +4274,7 @@ fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [
     };
     let roofs: std::collections::BTreeMap<u32, [f64; 4]> = products
         .iter()
-        .filter(|element| element.class == "Roof")
+        .filter(|element| SKETCHED_PRODUCT_CLASSES.contains(&element.class.as_str()))
         .filter_map(|element| {
             let (x, y) = (
                 float(element, "m_locationX")?,
@@ -4300,7 +4305,7 @@ fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [
     let profiles = sketch_plan_profiles(rf, revit_version, &sketch_lines, &roofs);
     for roof in products
         .iter_mut()
-        .filter(|element| element.class == "Roof")
+        .filter(|element| SKETCHED_PRODUCT_CLASSES.contains(&element.class.as_str()))
     {
         if let Some(profile) = roof.id.and_then(|id| profiles.get(&id)) {
             roof.fields.extend(profile.fields());

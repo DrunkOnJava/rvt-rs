@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Ceilings carry their sketch's outline (RE-98).** Ceilings take the
+  outline their sketch closes, as roofs do, instead of their record box.
+  66 of Snowdon Towers' 68 ceilings (50 before) and all 6 of RE1
+  Architecture's (5 before) now match Revit's outline within 0.1% of its
+  area. `plan_profiles_vs_ifc.py` measures each element's top surface, so
+  Revit's stacked layer solids count once.
+
 - **Edited sketches take their lines from the sketch itself (RE-97).** A
   Sketch element names the element it sketches and lists its curves. Where
   an edit left a line's owner reference naming another element, the list

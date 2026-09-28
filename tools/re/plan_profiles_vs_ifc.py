@@ -7,7 +7,10 @@ internal feet through each export's own site placement. For each element of
 the given classes whose Tag is in both files, it compares the upward-facing
 faces of the two bodies:
 
-- plan area: the area of the upward faces projected on plan;
+- plan area: the area of the element's top surface, its upward faces at
+  its highest level, projected on plan (Revit writes a layered floor, roof
+  or ceiling as one solid per layer, stacked, each with the element's
+  outline, so every upward face would count each layer);
 - vertices: the largest distance from a vertex of one file's upward faces
   to the nearest vertex of the other's, both ways, in plan.
 
@@ -71,6 +74,9 @@ def tops(path, classes):
             normal = np.cross(b - a, c - a)
             length = np.linalg.norm(normal, axis=1)
             up = (length > 1e-12) & (normal[:, 2] > 0.9 * length)
+            centre_z = (a[:, 2] + b[:, 2] + c[:, 2]) / 3.0
+            if up.any():
+                up &= centre_z >= centre_z[up].max() - 1e-3
             area = float(0.5 * normal[up, 2].sum())
             points = v[np.unique(faces[up].ravel())][:, :2]
             # A sketch of several pieces is several elements with one Tag.
