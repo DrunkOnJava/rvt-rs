@@ -1188,7 +1188,7 @@ fn opening_cuts_through_hosts(
             continue;
         }
         let window_cut =
-            |base: Option<entities::OpeningCut>| window_type_cut(entity, base).or(base);
+            |base: Option<entities::OpeningCut>| filler_type_cut(entity, base).or(base);
         if let Some(cut) = tapered_host_window_cut(entity, &entities[*host]) {
             if let Some(cut) = window_cut(Some(cut)) {
                 cuts.insert(index, cut);
@@ -1352,15 +1352,15 @@ fn real_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
 /// default), which keeps the opening `base` gives it.
 pub const WINDOW_TRIM_MAX_FEET: f64 = 0.5;
 
-/// RE-93: a window's opening as Revit's export cuts it, from its type's
-/// Width and Height and its type's Default Sill Height above its origin,
-/// centred on the origin along the window's X axis. Across the wall it
-/// keeps `base`'s band, or the body's depth. `None` unless the window
-/// reports its opening ([`export_content::WINDOW_OPENING_PROPERTIES`]),
-/// its width runs along one of its body's axes, and its record box holds
-/// the opening with at most [`WINDOW_TRIM_MAX_FEET`] to spare on each
-/// side and at top and bottom.
-fn window_type_cut(
+/// RE-93, RE-94: a window's or door's opening as Revit's export cuts it,
+/// from its type ([`crate::partition_schema_mvp::FillerOpening`]), centred
+/// on its origin along its X axis. Across the wall it keeps `base`'s band,
+/// or the body's depth. `None` unless the element reports its opening
+/// ([`export_content::FILLER_OPENING_PROPERTIES`]), its width runs along
+/// one of its body's axes, and its record box holds the opening with at
+/// most [`WINDOW_TRIM_MAX_FEET`] to spare on each side and at top and
+/// bottom.
+fn filler_type_cut(
     filler: &entities::IfcEntity,
     base: Option<entities::OpeningCut>,
 ) -> Option<entities::OpeningCut> {
@@ -1374,10 +1374,10 @@ fn window_type_cut(
     else {
         return None;
     };
-    if !ifc_type.eq_ignore_ascii_case("IfcWindow") {
+    if !ifc_type.eq_ignore_ascii_case("IfcWindow") && !ifc_type.eq_ignore_ascii_case("IfcDoor") {
         return None;
     }
-    let [cx, cy, ax, ay, base_z, width, height] = export_content::WINDOW_OPENING_PROPERTIES;
+    let [cx, cy, ax, ay, base_z, width, height] = export_content::FILLER_OPENING_PROPERTIES;
     let centre = [length_property(filler, cx)?, length_property(filler, cy)?];
     let [ax, ay] = [real_property(filler, ax)?, real_property(filler, ay)?];
     let base_z = length_property(filler, base_z)?;
@@ -1390,9 +1390,10 @@ fn window_type_cut(
     let offset = [centre[0] - location[0], centre[1] - location[1]];
     let along_x = (dot([ax, ay], local_x).abs() - 1.0).abs() <= 1e-6;
     let along_y = (dot([ax, ay], local_y).abs() - 1.0).abs() <= 1e-6;
+    // An opening edge on the box's own edge fits, whatever the round-off.
+    let spare = -1e-6..=WINDOW_TRIM_MAX_FEET;
     let fits = |lo: f64, hi: f64, box_lo: f64, box_hi: f64| {
-        (0.0..=WINDOW_TRIM_MAX_FEET).contains(&(lo - box_lo))
-            && (0.0..=WINDOW_TRIM_MAX_FEET).contains(&(box_hi - hi))
+        spare.contains(&(lo - box_lo)) && spare.contains(&(box_hi - hi))
     };
     let z0 = base_z - location[2];
     if !fits(z0, z0 + height, 0.0, body.height_feet) {

@@ -1910,8 +1910,9 @@ impl StepWriter {
                 // the type, so a reader can index PredefinedType
                 // instead of hitting "index out of range".
                 let ifc_upper = ifc_type.to_ascii_uppercase();
-                // RE-93: a window's OverallHeight and OverallWidth are its
-                // type's Height and Width, which Revit's export writes there.
+                // RE-93, RE-94: a window's or door's OverallHeight and
+                // OverallWidth are its opening's, which Revit's export writes
+                // there.
                 let property_length = |key: &str| {
                     property_set.as_ref().and_then(|set| {
                         set.properties.iter().find_map(|p| match &p.value {
@@ -1924,7 +1925,7 @@ impl StepWriter {
                         })
                     })
                 };
-                let [.., width_key, height_key] = super::export_content::WINDOW_OPENING_PROPERTIES;
+                let [.., width_key, height_key] = super::export_content::FILLER_OPENING_PROPERTIES;
                 let overall = property_length(height_key).zip(property_length(width_key));
                 let tail = element_attribute_tail(
                     &ifc_upper,

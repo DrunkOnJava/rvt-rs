@@ -21,7 +21,7 @@
 
 use rvt::RevitFile;
 use rvt::partition_schema_mvp::{
-    TYPE_ID_FIELD, TYPE_NAME_FIELD, recover_partition_schema_mvp, window_opening_from_fields,
+    TYPE_ID_FIELD, TYPE_NAME_FIELD, filler_opening_from_fields, recover_partition_schema_mvp,
 };
 use rvt::partition_type_parameters::type_window_openings;
 use rvt::walker::{InstanceField, WalkerLimits};
@@ -67,7 +67,7 @@ fn main() -> rvt::Result<()> {
     }
     let mut drawn = 0;
     for window in &mvp.windows {
-        let Some(o) = window_opening_from_fields(&window.fields) else {
+        let Some(o) = filler_opening_from_fields(&window.fields) else {
             continue;
         };
         drawn += 1;

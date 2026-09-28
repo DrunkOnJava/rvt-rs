@@ -372,9 +372,6 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
-    // --- Each window's opening from its type and transform (RE-93, #227) ---
-    attach_window_openings(rf, revit_version, &mut out.windows);
-
     // --- The materials each family type's geometry uses (RE-82, #355) ---
     let type_materials = crate::partition_type_materials::type_material_names(rf, revit_version);
     if !type_materials.is_empty() {
@@ -389,6 +386,12 @@ pub fn recover_partition_schema_mvp(
             attach_type_materials(&type_materials, elements);
         }
     }
+
+    // --- Each window's opening from its type and transform (RE-93, #227) ---
+    attach_window_openings(rf, revit_version, &mut out.windows);
+    // --- Each door's rough opening from its type (RE-94, #227), after RE-84
+    // marks the doors that are openings alone ---
+    attach_door_openings(rf, revit_version, &mut out.doors);
     Ok(out)
 }
 
@@ -1099,23 +1102,25 @@ fn attach_instance_axes(
     }
 }
 
-/// Fields holding a window's opening as Revit's export cuts it (RE-93):
-/// the plan point it is centred on (the window's origin), its plan
-/// direction (the window's X axis), its base elevation (the origin's plus
-/// its type's Default Sill Height), and its type's Width and Height, feet.
-pub const WINDOW_OPENING_FIELDS: [&str; 7] = [
-    "m_window_opening_x",
-    "m_window_opening_y",
-    "m_window_opening_axis_x",
-    "m_window_opening_axis_y",
-    "m_window_opening_base",
-    "m_window_opening_width",
-    "m_window_opening_height",
+/// Fields holding a window's or door's opening as Revit's export cuts it
+/// (RE-93, RE-94): the plan point it is centred on (the element's origin),
+/// its plan direction (the element's X axis), its base elevation (the
+/// origin's, plus a window type's Default Sill Height), and its width and
+/// height, feet: a window type's Width and Height, a door type's Rough
+/// Width and Rough Height.
+pub const FILLER_OPENING_FIELDS: [&str; 7] = [
+    "m_filler_opening_x",
+    "m_filler_opening_y",
+    "m_filler_opening_axis_x",
+    "m_filler_opening_axis_y",
+    "m_filler_opening_base",
+    "m_filler_opening_width",
+    "m_filler_opening_height",
 ];
 
-/// A window's opening as [`WINDOW_OPENING_FIELDS`] records it.
+/// A door's or window's opening as [`FILLER_OPENING_FIELDS`] records it.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct WindowOpening {
+pub struct FillerOpening {
     /// Plan point the opening is centred on, model feet.
     pub centre: [f64; 2],
     /// Unit plan direction of its width.
@@ -1161,40 +1166,119 @@ fn attach_window_openings(rf: &mut RevitFile, revit_version: u32, windows: &mut 
         else {
             continue;
         };
-        if !transform.is_upright() {
-            continue;
-        }
-        let Some([ax, ay]) = transform.plan_axis() else {
-            continue;
-        };
-        let [ox, oy, oz] = transform.origin;
-        let values = [
-            ox,
-            oy,
-            ax,
-            ay,
-            oz + opening.default_sill_feet,
+        push_filler_opening(
+            element,
+            transform,
+            opening.default_sill_feet,
             opening.width_feet,
             opening.height_feet,
-        ];
-        for (name, value) in WINDOW_OPENING_FIELDS.iter().zip(values) {
-            element
-                .fields
-                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
-        }
+        );
     }
 }
 
-/// The opening [`WINDOW_OPENING_FIELDS`] record.
-pub fn window_opening_from_fields(fields: &[(String, InstanceField)]) -> Option<WindowOpening> {
+/// How close a door's record box height must be to its type's Rough Height
+/// for the door to take its rough opening (RE-94), feet.
+pub const DOOR_ROUGH_HEIGHT_TOLERANCE_FEET: f64 = 1e-3;
+
+/// Give each upright door whose record box is its type's Rough Height tall
+/// its type's rough opening, from its origin up (RE-94,
+/// [`crate::partition_type_parameters::type_door_openings`]). On Snowdon
+/// Towers every door Revit cuts at its rough opening has a body that tall,
+/// and every other door a body its frame's height instead.
+fn attach_door_openings(rf: &mut RevitFile, revit_version: u32, doors: &mut [DecodedElement]) {
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let box_height = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == "m_bboxHeight" => Some(*value),
+            _ => None,
+        })
+    };
+    let types: BTreeSet<u32> = doors.iter().filter_map(type_of).collect();
+    let openings = crate::partition_type_parameters::type_door_openings(rf, revit_version, &types);
+    // A door whose type draws no geometry (RE-84) is an opening alone, which
+    // Revit does not cut at its rough size: RE1 Architecture's cased
+    // opening is 1.0 m wide against a Rough Width of 1.1 m.
+    let rough = |element: &DecodedElement| {
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_WITHOUT_GEOMETRY_FIELD)
+        {
+            return None;
+        }
+        let opening = type_of(element).and_then(|id| openings.get(&id))?;
+        let height = box_height(element)?;
+        ((height - opening.rough_height_feet).abs() <= DOOR_ROUGH_HEIGHT_TOLERANCE_FEET)
+            .then_some(*opening)
+    };
+    let ids: BTreeSet<u32> = doors
+        .iter()
+        .filter(|element| rough(element).is_some())
+        .filter_map(|element| element.id)
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+    else {
+        return;
+    };
+    for element in doors.iter_mut() {
+        let Some((opening, transform)) =
+            rough(element).zip(element.id.and_then(|id| transforms.get(&id)))
+        else {
+            continue;
+        };
+        push_filler_opening(
+            element,
+            transform,
+            0.0,
+            opening.rough_width_feet,
+            opening.rough_height_feet,
+        );
+    }
+}
+
+/// Record on an upright door or window the opening centred on its origin
+/// along its X axis, `base` above the origin ([`FILLER_OPENING_FIELDS`]).
+fn push_filler_opening(
+    element: &mut DecodedElement,
+    transform: &crate::partition_instance_transforms::InstanceTransform,
+    base: f64,
+    width: f64,
+    height: f64,
+) {
+    if !transform.is_upright() {
+        return;
+    }
+    let Some([ax, ay]) = transform.plan_axis() else {
+        return;
+    };
+    let [ox, oy, oz] = transform.origin;
+    let values = [ox, oy, ax, ay, oz + base, width, height];
+    for (name, value) in FILLER_OPENING_FIELDS.iter().zip(values) {
+        element
+            .fields
+            .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+    }
+}
+
+/// The opening [`FILLER_OPENING_FIELDS`] record.
+pub fn filler_opening_from_fields(fields: &[(String, InstanceField)]) -> Option<FillerOpening> {
     let float = |wanted: &str| {
         fields.iter().find_map(|(name, value)| match value {
             InstanceField::Float { value, .. } if name == wanted => Some(*value),
             _ => None,
         })
     };
-    let [x, y, ax, ay, base, width, height] = WINDOW_OPENING_FIELDS.map(float);
-    Some(WindowOpening {
+    let [x, y, ax, ay, base, width, height] = FILLER_OPENING_FIELDS.map(float);
+    Some(FillerOpening {
         centre: [x?, y?],
         axis: [ax?, ay?],
         base_feet: base?,

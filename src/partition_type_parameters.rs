@@ -20,8 +20,9 @@
 //!
 //! A type's length parameters sit in the same blocks as `f64 feet · ff × 8 ·
 //! i64 parameter` (RE-93): a BuiltInParameter's negative id, or the declared
-//! ElementId of a family parameter. [`type_window_openings`] reads the
-//! values a window's opening is built from.
+//! ElementId of a family parameter. [`type_window_openings`] and
+//! [`type_door_openings`] read the values a window's and a door's opening
+//! are built from.
 
 use crate::RevitFile;
 use crate::partition_element_records::bbox_marker;
@@ -252,12 +253,85 @@ pub fn type_window_openings(
     }
     let mut parameters = sills.clone();
     parameters.extend([WINDOW_WIDTH_PARAMETER, WINDOW_HEIGHT_PARAMETER]);
+    type_lengths(rf, &declared, types, &parameters)
+        .into_iter()
+        .filter_map(|(owner, held)| {
+            let value = |parameter: i64| held.get(&parameter).copied();
+            let mut sill = sills.iter().filter_map(|&parameter| value(parameter));
+            let default_sill_feet = sill.next()?;
+            if sill.any(|other| other != default_sill_feet) {
+                return None;
+            }
+            let opening = WindowTypeOpening {
+                width_feet: value(WINDOW_WIDTH_PARAMETER)?,
+                height_feet: value(WINDOW_HEIGHT_PARAMETER)?,
+                default_sill_feet,
+            };
+            (opening.width_feet > 0.0
+                && opening.height_feet > 0.0
+                && opening.default_sill_feet >= 0.0)
+                .then_some((owner, opening))
+        })
+        .collect()
+}
+
+/// A door type's Rough Width, by BuiltInParameter (RE-94).
+pub const DOOR_ROUGH_WIDTH_PARAMETER: i64 = -1001305;
+/// A door type's Rough Height, by BuiltInParameter (RE-94).
+pub const DOOR_ROUGH_HEIGHT_PARAMETER: i64 = -1001304;
+
+/// A door type's rough opening (RE-94), feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DoorTypeOpening {
+    /// The type's Rough Width.
+    pub rough_width_feet: f64,
+    /// The type's Rough Height.
+    pub rough_height_feet: f64,
+}
+
+/// The rough opening of each type in `types` whose Rough Width and Rough
+/// Height are read, and agree across every partition (RE-94). Empty for a
+/// release whose element records are not decoded.
+pub fn type_door_openings(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+) -> BTreeMap<u32, DoorTypeOpening> {
+    if bbox_marker(revit_version).is_none() || types.is_empty() {
+        return BTreeMap::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared: BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let parameters = BTreeSet::from([DOOR_ROUGH_WIDTH_PARAMETER, DOOR_ROUGH_HEIGHT_PARAMETER]);
+    type_lengths(rf, &declared, types, &parameters)
+        .into_iter()
+        .filter_map(|(owner, held)| {
+            let opening = DoorTypeOpening {
+                rough_width_feet: *held.get(&DOOR_ROUGH_WIDTH_PARAMETER)?,
+                rough_height_feet: *held.get(&DOOR_ROUGH_HEIGHT_PARAMETER)?,
+            };
+            (opening.rough_width_feet > 0.0 && opening.rough_height_feet > 0.0)
+                .then_some((owner, opening))
+        })
+        .collect()
+}
+
+/// The values of `parameters` held by each type in `types`, where every
+/// partition's value agrees.
+fn type_lengths(
+    rf: &mut RevitFile,
+    declared: &BTreeSet<u32>,
+    types: &BTreeSet<u32>,
+    parameters: &BTreeSet<i64>,
+) -> BTreeMap<u32, BTreeMap<i64, f64>> {
     let mut values: BTreeMap<u32, BTreeMap<i64, Option<f64>>> = BTreeMap::new();
-    for stream in &streams {
-        let Ok(inflated) = rf.inflated_partition(stream) else {
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (owner, found) in scan_partition_lengths(inflated.bytes(), &declared, &parameters) {
+        for (owner, found) in scan_partition_lengths(inflated.bytes(), declared, parameters) {
             if !types.contains(&owner) {
                 continue;
             }
@@ -275,22 +349,12 @@ pub fn type_window_openings(
     }
     values
         .into_iter()
-        .filter_map(|(owner, held)| {
-            let value = |parameter: i64| held.get(&parameter).copied().flatten();
-            let mut sill = sills.iter().filter_map(|&parameter| value(parameter));
-            let default_sill_feet = sill.next()?;
-            if sill.any(|other| other != default_sill_feet) {
-                return None;
-            }
-            let opening = WindowTypeOpening {
-                width_feet: value(WINDOW_WIDTH_PARAMETER)?,
-                height_feet: value(WINDOW_HEIGHT_PARAMETER)?,
-                default_sill_feet,
-            };
-            (opening.width_feet > 0.0
-                && opening.height_feet > 0.0
-                && opening.default_sill_feet >= 0.0)
-                .then_some((owner, opening))
+        .map(|(owner, held)| {
+            let agreed = held
+                .into_iter()
+                .filter_map(|(parameter, value)| Some((parameter, value?)))
+                .collect();
+            (owner, agreed)
         })
         .collect()
 }

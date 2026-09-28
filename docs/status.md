@@ -595,6 +595,11 @@ above it, which is the type's Default Sill Height where the type stores
 one. 56 of Snowdon's 68 windows now take that opening, each within
 0.001 ft of Revit's (none before), and their `OverallWidth` /
 `OverallHeight` (`reports/element-framing/RE-93-window-openings.md`).
+**RE-94 (2026-09-28)** cuts a door at its type's Rough Width by Rough
+Height where its body is Rough Height tall, which on Snowdon is exactly
+the 57 doors Revit cuts that way; 54 now match Revit's opening within
+0.001 ft (none before), and all 57 carry Revit's `OverallWidth` /
+`OverallHeight` (`reports/element-framing/RE-94-door-openings.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
