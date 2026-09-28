@@ -8,6 +8,18 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 family instances carry their materials (RE-113, #421,
+  #355).** A 2023 family type's value block is `[owner u32][28 x ff][3 x
+  00]` and its first map `u32 n · n × (u32 key · u32 material)` names the
+  materials its geometry uses, as RE-82's does on 2024. A 2023 material is
+  found by its class tag `0x09fb` 0x27 bytes past its `u32` id, and named
+  by its element data or, inside a family's data, by a `-1001203`
+  parameter entry. 2023 doors, windows, columns and beams are now written
+  with their type's `IfcMaterialConstituentSet`, where no 2023 element had
+  a material before: Revit's own set on 17 of Exemplo_data's 18 and all 27
+  of modelo_bim's. A type whose map names a material with no name read gets
+  none. Every 2024 and 2025 file is byte-identical.
+
 - **Revit 2023 wall, floor and roof types read their layers, and walls and
   roofs are typed (RE-112, #421).** A 2023 host type's layers follow its
   name as on 2024, framed by `ff ff ff ff 6f 10` on a wall type, in 29-byte

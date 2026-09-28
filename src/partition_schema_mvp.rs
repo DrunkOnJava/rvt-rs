@@ -177,6 +177,32 @@ pub fn recover_partition_schema_mvp(
             revit_version,
             &mut [&mut out.walls, &mut out.slabs, &mut out.products],
         );
+        // --- The materials each family type's geometry uses (RE-113). A
+        // system type's data holds its layers where a family type's holds
+        // its map, and a layer reads as a one-entry map, so the types of
+        // system-family elements are left out. ---
+        let mut type_materials = crate::partition_type_materials::type_material_names_2023(rf);
+        for element in out.walls.iter().chain(&out.slabs).chain(&out.products) {
+            let system = element.fields.iter().any(|(name, value)| {
+                name == FAMILY_NAME_SOURCE_FIELD
+                    && matches!(value, InstanceField::String(source) if source == SYSTEM_FAMILY_SOURCE)
+            });
+            let type_id = element.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+                _ => None,
+            });
+            if let (true, Some(type_id)) = (system, type_id) {
+                type_materials.remove(&type_id);
+            }
+        }
+        for elements in [
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.products,
+        ] {
+            attach_type_materials(&type_materials, elements);
+        }
         return Ok(out);
     }
 
