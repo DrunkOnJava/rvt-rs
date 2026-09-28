@@ -97,7 +97,7 @@ pub fn type_text_parameters(
     let Ok(records) = crate::elem_table::parse_records(rf) else {
         return BTreeMap::new();
     };
-    let declared: BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let declared = crate::elem_table::declared_ids(&records);
     let mut out: BTreeMap<u32, BTreeMap<&'static str, String>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -240,7 +240,7 @@ pub fn type_window_openings(
     let Ok(records) = crate::elem_table::parse_records(rf) else {
         return BTreeMap::new();
     };
-    let declared: BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let declared = crate::elem_table::declared_ids(&records);
     let streams = rf.partition_stream_names();
     let mut sills: BTreeSet<i64> = BTreeSet::new();
     for stream in &streams {
@@ -304,7 +304,7 @@ pub fn type_door_openings(
     let Ok(records) = crate::elem_table::parse_records(rf) else {
         return BTreeMap::new();
     };
-    let declared: BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let declared = crate::elem_table::declared_ids(&records);
     let parameters = BTreeSet::from([DOOR_ROUGH_WIDTH_PARAMETER, DOOR_ROUGH_HEIGHT_PARAMETER]);
     type_lengths(rf, &declared, types, &parameters)
         .into_iter()
@@ -364,7 +364,7 @@ pub fn type_i_sections(
     let Ok(records) = crate::elem_table::parse_records(rf) else {
         return BTreeMap::new();
     };
-    let declared: BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let declared = crate::elem_table::declared_ids(&records);
     let parameters = BTreeSet::from([
         SECTION_WIDTH_PARAMETER,
         SECTION_HEIGHT_PARAMETER,

@@ -857,6 +857,41 @@ fn beam_swept_solid(
     }
 }
 
+/// `BodySource` of a structural column drawn as its type's I section
+/// (RE-104).
+pub const COLUMN_I_SECTION_BODY_SOURCE: &str = "family_type_i_section";
+
+/// How closely an I-section column's section, turned to its X axis, must
+/// fill its record box in plan (RE-104), feet.
+pub const COLUMN_SECTION_TOLERANCE_FEET: f64 = 0.01;
+
+/// An upright structural column's I section and the plan angle of its X
+/// axis, which its flanges run along (RE-104): only where the section turned
+/// by that angle is `box_width` × `box_depth` in plan, as its record box is.
+fn column_i_section(
+    fields: &[(String, InstanceField)],
+    box_width: f64,
+    box_depth: f64,
+) -> Option<(f64, crate::partition_type_parameters::ISection)> {
+    let section = crate::partition_schema_mvp::beam_i_section_from_fields(fields)?;
+    let [ax, ay] = crate::partition_schema_mvp::COLUMN_I_AXIS_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    let (ax, ay) = (ax?, ay?);
+    let length = ax.hypot(ay);
+    if !(length.is_finite() && length > 1e-9) {
+        return None;
+    }
+    let (c, s) = ((ax / length).abs(), (ay / length).abs());
+    let (w, d) = (section.width_feet, section.depth_feet);
+    let fits = (w * c + d * s - box_width).abs() <= COLUMN_SECTION_TOLERANCE_FEET
+        && (w * s + d * c - box_depth).abs() <= COLUMN_SECTION_TOLERANCE_FEET;
+    fits.then(|| (ay.atan2(ax), section))
+}
+
 /// An I-section beam's body (RE-103): its type's I extruded along its
 /// centreline from one end, the profile's X axis level across the line, so
 /// the flanges run across and the web stands upright in the line's vertical
@@ -1538,6 +1573,13 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         crate::partition_beam_axes::i_section_body(beam, &section, bbox, start, end)
             .map(|body| (body, section))
     });
+    // RE-104: an upright structural column whose type is an I section,
+    // turned to its X axis where that fills its record box.
+    let i_column = if class == "StructuralColumn" {
+        column_i_section(&decoded.fields, width, depth)
+    } else {
+        None
+    };
     // RE-52: a straight run with separate treads and risers is drawn as
     // them.
     let stair_run = if class == "StairsRun" {
@@ -1709,6 +1751,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
+                    .or_else(|| i_column.map(|_| COLUMN_I_SECTION_BODY_SOURCE.into()))
                     .or_else(|| turned.map(|_| INSTANCE_TURNED_BODY_SOURCE.into()))
                     .unwrap_or_else(|| RECORD_BBOX_BODY_SOURCE.into()),
             ),
@@ -1721,7 +1764,8 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     || beam.is_some()
                     || stair_run.is_some()
                     || wall_centreline.is_some()
-                    || wall_arc.is_some(),
+                    || wall_arc.is_some()
+                    || i_column.is_some(),
             ),
         },
         Property {
@@ -1954,7 +1998,10 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             });
         }
     }
-    if let Some((_, section)) = i_beam {
+    if let Some(section) = i_beam
+        .map(|(_, section)| section)
+        .or(i_column.map(|(_, section)| section))
+    {
         properties.push(Property {
             name: "SectionShape".into(),
             value: PropertyValue::Text("I".into()),
@@ -2081,6 +2128,22 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     None,
                 ),
                 Some(beam) => (None, record_body, Some(beam_swept_solid(&beam, [x, y, z]))),
+                None if i_column.is_some() => {
+                    let (angle, section) = i_column.expect("checked above");
+                    (
+                        Some(angle),
+                        Extrusion {
+                            profile_override: Some(entities::ProfileDef::IShape {
+                                overall_width_feet: section.width_feet,
+                                overall_depth_feet: section.depth_feet,
+                                web_thickness_feet: section.web_feet,
+                                flange_thickness_feet: section.flange_feet,
+                            }),
+                            ..Extrusion::rectangle(section.width_feet, section.depth_feet, height)
+                        },
+                        None,
+                    )
+                }
                 None => match (turned, roof_slope) {
                     (Some((angle, along, across)), None) => (
                         Some(angle),
