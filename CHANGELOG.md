@@ -21,6 +21,14 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Turned and tilted curtain mullions and panels are drawn along their
+  own axes (RE-106).** The box along an instance's transform axes whose
+  axis-aligned box is its record box follows from three linear equations.
+  1,019 of Snowdon Towers' mullions and panels turned or tilted off the
+  model's axes now export as that box instead of their record box. On
+  every one, Revit's own mesh has its extents and centre along those axes
+  (to 0.0000 ft). Every other local file is byte-identical.
+
 - **Steel members carry their section as a material profile (RE-105,
   #94).** The 417 beams and columns drawn as their I section are written
   with an `IfcMaterialProfileSetUsage`, one set per type pairing its
