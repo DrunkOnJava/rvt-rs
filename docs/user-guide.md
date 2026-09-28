@@ -72,7 +72,8 @@ element records, with a measured slab thickness (#212) and, for all 80
 exported slabs, the plan profile their `OST_SketchLines` records close
 (#31, RE-25). Wall bodies carry the wall's real thickness and the length
 its joins leave it — the element record names the walls a wall is joined
-to, which takes 351 of 360 walls to an exact match against Revit's own
+to, and with the lists of walls each wall is joined to (RE-127) that
+takes all 360 walls to an exact match against Revit's own
 export in world coordinates, and every column is the record prism minus
 the walls that cut it, exact on 256 of 256 (#215 / #238 / #239, RE-26 and
 RE-29). Rooms come out as 116 `IFCSPACE` carrying their real Revit name,

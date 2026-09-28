@@ -11,6 +11,8 @@
 #   - ifc.sha256: the exported IFC's hash without its FILE_NAME and
 #     IFCOWNERHISTORY lines, which carry the export time, so two builds
 #     that write the same model hash the same;
+#   - witness-<artifact>.json: the rvt-rs observation committed under
+#     research/witness/<artifact>/observations/rvt-rs.json;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
 #     ending with its exit status;
 #   - probe.txt, when PROBE names an examples/ probe already built in
@@ -39,6 +41,13 @@ material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_if
 door_bodies_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
 
+# Witness artifacts (research/witness/<id>/observations/rvt-rs.json) per model.
+witness_artifacts() {
+  case "$1" in
+    core-interior) echo "magnetar-2024-core-interior magnetar-2024-core-interior-slim" ;;
+  esac
+}
+
 score() { # name args...
   local out="$1"; shift
   timeout 1200 python "$@" > "$out" 2>&1
@@ -54,6 +63,12 @@ while IFS='|' read -r name rvt ref; do
   "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
   grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+  # The witness observations committed for this model (research/witness/),
+  # regenerated so a change to its IFC can commit them from the results.
+  for artifact in $(witness_artifacts "$name"); do
+    "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/witness.ifc" --observation "$dir/witness-$artifact.json" --artifact-id "$artifact" > /dev/null 2>&1
+    rm -f "$dir/witness.ifc"
+  done
   if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
     timeout 1200 "$BIN/examples/$PROBE" "$MODELS/$rvt" > "$dir/probe.txt" 2>&1
     echo "exit $?" >> "$dir/probe.txt"
