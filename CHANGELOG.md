@@ -6,6 +6,23 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Revit 2026 projects export typed elements (RE-124, #421).** Every
+  per-release constant rvt-rs reads is the tag of a class in the file's own
+  schema, and on a Revit 2026 project those tags give the 2026 values:
+  the record marker (`Outline`, `ElementParents`), Level elevations
+  (`Plane`), element data (`CellList`), layers (`VerticalRegionsStructure`,
+  whose 2026 records are 41 bytes) and materials (`Material`,
+  `PatternHelper`, `PhysicalParamSet`). On the flowbim.ee house against
+  Revit 26.4's own IFC4X3 export: 113 of its 115 elements, none outside
+  it, with Revit's GlobalIds; its 4 storeys with Revit's names and
+  elevations; 13 of 13 rooms with Revit's number and name; 13 of 13 doors
+  and 15 of 16 windows in their host walls; walls named `Family:Type` as
+  Revit names them, and 26 layer sets as thick as Revit's. Experimental:
+  one model. Wall joins, roof slopes, stairs and IFC export overrides are
+  not read on 2026.
+
 ### Research
 
 - **Revit 2026 element records (RE-124, #421).** On the public flowbim.ee
@@ -19,6 +36,17 @@ All notable changes will be documented here. This project follows
   `tools/re/instances_vs_ifc_tags.py` measure it.
 
 ### Fixed
+
+- **A type whose material map cannot be read no longer drops its doors
+  and windows (RE-124, RE-84).** RE-84 exports a door or window whose type
+  has no geometry-material map as its opening alone. Two cases made every
+  type look map-less: a file whose material names are not read, and a map
+  with unset entries (a part with no material of its own), which the 2026
+  house's manufacturer doors and windows have. Neither now counts as "no
+  map": without material names nothing is decided, and a map with unset
+  entries shows the type draws geometry, though its materials are not
+  taken as the element's (taken as its set, they gave 46 more wrong sets
+  than right on Snowdon Towers). Every 2023 to 2025 file is byte-identical.
 
 - **No invented storeys (RE-124).** A file whose Levels are not read got
   storeys anyway: Level-like strings from its partitions at elevation 0, or

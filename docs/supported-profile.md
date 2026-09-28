@@ -80,7 +80,7 @@ Revit leaves them out.
 ## Not supported
 
 - Converting an arbitrary Revit model to IFC with Revit-grade fidelity.
-- Element records of releases other than 2023, 2024 and 2025. On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
+- Element records of releases other than 2023 to 2026 (2026 is experimental, on `main`, measured on one project, RE-124). On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
 - Door/Window typing from the opening-index rows (RE-19) and Level ElementIds
