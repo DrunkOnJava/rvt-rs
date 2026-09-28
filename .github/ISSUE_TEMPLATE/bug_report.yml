@@ -22,7 +22,7 @@ body:
     attributes:
       label: rvt-rs version
       description: Output of `cargo pkgid rvt` or the version from Cargo.toml.
-      placeholder: "0.1.2"
+      placeholder: "0.3.0"
     validations:
       required: true
   - type: dropdown

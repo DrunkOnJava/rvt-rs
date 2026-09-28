@@ -1,12 +1,13 @@
-# rvt-rs — Python bindings (v0.1.2)
+# rvt-rs — Python bindings (v0.3.0)
 
 `rvt` is a Python package built on top of the Rust `rvt` crate. It
-exposes the file reader, metadata getters, schema introspection,
-Layer-5a walker, and document-level IFC4 STEP exporter from the
-Rust core, without requiring a Rust toolchain at install time. The
-Python surface is narrower than the Rust surface — there is one
-class (`RevitFile`) and one module-level helper (`rvt_to_ifc`),
-both documented in full below.
+exposes the file reader, metadata, schema introspection, the
+`Global/ElemTable` index, the IFC4 exporter with its diagnostics, and
+element and room schedules from the Rust core, without requiring a Rust
+toolchain at install time. The Python surface is narrower than the Rust
+surface: one class (`RevitFile`) and three module-level functions
+(`rvt_to_ifc`, `rvt_to_ifc_diagnostics`, `read_metadata`), all documented
+below.
 
 Single source of truth for the runtime surface is
 [`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs); the hand-maintained type stubs
@@ -21,14 +22,16 @@ For all installation paths, including release smoke tests, see
 ### From PyPI
 
 ```bash
-pip install "rvt==0.1.2"
+pip install rvt
 ```
 
-**PyPI `rvt` 0.1.2 is published.** Wheels target Python ≥ 3.8 via
-pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
-every supported Python minor. The publish workflow uploads wheels on
-tag. The matching Rust crate is **not** on crates.io yet (docs.rs
-404) — see [`install.md`](install.md).
+**PyPI `rvt` 0.3.0 is the current release.** Wheels target Python ≥ 3.8
+via pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
+every supported Python minor. The matching Rust crate is on crates.io
+(`cargo add rvt`); platforms and the other install channels are in
+[`install.md`](install.md). This page describes `main`, which can be ahead
+of the latest release: what has landed since 0.3.0 is under `[Unreleased]`
+in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ### From source
 
@@ -91,7 +94,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) at v0.1.2.
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.3.0).
 
 ### Module-level
 
@@ -225,12 +228,14 @@ running heavy extractors.
 
 ```python
 basic_file_info_json(self) -> str | None
+basic_file_info_json_strict(self) -> str
 ```
 Full `BasicFileInfo` as a JSON string (parseable via
 `json.loads`). Single-call equivalent of the four individual
 getters plus any future fields added to the Rust `BasicFileInfo`
-struct. Returns `None` if the `BasicFileInfo` stream can't be
-parsed.
+struct. `basic_file_info_json` returns `None` if the `BasicFileInfo`
+stream can't be parsed; `basic_file_info_json_strict` raises
+`ValueError` instead.
 
 ```python
 part_atom_json(self) -> str | None
@@ -352,10 +357,13 @@ export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
 write_ifc(self, mode: str = "scaffold") -> str
 export_diagnostics_json(self) -> str
 ```
-Produce an IFC4 STEP string via `ifc::RvtDocExporter`. This is
-document-level export: project name, description, units,
-classifications — not per-element geometry. Raises `ValueError`
-if the file can't be parsed far enough to build a model.
+Produce an IFC4 STEP string via `ifc::RvtDocExporter`, the same
+exporter `rvt-ifc` runs. On Revit 2023, 2024 and 2025 projects it writes
+typed elements with bodies, storeys, types and materials (on
+`2024_Core_Interior.rvt`, 992 elements, every one with a body); on other
+releases and on family files, the spatial scaffold. What each release
+recovers is in [`status.md`](status.md). Raises `ValueError` if the file
+can't be parsed far enough to build a model.
 
 `mode` is one of `scaffold`, `typed-no-geometry`, `geometry`, or
 `strict`. `scaffold` accepts the historical spec-valid framework
@@ -371,6 +379,40 @@ typically succeeds until Lane 7 geometry recovery lands.
 
 `export_diagnostics_json()` returns the JSON diagnostics sidecar
 for the default IFC export without writing files.
+
+```python
+read_adocument_strict(self) -> dict
+read_adocument_lossy(self) -> dict
+```
+Variants of `read_adocument()`. `read_adocument_strict` raises
+`ValueError` when the `ADocument` record is not located or any of its
+fields fell back to raw bytes. `read_adocument_lossy` returns
+`{"value", "complete", "partial_fields", "failed_streams", "warnings",
+"confidence"}` and raises `OSError` only on stream-level failures.
+
+```python
+schema_diagnostics(self) -> dict
+```
+Integer counts describing the parsed schema: `class_count`,
+`parsed_field_count`, `declared_field_count_sum`,
+`field_count_mismatches`, `tagged_class_count`,
+`parent_only_class_count`, `ancestor_tag_count`, `skipped_records`,
+`cpp_type_count`. Raises `ValueError` if the schema can't be parsed.
+
+```python
+elem_table_header(self) -> dict
+elem_table_records(self) -> list[dict]
+declared_element_ids(self) -> list[int]
+```
+The `Global/ElemTable` index. `elem_table_header()` returns
+`{element_count, record_count, header_flag, decompressed_bytes}`
+(`element_count` is a per-release class tag, not a count; see
+`rvt-elem-table`). `elem_table_records()` returns one
+`{offset, id_primary, id_secondary, owner_id}` dict per record, where
+`owner_id` is the element the record's element belongs to, or `None`
+(RE-31; experimental). `declared_element_ids()` is the sorted,
+deduplicated set of ElementIds the table declares. CLI mirror:
+`rvt-elem-table file.rvt --json`.
 
 ```python
 __repr__(self) -> str
@@ -434,8 +476,10 @@ matrix verbatim:
 
 | Revit release | Open + metadata + schema | Walker (ADocument) | IFC4 document export |
 |---|---|---|---|
-| 2016 – 2023 | yes | `None` (entry-point detector: partial) | yes |
-| 2024 – 2026 | yes | full | yes |
+| 2016 – 2022 | yes | `None` (entry-point detector: partial) | spatial scaffold |
+| 2023 | yes | `None` (entry-point detector: partial) | typed elements from element records |
+| 2024 – 2025 | yes | full | typed elements with measured geometry |
+| 2026 | yes | full | spatial scaffold |
 
 Full matrix and per-column definitions are in
 [`docs/compatibility.md`](./compatibility.md). Expanding the generic
@@ -443,8 +487,8 @@ walker to 2016–2023 requires per-version entry-point heuristics and is
 tracked in [`ROADMAP.md`](../ROADMAP.md) — active work, not shipped.
 
 File types: `.rvt`, `.rfa`, `.rte`, `.rft` all read through the
-same code path (CFB magic dispatch). The reference corpus is
-entirely `.rfa`; project/template fixtures are pending (Q-01).
+same code path (CFB magic dispatch). The reference models, projects and
+families, are listed in [`reference-models.md`](reference-models.md).
 
 ## What isn't exposed yet
 
@@ -463,13 +507,10 @@ Not in Python today:
   registry, not wired into `iter_elements` on real project files.
   `rvt-doc` and the Rust `elements::all_decoders()` API cover the
   registry surface.
-- **Per-element IFC export.** The `write_ifc()` method uses
-  `RvtDocExporter` — document-level only (project, units,
-  classifications). The Rust crate's per-element mappings
-  (`IfcWall` / `IfcDoor` / `IfcSlab` / etc., also in
-  `compatibility.md` §4) are driven by internal exporter types
-  not yet surfaced through pyo3. The `rvt-ifc` CLI runs the full
-  pipeline.
+- **The export model itself.** `write_ifc()` returns the IFC text and
+  `export_diagnostics()` its diagnostics, but the in-memory `IfcModel`
+  (entities, storeys, materials) is not exposed as Python objects, and
+  neither are the glTF and plan-SVG writers (`rvt-gltf`, `rvt-sheet`).
 - **Decompression helper.** `read_stream` returns compressed
   bytes on truncated-gzip streams. The Rust
   `compression::inflate_at_with_limits` function isn't bound yet.
@@ -480,11 +521,9 @@ Not in Python today:
   a round-trip use case.
 - **Streaming large files.** The entire file is read into memory.
   There is no chunked / streaming reader.
-- **Strict-mode diagnostics.** `basic_file_info_json`,
-  `part_atom_json`, `read_adocument`, and `schema_json` all fall
-  back silently on parse errors (returning `None` or erroring
-  respectively). A `*_strict` variant surface that accumulates
-  per-field diagnostics is tracked in API-14 / API-15 / API-16.
+- **Strict variants for every getter.** `basic_file_info_json` and
+  `read_adocument` have `_strict` (and `read_adocument_lossy`) variants;
+  `part_atom_json` and `schema_json` do not yet.
 
 ## Troubleshooting
 

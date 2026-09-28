@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-28
 
 This page is the public source of truth for what rvt-rs can do today. It is
 intentionally blunt so users can decide quickly whether the tool fits their
@@ -738,6 +738,12 @@ prints it from any installed build.
   the whole schema, each element's Revit class, type parameters and MEP
   devices.
 - The Rust crate is on crates.io from 0.3.0, with its API on docs.rs.
+- `main` is ahead of v0.3.0 by everything under `[Unreleased]`: Revit 2023
+  projects' typed elements (RE-81 to RE-122), room outlines and room numbers
+  and names, door and window openings from their types, turned family
+  instances, steel sections, IFC type objects, sketched outlines and shafts,
+  and system family names in the file's locale. None of it is in a release
+  yet; the README lists it under "Release 0.3.0 and main".
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
 task backlog.
