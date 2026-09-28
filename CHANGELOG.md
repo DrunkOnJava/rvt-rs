@@ -8,6 +8,14 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2023 elements take Revit's own GlobalIds (RE-108, #421).** A
+  2023 `Global/ElemTable` record holds the element's creating episode at
+  `+0x0c`, where 2024's 40-byte record has it at `+0x18`. Every element,
+  room and storey rvt-rs exports from the two 2023 projects with a Revit
+  export now carries the GlobalId Revit gives it: Exemplo_data 37, 9 and
+  2, modelo_bim 37 and 4 (none before). Every 2024 and 2025 file is
+  byte-identical.
+
 - **Revit 2023 Levels and storeys (RE-107, #421).** Revit 2023 projects
   export with their real Levels as storeys, and each element on the
   storey of the Level its record names, by the same rules as 2024's. The
