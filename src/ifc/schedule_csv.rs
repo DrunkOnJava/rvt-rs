@@ -107,7 +107,7 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
 pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
     let unit = options.unit;
     let mut rows: Vec<(f64, String, Vec<String>)> = Vec::new();
-    for entity in &model.entities {
+    for (entity_index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -130,7 +130,7 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
         };
         let storey = storey_index.and_then(|i| model.building_storeys.get(i));
         // Same precedence as the STEP writer: profile set > layer set >
-        // single material.
+        // single material > constituent set.
         // A profile set names its section; its one material is the material.
         let material = material_profile_set_index
             .and_then(|i| model.material_profile_sets.get(i))
@@ -150,6 +150,26 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
                 material_index
                     .and_then(|i| model.materials.get(i))
                     .map(|m| m.name.clone())
+            })
+            // Then a family instance's materials (RE-82), or a wall's layer
+            // materials where its body is not a layer set (RE-88), each
+            // once, in the order the STEP writer lists them.
+            .or_else(|| {
+                let set = model
+                    .material_constituent_sets
+                    .iter()
+                    .find(|set| set.elements.contains(&entity_index))?;
+                let mut names: Vec<&str> = Vec::new();
+                for name in set
+                    .material_indices
+                    .iter()
+                    .filter_map(|&i| model.materials.get(i).map(|m| m.name.as_str()))
+                {
+                    if !names.contains(&name) {
+                        names.push(name);
+                    }
+                }
+                (!names.is_empty()).then(|| names.join("; "))
             })
             .unwrap_or_default();
         // Size columns describe the body the writer emits: only the
