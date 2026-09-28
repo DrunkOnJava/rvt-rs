@@ -3226,41 +3226,51 @@ pub fn opening_instances_from_records(
         .values()
         .map(|record| {
             let mut decoded = element_record_decoded(record, class, level_ids);
-            // The list is in ascending ElementId order. Prefer the nearest
-            // wall below the record's own id, then the nearest above it.
-            let walls: Vec<u32> = record
-                .references
-                .iter()
-                .filter_map(|id| u32::try_from(*id).ok())
-                .filter(|id| *id != record.element_id && host_candidates.contains(id))
-                .collect();
-            let (below, above): (Vec<u32>, Vec<u32>) =
-                walls.iter().partition(|id| **id < record.element_id);
-            let candidates: Vec<u32> = below.into_iter().rev().chain(above).collect();
-            if !candidates.is_empty() {
-                decoded.fields.push((
-                    OPENING_HOST_CANDIDATES_FIELD.into(),
-                    InstanceField::Vector(
-                        candidates
-                            .iter()
-                            .map(|&id| InstanceField::ElementId { tag: 0, id })
-                            .collect(),
-                    ),
-                ));
-            }
-            if let Some(&host) = candidates.first() {
-                decoded.fields.push((
-                    OPENING_HOST_FIELD.into(),
-                    InstanceField::ElementId { tag: 0, id: host },
-                ));
-                decoded.fields.push((
-                    OPENING_HOST_PROVENANCE_FIELD.into(),
-                    InstanceField::String(OPENING_HOST_PROVENANCE.into()),
-                ));
-            }
+            attach_host_candidates(record, host_candidates, &mut decoded);
             decoded
         })
         .collect()
+}
+
+/// Record on `decoded` the walls in `host_candidates` that `record`'s
+/// reference list names, nearest to its own ElementId first, and take the
+/// nearest as its host until [`bind_opening_hosts`] has seen curtain walls
+/// (#439, RE-85). The list is in ascending ElementId order: the nearest
+/// wall below the record's own id comes first, then the nearest above.
+fn attach_host_candidates(
+    record: &crate::partition_element_records::PartitionElementRecord,
+    host_candidates: &BTreeSet<u32>,
+    decoded: &mut DecodedElement,
+) {
+    let walls: Vec<u32> = record
+        .references
+        .iter()
+        .filter_map(|id| u32::try_from(*id).ok())
+        .filter(|id| *id != record.element_id && host_candidates.contains(id))
+        .collect();
+    let (below, above): (Vec<u32>, Vec<u32>) =
+        walls.iter().partition(|id| **id < record.element_id);
+    let candidates: Vec<u32> = below.into_iter().rev().chain(above).collect();
+    let Some(&host) = candidates.first() else {
+        return;
+    };
+    decoded.fields.push((
+        OPENING_HOST_CANDIDATES_FIELD.into(),
+        InstanceField::Vector(
+            candidates
+                .iter()
+                .map(|&id| InstanceField::ElementId { tag: 0, id })
+                .collect(),
+        ),
+    ));
+    decoded.fields.push((
+        OPENING_HOST_FIELD.into(),
+        InstanceField::ElementId { tag: 0, id: host },
+    ));
+    decoded.fields.push((
+        OPENING_HOST_PROVENANCE_FIELD.into(),
+        InstanceField::String(OPENING_HOST_PROVENANCE.into()),
+    ));
 }
 
 /// Bind each door or window to the first of its host candidates that is
@@ -3351,8 +3361,9 @@ fn without_non_primary_options(
 /// placed instance of a [`crate::partition_element_records::RECOVERED_CATEGORIES`]
 /// category, with its box as its body, into the bucket its category
 /// feeds. Components nested in doors and windows are left out
-/// ([`nested_in_openings`]). No names, types, storeys, joins, design
-/// options or opening hosts: their 2023 layouts are not decoded.
+/// ([`nested_in_openings`]). Doors and windows bind to their host wall by
+/// the 2024 rule (RE-85) on 2023's reference lists. No names, types,
+/// storeys, joins or design options: their 2023 layouts are not decoded.
 fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
     use crate::partition_element_records as per;
     let records = crate::partition_element_records_2023::scan_records(
@@ -3396,6 +3407,14 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
             _ => out.products.push(decoded),
         }
     }
+    let wall_ids: BTreeSet<u32> = out.walls.iter().filter_map(|wall| wall.id).collect();
+    for element in out.doors.iter_mut().chain(out.windows.iter_mut()) {
+        if let Some(record) = element.id.and_then(|id| selected.get(&id)) {
+            attach_host_candidates(record, &wall_ids, element);
+        }
+    }
+    bind_opening_hosts(&out.walls, &mut out.doors);
+    bind_opening_hosts(&out.walls, &mut out.windows);
 }
 
 /// ElementIds of the instances in `selected` nested in a door or window
