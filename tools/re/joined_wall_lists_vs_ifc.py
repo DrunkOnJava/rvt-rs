@@ -17,7 +17,7 @@ gets wrong, with both walls' entries for each other.
 
 Usage:
 
-    python3 tools/re/joined_wall_lists_vs_ifc.py probe.txt revit-export.ifc [--list]
+    python3 tools/re/joined_wall_lists_vs_ifc.py probe.txt revit-export.ifc [--list] [--ids ID,ID]
 
 Needs IfcOpenShell (tested with 0.8.5).
 """
@@ -49,6 +49,14 @@ def load(path):
     return rows
 
 
+def overlap(a, b):
+    """Whether two walls' record boxes overlap in height (NaN, unknown: yes)."""
+    za, zb = a.get("z") or [None, None], b.get("z") or [None, None]
+    if None in za + zb or any(math.isnan(v) for v in za + zb):
+        return True
+    return min(za[1], zb[1]) - max(za[0], zb[0]) > 1e-3
+
+
 def l_joints(rows):
     ends = collections.defaultdict(list)
     for tag, row in rows.items():
@@ -58,7 +66,11 @@ def l_joints(rows):
         if math.hypot(row["end"][0] - row["start"][0], row["end"][1] - row["start"][1]) < 1e-9:
             continue
         for which, point in (("start", row["start"]), ("end", row["end"])):
-            mates = [o for o in ends[(round(point[0], 5), round(point[1], 5))] if o != tag]
+            mates = [
+                o
+                for o in ends[(round(point[0], 5), round(point[1], 5))]
+                if o != tag and overlap(rows[tag], rows[o])
+            ]
             if len(mates) == 1:
                 yield tag, which, point, mates[0]
 
@@ -68,6 +80,7 @@ def main():
     if len(args) < 2:
         raise SystemExit(__doc__)
     listing = "--list" in args
+    ids = {int(v) for v in args[args.index("--ids") + 1].split(",")} if "--ids" in args else set()
     rows = load(args[0])
     layers = helper("wall_layers_vs_ifc")
     import ifcopenshell
@@ -128,7 +141,7 @@ def main():
             "partner names wall" if b else "partner does not name wall",
         )
         counts[key] += 1
-        if listing and (rule == "undecided" or rule != role):
+        if (listing and (rule == "undecided" or rule != role)) or wall in ids:
             listed.append((wall, which, partner, role, round(reach, 4), a, b))
     for key, n in sorted(counts.items(), key=lambda kv: (-kv[1], str(kv[0]))):
         print(f"  {n:>5}  {' | '.join(key) if isinstance(key, tuple) else key}")

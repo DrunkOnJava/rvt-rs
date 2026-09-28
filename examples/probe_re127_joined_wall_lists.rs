@@ -10,7 +10,8 @@
 //! is what this probe's output is scored for.
 //!
 //! One JSON object per wall with a centreline: `id`, the centreline's plan
-//! `start` and `end` in feet, and `lists`, every frame of either kind whose
+//! `start` and `end` in feet, `z`, its element record box's base and top,
+//! and `lists`, every frame of either kind whose
 //! entries all name another recovered wall, as `{kind, word, tag, at,
 //! entries}`; a join-list entry is `[k, id, j]` and a joined-wall entry is
 //! `[id, [u32...]]`. `at` is the frame's offset in the wall's data.
@@ -144,6 +145,16 @@ fn main() -> rvt::Result<()> {
             ))
         })
         .collect();
+    let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
+    let boxes: BTreeMap<u32, [f64; 6]> = rvt::partition_element_records::scan_category_records(
+        &mut rf,
+        version,
+        rvt::partition_element_records::OST_WALLS,
+        &declared,
+    )?
+    .into_iter()
+    .map(|record| (record.element_id, record.bbox_feet))
+    .collect();
     let mut lists: BTreeMap<u32, Vec<String>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -180,12 +191,14 @@ fn main() -> rvt::Result<()> {
         let mut row = String::new();
         let _ = write!(
             row,
-            "{{\"id\":{id},\"start\":[{},{}],\"end\":[{},{}],\"thickness\":{},\"lists\":[{}]}}",
+            "{{\"id\":{id},\"start\":[{},{}],\"end\":[{},{}],\"thickness\":{},\"z\":[{},{}],\"lists\":[{}]}}",
             axis.start[0],
             axis.start[1],
             axis.end[0],
             axis.end[1],
             axis.thickness_feet,
+            boxes.get(id).map_or(f64::NAN, |b| b[2]),
+            boxes.get(id).map_or(f64::NAN, |b| b[5]),
             lists.get(id).map(|l| l.join(",")).unwrap_or_default()
         );
         println!("{row}");
