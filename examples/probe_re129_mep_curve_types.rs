@@ -32,7 +32,7 @@ fn main() -> rvt::Result<()> {
         }
     }
     let records = per::scan_category_records_multi(&mut rf, version, &categories, &declared)?;
-    for record in records.iter().take(12) {
+    for record in &records {
         let Ok(inflated) = rf.inflated_partition(&record.stream) else {
             continue;
         };
@@ -109,6 +109,47 @@ fn main() -> rvt::Result<()> {
                 }
             }
         }
+    }
+    // Where each pipe's and duct's own element data names the elements
+    // holding the type names: offsets of those ids as u64 in the data.
+    let owners: [u32; 2] = [179_830, 434_017];
+    if let Some(layout) = rvt::partition_names::element_data_layout(version) {
+        let ids: std::collections::BTreeSet<u32> =
+            records.iter().map(|record| record.element_id).collect();
+        let mut hits: std::collections::BTreeMap<(u32, usize), usize> = Default::default();
+        let mut seen: std::collections::BTreeSet<u32> = Default::default();
+        for stream in rf.partition_stream_names() {
+            let Ok(inflated) = rf.inflated_partition(&stream) else {
+                continue;
+            };
+            let buf = inflated.bytes();
+            let starts: Vec<usize> = memchr::memmem::find_iter(buf, &layout.header).collect();
+            for (index, &hit) in starts.iter().enumerate() {
+                let id_at = hit + layout.header.len();
+                let Some(id) = layout.id_at(buf, id_at).filter(|id| ids.contains(id)) else {
+                    continue;
+                };
+                seen.insert(id);
+                let end = starts
+                    .get(index + 1)
+                    .copied()
+                    .unwrap_or(buf.len())
+                    .min(hit + 0x1_0000);
+                let data = &buf[id_at + 8..end];
+                for at in 0..data.len().saturating_sub(8) {
+                    let value = u64::from_le_bytes(data[at..at + 8].try_into().expect("8 bytes"));
+                    if let Some(owner) = owners.iter().find(|o| u64::from(**o) == value) {
+                        *hits.entry((*owner, at)).or_default() += 1;
+                        println!("data {id} names {owner} at +{at}");
+                    }
+                }
+            }
+        }
+        println!(
+            "element data found for {} of {} records; offsets {hits:?}",
+            seen.len(),
+            ids.len()
+        );
     }
     Ok(())
 }
