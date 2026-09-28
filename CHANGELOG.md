@@ -8,6 +8,18 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Only a Level that is a building story becomes a storey (RE-118,
+  #219).** A Level keeps Revit's Building Story setting past its name: the
+  first `ff × 8 · 00 01`, an `f64`, a `u64` ElementId, then 1 or 0. It is
+  exact against the "Building Story" parameter of Snowdon Towers' VIM
+  export on all 37 architectural and structural Levels, and 1 on Core
+  Interior's and RE1's, each a storey of Revit's IFC. A pad byte of 1
+  before the name length no longer refuses a Level. Snowdon Towers'
+  structural model, whose Levels were refused, now has its 12 building
+  stories as storeys, their names and elevations the VIM's, with 208 of
+  the 210 elements on them in their storey; its Top of Footing and TOS
+  Levels are not storeys. Every other model's IFC is byte-identical.
+
 - **Rooms carry their numbers and names on every release (RE-117, #90,
   #421).** A room's number and name are the parameter entries `-1006901
   (ROOM_NUMBER) · u32 n · UTF-16` and `-1006900 (ROOM_NAME) · u32 m ·

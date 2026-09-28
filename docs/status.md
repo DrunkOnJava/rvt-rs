@@ -183,7 +183,9 @@ across all eight inflated partitions, none with the plan bounds of any
 recovered plate, and no ordered vertex run of the export's polygon
 anywhere in the file at any stride.
 IFC export maps recovered Levels → storeys (with their real Revit
-names and elevations on Revit 2024, #218), Rooms → spaces, and
+names and elevations on Revit 2024, #218; since RE-118 only the Levels
+that are building stories, as Revit's export does, which gives Snowdon
+Towers' structural model its 12 storeys), Rooms → spaces, and
 Walls / Doors / Windows / Columns / Floors / BuildingPads →
 `IfcWall` / `IfcDoor` / `IfcWindow` / `IfcColumn` / `IfcSlab` (or
 `IfcShadingDevice` when overridden) with placement and an extrusion.

@@ -2176,8 +2176,11 @@ fn apply_partition_level_storeys(
             *storey_index = None;
         }
     }
+    // RE-118: only a building story is a storey of Revit's export; a Level
+    // that is not binds no element, which the later rules place.
     *building_storeys = levels
         .into_iter()
+        .filter(|level| level.building_story != Some(false))
         .enumerate()
         .map(|(index, level)| {
             // The Level's own ElementId is what a building element's
