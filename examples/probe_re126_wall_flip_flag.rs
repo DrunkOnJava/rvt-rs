@@ -4,8 +4,9 @@
 //! location line (`u32`), the orientation word (`u32`), the flip as one
 //! byte that is 0 or 1, and a second flag byte. The flag is 0 followed by
 //! `00 00`, or 1 followed by `ff ff`. It is set on 35 of the 59 walls of
-//! the flowbim.ee Revit 2026 house and on 4 of Core Interior's 360 (Revit
-//! 2024), and on none in RE1 Architecture (2025) or Snowdon Towers (2024).
+//! the flowbim.ee Revit 2026 house, on 4 of the 360 walls of Core
+//! Interior (Revit 2024), and on none in RE1 Architecture (2025) or
+//! Snowdon Towers (2024).
 //! What the flag sets is not measured.
 //!
 //! The probe prints the six bytes after the orientation word for each
