@@ -559,6 +559,13 @@ all 181 turned Snowdon instances are closer to Revit's body along their own
 axes (median 1.47 ft off before, 0.48 ft now), and the openings of the 27
 turned doors and windows are Revit's width along them
 (`reports/element-framing/RE-87-instance-transforms.md`).
+**RE-88 (2026-09-28)** gives walls whose body is not a layer set their
+layers' materials as Revit's export does: one layer its `IfcMaterial`,
+several an `IfcMaterialConstituentSet`, exterior first, a material's k-th
+occurrence named " (k)". That is Revit's association on every Snowdon wall
+rvt-rs writes a layer set for (143 of 143, 823 of 824); 72 of the 111
+walls that had no material now have Revit's, none a different one
+(`reports/element-framing/RE-88-wall-materials-without-layer-sets.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

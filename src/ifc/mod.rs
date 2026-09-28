@@ -1125,8 +1125,15 @@ fn export_rvt_doc(
     let global_ids = revit_model_global_ids(rf, &entities, &building_storeys);
     let (material_layer_sets, material_layer_usages) =
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
-    let material_constituent_sets =
+    let mut material_constituent_sets =
         material_constituent_sets_from_types(&entities, &element_type_materials, &mut materials);
+    let layer_constituent_sets = layer_materials_without_layer_sets(
+        &mut entities,
+        &element_layers,
+        &material_constituent_sets,
+        &mut materials,
+    );
+    material_constituent_sets.extend(layer_constituent_sets);
     let opening_cuts = opening_cuts_through_hosts(&entities);
 
     Ok(IfcModel {
@@ -1276,11 +1283,130 @@ fn material_constituent_sets_from_types(
         let set = *set_of.entry(indices.clone()).or_insert_with(|| {
             sets.push(entities::MaterialConstituentSet {
                 material_indices: indices,
+                names: Vec::new(),
                 elements: Vec::new(),
             });
             sets.len() - 1
         });
         sets[set].elements.push(entity_index);
+    }
+    sets
+}
+
+/// The index of the material named `name` in `materials`, added with the
+/// band's colour when it is not there yet; a material that has no colour
+/// takes the band's.
+fn layer_material_index(band: &LayerBand, name: &str, materials: &mut Vec<MaterialInfo>) -> usize {
+    match materials.iter().position(|m| m.name == name) {
+        Some(found) => {
+            let material = &mut materials[found];
+            if material.color_packed.is_none() && band.color_packed.is_some() {
+                material.color_packed = band.color_packed;
+                material.transparency = Some(band.transparency);
+            }
+            found
+        }
+        None => {
+            materials.push(MaterialInfo {
+                name: name.to_string(),
+                color_packed: band.color_packed,
+                transparency: band.color_packed.map(|_| band.transparency),
+            });
+            materials.len() - 1
+        }
+    }
+}
+
+/// RE-88: a wall whose layers are read but whose body is not a layer set
+/// (tapered, curved, cut or profiled, RE-86, RE-75) takes them as Revit's
+/// export does for any wall: a type of one layer its material, and a type
+/// of several an unnamed constituent set of its layers, exterior first,
+/// each named after its material and a material's k-th occurrence " (k)"
+/// after it. On Snowdon Towers that is Revit's association on every wall
+/// rvt-rs writes a layer set for (143 of 143 single materials, 823 of 824
+/// constituent sets with the same materials, order and names).
+///
+/// Left alone: an element with a layer set, a material, a profile set or a
+/// constituent set already (`taken`), a floor's, roof's or ceiling's
+/// stacked layers, and a type with any layer whose material name is not
+/// read.
+fn layer_materials_without_layer_sets(
+    entities: &mut [entities::IfcEntity],
+    element_layers: &std::collections::BTreeMap<u32, ElementLayers>,
+    taken: &[entities::MaterialConstituentSet],
+    materials: &mut Vec<MaterialInfo>,
+) -> Vec<entities::MaterialConstituentSet> {
+    let taken: std::collections::BTreeSet<usize> = taken
+        .iter()
+        .flat_map(|set| set.elements.iter().copied())
+        .collect();
+    let mut sets: Vec<entities::MaterialConstituentSet> = Vec::new();
+    let mut set_of: std::collections::BTreeMap<(Vec<usize>, Vec<String>), usize> =
+        Default::default();
+    for (index, entity) in entities.iter_mut().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            type_guid,
+            material_index,
+            material_layer_set_index: None,
+            material_profile_set_index: None,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if material_index.is_some() || taken.contains(&index) {
+            continue;
+        }
+        let Some(layers) = type_guid
+            .as_deref()
+            .and_then(|tag| tag.parse::<u32>().ok())
+            .and_then(|id| element_layers.get(&id))
+            .filter(|layers| !layers.stacked && !layers.layers.is_empty())
+        else {
+            continue;
+        };
+        let Some(names) = layers
+            .layers
+            .iter()
+            .map(|band| band.name.clone())
+            .collect::<Option<Vec<String>>>()
+        else {
+            continue;
+        };
+        let indices: Vec<usize> = layers
+            .layers
+            .iter()
+            .zip(&names)
+            .map(|(band, name)| layer_material_index(band, name, materials))
+            .collect();
+        if let [only] = indices.as_slice() {
+            *material_index = Some(*only);
+            continue;
+        }
+        let mut seen: std::collections::BTreeMap<&str, usize> = Default::default();
+        let labels: Vec<String> = names
+            .iter()
+            .map(|name| {
+                let count = seen.entry(name.as_str()).or_insert(0);
+                *count += 1;
+                if *count == 1 {
+                    name.clone()
+                } else {
+                    format!("{name} ({count})")
+                }
+            })
+            .collect();
+        let set = *set_of
+            .entry((indices.clone(), labels.clone()))
+            .or_insert_with(|| {
+                sets.push(entities::MaterialConstituentSet {
+                    material_indices: indices,
+                    names: labels,
+                    elements: Vec::new(),
+                });
+                sets.len() - 1
+            });
+        sets[set].elements.push(index);
     }
     sets
 }

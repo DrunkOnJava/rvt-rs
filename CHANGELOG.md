@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Walls whose body is not a layer set carry their layers' materials
+  (#355, RE-88).** Revit's export associates a wall's materials by its
+  type's layers: one layer gives its `IfcMaterial`, several an
+  `IfcMaterialConstituentSet` of the layers, exterior first, a material's
+  k-th occurrence named " (k)". That is Revit's association on every
+  Snowdon wall rvt-rs writes a layer set for (143 of 143, 823 of 824).
+  Tapered, curved, cut and profiled walls, which got no material, now get
+  it where their layers are read: on Snowdon Towers 72 of the 111, all
+  equal to Revit's (57 constituent sets, 15 materials), none different.
+  In the GLB a wall with one material takes its colour. Every other local
+  file exports byte-identical IFC.
 - **Turned family instances are drawn turned (RE-87).** A family
   instance's data holds its transform, a 3 x 3 rotation stored row by row
   and its origin. A door, window, piece of furniture or other family
