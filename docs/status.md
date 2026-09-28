@@ -60,7 +60,8 @@ GlobalId, and a body that is exact where the element's
 data is decoded and its bounding box where it is not. It writes that as IFC4,
 glTF, plan SVG and CSV, from the CLIs, Python and the zero-upload browser
 viewer. On Revit 2023 projects it reads each element's ElementId, category
-and bounding box (RE-81), walls cut back at their joins (RE-120), door and
+and bounding box (RE-81), walls cut back at their joins (RE-120), beams at their columns
+(RE-122), door and
 window hosts (RE-85), room outlines
 (RE-102) with their numbers and names (RE-117, which names every
 release's rooms), Levels with the storey each element sits on (RE-107;
