@@ -444,6 +444,193 @@ pub fn scan_wall_orientations(
         .collect())
 }
 
+/// The one tag whose lists name walls, across every wall's copies; `None`
+/// where there is none or more than one (RE-70).
+fn join_list_tag(found: &BTreeMap<u32, Option<WallJoinLists>>) -> Option<u32> {
+    let tags: BTreeSet<u32> = found
+        .values()
+        .flatten()
+        .flatten()
+        .map(|(tag, _)| *tag)
+        .collect();
+    let [tag] = tags.into_iter().collect::<Vec<_>>()[..] else {
+        return None;
+    };
+    Some(tag)
+}
+
+/// The word that opens a wall's joined-wall list (RE-127).
+pub const WALL_JOINED_LIST_WORD: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
+
+/// A joined-wall list's tag is its document's join-list tag plus this:
+/// `0x0b9f7f` beside `0x0b9f7d` on Core Interior, RE1 and the Revit 2026
+/// house (RE-127).
+pub const WALL_JOINED_LIST_TAG_STEP: u32 = 2;
+
+/// Most `u32`s a joined-wall entry is taken to carry.
+pub const MAX_WALL_JOINED_WORDS: usize = 256;
+
+/// A wall's joined-wall entries: each wall it names, with the `u32`s its
+/// entry carries.
+pub type WallJoinedEntries = BTreeMap<u32, Vec<u32>>;
+
+/// The entries of every joined-wall list in a wall's `data` (RE-127).
+///
+/// A list is `01 00 00 00 · u32 tag · 02 00 00 00`, a zero `u32` from Revit
+/// 2025 ([`wall_join_count_offset`]), a `u32` count and that many entries
+/// `u64 ElementId · u32 n · n × u32`, every ElementId a wall in `walls`. A
+/// wall named in two lists with different words is left out.
+pub fn wall_joined_entries(
+    data: &[u8],
+    count_at: usize,
+    tag: u32,
+    walls: &BTreeSet<u32>,
+) -> WallJoinedEntries {
+    let mut out: BTreeMap<u32, Option<Vec<u32>>> = BTreeMap::new();
+    for at in memchr::memmem::find_iter(data, &WALL_JOINED_LIST_WORD) {
+        if u32_at(data, at + 4) != Some(tag)
+            || u32_at(data, at + 8) != Some(2)
+            || (count_at > 12 && u32_at(data, at + 12) != Some(0))
+        {
+            continue;
+        }
+        let Some(count) = u32_at(data, at + count_at).map(|count| count as usize) else {
+            continue;
+        };
+        if count == 0 || count > MAX_WALL_JOIN_ENTRIES {
+            continue;
+        }
+        let mut cursor = at + count_at + 4;
+        let mut entries = Vec::with_capacity(count);
+        for _ in 0..count {
+            let Some(id) = u64_at(data, cursor)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| walls.contains(id))
+            else {
+                break;
+            };
+            let Some(n) = u32_at(data, cursor + 8)
+                .map(|n| n as usize)
+                .filter(|n| *n <= MAX_WALL_JOINED_WORDS)
+            else {
+                break;
+            };
+            let Some(words) = (0..n)
+                .map(|index| u32_at(data, cursor + 12 + 4 * index))
+                .collect::<Option<Vec<u32>>>()
+            else {
+                break;
+            };
+            entries.push((id, words));
+            cursor += 12 + 4 * n;
+        }
+        if entries.len() != count {
+            continue;
+        }
+        for (id, words) in entries {
+            match out.get_mut(&id) {
+                None => {
+                    out.insert(id, Some(words));
+                }
+                Some(held) => {
+                    if held.as_ref() != Some(&words) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    out.into_iter()
+        .filter_map(|(id, words)| words.map(|w| (id, w)))
+        .collect()
+}
+
+/// Each wall in `read`'s joined-wall entries, by ElementId (RE-127), in the
+/// lists whose tag follows the document's join-list tag
+/// ([`WALL_JOINED_LIST_TAG_STEP`]). A wall whose copies disagree is left
+/// out, and so is every wall in a file whose join-list tag is not read.
+pub fn scan_wall_joined_entries(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &BTreeSet<u32>,
+    read: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, WallJoinedEntries>> {
+    let (Some(header), Some(count_at)) = (
+        crate::partition_names::element_data_header(revit_version),
+        wall_join_count_offset(revit_version),
+    ) else {
+        return Ok(BTreeMap::new());
+    };
+    let mut lists: BTreeMap<u32, Option<WallJoinLists>> = BTreeMap::new();
+    // Each copy of a wall's data: its partition and byte range.
+    let mut copies: Vec<(u32, String, std::ops::Range<usize>)> = Vec::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        for (index, &hit) in hits.iter().enumerate() {
+            let id_at = hit + header.len();
+            let Some(id) = u64_at(buf, id_at)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| read.contains(id))
+            else {
+                continue;
+            };
+            let end = hits
+                .get(index + 1)
+                .copied()
+                .unwrap_or(buf.len())
+                .min(hit.saturating_add(WALL_JOIN_WINDOW))
+                .min(buf.len());
+            let Some(data) = buf.get(id_at + 8..end) else {
+                continue;
+            };
+            let found = wall_join_lists(data, count_at, walls);
+            match lists.get_mut(&id) {
+                None => {
+                    lists.insert(id, Some(found));
+                }
+                Some(held) => {
+                    if held.as_ref() != Some(&found) {
+                        *held = None;
+                    }
+                }
+            }
+            copies.push((id, stream.clone(), id_at + 8..end));
+        }
+    }
+    let Some(tag) = join_list_tag(&lists) else {
+        return Ok(BTreeMap::new());
+    };
+    let tag = tag.wrapping_add(WALL_JOINED_LIST_TAG_STEP);
+    let mut found: BTreeMap<u32, Option<WallJoinedEntries>> = BTreeMap::new();
+    for (id, stream, range) in copies {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let Some(data) = inflated.bytes().get(range) else {
+            continue;
+        };
+        let entries = wall_joined_entries(data, count_at, tag, walls);
+        match found.get_mut(&id) {
+            None => {
+                found.insert(id, Some(entries));
+            }
+            Some(held) => {
+                if held.as_ref() != Some(&entries) {
+                    *held = None;
+                }
+            }
+        }
+    }
+    Ok(found
+        .into_iter()
+        .filter_map(|(id, entries)| entries.map(|e| (id, e)))
+        .collect())
+}
+
 /// Releases a wall type's face angles are read on (RE-86). Only Snowdon
 /// Towers (Revit 2024) stores them; no 2025 file measured holds the record.
 pub const WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
@@ -664,13 +851,7 @@ pub fn scan_wall_join_partners(
             }
         }
     }
-    let tags: BTreeSet<u32> = found
-        .values()
-        .flatten()
-        .flatten()
-        .map(|(tag, _)| *tag)
-        .collect();
-    let [tag] = tags.into_iter().collect::<Vec<_>>()[..] else {
+    let Some(tag) = join_list_tag(&found) else {
         return Ok(BTreeMap::new());
     };
     Ok(found
