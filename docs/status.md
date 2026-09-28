@@ -563,8 +563,9 @@ turned doors and windows are Revit's width along them
 layers' materials as Revit's export does: one layer its `IfcMaterial`,
 several an `IfcMaterialConstituentSet`, exterior first, a material's k-th
 occurrence named " (k)". That is Revit's association on every Snowdon wall
-rvt-rs writes a layer set for (143 of 143, 823 of 824); 72 of the 111
-walls that had no material now have Revit's, none a different one
+rvt-rs writes a layer set for (143 of 143, 823 of 824); 95 of the 111
+walls that had no material now have Revit's, none a different one,
+including walls whose data does not place them
 (`reports/element-framing/RE-88-wall-materials-without-layer-sets.md`).
 
 The public viewer's demo gallery leads with the two files this section

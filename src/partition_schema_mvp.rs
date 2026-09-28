@@ -1987,6 +1987,24 @@ pub fn wall_layer_ends_from_fields(fields: &[(String, InstanceField)]) -> Option
 pub const SLAB_LAYERS_FIELD: &str = "m_slab_layers";
 
 /// The layers of a [`WALL_LAYERS_FIELD`] or [`SLAB_LAYERS_FIELD`] value.
+/// The layers [`WALL_LAYERS_FIELD`] records on a wall with no
+/// [`WALL_EXTERIOR_FIELDS`]: its type's, where its data does not place it
+/// (RE-88).
+pub fn unplaced_wall_layers_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<Vec<crate::ifc::LayerBand>> {
+    if fields
+        .iter()
+        .any(|(name, _)| WALL_EXTERIOR_FIELDS.contains(&name.as_str()))
+    {
+        return None;
+    }
+    fields
+        .iter()
+        .find_map(|(name, value)| (name == WALL_LAYERS_FIELD).then_some(value))
+        .and_then(layer_bands_from_field)
+}
+
 fn layer_bands_from_field(value: &InstanceField) -> Option<Vec<crate::ifc::LayerBand>> {
     let InstanceField::Vector(items) = value else {
         return None;
@@ -2375,6 +2393,26 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         for (name, value) in WALL_EXTERIOR_FIELDS.iter().zip(exterior) {
             wall.fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
+    }
+    // RE-88: a wall its data does not place (no orientation, line or arc)
+    // still carries its type's layers, for its materials. With no exterior
+    // side they are not drawn.
+    for wall in walls.iter_mut() {
+        if wall
+            .fields
+            .iter()
+            .any(|(name, _)| name == WALL_LAYERS_FIELD)
+        {
+            continue;
+        }
+        let Some(type_layers) = type_of(wall).and_then(|type_id| layers.get(&type_id)) else {
+            continue;
+        };
+        let bands = layer_bands_field(type_layers, &appearances, &names);
+        if matches!(&bands, InstanceField::Vector(items) if items.is_empty()) {
+            continue;
         }
         wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
     }
