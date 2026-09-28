@@ -371,6 +371,31 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             _ => None,
         })
         .flatten()
+        // A member written with a material profile set of one material
+        // (RE-105) takes it the same way.
+        .chain(
+            model
+                .entities
+                .iter()
+                .enumerate()
+                .filter_map(|(index, entity)| match entity {
+                    IfcEntity::BuildingElement {
+                        material_profile_set_index: Some(set),
+                        ..
+                    } => match model.material_profile_sets.get(*set)?.profiles.as_slice() {
+                        [profile]
+                            if model
+                                .materials
+                                .get(profile.material_index)
+                                .is_some_and(|info| info.color_packed.is_some()) =>
+                        {
+                            Some((index, profile.material_index))
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }),
+        )
         .collect();
 
     // Per-element: a node carrying the entity's identity, with the
