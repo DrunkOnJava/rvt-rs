@@ -6,6 +6,19 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The element schedule names family instances' materials.**
+  `rvt-schedule`'s material column now falls back to an element's material
+  constituent set (RE-82, RE-88), listing each material once in the IFC's
+  order, and matches the material the IFC associates. Before, it was empty
+  for every element written with a constituent set. Rows with a material:
+  - Core Interior 448 → 586;
+  - Snowdon Towers 1,273 → 2,703, structural 482 → 1,138;
+  - RE1 Architecture 15 → 58.
+
+  No other column changes.
+
 ### Changed
 
 - **Steel members carry their section as a material profile (RE-105,
