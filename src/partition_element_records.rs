@@ -414,6 +414,27 @@ pub fn bbox_marker(revit_version: u32) -> Option<[u8; 8]> {
     }
 }
 
+/// The bbox marker the file's own schema gives: `Outline`'s tag, `0xFF`×4,
+/// `ElementParents`' tag (RE-80, #421). `None` when the schema does not
+/// parse or lacks either class.
+pub fn schema_bbox_marker(rf: &mut RevitFile) -> Option<[u8; 8]> {
+    crate::partition_element_records_2023::record_marker(rf).map(|(marker, _)| marker)
+}
+
+/// The bbox marker to scan `rf` with, on a release whose record shape is
+/// proven: the release's measured constant ([`bbox_marker`]), confirmed by
+/// the file's own schema ([`schema_bbox_marker`]). A file whose schema
+/// gives another marker is not scanned (fail closed); one whose schema
+/// does not parse keeps the measured constant. On every 2024 and 2025 file
+/// measured the two agree (#421).
+pub fn file_bbox_marker(rf: &mut RevitFile, revit_version: u32) -> Option<[u8; 8]> {
+    let measured = bbox_marker(revit_version).filter(|_| supports_revit_version(revit_version))?;
+    match schema_bbox_marker(rf) {
+        Some(schema) if schema != measured => None,
+        _ => Some(measured),
+    }
+}
+
 /// A decoded partition element-record header.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PartitionElementRecord {
@@ -1020,7 +1041,7 @@ pub fn compute_second_prologue_ids(rf: &mut RevitFile) -> SecondPrologueIds {
     let Ok(version) = rf.basic_file_info().map(|b| b.version) else {
         return out;
     };
-    let Some(marker) = bbox_marker(version).filter(|_| supports_revit_version(version)) else {
+    let Some(marker) = file_bbox_marker(rf, version) else {
         return out;
     };
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
@@ -1340,8 +1361,7 @@ pub fn scan_unattributed_frames(
     revit_version: u32,
 ) -> Result<BTreeMap<String, usize>> {
     let mut by_class = BTreeMap::new();
-    let Some(marker) = bbox_marker(revit_version).filter(|_| supports_revit_version(revit_version))
-    else {
+    let Some(marker) = file_bbox_marker(rf, revit_version) else {
         return Ok(by_class);
     };
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
@@ -1440,8 +1460,7 @@ pub fn scan_category_records_multi(
     builtin_categories: &[i64],
     declared_ids: &BTreeSet<u32>,
 ) -> Result<Vec<PartitionElementRecord>> {
-    let Some(marker) = bbox_marker(revit_version).filter(|_| supports_revit_version(revit_version))
-    else {
+    let Some(marker) = file_bbox_marker(rf, revit_version) else {
         return Ok(Vec::new());
     };
     if declared_ids.is_empty() {

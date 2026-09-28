@@ -6,6 +6,19 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Element records are scanned with the marker the file's own schema
+  gives (#421).** The marker is `Outline`'s tag, `0xFF`×4 and
+  `ElementParents`' tag in the file's own `Formats/Latest` (RE-80), and
+  the record header carries `ElementHeader`'s tag. On every 2024 and 2025
+  file measured (11, with STE1200's rows for 2014 to 2026 in Discussion
+  #112) the schema's marker is the release's measured constant, so the
+  constant is now confirmed from the file: a file whose schema gives
+  another marker is not scanned, rather than scanned with the wrong one.
+  Which releases are read is unchanged, and every 2024 and 2025 export
+  is byte-identical.
+
 ## [0.4.0] — 2026-09-28
 
 Revit 2023 projects now export typed elements, as 2024 and 2025 projects
