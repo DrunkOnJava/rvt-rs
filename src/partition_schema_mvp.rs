@@ -1624,7 +1624,8 @@ fn attach_type_text_parameters(
 /// list that carries a pipe or duct type name
 /// ([`crate::partition_names::find_mep_curve_type_names`], RE-130). Pipe
 /// and duct types have no name entry, so
-/// [`crate::partition_names::resolve_type`] finds none for them. Ducts are
+/// [`crate::partition_names::resolve_type`] finds none for them. Only ids
+/// declared in `Global/ElemTable` are looked up. Ducts are
 /// left alone: their system family follows their type's shape, which is not
 /// read.
 fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
@@ -1633,6 +1634,19 @@ fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
             .fields
             .iter()
             .any(|(name, _)| name == TYPE_NAME_FIELD)
+    };
+    if !elements
+        .iter()
+        .any(|element| element.class == "Pipe" && !has_type(element))
+    {
+        return;
+    }
+    // Only declared ElementIds: a list's leading small values (`3`) are not
+    // ids, and the name pattern can match after one by chance.
+    let Ok(declared) = crate::elem_table::parse_records(rf)
+        .map(|records| crate::elem_table::declared_ids(&records))
+    else {
+        return;
     };
     let mut pending: Vec<(usize, BTreeSet<u32>)> = Vec::new();
     for (index, element) in elements.iter().enumerate() {
@@ -1646,7 +1660,7 @@ fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
         let references: BTreeSet<u32> = references
             .iter()
             .filter_map(|&id| u32::try_from(id).ok())
-            .filter(|&id| id != own)
+            .filter(|&id| id != own && declared.contains(&id))
             .collect();
         pending.push((index, references));
     }
