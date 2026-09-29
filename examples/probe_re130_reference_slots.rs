@@ -138,6 +138,12 @@ fn main() -> rvt::Result<()> {
             println!("mep type names in {stream}: {found:?}");
         }
     }
+    let undeclared: Vec<u32> = wanted
+        .iter()
+        .copied()
+        .filter(|id| !declared.contains(id))
+        .collect();
+    println!("undeclared among wanted: {undeclared:?}");
     println!(
         "wanted {wanted:?}; decoded classes {:?}",
         mvp.products
