@@ -62,6 +62,40 @@ fn main() -> rvt::Result<()> {
             refs.join(",")
         );
     }
+    // Where each MEP type's name is stored relative to its ElementId: the
+    // types Revit exports for RE1's pipes and ducts, by Tag.
+    let types: [(&str, u64); 5] = [
+        ("221116-WTR", 191_045),
+        ("233113-DUCT-Tees", 53_292),
+        ("SANWST-PVC", 53_456),
+        ("221316-SAN", 53_456),
+        ("WTR-Copper B", 191_061),
+    ];
+    for (name, id) in types {
+        let units: Vec<u8> = name.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let id_bytes = id.to_le_bytes();
+        for stream in rf.partition_stream_names() {
+            let Ok(inflated) = rf.inflated_partition(&stream) else {
+                continue;
+            };
+            let buf = inflated.bytes();
+            for at in memchr::memmem::find_iter(buf, &units) {
+                let from = at.saturating_sub(0x4000);
+                let to = (at + 0x4000).min(buf.len());
+                let near: Vec<i64> = memchr::memmem::find_iter(&buf[from..to], &id_bytes)
+                    .map(|i| (from + i) as i64 - at as i64)
+                    .collect();
+                let before: Vec<String> = buf[at.saturating_sub(40)..at]
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect();
+                println!(
+                    "{{\"type_name\":{name:?},\"type\":{id},\"stream\":{stream:?},\"at\":{at},\"id_offsets\":{near:?},\"before\":{:?}}}",
+                    before.join(" ")
+                );
+            }
+        }
+    }
     eprintln!("Revit {version}: {} records", records.len());
     Ok(())
 }
