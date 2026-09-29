@@ -96,6 +96,55 @@ fn main() -> rvt::Result<()> {
             }
         }
     }
+    // What the decoder makes of the first pipes (RE-130 wiring check).
+    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+        &mut rf,
+        version,
+        rvt::walker::WalkerLimits::default(),
+    )?;
+    let pipes: Vec<&rvt::walker::DecodedElement> = mvp
+        .products
+        .iter()
+        .filter(|element| element.class.contains("Pipe") || element.class.contains("Duct"))
+        .take(3)
+        .collect();
+    let mut wanted = std::collections::BTreeSet::new();
+    for pipe in &pipes {
+        let fields: Vec<&str> = pipe.fields.iter().map(|(name, _)| name.as_str()).collect();
+        println!(
+            "decoded {:?} class {:?} fields {fields:?}",
+            pipe.id, pipe.class
+        );
+        if let Some(record) = records
+            .iter()
+            .find(|record| Some(record.element_id) == pipe.id)
+        {
+            if let Ok(inflated) = rf.inflated_partition(&record.stream) {
+                let refs = per::decode_reference_list(
+                    inflated.bytes(),
+                    record.offset + per::REFERENCE_LIST_OFFSET,
+                )
+                .unwrap_or_default();
+                wanted.extend(refs.iter().filter_map(|&id| u32::try_from(id).ok()));
+            }
+        }
+    }
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let found = rvt::partition_names::find_mep_curve_type_names(inflated.bytes(), &wanted);
+        if !found.is_empty() {
+            println!("mep type names in {stream}: {found:?}");
+        }
+    }
+    println!(
+        "wanted {wanted:?}; decoded classes {:?}",
+        mvp.products
+            .iter()
+            .map(|e| e.class.as_str())
+            .collect::<std::collections::BTreeSet<_>>()
+    );
     eprintln!("Revit {version}: {} records", records.len());
     Ok(())
 }
