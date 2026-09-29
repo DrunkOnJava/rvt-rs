@@ -176,11 +176,12 @@ fn re1_names_are_revits() {
     // fixtures have types whose records also name a family nested in their
     // own (RE-42). Architecture's CasedOpening door 417199 is written as
     // its opening alone since RE-84, as Revit writes it, so it is not a
-    // named element.
+    // named element. Mechanical's 6 pipes and Plumbing's 62 of 63 are named
+    // from the type in their reference list (RE-130).
     for (model, expected) in [
         ("Architecture", 72),
-        ("Mechanical", 43),
-        ("Plumbing", 61),
+        ("Mechanical", 49),
+        ("Plumbing", 123),
         ("Electrical", 46),
     ] {
         let rvt = dir.join(format!("RE1-{model}.rvt"));

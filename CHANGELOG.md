@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Pipes named as Revit names them (RE-130, #96).** A pipe's type is in
+  its record's reference list, but pipe and duct types have no name entry,
+  so no type was found. Their name follows the type's ElementId at a fixed
+  place. Pipes now export as `Pipe Types:<type>:<ElementId>` with their
+  type object: RE1 Mechanical 6 of 6 and Plumbing 62 of 63 (none before),
+  and Plumbing's elements are typed as Revit types them on 122 of 123 (60
+  before). Ducts are not named yet: their family follows their type's
+  shape.
+
+### Added
+
 - **Joined-wall lists decide the L corners the join lists leave open
   (RE-127, #238).** Beside RE-70's join lists, a wall's data lists every
   wall it is joined to, with a run of values per wall. Where the join
