@@ -1624,8 +1624,7 @@ fn attach_type_text_parameters(
 /// list that carries a pipe or duct type name
 /// ([`crate::partition_names::find_mep_curve_type_names`], RE-130). Pipe
 /// and duct types have no name entry, so
-/// [`crate::partition_names::resolve_type`] finds none for them. Only ids
-/// declared in `Global/ElemTable` are looked up. Ducts are
+/// [`crate::partition_names::resolve_type`] finds none for them. Ducts are
 /// left alone: their system family follows their type's shape, which is not
 /// read.
 fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
@@ -1641,13 +1640,6 @@ fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
     {
         return;
     }
-    // Only declared ElementIds: a list's leading small values (`3`) are not
-    // ids, and the name pattern can match after one by chance.
-    let Ok(declared) = crate::elem_table::parse_records(rf)
-        .map(|records| crate::elem_table::declared_ids(&records))
-    else {
-        return;
-    };
     let mut pending: Vec<(usize, BTreeSet<u32>)> = Vec::new();
     for (index, element) in elements.iter().enumerate() {
         if element.class != "Pipe" || has_type(element) {
@@ -1657,10 +1649,13 @@ fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
         else {
             continue;
         };
+        // The list's first slot is a constant 3, not a reference (#228); the
+        // name pattern can match after it by chance.
         let references: BTreeSet<u32> = references
             .iter()
+            .skip(1)
             .filter_map(|&id| u32::try_from(id).ok())
-            .filter(|&id| id != own && declared.contains(&id))
+            .filter(|&id| id != own)
             .collect();
         pending.push((index, references));
     }
