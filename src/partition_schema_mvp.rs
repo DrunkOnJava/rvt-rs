@@ -352,6 +352,8 @@ pub fn recover_partition_schema_mvp(
     ] {
         attach_family_and_type_names(rf, elements);
     }
+    // --- Pipes' types, which have no name entry (RE-130) ---
+    attach_pipe_type_names(rf, &mut out.products);
     // --- System-family type names (#322) ---
     let mut unnamed: Vec<&mut DecodedElement> = [&mut out.walls, &mut out.slabs, &mut out.products]
         .into_iter()
@@ -1618,6 +1620,84 @@ fn attach_type_text_parameters(
     }
 }
 
+/// Give each pipe without a type the one id in its record's reference
+/// list that carries a pipe or duct type name
+/// ([`crate::partition_names::find_mep_curve_type_names`], RE-130). Pipe
+/// and duct types have no name entry, so
+/// [`crate::partition_names::resolve_type`] finds none for them. Ducts are
+/// left alone: their system family follows their type's shape, which is not
+/// read.
+fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
+    let has_type = |element: &DecodedElement| {
+        element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_NAME_FIELD)
+    };
+    let mut pending: Vec<(usize, BTreeSet<u32>)> = Vec::new();
+    for (index, element) in elements.iter().enumerate() {
+        if element.class != "Pipe" || has_type(element) {
+            continue;
+        }
+        let (Some(own), Some((references, _))) = (element.id, record_references(rf, element))
+        else {
+            continue;
+        };
+        let references: BTreeSet<u32> = references
+            .iter()
+            .filter_map(|&id| u32::try_from(id).ok())
+            .filter(|&id| id != own)
+            .collect();
+        pending.push((index, references));
+    }
+    if pending.is_empty() {
+        return;
+    }
+    let wanted: BTreeSet<u32> = pending
+        .iter()
+        .flat_map(|(_, ids)| ids.iter().copied())
+        .collect();
+    let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        for (id, name) in
+            crate::partition_names::find_mep_curve_type_names(inflated.bytes(), &wanted)
+        {
+            match names.get_mut(&id) {
+                None => {
+                    names.insert(id, Some(name));
+                }
+                Some(held) => {
+                    if held.as_deref() != Some(name.as_str()) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    for (index, references) in pending {
+        let mut typed = references
+            .iter()
+            .filter_map(|id| Some((*id, names.get(id)?.clone()?)));
+        let (Some((type_id, type_name)), None) = (typed.next(), typed.next()) else {
+            continue;
+        };
+        let element = &mut elements[index];
+        element.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: type_id,
+            },
+        ));
+        element
+            .fields
+            .push((TYPE_NAME_FIELD.into(), InstanceField::String(type_name)));
+    }
+}
+
 fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
     let names = rf.element_names();
     if names.entries.is_empty() {
@@ -2578,7 +2658,8 @@ pub fn element_layers_from_fields(
 ///   is a Basic Wall, a Compound Ceiling or a Basic Roof, since a Curtain
 ///   or Stacked Wall, a Basic Ceiling and Sloped Glazing have none;
 /// - a curtain panel whose type is a wall type with layers is a Basic Wall
-///   (RE-64).
+///   (RE-64);
+/// - a pipe is a Pipe Types, Revit's one pipe system family (RE-130).
 ///
 /// Measured against the `Family:Type:ElementId` names Revit's own IFC
 /// export gives the same elements, on every record-backed wall, floor,
@@ -2592,6 +2673,7 @@ pub fn system_family(class: &str, has_layers: bool) -> Option<&'static str> {
         ("BuildingPad", _) => Some("Pad"),
         ("SlabEdge", _) => Some("Slab Edge"),
         ("Ramp", _) => Some("Ramp"),
+        ("Pipe", _) => Some("Pipe Types"),
         ("Wall" | "CurtainWallPanel", true) => Some("Basic Wall"),
         ("Ceiling", true) => Some("Compound Ceiling"),
         ("Roof", true) => Some("Basic Roof"),
