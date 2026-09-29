@@ -4,7 +4,7 @@
 **Issue:** #96 (MEP); follows RE-35 (name entries) and RE-79 (MEP categories)
 **Artefacts:** RE1 Mechanical and RE1 Plumbing (Revit 2025, MIT), each with its IFC2X3 CoordinationView export. Measured on GitHub's hosted runners with the Measure workflow; the last run is 36497990733.
 **Probe:** `examples/probe_re129_mep_curve_types.rs`
-**Status:** negative. Nothing read so far links a pipe or duct to its type.
+**Status:** negative, superseded by RE-130. The type is in the reference list, where this report did not find it: it has no name entry, and its name is stored in a layout of its own.
 
 ## Why it matters
 
