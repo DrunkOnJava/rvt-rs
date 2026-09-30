@@ -10,7 +10,7 @@ schema/elem_table/walker against 913 KB and 34 MB real `.rvt` files.
 
 - **Hardware:** Apple M2 Max, 96 GB RAM, macOS 14 (arm64).
 - **Rust version:** whatever `rustup default` resolves stable to at bench
-  time. The crate declares `edition = "2024"` and `rust-version = "1.85"`
+  time. The crate declares `edition = "2024"` and `rust-version = "1.87"`
   (MSRV) in [`Cargo.toml`](../Cargo.toml); there is no pinned
   `rust-toolchain.toml`.
 - **Build profile:** `cargo build --release` — `[profile.release]` sets

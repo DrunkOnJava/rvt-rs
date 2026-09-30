@@ -117,7 +117,7 @@ impl PartAtom {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(ref e)) => {
-                    let name_owned = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name_owned = e.name().into_inner().to_string();
                     let (prefix, local) = match name_owned.split_once(':') {
                         Some((p, l)) => (Some(p.to_string()), l.to_string()),
                         None => (None, name_owned.clone()),
@@ -148,7 +148,7 @@ impl PartAtom {
                         "category" => {
                             last_category_scheme = e.attributes().find_map(|a| {
                                 let a = a.ok()?;
-                                if a.key.as_ref() == b"scheme" {
+                                if a.key.into_inner() == "scheme" {
                                     a.normalized_value(XmlVersion::Implicit1_0)
                                         .ok()
                                         .map(|v| v.into_owned())
@@ -161,18 +161,12 @@ impl PartAtom {
                         _ => {}
                     }
                 }
-                Ok(Event::Text(e)) => {
-                    if let Ok(decoded) = e.decode() {
-                        pending.push_str(&decoded);
-                    }
-                }
+                Ok(Event::Text(e)) => pending.push_str(&e),
                 Ok(Event::GeneralRef(e)) => {
                     if let Ok(Some(ch)) = e.resolve_char_ref() {
                         pending.push(ch);
-                    } else if let Ok(name) = e.decode() {
-                        if let Some(val) = resolve_predefined_entity(&name) {
-                            pending.push_str(val);
-                        }
+                    } else if let Some(val) = resolve_predefined_entity(&e) {
+                        pending.push_str(val);
                     }
                 }
                 Ok(Event::End(e)) => {
@@ -183,8 +177,8 @@ impl PartAtom {
                         &mut current_taxonomy,
                         &mut last_category_term,
                     );
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    let local = name.rsplit(':').next().unwrap_or(&name).to_string();
+                    let name = e.name().into_inner();
+                    let local = name.rsplit(':').next().unwrap_or(name).to_string();
                     match local.as_str() {
                         "taxonomy" => {
                             if let Some(t) = current_taxonomy.take() {

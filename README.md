@@ -26,7 +26,7 @@ For the non-technical workflow, start with the [`docs/user-guide.md`](docs/user-
 
 To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
-Rust 2024 edition (MSRV 1.85). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -479,7 +479,7 @@ SDK at build or run time. Contributing does not need private files either —
 the checked-in `corpus/tier1/` synthetic fixtures drive the default gates, and
 corpus-backed tests skip themselves while `RVT_PROJECT_CORPUS_DIR` is unset.
 
-- **Build:** stable Rust 1.85 or newer, then `cargo build`. Viewer:
+- **Build:** stable Rust 1.87 or newer, then `cargo build`. Viewer:
   `cd viewer && pnpm install --frozen-lockfile`. Python bindings: [`docs/python.md`](docs/python.md).
 - **Gate:** `tools/check-local.sh` runs what CI requires — `cargo fmt --check`,
   `cargo clippy -D warnings`, rustdoc with `-D warnings`, and the workspace
