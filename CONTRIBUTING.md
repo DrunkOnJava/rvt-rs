@@ -56,6 +56,8 @@ You need stable Rust 1.85 or newer (`rustup` installs it) and git.
    "Approve and run", so a PR that looks idle for a while is waiting on that,
    not on you. Leave "Allow edits by maintainers" on and we can push small
    fix-ups to your branch instead of bouncing it back.
+   [`docs/maintaining.md`](docs/maintaining.md) says how issues are triaged
+   and labelled, what a pull request has to pass, and how releases are cut.
 
 ### Optional gates
 

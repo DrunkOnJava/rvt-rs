@@ -2,9 +2,11 @@
 
 ## Status
 
-Proposed (API update returned HTTP 403 for the automation token; apply via
-GitHub Settings → Rules → `main-protection`, or with a token that can
-`Administration: write`).
+Accepted and applied on 2026-09-30. It was proposed earlier, when the API
+update returned HTTP 403 for the automation token; the maintainer's token
+applied it, and the live ruleset matches
+[`.github/rulesets/main-protection.json`](../../.github/rulesets/main-protection.json),
+which also limits merges to squash.
 
 ## Context
 
@@ -30,11 +32,11 @@ Update `main-protection` to:
 
 ## Apply payload
 
-See [`.github/rulesets/main-protection.proposed.json`](../../.github/rulesets/main-protection.proposed.json).
+See [`.github/rulesets/main-protection.json`](../../.github/rulesets/main-protection.json).
 
 ```bash
 gh api --method PUT repos/DrunkOnJava/rvt-rs/rulesets/15270879 \
-  --input .github/rulesets/main-protection.proposed.json
+  --input .github/rulesets/main-protection.json
 ```
 
 ## Consequences

@@ -206,6 +206,17 @@ All notable changes will be documented here. This project follows
   open milestones are for. The contribution map's open remainders, dated
   2026-09-19, are the tracker's 24 open issues by milestone, with their own
   titles. Documentation only.
+- **The repository is run as `docs/maintaining.md` describes.** `main`
+  requires a pull request and resolved conversations (ADR-005, now applied),
+  release tags `v*` are protected by a second ruleset, and both rulesets are
+  kept as code in `.github/rulesets/`. CodeQL default setup is on (workflows,
+  the viewer's TypeScript and JavaScript, the Python bindings), the repository
+  requires full-SHA pins for actions, and there is a `SUPPORT.md`. Dependabot
+  groups minor and patch updates, the bug and feature forms apply the project's
+  own `type:bug` and `type:feature` labels, and CI keeps its smoke wheels for
+  seven days and a pull request's evidence bundle for fourteen. The 0.4.0
+  milestone is closed with its release, and the geometry slices still open moved
+  to 0.4.x. Nothing in the crate, the CLIs or the viewer changes.
 
 ## [0.4.0] — 2026-09-28
 

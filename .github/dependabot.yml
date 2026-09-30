@@ -9,6 +9,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Minor and patch updates arrive as one pull request a week; a major
+    # update stays its own pull request, since it needs its own migration.
+    groups:
+      cargo-minor-and-patch:
+        update-types:
+          - minor
+          - patch
     labels:
       - dependencies
       - rust
@@ -19,6 +26,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - minor
+          - patch
     labels:
       - dependencies
       - github-actions
@@ -29,6 +41,11 @@ updates:
     directory: /viewer
     schedule:
       interval: weekly
+    groups:
+      viewer-minor-and-patch:
+        update-types:
+          - minor
+          - patch
     labels:
       - dependencies
       - viewer
