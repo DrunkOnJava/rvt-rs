@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -23,6 +24,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_LIMIT_BYTES = 10 * 1024**3
+# Directories with a lockfile that Dependabot deliberately does not update, and why
+# (docs/maintaining.md says the same).
+UNWATCHED = {"/tools/ci/witness-ifc-lite": "its third-party witness is pinned to an exact version on purpose"}
 results = []
 
 
@@ -116,33 +120,54 @@ def caches(repo):
     return [f"{used / 1024**3:.1f} GB used; run tools/maintainer/clean_caches.py (--delete to act)"] if used > 0.9 * CACHE_LIMIT_BYTES else []
 
 
-RUN_QUERIES = (
-    "branch=main&exclude_pull_requests=true&per_page=20",
-    "branch=main&exclude_pull_requests=true&status=completed&per_page=20",
-)
+MAIN_SUITES = """
+query($o:String!,$n:String!){
+  repository(owner:$o,name:$n){
+    ref(qualifiedName:"refs/heads/main"){
+      target{
+        ... on Commit{
+          history(first:100){
+            nodes{
+              checkSuites(first:50){
+                nodes{ conclusion status workflowRun{ event createdAt url workflow{ name } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}"""
 
 
 @check("the latest push or scheduled run of every workflow on main is not a failure")
 def main_green(repo):
-    # GitHub answers some runs queries from a stale index: on 2026-09-30 the same
-    # URL returned runs no newer than 09-07, 09-20 and 09-24 on three calls, and
-    # a stale answer only ever hides newer runs. So each workflow is asked twice,
-    # with differently shaped queries, and its newest run across both counts.
-    # Only push and scheduled runs say anything about main: a manual run (a
-    # Measure experiment) or a dynamic one (CodeQL, Dependabot) does not.
-    problems = []
-    for workflow in gh(f"repos/{repo}/actions/workflows?per_page=100")["workflows"]:
-        if workflow["state"] != "active":
-            continue
-        runs = {}
-        for query in RUN_QUERIES:
-            for run in gh(f"repos/{repo}/actions/workflows/{workflow['id']}/runs?{query}")["workflow_runs"]:
-                runs[run["id"]] = run
-        newest = sorted(runs.values(), key=lambda r: r["created_at"], reverse=True)
-        latest = next((r for r in newest if r["event"] in ("push", "schedule") and r["status"] == "completed"), None)
-        if latest and latest["conclusion"] == "failure":
-            problems.append(f"{workflow['name']}: failure ({latest['html_url']})")
-    return problems
+    # The REST runs list is sometimes served from a stale index, for filtered
+    # queries of any shape: on 2026-09-30 one URL returned three different
+    # snapshots minutes apart, and later both of a per-workflow pair at once, each
+    # time reporting a Fuzz failure from 09-06 that a dozen green nights had
+    # superseded. The check suites of main's last 100 commits, through GraphQL,
+    # are read from the primary store. A scheduled run is attached to the commit
+    # that was main's head when it ran, so a workflow whose last run is older
+    # than 100 commits is not judged. Only push and scheduled runs say anything
+    # about main (not a manual Measure experiment, CodeQL or Dependabot), and a
+    # cancelled or skipped run says nothing either way.
+    owner, name = repo.split("/")
+    data = gh("graphql", "-f", f"query={MAIN_SUITES}", "-f", f"o={owner}", "-f", f"n={name}")
+    if data.get("errors"):
+        raise RuntimeError(data["errors"][0]["message"][:160])
+    latest = {}
+    for commit in data["data"]["repository"]["ref"]["target"]["history"]["nodes"]:
+        for suite in commit["checkSuites"]["nodes"]:
+            run = suite.get("workflowRun")
+            if not run or run["event"] not in ("push", "schedule") or suite["status"] != "COMPLETED":
+                continue
+            if suite["conclusion"] not in ("SUCCESS", "FAILURE", "TIMED_OUT", "STARTUP_FAILURE"):
+                continue
+            workflow = run["workflow"]["name"]
+            if workflow not in latest or run["createdAt"] > latest[workflow][0]:
+                latest[workflow] = (run["createdAt"], suite["conclusion"], run["url"])
+    return [f"{workflow}: {conclusion.lower()} ({url})" for workflow, (_, conclusion, url) in sorted(latest.items()) if conclusion != "SUCCESS"]
 
 
 @check("no open Dependabot, code scanning or secret scanning alerts")
@@ -227,6 +252,54 @@ def label_references(repo):
     return [f"{label} is applied by {source} but does not exist" for label, source in sorted(wanted.items()) if label not in have]
 
 
+def dependabot_entries():
+    """(ecosystem, directories) of each update in .github/dependabot.yml."""
+    entries, current, in_list = [], None, False
+    for line in (ROOT / ".github" / "dependabot.yml").read_text().splitlines():
+        m = re.match(r"\s*- package-ecosystem:\s*(\S+)", line)
+        if m:
+            current, in_list = (m.group(1), []), False
+            entries.append(current)
+        elif current is None or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        elif re.match(r"\s+directory:\s*\S+", line):
+            current[1].append(line.split(":", 1)[1].strip().strip("\"'"))
+            in_list = False
+        elif re.match(r"\s+directories:\s*$", line):
+            in_list = True
+        elif in_list and re.match(r"\s+- \S+\s*$", line):
+            current[1].append(line.strip()[2:].strip().strip("\"'"))
+        else:
+            in_list = False
+    return entries
+
+
+@check("Dependabot watches every lockfile, Dockerfile and composite action, or the audit says why not")
+def dependabot_coverage(repo):
+    tree = gh(f"repos/{repo}/git/trees/HEAD?recursive=1")
+    if tree.get("truncated"):
+        raise RuntimeError("the repository tree is too large to list in one call")
+    need = {}
+    for item in tree["tree"]:
+        path = item["path"]
+        name = path.rsplit("/", 1)[-1]
+        folder = "/" + path.rsplit("/", 1)[0] if "/" in path else "/"
+        if name == "Cargo.lock":
+            need[("cargo", folder)] = path
+        elif name in ("package-lock.json", "pnpm-lock.yaml", "yarn.lock") and "node_modules" not in path:
+            need[("npm", folder)] = path
+        elif name == "Dockerfile" or name.startswith("Dockerfile."):
+            need[("docker", folder)] = path
+        elif re.fullmatch(r"\.github/actions/[^/]+/action\.ya?ml", path):
+            need[("github-actions", folder)] = path
+    watched = dependabot_entries()
+    return [
+        f"{path} ({ecosystem}) is not in .github/dependabot.yml"
+        for (ecosystem, folder), path in sorted(need.items())
+        if folder not in UNWATCHED and not any(e == ecosystem and any(fnmatch.fnmatchcase(folder, p) for p in dirs) for e, dirs in watched)
+    ]
+
+
 @check("open pull requests from others have a maintainer's reply within the window")
 def pull_replies(repo, days):
     owner = repo.split("/")[0]
@@ -272,6 +345,7 @@ def main():
     rulesets(args.repo)
     settings(args.repo)
     label_references(args.repo)
+    dependabot_coverage(args.repo)
     pull_replies(args.repo, args.reply_days)
     discussion_replies(args.repo, args.reply_days)
     failed = 0

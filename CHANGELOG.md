@@ -233,13 +233,16 @@ All notable changes will be documented here. This project follows
   open issue's labels, milestones against releases, stray branches, the Actions
   cache, the state of `main`'s workflows, open security alerts, the live
   rulesets against `.github/rulesets/`, the repository settings, the labels the
-  forms and Dependabot apply, and replies owed to pull requests and
-  discussions. The state of `main` is read per workflow, from its push and
-  scheduled runs, with two differently shaped queries: GitHub sometimes answers
-  a runs query from a stale index (one URL returned three different snapshots
-  minutes apart on 2026-09-30, the freshest six days old), which made the check
-  report a Fuzz failure that a green scheduled run had long superseded. The
-  PyPI environments now accept only release refs.
+  forms and Dependabot apply, that Dependabot watches every lockfile,
+  Dockerfile and composite action (the witness crate's lockfile is pinned on
+  purpose), and replies owed to pull requests and discussions. The state of
+  `main` is read per workflow, from its push and scheduled runs, out of the
+  check suites of its last 100 commits through GraphQL: GitHub's REST runs list
+  is sometimes served from a stale index (one URL returned three different
+  snapshots minutes apart on 2026-09-30, the freshest six days old, and later
+  two differently shaped queries agreed on one stale answer), which made the
+  check report a Fuzz failure that a green scheduled run had long superseded.
+  The PyPI environments now accept only release refs.
 - **`tools/maintainer/clean_caches.py` deletes the Actions caches nobody can
   use again.** The caches of pull requests that are no longer open, of deleted
   branches, and the superseded generations of `main`'s rust-cache families (a

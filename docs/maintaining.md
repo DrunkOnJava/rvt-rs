@@ -144,6 +144,8 @@ line names what to fix (its rulesets check needs an admin token). The list:
    issue to file with its cause, and a check that fails only because a service
    is down reports "not measured" rather than failing.
 5. Open Dependabot and code scanning alerts are triaged, each fixed or
-   dismissed with a reason.
+   dismissed with a reason, and Dependabot watches every lockfile, Dockerfile
+   and composite action in `.github/dependabot.yml` (the audit lists what is
+   missing).
 6. Discussions and community pull requests have an answer.
 7. The rulesets and settings still match their files.
