@@ -6,6 +6,17 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Research
+
+- **STE1200's `element_header` vectors reproduce (RE-132, #152, #421).**
+  Steffen's eight records of Einhoven (Revit 2023) and Core Interior (Revit
+  2024), each with its offset, ElementId, class, category, flags and box
+  (Discussion #112): on the runners, 6 of 8 agree with what rvt-rs reads on
+  every field, at the same offset on both envelopes, and his flags are the
+  `u32` at `+0x46` that RE-128 reads. The other two, Einhoven's walls 2921
+  and 3637, are not declared in `Global/ElemTable`, and rvt-rs does not read
+  them. `examples/probe_re132_slik_vectors.rs`.
+
 ### Added
 
 - **Pipes as the cylinders Revit draws (RE-131, #96).** A pipe's two ends
