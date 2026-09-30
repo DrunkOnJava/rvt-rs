@@ -4,15 +4,21 @@
 #   gh workflow run measure.yml -f ref=my-branch -f base=main
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f probe=probe_re70_wall_join_lists
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f probe=probe_re133_class_ordinals -f families=true
+#   gh workflow run measure.yml -f ref=my-branch -f base=main -f families=true
 #
-# Each side builds rvt-ifc and rvt-gltf at its ref and runs
+# Each side builds rvt-ifc, rvt-gltf and rvt-info at its ref and runs
 # tools/ci/measure-reference-models.sh (taken from the workflow's own ref,
 # so both sides are scored by the same scorers). The results are uploaded
 # as artifacts, and the compare job writes the differences between the two
 # sides to the run summary. Local-only models (Snowdon Towers and others
-# without a redistribution licence) are never fetched here. The Autodesk
-# family corpus (phi-ag/rvt) is fetched only when `families` is set, for the
-# probe to run on its files; it is scored against nothing and never stored.
+# without a redistribution licence) are never fetched here. rvt-info also
+# reads every model, and the compare job diffs what it printed: that is what
+# measures the PartAtom parser, which the IFC export does not reach (none of
+# the six reference models has a PartAtom stream; their ProjectInformation
+# stream goes through the same parser). The Autodesk family corpus (phi-ag/rvt)
+# is fetched when `families` is set, and on every run of a change to this
+# workflow, so rvt-info reads each family's PartAtom too and the probe runs on
+# it. The corpus is scored against nothing and never stored.
 
 name: Measure
 
@@ -41,7 +47,7 @@ on:
         required: false
         default: ""
       families:
-        description: Also run the probe on every file of the phi-ag/rvt family corpus (Autodesk-owned, fetched for the run and never stored)
+        description: Also read every file of the phi-ag/rvt family corpus with rvt-info, and run the probe on it (Autodesk-owned, fetched for the run and never stored)
         type: boolean
         required: false
         default: false
@@ -90,7 +96,7 @@ jobs:
         working-directory: measured
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
-          cargo build --profile ci --bin rvt-ifc --bin rvt-gltf
+          cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
           # A base older than the probe has no such example; it is skipped there.
           if [ -n "$PROBE" ] && [ -f "examples/$PROBE.rs" ]; then
             cargo build --profile ci --example "$PROBE"
@@ -100,7 +106,7 @@ jobs:
       - name: Fetch the reference models
         run: tools/fetch-reference-models.sh models
       - name: Fetch the family corpus
-        if: inputs.families
+        if: inputs.families || github.event_name == 'pull_request'
         uses: ./.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
@@ -111,7 +117,7 @@ jobs:
           PROBE_SCORER: ${{ inputs.probe_scorer }}
           PROBE_SCORER_DIR: measured/tools/re
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
-          FAMILY_DIR: ${{ inputs.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
+          FAMILY_DIR: ${{ (inputs.families || github.event_name == 'pull_request') && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
         run: |
           tools/ci/measure-reference-models.sh measured/target/ci models results
           cp measured-commit.txt results/commit.txt
@@ -142,7 +148,16 @@ jobs:
               echo
               for d in measure-head/*/; do
                 m=$(basename "$d")
+                [ -f "$d/ifc.sha256" ] || continue
                 if cmp -s "$d/ifc.sha256" "measure-base/$m/ifc.sha256"; then echo "- $m: identical"; else echo "- $m: **differs**"; fi
+              done
+              echo
+              echo "### Files whose rvt-info output differs (models and families)"
+              echo
+              for d in measure-head/*/; do
+                f=$(basename "$d")
+                [ -f "$d/info.json" ] || continue
+                if cmp -s "$d/info.json" "measure-base/$f/info.json" && cmp -s "$d/info.exit" "measure-base/$f/info.exit"; then echo "- $f: identical"; else echo "- $f: **differs**"; fi
               done
               echo
               echo "### Scorer differences (base → head)"

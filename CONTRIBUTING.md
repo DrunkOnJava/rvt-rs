@@ -277,7 +277,18 @@ When you discover something new about the file format:
    ```bash
    gh workflow run measure.yml --ref <branch> -f base=main
    gh workflow run measure.yml --ref <branch> -f base=none -f probe=<example name>
+   gh workflow run measure.yml --ref <branch> -f base=main -f families=true
    ```
+
+   Every run also has `rvt-info` read each model, and lists the files whose
+   output differs: that is what measures the PartAtom parser, which the IFC
+   export does not reach (the six reference models carry a `ProjectInformation`
+   stream, read by the same parser, and no `PartAtom`). The last command adds
+   the eleven-release Autodesk family corpus, the files with a `PartAtom`
+   stream. Use it for a change to a parser or to a crate it depends on (the
+   PartAtom reader, an inflate or decode dependency). To measure a branch with
+   a workflow file that is not yet on `main`, dispatch with `--ref <branch with
+   the workflow> -f ref=<branch to measure>`.
 
 This keeps every claim independently verifiable, which is the
 whole point of open reverse-engineering work.
