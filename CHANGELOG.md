@@ -10,9 +10,9 @@ All notable changes will be documented here. This project follows
 
 - **Pipes as the cylinders Revit draws (RE-131, #96).** A pipe's two ends
   are connector entries in its partition (an element, a connector index,
-  the `u32` 1 and a point of three `f64`), keyed by the pipe for an end
-  nothing is connected to and by the connected element otherwise, and its
-  record box gives the outside radius: every axis that is not nearly the
+  the `u32` 1 and a point of three `f64`), keyed by the pipe itself or by
+  the element connected at that end, and its record box gives the outside
+  radius: every axis that is not nearly the
   pipe's own must give the same radius, and the box rebuilt from the
   cylinder must be the record box on all six sides, or the pipe keeps its
   box. On RE1 Mechanical and Plumbing (Revit 2025), against Revit's own

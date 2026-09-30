@@ -15,11 +15,12 @@
 //! Autodesk's Snowdon Towers plumbing sample. On the RE1 Mechanical and
 //! Plumbing models (Revit 2025, MIT) the entries hold the two points at which
 //! Revit's own IFC starts and ends each pipe's extrusion: 69 of 69 pipes, to
-//! the last bit. The entry's element is the pipe for an end nothing is
-//! connected to and the connected element otherwise (pipe 442026's two ends
-//! are keyed by 442040 and 442191), so an entry is found by where its point
-//! falls, never by whose it is, and other elements' connectors lie at the same
-//! points.
+//! 0.00001 ft. At a connected end the entry's element is the one connected
+//! there (pipe 442026's two ends are keyed by 442040 and 442191, fittings
+//! Revit's export places 0.1413 ft beyond them on its axis); pipes 441731 and
+//! 441849 have both entries keyed by the pipe itself. So an entry is found by
+//! where its point falls, never by whose it is, and other elements'
+//! connectors lie at the same points.
 //!
 //! The record box then gives the outside radius, which no field stores. A
 //! cylinder of radius `r` and length `L` along the unit vector `u` has the
@@ -48,7 +49,7 @@ const ENTRY_MARKER: [u8; 4] = 1u32.to_le_bytes();
 const MAX_CONNECTOR_INDEX: u32 = 255;
 
 /// How far outside a pipe's box an entry's point may fall, feet. Measured
-/// ends are inside to the last bit; this is float noise.
+/// ends lie in it, on its faces, to 0.00001 ft; this is slack for float noise.
 pub const POINT_TOLERANCE_FEET: f64 = 1e-3;
 
 /// The radius each well-conditioned axis gives must agree to this, feet.
