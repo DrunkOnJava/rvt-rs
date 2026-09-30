@@ -51,10 +51,11 @@ when a release ships.
 - A pull request is required for everyone; only the maintainer can bypass it.
   Merges are **squash only**, commits must be **signed**, history is linear, and
   the branch must be up to date with `main`. The required checks are `cargo fmt`,
-  `cargo clippy`, `build + real files / ubuntu-latest / stable`, `cargo doc` and
-  `PII guard`. The others (MSRV, macOS and Windows, IfcOpenShell validation,
-  corpus tier 2, wheels, the audits) are not required, so read the whole check
-  list before merging anything they cover.
+  `cargo clippy`, `build + real files / ubuntu-latest / stable`,
+  `build + real files / ubuntu-latest / msrv`, `cargo doc` and `PII guard`. The
+  others (macOS and Windows, IfcOpenShell validation, corpus tier 2, wheels, the
+  audits) are not required, so read the whole check list before merging
+  anything they cover.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
   history: fix it before merging.
@@ -74,17 +75,21 @@ when a release ships.
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
-the MSRV job in CI builds on exactly that release. It is never lower than the
+the MSRV job in CI builds on exactly that release. The job is a required check,
+named `build + real files / ubuntu-latest / msrv` so that the name does not
+change when the release does. The MSRV is never lower than the
 floor the 2024 edition sets (1.85), and it moves up when a dependency worth
 taking needs a newer compiler: quick-xml 0.42 needs 1.86 and earcut 0.4.10 and
 later call `is_multiple_of`, which is stable from 1.87, so the MSRV is 1.87. It
 is raised in a minor release, never in a patch, and the CHANGELOG says so.
 
-A Dependabot pull request that fails the MSRV job is not merged as it is. Either
+A Dependabot pull request that fails the MSRV job cannot merge as it is. Either
 the MSRV is raised in the same pull request, with the reason and the crates it
 unblocks in the description, or the update is held with a comment in
 `Cargo.toml` naming the release it needs. earcut declares no `rust-version`, so
 Cargo's MSRV-aware resolver cannot warn about it: the MSRV job is the only check.
+Raising the MSRV also brings the lints that need it (at 1.87, clippy's
+`manual_is_multiple_of`), which the same pull request fixes.
 
 ## Releases
 
