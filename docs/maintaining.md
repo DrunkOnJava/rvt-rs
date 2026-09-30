@@ -103,9 +103,13 @@ Configured on the repository, with the rulesets kept as code in
 
 - Private vulnerability reporting, secret scanning with push protection,
   Dependabot alerts and security updates are on. Dependabot opens weekly version
-  updates for Cargo, GitHub Actions and the viewer's npm packages, with minor and
+  updates for Cargo (the crate and the fuzz workspace), GitHub Actions (the
+  workflows and the composite actions under `.github/actions`), the viewer's npm
+  packages and the release image's base in `docker/Dockerfile`, with minor and
   patch updates grouped; major updates arrive one at a time and are migrated by
-  hand when they need it.
+  hand when they need it. `tools/ci/witness-ifc-lite` gets no version updates,
+  since its third-party witness is pinned to an exact version on purpose, but
+  its lockfile is in the dependency graph and so covered by the alerts.
 - CodeQL default setup analyses the workflows, the viewer's TypeScript and
   JavaScript, and the Python bindings.
 - Every action is pinned to a full commit SHA and the repository requires it.
