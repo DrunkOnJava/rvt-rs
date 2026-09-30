@@ -9,8 +9,12 @@
 //! which fields agree, and where rvt-rs frames the record. Nothing here is
 //! read from his reader: the expected values are his, in `VECTORS`.
 //!
-//! The box is his length, thickness and height: the longer and the shorter
-//! plan side of the record's box, and its height, in millimetres.
+//! The flags word is `m_abFlags4Bytes`, the `u32` at `+0x46` of a record laid
+//! out as 2024 lays it out (RE-128). The box is his length, thickness and
+//! height: the longer and the shorter plan side of the record's box, and its
+//! height, in millimetres. For a record rvt-rs does not return, it prints
+//! whether the id is declared in `Global/ElemTable` and what a 2023 record's
+//! decode asks of the bytes at his offset.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re132_slik_vectors -- MODEL.rvt
@@ -24,6 +28,12 @@ use sha2::{Digest, Sha256};
 const DIMENSION_TOLERANCE_MM: f64 = 0.15;
 
 const FEET_TO_MM: f64 = 304.8;
+
+/// Bytes from a 2023 record's ElementId to its marker (RE-81).
+const ID_TO_MARKER_2023: isize = 52;
+
+/// Bytes from a 2023 record's `BuiltInCategory` to its marker (RE-81).
+const CATEGORY_BEFORE_MARKER_2023: isize = 38;
 
 struct Vector {
     /// SHA-256 of the `.rvt`.
@@ -142,6 +152,39 @@ fn dims_mm(bbox: [f64; 6]) -> [f64; 3] {
     [dx.max(dy), dx.min(dy), dz]
 }
 
+/// The `u32` at `at`, when it lies in `buf`.
+fn read_u32(buf: &[u8], at: isize) -> Option<u32> {
+    let at = usize::try_from(at).ok()?;
+    Some(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?))
+}
+
+/// What a 2023 record's decode asks of the bytes at `offset`, as JSON.
+fn diagnose_2023(rf: &mut RevitFile, vector: &Vector) -> String {
+    let Ok(inflated) = rf.inflated_partition(vector.stream) else {
+        return "null".to_string();
+    };
+    let buf = inflated.bytes();
+    let at = vector.offset as isize;
+    let id_here = read_u32(buf, at);
+    let category = usize::try_from(at + ID_TO_MARKER_2023 - CATEGORY_BEFORE_MARKER_2023)
+        .ok()
+        .and_then(|from| buf.get(from..from + 8))
+        .map(|b| i64::from_le_bytes(b.try_into().expect("8 bytes")));
+    let marker = rvt::partition_element_records_2023::record_marker(rf);
+    let marker_ok = marker.is_some_and(|(marker, _)| {
+        let from = (at + ID_TO_MARKER_2023) as usize;
+        buf.get(from..from + 8) == Some(marker.as_slice())
+    });
+    let header_ok = marker.is_some_and(|(_, tag)| {
+        buf.get(vector.offset + 8..vector.offset + 10) == Some(tag.to_le_bytes().as_slice())
+    });
+    format!(
+        "{{\"id_at_offset\":{},\"category_at_offset\":{},\"marker_at_offset_ok\":{marker_ok},\"header_tag_ok\":{header_ok}}}",
+        id_here.map_or(-1, i64::from),
+        category.unwrap_or(0),
+    )
+}
+
 fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let bytes = std::fs::read(&path).expect("read the model");
@@ -158,10 +201,10 @@ fn main() -> rvt::Result<()> {
         return Ok(());
     }
     let classes = rf.schema_classes()?;
+    let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let records = if version == 2023 {
         rvt::partition_element_records_2023::scan_records(&mut rf, version)
     } else {
-        let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
         per::scan_category_records_multi(
             &mut rf,
             version,
@@ -171,6 +214,7 @@ fn main() -> rvt::Result<()> {
     };
     let mut all_agree = 0;
     for vector in &mine {
+        let is_declared = declared.contains(&vector.id);
         let found: Vec<&per::PartitionElementRecord> = records
             .iter()
             .filter(|record| record.element_id == vector.id)
@@ -181,8 +225,13 @@ fn main() -> rvt::Result<()> {
             .or_else(|| found.first())
             .copied();
         let Some(record) = best else {
+            let diagnosis = if version == 2023 {
+                diagnose_2023(&mut rf, vector)
+            } else {
+                "null".to_string()
+            };
             println!(
-                "{{\"id\":{},\"found\":0,\"records_read\":{}}}",
+                "{{\"id\":{},\"found\":0,\"declared_in_elem_table\":{is_declared},\"records_read\":{},\"diagnosis\":{diagnosis}}}",
                 vector.id,
                 records.len()
             );
@@ -193,17 +242,28 @@ fn main() -> rvt::Result<()> {
             .map(|class| class.name.as_str());
         let class_text = class_name.unwrap_or("");
         let dims = dims_mm(record.bbox_feet);
+        // A 2023 record's start, laid out as 2024 lays it out, is 28 bytes
+        // before its ElementId.
+        let flags_at = if version == 2023 {
+            record.offset as isize + ID_TO_MARKER_2023 - per::BBOX_MARKER_OFFSET as isize + 0x46
+        } else {
+            record.offset as isize + 0x46
+        };
+        let flags = rf
+            .inflated_partition(&record.stream)
+            .ok()
+            .and_then(|inflated| read_u32(inflated.bytes(), flags_at));
         let stream_ok = record.stream == vector.stream;
         let category_ok = record.builtin_category == vector.category;
         let class_ok = class_name == Some(vector.class);
-        let flags_ok = record.flags == vector.flags;
+        let flags_ok = flags == Some(vector.flags);
         let dims_ok = (0..3).all(|k| (dims[k] - vector.dims_mm[k]).abs() <= DIMENSION_TOLERANCE_MM);
         let offset_delta = record.offset as i64 - vector.offset as i64;
         if stream_ok && category_ok && class_ok && flags_ok && dims_ok {
             all_agree += 1;
         }
         println!(
-            "{{\"id\":{},\"found\":{},\"stream\":{:?},\"stream_ok\":{stream_ok},\"offset\":{},\"offset_delta\":{offset_delta},\"category\":{},\"category_ok\":{category_ok},\"class\":{:?},\"class_tag\":{},\"class_ok\":{class_ok},\"flags\":{},\"flags_ok\":{flags_ok},\"dims_mm\":{:?},\"expected_dims_mm\":{:?},\"dims_ok\":{dims_ok}}}",
+            "{{\"id\":{},\"found\":{},\"declared_in_elem_table\":{is_declared},\"stream\":{:?},\"stream_ok\":{stream_ok},\"offset\":{},\"offset_delta\":{offset_delta},\"category\":{},\"category_ok\":{category_ok},\"class\":{:?},\"class_tag\":{},\"class_ok\":{class_ok},\"flags_at_0x46\":{},\"expected_flags\":{},\"flags_ok\":{flags_ok},\"dims_mm\":{:?},\"expected_dims_mm\":{:?},\"dims_ok\":{dims_ok}}}",
             vector.id,
             found.len(),
             record.stream,
@@ -211,7 +271,8 @@ fn main() -> rvt::Result<()> {
             record.builtin_category,
             class_text,
             record.class_tag,
-            record.flags,
+            flags.map_or(-1, i64::from),
+            vector.flags,
             dims,
             vector.dims_mm,
         );
