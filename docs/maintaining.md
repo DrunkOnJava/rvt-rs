@@ -51,10 +51,11 @@ when a release ships.
 - A pull request is required for everyone; only the maintainer can bypass it.
   Merges are **squash only**, commits must be **signed**, history is linear, and
   the branch must be up to date with `main`. The required checks are `cargo fmt`,
-  `cargo clippy`, `build + real files / ubuntu-latest / stable`, `cargo doc` and
-  `PII guard`. The others (MSRV, macOS and Windows, IfcOpenShell validation,
-  corpus tier 2, wheels, the audits) are not required, so read the whole check
-  list before merging anything they cover.
+  `cargo clippy`, `build + real files / ubuntu-latest / stable`,
+  `build + real files / ubuntu-latest / msrv`, `cargo doc` and `PII guard`. The
+  others (macOS and Windows, IfcOpenShell validation, corpus tier 2, wheels, the
+  audits) are not required, so read the whole check list before merging
+  anything they cover.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
   history: fix it before merging.
@@ -74,17 +75,30 @@ when a release ships.
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
-the MSRV job in CI builds on exactly that release. It is never lower than the
+the MSRV job in CI builds on exactly that release. The job is a required check,
+named `build + real files / ubuntu-latest / msrv` so that the name does not
+change when the release does. The MSRV is never lower than the
 floor the 2024 edition sets (1.85), and it moves up when a dependency worth
 taking needs a newer compiler: quick-xml 0.42 needs 1.86 and earcut 0.4.10 and
 later call `is_multiple_of`, which is stable from 1.87, so the MSRV is 1.87. It
 is raised in a minor release, never in a patch, and the CHANGELOG says so.
 
-A Dependabot pull request that fails the MSRV job is not merged as it is. Either
+A Dependabot pull request that fails the MSRV job cannot merge as it is. Either
 the MSRV is raised in the same pull request, with the reason and the crates it
 unblocks in the description, or the update is held with a comment in
 `Cargo.toml` naming the release it needs. earcut declares no `rust-version`, so
 Cargo's MSRV-aware resolver cannot warn about it: the MSRV job is the only check.
+Raising the MSRV also brings the lints that need it (at 1.87, clippy's
+`manual_is_multiple_of`), which the same pull request fixes.
+
+A dependency of a parser (quick-xml, flate2, encoding_rs, cfb) is measured, not
+only built. Run Measure with `-f families=true` (see
+[`CONTRIBUTING.md`](../CONTRIBUTING.md)): it diffs `rvt-info`'s output on the six
+reference models and the eleven Autodesk families, which is the only place the
+PartAtom reader is measured, since the IFC export never reaches it. For the
+PartAtom reader, dispatch `fuzz.yml` on the branch as well
+(`-f target=fuzz_part_atom -f duration_seconds=300`), and cite both runs in the
+pull request.
 
 ## Releases
 
@@ -138,13 +152,18 @@ line names what to fix (its rulesets check needs an admin token). The list:
 2. No stale branches remain on the remote (`delete_branch_on_merge` is on; a
    branch of a closed pull request is deleted with a note where its commits
    stay reachable from the pull request's head).
-3. The Actions cache is under its 10 GB limit. Caches of closed pull requests
-   are deleted (`gh cache list`, `gh cache delete <id>`); `main`'s caches are
-   kept.
+3. The Actions cache is under its 10 GB limit. `python3
+   tools/maintainer/clean_caches.py` (a dry run; `--delete` acts) removes the
+   caches of closed pull requests and deleted branches and `main`'s superseded
+   rust-cache generations: a new lockfile saves a new cache under a new key and
+   the old ones are never read again. `main`'s newest two generations of each
+   family, live branches' and open pull requests' caches are kept.
 4. Workflow runs on `main` are green. A red check is a defect to fix, or an
    issue to file with its cause, and a check that fails only because a service
    is down reports "not measured" rather than failing.
 5. Open Dependabot and code scanning alerts are triaged, each fixed or
-   dismissed with a reason.
+   dismissed with a reason, and Dependabot watches every lockfile, Dockerfile
+   and composite action in `.github/dependabot.yml` (the audit lists what is
+   missing).
 6. Discussions and community pull requests have an answer.
 7. The rulesets and settings still match their files.

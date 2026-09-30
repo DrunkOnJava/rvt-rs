@@ -74,8 +74,10 @@ jobs:
     # dominate wall-clock, so the Autodesk family corpus is fetched on
     # ubuntu-stable (primary) and windows-stable (CFB path-separator
     # regression); elsewhere the corpus checks skip and the CLI and
-    # contract checks still run.
-    name: build + real files / ${{ matrix.os }} / ${{ matrix.rust }}
+    # contract checks still run. The MSRV entry is labelled `msrv`, so its
+    # check name, which the main-protection ruleset requires, does not change
+    # when `rust-version` does.
+    name: build + real files / ${{ matrix.os }} / ${{ matrix.label || matrix.rust }}
     runs-on: ${{ matrix.os }}
     env:
       SCCACHE_GHA_ENABLED: "true"
@@ -95,6 +97,7 @@ jobs:
             with_corpus: false
           - os: ubuntu-latest
             rust: "1.87"  # MSRV, `rust-version` in Cargo.toml
+            label: msrv
             with_corpus: false
     steps:
       # Windows' git default `core.autocrlf=true` mangles binary files

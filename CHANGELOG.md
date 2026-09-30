@@ -16,6 +16,12 @@ All notable changes will be documented here. This project follows
   0.4.11. `rvt` 0.4.0 on crates.io declares 1.85. `docs/maintaining.md` says
   how the MSRV moves, and the MSRV job in CI now builds on 1.87 (its check name
   changes with it).
+- **The MSRV job is a required check.** A pull request that needs a newer Rust
+  than `rust-version` can no longer merge past it: Dependabot's earcut 0.4.11
+  update failed the job while GitHub still called the pull request mergeable.
+  The check is named `build + real files / ubuntu-latest / msrv`, without the
+  version, so the ruleset in `.github/rulesets/main-protection.json` does not
+  change when the MSRV does.
 
 ### Research
 
@@ -233,13 +239,24 @@ All notable changes will be documented here. This project follows
   open issue's labels, milestones against releases, stray branches, the Actions
   cache, the state of `main`'s workflows, open security alerts, the live
   rulesets against `.github/rulesets/`, the repository settings, the labels the
-  forms and Dependabot apply, and replies owed to pull requests and
-  discussions. The state of `main` is read per workflow, from its push and
-  scheduled runs, with two differently shaped queries: GitHub sometimes answers
-  a runs query from a stale index (one URL returned three different snapshots
-  minutes apart on 2026-09-30, the freshest six days old), which made the check
-  report a Fuzz failure that a green scheduled run had long superseded. The
-  PyPI environments now accept only release refs.
+  forms and Dependabot apply, that Dependabot watches every lockfile,
+  Dockerfile and composite action (the witness crate's lockfile is pinned on
+  purpose), and replies owed to pull requests and discussions. The state of
+  `main` is read per workflow, from its push and scheduled runs, out of the
+  check suites of its last 100 commits through GraphQL: GitHub's REST runs list
+  is sometimes served from a stale index (one URL returned three different
+  snapshots minutes apart on 2026-09-30, the freshest six days old, and later
+  two differently shaped queries agreed on one stale answer), which made the
+  check report a Fuzz failure that a green scheduled run had long superseded.
+  The PyPI environments now accept only release refs.
+- **`tools/maintainer/clean_caches.py` deletes the Actions caches nobody can
+  use again.** The caches of pull requests that are no longer open, of deleted
+  branches, and the superseded generations of `main`'s rust-cache families (a
+  new lockfile saves a cache under a new key and the old ones are never read
+  again; the newest two are kept). It is a dry run unless given `--delete`. On
+  2026-09-30 the cache stood at 9.1 GB of a 10 GB limit, and 4.9 GB of it was
+  that: 0.45 GB from closed pull requests, 4.49 GB from `main`'s old
+  generations.
 
 ## [0.4.0] — 2026-09-28
 
