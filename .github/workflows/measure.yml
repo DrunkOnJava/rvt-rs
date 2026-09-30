@@ -157,7 +157,7 @@ jobs:
               for d in measure-head/*/; do
                 f=$(basename "$d")
                 [ -f "$d/info.json" ] || continue
-                if cmp -s "$d/info.json" "measure-base/$f/info.json" && cmp -s "$d/info.exit" "measure-base/$f/info.exit"; then echo "- $f: identical"; else echo "- $f: **differs**"; fi
+                if cmp -s "$d/info.json" "measure-base/$f/info.json" && cmp -s "$d/info.exit" "measure-base/$f/info.exit"; then echo "- $f: identical ($(cat "$d/info.exit"))"; else echo "- $f: **differs**"; fi
               done
               echo
               echo "### Scorer differences (base → head)"
