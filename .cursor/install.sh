@@ -3,7 +3,7 @@
 # Idempotent bootstrap for the rvt-rs development environment.
 #
 # Sets up all three buildable components:
-#   1. Rust core library + CLI binaries (needs Rust >= 1.85 for edition 2024)
+#   1. Rust core library + CLI binaries (needs Rust >= 1.87, the MSRV)
 #   2. Python bindings (maturin + pyo3, built into a local venv)
 #   3. WebAssembly viewer (wasm-pack -> viewer/pkg + Vite/pnpm)
 #
@@ -34,7 +34,7 @@ if command -v apt-get >/dev/null 2>&1; then
 fi
 
 # --- 2. Rust toolchain -----------------------------------------------------
-# The crate is edition 2024 with rust-version = 1.85; install and default to
+# The crate is edition 2024 with rust-version = 1.87; install and default to
 # the stable channel and make sure the wasm target + fmt/clippy are present.
 log "Rust toolchain (stable + wasm32 target)"
 rustup toolchain install stable --profile minimal --no-self-update

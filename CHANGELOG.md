@@ -6,6 +6,17 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The minimum supported Rust version is 1.87, up from 1.85.** quick-xml 0.42
+  needs 1.86 and earcut 0.4.10 and later call `is_multiple_of`, stabilised in
+  1.87, and both updates were being held back for it (earcut's bound in
+  `Cargo.toml` said so). They are taken: the PartAtom reader now reads
+  quick-xml 0.42's `&str` names, text and entity references, and earcut is at
+  0.4.11. `rvt` 0.4.0 on crates.io declares 1.85. `docs/maintaining.md` says
+  how the MSRV moves, and the MSRV job in CI now builds on 1.87 (its check name
+  changes with it).
+
 ### Research
 
 - **A duct's or pipe's type, width and height are in its own object

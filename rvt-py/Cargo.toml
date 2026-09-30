@@ -2,7 +2,7 @@
 name = "rvt-py"
 version = "0.4.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 license = "Apache-2.0"
 description = "Python bindings for the `rvt` crate — pyo3 extension module behind the `rvt` wheel on PyPI. Kept in a separate crate so `rvt` itself can `#![forbid(unsafe_code)]` unconditionally (SEC-12/13)."
 authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]

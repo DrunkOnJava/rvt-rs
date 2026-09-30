@@ -5,8 +5,8 @@
 # Usage:
 #   tools/ci/measure-reference-models.sh BIN_DIR MODELS_DIR OUT_DIR
 #
-# BIN_DIR holds the rvt-ifc and rvt-gltf to measure; MODELS_DIR is where
-# tools/fetch-reference-models.sh put the models. For each model this
+# BIN_DIR holds the rvt-ifc, rvt-gltf and rvt-info to measure; MODELS_DIR is
+# where tools/fetch-reference-models.sh put the models. For each model this
 # writes OUT_DIR/<model>/:
 #   - model.ifc, when KEEP_IFC is set: the exported IFC itself;
 #   - ifc.sha256: the exported IFC's hash without its FILE_NAME and
@@ -16,13 +16,20 @@
 #     research/witness/<artifact>/observations/rvt-rs.json;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
 #     ending with its exit status;
+#   - info.json and info.exit: `rvt-info --redact --json` on it (the identity,
+#     the document's Atom entry, the streams) and its exit status. The Atom
+#     entry goes through the PartAtom parser, from the model's
+#     ProjectInformation stream. The IFC export reads only a PartAtom stream,
+#     which none of these models has (diagnostics.json says has_part_atom
+#     false), so this, and the families below, are what measure that parser;
 #   - probe.txt, when PROBE names an examples/ probe already built in
 #     BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
 #     PROBE_SCORER_DIR taking <probe output> <revit-export.ifc>.
-# When FAMILY_DIR names the Autodesk family corpus and PROBE is built, the
-# probe also runs on each of its .rfa files, into OUT_DIR/family-<file>/
-# probe.txt. A family has no Revit export, so nothing else is measured on it.
+# When FAMILY_DIR names the Autodesk family corpus, each of its .rfa files gets
+# OUT_DIR/family-<file>/ with the same info.json and info.exit (a family
+# carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
+# same probe.txt. A family has no Revit export, so nothing else is measured on it.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
@@ -59,6 +66,11 @@ score() { # name args...
   echo "exit $?" >> "$out"
 }
 
+info() { # file dir
+  "$BIN/rvt-info" "$1" --redact --json > "$2/info.json" 2> "$2/info.log"
+  echo "exit $?" > "$2/info.exit"
+}
+
 while IFS='|' read -r name rvt ref; do
   [ -n "$name" ] || continue
   dir="$OUT/$name"; mkdir -p "$dir"
@@ -67,6 +79,7 @@ while IFS='|' read -r name rvt ref; do
   echo "exit $?" >> "$dir/rvt-ifc.log"
   "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
+  info "$MODELS/$rvt" "$dir"
   grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
   # The witness observations committed for this model (research/witness/),
   # regenerated so a change to its IFC can commit them from the results.
@@ -91,11 +104,14 @@ while IFS='|' read -r name rvt ref; do
   echo "::endgroup::"
 done <<< "$MODELS_LIST"
 
-if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ] && [ -d "${FAMILY_DIR:-}" ]; then
+if [ -d "${FAMILY_DIR:-}" ]; then
   for family in "$FAMILY_DIR"/*.rfa; do
     [ -f "$family" ] || continue
     dir="$OUT/family-$(basename "$family" .rfa)"; mkdir -p "$dir"
-    timeout 1200 "$BIN/examples/$PROBE" "$family" > "$dir/probe.txt" 2>&1
-    echo "exit $?" >> "$dir/probe.txt"
+    info "$family" "$dir"
+    if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
+      timeout 1200 "$BIN/examples/$PROBE" "$family" > "$dir/probe.txt" 2>&1
+      echo "exit $?" >> "$dir/probe.txt"
+    fi
   done
 fi

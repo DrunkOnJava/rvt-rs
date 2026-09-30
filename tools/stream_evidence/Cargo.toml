@@ -2,7 +2,7 @@
 name = "stream-evidence"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 license = "Apache-2.0"
 publish = false
 description = "Reusable stream-evidence harness for Discussion #112 / issue #151 checksum-paged inflate probes (control vs experimental page stripping)."

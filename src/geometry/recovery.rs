@@ -454,7 +454,7 @@ fn points_from_flat_floats(items: &[InstanceField]) -> Option<Vec<(f64, f64)>> {
     if floats.len() < 6 {
         return None;
     }
-    if floats.len() % 3 == 0 {
+    if floats.len().is_multiple_of(3) {
         let mut pts = Vec::with_capacity(floats.len() / 3);
         for chunk in floats.chunks_exact(3) {
             pts.push((chunk[0], chunk[1]));
@@ -463,7 +463,7 @@ fn points_from_flat_floats(items: &[InstanceField]) -> Option<Vec<(f64, f64)>> {
             return Some(pts);
         }
     }
-    if floats.len() % 2 == 0 {
+    if floats.len().is_multiple_of(2) {
         let mut pts = Vec::with_capacity(floats.len() / 2);
         for chunk in floats.chunks_exact(2) {
             pts.push((chunk[0], chunk[1]));

@@ -2,7 +2,7 @@
 name = "rvt"
 version = "0.4.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 license = "Apache-2.0"
 description = "Apache-2.0 clean-room reader for Autodesk Revit files (.rvt, .rfa, .rte, .rft) without Revit: metadata, previews and the embedded schema of 2016-2026 files, and typed elements with measured geometry from Revit 2024 and 2025 projects, exported as IFC4, glTF and plan SVG."
 authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]
@@ -75,12 +75,12 @@ encoding_rs = "0.8"
 # transitive dependency through both quick-xml and serde_json.
 memchr = "2"
 # Triangulates the planar faces of saved family graphics (#255, rosejn).
-# MIT OR Apache-2.0. Held below 0.4.10, whose `is_multiple_of` needs Rust
-# 1.87: earcut declares no rust-version, so the MSRV-aware resolver cannot
-# pick an older release for a 1.85 build. Lift the bound with the MSRV.
-earcut = ">=0.4.5, <0.4.10"
-# PartAtom XML parser.
-quick-xml = { version = "0.41", features = ["serialize"] }
+# MIT OR Apache-2.0. From 0.4.10 it calls `is_multiple_of`, which needs Rust
+# 1.87, and it declares no rust-version, so the MSRV-aware resolver cannot
+# tell: keep `rust-version` at 1.87 or above while this allows 0.4.10+.
+earcut = "0.4.5"
+# PartAtom XML parser. 0.42 needs Rust 1.86.
+quick-xml = { version = "0.42", features = ["serialize"] }
 # Serialisation for JSON output + test fixtures.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -112,9 +112,8 @@ stream-evidence = { path = "tools/stream_evidence" }
 # Statistical benchmarking harness — drives `benches/*` and
 # powers the criterion-based cells in `docs/benchmarks.md` (Q-05).
 # `html_reports` renders per-run HTML + SVG so CI artefacts are
-# browsable. Version pinned to the 0.5 line (MSRV-compatible with
-# our 1.85 floor).
-criterion = { version = "0.7", features = ["html_reports"] }
+# browsable. Version 0.7 builds on the MSRV.
+criterion ={ version = "0.7", features = ["html_reports"] }
 # Property-based never-panic / round-trip suites in tests/proptest_parsers.rs.
 proptest = "1"
 # Tier-one corpus health: hex-encode license-sidecar SHA256 checks of

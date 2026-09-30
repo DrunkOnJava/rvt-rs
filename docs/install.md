@@ -77,7 +77,7 @@ PY
 ## Rust CLI From crates.io
 
 The Cargo package name is `rvt`, published from 0.3.0 on. It needs a stable
-Rust toolchain (1.85 or later):
+Rust toolchain (1.87 or later):
 
 ```bash
 cargo install rvt --locked

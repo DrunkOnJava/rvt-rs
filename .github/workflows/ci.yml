@@ -94,7 +94,7 @@ jobs:
             rust: stable
             with_corpus: false
           - os: ubuntu-latest
-            rust: "1.85"  # MSRV (Rust 2024 edition minimum)
+            rust: "1.87"  # MSRV, `rust-version` in Cargo.toml
             with_corpus: false
     steps:
       # Windows' git default `core.autocrlf=true` mangles binary files
