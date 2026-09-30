@@ -8,6 +8,21 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **A duct's or pipe's type, width and height are in its own object
+  (RE-134, #96).** The fields that follow the `RbsCurveConnectorManager`
+  anchor RE-131 reads a size after are the `RbsCurve` schema's own, in its
+  order: width or diameter at `+8`, height at `+16`, the type's ElementId at
+  `+64`. On RE1 Mechanical and Plumbing, against Revit's own IFC, that id is
+  Revit's type `Tag` for all 94 ducts and pipes, which closes RE-129's
+  negative (the link is in the element's object, not its record), a duct's
+  width and height are two of Revit's extrusion dimensions on 25 of 25 and
+  its size text is width by height in millimetres on 25 of 25. rvt-rs's duct
+  bodies already have Revit's world box on 25 of 25
+  (`tools/re/duct_bodies_vs_ifc.py`, now in every Measure run). The round
+  versus rectangular switch, which names a duct's family, is not found: all
+  25 ducts are rectangular and no redistributable model has a round or an
+  oval one, so ducts keep their `Duct-<ElementId>` names.
+  `examples/probe_re134_duct_connectors.rs`.
 - **jakobhirn-bit's class numbers are the tags rvt-rs reads, on eleven
   releases (RE-133, #154).** His table gives ten classes (`ElementHeader`,
   `Family`, `FamilyInstance`, `FamilySymbol`, `ContentMarker`,
