@@ -5,9 +5,10 @@ Last reviewed: 2026-09-30
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
 machine-readable [support matrix](docs/support-matrix.json); the statuses below
-are its ceilings and this page never claims more. The plan itself is the five
-GitHub milestones and the issues under them. [`TODO.md`](TODO.md) is the older
-task decomposition they grew out of.
+are its ceilings and this page never claims more. The plan itself is the GitHub
+milestones and the issues under them; a milestone is closed when its release
+ships. [`TODO.md`](TODO.md) is the older task decomposition they grew out of,
+and [`docs/maintaining.md`](docs/maintaining.md) says how the tracker is run.
 
 ## Product Goal
 
@@ -38,7 +39,7 @@ the four levels a file can reach are in the
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
 | Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial, 2026 is experimental (one local model). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | Element records of other releases (#421), parameters (0.5.0), held-out models (#408). |
-| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.4.0 milestone (below). |
+| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.4.x milestone (below). |
 | Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.5.0). |
 | Python and CLI | Partial | The `rvt` wheel on PyPI and prebuilt CLI archives on GitHub Releases, sharing the core's honesty bounds. | Stabilize JSON schemas and the one-shot inspect workflow. |
 | Write path | Partial | Stream-level patching only. Field-level semantic writes are unsupported and gated by [ADR-002](docs/decisions/ADR-002-semantic-write-api-gate.md). | Stay gated until openability can be proven. |
@@ -61,12 +62,13 @@ the four levels a file can reach are in the
   turned; steel members carry their I section; every typed element is related
   to an IFC type object of its Revit type.
 
-### 0.4.0: IFC geometry beta (milestone still open)
+### 0.4.x: IFC geometry beta, remaining slices
 
-The v0.4.0 tag did not close this milestone: its remaining geometry work is
-the geometry track. Each slice records a baseline, an improvement and a
-residual against Revit's own exports on the reference pack (#407), and
-approximations stay labelled (#409). Open now: wall bodies thicker or thinner
+v0.4.0 shipped part of the geometry beta. The milestone of that name is closed,
+and the slices still open moved to this one. Each slice records a baseline, an
+improvement and a residual against Revit's own exports on the reference pack
+(#407), approximations stay labelled (#409), and a slice ships in the next
+release that contains it. Open now: wall bodies thicker or thinner
 than their type's layers (#358), stair flights (#357) and aggregates (#323),
 sloped roofs (#356, needs a pitched-roof oracle), element materials (#355),
 the opening cut from the wall location curve (#227), room boundaries whose

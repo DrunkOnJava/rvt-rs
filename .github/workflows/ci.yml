@@ -523,7 +523,9 @@ jobs:
           path: |
             /tmp/witness/
             /tmp/witness-slim/
-          retention-days: 90
+          # Ninety days on `main`, where the verdict is the record; two weeks
+          # on a pull request's run, which nobody reads after it merges.
+          retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 14 }}
           if-no-files-found: ignore
 
   doc:
@@ -678,6 +680,8 @@ jobs:
         with:
           name: rvt-wheel-${{ matrix.os }}
           path: dist/*.whl
+          # A smoke build; the release wheels are built by publish.yml.
+          retention-days: 7
           if-no-files-found: error
 
   # Supply-chain hardening. `cargo-deny check` enforces our deny.toml:

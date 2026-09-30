@@ -21,7 +21,7 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.4.0: IFC geometry beta
+### 0.4.x: IFC geometry beta, remaining slices
 
 | Issue | Remainder |
 |---|---|
@@ -54,10 +54,11 @@ milestone is for.
 | [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421) | Element records beyond 2024/2025: derive the marker from the schema and measure the older envelope (RE-80 follow-up) |
 | [#408](https://github.com/DrunkOnJava/rvt-rs/issues/408) | Held-out validation: measure on licensed models not used to develop the decoder |
 
-### Research and unscheduled
+### Unscheduled
 
 | Issue | Remainder |
 |---|---|
+| [#528](https://github.com/DrunkOnJava/rvt-rs/issues/528) | MEP connectivity: ports and port-to-port connections (IfcDistributionPort, IfcRelConnectsPortToElement, IfcRelConnectsPorts) |
 | [#154](https://github.com/DrunkOnJava/rvt-rs/issues/154) | RE: Reproduce complete Formats/Latest parsing and serialization-tag assignment |
 | [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) | RE: Validate ElementHeader framing for ElementId and class-tag recovery |
 | [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) | RE: Validate Global/ElemTable body as a versioned ownership tree |

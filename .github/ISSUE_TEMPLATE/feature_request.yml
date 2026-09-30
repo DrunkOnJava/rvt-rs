@@ -1,7 +1,7 @@
 name: Feature request
 description: Propose a new capability, decoder, CLI flag, or API surface.
 title: "Feature: "
-labels: ["enhancement", "needs-triage"]
+labels: ["type:feature", "needs-triage"]
 body:
   - type: markdown
     attributes:

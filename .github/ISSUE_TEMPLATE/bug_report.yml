@@ -1,7 +1,7 @@
 name: Bug report
 description: rvt-rs crashes, panics, misreads a file, or produces clearly-wrong output.
 title: "Bug: "
-labels: ["bug", "needs-triage"]
+labels: ["type:bug", "needs-triage"]
 body:
   - type: markdown
     attributes:
