@@ -81,7 +81,7 @@ memchr = "2"
 # MIT OR Apache-2.0. Held below 0.4.10, whose `is_multiple_of` needs Rust
 # 1.87: earcut declares no rust-version, so the MSRV-aware resolver cannot
 # pick an older release for a 1.85 build. Lift the bound with the MSRV.
-earcut = ">=0.4.5, <0.4.10"
+earcut = ">=0.4.5, <0.4.12"
 # PartAtom XML parser.
 quick-xml = { version = "0.41", features = ["serialize"] }
 # Serialisation for JSON output + test fixtures.
