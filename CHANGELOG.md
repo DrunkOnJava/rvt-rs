@@ -217,6 +217,13 @@ All notable changes will be documented here. This project follows
   seven days and a pull request's evidence bundle for fourteen. The 0.4.0
   milestone is closed with its release, and the geometry slices still open moved
   to 0.4.x. Nothing in the crate, the CLIs or the viewer changes.
+- **`tools/maintainer/audit.py` checks the repository against
+  `docs/maintaining.md`.** It is read-only and prints one line per check: every
+  open issue's labels, milestones against releases, stray branches, the Actions
+  cache, the state of `main`'s workflows, open security alerts, the live
+  rulesets against `.github/rulesets/`, the repository settings, the labels the
+  forms and Dependabot apply, and replies owed to pull requests and
+  discussions. The PyPI environments now accept only release refs.
 
 ## [0.4.0] — 2026-09-28
 

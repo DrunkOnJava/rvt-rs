@@ -96,6 +96,10 @@ Configured on the repository, with the rulesets kept as code in
 - Every action is pinned to a full commit SHA and the repository requires it.
   The default workflow token is read-only.
 - Deleting or force-pushing `main` is blocked.
+- PyPI publishing uses OIDC trusted publishing, so no PyPI token is stored. The
+  `pypi` environment accepts only `v*` tags, and `testpypi` only `v*` tags and
+  `main`; a dry run from another branch is refused until its name is added to
+  the environment's deployment policy.
 
 To re-apply a ruleset from its file:
 
@@ -105,7 +109,10 @@ gh api -X PUT repos/DrunkOnJava/rvt-rs/rulesets/<id> --input .github/rulesets/ma
 
 ## Housekeeping
 
-At every release, and at least monthly:
+At every release, and at least monthly, run
+`python3 tools/maintainer/audit.py`. It is read-only, checks most of the list
+below against the repository and exits 1 if any check fails, and each failing
+line names what to fix (its rulesets check needs an admin token). The list:
 
 1. Every open issue has its labels and, where it has acceptance criteria, a
    milestone; closed milestones have no open issues.
