@@ -39,7 +39,7 @@ re1-plumbing|RE1-Plumbing.rvt|RE1-Plumbing.ifc
 IFC_SCORERS="aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc storeys_vs_ifc
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc
 material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_ifc
-door_bodies_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc"
+door_bodies_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc pipe_bodies_vs_ifc"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
 
 # Witness artifacts (research/witness/<id>/observations/rvt-rs.json) per model.
