@@ -18,8 +18,8 @@ done and you can skip straight to the build/run commands.
 
 ### Toolchain requirements (skip the discovery step)
 
-- **Rust must be stable ≥ 1.85.** The crate is `edition = "2024"`
-  (`rust-version = "1.85"` in `Cargo.toml`). The base image historically shipped
+- **Rust must be stable ≥ 1.87.** The crate is `edition = "2024"`
+  (`rust-version = "1.87"` in `Cargo.toml`). The base image historically shipped
   Rust 1.83, which **cannot** build this crate. `install.sh` runs
   `rustup default stable` and adds the `wasm32-unknown-unknown` target,
   `rustfmt`, and `clippy`. If you hit an edition-2024 error, run

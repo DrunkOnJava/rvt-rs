@@ -62,7 +62,7 @@ project treats a silent skipped step the same as an untested change.
 
 1. **CI clean on `main`.** `cargo fmt --check`, `cargo clippy
    --all-targets --all-features -- -D warnings`, and the full test
-   matrix (ubuntu/macos/windows × stable + MSRV 1.85 on ubuntu) are all
+   matrix (ubuntu/macos/windows × stable + MSRV 1.87 on ubuntu) are all
    green. `cargo deny check` and `cargo audit` are green.
 2. **Synthetic-project IFC integration test.** `cargo test --release
    --test ifc_synthetic_project`. This is the end-to-end regression
@@ -178,7 +178,7 @@ aspirational state. Update this section when you wire up more of it.
   - `cargo fmt --check`
   - `cargo clippy --all-targets --all-features -- -D warnings`
   - `cargo test` across `ubuntu-latest`, `macos-latest`,
-    `windows-latest` × stable + MSRV 1.85 on ubuntu
+    `windows-latest` × stable + MSRV 1.87 on ubuntu
   - `cargo doc --no-deps --lib` with `RUSTDOCFLAGS=-D warnings`
   - `cargo deny check` (license allowlist, RustSec advisory deny,
     crates.io-only source, wildcard deny — see `deny.toml`)

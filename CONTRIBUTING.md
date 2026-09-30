@@ -9,7 +9,7 @@ drive the default checks, and corpus-gated tests skip themselves while
 
 ## Ten minutes to a first pull request
 
-You need stable Rust 1.85 or newer (`rustup` installs it) and git.
+You need stable Rust 1.87 or newer (`rustup` installs it) and git.
 
 1. Fork the repository on GitHub, then clone your fork:
 

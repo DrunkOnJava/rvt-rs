@@ -71,6 +71,21 @@ when a release ships.
   support matrix, the README and the CHANGELOG change in the same pull request
   as the capability they describe.
 
+## Dependencies and the MSRV
+
+`rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
+the MSRV job in CI builds on exactly that release. It is never lower than the
+floor the 2024 edition sets (1.85), and it moves up when a dependency worth
+taking needs a newer compiler: quick-xml 0.42 needs 1.86 and earcut 0.4.10 and
+later call `is_multiple_of`, which is stable from 1.87, so the MSRV is 1.87. It
+is raised in a minor release, never in a patch, and the CHANGELOG says so.
+
+A Dependabot pull request that fails the MSRV job is not merged as it is. Either
+the MSRV is raised in the same pull request, with the reason and the crates it
+unblocks in the description, or the update is held with a comment in
+`Cargo.toml` naming the release it needs. earcut declares no `rust-version`, so
+Cargo's MSRV-aware resolver cannot warn about it: the MSRV job is the only check.
+
 ## Releases
 
 Tags `v*` are protected by the `release-tags` ruleset: only a maintainer can

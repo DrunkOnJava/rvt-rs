@@ -132,7 +132,7 @@ fn looks_like_utf16_le(bytes: &[u8]) -> bool {
     if bytes.starts_with(&[0xFF, 0xFE]) {
         return true;
     }
-    if bytes.len() % 2 != 0 {
+    if !bytes.len().is_multiple_of(2) {
         return false;
     }
     // Count code units that look like printable ASCII as `XX 00`.

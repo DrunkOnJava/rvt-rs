@@ -2,12 +2,10 @@
 name = "witness-ifc-lite"
 version = "0.1.0"
 edition = "2021"
-# NOT the workspace MSRV (1.85). ifc-lite-core 7.1.1 calls
-# `usize::is_multiple_of`, stabilised in Rust 1.87, so this witness needs a
-# newer toolchain than the `rvt` crate does. That is harmless precisely
-# because the witness is out-of-workspace: the MSRV job in ci.yml builds the
-# workspace only, and the `ifcopenshell-validate` job that runs this witness
-# uses `stable`.
+# The same floor as the workspace MSRV (1.87). ifc-lite-core 7.1.1 calls
+# `usize::is_multiple_of`, stabilised in Rust 1.87. The witness is
+# out-of-workspace: the MSRV job in ci.yml builds the workspace only, and the
+# `ifcopenshell-validate` job that runs this witness uses `stable`.
 rust-version = "1.87"
 license = "Apache-2.0"
 publish = false

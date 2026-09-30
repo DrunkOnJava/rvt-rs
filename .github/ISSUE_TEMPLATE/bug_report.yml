@@ -95,7 +95,7 @@ body:
     attributes:
       label: Rust toolchain
       description: Output of `rustc --version`.
-      placeholder: "rustc 1.85.0"
+      placeholder: "rustc 1.98.1"
     validations:
       required: true
   - type: checkboxes
