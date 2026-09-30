@@ -8,6 +8,25 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Pipes as the cylinders Revit draws (RE-131, #96).** A pipe's two ends
+  are connector entries in its partition (an element, a connector index,
+  the `u32` 1 and a point of three `f64`), keyed by the pipe for an end
+  nothing is connected to and by the connected element otherwise, and its
+  record box gives the outside radius: every axis that is not nearly the
+  pipe's own must give the same radius, and the box rebuilt from the
+  cylinder must be the record box on all six sides, or the pipe keeps its
+  box. On RE1 Mechanical and Plumbing (Revit 2025), against Revit's own
+  export: 69 of 69 pipes are circle-profile extrusions whose radius, axis
+  ends and length are Revit's to 0.00001 ft. `main` wrote every one as a
+  box, and the right axis for 21 of Plumbing's 63. No other model's IFC
+  changes. The entry layout and the radius derivation are jakobhirn-bit's
+  (Discussion #112), measured by them on Snowdon Towers' plumbing sample.
+  Revit 2025 only. Every RE1 pipe runs along a principal axis, so sloped
+  pipes rest on the rebuild proof, not on an oracle; ducts and fittings keep
+  their boxes.
+
+### Added
+
 - **Family instances in their real shape, opt-in (RE-78, #255, #227).**
   `rvt-ifc --saved-meshes` and `rvt-gltf --saved-meshes` replace each
   bounding-box body with the mesh Revit saved for the element's display,

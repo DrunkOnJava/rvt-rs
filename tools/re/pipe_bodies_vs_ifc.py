@@ -30,7 +30,7 @@ LENGTH_TOLERANCE_FT = 0.01
 
 
 def cylinders(path):
-    """Tag -> (profile name, radius in feet or None, start, end, length in feet)."""
+    """Tag -> (profile name, radius in feet or None, start, end, length in feet, Name)."""
     model = ifcopenshell.open(path)
     scale = unit.calculate_unit_scale(model) / FT
     out = {}
@@ -54,7 +54,7 @@ def cylinders(path):
                 radius = None
                 if profile.is_a("IfcCircleProfileDef"):
                     radius = float(profile.Radius) * scale
-                out[element.Tag] = (profile.is_a(), radius, start, end, length)
+                out[element.Tag] = (profile.is_a(), radius, start, end, length, element.Name or "")
     return out
 
 
@@ -72,9 +72,11 @@ def main():
     ap.add_argument("--list", action="store_true", help="print every pipe that differs")
     args = ap.parse_args()
     ours = cylinders(args.ours)
-    ref = cylinders(args.reference)
+    # Revit's IFC2X3 export writes ducts as IfcFlowSegment too; its pipes are
+    # named "Pipe Types:<type>:<ElementId>".
+    ref = {t: v for t, v in cylinders(args.reference).items() if v[5].startswith("Pipe Types:")}
     both = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
-    print(f"pipes with an extruded body: Revit {len(ref)}, rvt-rs {len(ours)}, both {len(both)}")
+    print(f"pipes in Revit's export with an extruded body: {len(ref)}; rvt-rs writes one for {len(both)} of them")
     profiles = {}
     for tag in both:
         profiles[ours[tag][0]] = profiles.get(ours[tag][0], 0) + 1
