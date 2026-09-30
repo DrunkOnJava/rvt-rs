@@ -16,6 +16,12 @@ All notable changes will be documented here. This project follows
   0.4.11. `rvt` 0.4.0 on crates.io declares 1.85. `docs/maintaining.md` says
   how the MSRV moves, and the MSRV job in CI now builds on 1.87 (its check name
   changes with it).
+- **The MSRV job is a required check.** A pull request that needs a newer Rust
+  than `rust-version` can no longer merge past it: Dependabot's earcut 0.4.11
+  update failed the job while GitHub still called the pull request mergeable.
+  The check is named `build + real files / ubuntu-latest / msrv`, without the
+  version, so the ruleset in `.github/rulesets/main-protection.json` does not
+  change when the MSRV does.
 
 ### Research
 
