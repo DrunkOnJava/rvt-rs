@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **jakobhirn-bit's class numbers are the tags rvt-rs reads, on eleven
+  releases (RE-133, #154).** His table gives ten classes (`ElementHeader`,
+  `Family`, `FamilyInstance`, `FamilySymbol`, `ContentMarker`,
+  `ElementParents`, `FamilyInstancePatternHelper`, `InstanceInfo`,
+  `RbsPipeCurve`, `RbsCurveConnectorManager`) for Revit 2024 and 2026
+  (Discussion #112): on the runners all 20 values equal the definition
+  ordinals `Formats/Latest` gives. The same ten are measured on the 11
+  Autodesk family files, 2016 to 2026, and each MIT reference model carries
+  its release's tags. `examples/probe_re133_class_ordinals.rs`; the Measure
+  workflow runs a probe on the family corpus too with `-f families=true`.
 - **STE1200's `element_header` vectors reproduce (RE-132, #152, #421).**
   Steffen's eight records of Einhoven (Revit 2023) and Core Interior (Revit
   2024), each with its offset, ElementId, class, category, flags and box

@@ -20,6 +20,9 @@
 #     BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
 #     PROBE_SCORER_DIR taking <probe output> <revit-export.ifc>.
+# When FAMILY_DIR names the Autodesk family corpus and PROBE is built, the
+# probe also runs on each of its .rfa files, into OUT_DIR/family-<file>/
+# probe.txt. A family has no Revit export, so nothing else is measured on it.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
@@ -86,3 +89,12 @@ while IFS='|' read -r name rvt ref; do
   [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
   echo "::endgroup::"
 done <<< "$MODELS_LIST"
+
+if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ] && [ -d "${FAMILY_DIR:-}" ]; then
+  for family in "$FAMILY_DIR"/*.rfa; do
+    [ -f "$family" ] || continue
+    dir="$OUT/family-$(basename "$family" .rfa)"; mkdir -p "$dir"
+    timeout 1200 "$BIN/examples/$PROBE" "$family" > "$dir/probe.txt" 2>&1
+    echo "exit $?" >> "$dir/probe.txt"
+  done
+fi

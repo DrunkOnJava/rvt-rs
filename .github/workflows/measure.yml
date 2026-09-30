@@ -3,13 +3,16 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f probe=probe_re70_wall_join_lists
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f probe=probe_re133_class_ordinals -f families=true
 #
 # Each side builds rvt-ifc and rvt-gltf at its ref and runs
 # tools/ci/measure-reference-models.sh (taken from the workflow's own ref,
 # so both sides are scored by the same scorers). The results are uploaded
 # as artifacts, and the compare job writes the differences between the two
 # sides to the run summary. Local-only models (Snowdon Towers and others
-# without a redistribution licence) are never fetched here.
+# without a redistribution licence) are never fetched here. The Autodesk
+# family corpus (phi-ag/rvt) is fetched only when `families` is set, for the
+# probe to run on its files; it is scored against nothing and never stored.
 
 name: Measure
 
@@ -37,6 +40,11 @@ on:
         description: tools/re scorer (no .py) to run on the probe's output and Revit's export, from the measured ref, empty for none
         required: false
         default: ""
+      families:
+        description: Also run the probe on every file of the phi-ag/rvt family corpus (Autodesk-owned, fetched for the run and never stored)
+        type: boolean
+        required: false
+        default: false
   # A change to the measurement itself measures its own PR against main.
   pull_request:
     paths:
@@ -91,12 +99,19 @@ jobs:
           PROBE: ${{ inputs.probe }}
       - name: Fetch the reference models
         run: tools/fetch-reference-models.sh models
+      - name: Fetch the family corpus
+        if: inputs.families
+        uses: ./.github/actions/fetch-corpus
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
       - name: Measure
         env:
           PROBE: ${{ inputs.probe }}
           PROBE_SCORER: ${{ inputs.probe_scorer }}
           PROBE_SCORER_DIR: measured/tools/re
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
+          FAMILY_DIR: ${{ inputs.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
         run: |
           tools/ci/measure-reference-models.sh measured/target/ci models results
           cp measured-commit.txt results/commit.txt
