@@ -1,8 +1,13 @@
 # Roadmap
 
+Last reviewed: 2026-09-30
+
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
-The support boundary lives in [`docs/status.md`](docs/status.md). The full task
-decomposition lives in [`TODO.md`](TODO.md) and the matching GitHub issues.
+The support boundary lives in [`docs/status.md`](docs/status.md) and the
+machine-readable [support matrix](docs/support-matrix.json); the statuses below
+are its ceilings and this page never claims more. The plan itself is the five
+GitHub milestones and the issues under them. [`TODO.md`](TODO.md) is the older
+task decomposition they grew out of.
 
 ## Product Goal
 
@@ -10,123 +15,94 @@ rvt-rs should become a first-class open-source utility for BIM and AEC users who
 need to inspect, validate, and exchange Revit files without installing Revit or
 uploading private models to a third-party service.
 
-The project is not there yet. It is currently a strong Revit inspection and
-reverse-engineering toolkit with a partial IFC/viewer path. **Generic
-real-project typed element extraction remains mostly unsolved**, with
-narrow exceptions: production `walker::iter_elements` prefers typed MVP
-decoders on `Global/Latest`, merges version-gated **ArcWall** partition
-recovers (Revit 2023 standard), and merges fail-closed partition MVP
-recovers for **Level** / **Material**, 2024
-**ArcWallRectOpening** index rows (ElemTable-confirmed related ids;
-never inventing typed `Door`/`Window` success), and 2024 partition
-element-record **Wall** / **Door** / **Window** / **Column** /
-**Floor** / **BuildingPad** instances (#204 / #211 / #212), plus, on 2024
-and 2025, furniture, casework, plumbing fixtures, specialty equipment,
-ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts and
-pipes (RE-33), structural framing, structural columns, structural
-foundations and generic models (RE-36), and lighting fixtures, air
-terminals, food-service equipment, planting, parking, entourage, hardscape,
-elevators and ramps (RE-37). IFC export
-wires partition **Level** → storeys, **Floor** / **BuildingPad** →
-`IFCSLAB` (or `IFCSHADINGDEVICE` under a per-element Revit export
-override), **Room** → `IFCSPACE`, and **Material** → `IfcMaterial`: on 2024 and
-2025 the file's own material records, named by ElementId with their
-colours (RE-58, #34), and display-name strings before that.
-**RE-19 (2026-08-29) negative on magnetar corpora:** no reliable Door vs
-Window discriminator in the 2024 opening index / nearby partition strings /
-ElemTable payloads, and no schema-field `Wall` / fail-closed 2024 ArcWall
-envelope — see
-[`reports/element-framing/RE-19-door-window-wall-negative.md`](reports/element-framing/RE-19-door-window-wall-negative.md).
-Host IFC voids/fills, Floor↔ElemTable id binding, and slab extrusion
-thickness remain open. Eighty-one per-class decoder structs exist in
-`elements::all_decoders()`; MVP classes are consulted by `iter_elements`,
-while the broader registry remains a library building block (see
-[`docs/status.md`](docs/status.md) and
-[`docs/compatibility.md`](docs/compatibility.md)).
+It is not a production Revit-to-IFC converter yet, and the matrix says so
+(`converter-grade-rvt-ifc` is unsupported). It opens every Revit file from 2016
+to 2026 and reads its metadata, previews and embedded schema. On Revit 2024 and
+2025 project files it reads the building: each element's ElementId, category,
+name, type, storey, materials, layers and GlobalId, and a body that is exact
+where the element's data is decoded and its bounding box where it is not. It
+writes that as IFC4, glTF, plan SVG and CSV from the CLIs, Python and the
+zero-upload browser viewer. Revit 2023 projects get a narrower version of the
+same, and Revit 2026 is experimental. Every recovery claim is measured against
+Revit's own IFC export of the same model. What is not decoded (most parameters,
+family geometry, hip and gable roofs, opening profiles, phase filtering, other
+releases' element records) is listed in [`docs/status.md`](docs/status.md), and
+the four levels a file can reach are in the
+[supported profile](docs/supported-profile.md).
 
 ## Current Position
 
-| Area | Current state | Next decision point |
-|---|---|---|
-| Container, compression, metadata | Shipped | Maintain compatibility and bounds checks. |
-| `Formats/Latest` schema | Shipped | The whole schema is read since #410; classify the 9 to 12 residual field encodings per release with byte evidence, and take class tags from the definition ordinal (#154). |
-| ADocument/document-level walker | Partial | Expand confidence across project releases and older files. |
-| Typed project elements | **Partial** | MVP typed path + ArcWall + partition Level/Material + 2024 opening index (ElemTable-confirmed ids) in `iter_elements` (fail closed). Every `DecodedElement` carries M3-07 provenance/confidence (CLI/Python/viewer + default IFC hide below 0.55). RE-19: no Door/Window discriminator / no schema-field Wall. RE-20: no Level ElementId map in the opening-index bytes; its note that `Level` is absent from Formats was an artifact of the 64 KB schema scan (#410: `Level` is class 2422 of Revit 2024's schema). Storeys come from element records instead (RE-24, RE-27, RE-51). |
-| IFC writer | Partial | Levels/Floors/Rooms/Materials from partition MVP emit honestly; ArcWall geometry on 2023; Door/Window host IFC + slab extrusion still open (blocked on RE-19); Floor/Room storey bind idle (RE-20). |
-| Browser viewer | Partial | File Status lists recovered storey names + material display-name samples + honest Parameters row (empty until AProperty host joins — RE-20: no AProperty carriers on magnetar Global/Latest); scene tree groups under `IFCBUILDINGSTOREY` (ArcWalls by elevation; Floors/Rooms stay Unassigned — RE-20 negative on Level ElementIds). |
-| Python/CLI surface | Partial | Stabilize JSON schemas and one-shot inspect workflow. |
-| Write path | Partial | Keep stream-level writes honest; defer semantic writes until openability can be proven. |
+| Area | Status | Current state | Next decision point |
+|---|---|---|---|
+| Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2026. | Maintain compatibility and bounds checks against hostile input. |
+| `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
+| ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
+| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial, 2026 is experimental (one local model). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | Element records of other releases (#421), parameters (0.5.0), held-out models (#408). |
+| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.4.0 milestone (below). |
+| Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.5.0). |
+| Python and CLI | Partial | The `rvt` wheel on PyPI and prebuilt CLI archives on GitHub Releases, sharing the core's honesty bounds. | Stabilize JSON schemas and the one-shot inspect workflow. |
+| Write path | Partial | Stream-level patching only. Field-level semantic writes are unsupported and gated by [ADR-002](docs/decisions/ADR-002-semantic-write-api-gate.md). | Stay gated until openability can be proven. |
 
 ## Milestones
 
-### 0.2.0: Audit-Clean Alpha (inspection-focused)
+### Released
 
-Purpose: make the repository easy to trust and easy to contribute to before
-deep decoder work accelerates. Positioning detail:
-[`docs/release-0.2.0-plan.md`](docs/release-0.2.0-plan.md) — **inspection
-alpha with experimental export**, not converter-grade.
+- **0.2.0, 2026-09-23: audit-clean alpha.** Repository hygiene, honest public
+  status, issue workflow and enforceable quality gates; prebuilt CLIs and the
+  Python package. An inspection-focused alpha with experimental export.
+- **0.3.0, 2026-09-27: trustworthy Revit 2024/2025 export.** IFC and glTF that
+  read like Revit's own export: walls, floors, roofs and ceilings as their
+  layers and materials, elements named and placed on Revit's storeys, stable
+  generated GlobalIds (#400), declared units (#403), the whole schema (#410),
+  and diagnostics that count the stand-in boxes (#409).
+- **0.4.0, 2026-09-28.** Revit 2023 projects export typed elements as 2024
+  and 2025 do; rooms take their real outline, number and name; doors and windows
+  cut the opening their type specifies; turned family instances are drawn
+  turned; steel members carry their I section; every typed element is related
+  to an IFC type object of its Revit type.
 
-- One-command local quality gate.
-- Explicit cargo-audit/cargo-deny expectations.
-- README, roadmap, compatibility, and status docs aligned.
-- GitHub issue forms for decoder work and corpus submissions.
-- Contribution map for non-maintainers.
-- Release artifact verification documented (honest crates.io / docs.rs /
-  PyPI status).
+### 0.4.0: IFC geometry beta (milestone still open)
 
-### 0.3.0: Real-Project Wall/Floor MVP
+The v0.4.0 tag did not close this milestone: its remaining geometry work is
+the geometry track. Each slice records a baseline, an improvement and a
+residual against Revit's own exports on the reference pack (#407), and
+approximations stay labelled (#409). Open now: wall bodies thicker or thinner
+than their type's layers (#358), stair flights (#357) and aggregates (#323),
+sloped roofs (#356, needs a pitched-roof oracle), element materials (#355),
+the opening cut from the wall location curve (#227), room boundaries whose
+solid does not close (#90), beams (#94), MEP equipment and routes (#96), the
+sketch-to-solid pipeline (#156), and the Snowdon slabs that are not in Revit's
+export: six in the Legends phase (#328) and one more (#309).
 
-Purpose: prove that rvt-rs can recover meaningful typed building elements from
-real project files, not only synthesized fixtures.
+### 0.5.0: element data (parameters) and viewer journey
 
-- Redistributable project corpus with license metadata.
-- Known-count fixtures for levels, walls, floors, doors, and windows.
-- Generic partition record scanner.
-- `ElemTable` id to partition-record offset linkage.
-- Typed MVP decoders + ArcWall + partition Level/Material / 2024 opening-index (ElemTable-confirmed) / 2024 element-record Wall/Door/Window/Column/Floor/BuildingPad merge wired into `iter_elements` without false positives; IFC Level/Floor/Room/Material emission (slab plan profiles recovered from OST_SketchLines records, #31/RE-25; wall bodies join-trimmed and column sections joined to their family type, #215/RE-26, with the joins themselves read from the `+0x88` reference list and column bodies cut by the walls they name, #238/#239/RE-29; schema-field Wall and typed Door/Window host binding still open).
-- Decode confidence and provenance attached to every element.
+Make rvt-rs a data source, not only a viewer: instance and type parameters with
+units and precedence (#35, #155), the element-record fields that carry them
+(#223, #228), shown consistently in Rust, Python, CLI schedules, IFC property
+sets and the viewer, with the viewer journey (open, inspect, schedule, export,
+diagnostics) verified end to end on the reference pack.
 
-### 0.4.0: IFC Geometry Beta
+### 1.0.0: first-class utility
 
-Purpose: export useful IFC only when decoded evidence is strong enough.
-
-- Explicit export modes: strict, proxy, and diagnostic.
-- No misleading generic proxies in default export.
-- IFC diagnostics sidecar describing decoded/skipped elements.
-- IfcOpenShell validation for generated outputs.
-- Comparison tooling against Revit-exported IFC when fixtures allow it.
-
-### 0.5.0: Viewer Beta
-
-Purpose: make unsupported states clear to non-technical users.
-
-- Decode/export confidence surfaced in the viewer.
-- Supported-file guidance before export.
-- Demo gallery using redistributable files.
-- Browser regression tests across desktop and mobile viewports.
-- Accessibility and responsive layout pass.
-- Desktop distribution investigation.
-
-### 1.0.0: First-Class Utility
-
-Purpose: ship a complete, honest workflow that gives meaningful value to users
-without requiring them to be Rust, Revit API, or reverse-engineering experts.
-
-- Supported input profile documented in user language.
-- End-to-end open -> inspect -> diagnose -> export workflow.
-- Actionable failure modes for unsupported files.
-- Non-technical documentation and screenshots.
-- Release artifacts verified and reproducible.
+A dependable open-source Revit data reader: a new user installs it, opens a
+supported model, gets correct elements, geometry and properties with every
+approximation visible, and can reproduce the measurements. Held-out licensed
+models are measured before fixes (#408), a reference pack and a
+privacy-preserving contribution path exist (#407), and the Rust and Python APIs
+are documented with runnable examples. Breadth (more releases, more categories)
+never lowers measured correctness.
 
 ## Contribution Priorities
 
 Start with [`docs/contribution-map.md`](docs/contribution-map.md). The highest
 leverage work is:
 
-1. Redistributable corpus files with known counts.
+1. Openly licensed models with a Revit export of the same file, and a
+   held-out check on them (#407, #408).
 2. Partition-stream probes that turn byte observations into falsifiable decoder
-   hypotheses.
-3. Tests that prevent `iter_elements` from claiming false positives.
+   hypotheses: one example that states the fact it proves and how to verify it
+   against the corpus, and a report with measured counts.
+3. Fixture assertions that prevent decoders from claiming false positives.
 4. Documentation that keeps user-facing support boundaries honest.
 5. Viewer diagnostics that explain what the tool could and could not decode.
 
@@ -139,5 +115,6 @@ rvt-rs will not:
 - Claim production RVT-to-IFC conversion before real project typed elements and
   geometry are corpus-proven.
 - Provide a Revit API-compatible surface.
+- Edit Revit model data at the field level before the ADR-002 gate opens.
 - Resolve cloud-worksharing, licensing, or external linked-model semantics in
   the near-term product.

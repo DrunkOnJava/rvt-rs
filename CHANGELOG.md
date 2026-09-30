@@ -174,6 +174,13 @@ All notable changes will be documented here. This project follows
   another marker is not scanned, rather than scanned with the wrong one.
   Which releases are read is unchanged, and every 2024 and 2025 export
   is byte-identical.
+- **`ROADMAP.md` and the contribution map match the milestones, the
+  support matrix and the tracker.** The roadmap's position table and
+  milestones were the RE-19 era's: they now carry the matrix's status for
+  each area, the three releases so far (0.2.0, 0.3.0, 0.4.0) and what the
+  open milestones are for. The contribution map's open remainders, dated
+  2026-09-19, are the tracker's 24 open issues by milestone, with their own
+  titles. Documentation only.
 
 ## [0.4.0] — 2026-09-28
 
