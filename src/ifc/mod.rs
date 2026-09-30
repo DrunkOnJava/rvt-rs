@@ -115,6 +115,7 @@ pub mod gltf;
 pub mod measure;
 pub mod pbr;
 pub mod pset_validate;
+pub mod saved_meshes;
 pub mod scene_graph;
 pub mod schedule_csv;
 pub mod share;
@@ -3245,6 +3246,12 @@ pub fn build_export_diagnostics_with_limits(
         confidence,
         formats_latest_integrity,
     }
+}
+
+/// Recount [`ExportDiagnostics::exported`] after changing `model`, as
+/// [`saved_meshes::attach`] does.
+pub fn recount_exported(diagnostics: &mut ExportDiagnostics, model: &IfcModel) {
+    diagnostics.exported = exported_model_diagnostics(model);
 }
 
 fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {

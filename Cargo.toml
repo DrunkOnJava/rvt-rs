@@ -77,6 +77,11 @@ encoding_rs = "0.8"
 # crate to the build graph: `memchr` is already a normal (non-dev)
 # transitive dependency through both quick-xml and serde_json.
 memchr = "2"
+# Triangulates the planar faces of saved family graphics (#255, rosejn).
+# MIT OR Apache-2.0. Held below 0.4.10, whose `is_multiple_of` needs Rust
+# 1.87: earcut declares no rust-version, so the MSRV-aware resolver cannot
+# pick an older release for a 1.85 build. Lift the bound with the MSRV.
+earcut = ">=0.4.5, <0.4.10"
 # PartAtom XML parser.
 quick-xml = { version = "0.41", features = ["serialize"] }
 # Serialisation for JSON output + test fixtures.

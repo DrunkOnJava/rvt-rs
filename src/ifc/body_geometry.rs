@@ -900,6 +900,10 @@ pub fn solid_mesh(shape: &SolidShape) -> Option<Mesh> {
         SolidShape::FacetedBrep {
             vertices_feet,
             triangles,
+        }
+        | SolidShape::TriangulatedFaceSet {
+            vertices_feet,
+            triangles,
         } => {
             if !vertices_feet.iter().flatten().all(|v| v.is_finite()) {
                 return None;

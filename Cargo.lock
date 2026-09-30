@@ -366,6 +366,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "earcut"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fdec2c01e52bd27b6889d73cbf783977c5c80631b4a9a1fccc977da3c1f3a31"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -935,6 +944,7 @@ dependencies = [
  "clap",
  "criterion",
  "dhat",
+ "earcut",
  "encoding_rs",
  "flate2",
  "hex",
