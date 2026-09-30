@@ -34,8 +34,8 @@ milestone is for.
 | [#309](https://github.com/DrunkOnJava/rvt-rs/issues/309) | Snowdon: one record-backed slab (ElementId 2062318) is not in Revit's export |
 | [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227) | Opening geometry: cut the IfcOpeningElement from the wall location curve instead of the door/window bbox; recover the 63 slab/shading-device penetrations |
 | [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | RE: Reproduce sketch-to-solid geometry reconstruction pipeline |
-| [#96](https://github.com/DrunkOnJava/rvt-rs/issues/96) | CLASS-16: MEP equipment decoders (Electrical/Mechanical/Plumbing fixtures) |
-| [#94](https://github.com/DrunkOnJava/rvt-rs/issues/94) | CLASS-14: Beam / StructuralFraming decoder + IfcBeam / IfcMember emission |
+| [#96](https://github.com/DrunkOnJava/rvt-rs/issues/96) | CLASS-16: MEP: the duct family, sloped runs, fittings and route geometry left after pipes and ducts |
+| [#94](https://github.com/DrunkOnJava/rvt-rs/issues/94) | CLASS-14: structural framing sections still not drawn: 6 channels, 25 angles, one HSS column, 17 I beams |
 | [#90](https://github.com/DrunkOnJava/rvt-rs/issues/90) | Room outlines: 7 Snowdon Towers rooms still drawn as their box (room solid edge topology) |
 
 ### 0.5.0: element data (parameters) and viewer journey
