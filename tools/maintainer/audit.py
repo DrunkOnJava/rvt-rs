@@ -34,7 +34,7 @@ def gh(*args):
 
 
 def pages(path):
-    """A paginated list endpoint as one list."""
+    """A paginated list endpoint as one list (the caches endpoint wraps its list in an object)."""
     p = subprocess.run(["gh", "api", "--paginate", path], capture_output=True, text=True)
     if p.returncode != 0:
         raise RuntimeError(p.stderr.strip().splitlines()[0][:160] if p.stderr.strip() else "gh failed")
@@ -45,7 +45,7 @@ def pages(path):
         if i >= len(text):
             break
         obj, i = decoder.raw_decode(text, i)
-        out.extend(obj if isinstance(obj, list) else [obj])
+        out.extend(obj if isinstance(obj, list) else obj["actions_caches"] if "actions_caches" in obj else [obj])
     return out
 
 
@@ -110,8 +110,10 @@ def branches(repo):
 
 @check("the Actions cache is under 90% of its 10 GB limit")
 def caches(repo):
-    used = gh(f"repos/{repo}/actions/cache/usage")["active_caches_size_in_bytes"]
-    return [f"{used / 1024**3:.1f} GB used; delete the caches of closed pull requests"] if used > 0.9 * CACHE_LIMIT_BYTES else []
+    # The usage endpoint lags: it still said 9.1 GB minutes after 4.9 GB had been
+    # deleted (2026-09-30), so add up the list itself.
+    used = sum(c["size_in_bytes"] for c in pages(f"repos/{repo}/actions/caches?per_page=100"))
+    return [f"{used / 1024**3:.1f} GB used; run tools/maintainer/clean_caches.py (--delete to act)"] if used > 0.9 * CACHE_LIMIT_BYTES else []
 
 
 RUN_QUERIES = (

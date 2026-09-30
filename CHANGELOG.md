@@ -240,6 +240,14 @@ All notable changes will be documented here. This project follows
   minutes apart on 2026-09-30, the freshest six days old), which made the check
   report a Fuzz failure that a green scheduled run had long superseded. The
   PyPI environments now accept only release refs.
+- **`tools/maintainer/clean_caches.py` deletes the Actions caches nobody can
+  use again.** The caches of pull requests that are no longer open, of deleted
+  branches, and the superseded generations of `main`'s rust-cache families (a
+  new lockfile saves a cache under a new key and the old ones are never read
+  again; the newest two are kept). It is a dry run unless given `--delete`. On
+  2026-09-30 the cache stood at 9.1 GB of a 10 GB limit, and 4.9 GB of it was
+  that: 0.45 GB from closed pull requests, 4.49 GB from `main`'s old
+  generations.
 
 ## [0.4.0] — 2026-09-28
 
