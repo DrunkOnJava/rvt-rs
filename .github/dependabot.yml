@@ -23,7 +23,11 @@ updates:
       prefix: deps
       include: scope
   - package-ecosystem: github-actions
-    directory: /
+    # The workflows, and the composite actions under .github/actions, which pin
+    # actions of their own.
+    directories:
+      - /
+      - /.github/actions/*
     schedule:
       interval: weekly
     groups:
@@ -50,6 +54,17 @@ updates:
       - dependencies
       - viewer
       - javascript
+    commit-message:
+      prefix: deps
+      include: scope
+  - package-ecosystem: docker
+    # The release container image's base, pinned by digest in docker/Dockerfile.
+    directory: /docker
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - docker
     commit-message:
       prefix: deps
       include: scope
