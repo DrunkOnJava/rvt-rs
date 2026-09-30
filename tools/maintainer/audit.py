@@ -114,14 +114,33 @@ def caches(repo):
     return [f"{used / 1024**3:.1f} GB used; delete the caches of closed pull requests"] if used > 0.9 * CACHE_LIMIT_BYTES else []
 
 
-@check("the latest run of every workflow on main is not a failure")
+RUN_QUERIES = (
+    "branch=main&exclude_pull_requests=true&per_page=20",
+    "branch=main&exclude_pull_requests=true&status=completed&per_page=20",
+)
+
+
+@check("the latest push or scheduled run of every workflow on main is not a failure")
 def main_green(repo):
-    latest = {}
-    for run in gh(f"repos/{repo}/actions/runs?branch=main&per_page=100")["workflow_runs"]:
-        if run["event"] == "dynamic":
+    # GitHub answers some runs queries from a stale index: on 2026-09-30 the same
+    # URL returned runs no newer than 09-07, 09-20 and 09-24 on three calls, and
+    # a stale answer only ever hides newer runs. So each workflow is asked twice,
+    # with differently shaped queries, and its newest run across both counts.
+    # Only push and scheduled runs say anything about main: a manual run (a
+    # Measure experiment) or a dynamic one (CodeQL, Dependabot) does not.
+    problems = []
+    for workflow in gh(f"repos/{repo}/actions/workflows?per_page=100")["workflows"]:
+        if workflow["state"] != "active":
             continue
-        latest.setdefault(run["name"], run)
-    return [f"{name}: {run['conclusion']} ({run['html_url']})" for name, run in latest.items() if run["conclusion"] == "failure"]
+        runs = {}
+        for query in RUN_QUERIES:
+            for run in gh(f"repos/{repo}/actions/workflows/{workflow['id']}/runs?{query}")["workflow_runs"]:
+                runs[run["id"]] = run
+        newest = sorted(runs.values(), key=lambda r: r["created_at"], reverse=True)
+        latest = next((r for r in newest if r["event"] in ("push", "schedule") and r["status"] == "completed"), None)
+        if latest and latest["conclusion"] == "failure":
+            problems.append(f"{workflow['name']}: failure ({latest['html_url']})")
+    return problems
 
 
 @check("no open Dependabot, code scanning or secret scanning alerts")
