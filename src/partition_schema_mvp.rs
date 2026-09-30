@@ -311,6 +311,8 @@ pub fn recover_partition_schema_mvp(
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
+    // --- Pipes as cylinders along their ends (RE-131) ---
+    attach_pipe_axes(rf, revit_version, &mut out.products);
     // --- Roof outlines from their sketch lines (RE-50) ---
     attach_roof_profiles(rf, revit_version, &mut out.products);
     // --- Shaft openings cut the outlines within their height (RE-99) ---
@@ -3452,6 +3454,92 @@ fn attach_beam_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [Deco
     }
 }
 
+/// Fields holding the first end of a pipe's centreline, model feet (RE-131).
+pub const PIPE_AXIS_START_FIELDS: [&str; 3] = [
+    "m_pipe_axis_start_x",
+    "m_pipe_axis_start_y",
+    "m_pipe_axis_start_z",
+];
+/// Fields holding the second end of a pipe's centreline, model feet (RE-131).
+pub const PIPE_AXIS_END_FIELDS: [&str; 3] = [
+    "m_pipe_axis_end_x",
+    "m_pipe_axis_end_y",
+    "m_pipe_axis_end_z",
+];
+/// Field holding a pipe's outside radius, feet (RE-131).
+pub const PIPE_RADIUS_FIELD: &str = "m_pipe_radius";
+
+/// The cylinder the partition MVP gave a pipe, when its connector entries
+/// and record box made one (RE-131).
+pub fn pipe_body_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<crate::partition_pipe_axes::PipeBody> {
+    let field = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let point = |names: [&str; 3]| Some([field(names[0])?, field(names[1])?, field(names[2])?]);
+    Some(crate::partition_pipe_axes::PipeBody {
+        start: point(PIPE_AXIS_START_FIELDS)?,
+        end: point(PIPE_AXIS_END_FIELDS)?,
+        radius_feet: field(PIPE_RADIUS_FIELD)?,
+    })
+}
+
+/// Give each pipe the cylinder its connector entries and its record box make
+/// ([`crate::partition_pipe_axes`], RE-131). A pipe whose ends are not found,
+/// or whose two ends and box no cylinder reproduces, is not given one and
+/// keeps its box.
+fn attach_pipe_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_pipe_axes as ppa;
+    if !ppa::supports_revit_version(revit_version) {
+        return;
+    }
+    let mut by_stream: BTreeMap<String, Vec<(u32, [f64; 6])>> = BTreeMap::new();
+    for element in products.iter().filter(|element| element.class == "Pipe") {
+        if let (Some(id), Some(bbox), Some(stream)) = (
+            element.id,
+            element_record_bbox(element),
+            element_source_stream(element),
+        ) {
+            by_stream.entry(stream).or_default().push((id, bbox));
+        }
+    }
+    if by_stream.is_empty() {
+        return;
+    }
+    let Ok(bodies) = ppa::scan_pipe_bodies(rf, revit_version, &by_stream) else {
+        return;
+    };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "Pipe")
+    {
+        let Some(body) = element.id.and_then(|id| bodies.get(&id)) else {
+            continue;
+        };
+        for (names, point) in [
+            (PIPE_AXIS_START_FIELDS, body.start),
+            (PIPE_AXIS_END_FIELDS, body.end),
+        ] {
+            for (name, value) in names.iter().zip(point) {
+                element
+                    .fields
+                    .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
+        }
+        element.fields.push((
+            PIPE_RADIUS_FIELD.into(),
+            InstanceField::Float {
+                value: body.radius_feet,
+                size: 8,
+            },
+        ));
+    }
+}
+
 /// Make every wall a curtain-wall mullion names a curtain wall, and give
 /// each panel and mullion that names exactly one of them that wall as its
 /// aggregate whole (RE-46).
@@ -3780,7 +3868,7 @@ fn attach_room_outlines(rf: &mut RevitFile, revit_version: u32, rooms: &mut [Dec
         return;
     }
     for room in rooms.iter_mut() {
-        let (Some(id), Some(stream)) = (room.id, room_source_stream(room)) else {
+        let (Some(id), Some(stream)) = (room.id, element_source_stream(room)) else {
             continue;
         };
         let float = |wanted: &str| {
@@ -3819,8 +3907,8 @@ fn attach_room_outlines(rf: &mut RevitFile, revit_version: u32, rooms: &mut [Dec
     }
 }
 
-fn room_source_stream(room: &DecodedElement) -> Option<String> {
-    room.fields.iter().find_map(|(name, value)| match value {
+fn element_source_stream(element: &DecodedElement) -> Option<String> {
+    element.fields.iter().find_map(|(name, value)| match value {
         InstanceField::String(stream) if name == "m_source_stream" => Some(stream.clone()),
         _ => None,
     })

@@ -950,6 +950,55 @@ fn beam_swept_solid(
     }
 }
 
+/// `BodySource` of a pipe drawn as the cylinder its connector entries and
+/// record box make (RE-131).
+pub const PIPE_AXIS_BODY_SOURCE: &str = "partition_pipe_axis";
+
+/// A pipe's body (RE-131): its circle extruded from one end to the other.
+/// `location` is the element's placement, which the extrusion's own placement
+/// is relative to.
+fn pipe_cylinder_solid(
+    pipe: &crate::partition_pipe_axes::PipeBody,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    let length = pipe.length_feet();
+    let axis = [
+        (pipe.end[0] - pipe.start[0]) / length,
+        (pipe.end[1] - pipe.start[1]) / length,
+        (pipe.end[2] - pipe.start[2]) / length,
+    ];
+    // The circle has no orientation, so the profile's X axis is any direction
+    // square to the axis: the axis crossed with the model axis it is least
+    // along.
+    let least = (0..3)
+        .min_by(|&a, &b| axis[a].abs().total_cmp(&axis[b].abs()))
+        .unwrap_or(0);
+    let mut across = [0.0; 3];
+    across[least] = 1.0;
+    let mut x = [
+        axis[1] * across[2] - axis[2] * across[1],
+        axis[2] * across[0] - axis[0] * across[2],
+        axis[0] * across[1] - axis[1] * across[0],
+    ];
+    let norm = (x[0] * x[0] + x[1] * x[1] + x[2] * x[2]).sqrt().max(1e-12);
+    for value in &mut x {
+        *value /= norm;
+    }
+    entities::SolidShape::PlacedExtrusion {
+        profile: entities::ProfileDef::Circle {
+            radius_feet: pipe.radius_feet,
+        },
+        origin_feet: [
+            pipe.start[0] - location[0],
+            pipe.start[1] - location[1],
+            pipe.start[2] - location[2],
+        ],
+        axis,
+        ref_direction: x,
+        depth_feet: length,
+    }
+}
+
 /// `BodySource` of a structural column drawn as its type's I section
 /// (RE-104).
 pub const COLUMN_I_SECTION_BODY_SOURCE: &str = "family_type_i_section";
@@ -1654,6 +1703,13 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // RE-131: a pipe is the cylinder its connector entries and its record
+    // box make, drawn as one; a pipe they do not make one for keeps its box.
+    let pipe = if class == "Pipe" {
+        crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields)
+    } else {
+        None
+    };
     // RE-103: a beam whose type is an I section, drawn as it where its body
     // along its line holds the section.
     let i_beam = beam.and_then(|beam| {
@@ -1851,6 +1907,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| column_body_source.clone())
                     .or_else(|| beam_body_source.clone())
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
+                    .or_else(|| pipe.map(|_| PIPE_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
                     .or_else(|| i_column.map(|_| COLUMN_I_SECTION_BODY_SOURCE.into()))
@@ -1865,6 +1922,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 profile.is_some()
                     || type_section.is_some()
                     || beam.is_some()
+                    || pipe.is_some()
                     || stair_run.is_some()
                     || wall_centreline.is_some()
                     || wall_arc.is_some()
@@ -2239,6 +2297,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     None,
                 ),
                 Some(beam) => (None, record_body, Some(beam_swept_solid(&beam, [x, y, z]))),
+                None if pipe.is_some() => (
+                    None,
+                    record_body,
+                    pipe.map(|body| pipe_cylinder_solid(&body, [x, y, z])),
+                ),
                 None if oriented.is_some() => (
                     None,
                     record_body,
