@@ -77,7 +77,9 @@ levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md).
 
 It is not a converter for arbitrary models: element records of other releases,
-most parameters, family geometry, hip and gable roofs, the boundaries of
+most parameters, family geometry (except the experimental `--saved-meshes`
+option, which draws a Revit 2024 family instance from the mesh Revit saved for
+its display, RE-78), hip and gable roofs, the boundaries of
 rooms whose stored solid does not close, opening profiles and phase
 filtering are not decoded, and rvt-rs does not edit
 Revit model data.
