@@ -152,13 +152,18 @@ line names what to fix (its rulesets check needs an admin token). The list:
 2. No stale branches remain on the remote (`delete_branch_on_merge` is on; a
    branch of a closed pull request is deleted with a note where its commits
    stay reachable from the pull request's head).
-3. The Actions cache is under its 10 GB limit. Caches of closed pull requests
-   are deleted (`gh cache list`, `gh cache delete <id>`); `main`'s caches are
-   kept.
+3. The Actions cache is under its 10 GB limit. `python3
+   tools/maintainer/clean_caches.py` (a dry run; `--delete` acts) removes the
+   caches of closed pull requests and deleted branches and `main`'s superseded
+   rust-cache generations: a new lockfile saves a new cache under a new key and
+   the old ones are never read again. `main`'s newest two generations of each
+   family, live branches' and open pull requests' caches are kept.
 4. Workflow runs on `main` are green. A red check is a defect to fix, or an
    issue to file with its cause, and a check that fails only because a service
    is down reports "not measured" rather than failing.
 5. Open Dependabot and code scanning alerts are triaged, each fixed or
-   dismissed with a reason.
+   dismissed with a reason, and Dependabot watches every lockfile, Dockerfile
+   and composite action in `.github/dependabot.yml` (the audit lists what is
+   missing).
 6. Discussions and community pull requests have an answer.
 7. The rulesets and settings still match their files.
