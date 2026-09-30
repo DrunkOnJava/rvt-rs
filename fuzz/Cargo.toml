@@ -3,6 +3,10 @@ name = "rvt-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
+# The crate's own rust-version (Cargo.toml). The fuzz workspace has its own
+# lockfile; without this its resolution, and Dependabot's, ignores the MSRV and
+# fuzzes versions the crate cannot ship (encoding_rs 0.8.42 needs Rust 1.88).
+rust-version = "1.87"
 
 [package.metadata]
 cargo-fuzz = true

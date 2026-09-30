@@ -653,7 +653,23 @@ jobs:
       # Linux builds inside the manylinux2014 container, as the release
       # does (publish.yml), so a change that breaks the glibc 2.17 build
       # fails here rather than at tag time.
+      #
+      # maturin-action installs maturin inside that container from a download
+      # off GitHub releases, which answered once with a page that was not a
+      # gzip (2026-09-30: "gzip: stdin: not in gzip format") and failed the
+      # job on a change that touched no code. So a failed build is retried
+      # once, below, with the identical inputs; a build that really fails
+      # fails both times and fails the job.
       - name: Build wheel via maturin
+        id: maturin
+        continue-on-error: true
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: build
+          manylinux: "2014"
+          args: --release --out dist
+      - name: Build wheel via maturin (retry)
+        if: steps.maturin.outcome == 'failure'
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: build
@@ -701,7 +717,7 @@ jobs:
       # `curl --silent -L` and failed the check when GitHub returned an
       # error page ("gzip: invalid magic").
       - name: Install cargo-deny
-        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-deny@0.20.2
       - run: cargo deny check
@@ -719,7 +735,7 @@ jobs:
         with:
           toolchain: stable
       - name: Install cargo-audit
-        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-audit@0.22.2
       - name: Audit Rust dependencies
