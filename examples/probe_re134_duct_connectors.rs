@@ -134,6 +134,20 @@ fn main() -> rvt::Result<()> {
         );
     }
     let classes = rf.schema_classes()?;
+    for name in ["RbsCurve", "RbsDuctCurve", "RbsPipeCurve"] {
+        for class in classes.classes.iter().filter(|class| class.name == name) {
+            let base = class
+                .base
+                .and_then(|tag| classes.by_tag(tag))
+                .map(|base| base.name.as_str());
+            println!(
+                "{{\"curve_class\":{},\"tag\":{},\"base\":{}}}",
+                quote(name),
+                class.tag,
+                text(base)
+            );
+        }
+    }
 
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let records = per::scan_category_records_multi(
