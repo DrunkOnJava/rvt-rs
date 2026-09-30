@@ -186,7 +186,7 @@ fn flush_origin(d: &[u8], marker_start: usize, stride: usize) -> Option<(usize, 
         return None;
     }
     let marker_offset = marker_start - origin;
-    if marker_offset >= stride || marker_offset % 4 != 0 {
+    if marker_offset >= stride || !marker_offset.is_multiple_of(4) {
         return None;
     }
     Some((origin, marker_offset))

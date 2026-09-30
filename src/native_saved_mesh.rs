@@ -650,7 +650,10 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
         }
         let mut ts = Vec::<u32>::new();
         earcut::Earcut::new().earcut(pts.iter().copied(), &holes, &mut ts);
-        ensure!(!ts.is_empty() && ts.len() % 3 == 0, "triangulation failed");
+        ensure!(
+            !ts.is_empty() && ts.len().is_multiple_of(3),
+            "triangulation failed"
+        );
         let mut earcut_triangles = ts
             .chunks_exact(3)
             .map(|t| [t[0], t[1], t[2]])
