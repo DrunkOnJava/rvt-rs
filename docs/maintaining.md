@@ -91,6 +91,15 @@ Cargo's MSRV-aware resolver cannot warn about it: the MSRV job is the only check
 Raising the MSRV also brings the lints that need it (at 1.87, clippy's
 `manual_is_multiple_of`), which the same pull request fixes.
 
+A dependency of a parser (quick-xml, flate2, encoding_rs, cfb) is measured, not
+only built. Run Measure with `-f families=true` (see
+[`CONTRIBUTING.md`](../CONTRIBUTING.md)): it diffs `rvt-info`'s output on the six
+reference models and the eleven Autodesk families, which is the only place the
+PartAtom reader is measured, since the IFC export never reaches it. For the
+PartAtom reader, dispatch `fuzz.yml` on the branch as well
+(`-f target=fuzz_part_atom -f duration_seconds=300`), and cite both runs in the
+pull request.
+
 ## Releases
 
 Tags `v*` are protected by the `release-tags` ruleset: only a maintainer can
