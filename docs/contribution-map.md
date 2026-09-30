@@ -13,30 +13,62 @@ AEC users without overstating current capability.
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
-## Open Remainders (as of 2026-09-19)
+## Open Remainders (as of 2026-09-30)
 
-Twelve roadmap and follow-up issues closed on 2026-09-19 against measured
-evidence: wall geometry (#30), floor and slab geometry (#31), doors and
-windows with host relationships (#32), the end-to-end MVP workflow (#66),
-wall instance recovery (#81), the IFCSLAB recall lift (#83), the real slab
-boundary profiles that replaced the rectangle (#87), the two viewer and
-reader reporting gaps (#187, #188), the `IFCSHADINGDEVICE`
-`.NOTDEFINED.` witness mismatch (#235), the `18" Basement` wall-type slot
-(#240, an index artifact rather than a second id space — RE-28), and the
-80 cut column bodies (#239, RE-29). What is left is narrower and each
-remainder is named, so pick one rather than re-opening a solved carrier:
+The issue tracker is the source of truth; this is its state today, by
+milestone, with each issue's own title. Pick one rather than re-opening a
+solved carrier: the reports under `reports/element-framing/` say what each
+negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
+milestone is for.
 
-| Issue | Named remainder |
+### 0.4.0: IFC geometry beta
+
+| Issue | Remainder |
 |---|---|
-| [#33](https://github.com/DrunkOnJava/rvt-rs/issues/33) / [#219](https://github.com/DrunkOnJava/rvt-rs/issues/219) | Storey containment binds 970 of 970 building elements on Core Interior, each in Revit's own storey. An element takes the Level its record names (RE-27), or its base constraint where it names two (RE-59). Where it names none, a railing takes its host stair's storey and other elements the Level their work planes carry, where that agrees with their elevation (RE-60). On Snowdon Towers 5,805 elements are in Revit's storey. What remains is 102 elements on no storey (proxies, light fixtures and railings whose readings disagree or are missing; #369), which are contained in the `IfcBuilding`, and 44 in a different storey from Revit's, mostly curtain-wall mullions under a different parent (#370). |
-| [#238](https://github.com/DrunkOnJava/rvt-rs/issues/238) | Wall join trims are down to 9 over-trimmed ends on 9 walls (from 31 on 24) since #274 / RE-29 required the trim candidate to be named in the record's reference list. The 9 are one side of each of two true L corners; no feature in the record orders the two sides, so this needs a new carrier, not a better heuristic. |
-| [#88](https://github.com/DrunkOnJava/rvt-rs/issues/88) | Compound layers are read from each type's own data (RE-53, not near the type record where RE-28 swept) and written as `IfcMaterialLayerSetUsage` with material names (RE-58). Sets are named `Family:Type` as Revit names them (RE-61). What remains is elements drawn whole or sloped, which get no set (#358). |
-| [#23](https://github.com/DrunkOnJava/rvt-rs/issues/23) | The Revit 2024 ArcWall envelope is still undecoded; RE-21's partition element record is a different carrier and does not close it. |
-| [#86](https://github.com/DrunkOnJava/rvt-rs/issues/86) | Partition names are partial and the Level ElementId bind stays blocked by the RE-20 negative. |
-| [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | The reported sketch-to-solid pipeline is untouched for sweeps and revolves; only the closed-loop plan profile of a slab is recovered (RE-25). |
-| [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227) | Doors and windows are bound to their host wall and the `(host wall, filling element)` pair set equals Revit's export on 138 of 138 (#222, RE-23), and the viewer now shows and can jump across that relationship (#269, #272). What is open is the opening cut itself: the `IfcOpeningElement` is still bodied with the door/window bounding box rather than cut from the wall location curve. |
-| [#34](https://github.com/DrunkOnJava/rvt-rs/issues/34) | On Revit 2024 and 2025 the IFC's materials are the file's own `OST_Materials` records, named by ElementId (RE-58, RE-125; 86 of 86 on Core Interior, where the export writes the 9 its elements use, all among them). What is open is joining family instances to their materials, and the names of 8 family materials here. |
-| [#90](https://github.com/DrunkOnJava/rvt-rs/issues/90) | Space bodies are still a placeholder; the real room boundary polygon is not recovered. |
+| [#358](https://github.com/DrunkOnJava/rvt-rs/issues/358) | Wall bodies thicker or thinner than their type's layers: 165 Snowdon walls drawn whole (RE-53) |
+| [#357](https://github.com/DrunkOnJava/rvt-rs/issues/357) | Stair flights not yet drawn: monolithic (end-with-riser flag), riserless, spiral, and nosing profiles |
+| [#356](https://github.com/DrunkOnJava/rvt-rs/issues/356) | Sloped roofs need a Revit 2024/2025 pitched-roof oracle |
+| [#355](https://github.com/DrunkOnJava/rvt-rs/issues/355) | Element materials: shading colours decode exactly; names and the element-to-material link do not yet |
+| [#328](https://github.com/DrunkOnJava/rvt-rs/issues/328) | Snowdon: 6 slabs in the Legends phase are not in Revit's export (phase filtering) |
+| [#323](https://github.com/DrunkOnJava/rvt-rs/issues/323) | Stairs, stair runs, landings, stringers and roofs as IFC aggregates |
+| [#309](https://github.com/DrunkOnJava/rvt-rs/issues/309) | Snowdon: one record-backed slab (ElementId 2062318) is not in Revit's export |
+| [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227) | Opening geometry: cut the IfcOpeningElement from the wall location curve instead of the door/window bbox; recover the 63 slab/shading-device penetrations |
+| [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | RE: Reproduce sketch-to-solid geometry reconstruction pipeline |
+| [#96](https://github.com/DrunkOnJava/rvt-rs/issues/96) | CLASS-16: MEP equipment decoders (Electrical/Mechanical/Plumbing fixtures) |
+| [#94](https://github.com/DrunkOnJava/rvt-rs/issues/94) | CLASS-14: Beam / StructuralFraming decoder + IfcBeam / IfcMember emission |
+| [#90](https://github.com/DrunkOnJava/rvt-rs/issues/90) | Room outlines: 7 Snowdon Towers rooms still drawn as their box (room solid edge topology) |
+
+### 0.5.0: element data (parameters) and viewer journey
+
+| Issue | Remainder |
+|---|---|
+| [#228](https://github.com/DrunkOnJava/rvt-rs/issues/228) | Element record reference list at +0x88: attribute the remaining slots (leading 3, family/type/level ids) |
+| [#223](https://github.com/DrunkOnJava/rvt-rs/issues/223) | Element record +0x46: the flag word is unread (+0x4a is the schema class, RE-76) |
+| [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
+| [#35](https://github.com/DrunkOnJava/rvt-rs/issues/35) | M4-07: Recover common parameters |
+
+### 1.0.0: first-class utility
+
+| Issue | Remainder |
+|---|---|
+| [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421) | Element records beyond 2024/2025: derive the marker from the schema and measure the older envelope (RE-80 follow-up) |
+| [#408](https://github.com/DrunkOnJava/rvt-rs/issues/408) | Held-out validation: measure on licensed models not used to develop the decoder |
+
+### Research and unscheduled
+
+| Issue | Remainder |
+|---|---|
+| [#154](https://github.com/DrunkOnJava/rvt-rs/issues/154) | RE: Reproduce complete Formats/Latest parsing and serialization-tag assignment |
+| [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) | RE: Validate ElementHeader framing for ElementId and class-tag recovery |
+| [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) | RE: Validate Global/ElemTable body as a versioned ownership tree |
+| [#85](https://github.com/DrunkOnJava/rvt-rs/issues/85) | RE-15-05: Symmetric-tuple probe sweep — find Sheet/View/Phase/DesignOption/Workset/ParameterElement resource tuples |
+
+### Good first issues
+
+| Issue | Remainder |
+|---|---|
+| [#502](https://github.com/DrunkOnJava/rvt-rs/issues/502) | Python: add part_atom_json_strict, as basic_file_info_json_strict has |
+| [#501](https://github.com/DrunkOnJava/rvt-rs/issues/501) | Probe probe_elem_table_ownership hardcodes /workspace paths |
 
 ## Work That Needs Design Discussion
 
