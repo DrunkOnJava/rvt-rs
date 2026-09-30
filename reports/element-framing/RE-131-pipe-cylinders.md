@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-30
 **Issues:** #96 (MEP); follows RE-130 (pipe types)
-**Artefacts:** RE1 Mechanical and Plumbing (Revit 2025, MIT), each against Revit's own IFC export. Every run is on GitHub's hosted runners with the Measure workflow: the probes are 36719977712 and 36720663075, the production path against `main` is 36722222519.
+**Artefacts:** RE1 Mechanical and Plumbing (Revit 2025, MIT), each against Revit's own IFC export. Every run is on GitHub's hosted runners with the Measure workflow: the probes are 36719977712 and 36720663075, the production path against `main` is 36723473598.
 **Probe:** `examples/probe_re131_pipe_sections.rs`; scored by `tools/re/pipe_bodies_vs_ifc.py`.
 **Status:** positive on Revit 2025 where the ends are proven. Sloped pipes and other releases are not measured here.
 **Credit:** the entry layout and the radius derivation are jakobhirn-bit's (Discussion #112), measured by them on Autodesk's Snowdon Towers plumbing sample.
@@ -25,7 +25,7 @@ Applied to the probe's hits (points inside the box that follow a `u32` 1) for ev
 
 ## 4. What changes
 
-Run 36722222519, this branch against `main`, scored per pipe by `pipe_bodies_vs_ifc.py`:
+Run 36723473598, this branch against `main`, scored per pipe by `pipe_bodies_vs_ifc.py`:
 
 | | `main` | RE-131 |
 |---|---:|---:|
@@ -33,9 +33,10 @@ Run 36722222519, this branch against `main`, scored per pipe by `pipe_bodies_vs_
 | radius within 0.001 ft of Revit's | 0 of 63 | **63 of 63** |
 | axis ends within 0.01 ft of Revit's | 21 of 63 | **63 of 63** |
 | length within 0.01 ft of Revit's | 21 of 63 | **63 of 63** |
-| RE1 Mechanical pipes, the same four | 0 of 6 | **6 of 6** |
+| RE1 Mechanical pipes: circle profile and radius | 0 of 6 | **6 of 6** |
+| RE1 Mechanical pipes: axis ends and length | 2 of 6 | **6 of 6** |
 
-The worst differences are under 0.00001 ft. The 21 pipes `main` had right are presumably the vertical ones, since its box was extruded along Z; that is inferred, not listed. The export diagnostics count the new body: `partition_pipe_axis` is 63 on Plumbing and 6 on Mechanical, and the record-box bodies fall from 124 to 61 and from 74 to 68. The IFC of Core Interior, Einhoven, RE1 Architecture and RE1 Electrical is identical to `main`'s, and no other scorer's output changes on any model.
+The worst differences are under 0.00001 ft. The 23 pipes `main` had right (21 of Plumbing's 63 and 2 of Mechanical's 6) are presumably the vertical ones, since its box was extruded along Z; that is inferred, not listed. The export diagnostics count the new body: `partition_pipe_axis` is 63 on Plumbing and 6 on Mechanical, and the record-box bodies fall from 124 to 61 and from 74 to 68. The IFC of Core Interior, Einhoven, RE1 Architecture and RE1 Electrical is identical to `main`'s, and no other scorer's output changes on any model.
 
 ## 5. Not measured
 

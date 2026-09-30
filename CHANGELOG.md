@@ -18,7 +18,7 @@ All notable changes will be documented here. This project follows
   box. On RE1 Mechanical and Plumbing (Revit 2025), against Revit's own
   export: 69 of 69 pipes are circle-profile extrusions whose radius, axis
   ends and length are Revit's to 0.00001 ft. `main` wrote every one as a
-  box, and the right axis for 21 of Plumbing's 63. No other model's IFC
+  box, and the right axis for 23 of the 69. No other model's IFC
   changes. The entry layout and the radius derivation are jakobhirn-bit's
   (Discussion #112), measured by them on Snowdon Towers' plumbing sample.
   Revit 2025 only. Every RE1 pipe runs along a principal axis, so sloped
