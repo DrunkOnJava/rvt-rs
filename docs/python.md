@@ -36,7 +36,7 @@ in [`CHANGELOG.md`](../CHANGELOG.md).
 ### From source
 
 ```bash
-# Needs a Rust toolchain (>= 1.85) and maturin.
+# Needs a Rust toolchain (>= 1.87) and maturin.
 pip install maturin
 git clone https://github.com/DrunkOnJava/rvt-rs
 cd rvt-rs
@@ -558,7 +558,7 @@ on exotic layouts. File an issue with the Revit release year and
 
 `maturin build --manifest-path rvt-py/Cargo.toml` needs:
 
-- Rust ≥ 1.85
+- Rust ≥ 1.87
 - Python development headers (`python3-dev` on Linux, Xcode
   command-line tools on macOS, python.org Python on Windows)
 

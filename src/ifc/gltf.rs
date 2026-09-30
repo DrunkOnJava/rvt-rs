@@ -761,11 +761,11 @@ pub fn write_glb(doc: &GltfDocument, bin: &[u8], out: &mut Vec<u8>) {
     let json_text = serde_json::to_string(doc).expect("serialize glTF doc");
     let mut json_bytes = json_text.into_bytes();
     // Pad JSON chunk to 4-byte boundary with ASCII space (per spec).
-    while json_bytes.len() % 4 != 0 {
+    while !json_bytes.len().is_multiple_of(4) {
         json_bytes.push(b' ');
     }
     let mut bin_padded = bin.to_vec();
-    while bin_padded.len() % 4 != 0 {
+    while !bin_padded.len().is_multiple_of(4) {
         bin_padded.push(0);
     }
 
@@ -813,7 +813,7 @@ fn bytemuck_cast_u16(src: &[u16]) -> Vec<u8> {
 }
 
 fn pad_to_4(buf: &mut Vec<u8>) {
-    while buf.len() % 4 != 0 {
+    while !buf.len().is_multiple_of(4) {
         buf.push(0);
     }
 }

@@ -476,7 +476,7 @@ fn profile_from_loops(loops: Vec<Vec<(f64, f64)>>) -> Option<PlanProfile> {
     let mut piece_of: Vec<Option<usize>> = vec![None; merged.len()];
     for (index, one) in merged.iter().enumerate() {
         let mut ring = one.clone();
-        if depth[index] % 2 == 0 {
+        if depth[index].is_multiple_of(2) {
             if signed_area(&ring) < 0.0 {
                 ring.reverse();
             }
