@@ -43,7 +43,7 @@ The partition's first bytes are `48 c1 00 00 …`, which is 49480, and 0x2c byte
 
 The next record starts right after the 16-byte trailer. The prologue constant is 12 below the constant the release's bbox marker ends with (RE-32). `partition_record_chain` walks from offset 0 and stops at the first position that is not a header whose trailer echoes its size.
 
-What follows the chain are further runs of records whose ids are not declared in `Global/ElemTable`. They are loaded families' own documents, with their own ElementId space. Frames there are never project elements. On Core Interior, partition 46's chain ends at `0x558502` and the family runs start 72 MB later.
+What follows the chain are further runs of records whose ids are not declared in `Global/ElemTable`. They are loaded families' own documents (RE-135: on six projects no id after the chain is declared, occurs in the chain or occurs twice, so the ids are unique in the file and no project element has one). Frames there are never project elements. On Core Interior, partition 46's chain ends at `0x558502` and the family runs start 72 MB later.
 
 ## 3. The chain holds every element
 
