@@ -175,7 +175,8 @@ pub fn append_typed_production_elements(
     let mut without_geometry: std::collections::BTreeSet<usize> = Default::default();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
     // RE-138: the joins of ducts and pipes, by entity index and ElementId.
-    let mut pending_joins: Vec<(usize, u32, [Option<(u32, u32)>; 2])> = Vec::new();
+    let mut pending_joins: Vec<(usize, u32, crate::partition_schema_mvp::ConnectorJoins)> =
+        Vec::new();
     // Bodies of aggregate wholes, held back until their parts are known: a
     // whole that no part names keeps its own body.
     let mut held_bodies: std::collections::BTreeMap<usize, Extrusion> =

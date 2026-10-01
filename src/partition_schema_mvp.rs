@@ -3551,8 +3551,11 @@ pub const CONNECTOR_ELEMENT_FIELDS: [&str; 2] = ["m_connector_0_element", "m_con
 pub const CONNECTOR_INDEX_FIELDS: [&str; 2] = ["m_connector_0_index", "m_connector_1_index"];
 
 /// The element and connector index joined at a duct's or pipe's connector 0
-/// and 1, from its fields (RE-138). `None` for a connector with no join read.
-pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> [Option<(u32, u32)>; 2] {
+/// and 1; `None` for a connector with no join read (RE-138).
+pub type ConnectorJoins = [Option<(u32, u32)>; 2];
+
+/// The joins of a duct or pipe, from its fields (RE-138).
+pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> ConnectorJoins {
     let element = |wanted: &str| {
         fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == wanted => Some(*id),
