@@ -86,6 +86,11 @@ def main():
     print(f"rvt-rs: {len(ports)} ports, {len(connections)} port-to-port connections, {len(ours_curve)} involving a duct or pipe")
     rate = 100.0 * len(reproduced) / len(revit_curve) if revit_curve else 0.0
     print(f"{len(reproduced)} of Revit's {len(revit_curve)} connections involving a duct or pipe are written ({rate:.1f}%), {len(missed)} are not")
+    # RE-141: a fitting's own joins are read too, so every connection is scored.
+    reproduced_all = revit_connections & connections
+    missed_all = revit_connections - connections
+    rate_all = 100.0 * len(reproduced_all) / len(revit_connections) if revit_connections else 0.0
+    print(f"{len(reproduced_all)} of all {len(revit_connections)} of Revit's connections are written ({rate_all:.1f}%), {len(missed_all)} are not")
     print(f"{len(extra)} connections written are not in Revit's export")
     print(f"{wrongly_tied} of rvt-rs's {len(ports)} ports are not tied to the element their name gives")
     try:
@@ -96,7 +101,7 @@ def main():
     except Exception as error:  # the validator is a measurement, not the score
         print(f"schema validation unavailable: {type(error).__name__}: {error}")
     if args.list:
-        for pair in sorted(missed, key=sorted):
+        for pair in sorted(missed_all, key=sorted):
             print("  not written:", sorted(pair))
         for pair in sorted(extra, key=sorted):
             print("  not in Revit's export:", sorted(pair))
