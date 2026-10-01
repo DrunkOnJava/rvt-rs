@@ -37,6 +37,13 @@
 //! declared parameter entry, as 2024 and Steffen's 2023 measurement have it;
 //! the number of 2023 records with entries is printed.
 //!
+//! RE-136 (the same scan): a Revit release before 2023 is read by the 2023
+//! envelope (Steffen measured it on 2014 to 2018 files), and every result
+//! carries how many records name a class the file's schema does not hold. For
+//! the ids that open two or more records in the chain (#548) it prints the
+//! classes, the sizes, whether the records are adjacent, and whether the id is
+//! one `Global/ElemTable` writes as a primary id or only as a secondary one.
+//!
 //! Usage:
 //!   cargo run --profile ci --example probe_re135_undeclared_records -- MODEL.rvt
 
@@ -71,6 +78,12 @@ const FLAG_HOST_STUB: u32 = 0x10;
 /// The longest run of top entries printed for a histogram.
 const TOP: usize = 15;
 
+/// What a record's class is called when the file's schema has no such tag.
+const UNRESOLVED: &str = "?";
+
+/// Repeated chain ids shown in full.
+const EXAMPLES: usize = 8;
+
 /// Bytes ahead of the first record field a 2023 header has: `u32` id, `u32`
 /// size.
 const HEADER_2023: usize = 12;
@@ -86,6 +99,8 @@ struct Record {
     offset: usize,
     id: u64,
     in_chain: bool,
+    /// Bytes from the record's start to the next, trailer included.
+    span: usize,
     entries: usize,
     class_tag: Option<u16>,
     flags: Option<u32>,
@@ -188,6 +203,7 @@ impl Layout {
             offset: start,
             id,
             in_chain,
+            span: 0,
             entries,
             class_tag: u16_at(buf, class_at + shift),
             flags: u32_at(buf, flags_at + shift),
@@ -196,15 +212,17 @@ impl Layout {
     }
 }
 
-/// Every header record of one partition, in stream order, and where its
-/// leading chain ends.
-fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Record>, usize) {
+/// Every header record of one partition, in stream order, where its leading
+/// chain ends, and how many positions outside an accepted record carried the
+/// header tag.
+fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Record>, usize, usize) {
     let mut chain_end = 0usize;
     while let Some(next) = layout.record_end(buf, chain_end, header_tag) {
         chain_end = next;
     }
     let mut out = Vec::new();
     let mut next_free = 0usize;
+    let mut candidates = 0usize;
     for hit in memchr::memmem::find_iter(buf, &header_tag.to_le_bytes()) {
         let Some(start) = hit.checked_sub(layout.tag_at()) else {
             continue;
@@ -212,16 +230,18 @@ fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Recor
         if start < next_free {
             continue;
         }
+        candidates += 1;
         let Some(end) = layout.record_end(buf, start, header_tag) else {
             continue;
         };
-        let Some(record) = layout.read(stream, buf, start, start < chain_end) else {
+        let Some(mut record) = layout.read(stream, buf, start, start < chain_end) else {
             continue;
         };
+        record.span = end - start;
         out.push(record);
         next_free = end;
     }
-    (out, chain_end)
+    (out, chain_end, candidates)
 }
 
 fn declared_in(declared: &BTreeSet<u32>, id: u64) -> bool {
@@ -248,6 +268,8 @@ struct Tally {
     stub_declared: usize,
     stub_undeclared: usize,
     with_entries: usize,
+    /// Records whose class tag the file's schema does not hold.
+    unresolved: usize,
     classes: BTreeMap<String, usize>,
     classes_declared: BTreeMap<String, usize>,
     classes_undeclared: BTreeMap<String, usize>,
@@ -264,6 +286,7 @@ impl Tally {
             .flags
             .is_some_and(|flags| flags & FLAG_HOST_STUB != 0);
         self.with_entries += usize::from(record.entries > 0);
+        self.unresolved += usize::from(class == UNRESOLVED);
         *self.classes.entry(class.clone()).or_default() += 1;
         if declared {
             self.declared += 1;
@@ -280,13 +303,14 @@ impl Tally {
 
     fn json(&self, group: &str) -> String {
         format!(
-            "{{\"group\":{group:?},\"records\":{},\"declared\":{},\"undeclared\":{},\"bit_0x10\":{{\"declared\":{},\"undeclared\":{}}},\"with_entries\":{},\"classes\":{},\"classes_declared\":{},\"classes_undeclared\":{},\"flags_declared\":{},\"flags_undeclared\":{}}}",
+            "{{\"group\":{group:?},\"records\":{},\"declared\":{},\"undeclared\":{},\"bit_0x10\":{{\"declared\":{},\"undeclared\":{}}},\"with_entries\":{},\"class_unresolved\":{},\"classes\":{},\"classes_declared\":{},\"classes_undeclared\":{},\"flags_declared\":{},\"flags_undeclared\":{}}}",
             self.declared + self.undeclared,
             self.declared,
             self.undeclared,
             self.stub_declared,
             self.stub_undeclared,
             self.with_entries,
+            self.unresolved,
             top_pairs(&self.classes, TOP),
             top_pairs(&self.classes_declared, TOP),
             top_pairs(&self.classes_undeclared, TOP),
@@ -301,7 +325,7 @@ fn run() -> rvt::Result<()> {
     let digest = sha256_hex(&std::fs::read(&path).expect("read the model"));
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
-    let layout = if version == 2023 {
+    let layout = if version <= 2023 {
         Layout::V2023
     } else if per::supports_revit_version(version) {
         Layout::V2024
@@ -323,21 +347,32 @@ fn run() -> rvt::Result<()> {
     };
     let class_name = |tag: Option<u16>| {
         tag.and_then(|tag| classes.by_tag(tag))
-            .map_or_else(|| "?".to_string(), |class| class.name.clone())
+            .map_or_else(|| UNRESOLVED.to_string(), |class| class.name.clone())
     };
-    let declared = rvt::elem_table::parse_records(&mut rf)
-        .map(|records| rvt::elem_table::declared_ids(&records))
-        .unwrap_or_default();
+    let table = rvt::elem_table::parse_records(&mut rf).unwrap_or_default();
+    let declared = rvt::elem_table::declared_ids(&table);
+    let primary: BTreeSet<u32> = table.iter().map(|record| record.id_primary).collect();
+    let secondary_only: BTreeSet<u32> = table
+        .iter()
+        .filter(|record| {
+            record.raw.len() == rvt::elem_table::RECORD_LEN_40
+                && record.id_secondary != 0
+                && record.id_secondary != record.id_primary
+        })
+        .map(|record| record.id_secondary)
+        .collect();
 
     let mut records: Vec<Record> = Vec::new();
     let mut stream_lines: Vec<String> = Vec::new();
+    let mut candidates = 0usize;
     let streams = rf.partition_stream_names();
     for stream in &streams {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        let (found, chain_end) = scan(layout, stream, buf, header_tag);
+        let (found, chain_end, stream_candidates) = scan(layout, stream, buf, header_tag);
+        candidates += stream_candidates;
         stream_lines.push(format!(
             "{{\"stream\":{stream:?},\"bytes\":{},\"chain_end\":{chain_end},\"records\":{},\"in_chain\":{}}}",
             buf.len(),
@@ -376,6 +411,92 @@ fn run() -> rvt::Result<()> {
         .filter(|&&id| declared_in(&declared, id))
         .count();
 
+    let mut chain_indexes: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for (index, record) in records
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| record.in_chain)
+    {
+        chain_indexes.entry(record.id).or_default().push(index);
+    }
+    let mut signatures: BTreeMap<String, usize> = BTreeMap::new();
+    let mut differing: BTreeMap<String, usize> = BTreeMap::new();
+    let mut shown: Vec<String> = Vec::new();
+    let (mut repeated_ids, mut adjacent) = (0usize, 0usize);
+    let (mut in_primary, mut in_secondary_only) = (0usize, 0usize);
+    let (mut same_stream, mut same_class, mut same_span, mut identical) =
+        (0usize, 0usize, 0usize, 0usize);
+    for (id, indexes) in chain_indexes
+        .iter()
+        .filter(|(_, indexes)| indexes.len() > 1)
+    {
+        repeated_ids += 1;
+        let names: Vec<String> = indexes
+            .iter()
+            .map(|&index| class_name(records[index].class_tag))
+            .collect();
+        *signatures.entry(names.join("+")).or_default() += 1;
+        adjacent += usize::from(indexes.windows(2).all(|pair| pair[1] == pair[0] + 1));
+        let id32 = u32::try_from(*id).ok();
+        in_primary += usize::from(id32.is_some_and(|id| primary.contains(&id)));
+        in_secondary_only += usize::from(id32.is_some_and(|id| secondary_only.contains(&id)));
+        let streams_of: BTreeSet<&str> = indexes
+            .iter()
+            .map(|&index| records[index].stream.as_str())
+            .collect();
+        same_stream += usize::from(streams_of.len() < indexes.len());
+        let first = &records[indexes[0]];
+        same_class += usize::from(
+            indexes
+                .iter()
+                .all(|&index| records[index].class_tag == first.class_tag),
+        );
+        same_span += usize::from(
+            indexes
+                .iter()
+                .all(|&index| records[index].span == first.span),
+        );
+        let blobs: Vec<Vec<u8>> = indexes
+            .iter()
+            .filter_map(|&index| {
+                let record = &records[index];
+                let inflated = rf.inflated_partition(&record.stream).ok()?;
+                inflated
+                    .bytes()
+                    .get(record.offset..record.offset + record.span)
+                    .map(<[u8]>::to_vec)
+            })
+            .collect();
+        if blobs.len() == indexes.len() && blobs.windows(2).all(|pair| pair[0] == pair[1]) {
+            identical += 1;
+        } else {
+            *differing.entry(class_name(first.class_tag)).or_default() += 1;
+        }
+        if shown.len() < EXAMPLES {
+            let parts: Vec<String> = indexes
+                .iter()
+                .map(|&index| {
+                    let record = &records[index];
+                    format!(
+                        "{{\"stream\":{:?},\"offset\":{},\"span\":{},\"class\":{:?},\"flags\":{}}}",
+                        record.stream,
+                        record.offset,
+                        record.span,
+                        class_name(record.class_tag),
+                        record
+                            .flags
+                            .map_or_else(|| "null".to_string(), |flags| format!("\"{flags:#x}\"")),
+                    )
+                })
+                .collect();
+            shown.push(format!(
+                "{{\"id\":{id},\"declared\":{},\"records\":[{}]}}",
+                declared_in(&declared, *id),
+                parts.join(",")
+            ));
+        }
+    }
+
     let content_documents = rf
         .read_stream("Global/ContentDocuments")
         .ok()
@@ -400,6 +521,24 @@ fn run() -> rvt::Result<()> {
         declared.len(),
         stream_lines.join(","),
         colliding.len(),
+    );
+    println!(
+        "{{\"repeated_chain_ids\":{repeated_ids},\"adjacent\":{adjacent},\"in_elem_table_primary\":{in_primary},\"in_elem_table_secondary_only\":{in_secondary_only},\"in_one_stream\":{same_stream},\"same_class\":{same_class},\"same_size\":{same_span},\"identical_bytes\":{identical},\"differing_classes\":{},\"signatures\":{},\"examples\":[{}]}}",
+        top_pairs(&differing, TOP),
+        top_pairs(&signatures, TOP),
+        shown.join(",")
+    );
+    let mut table_lengths: BTreeMap<String, usize> = BTreeMap::new();
+    for record in &table {
+        *table_lengths
+            .entry(record.raw.len().to_string())
+            .or_default() += 1;
+    }
+    println!(
+        "{{\"scan\":{{\"candidates\":{candidates},\"accepted\":{}}},\"elem_table\":{{\"records\":{},\"record_lengths\":{}}}}}",
+        records.len(),
+        table.len(),
+        top_pairs(&table_lengths, TOP)
     );
     println!("{}", all.json("all"));
     println!("{}", in_chain.json("in_chain"));

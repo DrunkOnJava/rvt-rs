@@ -1009,6 +1009,20 @@ offset-table scavenging. The moat reduces to:
 
 ## Addendum — Q4 flag-word is an ancestor-class reference (2026-04-19)
 
+**Superseded 2026-10-01 (RE-137, #154): not reproduced.** This addendum predates
+the page strip of `Formats/Latest` (#410) and the grammar of STE1200's report,
+which `formats::schema_classes` implements. Read with that grammar, on the
+2024 sample and on 16 more files of 2016 to 2026, none of the nine classes
+below has the base the table names: `HostObjAttr` has base `Symbol` (the class
+this addendum called its parent), `APIVSTAMacroElemTracking` has
+`ElemSetTracking`, and so on, usually the class defined inline right after it.
+Every base reference of every class resolves, 3,023 of 3,023 on a 2024 file,
+so the grammar's `u16` base reference is a base class and nothing in it
+supports a second, distinct ancestor. The nine "resolutions" below came from
+tags assigned over a schema that was inflated without its page strip. What
+the legacy "flag" word is, is not established. Report:
+`reports/element-framing/RE-137-q4-base-classes.md`.
+
 The u16 word sitting between the parent-class name and the
 field-count pair in a tagged-class record (called "flag" in earlier
 addenda) is **a class-tag reference** — it names another class in
