@@ -23,11 +23,22 @@ Usage:
 """
 
 import argparse
+import json
 import re
 
 import ifcopenshell
+import ifcopenshell.validate
 
 PORT_NAME = re.compile(r"^(?:In|Out)?Port_(\d+)_(\d+)$")
+PORT_ENTITY = re.compile(r"IfcDistributionPort|IfcRelConnectsPort")
+
+
+def port_schema_findings(path):
+    """IfcOpenShell's schema validation of a file: every finding, and those about the port entities."""
+    logger = ifcopenshell.validate.json_logger()
+    ifcopenshell.validate.validate(ifcopenshell.open(path), logger)
+    findings = list(logger.statements)
+    return findings, [f for f in findings if PORT_ENTITY.search(json.dumps(f, default=str))]
 
 
 def read(path):
@@ -77,6 +88,14 @@ def main():
     print(f"{len(reproduced)} of Revit's {len(revit_curve)} connections involving a duct or pipe are written ({rate:.1f}%), {len(missed)} are not")
     print(f"{len(extra)} connections written are not in Revit's export")
     print(f"{wrongly_tied} of rvt-rs's {len(ports)} ports are not tied to the element their name gives")
+    try:
+        findings, about_ports = port_schema_findings(args.rvt_rs_ifc)
+        print(f"schema validation of rvt-rs's file: {len(findings)} findings, {len(about_ports)} about the port entities")
+        if args.list:
+            for finding in about_ports[:10]:
+                print("  schema:", json.dumps(finding, default=str)[:300])
+    except Exception as error:  # the validator is a measurement, not the score
+        print(f"schema validation unavailable: {type(error).__name__}: {error}")
     if args.list:
         for pair in sorted(missed, key=sorted):
             print("  not written:", sorted(pair))

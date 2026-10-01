@@ -324,6 +324,15 @@
       "user_impact": "Pipes export as round pipes along their own axes, with Revit's radius and length, instead of boxes: all 69 of RE1 Mechanical's and Plumbing's."
     },
     {
+      "id": "element-record-mep-connections",
+      "area": "elements",
+      "name": "Ports and port-to-port connections of ducts and pipes (RE-138)",
+      "status": "partial",
+      "evidence": "partition_connector_pairs::scan_connector_pairs; partition_schema_mvp::attach_connector_pairs (CONNECTOR_* fields); ifc::export_content IfcEntity::PortConnection; ifc::step_writer IfcDistributionPort, IfcRelConnectsPortToElement and IfcRelConnectsPorts; examples/probe_re138_connector_pairs.rs; tools/re/connector_pairs_vs_ifc.py; tools/re/ports_vs_ifc.py; reports/element-framing/RE-138-connector-pairs.md",
+      "notes": "A duct's or pipe's object lists its connectors' joins after its RbsCurveConnectorManager anchor, as counted lists of two references (the curve's connector and the one joined: a u64 element, a u32 connector index, the u32 1). A join is written in two blocks; the earlier block stores the curve's own connector index inverted, so a list in the later block is read as stored and one in the earlier block inverted when no later list gives the join. The ports have no flow direction (Revit's export names them InPort_ or OutPort_ by the system's flow, which the lists do not carry), so they are named Port_<ElementId>_<index> with FlowDirection NOTDEFINED. A connection is written only when both elements are exported. Measured on RE1 Mechanical and Plumbing (Revit 2025) only; the connections of Revit's export that involve no duct or pipe (fitting to fitting, fitting to equipment) are not read.",
+      "user_impact": "Ducts and pipes joined to exported fittings and equipment carry IfcDistributionPort connections: 56 of the 59 connections of Revit's export that involve a duct or pipe on RE1 Mechanical and 112 of 118 on Plumbing, with 112 and 226 of Revit's 150 and 260 ports."
+    },
+    {
       "id": "element-record-roof-outlines",
       "area": "elements",
       "name": "Roof and ceiling outlines from their sketch lines, sketch lines' exact recorded ends, and shed roofs along their slope (Revit 2024)",
