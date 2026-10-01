@@ -212,15 +212,17 @@ impl Layout {
     }
 }
 
-/// Every header record of one partition, in stream order, and where its
-/// leading chain ends.
-fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Record>, usize) {
+/// Every header record of one partition, in stream order, where its leading
+/// chain ends, and how many positions outside an accepted record carried the
+/// header tag.
+fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Record>, usize, usize) {
     let mut chain_end = 0usize;
     while let Some(next) = layout.record_end(buf, chain_end, header_tag) {
         chain_end = next;
     }
     let mut out = Vec::new();
     let mut next_free = 0usize;
+    let mut candidates = 0usize;
     for hit in memchr::memmem::find_iter(buf, &header_tag.to_le_bytes()) {
         let Some(start) = hit.checked_sub(layout.tag_at()) else {
             continue;
@@ -228,6 +230,7 @@ fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Recor
         if start < next_free {
             continue;
         }
+        candidates += 1;
         let Some(end) = layout.record_end(buf, start, header_tag) else {
             continue;
         };
@@ -238,7 +241,7 @@ fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Recor
         out.push(record);
         next_free = end;
     }
-    (out, chain_end)
+    (out, chain_end, candidates)
 }
 
 fn declared_in(declared: &BTreeSet<u32>, id: u64) -> bool {
@@ -361,13 +364,15 @@ fn run() -> rvt::Result<()> {
 
     let mut records: Vec<Record> = Vec::new();
     let mut stream_lines: Vec<String> = Vec::new();
+    let mut candidates = 0usize;
     let streams = rf.partition_stream_names();
     for stream in &streams {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        let (found, chain_end) = scan(layout, stream, buf, header_tag);
+        let (found, chain_end, stream_candidates) = scan(layout, stream, buf, header_tag);
+        candidates += stream_candidates;
         stream_lines.push(format!(
             "{{\"stream\":{stream:?},\"bytes\":{},\"chain_end\":{chain_end},\"records\":{},\"in_chain\":{}}}",
             buf.len(),
@@ -522,6 +527,18 @@ fn run() -> rvt::Result<()> {
         top_pairs(&differing, TOP),
         top_pairs(&signatures, TOP),
         shown.join(",")
+    );
+    let mut table_lengths: BTreeMap<String, usize> = BTreeMap::new();
+    for record in &table {
+        *table_lengths
+            .entry(record.raw.len().to_string())
+            .or_default() += 1;
+    }
+    println!(
+        "{{\"scan\":{{\"candidates\":{candidates},\"accepted\":{}}},\"elem_table\":{{\"records\":{},\"record_lengths\":{}}}}}",
+        records.len(),
+        table.len(),
+        top_pairs(&table_lengths, TOP)
     );
     println!("{}", all.json("all"));
     println!("{}", in_chain.json("in_chain"));
