@@ -56,6 +56,14 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **The positions that carry the header tag and are not a record (RE-144,
+  #152).** Steffen asked whether RE1 Architecture's 1,707 such positions come in
+  repeated groups, as his scanner's false hits do on Core Interior. They are
+  mostly single: 1,431 distinct (id, size) pairs, and 32 pairs seen three or
+  more times cover 268 of them, their commonest size words being made of `0xFF`
+  bytes. Core Interior's 277 do repeat (26 pairs cover 210 of them) and
+  Einhoven's 20 hardly (one pair of three). The probe now prints the grouping.
+  `reports/element-framing/RE-144-header-tag-false-hits.md`.
 - **The later partition's copy is the newer one on Autodesk's 2021
   `rac_advanced` sample (RE-143, #548).** The project has two partitions and
   4,037 ids with a record in both. Of the 750 whose two records carry the
