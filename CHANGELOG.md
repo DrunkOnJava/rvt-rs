@@ -23,6 +23,21 @@ All notable changes will be documented here. This project follows
   version, so the ruleset in `.github/rulesets/main-protection.json` does not
   change when the MSRV does.
 
+### Fixed
+
+- **The declared ElementIds include the ElemTable's first record (RE-140, #152,
+  #421).** The frames `elem_table::parse_records` reads start 24 bytes into
+  their records, so none holds the table's first record, which starts at
+  `0x06`. On all 38 Autodesk sample projects and families of 2016 to 2027
+  measured, the one id that record declares was missing from every reader's
+  declared set although it has a record in the partitions' chain (a strict
+  walk of the chain covers every id read from `0x06` on all 38, and holds no
+  id the table does not declare on 37 of them; the 2021 `rac_advanced` sample
+  has 6).
+  The first record's ids are now read from `0x06`, kept on `records[0]` as
+  `ElemRecord::previous_ids`, and added by `declared_ids`; `parse_records`
+  returns the same records as before. Reported by puzzbobb (#421).
+
 ### Research
 
 - **What differs between the copies of a record in several partitions
