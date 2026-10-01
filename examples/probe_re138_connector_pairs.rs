@@ -29,7 +29,10 @@ fn main() -> rvt::Result<()> {
         &[per::OST_DUCT_CURVES, per::OST_PIPE_CURVES],
         &declared,
     )?;
-    let curves: BTreeSet<u64> = records.iter().map(|record| record.element_id).collect();
+    let curves: BTreeSet<u64> = records
+        .iter()
+        .map(|record| u64::from(record.element_id))
+        .collect();
     for &id in &curves {
         println!("{{\"curve\":{id}}}");
     }
