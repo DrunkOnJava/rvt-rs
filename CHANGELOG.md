@@ -25,6 +25,28 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **The Q4 addendum's "ancestor class" does not reproduce (RE-137, #154).**
+  The reconnaissance document read the `u16` before a class's field count as
+  a reference to an ancestor distinct from the parent, with nine classes
+  resolving. Read with the page-stripped schema grammar (`schema_classes`), on
+  17 files of 2016 to 2026, none of the nine has the base the addendum named
+  (`HostObjAttr` has base `Symbol`, what the addendum called its parent), and
+  every base reference of every class resolves (3,023 of 3,023 on a 2024
+  file). The addendum, the README and the field documentation now say so; what
+  the legacy word is stays open. `examples/probe_re137_q4_base_classes.rs`.
+- **The pre-2024 envelope, the ElemTable's record lengths and the repeated
+  ids (RE-136, #152, #153, #421, #548).** Steffen's `[u32 id][u32 size][u16
+  tag][u16 entries]` envelope reads every Autodesk family of 2016 to 2023
+  (seven releases not measured before): one record per declared id, none left
+  over, every class resolved. The ElemTable's record is 28 bytes on all of 2016
+  to 2023 and 40 on 2024 to 2026, on 17 files. The scan chains 99.46 per cent
+  of candidates on Core Interior and 99.62 per cent on Einhoven, Steffen's
+  99.5 to 99.8 per cent. The ids that open two chain records on Core Interior
+  (1,444) and the RE1 models are copies of one element's record in different
+  partitions, never two in one stream, always the same class; 873 of the 1,444
+  are byte-identical and the rest differ (236 walls, 184 family instances, 111
+  rooms), with Revit's GlobalId on all 854 exported elements regardless.
+  `examples/probe_re135_undeclared_records.rs`.
 - **The records after a project's chain are the loaded families' own
   documents (RE-135, #152, #421).** Steffen's reading of Einhoven's walls 2921
   and 3637, which RE-132 could not explain (Discussion #112): on six project
@@ -39,7 +61,8 @@ All notable changes will be documented here. This project follows
   `0x10` of the flag word is not a host-stub marker (Core Interior's three
   walls carry `0x929`; the bit is on 1,421 of RE1 Architecture's chain records
   and on 1,177 of a standalone family's). 1,444 ids on Core Interior open two
-  records in the chain, which is not explained (#548).
+  records in the chain, which RE-136 explains: they are copies of one
+  element's record in different partitions (#548).
   `examples/probe_re135_undeclared_records.rs`.
 - **A duct's or pipe's type, width and height are in its own object
   (RE-134, #96).** The fields that follow the `RbsCurveConnectorManager`
