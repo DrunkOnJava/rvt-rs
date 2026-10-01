@@ -56,6 +56,16 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **The later partition's copy is the newer one on Autodesk's 2021
+  `rac_advanced` sample (RE-143, #548).** The project has two partitions and
+  4,037 ids with a record in both. Of the 750 whose two records carry the
+  element marker and have different boxes, the 2020 release's single record of
+  the element agrees with the copy in `Partitions/7` for all 750 and the 2022
+  release's with the copy in `Partitions/8` for all 750 (to 0.001 ft): the
+  file holds two revisions of the element, and the later partition's is the
+  newer. The other multi-partition samples repeat only records without a box,
+  and Core Interior's own 571 ids are not decided by this one file; #548 stays
+  open. `tools/re/copy_vs_neighbours.py` repeats it from a Measure run.
 - **Autodesk's sample projects of 2016 to 2027, and puzzbobb's measurements
   (RE-140, #421, #152, #548).** Autodesk publishes its `rac_basic`, `rst_basic`
   and `rac_advanced` sample projects for every release from 2016 to 2027, 36
