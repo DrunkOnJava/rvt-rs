@@ -132,8 +132,9 @@ struct Record {
     /// The trailer's flag word, and whether its last word repeats the
     /// record's size (RE-140).
     trailer: Option<(u32, bool)>,
-    /// Whether the element-record marker is where this layout puts it
-    /// (RE-140): only such a record has the category and box read here.
+    /// Whether the element-record marker is where this layout puts it, 22
+    /// bytes further for each declared parameter entry (RE-140): only such a
+    /// record has the category and box read here.
     marked: bool,
     /// Where the marker is in the record's bytes, from its start, wherever
     /// that is (RE-140).
@@ -294,7 +295,7 @@ impl Layout {
             bbox: bbox_read.then_some(bbox),
             trailer: None,
             marked: marker.is_some_and(|marker| {
-                let at = start + self.marker_at();
+                let at = start + self.marker_at() + shift;
                 buf.get(at..at + marker.len()) == Some(marker.as_slice())
             }),
             marker_offset: None,
