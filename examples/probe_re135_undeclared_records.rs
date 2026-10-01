@@ -48,6 +48,14 @@
 //! byte positions that differ, counted by class and by position from the
 //! record's start (#548).
 //!
+//! RE-140 (the same scan, run on Autodesk's sample projects of 2019 to 2027):
+//! every group also prints the values of the trailer's flag word and how many
+//! trailers do not repeat the record's size; a 2023-form file prints how many
+//! `[Outline][0xFF x 4][ElementParents]` markers it holds, how many have the
+//! 32-bit header 52 bytes before them, and how many are followed by a
+//! well-formed bounding box. A release after 2026 is read as 2024 is, from the
+//! header record alone, so it prints what is there without being admitted.
+//!
 //! Usage:
 //!   cargo run --profile ci --example probe_re135_undeclared_records -- MODEL.rvt
 
@@ -97,6 +105,11 @@ const DIFFERING_OFFSETS_SHOWN: usize = 60;
 /// size.
 const HEADER_2023: usize = 12;
 
+/// Bytes from a 2023 record's ElementId to its marker (RE-81), and from the
+/// ElementId to the header tag.
+const MARKER_AFTER_ID: usize = 52;
+const HEADER_TAG_AFTER_ID: usize = 8;
+
 #[derive(Clone, Copy, PartialEq)]
 enum Layout {
     V2023,
@@ -116,6 +129,9 @@ struct Record {
     category: Option<i64>,
     /// The record's bounding box, feet: min x, y, z then max x, y, z.
     bbox: Option<[f64; 6]>,
+    /// The trailer's flag word, and whether its last word repeats the
+    /// record's size (RE-140).
+    trailer: Option<(u32, bool)>,
 }
 
 fn u16_at(buf: &[u8], at: usize) -> Option<u16> {
@@ -255,7 +271,22 @@ impl Layout {
             flags: u32_at(buf, flags_at + shift),
             category: i64_at(buf, category_at + shift),
             bbox: bbox_read.then_some(bbox),
+            trailer: None,
         })
+    }
+
+    /// The flag word of the trailer that ends the record `start..end`, and
+    /// whether the word after it repeats the size (both layouts end a record
+    /// with the flag word and the size echo).
+    fn trailer(self, buf: &[u8], start: usize, end: usize) -> Option<(u32, bool)> {
+        let size_at = match self {
+            Layout::V2023 => start + 4,
+            Layout::V2024 => start + 8,
+        };
+        let size = u32_at(buf, size_at)?;
+        let flag = u32_at(buf, end.checked_sub(8)?)?;
+        let echo = u32_at(buf, end.checked_sub(4)?)?;
+        Some((flag, echo == size))
     }
 }
 
@@ -285,6 +316,7 @@ fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Recor
             continue;
         };
         record.span = end - start;
+        record.trailer = layout.trailer(buf, start, end);
         out.push(record);
         next_free = end;
     }
@@ -322,10 +354,21 @@ struct Tally {
     classes_undeclared: BTreeMap<String, usize>,
     flags_declared: BTreeMap<String, usize>,
     flags_undeclared: BTreeMap<String, usize>,
+    /// The trailer flag word of every record (RE-140).
+    trailer_flags: BTreeMap<String, usize>,
+    /// Trailers whose last word is not the record's size.
+    echo_mismatch: usize,
 }
 
 impl Tally {
     fn add(&mut self, record: &Record, declared: bool, class: String) {
+        match record.trailer {
+            Some((flag, echo_matches)) => {
+                *self.trailer_flags.entry(format!("{flag:#x}")).or_default() += 1;
+                self.echo_mismatch += usize::from(!echo_matches);
+            }
+            None => *self.trailer_flags.entry("none".to_string()).or_default() += 1,
+        }
         let flag_key = record
             .flags
             .map_or_else(|| "none".to_string(), |flags| format!("{flags:#x}"));
@@ -350,7 +393,7 @@ impl Tally {
 
     fn json(&self, group: &str) -> String {
         format!(
-            "{{\"group\":{group:?},\"records\":{},\"declared\":{},\"undeclared\":{},\"bit_0x10\":{{\"declared\":{},\"undeclared\":{}}},\"with_entries\":{},\"class_unresolved\":{},\"classes\":{},\"classes_declared\":{},\"classes_undeclared\":{},\"flags_declared\":{},\"flags_undeclared\":{}}}",
+            "{{\"group\":{group:?},\"records\":{},\"declared\":{},\"undeclared\":{},\"bit_0x10\":{{\"declared\":{},\"undeclared\":{}}},\"with_entries\":{},\"class_unresolved\":{},\"classes\":{},\"classes_declared\":{},\"classes_undeclared\":{},\"flags_declared\":{},\"flags_undeclared\":{},\"trailer_flags\":{},\"echo_mismatch\":{}}}",
             self.declared + self.undeclared,
             self.declared,
             self.undeclared,
@@ -363,6 +406,8 @@ impl Tally {
             top_pairs(&self.classes_undeclared, TOP),
             top_pairs(&self.flags_declared, TOP),
             top_pairs(&self.flags_undeclared, TOP),
+            top_pairs(&self.trailer_flags, TOP),
+            self.echo_mismatch,
         )
     }
 }
@@ -372,13 +417,11 @@ fn run() -> rvt::Result<()> {
     let digest = sha256_hex(&std::fs::read(&path).expect("read the model"));
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
+    // A release after 2026 is read as 2024 is (RE-140); it is printed, not admitted.
     let layout = if version <= 2023 {
         Layout::V2023
-    } else if per::supports_revit_version(version) {
-        Layout::V2024
     } else {
-        println!("{{\"revit\":{version},\"skipped\":\"release not measured\"}}");
-        return Ok(());
+        Layout::V2024
     };
     let classes = rf.schema_classes()?;
     let tag_of = |name: &str| {
@@ -412,12 +455,32 @@ fn run() -> rvt::Result<()> {
     let mut records: Vec<Record> = Vec::new();
     let mut stream_lines: Vec<String> = Vec::new();
     let mut candidates = 0usize;
+    // RE-140: the markers of a 2023-form file, the 32-bit header 52 bytes
+    // before each, and a well-formed box after it.
+    let marker = (layout == Layout::V2023)
+        .then(|| rvt::partition_element_records_2023::record_marker(&mut rf))
+        .flatten();
+    let (mut markers, mut marker_headers, mut marker_boxes) = (0usize, 0usize, 0usize);
     let streams = rf.partition_stream_names();
     for stream in &streams {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
         let buf = inflated.bytes();
+        if let Some((marker, _)) = marker {
+            for at in memchr::memmem::find_iter(buf, &marker) {
+                markers += 1;
+                marker_headers += usize::from(
+                    at.checked_sub(MARKER_AFTER_ID)
+                        .and_then(|id_at| u16_at(buf, id_at + HEADER_TAG_AFTER_ID))
+                        == Some(header_tag),
+                );
+                let bbox: Option<Vec<f64>> = (0..6).map(|k| f64_at(buf, at + 8 + 8 * k)).collect();
+                marker_boxes += usize::from(bbox.is_some_and(|b| {
+                    b.iter().all(|x| x.is_finite()) && (0..3).all(|axis| b[axis] <= b[axis + 3])
+                }));
+            }
+        }
         let (found, chain_end, stream_candidates) = scan(layout, stream, buf, header_tag);
         candidates += stream_candidates;
         stream_lines.push(format!(
@@ -427,6 +490,11 @@ fn run() -> rvt::Result<()> {
             found.iter().filter(|record| record.in_chain).count(),
         ));
         records.extend(found);
+    }
+    if marker.is_some() {
+        println!(
+            "{{\"markers\":{markers},\"markers_with_header\":{marker_headers},\"markers_with_box\":{marker_boxes}}}"
+        );
     }
 
     let mut all = Tally::default();

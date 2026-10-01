@@ -1,0 +1,33 @@
+# Autodesk's published sample projects, one row per release (#421, RE-140).
+# Fetched from Autodesk's own download host for a measurement run by
+# tools/fetch-autodesk-samples.sh and never stored or committed. Autodesk licenses them under
+# CC BY-NC-SA 3.0 (https://www.autodesk.com/company/creative-commons), as it does the
+# family corpus. Hashes and sizes measured 2026-10-01.
+# year	file	url	sha256	bytes
+2019	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt	69726bb8c6bfe685ca8f4701ab30bfa069b84a7d20f40ae424dc5d8d89431d04	17584128
+2019	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rst_basic_sample_project.rvt	2d05d5249c6bd2d5d82661f2e640506c7d9bb33b796c59ee16e84df2192b1de9	5853184
+2019	rac_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rac_advanced_sample_project.rvt	3f6ec9f4650766b84c99c8d36db54b79d35ee3e570016a64461b2859cceff7f8	15622144
+2020	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2020RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	80abc5c49be32e8fc0da117b1624bfb7646b83d431823d201406c13d1fde9676	17793024
+2020	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2020RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	64ed91306a7ffbe2bf66fa0700d6109a7b199c56034361cb6b951d98c5c136c5	5881856
+2020	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2020RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	c6ba792daf571e3482577f773eb64600f087381fa7faa87353df1f1af0aa788f	15708160
+2021	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2021RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	8828b8803bf32866e83c57629df0dbefbf6a9ff6641916f84d39af9434829705	18518016
+2021	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2021RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	acd13fe315878c9c71a0cc88fcd97ef5e2629087d290232576afcbbe709de60d	6156288
+2021	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2021RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	a20b714a10f7f269bc0e09ce4be153dec6b64a884e049cb396a1066d83868a8c	18083840
+2022	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2022RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	131c02b8ce94dc4776f2b4b43505fadb46b61d13fab5672b6ba80078cf98f601	18608128
+2022	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2022RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	054a6e5803098dece0f7aa8d5248a74915696daed1a56492b95ce54d0f1de1de	6344704
+2022	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2022RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	430176be888c85e1af36e4477cde23b73dc83f70ea48315a52e3ab93083fefe6	16330752
+2023	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2023RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	94f98cc1a38f4f6c4799d62076dbdb14590543f9737863411ba68069a840df89	18898944
+2023	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2023RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	091ba54f47a2a84b45f925715ef4f4e3f910a16345b7d370150388cdd23c5391	6344704
+2023	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2023RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	75e8738dcc776950d1f08f8cf8c7ea6da1710c3a9aca17fb1e5e405aa7388d83	16486400
+2024	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	bb62c161b7991f0c5ec76605d3d9d0407e04001a2e4e6acac1c7fc32fd45ee55	19722240
+2024	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	aab838f861e0473be1cbb00e3ec57a20bc53fc16e1cec4c5d049bb401fcc616e	6602752
+2024	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	ff791052979d8f0acd51c35da1f9976f3357c10495b96fa322dca7555dfe5afc	17039360
+2025	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2025RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	41f1893a62d974edbe19f6077f7b75d0b662fff8c6ed167576e7ff568d3d4293	19750912
+2025	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2025RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	5089b2c661573cef8fd0741d044535497ae8f52bdb76973ceb47626483131acb	6651904
+2025	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2025RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	512e9188b245ba58fcc918630e4388b836df37042aa07de6db0e223b48de25d1	17068032
+2026	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2026RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	bc547fe94274a17abbea89330fcf8800b85652e0b8e25562b153c102af3d99dc	19759104
+2026	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2026RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	e7cf23a9627d3ee97ecb9fdf1ce0e34fd582c1d7ed0080fdc00f9e6563375418	6672384
+2026	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2026RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	f5fb37129bd1ab56e636469f55f71443630104d713a5d134b27b86f422083ace	17088512
+2027	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	c9ce4d013b630028973e4549d3be4b38b3640641948b035680eeea7306491a01	19828736
+2027	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	01685786d262fc89c5f81462694e6d87a31643d2eb7bc545497c663feeed1453	6737920
+2027	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	a88eb9f85e1e2d47bbc91ee214b178c2d7075822b6d08694f59e3e6f259024ed	17133568

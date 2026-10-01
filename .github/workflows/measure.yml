@@ -18,7 +18,9 @@
 # stream goes through the same parser). The Autodesk family corpus (phi-ag/rvt)
 # is fetched when `families` is set, and on every run of a change to this
 # workflow, so rvt-info reads each family's PartAtom too and the probe runs on
-# it. The corpus is scored against nothing and never stored.
+# it. The corpus is scored against nothing and never stored. Autodesk's sample
+# projects (2019 to 2027, pinned in research/autodesk-sample-projects.tsv) are
+# fetched the same way when `samples` is set.
 
 name: Measure
 
@@ -48,6 +50,11 @@ on:
         default: ""
       families:
         description: Also read every file of the phi-ag/rvt family corpus with rvt-info, and run the probe on it (Autodesk-owned, fetched for the run and never stored)
+        type: boolean
+        required: false
+        default: false
+      samples:
+        description: Also read Autodesk's sample projects of every release 2019 to 2027 (research/autodesk-sample-projects.tsv) with rvt-info, rvt-ifc diagnostics and the probe (Autodesk-owned, fetched for the run and never stored)
         type: boolean
         required: false
         default: false
@@ -111,6 +118,9 @@ jobs:
         with:
           repository: phi-ag/rvt
           path: _corpus
+      - name: Fetch Autodesk's sample projects
+        if: inputs.samples
+        run: tools/fetch-autodesk-samples.sh _samples
       - name: Measure
         env:
           PROBE: ${{ inputs.probe }}
@@ -118,6 +128,7 @@ jobs:
           PROBE_SCORER_DIR: measured/tools/re
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           FAMILY_DIR: ${{ (inputs.families || github.event_name == 'pull_request') && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
+          SAMPLE_DIR: ${{ inputs.samples && format('{0}/_samples', github.workspace) || '' }}
         run: |
           tools/ci/measure-reference-models.sh measured/target/ci models results
           cp measured-commit.txt results/commit.txt
