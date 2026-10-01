@@ -2317,6 +2317,76 @@ impl StepWriter {
             );
         }
 
+        // RE-138 (#528): the joins of ducts and pipes. A connector is an
+        // `IfcDistributionPort` named after its element and index, with no
+        // flow direction (the file's lists carry none), tied to its element
+        // by an `IfcRelConnectsPortToElement`; a join is an
+        // `IfcRelConnectsPorts` between two of them. A port is shared by every
+        // join it is in.
+        let mut ports: HashMap<(u32, u32), usize> = HashMap::new();
+        for entity in &model.entities {
+            let super::entities::IfcEntity::PortConnection {
+                a,
+                a_id,
+                a_index,
+                b,
+                b_id,
+                b_index,
+            } = entity
+            else {
+                continue;
+            };
+            let (Some(a_el), Some(b_el)) = (
+                entity_index_to_el_id.get(*a).and_then(|slot| *slot),
+                entity_index_to_el_id.get(*b).and_then(|slot| *slot),
+            ) else {
+                continue;
+            };
+            let ends = [(a_el, *a_id, *a_index), (b_el, *b_id, *b_index)];
+            let mut port_ids = [0usize; 2];
+            for (slot, &(element, id, index)) in ends.iter().enumerate() {
+                if let Some(&port) = ports.get(&(id, index)) {
+                    port_ids[slot] = port;
+                    continue;
+                }
+                let (id_text, index_text) = (id.to_string(), index.to_string());
+                let port = self.id();
+                self.emit_entity(
+                    port,
+                    format!(
+                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,$,$)",
+                        gid(&["port", &id_text, &index_text]),
+                    ),
+                );
+                let to_element = self.id();
+                self.emit_entity(
+                    to_element,
+                    format!(
+                        "IFCRELCONNECTSPORTTOELEMENT('{}',#{owner_hist},$,$,#{port},#{element})",
+                        gid(&["port_to_element", &id_text, &index_text]),
+                    ),
+                );
+                ports.insert((id, index), port);
+                port_ids[slot] = port;
+            }
+            let rel = self.id();
+            self.emit_entity(
+                rel,
+                format!(
+                    "IFCRELCONNECTSPORTS('{}',#{owner_hist},$,$,#{},#{},$)",
+                    gid(&[
+                        "ports",
+                        &a_id.to_string(),
+                        &a_index.to_string(),
+                        &b_id.to_string(),
+                        &b_index.to_string(),
+                    ]),
+                    port_ids[0],
+                    port_ids[1],
+                ),
+            );
+        }
+
         // RE-47: further sets of an element, such as Pset_StairCommon.
         for entity in &model.entities {
             let super::entities::IfcEntity::ElementPropertySet { element, set } = entity else {
