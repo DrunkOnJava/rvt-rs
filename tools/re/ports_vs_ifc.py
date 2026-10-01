@@ -91,9 +91,8 @@ def main():
     try:
         findings, about_ports = port_schema_findings(args.rvt_rs_ifc)
         print(f"schema validation of rvt-rs's file: {len(findings)} findings, {len(about_ports)} about the port entities")
-        if args.list:
-            for finding in about_ports[:10]:
-                print("  schema:", json.dumps(finding, default=str)[:300])
+        for finding in about_ports[:5]:
+            print("  schema:", json.dumps(finding, default=str)[:400])
     except Exception as error:  # the validator is a measurement, not the score
         print(f"schema validation unavailable: {type(error).__name__}: {error}")
     if args.list:
