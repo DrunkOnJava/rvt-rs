@@ -1,8 +1,9 @@
 # Autodesk's published sample projects, one row per release (#421, RE-140).
 # Fetched from Autodesk's own download host for a measurement run by
-# tools/fetch-autodesk-samples.sh and never stored or committed. Autodesk licenses them under
-# CC BY-NC-SA 3.0 (https://www.autodesk.com/company/creative-commons), as it does the
-# family corpus. Hashes and sizes measured 2026-10-01.
+# tools/fetch-autodesk-samples.sh and never stored or committed. They are on the host the
+# family corpus comes from, which phi-ag/rvt lists under CC BY-NC-SA 3.0; the projects' own
+# terms were not checked, which is why they are only fetched for a run. Hashes and sizes
+# measured 2026-10-01.
 # year	file	url	sha256	bytes
 2016	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt	8e6d1a7668dd700d7a94c022a80cbb2a9ea31925a75fbc551c8ced0904dbb8a1	16474112
 2016	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rst_basic_sample_project.rvt	c2fe9b5eea7c9d0e345e2a8a981cb94c8ded33408e7f3466903ad125149efe13	5693440

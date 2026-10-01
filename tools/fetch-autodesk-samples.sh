@@ -8,8 +8,10 @@
 # Autodesk's own download host into target-dir as <year>-<file>, checking the
 # pinned sha256 and byte count. A mismatch is deleted and reported, and the
 # script exits 1. Files already present with the right hash are left alone.
-# The files are Autodesk's (CC BY-NC-SA 3.0): they are fetched for a
-# measurement run and never stored in this repository.
+# The files are Autodesk's, on the host its sample families come from (which
+# phi-ag/rvt lists under CC BY-NC-SA 3.0; these projects' own terms were not
+# checked): they are fetched for a measurement run and never stored in this
+# repository.
 
 set -euo pipefail
 
