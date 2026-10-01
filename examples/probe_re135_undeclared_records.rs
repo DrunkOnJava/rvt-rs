@@ -260,7 +260,9 @@ impl Tally {
         let flag_key = record
             .flags
             .map_or_else(|| "none".to_string(), |flags| format!("{flags:#x}"));
-        let stub = record.flags.is_some_and(|flags| flags & FLAG_HOST_STUB != 0);
+        let stub = record
+            .flags
+            .is_some_and(|flags| flags & FLAG_HOST_STUB != 0);
         self.with_entries += usize::from(record.entries > 0);
         *self.classes.entry(class.clone()).or_default() += 1;
         if declared {

@@ -39,7 +39,7 @@ All notable changes will be documented here. This project follows
   `0x10` of the flag word is not a host-stub marker (Core Interior's three
   walls carry `0x929`; the bit is on 1,421 of RE1 Architecture's chain records
   and on 1,177 of a standalone family's). 1,444 ids on Core Interior open two
-  records in the chain, which is not explained.
+  records in the chain, which is not explained (#548).
   `examples/probe_re135_undeclared_records.rs`.
 - **A duct's or pipe's type, width and height are in its own object
   (RE-134, #96).** The fields that follow the `RbsCurveConnectorManager`

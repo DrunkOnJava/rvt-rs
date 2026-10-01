@@ -44,7 +44,7 @@ The probe finds every header record of every `Partitions/*` stream and splits th
 
 ## 5. Not established
 
-- **1,444 ElementIds on Core Interior (1,340 of them declared), and 13, 4, 109, 32 and 31 on the others, open two or more records in the chain.** RE-35 counted the declared ids that have a record in a chain, not that each has one. The class of those records is not measured, and neither is whether one of the two is what the ElemTable's second id (RE-41) points at.
+- **1,444 ElementIds on Core Interior (1,340 of them declared), and 13, 4, 109, 32 and 31 on the others, open two or more records in the chain.** RE-35 counted the declared ids that have a record in a chain, not that each has one. The class of those records is not measured, and neither is whether one of the two is what the ElemTable's second id (RE-41) points at. Filed as #548.
 - Which family document a record belongs to. The section headers give a count only.
 - 2023 records with declared parameter entries: none were found on Einhoven, so the 22-byte shift is unmeasured there.
 - Whether Revit's export holds the undeclared walls. Einhoven has no Revit export in the corpus. Core Interior has one, and its three could be looked up in it; that was not done.
