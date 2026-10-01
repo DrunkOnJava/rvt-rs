@@ -104,9 +104,8 @@ pub struct SchemaDiagnostics {
     /// usually means the full schema for that class lives in another
     /// stream or is implicit.
     pub parent_only_class_count: usize,
-    /// Classes that carry a non-zero `ancestor_tag` (Q4 addendum
-    /// finding — a mixin / protocol / category reference distinct
-    /// from direct `parent`).
+    /// Classes that carry a non-zero `ancestor_tag` (the Q4 addendum read
+    /// it as a reference distinct from `parent`; not reproduced, RE-137).
     pub ancestor_tag_count: usize,
     /// Parse candidates skipped for validation reasons. Copied from
     /// the underlying `skipped_records` field for convenience.
@@ -243,14 +242,16 @@ pub struct ClassEntry {
     /// `Formats/Latest`, or may be implicit.
     #[serde(default)]
     pub was_parent_only: bool,
-    /// Class-tag reference found in the preamble's "flag" word slot
-    /// (the u16 immediately before the field count). Non-zero values
-    /// match known class tags — likely a mixin / protocol / category
-    /// ancestor distinct from the direct `parent`. See §Q4 addendum
-    /// in `docs/rvt-moat-break-reconnaissance.md`.
+    /// The preamble's "flag" word (the u16 immediately before the field
+    /// count). The Q4 addendum read non-zero values as a class-tag
+    /// reference to an ancestor distinct from the direct `parent`; that
+    /// reading did not reproduce under the page-stripped schema grammar
+    /// (`schema_classes`, RE-137), and what the word is has not been
+    /// established. See the §Q4 addendum in
+    /// `docs/rvt-moat-break-reconnaissance.md`.
     ///
-    /// `None` when the slot was 0x0000 (no reference). 55% of tagged
-    /// classes in the 2024 sample have no ancestor_tag.
+    /// `None` when the slot was 0x0000. 55% of tagged classes in the 2024
+    /// sample have no ancestor_tag.
     #[serde(default)]
     pub ancestor_tag: Option<u16>,
 }
