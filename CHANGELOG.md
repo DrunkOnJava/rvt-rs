@@ -56,6 +56,27 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **Autodesk's sample projects of 2016 to 2027, and puzzbobb's measurements
+  (RE-140, #421, #152, #548).** Autodesk publishes its `rac_basic`, `rst_basic`
+  and `rac_advanced` sample projects for every release from 2016 to 2027, 36
+  files, on the host the sample families come from; the Measure workflow's new
+  `samples` input fetches them by pinned hash
+  (`research/autodesk-sample-projects.tsv`, never stored). Every measurement
+  puzzbobb posted on #421 that they can test reproduces: a strict walk of the
+  partition chain (the header tag, and a trailer that repeats the size) holds
+  a record for every id the ElemTable declares on all 47 files measured (36
+  projects, 11 families), the tags are RE-133's and 2027's is 1540, the
+  trailer's flag word is `0` or `0x01000000` except one `0x01001269` in each
+  of the eight structural projects of 2016 to 2023, and every element marker
+  of 2016 to 2023 has its 32-bit header 52 bytes before it and a well-formed
+  box after. The same model read in 2016 to 2022 agrees with 2024's reading
+  of it: class names on every id both hold, categories on 99.9 to 100 per
+  cent and boxes on 89.6 to 100 per cent of the records with a marker (the
+  box differences are likelier the model's own edits than a reading error,
+  and were not examined element by element). Revit 2027's records hold the
+  marker where 2024's do, 22 bytes further for each parameter entry. No
+  release is admitted: there is no Revit export of any of them.
+  `reports/element-framing/RE-140-sample-projects-2016-2027.md`.
 - **What differs between the copies of a record in several partitions
   (RE-139, #548).** On Core Interior, of the 571 ids whose copies differ, the
   bounding boxes of 171 walls, 96 family instances, 111 rooms and 12 floors
