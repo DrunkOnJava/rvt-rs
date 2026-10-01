@@ -23,6 +23,14 @@
 //! The pairs are Revit's `IfcRelConnectsPorts` of the ports named
 //! `<In or Out>Port_<ElementId>_<index>`, scored by
 //! `tools/re/connector_pairs_vs_ifc.py`.
+//!
+//! A fitting's joins are written in the same list form, with the fitting as
+//! the first reference, but not after an anchor of a fitting's own: they are
+//! found by the list alone, anywhere in a partition (RE-141). A fitting's list
+//! is written once and carries its own connector index as Revit numbers it
+//! (a tee's are 1, 2 and 3), where a duct's or pipe's earlier copy is
+//! inverted. A fitting's own record holds only the sorted ids of the elements
+//! it refers to.
 
 use crate::{Result, RevitFile};
 use std::collections::BTreeSet;
@@ -62,12 +70,17 @@ const UNSET: u64 = u64::MAX;
 /// A duct or pipe has two connectors, numbered 0 and 1.
 const CURVE_CONNECTORS: u32 = 2;
 
-/// One connector of a duct or pipe and the connector it is joined to.
+/// A connector index of a fitting or of the element it is joined to is below
+/// this: a fitting has a few connectors, numbered from 1.
+const FITTING_CONNECTORS: u32 = 8;
+
+/// One connector of a duct, pipe or fitting and the connector it is joined to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ConnectorPair {
-    /// The duct or pipe.
+    /// The duct, pipe or fitting.
     pub element: u64,
-    /// Its connector, 0 or 1, as Revit numbers it.
+    /// Its connector as Revit numbers it: 0 or 1 for a duct or pipe, from 1
+    /// for a fitting.
     pub index: u32,
     /// The element joined to that connector.
     pub other: u64,
@@ -205,6 +218,59 @@ pub fn scan_connector_pairs(
         for at in memchr::memmem::find_iter(buf, &anchor) {
             let tail = &buf[at..(at + SCAN_TO + LIST_BYTES).min(buf.len())];
             pairs.extend(resolve(&lists_in(tail, curves)));
+        }
+    }
+    Ok(pairs.into_iter().collect())
+}
+
+/// The list at `at` in `buf` when it joins one of `fittings` to one of
+/// `others` (RE-141).
+fn fitting_list_at(
+    buf: &[u8],
+    at: usize,
+    fittings: &BTreeSet<u64>,
+    others: &BTreeSet<u64>,
+) -> Option<ConnectorPair> {
+    if u32_at(buf, at)? != LIST_ENTRIES {
+        return None;
+    }
+    let (element, index, own_flag) = reference_at(buf, at + 4)?;
+    let (other, other_index, other_flag) = reference_at(buf, at + 4 + ENTRY_BYTES)?;
+    (fittings.contains(&element)
+        && others.contains(&other)
+        && other != element
+        && index < FITTING_CONNECTORS
+        && other_index < FITTING_CONNECTORS
+        && own_flag == REFERENCE_FLAG
+        && other_flag == REFERENCE_FLAG)
+        .then_some(ConnectorPair {
+            element,
+            index,
+            other,
+            other_index,
+        })
+}
+
+/// The connector pairs of `fittings` (the ElementIds of duct and pipe
+/// fittings) joined to one of `others`, sorted and without repeats (RE-141).
+/// Empty for a release this layout is not measured on.
+pub fn scan_fitting_pairs(
+    rf: &mut RevitFile,
+    fittings: &BTreeSet<u64>,
+    others: &BTreeSet<u64>,
+) -> Result<Vec<ConnectorPair>> {
+    if fittings.is_empty() || !supports_revit_version(rf.basic_file_info()?.version) {
+        return Ok(Vec::new());
+    }
+    let count = LIST_ENTRIES.to_le_bytes();
+    let mut pairs: BTreeSet<ConnectorPair> = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for at in memchr::memmem::find_iter(buf, &count) {
+            pairs.extend(fitting_list_at(buf, at, fittings, others));
         }
     }
     Ok(pairs.into_iter().collect())
