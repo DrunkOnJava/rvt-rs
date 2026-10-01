@@ -189,6 +189,7 @@ pub mod part_atom;
 pub mod partition_arc_walls;
 pub mod partition_beam_axes;
 pub mod partition_compound_structure;
+pub mod partition_connector_pairs;
 pub mod partition_design_options;
 pub mod partition_element_records;
 pub mod partition_element_records_2023;
