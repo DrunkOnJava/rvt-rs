@@ -235,6 +235,14 @@ impl Layout {
         }
     }
 
+    /// The id and size words of the header at `start` (RE-144).
+    fn header_words(self, buf: &[u8], start: usize) -> Option<(u64, u32)> {
+        match self {
+            Layout::V2023 => Some((u64::from(u32_at(buf, start)?), u32_at(buf, start + 4)?)),
+            Layout::V2024 => Some((u64_at(buf, start)?, u32_at(buf, start + 8)?)),
+        }
+    }
+
     /// Bytes from a record's start to its element-record marker.
     fn marker_at(self) -> usize {
         match self {
@@ -317,16 +325,24 @@ impl Layout {
     }
 }
 
-/// Every header record of one partition, in stream order, where its leading
-/// chain ends, and how many positions outside an accepted record carried the
-/// header tag.
+/// What one partition holds: every header record in stream order, where its
+/// leading chain ends, how many positions outside an accepted record carried
+/// the header tag, and the id and size words of those that were not accepted
+/// (RE-144).
+struct Scanned {
+    records: Vec<Record>,
+    chain_end: usize,
+    candidates: usize,
+    rejected: Vec<(u64, u32)>,
+}
+
 fn scan(
     layout: Layout,
     stream: &str,
     buf: &[u8],
     header_tag: u16,
     marker: Option<[u8; 8]>,
-) -> (Vec<Record>, usize, usize) {
+) -> Scanned {
     let mut chain_end = 0usize;
     while let Some(next) = layout.record_end(buf, chain_end, header_tag) {
         chain_end = next;
@@ -334,6 +350,7 @@ fn scan(
     let mut out = Vec::new();
     let mut next_free = 0usize;
     let mut candidates = 0usize;
+    let mut rejected = Vec::new();
     for hit in memchr::memmem::find_iter(buf, &header_tag.to_le_bytes()) {
         let Some(start) = hit.checked_sub(layout.tag_at()) else {
             continue;
@@ -343,6 +360,7 @@ fn scan(
         }
         candidates += 1;
         let Some(end) = layout.record_end(buf, start, header_tag) else {
+            rejected.extend(layout.header_words(buf, start));
             continue;
         };
         let Some(mut record) = layout.read(stream, buf, start, start < chain_end, marker) else {
@@ -357,7 +375,12 @@ fn scan(
         out.push(record);
         next_free = end;
     }
-    (out, chain_end, candidates)
+    Scanned {
+        records: out,
+        chain_end,
+        candidates,
+        rejected,
+    }
 }
 
 fn declared_in(declared: &BTreeSet<u32>, id: u64) -> bool {
@@ -567,6 +590,7 @@ fn run() -> rvt::Result<()> {
     let marker = rvt::partition_element_records_2023::record_marker(&mut rf);
     let (mut markers, mut marker_headers, mut marker_boxes) = (0usize, 0usize, 0usize);
     let mut strict: Vec<(u64, u32)> = Vec::new();
+    let mut rejected: Vec<(u64, u32)> = Vec::new();
     let streams = rf.partition_stream_names();
     for stream in &streams {
         let Ok(inflated) = rf.inflated_partition(stream) else {
@@ -588,7 +612,12 @@ fn run() -> rvt::Result<()> {
                 }));
             }
         }
-        let (found, chain_end, stream_candidates) = scan(
+        let Scanned {
+            records: found,
+            chain_end,
+            candidates: stream_candidates,
+            rejected: stream_rejected,
+        } = scan(
             layout,
             stream,
             buf,
@@ -596,6 +625,7 @@ fn run() -> rvt::Result<()> {
             marker.map(|(marker, _)| marker),
         );
         candidates += stream_candidates;
+        rejected.extend(stream_rejected);
         stream_lines.push(format!(
             "{{\"stream\":{stream:?},\"bytes\":{},\"chain_end\":{chain_end},\"records\":{},\"in_chain\":{}}}",
             buf.len(),
@@ -604,6 +634,25 @@ fn run() -> rvt::Result<()> {
         ));
         records.extend(found);
     }
+    // RE-144: the positions that carry the header tag and are not a record, by
+    // their id and size words: whether they come in repeated groups.
+    let mut by_pair: BTreeMap<(u64, u32), usize> = BTreeMap::new();
+    let mut by_size: BTreeMap<String, usize> = BTreeMap::new();
+    let mut by_id: BTreeMap<String, usize> = BTreeMap::new();
+    for &(id, size) in &rejected {
+        *by_pair.entry((id, size)).or_default() += 1;
+        *by_size.entry(size.to_string()).or_default() += 1;
+        *by_id.entry(id.to_string()).or_default() += 1;
+    }
+    let groups = by_pair.values().filter(|&&count| count >= 3).count();
+    let in_groups: usize = by_pair.values().filter(|&&count| count >= 3).sum();
+    println!(
+        "{{\"rejected\":{{\"count\":{},\"distinct_id_and_size\":{},\"groups_of_3_or_more\":{groups},\"positions_in_those_groups\":{in_groups},\"by_size\":{},\"by_id\":{}}}}}",
+        rejected.len(),
+        by_pair.len(),
+        top_pairs(&by_size, TOP),
+        top_pairs(&by_id, TOP)
+    );
     if layout == Layout::V2023 && marker.is_some() {
         println!(
             "{{\"markers\":{markers},\"markers_with_header\":{marker_headers},\"markers_with_box\":{marker_boxes}}}"
