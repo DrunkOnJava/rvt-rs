@@ -313,6 +313,8 @@ pub fn recover_partition_schema_mvp(
     attach_beam_axes(rf, revit_version, &mut out.products);
     // --- Pipes as cylinders along their ends (RE-131) ---
     attach_pipe_axes(rf, revit_version, &mut out.products);
+    // --- Which element each end of a duct or pipe is joined to (RE-138) ---
+    attach_connector_pairs(rf, revit_version, &mut out.products);
     // --- Roof outlines from their sketch lines (RE-50) ---
     attach_roof_profiles(rf, revit_version, &mut out.products);
     // --- Shaft openings cut the outlines within their height (RE-99) ---
@@ -3537,6 +3539,92 @@ fn attach_pipe_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [Deco
                 size: 8,
             },
         ));
+    }
+}
+
+/// Fields naming the element joined at a duct's or pipe's connector 0 and
+/// connector 1 (RE-138).
+pub const CONNECTOR_ELEMENT_FIELDS: [&str; 2] = ["m_connector_0_element", "m_connector_1_element"];
+
+/// Fields naming that element's connector index, for connector 0 and 1
+/// (RE-138).
+pub const CONNECTOR_INDEX_FIELDS: [&str; 2] = ["m_connector_0_index", "m_connector_1_index"];
+
+/// The element and connector index joined at a duct's or pipe's connector 0
+/// and 1; `None` for a connector with no join read (RE-138).
+pub type ConnectorJoins = [Option<(u32, u32)>; 2];
+
+/// The joins of a duct or pipe, from its fields (RE-138).
+pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> ConnectorJoins {
+    let element = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == wanted => Some(*id),
+            _ => None,
+        })
+    };
+    let index = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Integer { value, .. } if name == wanted => u32::try_from(*value).ok(),
+            _ => None,
+        })
+    };
+    let join = |k: usize| {
+        let other = element(CONNECTOR_ELEMENT_FIELDS[k])?;
+        let other_index = index(CONNECTOR_INDEX_FIELDS[k])?;
+        Some((other, other_index))
+    };
+    [join(0), join(1)]
+}
+
+/// Give each duct and pipe the element and connector joined at each of its two
+/// connectors ([`crate::partition_connector_pairs`], RE-138). A connector with
+/// no join read is left without the fields.
+fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_connector_pairs as pcp;
+    if !pcp::supports_revit_version(revit_version) {
+        return;
+    }
+    let is_curve = |element: &DecodedElement| matches!(element.class.as_str(), "Duct" | "Pipe");
+    let curves: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| is_curve(element))
+        .filter_map(|element| element.id)
+        .map(u64::from)
+        .collect();
+    if curves.is_empty() {
+        return;
+    }
+    let Ok(pairs) = pcp::scan_connector_pairs(rf, &curves) else {
+        return;
+    };
+    for element in products.iter_mut().filter(|element| is_curve(element)) {
+        let Some(id) = element.id else {
+            continue;
+        };
+        let mut joined = [false; 2];
+        for pair in pairs.iter().filter(|pair| pair.element == u64::from(id)) {
+            let (Ok(connector), Ok(other)) =
+                (usize::try_from(pair.index), u32::try_from(pair.other))
+            else {
+                continue;
+            };
+            if connector >= joined.len() || joined[connector] {
+                continue;
+            }
+            joined[connector] = true;
+            element.fields.push((
+                CONNECTOR_ELEMENT_FIELDS[connector].into(),
+                InstanceField::ElementId { tag: 0, id: other },
+            ));
+            element.fields.push((
+                CONNECTOR_INDEX_FIELDS[connector].into(),
+                InstanceField::Integer {
+                    value: i64::from(pair.other_index),
+                    signed: false,
+                    size: 4,
+                },
+            ));
+        }
     }
 }
 

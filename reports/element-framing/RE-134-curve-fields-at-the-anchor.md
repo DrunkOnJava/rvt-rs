@@ -81,4 +81,4 @@ So rvt-rs keeps naming ducts `Duct-<ElementId>`. What would isolate the switch i
 
 - Sloped or turned pipes and ducts, and pipe and duct fittings: every RE1 pipe is along a principal axis (RE-131) and every duct's box is its solid (section 4), and the fittings' geometry is in their families.
 - `m_vNormal` and the elevation offsets, which are seen but not compared with Revit's export.
-- Connector references: each curve's manager also lists, near +1,060 from the anchor, the elements at its connectors and their connector indices (a duct's own id, then the fitting joined to it). They are how Revit's `IfcRelConnectsPorts` (73 in RE1 Mechanical, 126 in Plumbing) would be written, and they are not decoded.
+- Connector references: each curve's manager also lists, near +1,060 from the anchor, the elements at its connectors and their connector indices (a duct's own id, then the fitting joined to it). They are how Revit's `IfcRelConnectsPorts` (73 in RE1 Mechanical, 126 in Plumbing) would be written, and they are decoded in RE-138.
