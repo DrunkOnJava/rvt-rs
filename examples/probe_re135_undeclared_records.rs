@@ -44,6 +44,10 @@
 //! classes, the sizes, whether the records are adjacent, and whether the id is
 //! one `Global/ElemTable` writes as a primary id or only as a secondary one.
 //!
+//! RE-139 (the same scan): for the copies of a repeated id that differ, the
+//! byte positions that differ, counted by class and by position from the
+//! record's start (#548).
+//!
 //! Usage:
 //!   cargo run --profile ci --example probe_re135_undeclared_records -- MODEL.rvt
 
@@ -83,6 +87,11 @@ const UNRESOLVED: &str = "?";
 
 /// Repeated chain ids shown in full.
 const EXAMPLES: usize = 8;
+
+/// Most differing byte positions counted for one pair of copies, and most
+/// (class, position) entries printed.
+const DIFF_POSITIONS: usize = 64;
+const DIFFERING_OFFSETS_SHOWN: usize = 60;
 
 /// Bytes ahead of the first record field a 2023 header has: `u32` id, `u32`
 /// size.
@@ -421,6 +430,7 @@ fn run() -> rvt::Result<()> {
     }
     let mut signatures: BTreeMap<String, usize> = BTreeMap::new();
     let mut differing: BTreeMap<String, usize> = BTreeMap::new();
+    let mut differing_at: BTreeMap<String, usize> = BTreeMap::new();
     let mut shown: Vec<String> = Vec::new();
     let (mut repeated_ids, mut adjacent) = (0usize, 0usize);
     let (mut in_primary, mut in_secondary_only) = (0usize, 0usize);
@@ -470,7 +480,24 @@ fn run() -> rvt::Result<()> {
         if blobs.len() == indexes.len() && blobs.windows(2).all(|pair| pair[0] == pair[1]) {
             identical += 1;
         } else {
-            *differing.entry(class_name(first.class_tag)).or_default() += 1;
+            let class = class_name(first.class_tag);
+            *differing.entry(class.clone()).or_default() += 1;
+            if blobs.len() == indexes.len() {
+                for blob in &blobs[1..] {
+                    if blob.len() != blobs[0].len() {
+                        *differing_at.entry(format!("{class}@size")).or_default() += 1;
+                        continue;
+                    }
+                    let positions = (0..blob.len())
+                        .filter(|&at| blob[at] != blobs[0][at])
+                        .take(DIFF_POSITIONS);
+                    for position in positions {
+                        *differing_at
+                            .entry(format!("{class}@{position}"))
+                            .or_default() += 1;
+                    }
+                }
+            }
         }
         if shown.len() < EXAMPLES {
             let parts: Vec<String> = indexes
@@ -523,8 +550,9 @@ fn run() -> rvt::Result<()> {
         colliding.len(),
     );
     println!(
-        "{{\"repeated_chain_ids\":{repeated_ids},\"adjacent\":{adjacent},\"in_elem_table_primary\":{in_primary},\"in_elem_table_secondary_only\":{in_secondary_only},\"in_one_stream\":{same_stream},\"same_class\":{same_class},\"same_size\":{same_span},\"identical_bytes\":{identical},\"differing_classes\":{},\"signatures\":{},\"examples\":[{}]}}",
+        "{{\"repeated_chain_ids\":{repeated_ids},\"adjacent\":{adjacent},\"in_elem_table_primary\":{in_primary},\"in_elem_table_secondary_only\":{in_secondary_only},\"in_one_stream\":{same_stream},\"same_class\":{same_class},\"same_size\":{same_span},\"identical_bytes\":{identical},\"differing_classes\":{},\"differing_offsets\":{},\"signatures\":{},\"examples\":[{}]}}",
         top_pairs(&differing, TOP),
+        top_pairs(&differing_at, DIFFERING_OFFSETS_SHOWN),
         top_pairs(&signatures, TOP),
         shown.join(",")
     );
