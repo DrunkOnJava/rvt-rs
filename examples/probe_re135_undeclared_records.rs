@@ -44,6 +44,10 @@
 //! classes, the sizes, whether the records are adjacent, and whether the id is
 //! one `Global/ElemTable` writes as a primary id or only as a secondary one.
 //!
+//! RE-139 (the same scan): for the copies of a repeated id that differ, the
+//! byte positions that differ, counted by class and by position from the
+//! record's start (#548).
+//!
 //! Usage:
 //!   cargo run --profile ci --example probe_re135_undeclared_records -- MODEL.rvt
 
@@ -84,6 +88,11 @@ const UNRESOLVED: &str = "?";
 /// Repeated chain ids shown in full.
 const EXAMPLES: usize = 8;
 
+/// Most differing byte positions counted for one pair of copies, and most
+/// (class, position) entries printed.
+const DIFF_POSITIONS: usize = 64;
+const DIFFERING_OFFSETS_SHOWN: usize = 60;
+
 /// Bytes ahead of the first record field a 2023 header has: `u32` id, `u32`
 /// size.
 const HEADER_2023: usize = 12;
@@ -105,6 +114,8 @@ struct Record {
     class_tag: Option<u16>,
     flags: Option<u32>,
     category: Option<i64>,
+    /// The record's bounding box, feet: min x, y, z then max x, y, z.
+    bbox: Option<[f64; 6]>,
 }
 
 fn u16_at(buf: &[u8], at: usize) -> Option<u16> {
@@ -129,6 +140,29 @@ fn i64_at(buf: &[u8], at: usize) -> Option<i64> {
     Some(i64::from_le_bytes(
         buf.get(at..at.checked_add(8)?)?.try_into().ok()?,
     ))
+}
+
+fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
+    Some(f64::from_le_bytes(
+        buf.get(at..at.checked_add(8)?)?.try_into().ok()?,
+    ))
+}
+
+/// The size of a difference between two bounding-box values, feet, as a name.
+fn delta_bucket(delta: f64) -> &'static str {
+    if delta == 0.0 {
+        "0"
+    } else if delta < 1e-9 {
+        "<1e-9"
+    } else if delta < 1e-6 {
+        "<1e-6"
+    } else if delta < 1e-3 {
+        "<1e-3"
+    } else if delta < 1.0 {
+        "<1"
+    } else {
+        ">=1"
+    }
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -180,13 +214,14 @@ impl Layout {
 
     /// The record that starts at `start`.
     fn read(self, stream: &str, buf: &[u8], start: usize, in_chain: bool) -> Option<Record> {
-        let (id, entries_at, class_at, flags_at, category_at) = match self {
+        let (id, entries_at, class_at, flags_at, category_at, bbox_at) = match self {
             Layout::V2024 => (
                 u64_at(buf, start)?,
                 start + 0x0e,
                 start + per::CLASS_TAG_OFFSET,
                 start + FLAGS_OFFSET,
                 start + per::CATEGORY_OFFSET,
+                start + per::BBOX_OFFSET,
             ),
             Layout::V2023 => (
                 u64::from(u32_at(buf, start)?),
@@ -194,10 +229,21 @@ impl Layout {
                 start + 46,
                 start + 42,
                 start + 14,
+                start + 60,
             ),
         };
         let entries = usize::from(u16_at(buf, entries_at).unwrap_or(0));
         let shift = ENTRY_BYTES * entries;
+        let mut bbox = [0.0f64; 6];
+        let bbox_read = bbox.iter_mut().enumerate().all(|(k, slot)| {
+            match f64_at(buf, bbox_at + shift + 8 * k) {
+                Some(value) if value.is_finite() => {
+                    *slot = value;
+                    true
+                }
+                _ => false,
+            }
+        });
         Some(Record {
             stream: stream.to_string(),
             offset: start,
@@ -208,6 +254,7 @@ impl Layout {
             class_tag: u16_at(buf, class_at + shift),
             flags: u32_at(buf, flags_at + shift),
             category: i64_at(buf, category_at + shift),
+            bbox: bbox_read.then_some(bbox),
         })
     }
 }
@@ -421,6 +468,11 @@ fn run() -> rvt::Result<()> {
     }
     let mut signatures: BTreeMap<String, usize> = BTreeMap::new();
     let mut differing: BTreeMap<String, usize> = BTreeMap::new();
+    let mut differing_at: BTreeMap<String, usize> = BTreeMap::new();
+    let mut bbox_deltas: BTreeMap<String, usize> = BTreeMap::new();
+    let mut diff_examples: Vec<String> = Vec::new();
+    let mut moved_walls: Vec<u64> = Vec::new();
+    let mut stream_pairs: BTreeMap<String, usize> = BTreeMap::new();
     let mut shown: Vec<String> = Vec::new();
     let (mut repeated_ids, mut adjacent) = (0usize, 0usize);
     let (mut in_primary, mut in_secondary_only) = (0usize, 0usize);
@@ -470,7 +522,76 @@ fn run() -> rvt::Result<()> {
         if blobs.len() == indexes.len() && blobs.windows(2).all(|pair| pair[0] == pair[1]) {
             identical += 1;
         } else {
-            *differing.entry(class_name(first.class_tag)).or_default() += 1;
+            let class = class_name(first.class_tag);
+            *differing.entry(class.clone()).or_default() += 1;
+            if blobs.len() == indexes.len() {
+                for blob in &blobs[1..] {
+                    if blob.len() != blobs[0].len() {
+                        *differing_at.entry(format!("{class}@size")).or_default() += 1;
+                        continue;
+                    }
+                    let positions = (0..blob.len())
+                        .filter(|&at| blob[at] != blobs[0][at])
+                        .take(DIFF_POSITIONS);
+                    for position in positions {
+                        *differing_at
+                            .entry(format!("{class}@{position}"))
+                            .or_default() += 1;
+                    }
+                }
+            }
+            let boxes: Vec<Option<[f64; 6]>> =
+                indexes.iter().map(|&index| records[index].bbox).collect();
+            if let Some(first_box) = boxes[0] {
+                let mut delta = 0.0f64;
+                let mut every_box_read = true;
+                for other in &boxes[1..] {
+                    match other {
+                        Some(other) => {
+                            delta = first_box
+                                .iter()
+                                .zip(other)
+                                .fold(delta, |most, (a, b)| most.max((a - b).abs()));
+                        }
+                        None => every_box_read = false,
+                    }
+                }
+                if every_box_read {
+                    *bbox_deltas
+                        .entry(format!("{class}:{}", delta_bucket(delta)))
+                        .or_default() += 1;
+                    if delta >= 1e-6 {
+                        if class == "SWall" {
+                            moved_walls.push(*id);
+                        }
+                        let streams: Vec<&str> = indexes
+                            .iter()
+                            .map(|&index| records[index].stream.as_str())
+                            .collect();
+                        *stream_pairs.entry(streams.join("|")).or_default() += 1;
+                    }
+                    if delta >= 1e-6 && diff_examples.len() < EXAMPLES {
+                        let copies: Vec<String> = indexes
+                            .iter()
+                            .map(|&index| {
+                                let record = &records[index];
+                                format!(
+                                    "{{\"stream\":{:?},\"offset\":{},\"bbox\":{}}}",
+                                    record.stream,
+                                    record.offset,
+                                    record
+                                        .bbox
+                                        .map_or_else(|| "null".to_string(), |b| format!("{b:?}")),
+                                )
+                            })
+                            .collect();
+                        diff_examples.push(format!(
+                            "{{\"id\":{id},\"class\":{class:?},\"delta_ft\":{delta:?},\"copies\":[{}]}}",
+                            copies.join(",")
+                        ));
+                    }
+                }
+            }
         }
         if shown.len() < EXAMPLES {
             let parts: Vec<String> = indexes
@@ -523,8 +644,11 @@ fn run() -> rvt::Result<()> {
         colliding.len(),
     );
     println!(
-        "{{\"repeated_chain_ids\":{repeated_ids},\"adjacent\":{adjacent},\"in_elem_table_primary\":{in_primary},\"in_elem_table_secondary_only\":{in_secondary_only},\"in_one_stream\":{same_stream},\"same_class\":{same_class},\"same_size\":{same_span},\"identical_bytes\":{identical},\"differing_classes\":{},\"signatures\":{},\"examples\":[{}]}}",
+        "{{\"repeated_chain_ids\":{repeated_ids},\"adjacent\":{adjacent},\"in_elem_table_primary\":{in_primary},\"in_elem_table_secondary_only\":{in_secondary_only},\"in_one_stream\":{same_stream},\"same_class\":{same_class},\"same_size\":{same_span},\"identical_bytes\":{identical},\"differing_classes\":{},\"differing_offsets\":{},\"bbox_delta_by_class\":{},\"differing_examples\":[{}],\"signatures\":{},\"examples\":[{}]}}",
         top_pairs(&differing, TOP),
+        top_pairs(&differing_at, DIFFERING_OFFSETS_SHOWN),
+        top_pairs(&bbox_deltas, DIFFERING_OFFSETS_SHOWN),
+        diff_examples.join(","),
         top_pairs(&signatures, TOP),
         shown.join(",")
     );
@@ -539,6 +663,10 @@ fn run() -> rvt::Result<()> {
         records.len(),
         table.len(),
         top_pairs(&table_lengths, TOP)
+    );
+    println!(
+        "{{\"moved\":{{\"walls\":{moved_walls:?},\"stream_pairs\":{}}}}}",
+        top_pairs(&stream_pairs, TOP)
     );
     println!("{}", all.json("all"));
     println!("{}", in_chain.json("in_chain"));

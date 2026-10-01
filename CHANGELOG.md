@@ -25,6 +25,17 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **What differs between the copies of a record in several partitions
+  (RE-139, #548).** On Core Interior, of the 571 ids whose copies differ, the
+  bounding boxes of 171 walls, 96 family instances, 111 rooms and 12 floors
+  differ by up to a foot (the wall examples by exactly one inch): they are
+  different revisions of the element, held in the main partition and one
+  other (`Partitions/46` with `59` for 377 ids, with `55` for 12). The other
+  models' boxes are equal or differ by less than 1e-9 ft. All 171 walls whose
+  boxes differ are exported, and all 360 exported walls match Revit's faces
+  and ends to 0.001 ft, but the exported body comes from the type's layers
+  and the axis, so that does not say the other copy would give the same.
+  Which copy is current is open. `examples/probe_re135_undeclared_records.rs`.
 - **The Q4 addendum's "ancestor class" does not reproduce (RE-137, #154).**
   The reconnaissance document read the `u16` before a class's field count as
   a reference to an ancestor distinct from the parent, with nine classes
