@@ -6,6 +6,22 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Ports for the joins of duct and pipe fittings (RE-141, #528).** A
+  fitting's joins are written in the same list form as a pipe's, with the
+  fitting first, and are read wherever they are in a partition. The IFC export
+  now writes an `IfcDistributionPort` for each connector of a joined pair of
+  fittings, ducts and pipes, fitting to fitting included: against Revit's own
+  export of the RE1 models, 66 of 73 of its port-to-port connections on
+  Mechanical (53 before) and 120 of 126 on Plumbing (112 before), none and one
+  that Revit does not hold, no schema finding, and no other model's output
+  changes. `partition_connector_pairs::scan_fitting_pairs`, and the joins type
+  `ConnectorJoins` now holds any number of connectors; the field names are
+  built by `connector_element_field` and `connector_index_field` where
+  `CONNECTOR_ELEMENT_FIELDS` and `CONNECTOR_INDEX_FIELDS` were.
+  `reports/element-framing/RE-141-fitting-joins.md`.
+
 ### Changed
 
 - **The minimum supported Rust version is 1.87, up from 1.85.** quick-xml 0.42

@@ -56,7 +56,7 @@ rvt-rs now writes a port for each connector in a join whose two elements it expo
 ## 4. What this does not claim
 
 - **No flow direction.** Revit names a port `InPort_` and gives it `.SINK.`, or `OutPort_` and `.SOURCE.`; across the 134 named ports of RE1 Mechanical the prefix and the direction agree on all 134, and the same connector index is In on some pipes and Out on others, so the direction is the system's flow, which the lists do not carry. rvt-rs writes `.NOTDEFINED.`. A fitting's or equipment's own direction lives in its family.
-- **Only connections that involve a duct or pipe.** Fitting to fitting and fitting to equipment connections, which are in Revit's export (14 of RE1 Mechanical's 73 and 8 of Plumbing's 126 involve no `IfcFlowSegment`), are not read.
+- **Only connections that involve a duct or pipe.** Fitting to fitting and fitting to equipment connections, which are in Revit's export (14 of RE1 Mechanical's 73 and 8 of Plumbing's 126 involve no `IfcFlowSegment`), are not read. RE-141 reads them: a fitting's joins are lists of the same form with the fitting first.
 - **Not the 3 and 6 connections that were not read** on the two models. They are connections of a duct or pipe whose lists, as read, do not give the join; what is different about them is not established.
 - **Port placement.** A port has no `ObjectPlacement`; Revit's has one at the connector's origin.
 - Revit 2025 only: the layout is measured on the RE1 models.
