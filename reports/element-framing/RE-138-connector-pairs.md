@@ -2,9 +2,9 @@
 
 **Date:** 2026-10-01
 **Issues:** #528, #96; Discussion #112
-**Artefacts:** `RE1-Mechanical.rvt` (Revit 2025, MIT; 25 ducts and 6 pipes) and `RE1-Plumbing.rvt` (63 pipes), with Revit's own IFC2X3 exports of both; the other two RE1 models for the negative. Measured on GitHub's hosted runners with the Measure workflow, runs 36872401031 (the lists) and 36872959370 (the export).
+**Artefacts:** `RE1-Mechanical.rvt` (Revit 2025, MIT; 25 ducts and 6 pipes) and `RE1-Plumbing.rvt` (63 pipes), with Revit's own IFC2X3 exports of both; the other two RE1 models for the negative. Measured on GitHub's hosted runners with the Measure workflow, runs 36872401031 (the lists) and 36874925630 (the export).
 **Probe and scorers:** `examples/probe_re138_connector_pairs.rs`, `tools/re/connector_pairs_vs_ifc.py` (the lists against Revit's connections) and `tools/re/ports_vs_ifc.py` (rvt-rs's export against Revit's).
-**Status:** positive, partial. 94 per cent of Revit's connections that involve a duct or pipe, on both models, with no flow direction.
+**Status:** positive, partial. The lists reproduce 94 per cent of Revit's connections that involve a duct or pipe on both models; the export writes 90 and 95 per cent of them, with no flow direction.
 **Credit:** jakobhirn-bit (Discussion #112), whose reading of a pipe's connector entries, keyed by the connected element, led RE-131 and RE-134 to the lists read here.
 
 ## 1. The lists
@@ -43,12 +43,13 @@ rvt-rs now writes a port for each connector in a join whose two elements it expo
 
 | model | Revit's ports | Revit's connections | involving a duct or pipe | rvt-rs's ports | rvt-rs's connections | of Revit's, written | written, not in Revit's | ports not tied to their element |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| RE1 Mechanical | 150 | 73 | 59 | 112 | 56 | **56 (94.9%)** | 0 | 0 |
+| RE1 Mechanical | 150 | 73 | 59 | 106 | 53 | **53 (89.8%)** | 0 | 0 |
 | RE1 Plumbing | 260 | 126 | 118 | 226 | 113 | **112 (94.9%)** | 1 | 0 |
 | RE1 Electrical | 53 | 0 | 0 | 0 | 0 | | | |
 | RE1 Architecture | 0 | 0 | 0 | 0 | 0 | | | |
 
-- Every port rvt-rs writes is tied to the element its name gives.
+- Every port rvt-rs writes is tied to the element its name gives, and IfcOpenShell's IFC4 schema validation of both files finds nothing (0 findings).
+- **A port is tied only to a distribution element.** IFC4's `IfcRelConnectsPortToElement` relates a port to an `IfcDistributionElement`. On RE1 Mechanical three of the lists' joins are to equipment rvt-rs writes as an `IfcBuildingElementProxy`; written, they were three schema errors in IfcOpenShell's validation, and they were 56 of the 59 instead of 53 before that rule. Revit's own IFC2X3 export puts ports on such proxies (5 of RE1 Mechanical's 150), which its schema allows.
 - Nothing else in the Measure outputs changes: the other scorers' outputs are identical to main's, and Core Interior's export, which has no duct or pipe, is byte-identical.
 - The ports are named `Port_<ElementId>_<index>`, with no `In` or `Out`.
 

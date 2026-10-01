@@ -83,10 +83,12 @@ All notable changes will be documented here. This project follows
   connector index differently (inverted in the earlier). rvt-rs reads them
   and writes an `IfcDistributionPort` for each connector, an
   `IfcRelConnectsPortToElement` for each port and an `IfcRelConnectsPorts` for
-  each join whose two elements it exports: 56 of the 59 connections of Revit's
-  export that involve a duct or pipe on RE1 Mechanical, 112 of 118 on
-  Plumbing, with every port tied to the element its name gives and one
-  connection written that Revit's export lacks. The ports have no flow
+  each join whose two elements it exports as distribution elements (IFC4
+  allows a port on no other, so equipment written as a building element proxy
+  has none): 53 of the 59 connections of Revit's export that involve a duct or
+  pipe on RE1 Mechanical, 112 of 118 on Plumbing, with every port tied to the
+  element its name gives, one connection written that Revit's export lacks and
+  no finding in IfcOpenShell's schema validation. The ports have no flow
   direction (Revit's names, `InPort_` and `OutPort_`, follow the system's
   flow, which the lists do not carry), so they are named
   `Port_<ElementId>_<index>`; fitting-to-fitting and equipment connections are
