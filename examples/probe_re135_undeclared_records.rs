@@ -415,9 +415,12 @@ fn run() -> rvt::Result<()> {
         chain_indexes.entry(record.id).or_default().push(index);
     }
     let mut signatures: BTreeMap<String, usize> = BTreeMap::new();
+    let mut differing: BTreeMap<String, usize> = BTreeMap::new();
     let mut shown: Vec<String> = Vec::new();
     let (mut repeated_ids, mut adjacent) = (0usize, 0usize);
     let (mut in_primary, mut in_secondary_only) = (0usize, 0usize);
+    let (mut same_stream, mut same_class, mut same_span, mut identical) =
+        (0usize, 0usize, 0usize, 0usize);
     for (id, indexes) in chain_indexes
         .iter()
         .filter(|(_, indexes)| indexes.len() > 1)
@@ -432,6 +435,38 @@ fn run() -> rvt::Result<()> {
         let id32 = u32::try_from(*id).ok();
         in_primary += usize::from(id32.is_some_and(|id| primary.contains(&id)));
         in_secondary_only += usize::from(id32.is_some_and(|id| secondary_only.contains(&id)));
+        let streams_of: BTreeSet<&str> = indexes
+            .iter()
+            .map(|&index| records[index].stream.as_str())
+            .collect();
+        same_stream += usize::from(streams_of.len() < indexes.len());
+        let first = &records[indexes[0]];
+        same_class += usize::from(
+            indexes
+                .iter()
+                .all(|&index| records[index].class_tag == first.class_tag),
+        );
+        same_span += usize::from(
+            indexes
+                .iter()
+                .all(|&index| records[index].span == first.span),
+        );
+        let blobs: Vec<Vec<u8>> = indexes
+            .iter()
+            .filter_map(|&index| {
+                let record = &records[index];
+                let inflated = rf.inflated_partition(&record.stream).ok()?;
+                inflated
+                    .bytes()
+                    .get(record.offset..record.offset + record.span)
+                    .map(<[u8]>::to_vec)
+            })
+            .collect();
+        if blobs.len() == indexes.len() && blobs.windows(2).all(|pair| pair[0] == pair[1]) {
+            identical += 1;
+        } else {
+            *differing.entry(class_name(first.class_tag)).or_default() += 1;
+        }
         if shown.len() < EXAMPLES {
             let parts: Vec<String> = indexes
                 .iter()
@@ -483,7 +518,8 @@ fn run() -> rvt::Result<()> {
         colliding.len(),
     );
     println!(
-        "{{\"repeated_chain_ids\":{repeated_ids},\"adjacent\":{adjacent},\"in_elem_table_primary\":{in_primary},\"in_elem_table_secondary_only\":{in_secondary_only},\"signatures\":{},\"examples\":[{}]}}",
+        "{{\"repeated_chain_ids\":{repeated_ids},\"adjacent\":{adjacent},\"in_elem_table_primary\":{in_primary},\"in_elem_table_secondary_only\":{in_secondary_only},\"in_one_stream\":{same_stream},\"same_class\":{same_class},\"same_size\":{same_span},\"identical_bytes\":{identical},\"differing_classes\":{},\"signatures\":{},\"examples\":[{}]}}",
+        top_pairs(&differing, TOP),
         top_pairs(&signatures, TOP),
         shown.join(",")
     );
