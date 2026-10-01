@@ -119,6 +119,14 @@ pub struct ElemRecord {
     /// layout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_id: Option<u32>,
+    /// The ids of the table's FIRST record, `(id_primary, id_secondary)`, set
+    /// on `records[0]` only (RE-140). The frames this parser reads start 24
+    /// bytes into their records, so each carries the ids of the record after
+    /// the one it opens in, and the table's first record, which starts at
+    /// `0x06`, is in none of them. [`declared_ids`] adds these. `None` on
+    /// every other record, and when the layout is not a 28- or 40-byte one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_ids: Option<(u32, u32)>,
     /// Raw record bytes (including the marker on project files).
     pub raw: Vec<u8>,
 }
@@ -418,6 +426,7 @@ pub fn parse_records_from_bytes(
             id_primary,
             id_secondary,
             owner_id,
+            previous_ids: None,
             raw,
         });
         i = record_end;
@@ -479,7 +488,37 @@ pub fn parse_records(rf: &mut RevitFile) -> Result<Vec<ElemRecord>> {
     let header = parse_header_bytes(&d)?;
     let layout = detect_layout(&d);
     let limit = header.record_count as usize;
-    Ok(parse_records_from_bytes(&d, layout, limit))
+    let mut records = parse_records_from_bytes(&d, layout, limit);
+    if let Some(first) = records.first_mut() {
+        first.previous_ids = first_record_ids(&d, layout);
+    }
+    Ok(records)
+}
+
+/// Bytes a frame starts after the record it opens in (RE-140): the table's
+/// records start at `0x06` and its frames at `0x1E`.
+const FRAME_AFTER_RECORD: usize = 24;
+
+/// The ids of the table's first record (RE-140): `(id_primary, id_secondary)`
+/// read from where the record starts, 24 bytes before the first frame, at
+/// `+0` and, on a 40-byte record, `+20`. A 28-byte record's second id is not
+/// declared, so its first is returned twice. `None` on a layout that is
+/// neither.
+fn first_record_ids(d: &[u8], layout: ElemTableLayout) -> Option<(u32, u32)> {
+    if !matches!(layout.framing, RecordFraming::Explicit { .. }) {
+        return None;
+    }
+    let origin = layout.start.checked_sub(FRAME_AFTER_RECORD)?;
+    let word = |at: usize| {
+        let bytes = d.get(at..at.checked_add(4)?)?;
+        Some(u32::from_le_bytes(bytes.try_into().ok()?))
+    };
+    let primary = word(origin)?;
+    match layout.stride {
+        28 => Some((primary, primary)),
+        40 => Some((primary, word(origin + 20)?)),
+        _ => None,
+    }
 }
 
 /// Index ElemTable records by `id_primary` for ElementId lookups.
@@ -568,12 +607,23 @@ pub const RECORD_LEN_40: usize = 40;
 /// `id_primary` is neither. Both are kept, so no id declared before is
 /// dropped. A `0` in `id_secondary` is not added: the 2024 family file's
 /// record 18 carries one.
+///
+/// The table's first record is added too, from [`ElemRecord::previous_ids`]
+/// (RE-140): no frame reads it, and on all 38 Autodesk sample projects and
+/// families of 2016 to 2027 measured, the one id it declares has a record in
+/// the partitions' chain.
 pub fn declared_ids(records: &[ElemRecord]) -> std::collections::BTreeSet<u32> {
     let mut ids = std::collections::BTreeSet::new();
     for record in records {
         ids.insert(record.id_primary);
         if record.raw.len() == RECORD_LEN_40 && record.id_secondary != 0 {
             ids.insert(record.id_secondary);
+        }
+        if let Some((primary, secondary)) = record.previous_ids {
+            ids.insert(primary);
+            if secondary != 0 {
+                ids.insert(secondary);
+            }
         }
     }
     ids
@@ -747,6 +797,7 @@ mod tests {
             id_primary,
             id_secondary,
             owner_id: None,
+            previous_ids: None,
             raw: vec![0; len],
         };
         let records = [
@@ -947,6 +998,7 @@ mod tests {
                 id_primary: 7,
                 id_secondary: 7,
                 owner_id: None,
+                previous_ids: None,
                 raw: vec![1],
             },
             ElemRecord {
@@ -954,6 +1006,7 @@ mod tests {
                 id_primary: 7,
                 id_secondary: 8,
                 owner_id: None,
+                previous_ids: None,
                 raw: vec![2],
             },
             ElemRecord {
@@ -961,6 +1014,7 @@ mod tests {
                 id_primary: 9,
                 id_secondary: 9,
                 owner_id: None,
+                previous_ids: None,
                 raw: vec![3],
             },
         ];

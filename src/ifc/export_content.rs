@@ -478,7 +478,7 @@ pub fn append_typed_production_elements(
         }
         if let Some(id) = decoded.id {
             let joins = crate::partition_schema_mvp::connector_joins_from_fields(&decoded.fields);
-            if joins.iter().any(Option::is_some) {
+            if !joins.is_empty() {
                 pending_joins.push((entity_index, id, joins));
             }
         }
@@ -577,10 +577,7 @@ pub fn append_typed_production_elements(
     };
     let mut connections: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
     for (entity, id, joins) in pending_joins {
-        for (index, join) in (0u32..).zip(joins) {
-            let Some((other_id, other_index)) = join else {
-                continue;
-            };
+        for (index, other_id, other_index) in joins {
             let Some(&other) = out.id_to_entity.get(&other_id) else {
                 continue;
             };

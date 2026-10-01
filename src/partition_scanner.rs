@@ -678,6 +678,7 @@ mod tests {
                 id_primary: 42,
                 id_secondary: 42,
                 owner_id: None,
+                previous_ids: None,
                 raw: vec![],
             },
             ElemRecord {
@@ -685,6 +686,7 @@ mod tests {
                 id_primary: 99,
                 id_secondary: 99,
                 owner_id: None,
+                previous_ids: None,
                 raw: vec![],
             },
         ];

@@ -3542,82 +3542,97 @@ fn attach_pipe_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [Deco
     }
 }
 
-/// Fields naming the element joined at a duct's or pipe's connector 0 and
-/// connector 1 (RE-138).
-pub const CONNECTOR_ELEMENT_FIELDS: [&str; 2] = ["m_connector_0_element", "m_connector_1_element"];
-
-/// Fields naming that element's connector index, for connector 0 and 1
-/// (RE-138).
-pub const CONNECTOR_INDEX_FIELDS: [&str; 2] = ["m_connector_0_index", "m_connector_1_index"];
-
-/// The element and connector index joined at a duct's or pipe's connector 0
-/// and 1; `None` for a connector with no join read (RE-138).
-pub type ConnectorJoins = [Option<(u32, u32)>; 2];
-
-/// The joins of a duct or pipe, from its fields (RE-138).
-pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> ConnectorJoins {
-    let element = |wanted: &str| {
-        fields.iter().find_map(|(name, value)| match value {
-            InstanceField::ElementId { id, .. } if name == wanted => Some(*id),
-            _ => None,
-        })
-    };
-    let index = |wanted: &str| {
-        fields.iter().find_map(|(name, value)| match value {
-            InstanceField::Integer { value, .. } if name == wanted => u32::try_from(*value).ok(),
-            _ => None,
-        })
-    };
-    let join = |k: usize| {
-        let other = element(CONNECTOR_ELEMENT_FIELDS[k])?;
-        let other_index = index(CONNECTOR_INDEX_FIELDS[k])?;
-        Some((other, other_index))
-    };
-    [join(0), join(1)]
+/// The field naming the element joined at connector `connector` of a duct,
+/// pipe or fitting (RE-138, RE-141).
+pub fn connector_element_field(connector: u32) -> String {
+    format!("m_connector_{connector}_element")
 }
 
-/// Give each duct and pipe the element and connector joined at each of its two
-/// connectors ([`crate::partition_connector_pairs`], RE-138). A connector with
-/// no join read is left without the fields.
+/// The field naming that element's connector index (RE-138, RE-141).
+pub fn connector_index_field(connector: u32) -> String {
+    format!("m_connector_{connector}_index")
+}
+
+/// The joins of an element: its connector, then the element and connector
+/// index it is joined to (RE-138, RE-141).
+pub type ConnectorJoins = Vec<(u32, u32, u32)>;
+
+/// The joins of a duct, pipe or fitting, from its fields (RE-138, RE-141).
+pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> ConnectorJoins {
+    let mut joins = ConnectorJoins::new();
+    for (name, value) in fields {
+        let InstanceField::ElementId { id: other, .. } = value else {
+            continue;
+        };
+        let Some(connector) = name
+            .strip_prefix("m_connector_")
+            .and_then(|rest| rest.strip_suffix("_element"))
+            .and_then(|number| number.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        let index_name = connector_index_field(connector);
+        let other_index = fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Integer { value, .. } if *name == index_name => {
+                u32::try_from(*value).ok()
+            }
+            _ => None,
+        });
+        if let Some(other_index) = other_index {
+            joins.push((connector, *other, other_index));
+        }
+    }
+    joins
+}
+
+/// Give each duct, pipe and fitting the element and connector joined at each
+/// of its connectors ([`crate::partition_connector_pairs`], RE-138, RE-141). A
+/// connector with no join read is left without the fields.
 fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     use crate::partition_connector_pairs as pcp;
     if !pcp::supports_revit_version(revit_version) {
         return;
     }
     let is_curve = |element: &DecodedElement| matches!(element.class.as_str(), "Duct" | "Pipe");
-    let curves: BTreeSet<u64> = products
-        .iter()
-        .filter(|element| is_curve(element))
-        .filter_map(|element| element.id)
-        .map(u64::from)
-        .collect();
-    if curves.is_empty() {
+    let is_fitting =
+        |element: &DecodedElement| matches!(element.class.as_str(), "DuctFitting" | "PipeFitting");
+    let ids_of = |keep: &dyn Fn(&DecodedElement) -> bool| -> BTreeSet<u64> {
+        products
+            .iter()
+            .filter(|element| keep(element))
+            .filter_map(|element| element.id)
+            .map(u64::from)
+            .collect()
+    };
+    let curves = ids_of(&is_curve);
+    let fittings = ids_of(&is_fitting);
+    if curves.is_empty() && fittings.is_empty() {
         return;
     }
-    let Ok(pairs) = pcp::scan_connector_pairs(rf, &curves) else {
-        return;
-    };
-    for element in products.iter_mut().filter(|element| is_curve(element)) {
+    let everything = ids_of(&|_| true);
+    let mut pairs = pcp::scan_connector_pairs(rf, &curves).unwrap_or_default();
+    pairs.extend(pcp::scan_fitting_pairs(rf, &fittings, &everything).unwrap_or_default());
+    for element in products
+        .iter_mut()
+        .filter(|element| is_curve(element) || is_fitting(element))
+    {
         let Some(id) = element.id else {
             continue;
         };
-        let mut joined = [false; 2];
+        let mut joined: BTreeSet<u32> = BTreeSet::new();
         for pair in pairs.iter().filter(|pair| pair.element == u64::from(id)) {
-            let (Ok(connector), Ok(other)) =
-                (usize::try_from(pair.index), u32::try_from(pair.other))
-            else {
+            let Ok(other) = u32::try_from(pair.other) else {
                 continue;
             };
-            if connector >= joined.len() || joined[connector] {
+            if !joined.insert(pair.index) {
                 continue;
             }
-            joined[connector] = true;
             element.fields.push((
-                CONNECTOR_ELEMENT_FIELDS[connector].into(),
+                connector_element_field(pair.index),
                 InstanceField::ElementId { tag: 0, id: other },
             ));
             element.fields.push((
-                CONNECTOR_INDEX_FIELDS[connector].into(),
+                connector_index_field(pair.index),
                 InstanceField::Integer {
                     value: i64::from(pair.other_index),
                     signed: false,

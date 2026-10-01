@@ -6,6 +6,22 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Ports for the joins of duct and pipe fittings (RE-141, #528).** A
+  fitting's joins are written in the same list form as a pipe's, with the
+  fitting first, and are read wherever they are in a partition. The IFC export
+  now writes an `IfcDistributionPort` for each connector of a joined pair of
+  fittings, ducts and pipes, fitting to fitting included: against Revit's own
+  export of the RE1 models, 66 of 73 of its port-to-port connections on
+  Mechanical (53 before) and 120 of 126 on Plumbing (112 before), none and one
+  that Revit does not hold, no schema finding, and no other model's output
+  changes. `partition_connector_pairs::scan_fitting_pairs`, and the joins type
+  `ConnectorJoins` now holds any number of connectors; the field names are
+  built by `connector_element_field` and `connector_index_field` where
+  `CONNECTOR_ELEMENT_FIELDS` and `CONNECTOR_INDEX_FIELDS` were.
+  `reports/element-framing/RE-141-fitting-joins.md`.
+
 ### Changed
 
 - **The minimum supported Rust version is 1.87, up from 1.85.** quick-xml 0.42
@@ -22,6 +38,21 @@ All notable changes will be documented here. This project follows
   The check is named `build + real files / ubuntu-latest / msrv`, without the
   version, so the ruleset in `.github/rulesets/main-protection.json` does not
   change when the MSRV does.
+
+### Fixed
+
+- **The declared ElementIds include the ElemTable's first record (RE-140, #152,
+  #421).** The frames `elem_table::parse_records` reads start 24 bytes into
+  their records, so none holds the table's first record, which starts at
+  `0x06`. On all 38 Autodesk sample projects and families of 2016 to 2027
+  measured, the one id that record declares was missing from every reader's
+  declared set although it has a record in the partitions' chain (a strict
+  walk of the chain covers every id read from `0x06` on all 38, and holds no
+  id the table does not declare on 37 of them; the 2021 `rac_advanced` sample
+  has 6).
+  The first record's ids are now read from `0x06`, kept on `records[0]` as
+  `ElemRecord::previous_ids`, and added by `declared_ids`; `parse_records`
+  returns the same records as before. Reported by puzzbobb (#421).
 
 ### Research
 
