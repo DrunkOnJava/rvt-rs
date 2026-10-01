@@ -174,6 +174,8 @@ pub fn append_typed_production_elements(
     // RE-84: doors and windows whose type draws no geometry.
     let mut without_geometry: std::collections::BTreeSet<usize> = Default::default();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
+    // RE-138: the joins of ducts and pipes, by entity index and ElementId.
+    let mut pending_joins: Vec<(usize, u32, [Option<(u32, u32)>; 2])> = Vec::new();
     // Bodies of aggregate wholes, held back until their parts are known: a
     // whole that no part names keeps its own body.
     let mut held_bodies: std::collections::BTreeMap<usize, Extrusion> =
@@ -454,6 +456,12 @@ pub fn append_typed_production_elements(
         }) {
             pending_parts.push((entity_index, whole));
         }
+        if let Some(id) = decoded.id {
+            let joins = crate::partition_schema_mvp::connector_joins_from_fields(&decoded.fields);
+            if joins.iter().any(Option::is_some) {
+                pending_joins.push((entity_index, id, joins));
+            }
+        }
 
         // Floor/Room → storey via Level ElementId only when both sides
         // carry ids that match. Partition MVP Levels are id-less today,
@@ -535,6 +543,33 @@ pub fn append_typed_production_elements(
     }
     for (whole, parts) in parts_by_whole {
         entities.push(entities::IfcEntity::Aggregate { whole, parts });
+    }
+
+    // RE-138 (#528): a join is written when both elements are exported, once
+    // however many of the two it was read from.
+    let mut connections: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
+    for (entity, id, joins) in pending_joins {
+        for (index, join) in (0u32..).zip(joins) {
+            let Some((other_id, other_index)) = join else {
+                continue;
+            };
+            let Some(&other) = out.id_to_entity.get(&other_id) else {
+                continue;
+            };
+            let mut ends = [(entity, id, index), (other, other_id, other_index)];
+            ends.sort();
+            connections.insert(ends);
+        }
+    }
+    for [(a, a_id, a_index), (b, b_id, b_index)] in connections {
+        entities.push(entities::IfcEntity::PortConnection {
+            a,
+            a_id,
+            a_index,
+            b,
+            b_id,
+            b_index,
+        });
     }
 
     if policy.include_geometry {

@@ -10,20 +10,22 @@
 //! +20  u64 the element joined to it  u32 connector index   u32 1
 //! ```
 //!
-//! Each join is written twice, some 200 bytes apart. The earlier copy stores
-//! the duct's own connector index the other way round from Revit's (0 for the
-//! connector Revit numbers 1, and 1 for 0); the later copy stores it as Revit
-//! numbers it. An end has the earlier copy always and the later one most of the
-//! time, so a join with both copies takes the later copy's index, and a join
-//! with one takes the earlier copy's, inverted. The index of the element joined
-//! at the other end is stored as Revit numbers it in both.
+//! A join is written in two blocks, the lists of the earlier at 1,021 to 1,130
+//! bytes from the anchor and of the later at 1,217 to 1,362 on the RE1 models.
+//! The earlier copy stores the duct's own connector index the other way round
+//! from Revit's (0 for the connector Revit numbers 1, and 1 for 0); the later
+//! copy stores it as Revit numbers it. A join has a later copy for most ends,
+//! and on some the earlier block holds one-reference lists instead, so a list
+//! in the later block is read as stored, and one in the earlier block is read
+//! inverted when no later list gives the same join. The index of the element
+//! joined at the other end is stored as Revit numbers it in both.
 //!
 //! The pairs are Revit's `IfcRelConnectsPorts` of the ports named
 //! `<In or Out>Port_<ElementId>_<index>`, scored by
 //! `tools/re/connector_pairs_vs_ifc.py`.
 
 use crate::{Result, RevitFile};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 /// Releases where this layout is measured: the RE1 models.
 pub const CONNECTOR_PAIR_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2025];
@@ -40,6 +42,11 @@ const CONNECTOR_MANAGER: &str = "RbsCurveConnectorManager";
 /// start at 1,021 to 1,362.
 const SCAN_FROM: usize = 900;
 const SCAN_TO: usize = 1600;
+
+/// A list at or after this many bytes from the anchor is in the later block:
+/// the earlier block's lists end at 1,130 and the later block's start at 1,217
+/// on RE1 Mechanical and Plumbing.
+const LATER_BLOCK_FROM: usize = 1170;
 
 /// A list holds two references: the curve's own connector and the one joined.
 const LIST_ENTRIES: u32 = 2;
@@ -136,31 +143,33 @@ fn lists_in(tail: &[u8], curves: &BTreeSet<u64>) -> Vec<RawList> {
     out
 }
 
-/// The connector pairs the lists of one anchor give. A join is the same
-/// element and connector at the other end; with two copies the later one's own
-/// index is Revit's, with one the earlier one's is inverted.
+/// The connector pairs the lists of one anchor give. A list in the later block
+/// carries the curve's own connector index as Revit numbers it; one in the
+/// earlier block carries it inverted, and is used only where no list of the
+/// later block gives the same join.
 fn resolve(lists: &[RawList]) -> Vec<ConnectorPair> {
-    let mut by_join: BTreeMap<(u64, u64, u32), Vec<&RawList>> = BTreeMap::new();
-    for list in lists {
-        by_join
-            .entry((list.own, list.other, list.other_index))
-            .or_default()
-            .push(list);
-    }
-    by_join
-        .into_iter()
-        .filter_map(|((element, other, other_index), mut copies)| {
-            copies.sort_by_key(|copy| copy.at);
-            let index = if copies.len() >= 2 {
-                copies.last()?.own_index
+    let later: BTreeSet<(u64, u64, u32)> = lists
+        .iter()
+        .filter(|list| list.at >= LATER_BLOCK_FROM)
+        .map(|list| (list.own, list.other, list.other_index))
+        .collect();
+    lists
+        .iter()
+        .filter_map(|list| {
+            let in_later_block = list.at >= LATER_BLOCK_FROM;
+            if !in_later_block && later.contains(&(list.own, list.other, list.other_index)) {
+                return None;
+            }
+            let index = if in_later_block {
+                list.own_index
             } else {
-                CURVE_CONNECTORS - 1 - copies.first()?.own_index
+                CURVE_CONNECTORS - 1 - list.own_index
             };
             Some(ConnectorPair {
-                element,
+                element: list.own,
                 index,
-                other,
-                other_index,
+                other: list.other,
+                other_index: list.other_index,
             })
         })
         .collect()

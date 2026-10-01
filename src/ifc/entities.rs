@@ -164,6 +164,22 @@ pub enum IfcEntity {
     /// index into `IfcModel::entities`), beside its own `property_set`:
     /// a standard set such as `Pset_StairCommon` (RE-47).
     ElementPropertySet { element: usize, set: PropertySet },
+    /// A join between two connectors (#528, RE-138): connector `a_index` of
+    /// the building element at `a` (ElementId `a_id`), a duct or pipe, is
+    /// connected to connector `b_index` of the element at `b` (ElementId
+    /// `b_id`). Both are indices into `IfcModel::entities`. The writer gives
+    /// each connector an `IfcDistributionPort` named after its element and
+    /// index, joins the two with an `IfcRelConnectsPorts`, and ties each to
+    /// its element with an `IfcRelConnectsPortToElement`. The ports have no
+    /// flow direction: the file's lists do not carry one.
+    PortConnection {
+        a: usize,
+        a_id: u32,
+        a_index: u32,
+        b: usize,
+        b_id: u32,
+        b_index: u32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
