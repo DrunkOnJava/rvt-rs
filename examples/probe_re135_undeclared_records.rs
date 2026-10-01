@@ -327,6 +327,27 @@ fn declared_in(declared: &BTreeSet<u32>, id: u64) -> bool {
     u32::try_from(id).is_ok_and(|id| declared.contains(&id))
 }
 
+/// Both ids of every `Global/ElemTable` record, read from `0x06` where the
+/// first record starts (RE-140; `parse_records` reads from the frame 24 bytes
+/// on, so it never reads the first record's ids): 28-byte records to 2023 and
+/// 40-byte from 2024, the second id at `+4` or `+20`.
+fn declared_from_origin(rf: &mut RevitFile, version: u32) -> Option<BTreeSet<u32>> {
+    const TABLE: &str = rvt::streams::GLOBAL_ELEM_TABLE;
+    let raw = rf.read_stream(TABLE).ok()?;
+    let table = rvt::compression::inflate_stream_at(TABLE, &raw, 8)
+        .or_else(|_| rvt::compression::inflate_stream_at(TABLE, &raw, 0))
+        .ok()?;
+    let count = usize::from(u16_at(&table, 2)?);
+    let (stride, second) = if version >= 2024 { (40, 20) } else { (28, 4) };
+    let mut ids = BTreeSet::new();
+    for record in 0..count {
+        let at = 6 + record * stride;
+        ids.extend(u32_at(&table, at));
+        ids.extend(u32_at(&table, at + second).filter(|&id| id != 0));
+    }
+    Some(ids)
+}
+
 /// The `limit` most frequent keys, as a JSON array of `[key, count]`.
 fn top_pairs(histogram: &BTreeMap<String, usize>, limit: usize) -> String {
     let mut pairs: Vec<(&String, &usize)> = histogram.iter().collect();
@@ -739,6 +760,51 @@ fn run() -> rvt::Result<()> {
     println!("{}", all.json("all"));
     println!("{}", in_chain.json("in_chain"));
     println!("{}", after_chain.json("after_chain"));
+
+    // RE-140: the ids of the table read from where its first record starts.
+    if let Some(exact) = declared_from_origin(&mut rf, version) {
+        let chain_ids: BTreeSet<u64> = records
+            .iter()
+            .filter(|record| record.in_chain)
+            .map(|record| record.id)
+            .collect();
+        let chain_not_declared = chain_ids
+            .iter()
+            .filter(|&&id| !declared_in(&exact, id))
+            .count();
+        let declared_without_record = exact
+            .iter()
+            .filter(|&&id| !chain_ids.contains(&u64::from(id)))
+            .count();
+        println!(
+            "{{\"declared_from_origin\":{{\"ids\":{},\"chain_ids\":{},\"chain_not_declared\":{chain_not_declared},\"declared_without_chain_record\":{declared_without_record}}}}}",
+            exact.len(),
+            chain_ids.len()
+        );
+    }
+    // RE-140: every chain record, one line each, for a comparison across
+    // releases of the same model: `R id class category min x y z max x y z`.
+    if std::env::args().any(|arg| arg == "--records") {
+        for record in records.iter().filter(|record| record.in_chain) {
+            let bbox = record.bbox.map_or_else(
+                || "-".to_string(),
+                |bbox| {
+                    bbox.iter()
+                        .map(|value| format!("{value:.6}"))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                },
+            );
+            println!(
+                "R {} {} {} {bbox}",
+                record.id,
+                class_name(record.class_tag),
+                record
+                    .category
+                    .map_or_else(|| "-".to_string(), |category| category.to_string())
+            );
+        }
+    }
 
     let describe = |record: &Record| {
         format!(

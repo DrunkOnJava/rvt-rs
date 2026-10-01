@@ -121,8 +121,9 @@ fi
 # Autodesk's sample projects (research/autodesk-sample-projects.tsv), one per
 # release and model: each gets OUT_DIR/sample-<year>-<file>/ with info.json and
 # info.exit, the export's diagnostics (what rvt-rs reads of it today) and its
-# exit status, and the probe's output. There is no Revit export of them, so
-# nothing is scored.
+# exit status, and the probe's output (called with --records, which a probe may
+# take to list what it read). There is no Revit export of them, so nothing is
+# scored.
 if [ -d "${SAMPLE_DIR:-}" ]; then
   for sample in "$SAMPLE_DIR"/*.rvt; do
     [ -f "$sample" ] || continue
@@ -133,7 +134,7 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     echo "exit $?" >> "$dir/rvt-ifc.log"
     [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
     if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
-      timeout 1200 "$BIN/examples/$PROBE" "$sample" > "$dir/probe.txt" 2>&1
+      timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
       echo "exit $?" >> "$dir/probe.txt"
     fi
     echo "::endgroup::"
