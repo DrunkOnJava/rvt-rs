@@ -472,6 +472,8 @@ fn run() -> rvt::Result<()> {
     let mut differing_at: BTreeMap<String, usize> = BTreeMap::new();
     let mut bbox_deltas: BTreeMap<String, usize> = BTreeMap::new();
     let mut diff_examples: Vec<String> = Vec::new();
+    let mut moved_walls: Vec<u64> = Vec::new();
+    let mut stream_pairs: BTreeMap<String, usize> = BTreeMap::new();
     let mut shown: Vec<String> = Vec::new();
     let (mut repeated_ids, mut adjacent) = (0usize, 0usize);
     let (mut in_primary, mut in_secondary_only) = (0usize, 0usize);
@@ -561,6 +563,16 @@ fn run() -> rvt::Result<()> {
                     *bbox_deltas
                         .entry(format!("{class}:{}", delta_bucket(delta)))
                         .or_default() += 1;
+                    if delta >= 1e-6 {
+                        if class == "SWall" {
+                            moved_walls.push(*id);
+                        }
+                        let streams: Vec<&str> = indexes
+                            .iter()
+                            .map(|&index| records[index].stream.as_str())
+                            .collect();
+                        *stream_pairs.entry(streams.join("|")).or_default() += 1;
+                    }
                     if delta >= 1e-6 && diff_examples.len() < EXAMPLES {
                         let copies: Vec<String> = indexes
                             .iter()
@@ -654,6 +666,10 @@ fn run() -> rvt::Result<()> {
         records.len(),
         table.len(),
         top_pairs(&table_lengths, TOP)
+    );
+    println!(
+        "{{\"moved\":{{\"walls\":{moved_walls:?},\"stream_pairs\":{}}}}}",
+        top_pairs(&stream_pairs, TOP)
     );
     println!("{}", all.json("all"));
     println!("{}", in_chain.json("in_chain"));
