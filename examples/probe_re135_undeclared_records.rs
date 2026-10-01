@@ -132,6 +132,9 @@ struct Record {
     /// The trailer's flag word, and whether its last word repeats the
     /// record's size (RE-140).
     trailer: Option<(u32, bool)>,
+    /// Whether the element-record marker is where this layout puts it
+    /// (RE-140): only such a record has the category and box read here.
+    marked: bool,
 }
 
 fn u16_at(buf: &[u8], at: usize) -> Option<u16> {
@@ -228,8 +231,23 @@ impl Layout {
         }
     }
 
+    /// Bytes from a record's start to its element-record marker.
+    fn marker_at(self) -> usize {
+        match self {
+            Layout::V2023 => MARKER_AFTER_ID,
+            Layout::V2024 => per::BBOX_MARKER_OFFSET,
+        }
+    }
+
     /// The record that starts at `start`.
-    fn read(self, stream: &str, buf: &[u8], start: usize, in_chain: bool) -> Option<Record> {
+    fn read(
+        self,
+        stream: &str,
+        buf: &[u8],
+        start: usize,
+        in_chain: bool,
+        marker: Option<[u8; 8]>,
+    ) -> Option<Record> {
         let (id, entries_at, class_at, flags_at, category_at, bbox_at) = match self {
             Layout::V2024 => (
                 u64_at(buf, start)?,
@@ -272,6 +290,10 @@ impl Layout {
             category: i64_at(buf, category_at + shift),
             bbox: bbox_read.then_some(bbox),
             trailer: None,
+            marked: marker.is_some_and(|marker| {
+                let at = start + self.marker_at();
+                buf.get(at..at + marker.len()) == Some(marker.as_slice())
+            }),
         })
     }
 
@@ -293,7 +315,13 @@ impl Layout {
 /// Every header record of one partition, in stream order, where its leading
 /// chain ends, and how many positions outside an accepted record carried the
 /// header tag.
-fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Record>, usize, usize) {
+fn scan(
+    layout: Layout,
+    stream: &str,
+    buf: &[u8],
+    header_tag: u16,
+    marker: Option<[u8; 8]>,
+) -> (Vec<Record>, usize, usize) {
     let mut chain_end = 0usize;
     while let Some(next) = layout.record_end(buf, chain_end, header_tag) {
         chain_end = next;
@@ -312,7 +340,7 @@ fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Recor
         let Some(end) = layout.record_end(buf, start, header_tag) else {
             continue;
         };
-        let Some(mut record) = layout.read(stream, buf, start, start < chain_end) else {
+        let Some(mut record) = layout.read(stream, buf, start, start < chain_end, marker) else {
             continue;
         };
         record.span = end - start;
@@ -325,6 +353,43 @@ fn scan(layout: Layout, stream: &str, buf: &[u8], header_tag: u16) -> (Vec<Recor
 
 fn declared_in(declared: &BTreeSet<u32>, id: u64) -> bool {
     u32::try_from(id).is_ok_and(|id| declared.contains(&id))
+}
+
+/// The ids of a partition's leading chain read by the rule a strict reader
+/// would use (RE-140): the header tag, and a trailer whose last word repeats
+/// the record's size. The flag word is returned, not checked, so a record
+/// with an odd flag does not end the chain. Each id comes with its flag.
+fn strict_chain(layout: Layout, buf: &[u8], header_tag: u16) -> Vec<(u64, u32)> {
+    let (size_at, trailer) = match layout {
+        Layout::V2023 => (4, HEADER_2023),
+        Layout::V2024 => (8, per::PARTITION_RECORD_TRAILER_LEN),
+    };
+    let mut out = Vec::new();
+    let mut at = 0usize;
+    while u16_at(buf, at + layout.tag_at()) == Some(header_tag) {
+        let (Some(size), Some(id)) = (
+            u32_at(buf, at + size_at),
+            match layout {
+                Layout::V2023 => u32_at(buf, at).map(u64::from),
+                Layout::V2024 => u64_at(buf, at),
+            },
+        ) else {
+            break;
+        };
+        let end = at + size as usize;
+        let (Some(flag), Some(echo)) = (
+            u32_at(buf, end + trailer - 8),
+            u32_at(buf, end + trailer - 4),
+        ) else {
+            break;
+        };
+        if echo != size || size < 16 {
+            break;
+        }
+        out.push((id, flag));
+        at = end + trailer;
+    }
+    out
 }
 
 /// Both ids of every `Global/ElemTable` record, read from `0x06` where the
@@ -476,19 +541,20 @@ fn run() -> rvt::Result<()> {
     let mut records: Vec<Record> = Vec::new();
     let mut stream_lines: Vec<String> = Vec::new();
     let mut candidates = 0usize;
-    // RE-140: the markers of a 2023-form file, the 32-bit header 52 bytes
-    // before each, and a well-formed box after it.
-    let marker = (layout == Layout::V2023)
-        .then(|| rvt::partition_element_records_2023::record_marker(&mut rf))
-        .flatten();
+    // RE-140: the element-record marker from the file's schema; in a 2023-form
+    // file the markers, the 32-bit header 52 bytes before each, and a
+    // well-formed box after it.
+    let marker = rvt::partition_element_records_2023::record_marker(&mut rf);
     let (mut markers, mut marker_headers, mut marker_boxes) = (0usize, 0usize, 0usize);
+    let mut strict: Vec<(u64, u32)> = Vec::new();
     let streams = rf.partition_stream_names();
     for stream in &streams {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        if let Some((marker, _)) = marker {
+        strict.extend(strict_chain(layout, buf, header_tag));
+        if let (Layout::V2023, Some((marker, _))) = (layout, marker) {
             for at in memchr::memmem::find_iter(buf, &marker) {
                 markers += 1;
                 marker_headers += usize::from(
@@ -502,7 +568,13 @@ fn run() -> rvt::Result<()> {
                 }));
             }
         }
-        let (found, chain_end, stream_candidates) = scan(layout, stream, buf, header_tag);
+        let (found, chain_end, stream_candidates) = scan(
+            layout,
+            stream,
+            buf,
+            header_tag,
+            marker.map(|(marker, _)| marker),
+        );
         candidates += stream_candidates;
         stream_lines.push(format!(
             "{{\"stream\":{stream:?},\"bytes\":{},\"chain_end\":{chain_end},\"records\":{},\"in_chain\":{}}}",
@@ -512,7 +584,7 @@ fn run() -> rvt::Result<()> {
         ));
         records.extend(found);
     }
-    if marker.is_some() {
+    if layout == Layout::V2023 && marker.is_some() {
         println!(
             "{{\"markers\":{markers},\"markers_with_header\":{marker_headers},\"markers_with_box\":{marker_boxes}}}"
         );
@@ -781,9 +853,30 @@ fn run() -> rvt::Result<()> {
             exact.len(),
             chain_ids.len()
         );
+        // The same, for the chain read by the size echo alone.
+        let strict_ids: BTreeSet<u64> = strict.iter().map(|(id, _)| *id).collect();
+        let mut strict_flags: BTreeMap<String, usize> = BTreeMap::new();
+        for (_, flag) in &strict {
+            *strict_flags.entry(format!("{flag:#x}")).or_default() += 1;
+        }
+        let strict_not_declared = strict_ids
+            .iter()
+            .filter(|&&id| !declared_in(&exact, id))
+            .count();
+        let declared_without_strict = exact
+            .iter()
+            .filter(|&&id| !strict_ids.contains(&u64::from(id)))
+            .count();
+        println!(
+            "{{\"strict_chain\":{{\"records\":{},\"ids\":{},\"not_declared\":{strict_not_declared},\"declared_without_record\":{declared_without_strict},\"flags\":{}}}}}",
+            strict.len(),
+            strict_ids.len(),
+            top_pairs(&strict_flags, TOP)
+        );
     }
     // RE-140: every chain record, one line each, for a comparison across
-    // releases of the same model: `R id class category min x y z max x y z`.
+    // releases of the same model: `R id class category M|- min x y z max x y z`,
+    // `M` when the element-record marker is where the layout puts it.
     if std::env::args().any(|arg| arg == "--records") {
         for record in records.iter().filter(|record| record.in_chain) {
             let bbox = record.bbox.map_or_else(
@@ -796,12 +889,13 @@ fn run() -> rvt::Result<()> {
                 },
             );
             println!(
-                "R {} {} {} {bbox}",
+                "R {} {} {} {} {bbox}",
                 record.id,
                 class_name(record.class_tag),
                 record
                     .category
-                    .map_or_else(|| "-".to_string(), |category| category.to_string())
+                    .map_or_else(|| "-".to_string(), |category| category.to_string()),
+                if record.marked { "M" } else { "-" }
             );
         }
     }
