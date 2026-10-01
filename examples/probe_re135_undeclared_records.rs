@@ -235,16 +235,15 @@ impl Layout {
         let entries = usize::from(u16_at(buf, entries_at).unwrap_or(0));
         let shift = ENTRY_BYTES * entries;
         let mut bbox = [0.0f64; 6];
-        let bbox_read = bbox
-            .iter_mut()
-            .enumerate()
-            .all(|(k, slot)| match f64_at(buf, bbox_at + shift + 8 * k) {
+        let bbox_read = bbox.iter_mut().enumerate().all(|(k, slot)| {
+            match f64_at(buf, bbox_at + shift + 8 * k) {
                 Some(value) if value.is_finite() => {
                     *slot = value;
                     true
                 }
                 _ => false,
-            });
+            }
+        });
         Some(Record {
             stream: stream.to_string(),
             offset: start,
@@ -541,10 +540,8 @@ fn run() -> rvt::Result<()> {
                     }
                 }
             }
-            let boxes: Vec<Option<[f64; 6]>> = indexes
-                .iter()
-                .map(|&index| records[index].bbox)
-                .collect();
+            let boxes: Vec<Option<[f64; 6]>> =
+                indexes.iter().map(|&index| records[index].bbox).collect();
             if let Some(first_box) = boxes[0] {
                 let mut delta = 0.0f64;
                 let mut every_box_read = true;
