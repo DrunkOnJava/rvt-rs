@@ -48,7 +48,7 @@
 //! byte positions that differ, counted by class and by position from the
 //! record's start (#548).
 //!
-//! RE-140 (the same scan, run on Autodesk's sample projects of 2019 to 2027):
+//! RE-140 (the same scan, run on Autodesk's sample projects of 2016 to 2027):
 //! every group also prints the values of the trailer's flag word and how many
 //! trailers do not repeat the record's size; a 2023-form file prints how many
 //! `[Outline][0xFF x 4][ElementParents]` markers it holds, how many have the
@@ -135,6 +135,9 @@ struct Record {
     /// Whether the element-record marker is where this layout puts it
     /// (RE-140): only such a record has the category and box read here.
     marked: bool,
+    /// Where the marker is in the record's bytes, from its start, wherever
+    /// that is (RE-140).
+    marker_offset: Option<usize>,
 }
 
 fn u16_at(buf: &[u8], at: usize) -> Option<u16> {
@@ -294,6 +297,7 @@ impl Layout {
                 let at = start + self.marker_at();
                 buf.get(at..at + marker.len()) == Some(marker.as_slice())
             }),
+            marker_offset: None,
         })
     }
 
@@ -345,6 +349,10 @@ fn scan(
         };
         record.span = end - start;
         record.trailer = layout.trailer(buf, start, end);
+        record.marker_offset = marker.and_then(|marker| {
+            buf.get(start..end)
+                .and_then(|body| memchr::memmem::find(body, &marker))
+        });
         out.push(record);
         next_free = end;
     }
@@ -444,10 +452,20 @@ struct Tally {
     trailer_flags: BTreeMap<String, usize>,
     /// Trailers whose last word is not the record's size.
     echo_mismatch: usize,
+    /// Where each record holds the element-record marker, from its start.
+    marker_offsets: BTreeMap<String, usize>,
 }
 
 impl Tally {
     fn add(&mut self, record: &Record, declared: bool, class: String) {
+        *self
+            .marker_offsets
+            .entry(
+                record
+                    .marker_offset
+                    .map_or_else(|| "none".to_string(), |offset| offset.to_string()),
+            )
+            .or_default() += 1;
         match record.trailer {
             Some((flag, echo_matches)) => {
                 *self.trailer_flags.entry(format!("{flag:#x}")).or_default() += 1;
@@ -479,7 +497,7 @@ impl Tally {
 
     fn json(&self, group: &str) -> String {
         format!(
-            "{{\"group\":{group:?},\"records\":{},\"declared\":{},\"undeclared\":{},\"bit_0x10\":{{\"declared\":{},\"undeclared\":{}}},\"with_entries\":{},\"class_unresolved\":{},\"classes\":{},\"classes_declared\":{},\"classes_undeclared\":{},\"flags_declared\":{},\"flags_undeclared\":{},\"trailer_flags\":{},\"echo_mismatch\":{}}}",
+            "{{\"group\":{group:?},\"records\":{},\"declared\":{},\"undeclared\":{},\"bit_0x10\":{{\"declared\":{},\"undeclared\":{}}},\"with_entries\":{},\"class_unresolved\":{},\"classes\":{},\"classes_declared\":{},\"classes_undeclared\":{},\"flags_declared\":{},\"flags_undeclared\":{},\"trailer_flags\":{},\"echo_mismatch\":{},\"marker_offsets\":{}}}",
             self.declared + self.undeclared,
             self.declared,
             self.undeclared,
@@ -494,6 +512,7 @@ impl Tally {
             top_pairs(&self.flags_undeclared, TOP),
             top_pairs(&self.trailer_flags, TOP),
             self.echo_mismatch,
+            top_pairs(&self.marker_offsets, TOP),
         )
     }
 }

@@ -4,6 +4,15 @@
 # CC BY-NC-SA 3.0 (https://www.autodesk.com/company/creative-commons), as it does the
 # family corpus. Hashes and sizes measured 2026-10-01.
 # year	file	url	sha256	bytes
+2016	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt	8e6d1a7668dd700d7a94c022a80cbb2a9ea31925a75fbc551c8ced0904dbb8a1	16474112
+2016	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rst_basic_sample_project.rvt	c2fe9b5eea7c9d0e345e2a8a981cb94c8ded33408e7f3466903ad125149efe13	5693440
+2016	rac_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rac_advanced_sample_project.rvt	187608afda28470d115da72bbc67a0dfc0201f36526e7a77a18915ff3d06ed21	14077952
+2017	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2017RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt	a1d3d0775ae0937e3f4c8fb97015b6e0884acefae52435d9cacd27d008f5fefb	17125376
+2017	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2017RVT_RTM/Docs/InProd/rst_basic_sample_project.rvt	2c103da4b2579bf59bf52ce1096a0f620710d2517c9f34907b1b79448de0ccd1	5816320
+2017	rac_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2017RVT_RTM/Docs/InProd/rac_advanced_sample_project.rvt	fa1ee9b9d438de18d4143fc81a7aa1c5d1bda130ee9de2f3a5ff02e49a4e2d31	15273984
+2018	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2018RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt	8fce035abd3e5a78c68a8d6529fd5066d04c38ebf7ec3dd1de79495d85481535	17375232
+2018	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2018RVT_RTM/Docs/InProd/rst_basic_sample_project.rvt	47e1d228d0febf9d8cfcd7520139bb195caf47e82763d22864e6db574847f1c9	5902336
+2018	rac_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2018RVT_RTM/Docs/InProd/rac_advanced_sample_project.rvt	12b00efbbb6356a56138000ccb251f80fb4b534cbe11e5473db74abd61678608	15474688
 2019	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt	69726bb8c6bfe685ca8f4701ab30bfa069b84a7d20f40ae424dc5d8d89431d04	17584128
 2019	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rst_basic_sample_project.rvt	2d05d5249c6bd2d5d82661f2e640506c7d9bb33b796c59ee16e84df2192b1de9	5853184
 2019	rac_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rac_advanced_sample_project.rvt	3f6ec9f4650766b84c99c8d36db54b79d35ee3e570016a64461b2859cceff7f8	15622144

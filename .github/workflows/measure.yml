@@ -19,7 +19,7 @@
 # is fetched when `families` is set, and on every run of a change to this
 # workflow, so rvt-info reads each family's PartAtom too and the probe runs on
 # it. The corpus is scored against nothing and never stored. Autodesk's sample
-# projects (2019 to 2027, pinned in research/autodesk-sample-projects.tsv) are
+# projects (2016 to 2027, pinned in research/autodesk-sample-projects.tsv) are
 # fetched the same way when `samples` is set.
 
 name: Measure
@@ -54,7 +54,7 @@ on:
         required: false
         default: false
       samples:
-        description: Also read Autodesk's sample projects of every release 2019 to 2027 (research/autodesk-sample-projects.tsv) with rvt-info, rvt-ifc diagnostics and the probe (Autodesk-owned, fetched for the run and never stored)
+        description: Also read Autodesk's sample projects of every release 2016 to 2027 (research/autodesk-sample-projects.tsv) with rvt-info, rvt-ifc diagnostics and the probe (Autodesk-owned, fetched for the run and never stored)
         type: boolean
         required: false
         default: false
