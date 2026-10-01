@@ -30,6 +30,8 @@
 # OUT_DIR/family-<file>/ with the same info.json and info.exit (a family
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
 # same probe.txt. A family has no Revit export, so nothing else is measured on it.
+# SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
+# export's diagnostics.json and rvt-ifc.log under OUT_DIR/sample-<file>/.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
@@ -113,5 +115,28 @@ if [ -d "${FAMILY_DIR:-}" ]; then
       timeout 1200 "$BIN/examples/$PROBE" "$family" > "$dir/probe.txt" 2>&1
       echo "exit $?" >> "$dir/probe.txt"
     fi
+  done
+fi
+
+# Autodesk's sample projects (research/autodesk-sample-projects.tsv), one per
+# release and model: each gets OUT_DIR/sample-<year>-<file>/ with info.json and
+# info.exit, the export's diagnostics (what rvt-rs reads of it today) and its
+# exit status, and the probe's output (called with --records, which a probe may
+# take to list what it read). There is no Revit export of them, so nothing is
+# scored.
+if [ -d "${SAMPLE_DIR:-}" ]; then
+  for sample in "$SAMPLE_DIR"/*.rvt; do
+    [ -f "$sample" ] || continue
+    dir="$OUT/sample-$(basename "$sample" .rvt)"; mkdir -p "$dir"
+    echo "::group::$(basename "$sample")"
+    info "$sample" "$dir"
+    "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" > "$dir/rvt-ifc.log" 2>&1
+    echo "exit $?" >> "$dir/rvt-ifc.log"
+    [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
+    if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
+      timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
+      echo "exit $?" >> "$dir/probe.txt"
+    fi
+    echo "::endgroup::"
   done
 fi

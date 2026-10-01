@@ -45,12 +45,28 @@ their source by whoever runs the measurement, never committed.
 |---|---|---|---|---|
 | AA-SingleDwellingHouse-RVT-CIADD, with its IFC | 2026 | [flowbim.ee](https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.rvt) | `eeff78f3…0a654` (IFC `c9e2986c…67342`) | the first 2026 project with Revit's export: the 2026 element-record gate (#421); measured in RE-124 (88 placed instances, all in Revit's export) |
 | 02_BIMcollab_Example_STR, with its IFC2X3 | 2015 | the public BIMcollab example project package | `8cd1f122…e193` | the pre-2024 record envelope (#421) |
-| rac_basic_sample_project | 2017 | Autodesk sample | `a1d3d077…5fefb` | the same, with no export |
+| rac_basic_sample_project | 2017 | Autodesk sample | `a1d3d077…5fefb` | the same, with no export; now fetched and measured with the other sample projects (below, RE-140) |
 | Geberit VariForm washbasin PRO_1833290, two variants | 2018 family | Geberit | `28b9d111…e5e4`, `0d48b22c…fbb9` | DirectShape meshes in a family |
 | Pucciplast Cassetta Eco 9/4 l (EN) | 2022 family | Pucciplast | `a610ffcc…ae00` | sketch forms and voids in a family |
 
 STE1200's test vectors for the first three (record bytes, offsets and the
 values read) are the cross-check for any reader of them.
+
+## Autodesk's sample projects, fetched for a run
+
+Autodesk publishes `rac_basic`, `rst_basic` and `rac_advanced` sample projects
+for every Revit release from 2016 to 2027 on its own download host, 36 files,
+the host the sample families of the phi-ag/rvt corpus (CC BY-NC-SA 3.0) come
+from; the projects' own terms were not checked. They are pinned by hash in
+[`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv)
+and fetched by `tools/fetch-autodesk-samples.sh`; the Measure workflow reads
+them with `-f samples=true` (`rvt-info`, the IFC export's diagnostics, and the
+probe given). They are never stored in this repository.
+
+There is no Revit export of any of them, so they measure the record envelope
+and what a release's reader gives on the same model, not recovery against
+Revit: `reports/element-framing/RE-140-sample-projects-2016-2027.md` compares
+each release's records with 2024's by ElementId. They do not admit a release.
 
 ## Compare like with like
 
