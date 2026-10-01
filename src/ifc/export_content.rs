@@ -139,6 +139,25 @@ pub fn is_misleading_proxy_class(class_name: &str) -> bool {
     )
 }
 
+/// Whether an IFC4 entity name is an `IfcDistributionElement` among those the
+/// exporter writes: the only kind of element an `IfcDistributionPort` may be
+/// tied to (RE-138). Equipment written as a building element proxy is not.
+fn is_distribution_element(ifc_type: &str) -> bool {
+    ifc_type.starts_with("IFCFLOW")
+        || matches!(
+            ifc_type,
+            "IFCDUCTSEGMENT"
+                | "IFCDUCTFITTING"
+                | "IFCPIPESEGMENT"
+                | "IFCPIPEFITTING"
+                | "IFCAIRTERMINAL"
+                | "IFCSANITARYTERMINAL"
+                | "IFCLIGHTFIXTURE"
+                | "IFCELECTRICAPPLIANCE"
+                | "IFCALARM"
+        )
+}
+
 /// Strip placement / body / host claims so an export cannot over-claim geometry.
 pub fn strip_building_element_geometry(entities: &mut [entities::IfcEntity]) {
     for entity in entities.iter_mut() {
@@ -546,8 +565,16 @@ pub fn append_typed_production_elements(
         entities.push(entities::IfcEntity::Aggregate { whole, parts });
     }
 
-    // RE-138 (#528): a join is written when both elements are exported, once
+    // RE-138 (#528): a join is written when both elements are exported as
+    // distribution elements, the only elements a port may be tied to, and once
     // however many of the two it was read from.
+    let is_distribution = |index: usize| {
+        matches!(
+            entities.get(index),
+            Some(entities::IfcEntity::BuildingElement { ifc_type, .. })
+                if is_distribution_element(ifc_type)
+        )
+    };
     let mut connections: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
     for (entity, id, joins) in pending_joins {
         for (index, join) in (0u32..).zip(joins) {
@@ -557,6 +584,9 @@ pub fn append_typed_production_elements(
             let Some(&other) = out.id_to_entity.get(&other_id) else {
                 continue;
             };
+            if !is_distribution(entity) || !is_distribution(other) {
+                continue;
+            }
             let mut ends = [(entity, id, index), (other, other_id, other_index)];
             ends.sort();
             connections.insert(ends);
