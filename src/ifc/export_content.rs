@@ -1010,25 +1010,31 @@ fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> 
 /// with `SerialNumber` (`IfcIdentifier`). Empty when the element has none.
 fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<PropertySet> {
     use crate::partition_schema_mvp as mvp;
-    let serial = decoded.fields.iter().find_map(|(field, value)| match value {
-        InstanceField::String(text) if field == mvp::SERIAL_NUMBER_FIELD => Some(text),
-        _ => None,
-    });
+    let serial = decoded
+        .fields
+        .iter()
+        .find_map(|(field, value)| match value {
+            InstanceField::String(text) if field == mvp::SERIAL_NUMBER_FIELD => Some(text),
+            _ => None,
+        });
     let Some(serial) = serial.filter(|text| !text.is_empty()) else {
         return Vec::new();
     };
     let proxy = ifc_type == "IFCBUILDINGELEMENTPROXY";
-    ["Pset_ManufacturerOccurrence", "Pset_PrecastConcreteElementGeneral"]
-        .into_iter()
-        .filter(|set| proxy || *set == "Pset_ManufacturerOccurrence")
-        .map(|set| PropertySet {
-            name: set.into(),
-            properties: vec![Property {
-                name: "SerialNumber".into(),
-                value: PropertyValue::Identifier(serial.clone()),
-            }],
-        })
-        .collect()
+    [
+        "Pset_ManufacturerOccurrence",
+        "Pset_PrecastConcreteElementGeneral",
+    ]
+    .into_iter()
+    .filter(|set| proxy || *set == "Pset_ManufacturerOccurrence")
+    .map(|set| PropertySet {
+        name: set.into(),
+        properties: vec![Property {
+            name: "SerialNumber".into(),
+            value: PropertyValue::Identifier(serial.clone()),
+        }],
+    })
+    .collect()
 }
 
 /// A room's `Pset_SpaceCommon` (RE-153), as Revit's export writes it:
