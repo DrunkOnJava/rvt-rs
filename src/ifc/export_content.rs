@@ -893,7 +893,8 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
 /// `ifc_type` (RE-154), each holding the type's name: `Pset_QuantityTakeOff`,
 /// the entity's common set, and on walls and slabs its reinforcement-pitch
 /// set, which declares `Reference` an `IfcLabel`. Only the entities measured
-/// on the RE1 models' exports are listed; any other gets none.
+/// on the RE1 models' exports are listed, with the IFC4 subtypes rvt-rs writes
+/// for Revit's flow, furnishing and control elements; any other gets none.
 fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> {
     let common: &[(&str, bool)] = match ifc_type {
         "IFCWALL" => &[
@@ -911,10 +912,23 @@ fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> 
         "IFCPLATE" => &[("Pset_PlateCommon", true)],
         "IFCRAILING" => &[("Pset_RailingCommon", true)],
         "IFCBUILDINGELEMENTPROXY" => &[("Pset_BuildingElementProxyCommon", true)],
-        "IFCFLOWTERMINAL" | "IFCFLOWFITTING" | "IFCFLOWSEGMENT" => {
-            &[("Pset_DistributionFlowElementCommon", true)]
+        // Revit's export writes these as IfcFlowTerminal, IfcFlowFitting and
+        // IfcFlowSegment; rvt-rs writes the IFC4 subtypes.
+        "IFCFLOWTERMINAL"
+        | "IFCFLOWFITTING"
+        | "IFCFLOWSEGMENT"
+        | "IFCDUCTSEGMENT"
+        | "IFCPIPESEGMENT"
+        | "IFCDUCTFITTING"
+        | "IFCPIPEFITTING"
+        | "IFCAIRTERMINAL"
+        | "IFCSANITARYTERMINAL"
+        | "IFCLIGHTFIXTURE"
+        | "IFCELECTRICAPPLIANCE" => &[("Pset_DistributionFlowElementCommon", true)],
+        // IfcFurnishingElement and IfcDistributionControlElement in Revit's.
+        "IFCFURNISHINGELEMENT" | "IFCFURNITURE" | "IFCDISTRIBUTIONCONTROLELEMENT" | "IFCALARM" => {
+            &[]
         }
-        "IFCFURNISHINGELEMENT" | "IFCDISTRIBUTIONCONTROLELEMENT" => &[],
         _ => return Vec::new(),
     };
     std::iter::once(("Pset_QuantityTakeOff", true))
