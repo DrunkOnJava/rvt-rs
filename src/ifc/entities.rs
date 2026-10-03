@@ -1332,6 +1332,24 @@ pub struct PropertySet {
     pub properties: Vec<Property>,
 }
 
+impl PropertySet {
+    /// `Pset_AirSideSystemInformation` and `Pset_ProductRequirements`, each
+    /// with `Name` (`IfcLabel`) `name`: the sets Revit's export gives every
+    /// storey and space on the RE1 models, holding its name (#35).
+    pub fn name_sets(name: &str) -> Vec<PropertySet> {
+        ["Pset_AirSideSystemInformation", "Pset_ProductRequirements"]
+            .into_iter()
+            .map(|set| PropertySet {
+                name: set.into(),
+                properties: vec![Property {
+                    name: "Name".into(),
+                    value: PropertyValue::Label(name.to_string()),
+                }],
+            })
+            .collect()
+    }
+}
+
 /// A single property inside a [`PropertySet`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Property {
@@ -1370,6 +1388,9 @@ pub enum PropertyValue {
     Real(f64),
     /// Boolean — `IfcBoolean`.
     Boolean(bool),
+    /// A three-valued logical — `IfcLogical`, `None` for unknown, as
+    /// `Pset_BuildingStoreyCommon.AboveGround` declares.
+    Logical(Option<bool>),
     /// Length measurement in feet (writer converts to metres).
     /// Maps to `IfcLengthMeasure` with project length unit.
     LengthFeet(f64),
@@ -1408,6 +1429,14 @@ impl PropertyValue {
             PropertyValue::Boolean(b) => {
                 format!("IFCBOOLEAN(.{}.)", if *b { "T" } else { "F" })
             }
+            PropertyValue::Logical(b) => format!(
+                "IFCLOGICAL(.{}.)",
+                match b {
+                    Some(true) => "T",
+                    Some(false) => "F",
+                    None => "U",
+                }
+            ),
             PropertyValue::LengthFeet(ft) => {
                 // Convert to metres at emit time (project length unit).
                 let metres = ft * 0.3048;
