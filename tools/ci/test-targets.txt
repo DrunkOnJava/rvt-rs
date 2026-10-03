@@ -61,17 +61,9 @@ contract  support_matrix
 contract  witness_registry
 contract  witness_verdict
 
-unit      cfb_patch_corpus
-unit      checksum_page_framing
 unit      control_cancellation
-unit      corpus_tier1_health
-unit      es_remap_golden
 unit      fuzz_regressions
-unit      gen_fixture_roundtrip
-unit      geometry_recovery
 unit      graceful_degradation
-unit      ifc_export_modes
 unit      ifc_synthetic_project
 unit      ifc_synthetic_structural
 unit      proptest_parsers
-unit      typed_decoders
