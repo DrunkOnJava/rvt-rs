@@ -41,6 +41,17 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The native path reads Revit 2018's schema to its end (#421, #154).**
+  `schema_registry::parse` stopped at byte 351,466 of the 2018 catalog
+  (`schema name byte budget`), on Autodesk's 2018 family and 2018
+  `rac_basic`. A composite member that is not itself an array, over a fixed
+  array of plain class references, writes those references once more after
+  the nested descriptor: 2018's `SiteSurface.m_facets` (`0x500d` over
+  `0x100e`), the only member of that shape in any catalog from 2016 to 2027,
+  as puzzbobb found. The parser now reads them. Checked by the new real-file
+  target `tests/schema_registry_catalogs.rs`: every family catalog of 2016 to
+  2026 is read to its end and gives the same classes as
+  `formats::schema_classes`.
 - **The declared ElementIds include the ElemTable's first record (RE-140, #152,
   #421).** The frames `elem_table::parse_records` reads start 24 bytes into
   their records, so none holds the table's first record, which starts at
