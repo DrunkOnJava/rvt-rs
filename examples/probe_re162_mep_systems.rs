@@ -136,7 +136,7 @@ fn adler32(data: &[u8]) -> u32 {
 }
 
 /// Every verified data object in `b` (RE-153): `(start, end, ElementId)`.
-fn objects(b: &[u8]) -> Vec<(usize, usize, u32)> {
+fn objects(b: &[u8]) -> Vec<(usize, usize, u32, u32)> {
     let mut out = Vec::new();
     let mut p = 0;
     while p + 20 <= b.len() {
@@ -154,7 +154,7 @@ fn objects(b: &[u8]) -> Vec<(usize, usize, u32)> {
                     data.extend_from_slice(&b[p + 20..end]);
                     data.truncate(size);
                     if adler32(&data) == sum {
-                        out.push((p, end, id));
+                        out.push((p, end, id, class));
                     }
                 }
             }
@@ -164,13 +164,14 @@ fn objects(b: &[u8]) -> Vec<(usize, usize, u32)> {
     out
 }
 
-fn owner(objs: &[(usize, usize, u32)], at: usize) -> Option<u32> {
+/// The ElementId and class word of the innermost object holding `at`.
+fn owner(objs: &[(usize, usize, u32, u32)], at: usize) -> Option<(u32, u32)> {
     let index = objs.partition_point(|(start, ..)| *start <= at);
     objs[..index]
         .iter()
         .rev()
-        .find(|(_, end, _)| *end > at)
-        .map(|(_, _, id)| *id)
+        .find(|(_, end, ..)| *end > at)
+        .map(|(_, _, id, class)| (*id, *class))
 }
 
 fn probe(path: &str) -> anyhow::Result<Vec<String>> {
@@ -191,6 +192,13 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         return Ok(vec![format!("{{\"file\":{path:?},\"systems\":0}}")]);
     }
     let mut rf = RevitFile::open(path)?;
+    let class_names: BTreeMap<u32, String> = rf
+        .schema_classes()?
+        .classes
+        .into_iter()
+        .map(|class| (u32::from(class.tag), class.name))
+        .collect();
+    let names = rf.element_names();
     let mut streams = Vec::new();
     for name in rf.partition_stream_names() {
         if let Ok(inflated) = rf.inflated_partition(&name) {
@@ -206,32 +214,45 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     for (name, members) in &systems {
         let mut needle = (name.encode_utf16().count() as u32).to_le_bytes().to_vec();
         needle.extend(name.encode_utf16().flat_map(u16::to_le_bytes));
-        // candidate system id -> name hits
-        let mut candidates: BTreeMap<u32, usize> = BTreeMap::new();
+        // candidate system id -> (name hits, class word)
+        let mut candidates: BTreeMap<u32, (usize, u32)> = BTreeMap::new();
         for (_, b, objs) in &streams {
             for at in memchr::memmem::find_iter(b, &needle) {
-                if let Some(id) = owner(objs, at) {
-                    *candidates.entry(id).or_default() += 1;
+                if let Some((id, class)) = owner(objs, at) {
+                    candidates.entry(id).or_insert((0, class)).0 += 1;
                 }
             }
         }
         let mut rows = Vec::new();
-        for (candidate, hits) in &candidates {
+        for (candidate, (hits, class)) in &candidates {
             let mut in_own = BTreeSet::new();
             let mut anywhere = 0usize;
             for (_, b, objs) in &streams {
                 for at in memchr::memmem::find_iter(b, &candidate.to_le_bytes()) {
                     anywhere += 1;
-                    if let Some(id) = owner(objs, at) {
+                    if let Some((id, _)) = owner(objs, at) {
                         if members.contains(&id) {
                             in_own.insert(id);
                         }
                     }
                 }
             }
+            if in_own.is_empty() {
+                continue;
+            }
+            let class_name = class_names
+                .get(&(class & 0xffff))
+                .cloned()
+                .unwrap_or_default();
+            let entry = names
+                .entries
+                .get(candidate)
+                .map(|e| format!("{e:?}"))
+                .unwrap_or_default();
             rows.push(format!(
-                "{{\"candidate\":{candidate},\"name_hits\":{hits},\"members_holding_it\":{},\"occurrences\":{anywhere}}}",
-                in_own.len()
+                "{{\"candidate\":{candidate},\"name_hits\":{hits},\"members_holding_it\":{},\"occurrences\":{anywhere},\"class\":\"{class:#x} {class_name}\",\"name_entry\":{:?}}}",
+                in_own.len(),
+                entry
             ));
         }
         out.push(format!(
