@@ -370,6 +370,7 @@ pub fn append_typed_production_elements(
         let mut property_set = None;
         let mut pending_host_id = None;
         let mut piece_bodies: Vec<Extrusion> = Vec::new();
+        let mut void_bodies: Vec<VoidBody> = Vec::new();
         let mut held_body = None;
         let mut solid_shape = None;
 
@@ -391,12 +392,14 @@ pub fn append_typed_production_elements(
                 solid,
                 properties,
                 pieces,
+                void_openings,
             }) = element_record_geometry
             {
                 location_feet = Some(location);
                 rotation_radians = rotation;
                 solid_shape = solid;
                 piece_bodies = pieces;
+                void_bodies = void_openings;
                 // #323 / RE-46: a stair or curtain wall is carried by its
                 // parts, as in Revit's export; its own record box would
                 // double their volume. It is held until the parts are known.
@@ -491,6 +494,23 @@ pub fn append_typed_production_elements(
             out.level_elementid_binds += 1;
         }
 
+        // RE-151: the name of the openings of a floor's tagged voids.
+        let opening_name = (!void_bodies.is_empty()).then(|| {
+            let type_id = decoded.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. }
+                    if name == crate::partition_schema_mvp::TYPE_ID_FIELD =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            });
+            match (family_and_type(&decoded), type_id) {
+                (Some((family, type_name)), Some(type_id)) => {
+                    format!("{family}:{type_name}:{type_id}")
+                }
+                _ => format!("Opening for {name}"),
+            }
+        });
         entities.push(entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -525,6 +545,20 @@ pub fn append_typed_production_elements(
                     }
                     entities.push(piece);
                 }
+            }
+        }
+        // RE-151: each tagged void of a floor's sketch is an opening voiding
+        // the floor, or the piece it is in, named `Family:Type:<type id>` as
+        // in Revit's export.
+        if let Some(opening_name) = opening_name {
+            for (piece, tag, outline_feet, depth_feet) in void_bodies {
+                entities.push(entities::IfcEntity::VoidOpening {
+                    host: entity_index + piece,
+                    tag: tag.to_string(),
+                    name: opening_name.clone(),
+                    outline_feet,
+                    depth_feet,
+                });
             }
         }
         // RE-47: a stair's or flight's riser and tread dimensions, in the
@@ -872,7 +906,14 @@ struct RecordGeometry {
     solid: Option<entities::SolidShape>,
     properties: PropertySet,
     pieces: Vec<Extrusion>,
+    /// Each tagged void of a floor's sketch (RE-151): the piece it is in, its
+    /// tag, its outline in the body's frame and the floor's thickness.
+    void_openings: Vec<VoidBody>,
 }
+
+/// A tagged void of a floor's sketch (RE-151): the piece it is in, its tag,
+/// its outline in the body's frame, and the floor's thickness, feet.
+type VoidBody = (usize, u32, Vec<(f64, f64)>, f64);
 
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
@@ -1927,6 +1968,22 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 .collect()
         })
         .unwrap_or_default();
+    // RE-151: a floor's tagged void is also an opening voiding it, as Revit's
+    // export writes it, the void's outline through the floor's thickness.
+    let void_openings: Vec<VoidBody> = profile
+        .as_ref()
+        .filter(|_| class == "Floor")
+        .map(|profile| {
+            profile
+                .void_openings
+                .iter()
+                .map(|void| {
+                    let outline = void.outline_xy.iter().map(|(px, py)| (px - x, py - y));
+                    (void.piece, void.tag, outline.collect(), height)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     // The family/type symbol's section, when the instance joined to
     // one and the section agrees with the instance envelope (#215,
     // RE-26). The rectangle it gives is the same shape the envelope
@@ -2414,6 +2471,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             properties,
         },
         pieces: piece_bodies,
+        void_openings,
     })
 }
 

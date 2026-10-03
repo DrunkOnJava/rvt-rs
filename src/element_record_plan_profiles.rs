@@ -115,6 +115,24 @@ pub const PLAN_PROFILE_SEGMENTS_FIELD: &str = "m_plan_profile_segments";
 /// Field carrying the further pieces of a sketch made of separate loops
 /// (#331): each piece an outer loop followed by its voids.
 pub const PLAN_PROFILE_PIECES_FIELD: &str = "m_plan_profile_pieces";
+/// Field carrying the void loops whose sketch lines tag them (RE-151): each
+/// the piece it is in, its tag and the loop.
+pub const PLAN_PROFILE_VOID_OPENINGS_FIELD: &str = "m_plan_profile_void_openings";
+
+/// A void loop of a sketch and the sketch line that tags it (RE-151). Revit's
+/// export writes a floor's void as an `IfcOpeningElement` voiding the floor,
+/// with the loop's outline, and the `Tag` the lowest ElementId of the sketch
+/// lines on the loop.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VoidOpening {
+    /// The piece the void is in: 0 the first, `n` the `n`th of
+    /// [`PlanProfile::pieces`].
+    pub piece: usize,
+    /// The lowest ElementId of the sketch lines on the loop.
+    pub tag: u32,
+    /// The loop, counter-clockwise.
+    pub outline_xy: Vec<(f64, f64)>,
+}
 
 /// One further piece of a plan profile whose sketch is several separate
 /// loops (#331): an outer loop and the voids inside it.
@@ -145,6 +163,9 @@ pub struct PlanProfile {
     /// export writes each piece as its own element with the element's
     /// `Tag`. Empty for a single-piece sketch.
     pub pieces: Vec<PlanPiece>,
+    /// The voids whose sketch lines tag them (RE-151), by piece and then
+    /// largest first.
+    pub void_openings: Vec<VoidOpening>,
 }
 
 impl PlanProfile {
@@ -189,7 +210,12 @@ impl PlanProfile {
 
     /// The `DecodedElement` fields carrying this profile.
     pub fn fields(&self) -> Vec<(String, InstanceField)> {
-        vec![
+        let integer = |value: i64| InstanceField::Integer {
+            value,
+            signed: false,
+            size: 8,
+        };
+        let mut fields = vec![
             (PLAN_PROFILE_OUTER_FIELD.into(), loop_field(&self.outer_xy)),
             (
                 PLAN_PROFILE_INNER_FIELD.into(),
@@ -223,7 +249,25 @@ impl PlanProfile {
                         .collect(),
                 ),
             ),
-        ]
+        ];
+        if !self.void_openings.is_empty() {
+            fields.push((
+                PLAN_PROFILE_VOID_OPENINGS_FIELD.into(),
+                InstanceField::Vector(
+                    self.void_openings
+                        .iter()
+                        .map(|void| {
+                            InstanceField::Vector(vec![
+                                integer(void.piece as i64),
+                                integer(i64::from(void.tag)),
+                                loop_field(&void.outline_xy),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ));
+        }
+        fields
     }
 }
 
@@ -239,6 +283,7 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
     let mut inner = Vec::new();
     let mut segments = 0usize;
     let mut pieces = Vec::new();
+    let mut void_openings = Vec::new();
     for (name, value) in fields {
         match (name.as_str(), value) {
             (PLAN_PROFILE_SOURCE_FIELD, InstanceField::String(text)) => {
@@ -255,6 +300,9 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
             (PLAN_PROFILE_PIECES_FIELD, InstanceField::Vector(items)) => {
                 pieces = items.iter().filter_map(piece_from_field).collect();
             }
+            (PLAN_PROFILE_VOID_OPENINGS_FIELD, InstanceField::Vector(items)) => {
+                void_openings = items.iter().filter_map(void_opening_from_field).collect();
+            }
             _ => {}
         }
     }
@@ -270,6 +318,27 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
         inner_xy: inner,
         segment_ids: vec![0; segments],
         pieces,
+        void_openings,
+    })
+}
+
+fn void_opening_from_field(field: &InstanceField) -> Option<VoidOpening> {
+    let InstanceField::Vector(parts) = field else {
+        return None;
+    };
+    let [
+        InstanceField::Integer { value: piece, .. },
+        InstanceField::Integer { value: tag, .. },
+        outline,
+    ] = parts.as_slice()
+    else {
+        return None;
+    };
+    let outline_xy = points_from_field(outline)?;
+    (outline_xy.len() >= 3).then_some(VoidOpening {
+        piece: usize::try_from(*piece).ok()?,
+        tag: u32::try_from(*tag).ok()?,
+        outline_xy,
     })
 }
 
@@ -372,11 +441,68 @@ pub fn plan_profiles_from_sketch_line_records(
             })
             .collect();
         if let Some(mut profile) = plan_profile_from_segments(&boxes) {
+            let lines: Vec<(u32, (f64, f64))> = ids
+                .iter()
+                .zip(&boxes)
+                .map(|(id, b)| (*id, ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0)))
+                .collect();
+            tag_voids(&mut profile, &lines);
             profile.segment_ids = ids;
             out.insert(owner, profile);
         }
     }
     out
+}
+
+/// How far a sketch line's point may lie from a loop's edge and still be on
+/// it (RE-151), feet.
+pub const ON_LOOP_EPS_FEET: f64 = 1e-4;
+
+/// Tag each void of `profile` with the lowest ElementId of the sketch lines
+/// on it (RE-151), `lines` each sketch line's ElementId and a point of it on
+/// the edge it makes: a straight line's box centre, its midpoint, or the
+/// midpoint of the first chord a curve is drawn with. A line is on a loop
+/// where that point lies on one of the loop's edges. A void with no line on
+/// it is left untagged.
+pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
+    let voids = std::iter::once(&profile.inner_xy)
+        .chain(profile.pieces.iter().map(|piece| &piece.inner_xy))
+        .enumerate()
+        .flat_map(|(piece, inner)| inner.iter().map(move |ring| (piece, ring)));
+    let mut tagged = Vec::new();
+    for (piece, ring) in voids {
+        let tag = lines
+            .iter()
+            .filter(|(_, point)| on_loop(ring, *point))
+            .map(|(id, _)| *id)
+            .min();
+        if let Some(tag) = tag {
+            let mut outline_xy = ring.clone();
+            outline_xy.reverse();
+            tagged.push(VoidOpening {
+                piece,
+                tag,
+                outline_xy,
+            });
+        }
+    }
+    profile.void_openings = tagged;
+}
+
+/// Whether `point` lies on an edge of the closed loop `ring`, to within
+/// [`ON_LOOP_EPS_FEET`].
+fn on_loop(ring: &[(f64, f64)], point: (f64, f64)) -> bool {
+    (0..ring.len()).any(|index| {
+        let (a, b) = (ring[index], ring[(index + 1) % ring.len()]);
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let length = dx * dx + dy * dy;
+        if length == 0.0 {
+            return false;
+        }
+        let t = (((point.0 - a.0) * dx + (point.1 - a.1) * dy) / length).clamp(0.0, 1.0);
+        let (x, y) = (a.0 + t * dx, a.1 + t * dy);
+        (point.0 - x).hypot(point.1 - y) <= ON_LOOP_EPS_FEET
+    })
 }
 
 /// Recover one plan profile from a set of segment plan bounding boxes
@@ -500,6 +626,7 @@ fn profile_from_loops(loops: Vec<Vec<(f64, f64)>>) -> Option<PlanProfile> {
         inner_xy: first.inner_xy,
         segment_ids: Vec::new(),
         pieces: pieces.collect(),
+        void_openings: Vec::new(),
     })
 }
 
