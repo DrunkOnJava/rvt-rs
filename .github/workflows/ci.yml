@@ -680,8 +680,10 @@ jobs:
           args: --release --out dist
       # Install into this runner's Python and run the installed wheel end
       # to end: open a Revit file and export IFC through the Python API
-      # (tools/ci/wheel-smoke.py, the same smoke the release runs). The
-      # pytest suite in tests/python is unit-level and is not run.
+      # (tools/ci/wheel-smoke.py, the same smoke the release runs), then
+      # the pytest suite in tests/python: integration tests of the public
+      # Python API on the tier-1 fixtures and, with the corpus fetched,
+      # the eleven Autodesk families (B25).
       - name: Install the built wheel
         shell: bash
         run: |
@@ -694,6 +696,15 @@ jobs:
           python3 tools/ci/wheel-smoke.py corpus/tier1/architectural-2024/architectural-2024.rvt
           family="_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"
           if [ -f "$family" ]; then python3 tools/ci/wheel-smoke.py "$family"; fi
+      - name: Python API integration tests on Revit files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'pytest>=8,<9' 'jsonschema>=4,<5'
+          if [ -d _corpus/examples/Autodesk ]; then
+            export RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk"
+          fi
+          python3 -m pytest tests/python -q -rs
       - name: Upload wheel artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
