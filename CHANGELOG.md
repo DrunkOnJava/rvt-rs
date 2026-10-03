@@ -41,6 +41,17 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The native path reads Revit 2018's schema to its end (#421, #154).**
+  `schema_registry::parse` stopped at byte 351,466 of the 2018 catalog
+  (`schema name byte budget`), on Autodesk's 2018 family and 2018
+  `rac_basic`. A composite member that is not itself an array, over a fixed
+  array of plain class references, writes those references once more after
+  the nested descriptor: 2018's `SiteSurface.m_facets` (`0x500d` over
+  `0x100e`), the only member of that shape in any catalog from 2016 to 2027,
+  as puzzbobb found. The parser now reads them. Checked by the new real-file
+  target `tests/schema_registry_catalogs.rs`: every family catalog of 2016 to
+  2026 is read to its end and gives the same classes as
+  `formats::schema_classes`.
 - **The declared ElementIds include the ElemTable's first record (RE-140, #152,
   #421).** The frames `elem_table::parse_records` reads start 24 bytes into
   their records, so none holds the table's first record, which starts at
@@ -74,9 +85,31 @@ All notable changes will be documented here. This project follows
   unchanged. Id 0 is an ordinary id (Einhoven's and Core Interior's
   `AllProjectPhases`). Checked by the new real-file target
   `tests/elem_table_frame.rs`.
+- **The native record path keeps elements whose route finds no record
+  (RE-145, #548).** `native_document::extract` takes an element's current
+  record from the partition its stored revision routes to, and skips records
+  elsewhere as historical. On Einhoven 6 elements route to `Partitions/1` and
+  on Core Interior 10 to `Partitions/48`, partitions that hold none of their
+  records, so the native path emitted 2,609 of Einhoven's 2,615 elements and
+  26,415 of Core Interior's 26,425. Such an element now takes its copy in the
+  latest partition that holds one, which is the copy the route itself picks
+  wherever it finds one (569 of 571 differing pairs on Core Interior, 887 of
+  887 on Autodesk's 2021 `rac_advanced`). The summary counts them in
+  `current_records_outside_route`. Checked by the new real-file target
+  `tests/native_current_records.rs`.
 
 ### Research
 
+- **The Q4 word is the grandparent's tag, and `ClassEntry::tag` is the base's
+  (RE-146, #154).** On every class `formats::parse_schema` tags, on 53 files of
+  2016 to 2027 (the families, Autodesk's sample projects and the six reference
+  models), the tag it keeps is the base class's tag (never the class's own),
+  and its `ancestor_tag` is the grandparent's, as puzzbobb reported. That
+  answers RE-137's open question: the Q4 addendum looked a grandparent's tag up
+  among base tags. `ClassEntry`'s documentation says so now; the readers that
+  use `ClassEntry::tag` as the class's own tag (the schema-directed walker,
+  `tagged_ancestor`, `rvt-analyze`) are left for a follow-up.
+  `reports/element-framing/RE-146-q4-word-is-the-grandparent.md`.
 - **The positions that carry the header tag and are not a record (RE-144,
   #152).** Steffen asked whether RE1 Architecture's 1,707 such positions come in
   repeated groups, as his scanner's false hits do on Core Interior. They are

@@ -165,6 +165,22 @@ impl<'a> Reader<'a> {
                     references.push(actual);
                 }
             }
+            // A composite that is not itself an array, over a fixed array of
+            // plain class references, writes those references once more after
+            // the nested descriptor: Revit 2018's `SiteSurface.m_facets`,
+            // `0x500d` over `0x100e` (#421). No other member of a 2016 to
+            // 2027 catalog has that shape.
+            if array_count.is_none() && nested.base == 14 && nested.array_count.is_some() {
+                for expected in &nested.references {
+                    let actual = self.reference()?;
+                    ensure!(
+                        actual.tag == expected.tag,
+                        "schema composite trailing reference mismatch at {}",
+                        actual.offset
+                    );
+                    references.push(actual);
+                }
+            }
             Some(Box::new(nested))
         } else {
             None
