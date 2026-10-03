@@ -11,8 +11,11 @@
 //! +64   u64   m_idType
 //! ```
 //!
-//! An element's anchor is the nearest one before its first connector entry
-//! (RE-131, [`crate::partition_pipe_axes`]) within [`ANCHOR_WINDOW`] bytes. On
+//! The anchors are one per curve, and a curve's connector entries (RE-131,
+//! [`crate::partition_pipe_axes`]) follow its anchor within [`ANCHOR_WINDOW`]
+//! bytes: an anchor is the element's whose box alone holds the points of the
+//! first two entries after it. A neighbour joined at one end holds only that
+//! end, so the first entry in the stream that falls in a box is not enough. On
 //! the RE1 Mechanical and Plumbing models (Revit 2025, MIT), against Revit's
 //! own IFC: every duct and pipe has one (25, 6 and 63); the type id is
 //! Revit's type `Tag` on all 94; a duct's width and height are two of the
@@ -168,40 +171,38 @@ pub fn scan_curve_fields(
         if anchors.is_empty() {
             continue;
         }
-        // Each element's first connector entry: the first entry whose point
-        // lies in its box.
-        let mut first: Vec<Option<usize>> = vec![None; boxes.len()];
-        for at in memchr::memmem::find_iter(buf, &1u32.to_le_bytes()) {
-            if first.iter().all(Option::is_some) {
-                break;
-            }
-            let Some(point) = entry_point(buf, at) else {
-                continue;
-            };
-            for (index, (_, bbox)) in boxes.iter().enumerate() {
-                if first[index].is_some() {
-                    continue;
-                }
-                let inside = (0..3).all(|axis| {
-                    point[axis] >= bbox[axis] - POINT_TOLERANCE_FEET
-                        && point[axis] <= bbox[axis + 3] + POINT_TOLERANCE_FEET
-                });
-                if inside {
-                    first[index] = Some(at);
-                }
-            }
-        }
-        for ((id, _), entry) in boxes.iter().zip(first) {
-            let Some(entry) = entry else {
-                continue;
-            };
-            let before = anchors.partition_point(|a| *a < entry);
-            let Some(&at) = before.checked_sub(1).and_then(|i| anchors.get(i)) else {
-                continue;
-            };
-            if entry - at > ANCHOR_WINDOW {
+        let inside = |point: [f64; 3], bbox: &[f64; 6]| {
+            (0..3).all(|axis| {
+                point[axis] >= bbox[axis] - POINT_TOLERANCE_FEET
+                    && point[axis] <= bbox[axis + 3] + POINT_TOLERANCE_FEET
+            })
+        };
+        // The connector entries whose points lie in some element's box, in
+        // the order they are written.
+        let entries: Vec<(usize, [f64; 3])> = memchr::memmem::find_iter(buf, &1u32.to_le_bytes())
+            .filter_map(|at| Some((at, entry_point(buf, at)?)))
+            .filter(|(_, point)| boxes.iter().any(|(_, bbox)| inside(*point, bbox)))
+            .collect();
+        // An anchor belongs to the one element whose box holds the points of
+        // the first two entries after it within the window: a curve's own two
+        // ends, of which a neighbour joined at one end holds only that one.
+        for &at in &anchors {
+            let from = entries.partition_point(|(offset, _)| *offset <= at);
+            let points: Vec<[f64; 3]> = entries[from..]
+                .iter()
+                .take_while(|(offset, _)| offset - at <= ANCHOR_WINDOW)
+                .take(2)
+                .map(|(_, point)| *point)
+                .collect();
+            if points.is_empty() {
                 continue;
             }
+            let mut owners = boxes
+                .iter()
+                .filter(|(_, bbox)| points.iter().all(|point| inside(*point, bbox)));
+            let (Some((id, _)), None) = (owners.next(), owners.next()) else {
+                continue;
+            };
             let Some(fields) = fields_at(buf, at) else {
                 continue;
             };
