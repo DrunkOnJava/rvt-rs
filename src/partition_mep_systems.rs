@@ -4,7 +4,7 @@
 //! `RbsHvacSystem`, `RbsPipingSystem` or `RbsElectricalSystem`. An HVAC or
 //! piping system's name is the first string of printable ASCII in its
 //! payload; an electrical system's is its circuit number
-//! ([`circuit_number`]). Its members are the elements whose own data objects
+//! (RE-162 §3). Its members are the elements whose own data objects
 //! hold the system's ElementId. On the RE1 Mechanical, Plumbing and
 //! Electrical models (Revit 2025, MIT), against Revit's own IFC: every one of
 //! Revit's 26 `IfcSystem`s is one such object of the same name, and every
