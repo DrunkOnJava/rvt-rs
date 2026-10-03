@@ -1111,7 +1111,9 @@ pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], s
             entities::IfcEntity::BuildingElement {
                 storey_index: Some(index),
                 ..
-            } => storeys.get(*index).map_or(0.0, |storey| storey.elevation_feet),
+            } => storeys
+                .get(*index)
+                .map_or(0.0, |storey| storey.elevation_feet),
             _ => 0.0,
         })
         .collect();
