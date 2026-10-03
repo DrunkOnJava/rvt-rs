@@ -8,8 +8,8 @@ Every single-value property of every property set Revit's export relates to
 an object is keyed by the object (an element by its `Tag`, a space by its
 `Name`, a storey by its `Name`, the building as `building`), the set's name
 and the property's name. For each key Revit writes, the rvt-rs export either
-has the same value (value type and value as written, numbers compared to six
-significant figures, lengths in metres from each file's own length unit), a
+has the same value (value type and value as written, numbers within a
+relative 1e-5, lengths in metres from each file's own length unit), a
 different one, or none. rvt-rs's own sets
 (`RvtElementRecordGeometry` and other non-`Pset_` sets) are left out, as are
 objects rvt-rs does not write at all.
@@ -47,11 +47,22 @@ def value_of(value, metres_per_unit):
     raw = value.wrappedValue
     if "LengthMeasure" in value.is_a():
         raw = raw * metres_per_unit
-    if isinstance(raw, float):
-        raw = float(f"{raw:.6g}")
-    elif isinstance(raw, (tuple, list)):
+    if isinstance(raw, (tuple, list)):
         raw = tuple(raw)
     return (value.is_a(), raw)
+
+
+def same(a, b):
+    """Equal values: the same type, and numbers within a relative 1e-5 (a
+    micrometre on a metre-long pipe, below the writers' rounding)."""
+    if a is None or b is None or a == "missing" or b == "missing":
+        return a == b
+    (type_a, raw_a), (type_b, raw_b) = a, b
+    if type_a != type_b:
+        return False
+    if isinstance(raw_a, float) and isinstance(raw_b, (int, float)):
+        return abs(raw_a - raw_b) <= 1e-5 * max(1.0, abs(raw_a), abs(raw_b))
+    return raw_a == raw_b
 
 
 def properties(path):
@@ -97,7 +108,7 @@ def main(argv):
         row = rows[(pset, prop)]
         row[0] += 1
         mine = ours.get((key, pset, prop), "missing")
-        if mine == value:
+        if same(mine, value):
             row[1] += 1
         elif mine == "missing":
             row[3] += 1
