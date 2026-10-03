@@ -73,7 +73,7 @@ into milestones).
 | 11 | B18 | `src/elements/structural.rs:210`: curved-beam length | debt | S | done |
 | 12 | B19 | `TODO.md` (1,310 lines): mark items done or superseded by issues | docs | M | done |
 | 13 | B23 | Unit-suite audit (keep or mirror), then delete mirror suites area by area | tests | L | done |
-| 14 | B09 | #355: family-instance materials from `FamilySymbol.m_geomTag2MaterialId`, instance material parameters, render type 4 | feature | L | in review |
+| 14 | B09 | #355: family-instance materials from `FamilySymbol.m_geomTag2MaterialId`, instance material parameters, render type 4 | feature | L | done |
 | 15 | B20 | Geometry slices of milestone 0.4.x, starting with #227 | feature | XL | in progress |
 | 16 | B08 | #309: door and window types with an empty material map are bare `IfcOpeningElement`s | feature | M | blocked |
 | 17 | B07 | #223: the flag word at `+0x46` is not Room Bounding | research | S | done (reply, unverified) |
@@ -135,11 +135,21 @@ Each item lists its PR, its red run on `main` (the test commit's message has the
   That is 24,373 lines in all. The Python suite is an integration test over the public API on real files, so it is kept and now runs in CI (B25).
 - **B24, done (measured, no change)** (#581). RE-150: the walker's `Global/Latest` scan finds 0 candidates at the production threshold on every measured file, with base tags and with own tags alike, so the base-tag lookup changes no output.
 - **B25, done** (#578). `tests/python` (64 tests, plus 1 needing `jsonschema`, now installed) runs on the built wheel in the wheel job against the tier-1 fixtures and the family corpus. First run: 64 passed, 1 skipped.
-- **B09, in review** (#580).
+- **B09, done** (#580, merged).
   - Red on `main` (draft #579): `tests/element_materials.rs` gave 0 of 256 columns Revit's material set.
   - Measure (run 37120595647): element materials with Revit's set went from 580 to 836 on Core Interior, 0 to 47 on RE1 Electrical, 0 to 43 on RE1 Mechanical and 0 to 60 on RE1 Plumbing, with no wrong set added.
   - With the maintainer's approval, the pinned material count went from 86 to 87, and the witness observations were regenerated on the runners.
-- **B20, in progress.** RE-151 (#227): every one of Core Interior's 63 unfilled openings is tagged with a sketch line (`CurveElem`, category −2000045) whose owner is the opening's host. They are holes in the host's sketch. Next: which line of the loop gives the Tag, then emit the openings.
+- **B20, in progress.** Milestone #227, the openings Revit's export leaves unfilled (RE-151):
+  - #584: each hole in a floor's or shading device's sketch is an opening voiding it, tagged with the lowest id of the sketch lines on the hole.
+    - Red on `main` (draft #583, run 37126870895): `tests/unfilled_openings.rs` found 62 of Revit's 62 slab and shading-device openings missing.
+    - Measure (run 37128180603): 62 of Revit's 63 unfilled openings, all within 0.001 ft of Revit's box. Every other model's outputs are identical to `main`.
+    - With the maintainer's approval, the Core Interior witness observations were regenerated (surface unchanged, 0 diffs).
+  - Left on #227: the 63rd opening, a hole in wall 55840's elevation-profile sketch. Reading it needs that wall's edited profile, which rvt-rs does not read.
+  - The other 0.4.x milestones are blocked here:
+    - #90, #94, #309, #323, #328, #357 and #358 are measured only on Snowdon, which is local-only;
+    - #356 needs a pitched-roof oracle;
+    - #156 waits on reported format evidence;
+    - #96's open parts need a model with round or oval ducts.
 
 ## Item details
 
