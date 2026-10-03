@@ -353,10 +353,11 @@ pub fn append_typed_production_elements(
         // RE-154: the type name, where the element is named by it. A door or
         // window whose type draws no geometry is written as its opening
         // (RE-84), which takes none.
-        let opening_only = decoded.fields.iter().any(|(name, value)| {
-            name == crate::partition_schema_mvp::TYPE_WITHOUT_GEOMETRY_FIELD
-                && matches!(value, InstanceField::Bool(true))
-        });
+        let opening_only = matches!(decoded.class.as_str(), "Door" | "Window")
+            && decoded.fields.iter().any(|(name, value)| {
+                name == crate::partition_schema_mvp::TYPE_WITHOUT_GEOMETRY_FIELD
+                    && matches!(value, InstanceField::Bool(true))
+            });
         let reference_type = family_and_type(&decoded)
             .filter(|_| own_name.is_none() && named_by_type && !opening_only)
             .map(|(_, type_name)| type_name);
