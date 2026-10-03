@@ -360,6 +360,19 @@ pub fn recover_partition_schema_mvp(
     attach_pipe_type_names(rf, &mut out.products);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
     attach_curve_fields(rf, revit_version, &mut out.products);
+    // --- The shared parameter Serial Number (RE-156) ---
+    attach_serial_numbers(
+        rf,
+        revit_version,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ],
+    );
     // --- System-family type names (#322) ---
     let mut unnamed: Vec<&mut DecodedElement> = [&mut out.walls, &mut out.slabs, &mut out.products]
         .into_iter()
@@ -3598,6 +3611,41 @@ pub fn curve_size_from_fields(fields: &[(String, InstanceField)]) -> Option<(f64
         })
     };
     Some((field(CURVE_SIZE_FIELDS[0])?, field(CURVE_SIZE_FIELDS[1])?))
+}
+
+/// Field carrying an element's value of the shared parameter `Serial Number`
+/// (RE-156).
+pub const SERIAL_NUMBER_FIELD: &str = "m_serial_number";
+/// Name of the shared parameter whose value Revit's export writes as
+/// `SerialNumber` (RE-156).
+pub const SERIAL_NUMBER_PARAMETER_NAME: &str = "Serial Number";
+
+/// Give each element of `groups` its value of the shared parameter `Serial
+/// Number`: the text entry with the parameter's ElementId in the element's
+/// own data object (RE-156). A file with no such parameter changes nothing.
+fn attach_serial_numbers(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 6],
+) {
+    use crate::partition_room_parameters as prp;
+    let definitions = prp::find_parameter_definitions(rf, revit_version);
+    let Some(&parameter) = definitions.get(SERIAL_NUMBER_PARAMETER_NAME) else {
+        return;
+    };
+    let ids: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter().filter_map(|element| element.id))
+        .collect();
+    let values = prp::scan_text_parameter(rf, revit_version, &ids, i64::from(parameter));
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        if let Some(value) = element.id.and_then(|id| values.get(&id)) {
+            element.fields.push((
+                SERIAL_NUMBER_FIELD.into(),
+                InstanceField::String(value.clone()),
+            ));
+        }
+    }
 }
 
 /// Give each duct and pipe the width and height its curve object holds, and
