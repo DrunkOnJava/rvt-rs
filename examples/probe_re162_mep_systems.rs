@@ -91,8 +91,10 @@ fn systems(step: &str) -> Vec<(String, BTreeSet<u32>)> {
             continue;
         }
         let f = split_args(args);
-        let Some((group_entity, group_args)) =
-            f.get(6).and_then(|g| refs(g).first().copied()).and_then(|g| ents.get(&g))
+        let Some((group_entity, group_args)) = f
+            .get(6)
+            .and_then(|g| refs(g).first().copied())
+            .and_then(|g| ents.get(&g))
         else {
             continue;
         };
@@ -260,6 +262,78 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
             members.len(),
             rows.join(",")
         ));
+    }
+    // Every object of a system class: its strings (offset from the header),
+    // the objects holding its id, and the Revit system they overlap most.
+    let system_classes = ["RbsPipingSystem", "RbsHvacSystem", "RbsElectricalSystem"];
+    let mut seen = BTreeSet::new();
+    for (_, b, objs) in &streams {
+        for (start, end, id, class) in objs {
+            let class_name = class_names
+                .get(&(class & 0xffff))
+                .cloned()
+                .unwrap_or_default();
+            if !system_classes.contains(&class_name.as_str()) || !seen.insert(*id) {
+                continue;
+            }
+            let mut strings = Vec::new();
+            let mut q = start + 20;
+            while q + 4 < end - 4 && strings.len() < 6 {
+                let n = u32_at(b, q).unwrap_or(0) as usize;
+                if (1..=80).contains(&n) && q + 4 + 2 * n <= end - 4 {
+                    let units: Vec<u16> = b[q + 4..q + 4 + 2 * n]
+                        .chunks(2)
+                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                        .collect();
+                    if units.iter().all(|u| (0x20..0xd800).contains(u)) {
+                        strings.push(format!(
+                            "{}:{:?}",
+                            q - start,
+                            String::from_utf16_lossy(&units)
+                        ));
+                        q += 4 + 2 * n;
+                        continue;
+                    }
+                }
+                q += 1;
+            }
+            let mut holders: BTreeMap<u32, u32> = BTreeMap::new();
+            for (_, b2, objs2) in &streams {
+                for at in memchr::memmem::find_iter(b2, &id.to_le_bytes()) {
+                    if let Some((holder, holder_class)) = owner(objs2, at) {
+                        if holder != *id {
+                            holders.insert(holder, holder_class);
+                        }
+                    }
+                }
+            }
+            let best = systems
+                .iter()
+                .max_by_key(|(_, m)| m.iter().filter(|t| holders.contains_key(*t)).count());
+            let (revit_name, revit_members) = best
+                .map(|(n, m)| (n.clone(), m.clone()))
+                .unwrap_or_default();
+            let shared = revit_members
+                .iter()
+                .filter(|t| holders.contains_key(*t))
+                .count();
+            let mut extras: BTreeMap<String, usize> = BTreeMap::new();
+            for (holder, holder_class) in &holders {
+                if !revit_members.contains(holder) {
+                    let n = class_names
+                        .get(&(holder_class & 0xffff))
+                        .cloned()
+                        .unwrap_or_default();
+                    *extras.entry(n).or_default() += 1;
+                }
+            }
+            out.push(format!(
+                "{{\"system_object\":{id},\"class\":{class_name:?},\"size\":{},\"strings\":{strings:?},\"holders\":{},\"revit_system\":{revit_name:?},\"revit_members\":{},\"shared\":{shared},\"extras\":{extras:?}}}",
+                end - start,
+                holders.len(),
+                revit_members.len()
+            ));
+        }
     }
     Ok(out)
 }
