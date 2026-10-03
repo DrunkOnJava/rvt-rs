@@ -8,6 +8,18 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A floor's sketch holes are openings voiding it (RE-151, #227).** Revit's
+  export writes each hole in a floor's or shading device's sketch twice: as a
+  void of the slab's profile, which rvt-rs already wrote, and as an
+  `IfcOpeningElement` voiding the slab, with the hole's outline through the
+  slab's thickness, placed in the slab's frame, named `Family:Type:<type id>`
+  and tagged with the lowest ElementId of the sketch lines on the hole. The
+  IFC export now writes those openings: Core Interior's 42 slab and 20
+  shading-device openings, all within 0.001 ft of Revit's (Measure). Checked
+  by the new real-file target `tests/unfilled_openings.rs`. The 63rd, a hole
+  in wall 55840's elevation profile, is not read.
+  `element_record_plan_profiles::tag_voids`, `PlanProfile::void_openings`
+  and `IfcEntity::VoidOpening`.
 - **Family instances whose type draws with no material take Revit's
   `<Unnamed>`, and columns walls are joined to take the walls' material
   (#355).** A family type's geometry-material map (RE-82, puzzbobb's
