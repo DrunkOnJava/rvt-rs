@@ -49,7 +49,7 @@ on:
         required: false
         default: ""
       families:
-        description: Also read every file of the phi-ag/rvt family corpus with rvt-info, and run the probe on it (Autodesk-owned, fetched for the run and never stored)
+        description: Also read every file of the phi-ag/rvt family corpus and the makers' public families (research/public-families.tsv) with rvt-info, and run the probe on them (fetched for the run and never stored)
         type: boolean
         required: false
         default: false
@@ -118,6 +118,11 @@ jobs:
         with:
           repository: phi-ag/rvt
           path: _corpus
+      # Families their makers publish (research/public-families.tsv, #152),
+      # read with the family corpus. An unreachable host is NOT MEASURED.
+      - name: Fetch the makers' public families
+        if: inputs.families || github.event_name == 'pull_request'
+        run: tools/fetch-public-families.sh _corpus/examples/Autodesk
       - name: Fetch Autodesk's sample projects
         if: inputs.samples
         run: tools/fetch-autodesk-samples.sh _samples
