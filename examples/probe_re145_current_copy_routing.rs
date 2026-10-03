@@ -163,8 +163,10 @@ fn probe(path: &str) -> anyhow::Result<String> {
         if !partitions.contains(&routed) {
             routed_without_copy += 1;
             if without_copy.len() < EXAMPLES {
+                // A Vec prints as a JSON array; a BTreeSet would not.
+                let partition_list: Vec<u32> = partitions.iter().copied().collect();
                 without_copy.push(format!(
-                    "{{\"id\":{id},\"class\":{},\"partitions\":{partitions:?},\"routed\":{routed},\
+                    "{{\"id\":{id},\"class\":{},\"partitions\":{partition_list:?},\"routed\":{routed},\
                      \"stored_revision\":{},\"identical\":{}}}",
                     class_of(&list[0].body),
                     identity.stored_revision,
@@ -214,7 +216,12 @@ fn probe(path: &str) -> anyhow::Result<String> {
                     .filter(|id| copies.contains_key(id) && !emitted.contains(id))
                     .map(|id| {
                         let list = &copies[id];
-                        let partitions: BTreeSet<u32> = list.iter().map(|c| c.partition).collect();
+                        let partitions: Vec<u32> = list
+                            .iter()
+                            .map(|c| c.partition)
+                            .collect::<BTreeSet<u32>>()
+                            .into_iter()
+                            .collect();
                         format!(
                             "{{\"id\":{id},\"class\":{},\"partitions\":{partitions:?}}}",
                             class_of(&list[0].body)
@@ -260,7 +267,11 @@ fn probe(path: &str) -> anyhow::Result<String> {
 }
 
 fn main() {
-    let paths: Vec<String> = std::env::args().skip(1).collect();
+    // Measure passes flags such as `--records` after the paths.
+    let paths: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|arg| !arg.starts_with("--"))
+        .collect();
     if paths.is_empty() {
         eprintln!("usage: probe_re145_current_copy_routing MODEL.rvt ...");
         std::process::exit(2);
