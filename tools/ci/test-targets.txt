@@ -40,6 +40,7 @@ real      re19_door_window_wall_negative
 real      revit_global_ids
 real      rooms_floors_from_records_only
 real      samples
+real      schema_registry_catalogs
 real      walker_to_ifc_integration
 
 cli       cli_ergonomics
