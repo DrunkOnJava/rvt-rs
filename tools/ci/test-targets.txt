@@ -27,6 +27,7 @@ real      corpus_tier2_health
 real      curtain_walls
 real      design_options
 real      duct_fields
+real      duct_segment_type_common
 real      elem_table_corpus         skip=declared_element_ids_returns_sorted_deduped_set
 real      elem_table_frame
 real      element_materials

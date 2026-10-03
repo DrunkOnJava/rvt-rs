@@ -646,8 +646,12 @@ pub fn append_typed_production_elements(
             }),
             _ => None,
         };
+        // A duct's length is also in its Pset_DuctSegmentTypeCommon, as on
+        // every RE1 Mechanical duct.
+        let duct_set = (decoded.class == "Duct").then_some("Pset_DuctSegmentTypeCommon");
         if let Some(length) = segment_length {
-            for name in ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"] {
+            let sets = ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"];
+            for name in sets.into_iter().chain(duct_set) {
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: entity_index,
                     set: PropertySet {
