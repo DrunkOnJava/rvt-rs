@@ -523,7 +523,7 @@ pub fn append_typed_production_elements(
         let mut reference_sets = reference_type
             .map(|type_name| reference_property_sets(&ifc_type, &type_name))
             .unwrap_or_default();
-        add_is_external(&mut reference_sets, &ifc_type, &decoded);
+        add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         let serial_sets = serial_number_property_sets(&decoded, &ifc_type);
         // RE-151: the name of the openings of a floor's tagged voids.
         let opening_name = (!void_bodies.is_empty()).then(|| {
@@ -1073,9 +1073,19 @@ fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<
 
 /// Add `IsExternal` (`IfcBoolean`) to a door's `Pset_DoorCommon` or a
 /// slab's `Pset_SlabCommon` among `sets`, from its type's Function, 0
-/// interior or 1 exterior (RE-158). Nothing for another Function, which RE1
-/// does not show, or when the type's Function was not read.
-fn add_is_external(sets: &mut [PropertySet], ifc_type: &str, decoded: &DecodedElement) {
+/// interior or 1 exterior (RE-158), starting the set when the element has
+/// none (no type name for its `Reference`). Nothing for another Function,
+/// which RE1 does not show, when the type's Function was not read, or for a
+/// door written as its opening alone (RE-84).
+fn add_is_external(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    opening_only: bool,
+) {
+    if opening_only {
+        return;
+    }
     let common = match ifc_type {
         "IFCDOOR" => "Pset_DoorCommon",
         "IFCSLAB" => "Pset_SlabCommon",
@@ -1094,11 +1104,16 @@ fn add_is_external(sets: &mut [PropertySet], ifc_type: &str, decoded: &DecodedEl
         Some(1) => true,
         _ => return,
     };
-    if let Some(set) = sets.iter_mut().find(|set| set.name == common) {
-        set.properties.push(Property {
-            name: "IsExternal".into(),
-            value: PropertyValue::Boolean(external),
-        });
+    let property = Property {
+        name: "IsExternal".into(),
+        value: PropertyValue::Boolean(external),
+    };
+    match sets.iter_mut().find(|set| set.name == common) {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: common.into(),
+            properties: vec![property],
+        }),
     }
 }
 
