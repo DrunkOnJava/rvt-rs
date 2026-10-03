@@ -147,7 +147,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         render(&overall)
     )];
     let mut categories: Vec<(&i64, &(usize, Tally))> = by_category.iter().collect();
-    categories.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    categories.sort_by_key(|(_, (count, _))| std::cmp::Reverse(*count));
     for (category, (count, tally)) in categories.into_iter().take(CATEGORIES_SHOWN) {
         out.push(format!(
             "{{\"category\":{category},\"records\":{count},\"slots\":{{{}}}}}",
