@@ -60,6 +60,9 @@ def same(a, b):
     (type_a, raw_a), (type_b, raw_b) = a, b
     if type_a != type_b:
         return False
+    if type_a in ("enumerated", "list"):
+        # Item by item, so a list of lengths gets the same tolerance as one.
+        return len(raw_a) == len(raw_b) and all(same(x, y) for x, y in zip(raw_a, raw_b))
     if isinstance(raw_a, float) and isinstance(raw_b, (int, float)):
         return abs(raw_a - raw_b) <= 1e-5 * max(1.0, abs(raw_a), abs(raw_b))
     return raw_a == raw_b
