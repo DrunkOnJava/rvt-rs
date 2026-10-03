@@ -21,13 +21,15 @@
 //!
 //! - **Field-level semantic editing**: writing NEW values into
 //!   Formats/Latest schema fields or Global/Latest instance fields.
-//!   Blocked on Phase 7 (per-class encoders) in
-//!   `TODO-BLINDSIDE.md`. Stream-level patching + the 100%
-//!   classified schema are the pieces that unblock it.
+//!   Gated by ADR-002 (`docs/decisions/ADR-002-semantic-write-api-gate.md`)
+//!   until a written file can be shown to open in Revit; it needs
+//!   per-class encoders on top of stream-level patching and the
+//!   whole-schema reader (#410).
 //! - **CFB structural writing at Revit's exact sector layout**:
 //!   non-empty patches preserve unpatched stream bytes and identity
 //!   metadata, but the raw container bytes can still differ because
 //!   the `cfb` crate owns FAT/directory maintenance.
+//!
 //! # Atomicity
 //!
 //! [`write_with_patches`] writes to a sibling temp file and renames

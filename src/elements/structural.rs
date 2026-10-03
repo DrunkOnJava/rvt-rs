@@ -207,8 +207,8 @@ impl Beam {
     }
 
     /// Straight-line beam length in feet. None when either endpoint
-    /// is missing (curved beams will need curve-aware length — TODO
-    /// when walker Vector variant lands for curved-beam profiles).
+    /// is missing. For a curved beam this is the chord, not the arc:
+    /// curved beam axes are not read yet (#94).
     pub fn length_feet(&self) -> Option<f64> {
         let (s, e) = (self.start?, self.end?);
         let dx = e.x - s.x;
