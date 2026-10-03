@@ -50,9 +50,30 @@ All notable changes will be documented here. This project follows
   walk of the chain covers every id read from `0x06` on all 38, and holds no
   id the table does not declare on 37 of them; the 2021 `rac_advanced` sample
   has 6).
-  The first record's ids are now read from `0x06`, kept on `records[0]` as
-  `ElemRecord::previous_ids`, and added by `declared_ids`; `parse_records`
-  returns the same records as before. Reported by puzzbobb (#421).
+  Reported by puzzbobb (#421). Superseded by the entry below:
+  `parse_records` now returns that record itself.
+- **`Global/ElemTable` is read from `0x06`, as the table it is (#152).** After
+  the `u16` tag and the `u32` record count at `0x02`, the records start at
+  `0x06` and close with their owner, 28 bytes through Revit 2023 and 40 from
+  2024 (STE1200's frame; puzzbobb measured it on 30 files from 2008 to 2027).
+  `elem_table::parse_records` read frames from `0x1E`, 24 bytes into each
+  record, so it never returned the first record, and on every 2024 and later
+  file and every family it returned a last one read from the bytes after the
+  table: `(0, 0)` on the 2024 to 2027 projects, `(18, 0)` on the 2016 family,
+  declaring an id 0 that no record holds. On 28-byte projects it returned one
+  record too few (Einhoven: 2,614 of 2,615). It now returns exactly the stated
+  count, ids rising over the whole table, with each record's own owner, so a
+  family's first record is owned by element 17. The record size is the one at
+  which the stated records fit from `0x06` with rising ids, which also reads
+  the 2008 to 2012 projects whose marker scan took an 84-byte stride (no such
+  file is in the corpora here). `ElemTableLayout::start` is `0x06` and
+  `marker_offset` the owner's offset (24 or 28); `ElemRecord::previous_ids` is
+  always `None` (the first record is `records[0]`);
+  `RECORD_EPISODE_OFFSET` and `RECORD_EPISODE_OFFSET_28` are both 8, the same
+  bytes as before counted from the record's start, so every GlobalId is
+  unchanged. Id 0 is an ordinary id (Einhoven's and Core Interior's
+  `AllProjectPhases`). Checked by the new real-file target
+  `tests/elem_table_frame.rs`.
 
 ### Research
 
