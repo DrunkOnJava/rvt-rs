@@ -60,19 +60,19 @@ into milestones).
 
 | # | id | title | lane | size | status |
 |---|---|---|---|---|---|
-| 1 | B02 | ElemTable records from `0x06`: drop the tail frame on 40-byte files, keep the first record, and expose its owner | fix | M | committed |
-| 2 | B03 | `schema_registry` reads Revit 2018's `SiteSurface.m_facets` trailing class reference | fix | S | committed |
-| 3 | B04 | Single-copy elements routed to another partition are dropped as historical (Core Interior, 2024) | fix/research | M | committed |
-| 4 | B05 | #548: does `route_episode` pick the newer copy? Measure on the Autodesk samples and Core Interior | research | M | committed |
-| 5 | B10 | #154: the Q4 word is the grandparent's tag; the GUID list starts at 2014 | research | S | committed |
+| 1 | B02 | ElemTable records from `0x06`: drop the tail frame on 40-byte files, keep the first record, and expose its owner | fix | M | in progress |
+| 2 | B03 | `schema_registry` reads Revit 2018's `SiteSurface.m_facets` trailing class reference | fix | S | in progress |
+| 3 | B04 | Single-copy elements routed to another partition are dropped as historical (Core Interior, 2024) | fix/research | M | in progress |
+| 4 | B05 | #548: does `route_episode` pick the newer copy? Measure on the Autodesk samples and Core Interior | research | M | in progress |
+| 5 | B10 | #154: the Q4 word is the grandparent's tag; the GUID list starts at 2014 | research | S | in progress |
 | 6 | B11 | #152: the Stertil 2014 family as a fetchable, pinned corpus file; tick the 2014 and 2026 items | corpus/research | M | committed |
 | 7 | B12 | #421 §3: a record's family document is the `ContentDocuments` section whose GUID keys its block | research | M | committed |
 | 8 | B06 | Native path on 2016 to 2022: continuation bits `flags & 3`, pre-2018 size accounting, id width per group | feature | M | committed |
 | 9 | B01 | Answer the 13 open community comments with measured replies, each as its item lands | community | M | committed |
-| 10 | B17 | `src/writer.rs:25` names a `TODO-BLINDSIDE.md` that does not exist | debt | S | committed |
-| 11 | B18 | `src/elements/structural.rs:210`: curved-beam length | debt | S | committed |
+| 10 | B17 | `src/writer.rs:25` names a `TODO-BLINDSIDE.md` that does not exist | debt | S | done |
+| 11 | B18 | `src/elements/structural.rs:210`: curved-beam length | debt | S | done |
 | 12 | B19 | `TODO.md` (1,310 lines): mark items done or superseded by issues | docs | M | committed |
-| 13 | B23 | Unit-suite audit (keep or mirror), then delete mirror suites area by area | tests | L | committed |
+| 13 | B23 | Unit-suite audit (keep or mirror), then delete mirror suites area by area | tests | L | in progress |
 | 14 | B09 | #355: family-instance materials from `FamilySymbol.m_geomTag2MaterialId`, instance material parameters, render type 4 | feature | L | committed |
 | 15 | B20 | Geometry slices of milestone 0.4.x, starting with #227 | feature | XL | committed |
 | 16 | B08 | #309: door and window types with an empty material map are bare `IfcOpeningElement`s | feature | M | blocked |
@@ -80,6 +80,25 @@ into milestones).
 | 18 | B13 | #421 §2: six curtain system type records on 2021 `rac_advanced` that ElemTable does not list | research | S | open |
 | 19 | B21 | Parameters (0.5.0: #35, #155, #223, #228) | feature | XL | open |
 | 20 | B22 | Held-out validation on licensed models (#408) | test | L | blocked |
+
+## Progress log
+
+- **B02** (PR #559).
+  - Red: `tests/elem_table_frame.rs` failed on `main` (draft #558, run 37115866869).
+    - `2016 family: ids rise strictly, but record 1595 has id 18 after 7259 (of 1596)`
+    - `Revit_IFC5_Einhoven.rvt: parse_records returns the 2615 records the table states, left: 2614, right: 2615`
+  - Green: every required check on #559, plus corpus tier 2.
+  - Measure against `main` (run 37116473919, families and samples): scorer output and rvt-info output are identical on all 6 models, 11 families and 36 samples; only RE1 Architecture's IFC bytes differ. That IFC is being diffed (run 37116833078).
+  - Five existing tests were updated with the maintainer's approval, in their own commit.
+- **B03** (PR #561).
+  - Red: `tests/schema_registry_catalogs.rs` failed on `main` (draft #560, run 37116554570): `["2018: schema name byte budget at 351466: 786452"]`, the only failing release.
+- **B04, B05.** Probe `probe_re145_current_copy_routing` on branch `re/re145-copy-routing`, Measure run 37116666890 with the samples.
+- **B10.** Probe `probe_re146_q4_word` on branch `re/re146-q4-word`, Measure run 37116713027 with the families and samples.
+- **B17, B18.**
+  - `src/writer.rs` now points at ADR-002 instead of the missing `TODO-BLINDSIDE.md`.
+  - The curved-beam marker in `src/elements/structural.rs` now says the length is the chord and links #94.
+  - These are comment-only changes, verified by CI's `cargo doc` and `cargo clippy`. There is no behaviour to test.
+- **B23.** Area `elem_table`: the inline mirror suite is deleted (336 lines) in #559, landing with that PR's green real-file run. `index_by_element_id_keeps_first_duplicate` is kept as a keep test.
 
 ## Item details
 
