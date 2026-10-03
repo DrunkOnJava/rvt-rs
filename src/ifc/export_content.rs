@@ -358,9 +358,24 @@ pub fn append_typed_production_elements(
                 name == crate::partition_schema_mvp::TYPE_WITHOUT_GEOMETRY_FIELD
                     && matches!(value, InstanceField::Bool(true))
             });
+        // A duct's type is read (RE-134) but not its system family, which
+        // follows its shape; its Reference is still its type's name.
+        let duct_type = (decoded.class == "Duct")
+            .then(|| {
+                decoded.fields.iter().find_map(|(name, value)| match value {
+                    InstanceField::String(text)
+                        if name == crate::partition_schema_mvp::TYPE_NAME_FIELD =>
+                    {
+                        Some(text.clone())
+                    }
+                    _ => None,
+                })
+            })
+            .flatten();
         let reference_type = family_and_type(&decoded)
             .filter(|_| own_name.is_none() && named_by_type && !opening_only)
-            .map(|(_, type_name)| type_name);
+            .map(|(_, type_name)| type_name)
+            .or(duct_type);
         let name = match (
             own_name,
             decoded.id,
@@ -590,16 +605,29 @@ pub fn append_typed_production_elements(
                 set,
             });
         }
-        // A pipe's length between its ends, which Revit's export gives in
-        // both flow-segment sets (RE-131 reads the ends).
-        if let Some(pipe) = (decoded.class == "Pipe")
-            .then(|| crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields))
-            .flatten()
-        {
-            let length = (0..3)
-                .map(|axis| (pipe.end[axis] - pipe.start[axis]).powi(2))
-                .sum::<f64>()
-                .sqrt();
+        // A pipe's or duct's length along its axis, which Revit's export gives
+        // in both flow-segment sets: a pipe's between its ends (RE-131), a
+        // duct's the dimension of its box its section leaves (RE-134).
+        let segment_length = match decoded.class.as_str() {
+            "Pipe" => {
+                crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields).map(|pipe| {
+                    (0..3)
+                        .map(|axis| (pipe.end[axis] - pipe.start[axis]).powi(2))
+                        .sum::<f64>()
+                        .sqrt()
+                })
+            }
+            "Duct" => decoded.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. }
+                    if name == crate::partition_schema_mvp::DUCT_LENGTH_FIELD =>
+                {
+                    Some(*value)
+                }
+                _ => None,
+            }),
+            _ => None,
+        };
+        if let Some(length) = segment_length {
             for name in ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"] {
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: entity_index,

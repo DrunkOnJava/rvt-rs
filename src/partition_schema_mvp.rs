@@ -358,6 +358,8 @@ pub fn recover_partition_schema_mvp(
     }
     // --- Pipes' types, which have no name entry (RE-130) ---
     attach_pipe_type_names(rf, &mut out.products);
+    // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
+    attach_curve_fields(rf, revit_version, &mut out.products);
     // --- System-family type names (#322) ---
     let mut unnamed: Vec<&mut DecodedElement> = [&mut out.walls, &mut out.slabs, &mut out.products]
         .into_iter()
@@ -3577,6 +3579,130 @@ pub const PIPE_AXIS_END_FIELDS: [&str; 3] = [
 ];
 /// Field holding a pipe's outside radius, feet (RE-131).
 pub const PIPE_RADIUS_FIELD: &str = "m_pipe_radius";
+/// Fields holding a duct's or pipe's `m_dWidthOrDiameter` and `m_dHeight`,
+/// feet (RE-134).
+pub const CURVE_SIZE_FIELDS: [&str; 2] = ["m_curve_width", "m_curve_height"];
+/// Field holding a duct's length along its axis, feet: the dimension of its
+/// record box its width and height leave (RE-134).
+pub const DUCT_LENGTH_FIELD: &str = "m_duct_length";
+/// How closely a duct's width and height must match two of its box's
+/// dimensions, feet.
+pub const CURVE_BOX_TOLERANCE_FEET: f64 = 2e-3;
+
+/// A duct's or pipe's width and height, feet (RE-134), when read.
+pub fn curve_size_from_fields(fields: &[(String, InstanceField)]) -> Option<(f64, f64)> {
+    let field = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    Some((field(CURVE_SIZE_FIELDS[0])?, field(CURVE_SIZE_FIELDS[1])?))
+}
+
+/// Give each duct and pipe the width and height its curve object holds, and
+/// each duct without a type its curve's type and that type's name
+/// ([`crate::partition_curve_fields`], RE-134;
+/// [`crate::partition_names::find_mep_curve_type_names`], RE-130). An element
+/// whose anchor is not found gets nothing.
+fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_curve_fields as pcf;
+    if !pcf::supports_revit_version(revit_version) {
+        return;
+    }
+    let is_curve = |element: &DecodedElement| matches!(element.class.as_str(), "Duct" | "Pipe");
+    let mut by_stream: BTreeMap<String, Vec<(u32, [f64; 6])>> = BTreeMap::new();
+    for element in products.iter().filter(|element| is_curve(element)) {
+        if let (Some(id), Some(bbox), Some(stream)) = (
+            element.id,
+            element_record_bbox(element),
+            element_source_stream(element),
+        ) {
+            by_stream.entry(stream).or_default().push((id, bbox));
+        }
+    }
+    let Ok(fields) = pcf::scan_curve_fields(rf, revit_version, &by_stream) else {
+        return;
+    };
+    if fields.is_empty() {
+        return;
+    }
+    let has = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().any(|(name, _)| name == wanted)
+    };
+    let wanted: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "Duct" && !has(element, TYPE_NAME_FIELD))
+        .filter_map(|element| Some(fields.get(&element.id?)?.type_id))
+        .collect();
+    let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    if !wanted.is_empty() {
+        for stream in rf.partition_stream_names() {
+            let Ok(inflated) = rf.inflated_partition(&stream) else {
+                continue;
+            };
+            for (id, name) in
+                crate::partition_names::find_mep_curve_type_names(inflated.bytes(), &wanted)
+            {
+                match names.get_mut(&id) {
+                    None => {
+                        names.insert(id, Some(name));
+                    }
+                    Some(held) => {
+                        if held.as_deref() != Some(name.as_str()) {
+                            *held = None;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for element in products.iter_mut().filter(|element| is_curve(element)) {
+        let Some(curve) = element.id.and_then(|id| fields.get(&id)).copied() else {
+            continue;
+        };
+        for (name, value) in CURVE_SIZE_FIELDS
+            .iter()
+            .zip([curve.width_feet, curve.height_feet])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        // A duct along one of the model's axes: its box is its section by its
+        // length (RE-134: 25 of 25 RE1 ducts).
+        if element.class == "Duct" {
+            if let Some(length) = element_record_bbox(element)
+                .and_then(|bbox| curve.length_in_box(bbox, CURVE_BOX_TOLERANCE_FEET))
+            {
+                element.fields.push((
+                    DUCT_LENGTH_FIELD.into(),
+                    InstanceField::Float {
+                        value: length,
+                        size: 8,
+                    },
+                ));
+            }
+        }
+        if element.class != "Duct" || has(element, TYPE_NAME_FIELD) {
+            continue;
+        }
+        let Some(Some(type_name)) = names.get(&curve.type_id) else {
+            continue;
+        };
+        element.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: curve.type_id,
+            },
+        ));
+        element.fields.push((
+            TYPE_NAME_FIELD.into(),
+            InstanceField::String(type_name.clone()),
+        ));
+    }
+}
 
 /// The cylinder the partition MVP gave a pipe, when its connector entries
 /// and record box made one (RE-131).
