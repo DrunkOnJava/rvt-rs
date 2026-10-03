@@ -2279,10 +2279,14 @@ impl StepWriter {
                 prod_shape_id,
                 format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{rep_id}))"),
             );
+            // Its own identity axis, so the solid's Position is never also the
+            // placement's (#232).
+            let opening_axis = self.id();
+            self.emit_entity(opening_axis, format!("IFCAXIS2PLACEMENT3D(#{origin},$,$)"));
             let placement_id = self.id();
             self.emit_entity(
                 placement_id,
-                format!("IFCLOCALPLACEMENT(#{host_placement},#{axis_placement})"),
+                format!("IFCLOCALPLACEMENT(#{host_placement},#{opening_axis})"),
             );
             let host_gid = el_id_to_gid.get(host_el_id).copied().unwrap_or_default();
             let opening_gid = gid(&["void-opening", host_gid, tag]);
