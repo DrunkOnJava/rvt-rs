@@ -124,20 +124,33 @@ fn pipes(step: &str) -> (f64, Vec<Pipe>) {
             continue;
         }
         let f = split_args(a);
-        let Some((_, set_args)) = f.get(5).and_then(|s| reference(s)).and_then(|s| ents.get(&s))
+        let Some((_, set_args)) = f
+            .get(5)
+            .and_then(|s| reference(s))
+            .and_then(|s| ents.get(&s))
         else {
             continue;
         };
-        let invert = list(split_args(set_args).get(4).map(String::as_str).unwrap_or(""))
-            .iter()
-            .filter_map(|p| ents.get(p))
-            .find_map(|(_, pa)| {
-                let pf = split_args(pa);
-                if pf.first()?.trim() != "'InvertElevation'" {
-                    return None;
-                }
-                pf.get(2)?.split_once('(')?.1.trim_end_matches(')').parse().ok()
-            });
+        let invert = list(
+            split_args(set_args)
+                .get(4)
+                .map(String::as_str)
+                .unwrap_or(""),
+        )
+        .iter()
+        .filter_map(|p| ents.get(p))
+        .find_map(|(_, pa)| {
+            let pf = split_args(pa);
+            if pf.first()?.trim() != "'InvertElevation'" {
+                return None;
+            }
+            pf.get(2)?
+                .split_once('(')?
+                .1
+                .trim_end_matches(')')
+                .parse()
+                .ok()
+        });
         if let Some(invert) = invert {
             for object in list(f.get(4).map(String::as_str).unwrap_or("")) {
                 inverts.insert(object, invert);
@@ -150,7 +163,10 @@ fn pipes(step: &str) -> (f64, Vec<Pipe>) {
             continue;
         };
         let f = split_args(a);
-        let tag = f.get(7).map(|t| t.trim().trim_matches('\'').to_string()).unwrap_or_default();
+        let tag = f
+            .get(7)
+            .map(|t| t.trim().trim_matches('\'').to_string())
+            .unwrap_or_default();
         // Representation -> shape -> solid.
         let solid = f
             .get(6)
@@ -167,17 +183,25 @@ fn pipes(step: &str) -> (f64, Vec<Pipe>) {
             continue;
         }
         let sf = split_args(solid_args);
-        let profile = sf.first().and_then(|p| reference(p)).and_then(|p| ents.get(&p));
+        let profile = sf
+            .first()
+            .and_then(|p| reference(p))
+            .and_then(|p| ents.get(&p));
         let Some(("IFCCIRCLEPROFILEDEF", profile_args)) =
             profile.map(|(e, pa)| (e.as_str(), pa.as_str()))
         else {
             continue;
         };
-        let Some(radius) = split_args(profile_args).get(3).and_then(|r| r.trim().parse().ok())
+        let Some(radius) = split_args(profile_args)
+            .get(3)
+            .and_then(|r| r.trim().parse().ok())
         else {
             continue;
         };
-        let Some((_, position)) = sf.get(1).and_then(|p| reference(p)).and_then(|p| ents.get(&p))
+        let Some((_, position)) = sf
+            .get(1)
+            .and_then(|p| reference(p))
+            .and_then(|p| ents.get(&p))
         else {
             continue;
         };
@@ -241,9 +265,12 @@ fn objects(b: &[u8]) -> Vec<(usize, usize, u32, u32)> {
     let mut p = 0;
     while p + 20 <= b.len() {
         if u32_at(b, p + 4) == Some(0) {
-            if let (Some(id), Some(sum), Some(size), Some(class)) =
-                (u32_at(b, p), u32_at(b, p + 8), u32_at(b, p + 12), u32_at(b, p + 16))
-            {
+            if let (Some(id), Some(sum), Some(size), Some(class)) = (
+                u32_at(b, p),
+                u32_at(b, p + 8),
+                u32_at(b, p + 12),
+                u32_at(b, p + 16),
+            ) {
                 let size = size as usize;
                 let end = p + 20 + size;
                 if size >= 4 && end <= b.len() && u32_at(b, end - 4) == Some(size as u32) {
