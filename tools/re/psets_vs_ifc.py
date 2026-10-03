@@ -9,7 +9,8 @@ an object is keyed by the object (an element by its `Tag`, a space by its
 `Name`, a storey by its `Name`, the building as `building`), the set's name
 and the property's name. For each key Revit writes, the rvt-rs export either
 has the same value (value type and value as written, numbers compared to six
-significant figures), a different one, or none. rvt-rs's own sets
+significant figures, lengths in metres from each file's own length unit), a
+different one, or none. rvt-rs's own sets
 (`RvtElementRecordGeometry` and other non-`Pset_` sets) are left out, as are
 objects rvt-rs does not write at all.
 
@@ -28,6 +29,7 @@ import collections
 import sys
 
 import ifcopenshell
+import ifcopenshell.util.unit
 
 
 def key_of(obj):
@@ -39,10 +41,12 @@ def key_of(obj):
     return f"tag:{tag}" if tag else None
 
 
-def value_of(value):
+def value_of(value, metres_per_unit):
     if value is None:
         return None
     raw = value.wrappedValue
+    if "LengthMeasure" in value.is_a():
+        raw = raw * metres_per_unit
     if isinstance(raw, float):
         raw = float(f"{raw:.6g}")
     elif isinstance(raw, (tuple, list)):
@@ -53,6 +57,7 @@ def value_of(value):
 def properties(path):
     """(object key, set, property) -> value, and the keys of every object."""
     f = ifcopenshell.open(path)
+    metres_per_unit = ifcopenshell.util.unit.calculate_unit_scale(f)
     out = {}
     objects = set()
     for product in f.by_type("IfcObject"):
@@ -69,7 +74,7 @@ def properties(path):
                 continue
             for prop in pset.HasProperties or ():
                 if prop.is_a("IfcPropertySingleValue"):
-                    out[(key, pset.Name, prop.Name)] = value_of(prop.NominalValue)
+                    out[(key, pset.Name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
     return out, objects
 
 
