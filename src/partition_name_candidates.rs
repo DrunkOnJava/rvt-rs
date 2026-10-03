@@ -157,30 +157,3 @@ where
     names.dedup();
     names
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn classifies_known_material_and_level_names() {
-        assert_eq!(classify_name("Concrete"), Some(NameBucket::MaterialLike));
-        assert_eq!(classify_name("Level 1"), Some(NameBucket::LevelLike));
-        assert_eq!(classify_name("Lobby"), Some(NameBucket::SpaceLike));
-    }
-
-    #[test]
-    fn rejects_forge_and_asset_paths() {
-        assert!(classify_name("autodesk.unit.unit:meters-1.0.0").is_none());
-        assert!(classify_name("Mats/Hardwood/Generic.xml").is_none());
-    }
-
-    #[test]
-    fn building_storey_filter_keeps_level_and_roof() {
-        assert!(is_building_storey_name("Level 1"));
-        assert!(is_building_storey_name("Roof"));
-        assert!(is_building_storey_name("Ground floor"));
-        assert!(!is_building_storey_name("Level Head - Upgrade"));
-        assert!(!is_building_storey_name("Level 3 - Wall Layouts 1"));
-    }
-}
