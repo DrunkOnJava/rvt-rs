@@ -1,5 +1,14 @@
 # Global/ElemTable record layout — 2026-04-21
 
+> **Superseded (2026-10-03, #152).** This note frames records from `0x1E`.
+> The table's records start at `0x06`, after a `u16` tag and a `u32` record
+> count at `0x02`, and close with their owner: `[u32 id][u32 id][16 B][u32
+> owner]` (28 B, Revit 2008 to 2023) and `[u64 id][12 B][u64 id][u64
+> owner][u32]` (40 B, 2024 on). The `0x1E` frames start 24 bytes into each
+> record, so they miss the first record and read one more from the tail.
+> `src/elem_table.rs` documents the current reading; the dumps below are
+> kept as the original evidence.
+
 Hex-dump-level RE of the `Global/ElemTable` decompressed body across
 three corpus variants. Run via `examples/probe_elem_table_hex.rs`.
 
