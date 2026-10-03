@@ -199,6 +199,7 @@ pub mod partition_ifc_export_overrides;
 pub mod partition_instance_transforms;
 pub mod partition_level_records;
 pub mod partition_materials;
+pub mod partition_mep_systems;
 pub mod partition_name_candidates;
 pub mod partition_names;
 pub mod partition_pipe_axes;
