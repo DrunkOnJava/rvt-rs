@@ -1202,6 +1202,7 @@ impl StepWriter {
         for (index, storey) in storeys.iter().enumerate() {
             let mut sets = PropertySet::name_sets(&storey.name);
             sets.push(unknown("Pset_BuildingStoreyCommon", "AboveGround"));
+            sets.push(unknown("Pset_ScratchDrift", "AboveGround"));
             for set in &sets {
                 let key = [storey_gids[index].as_str(), set.name.as_str()].join("\u{1f}");
                 self.emit_property_set(
