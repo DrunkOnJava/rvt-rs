@@ -3641,8 +3641,7 @@ fn attach_type_functions(
         .iter()
         .flat_map(|elements| elements.iter().filter_map(type_of))
         .collect();
-    let functions =
-        prp::scan_integer_parameter(rf, revit_version, &types, prp::FUNCTION_PARAMETER);
+    let functions = prp::scan_integer_parameter(rf, revit_version, &types, prp::FUNCTION_PARAMETER);
     for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
         if let Some(&function) = type_of(element).and_then(|id| functions.get(&id)) {
             element.fields.push((
