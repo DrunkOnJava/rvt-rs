@@ -7,7 +7,9 @@
 //! For every element rvt-rs writes as the same entity, with the same `Tag` and
 //! `Name` (`Family:Type:ElementId`) as Revit's, each of those `Reference`
 //! values must be in rvt-rs's export too, with Revit's value type, and rvt-rs
-//! must write no `Reference` Revit does not.
+//! must write no `Reference` Revit does not on an element both exports hold.
+//! An element Revit's export does not hold at all is the element scorers'
+//! concern, not this one's.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: the four `RE1-*.rvt` models with
 //! their `RE1-*.ifc` exports. Skips what is absent.
@@ -194,9 +196,6 @@ fn re1_common_references_are_revits() {
         let mut wrong: Vec<(String, String, String, Option<String>)> = Vec::new();
         for (tag, element) in &ours {
             let Some(revit) = theirs.get(tag) else {
-                for (set, value) in &element.references {
-                    wrong.push((tag.clone(), set.clone(), value.clone(), None));
-                }
                 continue;
             };
             for (set, value) in &element.references {
