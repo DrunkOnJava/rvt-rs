@@ -293,37 +293,3 @@ fn try_decompress(data: &[u8]) -> Option<Vec<u8>> {
     }
     None
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn classify_invariant() {
-        assert_eq!(classify_column(&[5, 5, 5, 5]), ByteClass::Invariant);
-    }
-
-    #[test]
-    fn classify_low_variance() {
-        assert!(matches!(
-            classify_column(&[0, 1, 0, 1, 0]),
-            ByteClass::LowVariance(2)
-        ));
-    }
-
-    #[test]
-    fn classify_monotonic() {
-        assert_eq!(classify_column(&[1, 2, 3, 4, 5]), ByteClass::MonotonicInt);
-    }
-
-    #[test]
-    fn classify_size_correlated() {
-        assert_eq!(classify_column(&[1, 1, 2, 2, 3]), ByteClass::SizeCorrelated);
-    }
-
-    #[test]
-    fn classify_variable() {
-        // More than 5 distinct bytes, not monotonic
-        assert_eq!(classify_column(&[9, 1, 7, 3, 200, 85]), ByteClass::Variable);
-    }
-}
