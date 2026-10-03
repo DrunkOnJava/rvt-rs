@@ -1631,6 +1631,13 @@ fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [Decoded
             _ => None,
         });
         if type_id.is_some_and(|id| unset_types.contains(&id)) {
+            // The type draws geometry, so it is not a type without
+            // geometry (RE-84), which `attach_type_materials` took its empty
+            // map to mean; a hosted instance would otherwise be written as
+            // its opening alone (reported by Cursor Bugbot on #580).
+            element
+                .fields
+                .retain(|(name, _)| name != TYPE_WITHOUT_GEOMETRY_FIELD);
             element.fields.push((
                 TYPE_MATERIAL_FIELD.into(),
                 InstanceField::String(crate::partition_type_materials::UNNAMED_MATERIAL.into()),
