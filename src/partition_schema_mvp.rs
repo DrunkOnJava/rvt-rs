@@ -3692,7 +3692,8 @@ fn attach_serial_numbers(
 }
 
 /// Give each duct and pipe the width and height its curve object holds, and
-/// each duct without a type its curve's type and that type's name
+/// each one still without a type (a duct, or a pipe RE-130's reference list
+/// does not type, B29) its curve's type and that type's name
 /// ([`crate::partition_curve_fields`], RE-134;
 /// [`crate::partition_names::find_mep_curve_type_names`], RE-130). An element
 /// whose anchor is not found gets nothing.
@@ -3729,7 +3730,7 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
     };
     let wanted: BTreeSet<u32> = products
         .iter()
-        .filter(|element| element.class == "Duct" && !has(element, TYPE_NAME_FIELD))
+        .filter(|element| is_curve(element) && !has(element, TYPE_NAME_FIELD))
         .filter_map(|element| Some(fields.get(&element.id?)?.type_id))
         .collect();
     let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
@@ -3791,7 +3792,7 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
                 ));
             }
         }
-        if element.class != "Duct" || has(element, TYPE_NAME_FIELD) {
+        if !is_curve(element) || has(element, TYPE_NAME_FIELD) {
             continue;
         }
         let Some(Some(type_name)) = names.get(&curve.type_id) else {
