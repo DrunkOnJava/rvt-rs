@@ -16,7 +16,9 @@
 //! the text (a length prefix when it equals the length), the `i64` before
 //! that (a parameter id when the prefix is a length), the 24 bytes before
 //! the text, and the innermost verified data object holding it (RE-153), by
-//! ElementId and class word. Each property's name is looked for the same
+//! ElementId and class word. For each positive id found before a
+//! length-prefixed value (a project parameter's ElementId), it prints the
+//! strings in that id's own data objects. Each property's name is looked for the same
 //! way, under the set `(property name)`, since a parameter of that name
 //! would hold it in the element defining the parameter.
 //!
@@ -24,7 +26,7 @@
 //!   cargo run --profile ci --example probe_re156_value_sources -- MODEL.rvt ...
 
 use rvt::RevitFile;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// `#id -> (entity, args)` for every line of a STEP file.
@@ -268,6 +270,8 @@ const VALUES_PER_PROPERTY: usize = 3;
 const MIN_LEN: usize = 3;
 /// Hits printed per value.
 const HITS_SHOWN: usize = 4;
+/// Strings printed per data object of a parameter id.
+const STRINGS_SHOWN: usize = 12;
 
 fn i64_at(b: &[u8], at: usize) -> Option<i64> {
     Some(i64::from_le_bytes(
@@ -314,11 +318,16 @@ fn load(rf: &mut RevitFile) -> Vec<Stream> {
     out
 }
 
-fn hits(streams: &[Stream], value: &str) -> (BTreeMap<String, usize>, Vec<String>) {
+/// Hit counts by stream and encoding, the hits shown, and the positive ids
+/// before length-prefixed hits.
+type Hits = (BTreeMap<String, usize>, Vec<String>, BTreeSet<i64>);
+
+fn hits(streams: &[Stream], value: &str) -> Hits {
     let utf16: Vec<u8> = value.encode_utf16().flat_map(u16::to_le_bytes).collect();
     let units = value.encode_utf16().count();
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut shown = Vec::new();
+    let mut ids = BTreeSet::new();
     for stream in streams {
         for (encoding, needle) in [("utf16", utf16.as_slice()), ("utf8", value.as_bytes())] {
             for at in memchr::memmem::find_iter(&stream.bytes, needle) {
@@ -326,9 +335,6 @@ fn hits(streams: &[Stream], value: &str) -> (BTreeMap<String, usize>, Vec<String
                 *counts
                     .entry(format!("{} {encoding}", stream.name))
                     .or_default() += 1;
-                if shown.len() >= HITS_SHOWN {
-                    continue;
-                }
                 let prefix = at.checked_sub(4).and_then(|p| u32_at(b, p));
                 let expected = if encoding == "utf16" {
                     units
@@ -341,6 +347,10 @@ fn hits(streams: &[Stream], value: &str) -> (BTreeMap<String, usize>, Vec<String
                 } else {
                     None
                 };
+                ids.extend(id.filter(|i| *i > 0));
+                if shown.len() >= HITS_SHOWN {
+                    continue;
+                }
                 let index = stream.objects.partition_point(|(start, ..)| *start <= at);
                 let owner = stream.objects[..index]
                     .iter()
@@ -360,7 +370,53 @@ fn hits(streams: &[Stream], value: &str) -> (BTreeMap<String, usize>, Vec<String
             }
         }
     }
-    (counts, shown)
+    (counts, shown, ids)
+}
+
+/// The length-prefixed UTF-16 strings (`u32 n · UTF-16 × n`, 2 to 64
+/// printable characters) inside every verified data object of ElementId
+/// `id`, by stream, up to [`STRINGS_SHOWN`] per object.
+fn object_strings(streams: &[Stream], id: i64) -> Vec<String> {
+    let Ok(id) = u32::try_from(id) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for stream in streams {
+        for (start, end, _, class) in stream.objects.iter().filter(|o| o.2 == id) {
+            let b = &stream.bytes[*start..*end];
+            let mut strings = Vec::new();
+            let mut at = 0;
+            while at + 4 <= b.len() && strings.len() < STRINGS_SHOWN {
+                let n = u32_at(b, at).unwrap_or(0) as usize;
+                let raw = if (2..=64).contains(&n) {
+                    b.get(at + 4..at + 4 + 2 * n)
+                } else {
+                    None
+                };
+                let text = raw
+                    .and_then(|raw| {
+                        let units: Vec<u16> = raw
+                            .chunks_exact(2)
+                            .map(|p| u16::from_le_bytes([p[0], p[1]]))
+                            .collect();
+                        String::from_utf16(&units).ok()
+                    })
+                    .filter(|t| t.chars().all(|c| !c.is_control() && (c as u32) < 0x3000));
+                match text {
+                    Some(text) => {
+                        at += 4 + 2 * n;
+                        strings.push(text);
+                    }
+                    None => at += 1,
+                }
+            }
+            out.push(format!(
+                "{{\"stream\":{:?},\"object\":{id},\"class\":\"{class:#x}\",\"at\":{start},\"strings\":{strings:?}}}",
+                stream.name
+            ));
+        }
+    }
+    out
 }
 
 fn probe(path: &str) -> anyhow::Result<Vec<String>> {
@@ -403,9 +459,11 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         streams.len(),
         values.len()
     )];
+    let mut parameter_ids = BTreeSet::new();
     for ((set, property), sample) in &values {
         for (value, (element, type_id)) in sample {
-            let (counts, shown) = hits(&streams, value);
+            let (counts, shown, ids) = hits(&streams, value);
+            parameter_ids.extend(ids);
             let counts: Vec<String> = counts.iter().map(|(k, n)| format!("{k:?}:{n}")).collect();
             out.push(format!(
                 "{{\"set\":{set:?},\"property\":{property:?},\"value\":{value:?},\
@@ -415,6 +473,13 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
                 shown.join(",")
             ));
         }
+    }
+    for id in parameter_ids {
+        let objects = object_strings(&streams, id);
+        out.push(format!(
+            "{{\"parameter\":{id},\"objects\":[{}]}}",
+            objects.join(",")
+        ));
     }
     Ok(out)
 }
