@@ -24,9 +24,9 @@
       "IFCEXTRUDEDAREASOLID": 1108,
       "IFCGEOMETRICREPRESENTATIONCONTEXT": 1,
       "IFCLOCALPLACEMENT": 1125,
-      "IFCMATERIAL": 86,
-      "IFCMATERIALCONSTITUENT": 4,
-      "IFCMATERIALCONSTITUENTSET": 2,
+      "IFCMATERIAL": 87,
+      "IFCMATERIALCONSTITUENT": 6,
+      "IFCMATERIALCONSTITUENTSET": 4,
       "IFCMATERIALLAYER": 9,
       "IFCMATERIALLAYERSET": 8,
       "IFCMATERIALLAYERSETUSAGE": 407,
@@ -43,7 +43,7 @@
       "IFCPROPERTYSINGLEVALUE": 16409,
       "IFCRECTANGLEPROFILEDEF": 892,
       "IFCRELAGGREGATES": 3,
-      "IFCRELASSOCIATESMATERIAL": 410,
+      "IFCRELASSOCIATESMATERIAL": 412,
       "IFCRELCONTAINEDINSPATIALSTRUCTURE": 13,
       "IFCRELDEFINESBYPROPERTIES": 970,
       "IFCRELDEFINESBYTYPE": 16,
@@ -75,7 +75,7 @@
       "IFCWALL": 360,
       "IFCWINDOW": 6
     },
-    "material_count": 86,
+    "material_count": 87,
     "relations": {
       "IFCRELFILLSELEMENT": [
         [
@@ -698,7 +698,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "caefd647c89f1202efe456c97246428ebc4d0b5fbcb81d714e49422d75f2ff88",
+  "observation_hash_sha256": "02d20dd67a975813acb8d487666767c01dcc5ed9fa32199120fe5623131cf517",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",

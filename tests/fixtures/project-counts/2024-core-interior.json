@@ -134,11 +134,11 @@
       "source_ifc_type": "IFCMATERIAL",
       "tolerance": 0,
       "decoder_metric": "diagnostics.exported.material_count",
-      "decoder_expected": 86,
+      "decoder_expected": 87,
       "decoder_tolerance": 0,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "Changed 2026-09-28 (RE-125): 78 -> 86, every OST_Materials record named; the 8 added (Terrazzo, Chair Fabric, Material 2/4/4 (2)/6/8/10) keep their name after a run of parameter entries, closed by eight zero bytes, a u64 ElementId and 0xff x8. rvt-rs writes the file's own materials: each OST_Materials record (-2000700, the bbox-less type-record shape, 86 on this .rvt, RE-28) whose name its object gives (RE-58), with its shading colour (RE-53) - 78 of the 86. On Revit 2024 and 2025 this replaced the partition display-name heuristic, which gave 102. The paired 20 KB element export expects 1, and Revit writes only the materials its exported elements use, so the count stays a known gap. Of the 86, 8 family materials have no name found and are left out. Family instances are not joined to their materials; layered walls, floors, roofs and ceilings are, through their layer sets (RE-58). See reports/element-framing/RE-58-material-layer-sets.md and RE-28-wall-type-records.md."
+      "notes": "Changed 2026-10-03 (#355, approved by the maintainer): 86 -> 87, the '<Unnamed>' material Revit's own export also writes, now related to the 107 columns whose type draws with no material. Changed 2026-09-28 (RE-125): 78 -> 86, every OST_Materials record named; the 8 added (Terrazzo, Chair Fabric, Material 2/4/4 (2)/6/8/10) keep their name after a run of parameter entries, closed by eight zero bytes, a u64 ElementId and 0xff x8. rvt-rs writes the file's own materials: each OST_Materials record (-2000700, the bbox-less type-record shape, 86 on this .rvt, RE-28) whose name its object gives (RE-58), with its shading colour (RE-53) - 78 of the 86. On Revit 2024 and 2025 this replaced the partition display-name heuristic, which gave 102. The paired 20 KB element export expects 1, and Revit writes only the materials its exported elements use, so the count stays a known gap. Of the 86, 8 family materials have no name found and are left out. Family instances are not joined to their materials; layered walls, floors, roofs and ceilings are, through their layer sets (RE-58). See reports/element-framing/RE-58-material-layer-sets.md and RE-28-wall-type-records.md."
     },
     "units": {
       "status": "known",

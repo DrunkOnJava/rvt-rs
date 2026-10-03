@@ -8,6 +8,23 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Family instances whose type draws with no material take Revit's
+  `<Unnamed>`, and columns walls are joined to take the walls' material
+  (#355).** A family type's geometry-material map (RE-82, puzzbobb's
+  `FamilySymbol.m_geomTag2MaterialId`) whose every value is unset read as no
+  map, and its instances got no material. Revit's export gives them
+  `<Unnamed>`: 107 of Core Interior's 256 columns and 150 of the 152 RE1
+  fittings, terminals and fixtures it relates a material to. Such a type is
+  now recognised by the first map in its value block, distinct geometry-tag
+  keys and only unset values (RE-149), and its columns and products take
+  `<Unnamed>`. A column the record's reference list joins to overlapping
+  walls takes those walls' material instead, as Revit gives Core Interior's
+  other 149 columns "Default Wall" (the module that cuts columns by those
+  walls already found the same 149/107 split). Doors, windows, walls and
+  slabs are unchanged. Checked by the new real-file target
+  `tests/element_materials.rs`: all 256 of Core Interior's columns have
+  Revit's material set. `element_record_column_cuts::column_joined_walls`,
+  `partition_type_materials::unset_material_types` and `UNNAMED_MATERIAL`.
 - **Ports for the joins of duct and pipe fittings (RE-141, #528).** A
   fitting's joins are written in the same list form as a pipe's, with the
   fitting first, and are read wherever they are in a partition. The IFC export
