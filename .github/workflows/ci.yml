@@ -700,7 +700,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install 'pytest>=8,<9'
+          python3 -m pip install 'pytest>=8,<9' 'jsonschema>=4,<5'
           if [ -d _corpus/examples/Autodesk ]; then
             export RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk"
           fi
