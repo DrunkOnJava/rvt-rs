@@ -131,7 +131,10 @@ struct Written {
 
 fn tag(ents: &BTreeMap<u64, (String, String)>, id: u64) -> Option<u32> {
     let (_, args) = ents.get(&id)?;
-    split_args(args).get(7).map(|t| decode(t)).and_then(|t| t.parse().ok())
+    split_args(args)
+        .get(7)
+        .map(|t| decode(t))
+        .and_then(|t| t.parse().ok())
 }
 
 fn written(step: &str) -> Vec<Written> {
@@ -142,7 +145,10 @@ fn written(step: &str) -> Vec<Written> {
             continue;
         }
         let f = split_args(args);
-        let Some(type_tag) = f.get(5).and_then(|t| reference(t)).and_then(|t| tag(&ents, t))
+        let Some(type_tag) = f
+            .get(5)
+            .and_then(|t| reference(t))
+            .and_then(|t| tag(&ents, t))
         else {
             continue;
         };
@@ -156,8 +162,10 @@ fn written(step: &str) -> Vec<Written> {
             continue;
         }
         let f = split_args(args);
-        let Some((set_entity, set_args)) =
-            f.get(5).and_then(|s| reference(s)).and_then(|s| ents.get(&s))
+        let Some((set_entity, set_args)) = f
+            .get(5)
+            .and_then(|s| reference(s))
+            .and_then(|s| ents.get(&s))
         else {
             continue;
         };
@@ -244,9 +252,12 @@ fn objects(b: &[u8]) -> BTreeMap<u32, Vec<(usize, usize)>> {
     let mut p = 0;
     while p + 20 <= b.len() {
         if u32_at(b, p + 4) == Some(0) {
-            if let (Some(id), Some(sum), Some(size), Some(class)) =
-                (u32_at(b, p), u32_at(b, p + 8), u32_at(b, p + 12), u32_at(b, p + 16))
-            {
+            if let (Some(id), Some(sum), Some(size), Some(class)) = (
+                u32_at(b, p),
+                u32_at(b, p + 8),
+                u32_at(b, p + 12),
+                u32_at(b, p + 16),
+            ) {
                 let size = size as usize;
                 let end = p + 20 + size;
                 if size >= 4 && end <= b.len() && u32_at(b, end - 4) == Some(size as u32) {
@@ -267,6 +278,9 @@ fn objects(b: &[u8]) -> BTreeMap<u32, Vec<(usize, usize)>> {
 /// Where a candidate value sits: in the element's own object or its type's,
 /// after which BuiltInParameter, and which word after it.
 type Key = (&'static str, i64, usize);
+
+/// A partition: its name, inflated bytes and verified data objects.
+type Stream = (String, Vec<u8>, BTreeMap<u32, Vec<(usize, usize)>>);
 
 fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     let model = Path::new(path);
@@ -290,7 +304,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         )]);
     }
     let definitions = rvt::partition_room_parameters::find_parameter_definitions(&mut rf, revit);
-    let mut streams: Vec<(String, Vec<u8>, BTreeMap<u32, Vec<(usize, usize)>>)> = Vec::new();
+    let mut streams: Vec<Stream> = Vec::new();
     for name in rf.partition_stream_names() {
         if let Ok(inflated) = rf.inflated_partition(&name) {
             let bytes = inflated.bytes().to_vec();
@@ -362,7 +376,9 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     // (set, property) -> key -> (agree, total)
     let mut scores: BTreeMap<(String, String), BTreeMap<Key, (usize, usize)>> = BTreeMap::new();
     for w in &written {
-        let score = scores.entry((w.set.clone(), w.property.clone())).or_default();
+        let score = scores
+            .entry((w.set.clone(), w.property.clone()))
+            .or_default();
         for (place, holder) in [("own", Some(w.element)), ("type", w.type_id)] {
             let Some(found) = holder.and_then(|h| candidates.get(&h)) else {
                 continue;
