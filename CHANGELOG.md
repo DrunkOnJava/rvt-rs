@@ -107,6 +107,16 @@ All notable changes will be documented here. This project follows
   newer. The other multi-partition samples repeat only records without a box,
   and Core Interior's own 571 ids are not decided by this one file; #548 stays
   open. `tools/re/copy_vs_neighbours.py` repeats it from a Measure run.
+- **A keyed block belongs to the loaded family whose GUID keys it (RE-148,
+  #421).** On every Autodesk sample project of 2019 to 2027 the keys of the
+  partition blocks after a `ContentMarker` are in `Global/ContentDocuments`
+  (163 of 163 on `rac_basic`, 52 of 52 on `rst_basic`, 121 of 121 on
+  `rac_advanced`, as puzzbobb found), and on every block of every file
+  measured the marker's count is the block's channel-101 records less the one
+  with id -1. RE1 Electrical's 60 keys of 288 are not found in the stream.
+  That answers RE-135's question of which family a record after the chain
+  belongs to. `native_segments::GroupSource` gains `content_element_count`.
+  `reports/element-framing/RE-148-content-keys.md`.
 - **Autodesk's sample projects of 2016 to 2027, and puzzbobb's measurements
   (RE-140, #421, #152, #548).** Autodesk publishes its `rac_basic`, `rst_basic`
   and `rac_advanced` sample projects for every release from 2016 to 2027, 36
