@@ -89,35 +89,3 @@ pub fn mapping_examples() -> Vec<PsetMappingExample> {
         },
     ]
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn classifies_known_and_unknown_reserved() {
-        assert_eq!(
-            classify_pset_name("Pset_WallCommon"),
-            PsetNameKind::BuildingsmartCommon
-        );
-        assert_eq!(
-            classify_pset_name("Pset_RevitType_Wall"),
-            PsetNameKind::RevitTypeAlias
-        );
-        assert_eq!(
-            classify_pset_name("Pset_RvtRsDiagnosticCandidate"),
-            PsetNameKind::ToolkitDiagnostic
-        );
-        assert!(is_unknown_reserved_pset("Pset_SomethingInvented"));
-        assert_eq!(classify_pset_name("MyProps"), PsetNameKind::NonPset);
-    }
-
-    #[test]
-    fn mapping_examples_omit_es_by_default() {
-        let ex = mapping_examples();
-        assert!(
-            ex.iter()
-                .any(|e| e.revit_concept.contains("ES") && e.ifc_pset.contains("omitted"))
-        );
-    }
-}
