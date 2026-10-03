@@ -16,10 +16,10 @@
 //! - `declared`: an ElementId the ElemTable declares;
 //! - `other`.
 //!
-//! Each slot is placed by where it sits: `first`, `before own` (the host
-//! slot), `own`, `after own +k`, `last`, or `middle`. It prints, overall
-//! and for the commonest categories, how many slots of each place hold each
-//! kind.
+//! Each slot is placed by where it sits: `slot k` counted from the start (up
+//! to `slot 7 or more`), `before own` (the host slot), `own`, `after own +k`
+//! (up to `+4 or more`). It prints, overall and for the commonest categories,
+//! how many slots of each place hold each kind.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re155_reference_slots -- MODEL.rvt ...
@@ -35,15 +35,15 @@ fn place(index: usize, len: usize, own: Option<usize>) -> String {
     match own {
         Some(o) if index == o => return "own".into(),
         Some(o) if index + 1 == o => return "before own".into(),
-        Some(o) if index > o => return format!("after own +{}", index - o),
+        Some(o) if index > o && index - o <= 3 => return format!("after own +{}", index - o),
+        Some(o) if index > o => return "after own +4 or more".into(),
+        None if index + 1 == len => return "last, no own".into(),
         _ => {}
     }
-    if index == 0 {
-        "first".into()
-    } else if index + 1 == len {
-        "last".into()
+    if index <= 6 {
+        format!("slot {index}")
     } else {
-        "middle".into()
+        "slot 7 or more".into()
     }
 }
 
