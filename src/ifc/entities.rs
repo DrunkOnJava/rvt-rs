@@ -1358,6 +1358,12 @@ pub struct Property {
 pub enum PropertyValue {
     /// Free-form text — `IfcText`.
     Text(String),
+    /// A name — `IfcLabel`, as standard property sets declare for values
+    /// such as `Pset_SpaceCommon.FloorCovering` (RE-153).
+    Label(String),
+    /// An identifier — `IfcIdentifier`, as standard property sets declare
+    /// for `Reference` (RE-153).
+    Identifier(String),
     /// Integer count — `IfcInteger`.
     Integer(i64),
     /// Floating-point real — `IfcReal`.
@@ -1395,6 +1401,8 @@ impl PropertyValue {
     pub fn to_step(&self) -> String {
         match self {
             PropertyValue::Text(s) => format!("IFCTEXT('{}')", escape_step_string(s)),
+            PropertyValue::Label(s) => format!("IFCLABEL('{}')", escape_step_string(s)),
+            PropertyValue::Identifier(s) => format!("IFCIDENTIFIER('{}')", escape_step_string(s)),
             PropertyValue::Integer(n) => format!("IFCINTEGER({n})"),
             PropertyValue::Real(v) => format!("IFCREAL({v:.6})"),
             PropertyValue::Boolean(b) => {

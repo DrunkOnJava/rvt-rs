@@ -8,6 +8,16 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A room's `Pset_SpaceCommon`, with its Floor Finish (RE-153, #35).** Revit's
+  export gives each room a `Pset_SpaceCommon` with `Reference`
+  (`IfcIdentifier`, its name and number) and `FloorCovering` (`IfcLabel`, its
+  Floor Finish). A room's Floor Finish is the text parameter -1006903, joined
+  to the room through the Adler-32-verified data object that holds it; on RE1
+  Architecture it is Revit's `FloorCovering` on 11 of 11 rooms. The IFC export
+  now writes that set on every room. Checked by the new real-file target
+  `tests/space_common.rs` against RE1 Architecture's export.
+  `partition_room_parameters::scan_room_text_parameter` and
+  `enclosing_data_object`, and `PropertyValue::Label` and `::Identifier`.
 - **A floor's sketch holes are openings voiding it (RE-151, #227).** Revit's
   export writes each hole in a floor's or shading device's sketch twice: as a
   void of the slab's profile, which rvt-rs already wrote, and as an

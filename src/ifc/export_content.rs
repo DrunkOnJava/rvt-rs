@@ -569,6 +569,13 @@ pub fn append_typed_production_elements(
                 set,
             });
         }
+        // RE-153: a room's Pset_SpaceCommon.
+        if let Some(set) = space_common_property_set(&decoded) {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set,
+            });
+        }
     }
 
     // #323: group each whole's parts into one aggregate.
@@ -857,6 +864,44 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     }
     (!properties.is_empty()).then(|| PropertySet {
         name: name.into(),
+        properties,
+    })
+}
+
+/// A room's `Pset_SpaceCommon` (RE-153), as Revit's export writes it:
+/// `Reference` (`IfcIdentifier`) its name and number, and `FloorCovering`
+/// (`IfcLabel`) its Floor Finish. `None` when neither was read.
+fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
+    use crate::partition_schema_mvp as mvp;
+    if decoded.class != "Room" {
+        return None;
+    }
+    let text = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::String(text) if field == wanted && !text.is_empty() => {
+                    Some(text.clone())
+                }
+                _ => None,
+            })
+    };
+    let mut properties = Vec::new();
+    if let (Some(name), Some(number)) = (text("m_name"), text(mvp::ROOM_NUMBER_FIELD)) {
+        properties.push(Property {
+            name: "Reference".into(),
+            value: PropertyValue::Identifier(format!("{name} {number}")),
+        });
+    }
+    if let Some(finish) = text(mvp::ROOM_FLOOR_FINISH_FIELD) {
+        properties.push(Property {
+            name: "FloorCovering".into(),
+            value: PropertyValue::Label(finish),
+        });
+    }
+    (!properties.is_empty()).then(|| PropertySet {
+        name: "Pset_SpaceCommon".into(),
         properties,
     })
 }
