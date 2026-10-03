@@ -5243,7 +5243,7 @@ fn sketch_plan_profiles(
                     .flat_map(|arc| [arc.point(arc.start_angle), arc.point(arc.end_angle)]),
             )
             .collect();
-        let exact: Option<(Vec<[f64; 4]>, bool, Vec<(u32, (f64, f64))>)> = segments
+        let exact: Option<ExactSketch> = segments
             .iter()
             .filter(|(id, bbox)| {
                 let point = [bbox[0], bbox[1], bbox[2]];
@@ -5312,6 +5312,10 @@ fn sketch_plan_profiles(
     }
     profiles
 }
+
+/// A sketch read from its lines' exact ends: the chords, whether any is an
+/// arc's, and each line's ElementId with a point on its edge (RE-151).
+type ExactSketch = (Vec<[f64; 4]>, bool, Vec<(u32, (f64, f64))>);
 
 /// Classes whose plan outline is their sketch's: roofs (RE-50) and, since
 /// RE-98, ceilings.
