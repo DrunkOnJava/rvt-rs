@@ -20,7 +20,7 @@
 //! Usage:
 //!   cargo run --profile ci --example probe_re148_content_keys -- MODEL.rvt ...
 
-use rvt::compression::{inflate_stream_at, prepare_stream_for_inflate};
+use rvt::compression::{inflate_all_chunks, prepare_stream_for_inflate};
 use rvt::streams::GLOBAL_CONTENT_DOCUMENTS;
 use rvt::{RevitFile, native_document, native_segments, schema_registry};
 use std::collections::BTreeMap;
@@ -83,11 +83,18 @@ fn probe(path: &str) -> anyhow::Result<String> {
     let revit = rf.basic_file_info()?.version;
     let registry =
         schema_registry::parse(&native_document::read_single(&mut rf, "Formats/Latest")?)?;
-    let documents = inflate_stream_at(
-        GLOBAL_CONTENT_DOCUMENTS,
-        &rf.read_stream(GLOBAL_CONTENT_DOCUMENTS)?,
-        0,
-    )?;
+    // Every gzip member of the stream, after the checksum-page strip: the
+    // stream does not start with its member on every file.
+    let stored = rf.read_stream(GLOBAL_CONTENT_DOCUMENTS)?;
+    let prepared = prepare_stream_for_inflate(GLOBAL_CONTENT_DOCUMENTS, &stored);
+    let documents: Vec<u8> = inflate_all_chunks(prepared.as_ref())
+        .into_iter()
+        .flatten()
+        .collect();
+    anyhow::ensure!(
+        !documents.is_empty(),
+        "Global/ContentDocuments inflates to nothing"
+    );
     let mut names: Vec<String> = rf
         .stream_names()
         .iter()
