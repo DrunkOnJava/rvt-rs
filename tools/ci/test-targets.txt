@@ -33,6 +33,7 @@ real      ifc_export_overrides
 real      ifc_roundtrip
 real      iter_elements_typed       skip=production_iter_elements_tier1,decode_instance_prefer_typed_fails_closed
 real      level_names
+real      native_partitions_walk
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
 real      project_corpus_smoke
