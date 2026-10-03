@@ -525,6 +525,7 @@ pub fn append_typed_production_elements(
             .map(|type_name| reference_property_sets(&ifc_type, &type_name))
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
+        add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         let serial_sets = serial_number_property_sets(&decoded, &ifc_type);
         // RE-151: the name of the openings of a floor's tagged voids.
         let opening_name = (!void_bodies.is_empty()).then(|| {
@@ -1115,6 +1116,34 @@ fn add_is_external(
             name: common.into(),
             properties: vec![property],
         }),
+    }
+}
+
+/// Add `Finish` (`IfcText`) to a covering's `Pset_CoveringCommon` among
+/// `sets`: its type's finish layers' materials (B41).
+fn add_covering_finish(sets: &mut [PropertySet], ifc_type: &str, decoded: &DecodedElement) {
+    if ifc_type != "IFCCOVERING" {
+        return;
+    }
+    let finish = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::String(text)
+            if name == crate::partition_schema_mvp::COVERING_FINISH_FIELD =>
+        {
+            Some(text.clone())
+        }
+        _ => None,
+    });
+    let Some(finish) = finish else {
+        return;
+    };
+    if let Some(set) = sets
+        .iter_mut()
+        .find(|set| set.name == "Pset_CoveringCommon")
+    {
+        set.properties.push(Property {
+            name: "Finish".into(),
+            value: PropertyValue::Text(finish),
+        });
     }
 }
 
