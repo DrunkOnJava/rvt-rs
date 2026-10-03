@@ -139,9 +139,11 @@ fn probe(path: &str) -> anyhow::Result<String> {
             count_agrees += 1;
         } else if counterexamples.len() < EXAMPLES {
             counterexamples.push(format!(
-                "{{\"key\":\"{}\",\"stated\":{:?},\"records\":{},\"minus_one\":{}}}",
+                "{{\"key\":\"{}\",\"stated\":{},\"records\":{},\"minus_one\":{}}}",
                 hex(key),
-                block.stated,
+                block
+                    .stated
+                    .map_or_else(|| "null".to_string(), |s| s.to_string()),
                 block.records,
                 block.minus_one
             ));
@@ -152,10 +154,16 @@ fn probe(path: &str) -> anyhow::Result<String> {
             *m.entry(b.minus_one).or_default() += 1;
             m
         });
+    // A JSON object, keyed by the number of id -1 records in a block.
+    let minus_one_per_block = minus_one_per_block
+        .iter()
+        .map(|(k, n)| format!("\"{k}\":{n}"))
+        .collect::<Vec<_>>()
+        .join(",");
     Ok(format!(
         "{{\"file\":{file:?},\"revit\":{revit},\"content_documents_bytes\":{},\"blocks\":{},\
          \"keys_in_content_documents\":{in_documents},\"stated_count_agrees\":{count_agrees},\
-         \"blocks_by_minus_one_records\":{minus_one_per_block:?},\"unsplit_groups\":{unsplit},\
+         \"blocks_by_minus_one_records\":{{{minus_one_per_block}}},\"unsplit_groups\":{unsplit},\
          \"counterexamples\":[{}]}}",
         documents.len(),
         blocks.len(),
