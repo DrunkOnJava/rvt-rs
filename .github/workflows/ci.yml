@@ -456,6 +456,7 @@ jobs:
       # must replay byte-for-byte against the committed ones under
       # research/witness/. Fail-closed.
       - name: OctetProof verdict — source witness vs two bridge witnesses, replayed
+        id: witness_full
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
@@ -492,7 +493,13 @@ jobs:
       # cannot claim yet, and those are excluded first-class with their
       # tracking issues. Columns joined the claimed surface when the count
       # became exact (256/256, tolerance 0).
+      #
+      # It runs whenever the step above ran, failed included: a change that
+      # moves rvt-rs's observation drifts both edges, and running this one
+      # too publishes both fresh observations in the same run (B27). The job
+      # still fails if either verdict does.
       - name: OctetProof verdict — full-project export (slim), three witnesses
+        if: ${{ !cancelled() && (steps.witness_full.outcome == 'success' || steps.witness_full.outcome == 'failure') }}
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
