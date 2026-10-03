@@ -108,6 +108,8 @@ fn exported_tags(path: &str) -> Option<BTreeSet<u64>> {
 }
 
 type Tally = BTreeMap<(i64, bool, Option<u32>, Option<u32>), usize>;
+/// `(category, element id, exported, created, demolished)`.
+type Row = (i64, u64, bool, Option<u32>, Option<u32>);
 
 fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     let Some(exported) = exported_tags(path) else {
@@ -126,7 +128,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     let mut left_out = Vec::new();
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     let mut exported_categories: BTreeSet<i64> = BTreeSet::new();
-    let mut rows: Vec<(i64, u64, bool, Option<u32>, Option<u32>)> = Vec::new();
+    let mut rows: Vec<Row> = Vec::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
