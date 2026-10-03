@@ -27,6 +27,7 @@ real      curtain_walls
 real      design_options
 real      elem_table_corpus         skip=declared_element_ids_returns_sorted_deduped_set
 real      elem_table_frame
+real      element_materials
 real      element_names
 real      element_records_2025
 real      ifc_export_overrides
