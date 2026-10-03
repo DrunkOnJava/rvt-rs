@@ -1,0 +1,7 @@
+# Revit families their makers publish on their own sites (#152), fetched for a Measure run
+# by tools/fetch-public-families.sh and never stored or committed. Each row is a zip on the
+# maker's site with its sha256 and size, the .rfa inside it by sha256 and size, the release
+# the family was saved in, the name it is written as, and who pointed to it. The makers'
+# terms for these downloads were not checked, which is why they are only fetched for a run.
+# year	name	zip-url	zip-sha256	zip-bytes	rfa-sha256	rfa-bytes	reported-by
+2014	stertil-closed-pit-sp-xp-pp-2014.rfa	https://stertil-dockproducts.co.uk/uploads/2016/07/closed_pit.zip	6e65aae1e2603252a44857e9b397f5e4d285e5ded31eb57a734c1a78a755eca2	9449001	b3b46ded5fc26bfa9e554442f089b51e6331f2fe89c86188b5ed41ec5a98de0c	4923392	STE1200, #152 (issuecomment-5967778938)
