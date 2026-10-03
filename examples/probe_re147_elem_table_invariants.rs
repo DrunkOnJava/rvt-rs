@@ -77,7 +77,11 @@ fn probe(path: &str) -> rvt::Result<String> {
 }
 
 fn main() {
-    let paths: Vec<String> = std::env::args().skip(1).collect();
+    // Measure passes flags such as `--records` after the paths.
+    let paths: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|arg| !arg.starts_with("--"))
+        .collect();
     if paths.is_empty() {
         eprintln!("usage: probe_re147_elem_table_invariants FILE.rvt ...");
         std::process::exit(2);
