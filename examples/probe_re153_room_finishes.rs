@@ -1,30 +1,39 @@
-//! RE-153 (probe): the text parameters stored after a room's number and name
-//! (#35), against the `Pset_SpaceCommon` Revit's export writes.
+//! RE-153 (probe): a room's text parameters (#35), against the
+//! `Pset_SpaceCommon` Revit's export writes.
 //!
-//! RE-117 reads a room's number and name from its parameter entries, `id ·
-//! u32 n · UTF-16 × n` with a BuiltInParameter id as wide as the release's
-//! ElementIds. Revit's IFC4 export of RE1 Architecture gives each of its 11
-//! rooms a `Pset_SpaceCommon` with `FloorCovering`, the room's Floor Finish.
-//! This lists every entry of that shape whose id is a BuiltInParameter
-//! (-1,000,000 to -1,200,000) within [`WINDOW`] bytes past a room's name
-//! entry, and the room's `Pset_SpaceCommon` from the reference export next
-//! to the model (`<model>_slim.ifc`, else `<model>.ifc`), matched by room
-//! number (the space's `Name`). It prints, per parameter id, how many rooms
-//! carry it and on how many its value is each Revit property's, then the
-//! first rooms in full.
+//! Revit's IFC4 export of RE1 Architecture gives each of its 11 rooms a
+//! `Pset_SpaceCommon` with `FloorCovering`, the room's Floor Finish. A text
+//! parameter is an entry `id · u32 n · UTF-16 × n` with a BuiltInParameter id
+//! as wide as the release's ElementIds (RE-117). This finds every such entry
+//! whose id is in [`PARAMETERS`] (the room parameters around `ROOM_NAME`,
+//! -1006900) in every partition, and the data object holding it: the last
+//! header `[i32 ElementId][i32 0][u32 Adler-32][i32 size][i32 class]` before
+//! it whose `size` bytes end in the size again, enclose the entry, and whose
+//! Adler-32 (over the class word and the payload less its last 4 bytes)
+//! verifies (the #35 comment of 2026-09-29). It joins the object's ElementId
+//! to the rooms (`OST_Rooms`), and each room by number to the space's
+//! `Pset_SpaceCommon` in the reference export next to the model
+//! (`<model>_slim.ifc`, else `<model>.ifc`). Per parameter id it prints the
+//! entries, those inside a verified object, those on a room, and on how many
+//! rooms the value equals each Revit property; then every room of the first
+//! file with a reference in full. Revit 2024 and later (the header of 2023 has
+//! no zero word).
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re153_room_finishes -- MODEL.rvt ...
 
 use rvt::RevitFile;
 use rvt::partition_element_records as per;
-use rvt::partition_room_parameters::{ROOM_NAME_PARAMETER, ROOM_NUMBER_PARAMETER};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-/// How far past a room's name entry its other entries are looked for.
-const WINDOW: usize = 0x800;
-const EXAMPLES: usize = 4;
+/// The BuiltInParameter ids looked for: `ROOM_NAME` (-1006900) and its
+/// neighbours.
+const PARAMETERS: std::ops::RangeInclusive<i64> = -1_006_920..=-1_006_895;
+/// How far before an entry its object's header is looked for.
+const SEARCH: usize = 200_000;
+/// Bytes of a data object's header.
+const HEADER: usize = 20;
 
 /// `#id -> (entity, args)` for every line of a STEP file.
 fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
@@ -107,7 +116,77 @@ fn space_common(step: &str) -> BTreeMap<String, BTreeMap<String, String>> {
     out
 }
 
-fn probe(path: &str) -> anyhow::Result<Vec<String>> {
+fn u32_at(b: &[u8], at: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(
+        b.get(at..at.checked_add(4)?)?.try_into().ok()?,
+    ))
+}
+
+fn adler32(data: &[u8]) -> u32 {
+    let (mut a, mut s) = (1u32, 0u32);
+    for chunk in data.chunks(5552) {
+        for &x in chunk {
+            a += u32::from(x);
+            s += a;
+        }
+        a %= 65521;
+        s %= 65521;
+    }
+    (s << 16) | a
+}
+
+/// The ElementId of the verified data object whose payload holds `at`.
+fn enclosing_object(b: &[u8], at: usize) -> Option<u32> {
+    let low = at.saturating_sub(SEARCH);
+    let mut p = at.checked_sub(HEADER)?;
+    loop {
+        if let (Some(id), Some(0), Some(sum), Some(size), Some(class)) = (
+            u32_at(b, p),
+            u32_at(b, p + 4),
+            u32_at(b, p + 8),
+            u32_at(b, p + 12).map(|s| s as usize),
+            u32_at(b, p + 16),
+        ) {
+            let end = p + HEADER + size;
+            if size >= 4 && end > at && end <= b.len() && u32_at(b, end - 4) == Some(size as u32) {
+                let mut data = class.to_le_bytes().to_vec();
+                data.extend_from_slice(&b[p + HEADER..end]);
+                data.truncate(size);
+                if adler32(&data) == sum {
+                    return Some(id);
+                }
+            }
+        }
+        if p <= low {
+            return None;
+        }
+        p -= 1;
+    }
+}
+
+fn string_at(buf: &[u8], at: usize) -> Option<String> {
+    let n = u32_at(buf, at)? as usize;
+    if !(1..=256).contains(&n) {
+        return None;
+    }
+    let units: Vec<u16> = buf
+        .get(at + 4..at + 4 + 2 * n)?
+        .chunks_exact(2)
+        .map(|p| u16::from_le_bytes([p[0], p[1]]))
+        .collect();
+    let text = String::from_utf16(&units).ok()?;
+    (!text.chars().any(char::is_control)).then_some(text)
+}
+
+#[derive(Default)]
+struct Tally {
+    entries: usize,
+    in_object: usize,
+    on_room: usize,
+    equals: BTreeMap<String, usize>,
+}
+
+fn probe(path: &str, full: bool) -> anyhow::Result<Vec<String>> {
     let model = Path::new(path);
     let stem = model.file_stem().unwrap_or_default().to_string_lossy();
     let dir = model.parent().unwrap_or(Path::new("."));
@@ -121,144 +200,114 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     };
     let mut rf = RevitFile::open(path)?;
     let revit = rf.basic_file_info()?.version;
-    let Some(layout) = rvt::partition_names::element_data_layout(revit) else {
+    if revit < 2024 {
         return Ok(vec![format!(
-            "{{\"file\":{path:?},\"skipped\":\"no element-data layout\"}}"
+            "{{\"file\":{path:?},\"revit\":{revit},\"skipped\":\"before 2024\"}}"
         )]);
-    };
+    }
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let rooms: BTreeSet<u32> =
         per::scan_category_records_multi(&mut rf, revit, &[per::OST_ROOMS], &declared)?
             .iter()
             .map(|r| r.element_id)
             .collect();
-    let id_len = if layout.wide_id { 8 } else { 4 };
-    let tag = |id: i64| -> Vec<u8> {
-        if layout.wide_id {
-            id.to_le_bytes().to_vec()
-        } else {
-            (id as i32).to_le_bytes().to_vec()
-        }
-    };
-    let (number_tag, name_tag) = (tag(ROOM_NUMBER_PARAMETER), tag(ROOM_NAME_PARAMETER));
-    let param_at = |buf: &[u8], at: usize| -> Option<i64> {
-        let id = if layout.wide_id {
-            i64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?)
-        } else {
-            i64::from(i32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?))
-        };
-        (-1_200_000..=-1_000_000).contains(&id).then_some(id)
-    };
-    let string_at = |buf: &[u8], at: usize| -> Option<(String, usize)> {
-        let n = u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?) as usize;
-        if !(1..=256).contains(&n) {
-            return None;
-        }
-        let units: Vec<u16> = buf
-            .get(at + 4..at + 4 + 2 * n)?
-            .chunks_exact(2)
-            .map(|p| u16::from_le_bytes([p[0], p[1]]))
-            .collect();
-        let text = String::from_utf16(&units).ok()?;
-        (!text.chars().any(char::is_control)).then_some((text, at + 4 + 2 * n))
-    };
-    // room -> (number, name, [(param, value, offset past the name entry)])
-    let mut found: BTreeMap<u32, (String, String, Vec<(i64, String, usize)>)> = BTreeMap::new();
+    // room -> param -> values
+    let mut by_room: BTreeMap<u32, BTreeMap<i64, BTreeSet<String>>> = BTreeMap::new();
+    let mut tallies: BTreeMap<i64, Tally> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        for hit in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
-            let Some(id) = layout.id_at(buf, hit + 4).filter(|id| rooms.contains(id)) else {
-                continue;
-            };
-            if found.contains_key(&id) {
-                continue;
-            }
-            let start = hit + 4 + id_len;
-            let end = (start + 0x400).min(buf.len());
-            let Some(window) = buf.get(start..end) else {
-                continue;
-            };
-            let entry = memchr::memmem::find_iter(window, &number_tag).find_map(|at| {
-                let at = start + at;
-                let (number, after) = string_at(buf, at + number_tag.len())?;
-                (buf.get(after..after + name_tag.len())? == &name_tag[..]).then_some(())?;
-                let (name, past) = string_at(buf, after + name_tag.len())?;
-                Some((number, name, past))
-            });
-            let Some((number, name, past)) = entry else {
-                continue;
-            };
-            let mut entries = Vec::new();
-            let stop = (past + WINDOW).min(buf.len());
-            let mut at = past;
-            while at + id_len + 4 <= stop {
-                if let Some(param) = param_at(buf, at) {
-                    if let Some((value, next)) = string_at(buf, at + id_len) {
-                        entries.push((param, value, at - past));
-                        at = next;
-                        continue;
-                    }
-                }
-                at += 1;
-            }
-            found.insert(id, (number, name, entries));
-        }
-    }
-    // param -> (rooms carrying it, matches per Revit property)
-    let mut by_param: BTreeMap<i64, (usize, BTreeMap<String, usize>)> = BTreeMap::new();
-    let mut matched_rooms = 0;
-    for (number, _, entries) in found.values() {
-        let revit_props = revit_spaces.get(number);
-        matched_rooms += usize::from(revit_props.is_some());
-        for (param, value, _) in entries {
-            let row = by_param.entry(*param).or_default();
-            row.0 += 1;
-            for (prop, revit_value) in revit_props.into_iter().flatten() {
-                if revit_value == value {
-                    *row.1.entry(prop.clone()).or_default() += 1;
+        for param in PARAMETERS {
+            for hit in memchr::memmem::find_iter(buf, &param.to_le_bytes()) {
+                let Some(value) = string_at(buf, hit + 8) else {
+                    continue;
+                };
+                let tally = tallies.entry(param).or_default();
+                tally.entries += 1;
+                let Some(id) = enclosing_object(buf, hit) else {
+                    continue;
+                };
+                tally.in_object += 1;
+                if rooms.contains(&id) {
+                    tally.on_room += 1;
+                    by_room
+                        .entry(id)
+                        .or_default()
+                        .entry(param)
+                        .or_default()
+                        .insert(value);
                 }
             }
         }
     }
-    let params: Vec<String> = by_param
+    let number_of = |values: &BTreeMap<i64, BTreeSet<String>>| {
+        values
+            .get(&rvt::partition_room_parameters::ROOM_NUMBER_PARAMETER)
+            .filter(|v| v.len() == 1)
+            .and_then(|v| v.iter().next().cloned())
+    };
+    let mut matched = 0;
+    for values in by_room.values() {
+        let Some(revit_props) = number_of(values).and_then(|n| revit_spaces.get(&n)) else {
+            continue;
+        };
+        matched += 1;
+        for (param, set) in values {
+            for (prop, revit_value) in revit_props {
+                if set.len() == 1 && set.contains(revit_value) {
+                    *tallies
+                        .entry(*param)
+                        .or_default()
+                        .equals
+                        .entry(prop.clone())
+                        .or_default() += 1;
+                }
+            }
+        }
+    }
+    let params: Vec<String> = tallies
         .iter()
-        .map(|(p, (n, m))| {
-            let m: Vec<String> = m.iter().map(|(k, v)| format!("{k:?}:{v}")).collect();
+        .map(|(p, t)| {
+            let eq: Vec<String> = t.equals.iter().map(|(k, v)| format!("{k:?}:{v}")).collect();
             format!(
-                "\"{p}\":{{\"rooms\":{n},\"equals_revit\":{{{}}}}}",
-                m.join(",")
+                "\"{p}\":{{\"entries\":{},\"in_verified_object\":{},\"on_room\":{},\"equals_revit\":{{{}}}}}",
+                t.entries,
+                t.in_object,
+                t.on_room,
+                eq.join(",")
             )
         })
         .collect();
     let mut out = vec![format!(
-        "{{\"file\":{path:?},\"revit\":{revit},\"rooms\":{},\"rooms_read\":{},\"revit_spaces_with_pset\":{},\
-         \"rooms_matched_by_number\":{matched_rooms},\"params\":{{{}}}}}",
+        "{{\"file\":{path:?},\"revit\":{revit},\"rooms\":{},\"rooms_with_entries\":{},\
+         \"revit_spaces_with_pset\":{},\"rooms_matched_by_number\":{matched},\"params\":{{{}}}}}",
         rooms.len(),
-        found.len(),
+        by_room.len(),
         revit_spaces.len(),
         params.join(",")
     )];
-    for (id, (number, name, entries)) in found.iter().take(EXAMPLES) {
-        let e: Vec<String> = entries
-            .iter()
-            .map(|(p, v, at)| format!("[{p},{v:?},{at}]"))
-            .collect();
-        let revit_props = revit_spaces
-            .get(number)
-            .map(|m| {
-                m.iter()
-                    .map(|(k, v)| format!("{k:?}:{v:?}"))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            })
-            .unwrap_or_default();
-        out.push(format!(
-            "{{\"room\":{id},\"number\":{number:?},\"name\":{name:?},\"entries\":[{}],\"revit\":{{{revit_props}}}}}",
-            e.join(",")
-        ));
+    if full {
+        for (room, values) in &by_room {
+            let v: Vec<String> = values
+                .iter()
+                .map(|(p, set)| format!("\"{p}\":{:?}", set.iter().collect::<Vec<_>>()))
+                .collect();
+            let revit_props = number_of(values)
+                .and_then(|n| revit_spaces.get(&n))
+                .map(|m| {
+                    m.iter()
+                        .map(|(k, v)| format!("{k:?}:{v:?}"))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                })
+                .unwrap_or_default();
+            out.push(format!(
+                "{{\"room\":{room},\"values\":{{{}}},\"revit\":{{{revit_props}}}}}",
+                v.join(",")
+            ));
+        }
     }
     Ok(out)
 }
@@ -270,7 +319,8 @@ fn main() {
         .filter(|arg| !arg.starts_with("--"))
         .collect();
     for path in &paths {
-        match probe(path) {
+        let full = !path.contains("Core_Interior");
+        match probe(path, full) {
             Ok(lines) => lines.iter().for_each(|l| println!("{l}")),
             Err(error) => println!("{{\"file\":{path:?},\"error\":{:?}}}", format!("{error:#}")),
         }
