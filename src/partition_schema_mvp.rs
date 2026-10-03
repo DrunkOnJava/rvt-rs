@@ -4021,8 +4021,26 @@ pub fn rooms_from_partition_category_records(
     // gives the Level. On Snowdon Towers the block names 1 of 54 rooms, and
     // that one wrongly.
     attach_room_parameter_entries(rf, revit_version, &room_ids, &mut rooms);
+    // RE-153: a room's Floor Finish.
+    let finishes = crate::partition_room_parameters::scan_room_text_parameter(
+        rf,
+        revit_version,
+        &room_ids,
+        crate::partition_room_parameters::ROOM_FINISH_FLOOR_PARAMETER,
+    );
+    for room in rooms.iter_mut() {
+        if let Some(finish) = room.id.and_then(|id| finishes.get(&id)) {
+            room.fields.push((
+                ROOM_FLOOR_FINISH_FIELD.into(),
+                InstanceField::String(finish.clone()),
+            ));
+        }
+    }
     Ok(rooms)
 }
+
+/// Field carrying a room's Floor Finish (RE-153).
+pub const ROOM_FLOOR_FINISH_FIELD: &str = "m_room_floor_finish";
 
 /// Give each room in `rooms` the number and name its parameter entries
 /// hold (RE-117), in place of any read before that differs; a room whose
