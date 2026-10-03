@@ -520,9 +520,10 @@ pub fn append_typed_production_elements(
             out.level_elementid_binds += 1;
         }
 
-        let reference_sets = reference_type
+        let mut reference_sets = reference_type
             .map(|type_name| reference_property_sets(&ifc_type, &type_name))
             .unwrap_or_default();
+        add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         let serial_sets = serial_number_property_sets(&decoded, &ifc_type);
         // RE-151: the name of the openings of a floor's tagged voids.
         let opening_name = (!void_bodies.is_empty()).then(|| {
@@ -1068,6 +1069,52 @@ fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<
         }],
     })
     .collect()
+}
+
+/// Add `IsExternal` (`IfcBoolean`) to a door's `Pset_DoorCommon` or a
+/// slab's `Pset_SlabCommon` among `sets`, from its type's Function, 0
+/// interior or 1 exterior (RE-158), starting the set when the element has
+/// none (no type name for its `Reference`). Nothing for another Function,
+/// which RE1 does not show, when the type's Function was not read, or for a
+/// door written as its opening alone (RE-84).
+fn add_is_external(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    opening_only: bool,
+) {
+    if opening_only {
+        return;
+    }
+    let common = match ifc_type {
+        "IFCDOOR" => "Pset_DoorCommon",
+        "IFCSLAB" => "Pset_SlabCommon",
+        _ => return,
+    };
+    let function = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Integer { value, .. }
+            if name == crate::partition_schema_mvp::TYPE_FUNCTION_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    });
+    let external = match function {
+        Some(0) => false,
+        Some(1) => true,
+        _ => return,
+    };
+    let property = Property {
+        name: "IsExternal".into(),
+        value: PropertyValue::Boolean(external),
+    };
+    match sets.iter_mut().find(|set| set.name == common) {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: common.into(),
+            properties: vec![property],
+        }),
+    }
 }
 
 /// The property of `Pset_FlowSegmentPipeSegment` holding a pipe's invert.

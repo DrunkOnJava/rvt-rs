@@ -385,6 +385,8 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
+    // --- A door's and a floor's type Function (RE-158) ---
+    attach_type_functions(rf, revit_version, [&mut out.doors, &mut out.slabs]);
     // --- Curtain panels that are walls (RE-64) ---
     let mut unnamed_panels: Vec<&mut DecodedElement> = out
         .products
@@ -3614,6 +3616,44 @@ pub fn curve_size_from_fields(fields: &[(String, InstanceField)]) -> Option<(f64
         })
     };
     Some((field(CURVE_SIZE_FIELDS[0])?, field(CURVE_SIZE_FIELDS[1])?))
+}
+
+/// Field carrying the Function of an element's type (`FUNCTION_PARAM`: 0
+/// interior, 1 exterior), RE-158.
+pub const TYPE_FUNCTION_FIELD: &str = "m_type_function";
+
+/// Give each element of `groups` whose type is known its type's Function,
+/// the integer entry `FUNCTION_PARAM` in the type's own data object
+/// (RE-158). A type whose entries disagree, or that has none, gives nothing.
+fn attach_type_functions(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    use crate::partition_room_parameters as prp;
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let types: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter().filter_map(type_of))
+        .collect();
+    let functions = prp::scan_integer_parameter(rf, revit_version, &types, prp::FUNCTION_PARAMETER);
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        if let Some(&function) = type_of(element).and_then(|id| functions.get(&id)) {
+            element.fields.push((
+                TYPE_FUNCTION_FIELD.into(),
+                InstanceField::Integer {
+                    value: i64::from(function),
+                    signed: false,
+                    size: 4,
+                },
+            ));
+        }
+    }
 }
 
 /// Field carrying an element's value of the shared parameter `Serial Number`
