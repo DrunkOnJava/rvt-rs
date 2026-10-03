@@ -8,6 +8,15 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **The `Reference` of Revit's common property sets (RE-154, #35).** Revit's
+  export gives every element `Pset_QuantityTakeOff.Reference`, its entity's
+  common set's `Reference` (`Pset_WallCommon`, `Pset_DoorCommon`,
+  `Pset_DistributionFlowElementCommon` ...), and on walls and slabs the
+  reinforcement-pitch set's, each the type's name; no stored parameter holds
+  it. The IFC export now writes those sets on each element named
+  `Family:Type:ElementId`, for the entities measured on the RE1 exports.
+  Checked by the new real-file target `tests/common_reference.rs` against all
+  four RE1 exports.
 - **A room's `Pset_SpaceCommon`, with its Floor Finish (RE-153, #35).** Revit's
   export gives each room a `Pset_SpaceCommon` with `Reference`
   (`IfcIdentifier`, its name and number) and `FloorCovering` (`IfcLabel`, its
