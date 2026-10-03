@@ -152,7 +152,8 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
             )
         })
         .collect();
-    let mut best: Vec<(&i64, &(usize, usize))> = agree.iter().filter(|(_, (a, _))| *a > 0).collect();
+    let mut best: Vec<(&i64, &(usize, usize))> =
+        agree.iter().filter(|(_, (a, _))| *a > 0).collect();
     best.sort_by_key(|(_, (a, _))| std::cmp::Reverse(*a));
     let best: Vec<String> = best
         .iter()
