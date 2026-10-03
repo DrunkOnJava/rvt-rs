@@ -78,7 +78,7 @@ into milestones).
 | 16 | B08 | #309: door and window types with an empty material map are bare `IfcOpeningElement`s | feature | M | blocked |
 | 17 | B07 | #223: the flag word at `+0x46` is not Room Bounding | research | S | done (reply, unverified) |
 | 18 | B13 | #421 §2: six curtain system type records on 2021 `rac_advanced` that ElemTable does not list | research | S | done (reply) |
-| 19 | B21 | Parameters (0.5.0: #35, #155, #223, #228) | feature | XL | open |
+| 19 | B21 | Parameters (0.5.0: #35, #155, #223, #228) | feature | XL | in progress |
 | 20 | B22 | Held-out validation on licensed models (#408) | test | L | blocked |
 | 21 | B24 | `ClassEntry::tag` is the base's tag (RE-146), but the schema-directed walker, `SchemaTable::tagged_ancestor` and `rvt-analyze` use it as the class's own | fix | M | done (measured, no change) |
 | 22 | B25 | Run the Python API integration suite (`tests/python`, 64 tests) in the wheel job | tooling | S | done |
@@ -150,6 +150,32 @@ Each item lists its PR, its red run on `main` (the test commit's message has the
     - #356 needs a pitched-roof oracle;
     - #156 waits on reported format evidence;
     - #96's open parts need a model with round or oval ducts.
+- **B21, in progress.** Milestone #35, parameters, measured against the property sets of Revit's RE1 exports:
+  - #588 (RE-153): a room's Floor Finish is the text parameter -1006903, joined to the room through its Adler-32-verified data object (11 of 11 on RE1 Architecture).
+  - #589: each room's `Pset_SpaceCommon` (`Reference`, `FloorCovering`).
+    - Red: draft #587, run 37131559218.
+    - `tests/space_common.rs`.
+    - With the maintainer's approval, Core Interior's pinned property sets went from 970 to 1086, and the witness observations were regenerated.
+  - #590 (RE-154): every `Pset_*Common.Reference` and `Pset_QuantityTakeOff.Reference` is the type's name, not a stored parameter.
+  - #592: those `Reference` sets on every element named `Family:Type`.
+    - Red: draft #591, run 37133676030.
+    - `tests/common_reference.rs` on all four RE1 models.
+    - With the maintainer's approval, the pinned property sets went from 1086 to 2670, and the witness was regenerated.
+  - #593: the `psets_vs_ifc` scorer in Measure compares every property Revit writes with rvt-rs's value.
+  - #595, in review: a pipe's `Length` in both flow-segment sets.
+    - Red: draft #594, run 37136045232.
+    - `tests/segment_length.rs`.
+  - Open, each needing evidence first:
+    - duct `Length` needs RE-134's width and height read in code;
+    - `FireRating` is on the wall type, but RE1's one-character value meets four parameter ids;
+    - `IsExternal`, `LoadBearing`, `ExtendToStructure`, `PitchAngle`, `InvertElevation` and `Finish` are not stored text entries;
+    - the storey and building sets need writer support for property sets outside building elements.
+  - #155, #223 and #228 are untouched.
+
+## Findings logged this session
+
+- **RE1 Plumbing: an element Revit does not export.** rvt-rs writes water closet tank 442378 (`Water Closet Tank_M`); Revit's export holds no element with that `Tag`. Probably a nested family instance; not yet investigated.
+- **#227's 63rd opening** is a hole in wall 55840's elevation-profile sketch (RE-151); it needs the wall's edited profile read.
 
 ## Item details
 
