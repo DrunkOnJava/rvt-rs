@@ -373,6 +373,19 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- The MEP systems each element is a member of (RE-162) ---
+    attach_mep_systems(
+        rf,
+        revit_version,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ],
+    );
     // --- System-family type names (#322) ---
     let mut unnamed: Vec<&mut DecodedElement> = [&mut out.walls, &mut out.slabs, &mut out.products]
         .into_iter()
@@ -3686,6 +3699,58 @@ fn attach_serial_numbers(
             element.fields.push((
                 SERIAL_NUMBER_FIELD.into(),
                 InstanceField::String(value.clone()),
+            ));
+        }
+    }
+}
+
+/// Prefix of the field naming an MEP system an element is a member of: the
+/// system's ElementId follows, and the field holds its name, empty where it
+/// has none (RE-162).
+pub const MEP_SYSTEM_FIELD_PREFIX: &str = "m_mep_system_";
+
+/// The MEP systems an element is a member of, by ElementId, with their names
+/// (RE-162).
+pub fn mep_systems_from_fields(fields: &[(String, InstanceField)]) -> Vec<(u32, Option<String>)> {
+    fields
+        .iter()
+        .filter_map(|(name, value)| {
+            let id = name.strip_prefix(MEP_SYSTEM_FIELD_PREFIX)?.parse().ok()?;
+            let InstanceField::String(system_name) = value else {
+                return None;
+            };
+            Some((id, Some(system_name.clone()).filter(|n| !n.is_empty())))
+        })
+        .collect()
+}
+
+/// Give each element of `groups` the MEP systems it is a member of
+/// ([`crate::partition_mep_systems`], RE-162).
+fn attach_mep_systems(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 6],
+) {
+    use crate::partition_mep_systems as pms;
+    if !pms::supports_revit_version(revit_version) {
+        return;
+    }
+    let ids: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter().filter_map(|element| element.id))
+        .collect();
+    let systems = pms::scan_mep_systems(rf, revit_version, &ids).unwrap_or_default();
+    if systems.is_empty() {
+        return;
+    }
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(id) = element.id else {
+            continue;
+        };
+        for system in systems.iter().filter(|system| system.members.contains(&id)) {
+            element.fields.push((
+                format!("{MEP_SYSTEM_FIELD_PREFIX}{}", system.id),
+                InstanceField::String(system.name.clone().unwrap_or_default()),
             ));
         }
     }

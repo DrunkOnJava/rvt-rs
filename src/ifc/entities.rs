@@ -180,6 +180,16 @@ pub enum IfcEntity {
         b_id: u32,
         b_index: u32,
     },
+    /// An MEP system (RE-162, #528): the Revit system element `id`, named
+    /// `name`, grouping the building elements at `members` (indices into
+    /// `IfcModel::entities`). The writer emits an `IfcSystem` with an
+    /// `IfcRelAssignsToGroup` of its members and an `IfcRelServicesBuildings`
+    /// to the building, as Revit's export does.
+    System {
+        id: u32,
+        name: Option<String>,
+        members: Vec<usize>,
+    },
     /// An opening nothing fills (RE-151, #227): a hole in a floor's sketch,
     /// voiding the building element at `host` (an index into
     /// `IfcModel::entities`), as Revit's export writes it. The writer places
