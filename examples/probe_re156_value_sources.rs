@@ -1,5 +1,6 @@
 //! RE-156 (probe): where in the file the text values of Revit's property sets
-//! are, when they are not BuiltInParameter text entries (#35).
+//! are, when they are not BuiltInParameter text entries (#35). RE-159 added
+//! the first item of list values, such as `ConnectionType`.
 //!
 //! RE-154 looked for each text value of Revit's property sets among the
 //! entries `id · u32 n · UTF-16 × n` whose `i64` id is a BuiltInParameter,
@@ -182,13 +183,16 @@ fn written(step: &str) -> Vec<Written> {
             let Some((pe, pa)) = ents.get(&prop) else {
                 continue;
             };
-            if pe != "IFCPROPERTYSINGLEVALUE" {
+            if pe != "IFCPROPERTYSINGLEVALUE" && pe != "IFCPROPERTYLISTVALUE" {
                 continue;
             }
             let pf = split_args(pa);
             let (Some(name), Some(value)) = (pf.first(), pf.get(2)) else {
                 continue;
             };
+            // A list value's first item (RE-159: ConnectionType).
+            let value = value.trim().trim_start_matches('(');
+            let value = split_args(value).first().cloned().unwrap_or_default();
             let value = value.trim();
             let text = ["IFCLABEL(", "IFCTEXT(", "IFCIDENTIFIER("]
                 .iter()
@@ -318,16 +322,24 @@ fn load(rf: &mut RevitFile) -> Vec<Stream> {
     out
 }
 
-/// Hit counts by stream and encoding, the hits shown, and the positive ids
-/// before length-prefixed hits.
-type Hits = (BTreeMap<String, usize>, Vec<String>, BTreeSet<i64>);
+/// Hit counts by stream and encoding, the hits shown, the positive ids
+/// before length-prefixed hits, and the hits inside one of the holders' own
+/// data objects (the element carrying the value, or its type) with the id
+/// before each.
+type Hits = (
+    BTreeMap<String, usize>,
+    Vec<String>,
+    BTreeSet<i64>,
+    Vec<String>,
+);
 
-fn hits(streams: &[Stream], value: &str) -> Hits {
+fn hits(streams: &[Stream], value: &str, holders: [Option<u32>; 2]) -> Hits {
     let utf16: Vec<u8> = value.encode_utf16().flat_map(u16::to_le_bytes).collect();
     let units = value.encode_utf16().count();
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut shown = Vec::new();
     let mut ids = BTreeSet::new();
+    let mut held = Vec::new();
     for stream in streams {
         for (encoding, needle) in [("utf16", utf16.as_slice()), ("utf8", value.as_bytes())] {
             for at in memchr::memmem::find_iter(&stream.bytes, needle) {
@@ -348,15 +360,26 @@ fn hits(streams: &[Stream], value: &str) -> Hits {
                     None
                 };
                 ids.extend(id.filter(|i| *i > 0));
+                let index = stream.objects.partition_point(|(start, ..)| *start <= at);
+                let holder = stream.objects[..index]
+                    .iter()
+                    .rev()
+                    .find(|(_, end, ..)| *end > at);
+                if let Some((_, _, owner, _)) = holder {
+                    if holders.contains(&Some(*owner)) && held.len() < HITS_SHOWN {
+                        held.push(format!(
+                            "{{\"stream\":{:?},\"object\":{owner},\"id\":{},\"before\":{:?}}}",
+                            stream.name,
+                            id.map_or("null".into(), |i| i.to_string()),
+                            hex(&b[at.saturating_sub(24)..at])
+                        ));
+                    }
+                }
                 if shown.len() >= HITS_SHOWN {
                     continue;
                 }
-                let index = stream.objects.partition_point(|(start, ..)| *start <= at);
-                let owner = stream.objects[..index]
-                    .iter()
-                    .rev()
-                    .find(|(_, end, ..)| *end > at)
-                    .map(|(start, _, id, class)| format!("{id} class {class:#x} at {start}"));
+                let owner =
+                    holder.map(|(start, _, id, class)| format!("{id} class {class:#x} at {start}"));
                 let before = &b[at.saturating_sub(24)..at];
                 shown.push(format!(
                     "{{\"stream\":{:?},\"inflated\":{},\"encoding\":{encoding:?},\"at\":{at},\
@@ -370,7 +393,7 @@ fn hits(streams: &[Stream], value: &str) -> Hits {
             }
         }
     }
-    (counts, shown, ids)
+    (counts, shown, ids, held)
 }
 
 /// The length-prefixed UTF-16 strings (`u32 n · UTF-16 × n`, 2 to 64
@@ -466,15 +489,16 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     let mut parameter_ids = BTreeSet::new();
     for ((set, property), sample) in &values {
         for (value, (element, type_id)) in sample {
-            let (counts, shown, ids) = hits(&streams, value);
+            let (counts, shown, ids, held) = hits(&streams, value, [Some(*element), *type_id]);
             parameter_ids.extend(ids);
             let counts: Vec<String> = counts.iter().map(|(k, n)| format!("{k:?}:{n}")).collect();
             out.push(format!(
                 "{{\"set\":{set:?},\"property\":{property:?},\"value\":{value:?},\
-                 \"element\":{element},\"type\":{},\"counts\":{{{}}},\"hits\":[{}]}}",
+                 \"element\":{element},\"type\":{},\"counts\":{{{}}},\"hits\":[{}],\"held\":[{}]}}",
                 type_id.map_or("null".into(), |t| t.to_string()),
                 counts.join(","),
-                shown.join(",")
+                shown.join(","),
+                held.join(",")
             ));
         }
     }
