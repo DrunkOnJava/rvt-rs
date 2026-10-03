@@ -279,36 +279,56 @@ fn adler32(data: &[u8]) -> u32 {
 /// the size again and enclose `at`, and whose Adler-32, over the class word
 /// and the payload less its last 4 bytes, verifies. Revit 2024 and later.
 pub fn enclosing_data_object(buf: &[u8], at: usize) -> Option<u32> {
-    let u32_at = |p: usize| {
-        buf.get(p..p.checked_add(4)?)
-            .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
-    };
     let low = at.saturating_sub(DATA_OBJECT_SEARCH);
     let mut p = at.checked_sub(DATA_OBJECT_HEADER)?;
     loop {
-        if let (Some(id), Some(0), Some(sum), Some(size), Some(class)) = (
-            u32_at(p),
-            u32_at(p + 4),
-            u32_at(p + 8),
-            u32_at(p + 12).map(|s| s as usize),
-            u32_at(p + 16),
-        ) {
-            let end = p + DATA_OBJECT_HEADER + size;
-            if size >= 4 && end > at && end <= buf.len() && u32_at(end - 4) == Some(size as u32) {
-                let mut data = Vec::with_capacity(size);
-                data.extend_from_slice(&class.to_le_bytes());
-                data.extend_from_slice(&buf[p + DATA_OBJECT_HEADER..end]);
-                data.truncate(size);
-                if adler32(&data) == sum {
-                    return Some(id);
-                }
-            }
+        if let Some(object) = verified_data_object(buf, p).filter(|object| object.end > at) {
+            return Some(object.element_id);
         }
         if p <= low {
             return None;
         }
         p -= 1;
     }
+}
+
+/// A data object whose header starts at a known offset (RE-153).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DataObject {
+    /// The ElementId in its header.
+    pub element_id: u32,
+    /// Its class word.
+    pub class: u32,
+    /// The offset just past its payload.
+    pub end: usize,
+}
+
+/// The data object whose header starts at `p`, when its payload ends in its
+/// size again and its Adler-32, over the class word and the payload less its
+/// last 4 bytes, verifies. Revit 2024 and later.
+pub fn verified_data_object(buf: &[u8], p: usize) -> Option<DataObject> {
+    let u32_at = |p: usize| {
+        buf.get(p..p.checked_add(4)?)
+            .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
+    };
+    if u32_at(p.checked_add(4)?)? != 0 {
+        return None;
+    }
+    let (id, sum, size, class) = (u32_at(p)?, u32_at(p + 8)?, u32_at(p + 12)?, u32_at(p + 16)?);
+    let size = size as usize;
+    let end = p.checked_add(DATA_OBJECT_HEADER)?.checked_add(size)?;
+    if size < 4 || end > buf.len() || u32_at(end - 4) != Some(size as u32) {
+        return None;
+    }
+    let mut data = Vec::with_capacity(size);
+    data.extend_from_slice(&class.to_le_bytes());
+    data.extend_from_slice(&buf[p + DATA_OBJECT_HEADER..end]);
+    data.truncate(size);
+    (adler32(&data) == sum).then_some(DataObject {
+        element_id: id,
+        class,
+        end,
+    })
 }
 
 /// Each room's value of the text parameter `parameter`, by ElementId
