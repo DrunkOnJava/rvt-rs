@@ -73,7 +73,9 @@ pub fn walk(
     let content_key_tag = tag("ContentKey")?;
     let segment_tag = tag("SegmentMarker")?;
     let checkback_tag = tag("SegmentCheckback")?;
-    let signature_tag = tag("SignatureMarker")?;
+    // The 2016 and 2017 schemas have no `SignatureMarker` class and their
+    // partitions write none (#421); it is required only where it is met.
+    let signature_tag = registry.named("SignatureMarker").map(|c| c.tag);
     let mut r = Reader {
         bytes: prepared,
         pos: 0,
@@ -131,8 +133,12 @@ pub fn walk(
                 );
                 continue;
             }
+            // `m_continuationBits` is `(n << 2) | flags`: flag 1 continues the
+            // previous segment, flag 2 continues into the next. `n` is 1 on
+            // every segment from Revit 2018 on and 100 or more before, rising
+            // through a stream (#421); it is not read beyond being set.
             ensure!(
-                (4..=7).contains(&flags) && size >= 18,
+                flags >> 2 != 0 && size >= 18,
                 "unsupported segment flags/size at {offset}"
             );
             let channel = r.u64()?;
@@ -198,7 +204,7 @@ pub fn walk(
                 "segment checkback mismatch at {offset}"
             );
             last_size = None;
-        } else if next == signature_tag {
+        } else if Some(next) == signature_tag {
             ensure!(active.is_none(), "signature interrupts continued segment");
             let count = r.u32()? as usize;
             ensure!(count <= 1_000_000, "partition signature budget exceeded");
