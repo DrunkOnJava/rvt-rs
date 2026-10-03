@@ -14,6 +14,9 @@ use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// A property set's properties: name -> value as written.
+type Props = BTreeMap<String, String>;
+
 /// `#id -> (entity, args)` for every line of a STEP file.
 fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
     let mut out = BTreeMap::new();
@@ -134,11 +137,7 @@ fn re1_architecture_space_common_is_revits() {
         .export_with_diagnostics(&mut rf)
         .expect("export");
     let ours = space_common(&write_step(&result.model));
-    let differing: Vec<(
-        &String,
-        &BTreeMap<String, String>,
-        Option<&BTreeMap<String, String>>,
-    )> = theirs
+    let differing: Vec<(&String, &Props, Option<&Props>)> = theirs
         .iter()
         .filter(|(space, props)| ours.get(*space) != Some(*props))
         .map(|(space, props)| (space, props, ours.get(space)))
