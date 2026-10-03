@@ -608,12 +608,15 @@ pub fn append_typed_production_elements(
         // #35: the two sets holding a room's name, as Revit's export gives
         // every space.
         if decoded.class == "Room" {
-            let name = decoded.fields.iter().find_map(|(field, value)| match value {
-                InstanceField::String(text) if field == "m_name" && !text.is_empty() => {
-                    Some(text.as_str())
-                }
-                _ => None,
-            });
+            let name = decoded
+                .fields
+                .iter()
+                .find_map(|(field, value)| match value {
+                    InstanceField::String(text) if field == "m_name" && !text.is_empty() => {
+                        Some(text.as_str())
+                    }
+                    _ => None,
+                });
             for set in name.map(PropertySet::name_sets).unwrap_or_default() {
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: entity_index,
