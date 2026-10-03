@@ -2,23 +2,25 @@
 //! Do trailing words of ElemTable records look like owner ElementIds?
 //!
 //! Does not invent a decoder — prints histograms and join rates only.
+//!
+//! Usage (RE-152 read Einhoven, 28-byte records, and Core Interior, 40-byte):
+//!   cargo run --example probe_elem_table_ownership -- MODEL.rvt ...
 
 use rvt::{RevitFile, elem_table};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() {
-    let paths = [
-        (
-            "2023-einhoven-28B",
-            "/workspace/_project_corpus/Revit/Revit_IFC5_Einhoven.rvt",
-        ),
-        (
-            "2024-core-40B",
-            "/workspace/_project_corpus/Revit/2024_Core_Interior.rvt",
-        ),
-    ];
-    for (label, path) in paths {
-        println!("=== {label} ===");
+    // Measure passes flags such as `--records` after the paths.
+    let paths: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|arg| !arg.starts_with("--"))
+        .collect();
+    if paths.is_empty() {
+        eprintln!("usage: probe_elem_table_ownership MODEL.rvt ...");
+        std::process::exit(2);
+    }
+    for path in &paths {
+        println!("=== {path} ===");
         let mut rf = match RevitFile::open(path) {
             Ok(rf) => rf,
             Err(e) => {

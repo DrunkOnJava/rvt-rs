@@ -422,6 +422,14 @@ impl PyRevitFile {
         Ok(Some(serde_json::to_string(&pa).map_err(to_py_val)?))
     }
 
+    /// Strict [`part_atom_json`]: the same JSON, or `ValueError` naming
+    /// the cause, `Stream not found: PartAtom` or `Malformed PartAtom
+    /// XML: ...`, where `part_atom_json` returns `None` for both (#502).
+    fn part_atom_json_strict(&mut self) -> PyResult<String> {
+        let pa = self.inner.part_atom().map_err(to_py_val)?;
+        serde_json::to_string(&pa).map_err(to_py_val)
+    }
+
     /// Full schema as a JSON string. The Rust-side `SchemaTable` type
     /// already derives `Serialize`, so this is zero-copy relative to
     /// the in-memory schema. Parse with `json.loads()` in Python to

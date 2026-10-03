@@ -212,6 +212,12 @@ class RevitFile:
         project ``.rvt`` files).
         """
 
+    def part_atom_json_strict(self) -> str:
+        """Strict ``part_atom_json``: the same JSON, or ``ValueError``
+        naming the cause, ``Stream not found: PartAtom`` or ``Malformed
+        PartAtom XML: ...``, where ``part_atom_json`` returns ``None``.
+        """
+
     def schema_summary(self) -> TypedSchemaSummary:
         """Decoded schema counts. Cheap. Returns a dict with keys
         ``classes``, ``fields``, ``cpp_types``.
