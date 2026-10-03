@@ -196,6 +196,9 @@ pub fn append_typed_production_elements(
     // RE-138: the joins of ducts and pipes, by entity index and ElementId.
     let mut pending_joins: Vec<(usize, u32, crate::partition_schema_mvp::ConnectorJoins)> =
         Vec::new();
+    // RE-162: each MEP system's name and members, by its ElementId.
+    let mut pending_systems: std::collections::BTreeMap<u32, (Option<String>, Vec<usize>)> =
+        Default::default();
     // Bodies of aggregate wholes, held back until their parts are known: a
     // whole that no part names keeps its own body.
     let mut held_bodies: std::collections::BTreeMap<usize, Extrusion> =
@@ -511,6 +514,14 @@ pub fn append_typed_production_elements(
                 pending_joins.push((entity_index, id, joins));
             }
         }
+        // RE-162: the MEP systems the element is a member of.
+        for (system, name) in crate::partition_schema_mvp::mep_systems_from_fields(&decoded.fields)
+        {
+            let entry = pending_systems
+                .entry(system)
+                .or_insert_with(|| (name, Vec::new()));
+            entry.1.push(entity_index);
+        }
 
         // Floor/Room → storey via Level ElementId only when both sides
         // carry ids that match. Partition MVP Levels are id-less today,
@@ -751,6 +762,9 @@ pub fn append_typed_production_elements(
             b_id,
             b_index,
         });
+    }
+    for (id, (name, members)) in pending_systems {
+        entities.push(entities::IfcEntity::System { id, name, members });
     }
 
     if policy.include_geometry {

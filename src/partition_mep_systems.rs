@@ -1,0 +1,143 @@
+//! MEP systems and their members (RE-162, B33, #528).
+//!
+//! An MEP system is an element of its own, a data object (RE-153) of class
+//! `RbsHvacSystem`, `RbsPipingSystem` or `RbsElectricalSystem` whose payload
+//! holds the system's name as `u32 n · UTF-16 × n`. Its members are the
+//! elements whose own data objects hold the system's ElementId. On the RE1
+//! Mechanical, Plumbing and Electrical models (Revit 2025, MIT), against
+//! Revit's own IFC: every one of Revit's `IfcSystem`s is one such object of
+//! the same name, and every element Revit groups in it holds its id.
+
+use crate::partition_room_parameters::{
+    DATA_OBJECT_HEADER, enclosing_data_object, verified_data_object,
+};
+use crate::{Result, RevitFile};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// The schema classes of MEP systems.
+pub const SYSTEM_CLASSES: [&str; 3] = ["RbsHvacSystem", "RbsPipingSystem", "RbsElectricalSystem"];
+/// Longest system name read, in UTF-16 units.
+const MAX_NAME_UNITS: usize = 256;
+
+/// One MEP system.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MepSystem {
+    /// Its ElementId.
+    pub id: u32,
+    /// Its schema class, one of [`SYSTEM_CLASSES`].
+    pub class: String,
+    /// Its name, where its object holds one.
+    pub name: Option<String>,
+    /// The elements of `elements` (see [`scan_mep_systems`]) whose own data
+    /// objects hold its id.
+    pub members: BTreeSet<u32>,
+}
+
+/// Data objects are read on Revit 2024 and later (RE-153).
+pub fn supports_revit_version(revit_version: u32) -> bool {
+    revit_version >= 2024
+}
+
+/// The first `u32 n · UTF-16 × n` string in `payload` of printable ASCII.
+/// Shorter strings of other units come first: a `1` followed by half an
+/// ElementId reads as one.
+fn first_string(payload: &[u8]) -> Option<String> {
+    let mut q = 0;
+    while q + 4 <= payload.len() {
+        let n = u32::from_le_bytes(payload[q..q + 4].try_into().ok()?) as usize;
+        if (1..=MAX_NAME_UNITS).contains(&n) && q + 4 + 2 * n <= payload.len() {
+            let units: Vec<u16> = payload[q + 4..q + 4 + 2 * n]
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            if units.iter().all(|u| (0x20..0xd800).contains(u)) {
+                return Some(String::from_utf16_lossy(&units));
+            }
+        }
+        q += 1;
+    }
+    None
+}
+
+/// Every MEP system in the file, with its members among `elements`. A system
+/// whose objects in two streams disagree on its name keeps no name. Empty for
+/// a release before 2024 or a schema with none of [`SYSTEM_CLASSES`].
+pub fn scan_mep_systems(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: &BTreeSet<u32>,
+) -> Result<Vec<MepSystem>> {
+    if !supports_revit_version(revit_version) {
+        return Ok(Vec::new());
+    }
+    let classes = rf.schema_classes()?;
+    let tags: BTreeMap<u32, String> = classes
+        .classes
+        .iter()
+        .filter(|class| SYSTEM_CLASSES.contains(&class.name.as_str()))
+        .map(|class| (u32::from(class.tag), class.name.clone()))
+        .collect();
+    if tags.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut systems: BTreeMap<u32, MepSystem> = BTreeMap::new();
+    let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    let streams = rf.partition_stream_names();
+    for stream in &streams {
+        let Ok(inflated) = rf.inflated_partition(stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for (&tag, class) in &tags {
+            for hit in memchr::memmem::find_iter(buf, &tag.to_le_bytes()) {
+                let Some(p) = hit.checked_sub(16) else {
+                    continue;
+                };
+                let Some(object) = verified_data_object(buf, p) else {
+                    continue;
+                };
+                if object.class & 0xffff != tag {
+                    continue;
+                }
+                let name = first_string(&buf[p + DATA_OBJECT_HEADER..object.end - 4]);
+                match names.get_mut(&object.element_id) {
+                    None => {
+                        names.insert(object.element_id, name);
+                    }
+                    Some(held) => {
+                        if *held != name {
+                            *held = None;
+                        }
+                    }
+                }
+                systems
+                    .entry(object.element_id)
+                    .or_insert_with(|| MepSystem {
+                        id: object.element_id,
+                        class: class.clone(),
+                        name: None,
+                        members: BTreeSet::new(),
+                    });
+            }
+        }
+    }
+    for stream in &streams {
+        let Ok(inflated) = rf.inflated_partition(stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for system in systems.values_mut() {
+            for hit in memchr::memmem::find_iter(buf, &system.id.to_le_bytes()) {
+                if let Some(holder) = enclosing_data_object(buf, hit)
+                    .filter(|holder| *holder != system.id && elements.contains(holder))
+                {
+                    system.members.insert(holder);
+                }
+            }
+        }
+    }
+    for system in systems.values_mut() {
+        system.name = names.remove(&system.id).flatten();
+    }
+    Ok(systems.into_values().collect())
+}
