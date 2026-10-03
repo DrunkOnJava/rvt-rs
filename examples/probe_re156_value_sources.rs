@@ -419,6 +419,9 @@ fn object_strings(streams: &[Stream], id: i64) -> Vec<String> {
     out
 }
 
+/// (set, property) -> value -> (an element carrying it, that element's type).
+type Samples = BTreeMap<(String, String), BTreeMap<String, (u32, Option<u32>)>>;
+
 fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     let model = Path::new(path);
     let stem = model.file_stem().unwrap_or_default().to_string_lossy();
@@ -433,15 +436,16 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         )]);
     };
     let written = written(&std::fs::read_to_string(&reference)?);
-    // (set, property) -> value -> (an element carrying it, that element's type)
-    let mut values: BTreeMap<(String, String), BTreeMap<String, (u32, Option<u32>)>> =
-        BTreeMap::new();
+    let mut values: Samples = BTreeMap::new();
     for w in &written {
-        let slot = values.entry((w.set.clone(), w.property.clone())).or_default();
+        let slot = values
+            .entry((w.set.clone(), w.property.clone()))
+            .or_default();
         if w.value.chars().count() >= MIN_LEN
             && (slot.len() < VALUES_PER_PROPERTY || slot.contains_key(&w.value))
         {
-            slot.entry(w.value.clone()).or_insert((w.element, w.type_id));
+            slot.entry(w.value.clone())
+                .or_insert((w.element, w.type_id));
         }
         // The property's own name, as a parameter of that name would hold
         // it in the element that defines the parameter.
