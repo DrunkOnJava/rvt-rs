@@ -6134,7 +6134,43 @@ fn attach_slab_layers(
         if matches!(&bands, InstanceField::Vector(items) if !items.is_empty()) {
             element.fields.push((SLAB_LAYERS_FIELD.into(), bands));
         }
+        // B41: a ceiling's finish, its finish layers' materials.
+        if element.class == "Ceiling" {
+            if let Some(finish) = finish_of_layers(type_layers, &names) {
+                element
+                    .fields
+                    .push((COVERING_FINISH_FIELD.into(), InstanceField::String(finish)));
+            }
+        }
     }
+}
+
+/// Field holding a ceiling's finish, the names of its type's finish layers'
+/// materials each followed by `;` (B41).
+pub const COVERING_FINISH_FIELD: &str = "m_covering_finish";
+
+/// The names of the materials of `layers`' finish layers (functions 4 and
+/// 5, [`crate::partition_compound_structure`]), each followed by `;`, as
+/// Revit's export writes `Pset_CoveringCommon.Finish` (6 of 6 RE1 ceilings,
+/// one finish layer each). `None` when there is no finish layer, or one
+/// whose material's name is not read.
+fn finish_of_layers(
+    layers: &[crate::partition_compound_structure::CompoundLayer],
+    names: &std::collections::BTreeMap<u32, String>,
+) -> Option<String> {
+    let finishes: Vec<&crate::partition_compound_structure::CompoundLayer> = layers
+        .iter()
+        .filter(|layer| matches!(layer.function, 4 | 5))
+        .collect();
+    if finishes.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    for layer in finishes {
+        out.push_str(names.get(&layer.material?)?);
+        out.push(';');
+    }
+    Some(out)
 }
 
 /// Back-compat alias for the #204 entry point.
