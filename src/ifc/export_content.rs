@@ -590,6 +590,29 @@ pub fn append_typed_production_elements(
                 set,
             });
         }
+        // A pipe's length between its ends, which Revit's export gives in
+        // both flow-segment sets (RE-131 reads the ends).
+        if let Some(pipe) = (decoded.class == "Pipe")
+            .then(|| crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields))
+            .flatten()
+        {
+            let length = (0..3)
+                .map(|axis| (pipe.end[axis] - pipe.start[axis]).powi(2))
+                .sum::<f64>()
+                .sqrt();
+            for name in ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"] {
+                entities.push(entities::IfcEntity::ElementPropertySet {
+                    element: entity_index,
+                    set: PropertySet {
+                        name: name.into(),
+                        properties: vec![Property {
+                            name: "Length".into(),
+                            value: PropertyValue::PositiveLengthFeet(length),
+                        }],
+                    },
+                });
+            }
+        }
         // RE-154: the common property sets' Reference, the type's name.
         for set in reference_sets {
             entities.push(entities::IfcEntity::ElementPropertySet {
