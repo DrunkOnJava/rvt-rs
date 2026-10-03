@@ -373,6 +373,19 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- The MEP systems each element is a member of (RE-162) ---
+    attach_mep_systems(
+        rf,
+        revit_version,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ],
+    );
     // --- System-family type names (#322) ---
     let mut unnamed: Vec<&mut DecodedElement> = [&mut out.walls, &mut out.slabs, &mut out.products]
         .into_iter()
@@ -3691,8 +3704,61 @@ fn attach_serial_numbers(
     }
 }
 
+/// Prefix of the field naming an MEP system an element is a member of: the
+/// system's ElementId follows, and the field holds its name, empty where it
+/// has none (RE-162).
+pub const MEP_SYSTEM_FIELD_PREFIX: &str = "m_mep_system_";
+
+/// The MEP systems an element is a member of, by ElementId, with their names
+/// (RE-162).
+pub fn mep_systems_from_fields(fields: &[(String, InstanceField)]) -> Vec<(u32, Option<String>)> {
+    fields
+        .iter()
+        .filter_map(|(name, value)| {
+            let id = name.strip_prefix(MEP_SYSTEM_FIELD_PREFIX)?.parse().ok()?;
+            let InstanceField::String(system_name) = value else {
+                return None;
+            };
+            Some((id, Some(system_name.clone()).filter(|n| !n.is_empty())))
+        })
+        .collect()
+}
+
+/// Give each element of `groups` the MEP systems it is a member of
+/// ([`crate::partition_mep_systems`], RE-162).
+fn attach_mep_systems(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 6],
+) {
+    use crate::partition_mep_systems as pms;
+    if !pms::supports_revit_version(revit_version) {
+        return;
+    }
+    let ids: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter().filter_map(|element| element.id))
+        .collect();
+    let systems = pms::scan_mep_systems(rf, revit_version, &ids).unwrap_or_default();
+    if systems.is_empty() {
+        return;
+    }
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(id) = element.id else {
+            continue;
+        };
+        for system in systems.iter().filter(|system| system.members.contains(&id)) {
+            element.fields.push((
+                format!("{MEP_SYSTEM_FIELD_PREFIX}{}", system.id),
+                InstanceField::String(system.name.clone().unwrap_or_default()),
+            ));
+        }
+    }
+}
+
 /// Give each duct and pipe the width and height its curve object holds, and
-/// each duct without a type its curve's type and that type's name
+/// each one still without a type (a duct, or a pipe RE-130's reference list
+/// does not type, B29) its curve's type and that type's name
 /// ([`crate::partition_curve_fields`], RE-134;
 /// [`crate::partition_names::find_mep_curve_type_names`], RE-130). An element
 /// whose anchor is not found gets nothing.
@@ -3729,7 +3795,7 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
     };
     let wanted: BTreeSet<u32> = products
         .iter()
-        .filter(|element| element.class == "Duct" && !has(element, TYPE_NAME_FIELD))
+        .filter(|element| is_curve(element) && !has(element, TYPE_NAME_FIELD))
         .filter_map(|element| Some(fields.get(&element.id?)?.type_id))
         .collect();
     let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
@@ -3791,7 +3857,7 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
                 ));
             }
         }
-        if element.class != "Duct" || has(element, TYPE_NAME_FIELD) {
+        if !is_curve(element) || has(element, TYPE_NAME_FIELD) {
             continue;
         }
         let Some(Some(type_name)) = names.get(&curve.type_id) else {
@@ -6122,6 +6188,15 @@ fn attach_slab_layers(
             })
             .collect();
         let type_layers = &type_layers;
+        // B41: a ceiling's finish, its finish layers' materials. It is the
+        // type's, so it does not wait on the height check below.
+        if element.class == "Ceiling" {
+            if let Some(finish) = finish_of_layers(type_layers, &names) {
+                element
+                    .fields
+                    .push((COVERING_FINISH_FIELD.into(), InstanceField::String(finish)));
+            }
+        }
         let height = element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::Float { value, .. } if name == "m_bboxHeight" => Some(*value),
             _ => None,
@@ -6135,6 +6210,34 @@ fn attach_slab_layers(
             element.fields.push((SLAB_LAYERS_FIELD.into(), bands));
         }
     }
+}
+
+/// Field holding a ceiling's finish, the names of its type's finish layers'
+/// materials each followed by `;` (B41).
+pub const COVERING_FINISH_FIELD: &str = "m_covering_finish";
+
+/// The names of the materials of `layers`' finish layers (functions 4 and
+/// 5, [`crate::partition_compound_structure`]), each followed by `;`, as
+/// Revit's export writes `Pset_CoveringCommon.Finish` (6 of 6 RE1 ceilings,
+/// one finish layer each). `None` when there is no finish layer, or one
+/// whose material's name is not read.
+fn finish_of_layers(
+    layers: &[crate::partition_compound_structure::CompoundLayer],
+    names: &std::collections::BTreeMap<u32, String>,
+) -> Option<String> {
+    let finishes: Vec<&crate::partition_compound_structure::CompoundLayer> = layers
+        .iter()
+        .filter(|layer| matches!(layer.function, 4 | 5))
+        .collect();
+    if finishes.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    for layer in finishes {
+        out.push_str(names.get(&layer.material?)?);
+        out.push(';');
+    }
+    Some(out)
 }
 
 /// Back-compat alias for the #204 entry point.

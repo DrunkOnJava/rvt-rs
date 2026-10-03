@@ -2533,6 +2533,53 @@ impl StepWriter {
             );
         }
 
+        // RE-162 (#528): each MEP system, an `IfcSystem` grouping its members
+        // and serving the building.
+        for entity in &model.entities {
+            let super::entities::IfcEntity::System { id, name, members } = entity else {
+                continue;
+            };
+            let member_refs: Vec<String> = members
+                .iter()
+                .filter(|member| is_building_element(**member))
+                .filter_map(|member| entity_index_to_el_id.get(*member).and_then(|slot| *slot))
+                .map(|el| format!("#{el}"))
+                .collect();
+            if member_refs.is_empty() {
+                continue;
+            }
+            let id_text = id.to_string();
+            let name = name
+                .as_deref()
+                .map(|n| format!("'{}'", escape(n)))
+                .unwrap_or_else(|| "$".into());
+            let system = self.id();
+            self.emit_entity(
+                system,
+                format!(
+                    "IFCSYSTEM('{}',#{owner_hist},{name},$,$)",
+                    gid(&["system", &id_text]),
+                ),
+            );
+            let group = self.id();
+            self.emit_entity(
+                group,
+                format!(
+                    "IFCRELASSIGNSTOGROUP('{}',#{owner_hist},$,$,({}),$,#{system})",
+                    gid(&["system_members", &id_text]),
+                    member_refs.join(","),
+                ),
+            );
+            let serves = self.id();
+            self.emit_entity(
+                serves,
+                format!(
+                    "IFCRELSERVICESBUILDINGS('{}',#{owner_hist},$,$,#{system},(#{building_id}))",
+                    gid(&["system_building", &id_text]),
+                ),
+            );
+        }
+
         // RE-47: further sets of an element, such as Pset_StairCommon.
         for entity in &model.entities {
             let super::entities::IfcEntity::ElementPropertySet { element, set } = entity else {
