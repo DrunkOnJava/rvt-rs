@@ -133,10 +133,24 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     }
     let mut firsts: Vec<(&u64, &usize)> = first_values.iter().collect();
     firsts.sort_by_key(|(_, n)| std::cmp::Reverse(**n));
+    // The name entry (RE-38) and ElemTable record of each common value.
+    let names = rf.element_names();
+    let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let firsts: Vec<String> = firsts
         .iter()
         .take(8)
-        .map(|(v, n)| format!("\"{v}\":{n}"))
+        .map(|(v, n)| {
+            let id = u32::try_from(**v).ok();
+            let name = id
+                .and_then(|id| names.entries.get(&id))
+                .map(|entry| format!("{entry:?}"))
+                .unwrap_or_default();
+            let declared = id.is_some_and(|id| declared.contains(&id));
+            format!(
+                "\"{v}\":\"{n} declared={declared} name={}\"",
+                name.replace('"', "'")
+            )
+        })
         .collect();
     let mut best: Vec<(&i64, &(usize, usize))> = agree.iter().filter(|(_, (a, _))| *a > 0).collect();
     best.sort_by_key(|(_, (a, _))| std::cmp::Reverse(*a));
