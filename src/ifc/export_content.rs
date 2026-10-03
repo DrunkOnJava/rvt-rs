@@ -606,6 +606,25 @@ pub fn append_typed_production_elements(
                 set,
             });
         }
+        // #35: the two sets holding a room's name, as Revit's export gives
+        // every space.
+        if decoded.class == "Room" {
+            let name = decoded
+                .fields
+                .iter()
+                .find_map(|(field, value)| match value {
+                    InstanceField::String(text) if field == "m_name" && !text.is_empty() => {
+                        Some(text.as_str())
+                    }
+                    _ => None,
+                });
+            for set in name.map(PropertySet::name_sets).unwrap_or_default() {
+                entities.push(entities::IfcEntity::ElementPropertySet {
+                    element: entity_index,
+                    set,
+                });
+            }
+        }
         // A pipe's or duct's length along its axis, which Revit's export gives
         // in both flow-segment sets: a pipe's between its ends (RE-131), a
         // duct's the dimension of its box its section leaves (RE-134).

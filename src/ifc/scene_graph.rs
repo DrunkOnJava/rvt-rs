@@ -720,6 +720,12 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
         // Words, not `true` / `false` — the panel is read by people,
         // and a Revit yes/no parameter is a yes/no answer.
         PropertyValue::Boolean(b) => if *b { "Yes" } else { "No" }.to_string(),
+        PropertyValue::Logical(b) => match b {
+            Some(true) => "Yes",
+            Some(false) => "No",
+            None => "Unknown",
+        }
+        .to_string(),
         PropertyValue::LengthFeet(f) | PropertyValue::PositiveLengthFeet(f) => format!("{f:.3} ft"),
         PropertyValue::AngleRadians(r) => format!("{:.3}°", r.to_degrees()),
         PropertyValue::AreaSquareFeet(a) => format!("{a:.2} sq ft"),
@@ -739,7 +745,7 @@ fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
         PropertyValue::Text(_) | PropertyValue::Label(_) | PropertyValue::Identifier(_) => "text",
         PropertyValue::Integer(_) => "integer",
         PropertyValue::Real(_) => "real",
-        PropertyValue::Boolean(_) => "boolean",
+        PropertyValue::Boolean(_) | PropertyValue::Logical(_) => "boolean",
         PropertyValue::LengthFeet(_) | PropertyValue::PositiveLengthFeet(_) => "length",
         PropertyValue::AngleRadians(_) => "angle",
         PropertyValue::AreaSquareFeet(_) => "area",
@@ -760,6 +766,7 @@ fn property_value_is_numeric(v: &super::entities::PropertyValue) -> bool {
             | PropertyValue::Label(_)
             | PropertyValue::Identifier(_)
             | PropertyValue::Boolean(_)
+            | PropertyValue::Logical(_)
     )
 }
 

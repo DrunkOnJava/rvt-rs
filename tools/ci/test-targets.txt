@@ -51,6 +51,7 @@ real      schema_registry_catalogs
 real      segment_length
 real      serial_number
 real      space_common
+real      spatial_property_sets
 real      unfilled_openings
 real      walker_to_ifc_integration
 
