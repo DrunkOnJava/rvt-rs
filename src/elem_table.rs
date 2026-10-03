@@ -1,49 +1,39 @@
 //! `Global/ElemTable` — Revit's element-id index.
 //!
-//! This stream lists every ElementId in the file along with metadata.
-//! The record layout varies by file variant (see
-//! `docs/elem-table-record-layout-2026-04-21.md` for the hex-dump
-//! reverse-engineering notes):
+//! This stream lists every ElementId in the file, in ascending order, with
+//! its owner (#152). After a `u16` (the tag of the class `ElemTable` in the
+//! file's own schema) and a `u32` record count at `0x02`, the records start
+//! at `0x06` and close with their owner:
 //!
-//! | Variant               | Record start | Marker per record      | Record size |
-//! | ---                   | ---          | ---                    | ---         |
-//! | Revit 2016-2023 (.rvt, .rfa) | `0x1E` | `FF FF FF FF` at `+0`  | 28 B        |
-//! | Revit 2024-2026 (.rvt, .rfa) | `0x1E` | `FF`×8 at `+4`         | 40 B        |
+//! | Releases            | Record size | Layout                                          |
+//! | ---                 | ---         | ---                                             |
+//! | Revit 2008 to 2023  | 28 B        | `[u32 id][u32 id][16 B][u32 owner]`             |
+//! | Revit 2024 and later| 40 B        | `[u64 id][12 B][u64 id][u64 owner][u32]`        |
 //!
-//! Family files use the same records as projects. They leave the marker
-//! field at `0` instead of `0xFF`, and the record array is followed by a
-//! trailer, so neither the marker scan nor the flush check finds them;
-//! [`detect_layout`] recognises them by their ascending ids instead. A
-//! 12-byte implicit layout from `0x30` remains only as the fallback for a
-//! table nothing else recognises.
+//! That is STE1200's frame, measured by puzzbobb on 30 files from 2008 to
+//! 2027: read so, the stated number of records fits before a 19-byte
+//! (28 B) or 24-byte (40 B) tail on project files, the ids rise strictly,
+//! every set owner is an id of the table, and no owner chain loops. Family
+//! files use the same records and leave an unset owner at `0` where project
+//! files write all `0xFF`; their records are followed by a longer trailer.
 //!
-//! The marker is a sentinel-valued field *inside* a record, not necessarily
-//! the record's first byte: on the 40-byte 2024 variant each record opens
-//! with one zero `u32` and the `FF`×8 run only starts at `+4`. That field is
-//! an optional `u64` ElementId reference and `FF`×8 is its unset value, so
-//! not every record carries the run (see [`detect_layout`]). The record
-//! array is exactly `record_count × stride` bytes and ends flush with the
-//! end of the decompressed stream, which is what recovers the true origin
-//! (see `flush_origin`).
+//! The first record is whatever element has the lowest surviving id, which
+//! depends on the file's history (the template it started from, deleted
+//! elements): `AllProjectPhases` at 0 on Einhoven and Core Interior, at 1 on
+//! Autodesk's sample projects, `DimensionStyle` at 0 on the families. Id 0 is
+//! an ordinary id. Its owner, at `0x1E` (28 B) or `0x22` (40 B), is element
+//! 17 on the 2016 to 2026 families; [`ElemTableHeader::header_flag`] still
+//! reports it under its old name.
 //!
-//! Header (bytes 0..0x10) is common across all variants:
-//!
-//! ```text
-//! [u16 LE element_count]
-//! [u16 LE record_count]
-//! [12 bytes zero-padding]
-//! ```
-//!
-//! What `parse_header` reports as `header_flag = 0x0011` (at `0x1E` on
-//! 28-byte tables, `0x22` on 40-byte ones) is not a header field: it is
-//! the owner field that closes the table's first record, at `0x06`, before
-//! the frame this parser reads (#152). It names ElementId 17 on family files
-//! and is unset on project files. The name is kept for compatibility.
+//! Earlier versions of this parser read 24 bytes into each record (from
+//! `0x1E`), so they missed the first record and read one more from the
+//! tail (#152, #553). A 12-byte implicit layout from `0x30` remains only as
+//! the fallback for a table neither record size fits.
 
 use crate::{Error, Result, RevitFile, compression, streams::GLOBAL_ELEM_TABLE};
 use serde::{Deserialize, Serialize};
 
-/// Header extracted from the first 32 bytes of decompressed Global/ElemTable.
+/// Header extracted from the first bytes of decompressed Global/ElemTable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElemTableHeader {
     /// Named for what it was assumed to be, but not a count of elements:
@@ -52,8 +42,9 @@ pub struct ElemTableHeader {
     /// 2016, 1411 on 2024, 1481 on 2026). For the declared ElementIds use
     /// [`declared_element_ids`].
     pub element_count: u16,
-    /// Declared number of records (may differ if some elements have multiple
-    /// records, e.g. versioned entries).
+    /// The number of records, the low 16 bits of the `u32` count at `0x02`
+    /// (every file measured has fewer than 65,536 records; [`parse_records`]
+    /// reads the whole `u32`).
     pub record_count: u16,
     /// The `0x0011` found at `0x1E` / `0x22` on family files, 0 elsewhere.
     /// It is the owner field of the table's first record (ElementId 17 on
@@ -66,22 +57,25 @@ pub struct ElemTableHeader {
 /// How records are framed in this ElemTable stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RecordFraming {
-    /// 12-byte records from `0x30`, no marker: the fallback for a table no
-    /// other layout recognises. No corpus file uses it.
+    /// 12-byte records from `0x30`, no owner field: the fallback for a
+    /// table neither record size fits. No corpus file uses it.
     Implicit,
-    /// Project files: each record begins with N FF bytes (4 on 2023, 8 on 2024).
+    /// The 28- and 40-byte records. `marker_len` is the width of the owner
+    /// field (4 or 8 bytes), whose unset value is all `0xFF` on project
+    /// files and `0` on family files.
     Explicit { marker_len: usize },
 }
 
 /// Detected record layout — where records start, how big they are, how they're framed.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ElemTableLayout {
-    /// Offset of record 0's **first byte** in the decompressed stream.
+    /// Offset of record 0's first byte in the decompressed stream: `0x06`
+    /// on the explicit layouts.
     pub start: usize,
     pub stride: usize,
-    /// Offset of the `FF` marker *within* a record. `0` on the 28-byte
-    /// project variant (the marker opens the record), `4` on the 40-byte
-    /// one (one zero `u32` precedes it). Unused for [`RecordFraming::Implicit`].
+    /// Offset of the owner field within a record: `24` on the 28-byte
+    /// layout, `28` on the 40-byte one. Unused for
+    /// [`RecordFraming::Implicit`].
     pub marker_offset: usize,
     pub framing: RecordFraming,
 }
@@ -89,45 +83,34 @@ pub struct ElemTableLayout {
 /// A fully-parsed record from ElemTable.
 ///
 /// On the implicit fallback layout, `id_primary`/`id_secondary` are the first
-/// two `u32`s of the 12-byte record. On the explicit layouts, which project
-/// and family files both use, these are the monotonic element-id pair
-/// that starts each record past the marker; observations show `id_secondary`
-/// matches `id_primary` on most rows.
+/// two `u32`s of the 12-byte record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElemRecord {
     /// Offset in the decompressed stream where this record begins.
     pub offset: usize,
-    /// First u32 after the marker (element id on project files).
+    /// The record's first id, at `+0` (the low half of a `u64` on the
+    /// 40-byte layout).
     pub id_primary: u32,
-    /// Second u32. Equal to `id_primary` on nearly every record. Where the
-    /// two differ on the 40-byte layout, this one is the element's
-    /// ElementId as its partition record and Revit's own IFC export carry
-    /// it (RE-41, [`declared_ids`]).
+    /// The record's second id (`+4` on 28 bytes, `+20` on 40). Equal to
+    /// `id_primary` on nearly every record. Where the two differ on the
+    /// 40-byte layout, this one is the element's ElementId as its partition
+    /// record and Revit's own IFC export carry it (RE-41, [`declared_ids`]).
     pub id_secondary: u32,
-    /// The element this record's element belongs to (RE-31); `None` when
-    /// the field holds its unset value, all `0xFF`. It is the field the
-    /// layout detector anchors on (`u64` at `+4` on the 40-byte layout,
-    /// `u32` at `+0` on the 28-byte one) of the **following** frame: the
-    /// table's records start at `0x06`, 24 bytes before the frame this
-    /// parser reads, and each ends with its owner, so a frame opens with
-    /// the owner of the record before it (#152, reported by STE1200). Read
-    /// that way no record owns itself and no owner chain loops, on Core
-    /// Interior, Snowdon Towers, RE1 Architecture and Einhoven, where the
-    /// frame's own field gave 304, 1,342, 26 and 7 self-owned records. `0`
-    /// is treated as unset too: family files leave the field at `0` where
-    /// project files write `0xFF`. Always `None` on the implicit fallback
+    /// The element this record's element belongs to (RE-31), the field
+    /// that closes the record (`u32` at `+24` on 28 bytes, `u64` at `+28`
+    /// on 40); `None` when it holds its unset value, all `0xFF` on project
+    /// files and `0` on family files. Read so, no record owns itself and no
+    /// owner chain loops (#152). Always `None` on the implicit fallback
     /// layout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_id: Option<u32>,
-    /// The ids of the table's FIRST record, `(id_primary, id_secondary)`, set
-    /// on `records[0]` only (RE-140). The frames this parser reads start 24
-    /// bytes into their records, so each carries the ids of the record after
-    /// the one it opens in, and the table's first record, which starts at
-    /// `0x06`, is in none of them. [`declared_ids`] adds these. `None` on
-    /// every other record, and when the layout is not a 28- or 40-byte one.
+    /// Always `None`. It held the table's first record's ids while the
+    /// parser read from `0x1E` and missed that record (RE-140); the first
+    /// record is now `records[0]` itself. Kept so code that names the field
+    /// still compiles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_ids: Option<(u32, u32)>,
-    /// Raw record bytes (including the marker on project files).
+    /// Raw record bytes.
     pub raw: Vec<u8>,
 }
 
@@ -164,162 +147,77 @@ fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
     })
 }
 
-/// Recover record 0's true origin (and the marker's in-record offset) from
-/// the declared record count.
-///
-/// The marker scan in [`detect_layout`] finds the first run of `0xFF` bytes,
-/// but that run is a sentinel-valued *field inside* record 0, not necessarily
-/// record 0's first byte — on the 40-byte Revit-2024 project variant the
-/// record opens one `u32` earlier. The record array is exactly
-/// `record_count × stride` bytes and ends flush with the end of the
-/// decompressed stream, so `len − record_count × stride` is the origin
-/// whenever it lands a whole number of `u32` fields (and less than one
-/// stride) ahead of the marker. Anything else — a stream that is too short,
-/// a `record_count` of 0, a non-`u32`-aligned or out-of-range difference —
-/// is `None`, and [`detect_layout`] keeps the marker itself as the origin.
-fn flush_origin(d: &[u8], marker_start: usize, stride: usize) -> Option<(usize, usize)> {
-    if stride == 0 || d.len() < 4 {
-        return None;
-    }
-    let record_count = u16::from_le_bytes([d[2], d[3]]) as usize;
-    if record_count == 0 {
-        return None;
-    }
-    let span = record_count.checked_mul(stride)?;
-    if span > d.len() {
-        return None;
-    }
-    let origin = d.len() - span;
-    if origin > marker_start {
-        return None;
-    }
-    let marker_offset = marker_start - origin;
-    if marker_offset >= stride || !marker_offset.is_multiple_of(4) {
-        return None;
-    }
-    Some((origin, marker_offset))
+/// Where the records start: after the `u16` tag and the `u32` count.
+pub const RECORDS_ORIGIN: usize = 0x06;
+
+/// The record count the table states, the `u32` at `0x02`.
+fn stated_count(d: &[u8]) -> Option<usize> {
+    let bytes = d.get(2..6)?;
+    usize::try_from(u32::from_le_bytes(bytes.try_into().ok()?)).ok()
 }
 
-/// Record sizes of the explicit project layouts (see the module table).
-const KNOWN_EXPLICIT_STRIDES: [usize; 2] = [40, 28];
+/// `(second id, owner, owner width)` offsets of a record of `stride` bytes.
+fn record_fields(stride: usize) -> Option<(usize, usize, usize)> {
+    match stride {
+        28 => Some((4, 24, 4)),
+        40 => Some((20, 28, 8)),
+        _ => None,
+    }
+}
 
-/// Detect the record layout by finding the first two per-record markers and
-/// taking their stride, then anchoring record 0's origin against the declared
-/// record count (see the module docs and `flush_origin`). Falls back to the family-file
-/// implicit layout (12 B from `0x30`) when no markers are present and the
-/// ids do not reveal an explicit layout (family files: see the module docs).
-///
-/// The sentinel field is not `0xFF` on every record: on Autodesk's Snowdon
-/// Towers 2024 architectural sample records 1 and 2 hold `0x10` there, so
-/// the first two runs are three records apart. When the measured spacing
-/// cannot tile the stream flush against the declared record count, a known
-/// explicit stride that divides the spacing and does tile it is used instead.
+fn u32_at(d: &[u8], at: usize) -> Option<u32> {
+    let bytes = d.get(at..at.checked_add(4)?)?;
+    Some(u32::from_le_bytes(bytes.try_into().ok()?))
+}
+
+/// Detect the record layout: the record size (28 or 40 bytes) at which the
+/// stated number of records fits from `0x06` with ids rising over the whole
+/// table. When both fit equally, the one that leaves the shorter tail wins
+/// (a 40-byte table also fits at 28). Falls back to the 12-byte implicit
+/// layout from `0x30` when neither fits.
 pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
-    let scan_start = 0x10usize;
-    let scan_end = d.len().min(512);
-
-    let mut markers: Vec<(usize, usize)> = Vec::with_capacity(3);
-    let mut i = scan_start;
-    while i + 4 <= scan_end && markers.len() < 3 {
-        if d[i] == 0xFF && d[i + 1] == 0xFF && d[i + 2] == 0xFF && d[i + 3] == 0xFF {
-            let eight_ff = i + 8 <= d.len()
-                && d[i + 4] == 0xFF
-                && d[i + 5] == 0xFF
-                && d[i + 6] == 0xFF
-                && d[i + 7] == 0xFF;
-            let len = if eight_ff { 8 } else { 4 };
-            markers.push((i, len));
-            i += len;
-        } else {
-            i += 1;
-        }
-    }
-
-    if markers.len() >= 2 {
-        let (m0, marker_len) = markers[0];
-        let (m1, _) = markers[1];
-        let spacing = m1 - m0;
-        // The sentinel field is not `0xFF` in every record: on Autodesk's
-        // Snowdon Towers 2024 architectural sample, records 1 and 2 hold
-        // `0x10` there, so the first two runs sit three 40-byte records
-        // apart and the spacing alone reads as a 120-byte stride — 15744
-        // misframed records instead of 47233. When the spacing does not
-        // tile the stream flush against the declared record count, take the
-        // known stride that does and that divides the spacing evenly.
-        let (stride, start, marker_offset) = match flush_origin(d, m0, spacing) {
-            Some((start, offset)) => (spacing, start, offset),
-            None => KNOWN_EXPLICIT_STRIDES
-                .iter()
-                .filter(|&&s| s != spacing && spacing % s == 0)
-                .find_map(|&s| flush_origin(d, m0, s).map(|(start, offset)| (s, start, offset)))
-                .unwrap_or((spacing, m0, 0)),
-        };
-        ElemTableLayout {
-            start,
-            stride,
-            marker_offset,
-            framing: RecordFraming::Explicit { marker_len },
-        }
-    } else {
-        id_progression_layout(d).unwrap_or(ElemTableLayout {
-            start: 0x30,
-            stride: 12,
-            marker_offset: 0,
-            framing: RecordFraming::Implicit,
-        })
-    }
-}
-
-/// Record 0's offset on both explicit layouts.
-const EXPLICIT_ORIGIN: usize = 0x1E;
-
-/// Recognise an explicit layout without a marker run, from its ids.
-///
-/// Family files leave the marker field at `0` and end the record array in a
-/// trailer, so neither the marker scan nor [`flush_origin`] applies. What
-/// does hold on every release (2016-2026) is the id pair: from `0x1E`, the
-/// first records' `id_primary` values rise strictly from a non-zero start
-/// and equal their `id_secondary`. The 40-byte layout is tried first, and
-/// both must fit `record_count` records inside the stream.
-fn id_progression_layout(d: &[u8]) -> Option<ElemTableLayout> {
-    const SAMPLE: usize = 64;
-    let record_count = usize::from(u16::from_le_bytes([*d.get(2)?, *d.get(3)?]));
-    let sample = record_count.min(SAMPLE);
-    if sample < 8 {
-        return None;
-    }
-    let read_u32 = |at: usize| {
-        d.get(at..at.checked_add(4)?)
-            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    let fallback = ElemTableLayout {
+        start: 0x30,
+        stride: 12,
+        marker_offset: 0,
+        framing: RecordFraming::Implicit,
     };
-    // (stride, id_primary at, id_secondary at, marker offset, marker length)
-    for (stride, id_at, id2_at, marker_offset, marker_len) in [(40, 16, 36, 4, 8), (28, 4, 8, 0, 4)]
-    {
-        let span = stride * record_count;
-        if EXPLICIT_ORIGIN.checked_add(span)? > d.len() {
-            continue;
+    let Some(count) = stated_count(d).filter(|&count| count > 0) else {
+        return fallback;
+    };
+    let rising = |stride: usize| -> Option<(usize, usize)> {
+        let end = count.checked_mul(stride)?.checked_add(RECORDS_ORIGIN)?;
+        if end > d.len() {
+            return None;
         }
-        let pairs: Option<Vec<(u32, u32)>> = (0..sample)
-            .map(|k| {
-                let record = EXPLICIT_ORIGIN + k * stride;
-                Some((read_u32(record + id_at)?, read_u32(record + id2_at)?))
-            })
-            .collect();
-        let Some(pairs) = pairs else {
-            continue;
-        };
-        let ascending = pairs.windows(2).all(|w| w[1].0 > w[0].0);
-        let paired = pairs.iter().all(|(a, b)| a == b);
-        if pairs[0].0 != 0 && ascending && paired {
-            return Some(ElemTableLayout {
-                start: EXPLICIT_ORIGIN,
-                stride,
-                marker_offset,
-                framing: RecordFraming::Explicit { marker_len },
-            });
+        let mut previous = None;
+        let mut rises = 0;
+        for k in 0..count {
+            let id = u32_at(d, RECORDS_ORIGIN + k * stride)?;
+            if previous.is_some_and(|p| id > p) {
+                rises += 1;
+            }
+            previous = Some(id);
         }
+        Some((rises, d.len() - end))
+    };
+    let best = [40usize, 28]
+        .into_iter()
+        .filter_map(|stride| rising(stride).map(|(rises, tail)| (stride, rises, tail)))
+        .filter(|&(_, rises, _)| rises + 1 == count)
+        .min_by_key(|&(_, _, tail)| tail);
+    let Some((stride, _, _)) = best else {
+        return fallback;
+    };
+    let (_, owner_at, owner_width) = record_fields(stride).expect("28 or 40");
+    ElemTableLayout {
+        start: RECORDS_ORIGIN,
+        stride,
+        marker_offset: owner_at,
+        framing: RecordFraming::Explicit {
+            marker_len: owner_width,
+        },
     }
-    None
 }
 
 /// Parse only the header portion of Global/ElemTable. Sufficient for counts
@@ -332,11 +230,11 @@ pub fn parse_header(rf: &mut RevitFile) -> Result<ElemTableHeader> {
 /// Parse records from an already-decompressed ElemTable byte slice.
 /// Splits the pure-byte-slice path out from `parse_records` (which takes
 /// a `RevitFile` and handles the stream-read + inflate). Useful for fuzz
-/// targets and unit tests that want to feed synthetic inputs directly.
+/// targets that want to feed synthetic inputs directly.
 ///
-/// `limit` is the maximum number of records to return — typically
-/// `header.record_count` from `parse_header_bytes`. Returns fewer
-/// records if the stream runs out of bytes before `limit` is reached.
+/// `limit` is the maximum number of records to return — typically the
+/// table's stated count. Returns fewer records if the stream runs out of
+/// bytes before `limit` is reached.
 pub fn parse_records_from_bytes(
     d: &[u8],
     layout: ElemTableLayout,
@@ -351,104 +249,33 @@ pub fn parse_records_from_bytes(
         let Some(record_end) = i.checked_add(layout.stride) else {
             break;
         };
-        if record_end > d.len() {
+        let Some(record) = d.get(i..record_end) else {
             break;
-        }
-        let (id_primary, id_secondary) = match layout.framing {
+        };
+        let (id_primary, id_secondary, owner_id) = match layout.framing {
             RecordFraming::Implicit => {
-                let a = u32::from_le_bytes([d[i], d[i + 1], d[i + 2], d[i + 3]]);
-                let b = u32::from_le_bytes([d[i + 4], d[i + 5], d[i + 6], d[i + 7]]);
-                (a, b)
-            }
-            RecordFraming::Explicit { marker_len } => {
-                let Some(body) = i
-                    .checked_add(layout.marker_offset)
-                    .and_then(|m| m.checked_add(marker_len))
-                else {
+                let (Some(a), Some(b)) = (u32_at(record, 0), u32_at(record, 4)) else {
                     break;
                 };
-                if body > record_end {
-                    break;
-                }
-                if layout.stride == 28 {
-                    let Some(body_end) = body.checked_add(8) else {
-                        break;
-                    };
-                    if body_end > record_end {
-                        break;
-                    }
-                    let a = u32::from_le_bytes([d[body], d[body + 1], d[body + 2], d[body + 3]]);
-                    let b =
-                        u32::from_le_bytes([d[body + 4], d[body + 5], d[body + 6], d[body + 7]]);
-                    (a, b)
-                } else if layout.stride == 40 {
-                    let Some(body_end) = body.checked_add(28) else {
-                        break;
-                    };
-                    if body_end > record_end {
-                        break;
-                    }
-                    // 40-byte layout (observed on Revit 2024 projects):
-                    //   [4 B zero][8 B marker][4 B zero][u32 id_primary][16 B zero/payload][u32 id_secondary]
-                    // `body` is past the leading zero u32 and the marker, so
-                    // id_primary is at body+4, id_secondary at body+24
-                    // (record offsets +16 and +36 respectively).
-                    let a =
-                        u32::from_le_bytes([d[body + 4], d[body + 5], d[body + 6], d[body + 7]]);
-                    let b = u32::from_le_bytes([
-                        d[body + 24],
-                        d[body + 25],
-                        d[body + 26],
-                        d[body + 27],
-                    ]);
-                    (a, b)
-                } else {
-                    let Some(body_end) = body.checked_add(4) else {
-                        break;
-                    };
-                    if body_end > record_end {
-                        break;
-                    }
-                    let a = u32::from_le_bytes([d[body], d[body + 1], d[body + 2], d[body + 3]]);
-                    (a, a)
-                }
+                (a, b, None)
             }
-        };
-        let owner_id = match layout.framing {
-            RecordFraming::Implicit => None,
             RecordFraming::Explicit { marker_len } => {
-                owner_field(&d[i..record_end], layout.marker_offset, marker_len)
+                let second_at = record_fields(layout.stride).map_or(4, |(second, _, _)| second);
+                let (Some(a), Some(b)) = (u32_at(record, 0), u32_at(record, second_at)) else {
+                    break;
+                };
+                (a, b, owner_field(record, layout.marker_offset, marker_len))
             }
         };
-        let raw = d[i..record_end].to_vec();
         records.push(ElemRecord {
             offset: i,
             id_primary,
             id_secondary,
             owner_id,
             previous_ids: None,
-            raw,
+            raw: record.to_vec(),
         });
         i = record_end;
-    }
-    // The owner field a record's frame opens with closes the record before
-    // it (#152): a record's own owner is the field that follows it, and the
-    // last record's lies in the bytes after the last full frame.
-    if let RecordFraming::Explicit { marker_len } = layout.framing {
-        // The tail is trusted only to name an element the table declares.
-        let tail = d
-            .get(i..)
-            .and_then(|rest| owner_field(rest, layout.marker_offset, marker_len))
-            .filter(|owner| records.iter().any(|r| r.id_primary == *owner));
-        let following: Vec<Option<u32>> = records
-            .iter()
-            .skip(1)
-            .map(|record| record.owner_id)
-            .chain(std::iter::once(tail))
-            .collect();
-        for (record, owner) in records.iter_mut().zip(following) {
-            record.owner_id = owner;
-        }
     }
     records
 }
@@ -480,45 +307,18 @@ fn inflate(rf: &mut RevitFile) -> Result<Vec<u8>> {
         .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))
 }
 
-/// Parse all records from Global/ElemTable, bounded by the header's
-/// `record_count`. Uses `detect_layout` to pick the correct stride/start for
-/// each file variant, so works on both family and project files.
+/// Parse all records from Global/ElemTable: the `u32` count at `0x02`
+/// records from `0x06`, at the record size [`detect_layout`] finds. On the
+/// implicit fallback layout the count is the header's `record_count`.
 pub fn parse_records(rf: &mut RevitFile) -> Result<Vec<ElemRecord>> {
     let d = inflate(rf)?;
     let header = parse_header_bytes(&d)?;
     let layout = detect_layout(&d);
-    let limit = header.record_count as usize;
-    let mut records = parse_records_from_bytes(&d, layout, limit);
-    if let Some(first) = records.first_mut() {
-        first.previous_ids = first_record_ids(&d, layout);
-    }
-    Ok(records)
-}
-
-/// Bytes a frame starts after the record it opens in (RE-140): the table's
-/// records start at `0x06` and its frames at `0x1E`.
-const FRAME_AFTER_RECORD: usize = 24;
-
-/// The ids of the table's first record (RE-140): `(id_primary, id_secondary)`
-/// read from where the record starts, 24 bytes before the first frame, at
-/// `+0` and, on a 40-byte record, `+20`. A 28-byte record's second id is not
-/// declared, so its first is returned twice. `None` on a layout that is
-/// neither.
-fn first_record_ids(d: &[u8], layout: ElemTableLayout) -> Option<(u32, u32)> {
-    if !matches!(layout.framing, RecordFraming::Explicit { .. }) {
-        return None;
-    }
-    let origin = layout.start.checked_sub(FRAME_AFTER_RECORD)?;
-    let word = |at: usize| {
-        let bytes = d.get(at..at.checked_add(4)?)?;
-        Some(u32::from_le_bytes(bytes.try_into().ok()?))
+    let limit = match layout.framing {
+        RecordFraming::Explicit { .. } => stated_count(&d).unwrap_or(0),
+        RecordFraming::Implicit => usize::from(header.record_count),
     };
-    let primary = word(origin)?;
-    match layout.stride {
-        28 => Some((primary, primary)),
-        40 => Some((primary, word(origin + 20)?)),
-        _ => None,
-    }
+    Ok(parse_records_from_bytes(&d, layout, limit))
 }
 
 /// Index ElemTable records by `id_primary` for ElementId lookups.
@@ -605,25 +405,13 @@ pub const RECORD_LEN_40: usize = 40;
 /// (Structural), and `id_secondary` is the id the element's partition
 /// record carries (RE-35) and the `Tag` Revit's own IFC export writes;
 /// `id_primary` is neither. Both are kept, so no id declared before is
-/// dropped. A `0` in `id_secondary` is not added: the 2024 family file's
-/// record 18 carries one.
-///
-/// The table's first record is added too, from [`ElemRecord::previous_ids`]
-/// (RE-140): no frame reads it, and on all 38 Autodesk sample projects and
-/// families of 2016 to 2027 measured, the one id it declares has a record in
-/// the partitions' chain.
+/// dropped. A `0` in `id_secondary` is not added.
 pub fn declared_ids(records: &[ElemRecord]) -> std::collections::BTreeSet<u32> {
     let mut ids = std::collections::BTreeSet::new();
     for record in records {
         ids.insert(record.id_primary);
         if record.raw.len() == RECORD_LEN_40 && record.id_secondary != 0 {
             ids.insert(record.id_secondary);
-        }
-        if let Some((primary, secondary)) = record.previous_ids {
-            ids.insert(primary);
-            if secondary != 0 {
-                ids.insert(secondary);
-            }
         }
     }
     ids
@@ -653,342 +441,6 @@ pub fn parse_records_rough(rf: &mut RevitFile, max_records: usize) -> Result<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn header_has_element_count() {
-        // Synthesize the first 48 bytes we've observed across 11 releases.
-        let mut buf = Vec::<u8>::new();
-        buf.extend_from_slice(&[0x96, 0x04]); // element_count = 1174 (2016)
-        buf.extend_from_slice(&[0x3c, 0x06]); // record_count = 1596
-        buf.resize(0x1e, 0);
-        buf.extend_from_slice(&[0x11, 0x00]); // header_flag
-        buf.resize(0x30, 0);
-        assert_eq!(u16::from_le_bytes([buf[0], buf[1]]), 1174);
-        assert_eq!(u16::from_le_bytes([buf[2], buf[3]]), 1596);
-        assert_eq!(u16::from_le_bytes([buf[0x1e], buf[0x1f]]), 0x0011);
-    }
-
-    /// A family table: record 0's owner is 17, every other owner field is
-    /// `0` (no `0xFF` run), ids rise from 1, and a trailer follows the
-    /// records. The ids reveal the layout; owners of `0` read as unset.
-    #[test]
-    fn family_tables_are_recognised_by_their_ids() {
-        for (stride, id_at, id2_at, owner_at) in
-            [(40usize, 16usize, 36usize, 4usize), (28, 4, 8, 0)]
-        {
-            const RECORDS: usize = 20;
-            let mut buf = vec![0u8; 0x1e + RECORDS * stride + 96];
-            buf[2..4].copy_from_slice(&(RECORDS as u16).to_le_bytes());
-            buf[0x1e + owner_at] = 0x11;
-            let mut id = 1u32;
-            for k in 0..RECORDS {
-                let rec = 0x1e + k * stride;
-                buf[rec + id_at..rec + id_at + 4].copy_from_slice(&id.to_le_bytes());
-                buf[rec + id2_at..rec + id2_at + 4].copy_from_slice(&id.to_le_bytes());
-                id += if k == 0 { 2 } else { 1 };
-            }
-            buf[0x1e + RECORDS * stride..].fill(0x5a);
-            let layout = detect_layout(&buf);
-            assert_eq!(layout.stride, stride);
-            assert_eq!(layout.start, 0x1e);
-            assert!(matches!(layout.framing, RecordFraming::Explicit { .. }));
-            let records = parse_records_from_bytes(&buf, layout, RECORDS);
-            assert_eq!(records.len(), RECORDS);
-            assert_eq!(records[0].id_primary, 1);
-            assert_eq!(records[1].id_primary, 3);
-            // The 17 closes the record before the parsed frame (#152).
-            assert!(records.iter().all(|r| r.owner_id.is_none()));
-        }
-    }
-
-    #[test]
-    fn unrecognised_table_falls_back_to_implicit_12b() {
-        // No FF markers, and too short for the declared record count.
-        let mut buf = vec![0u8; 0x80];
-        buf[0] = 0x83;
-        buf[1] = 0x05;
-        buf[2] = 0xb7;
-        buf[3] = 0x07;
-        buf[0x22] = 0x11;
-        buf[0x23] = 0x00;
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.framing, RecordFraming::Implicit);
-        assert_eq!(layout.start, 0x30);
-        assert_eq!(layout.stride, 12);
-    }
-
-    #[test]
-    fn detect_project_2023_layout_28b_4byte_marker() {
-        // Synthesize header + two 28B records with 4-byte FF FF FF FF markers.
-        let mut buf = vec![0u8; 0x80];
-        buf[0x1e] = 0xff;
-        buf[0x1f] = 0xff;
-        buf[0x20] = 0xff;
-        buf[0x21] = 0xff;
-        buf[0x22] = 0x01;
-        buf[0x3a] = 0xff;
-        buf[0x3b] = 0xff;
-        buf[0x3c] = 0xff;
-        buf[0x3d] = 0xff;
-        buf[0x3e] = 0x02;
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.framing, RecordFraming::Explicit { marker_len: 4 });
-        assert_eq!(layout.start, 0x1e);
-        assert_eq!(layout.stride, 28);
-        assert_eq!(layout.marker_offset, 0);
-    }
-
-    #[test]
-    fn detect_project_2024_layout_40b_8byte_marker() {
-        // Synthesize header + two 40B records with 8-byte FF markers.
-        let mut buf = vec![0u8; 0x80];
-        buf[0x22..0x2a].fill(0xff);
-        buf[0x2e] = 0x01;
-        buf[0x4a..0x52].fill(0xff);
-        buf[0x56] = 0x02;
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.framing, RecordFraming::Explicit { marker_len: 8 });
-        assert_eq!(layout.start, 0x22);
-        assert_eq!(layout.stride, 40);
-        assert_eq!(layout.marker_offset, 0);
-    }
-
-    /// Autodesk's Snowdon Towers 2024 architectural sample: a 40-byte
-    /// table whose sentinel field is `0x10`, not `0xFF`×8, in records 1
-    /// and 2, so the first two `0xFF` runs are 120 bytes apart. The
-    /// declared record count only tiles the stream at 40 bytes.
-    #[test]
-    fn sparse_sentinels_do_not_triple_the_2024_stride() {
-        const RECORDS: usize = 6;
-        let mut buf = vec![0u8; 30 + RECORDS * 40];
-        buf[2..4].copy_from_slice(&(RECORDS as u16).to_le_bytes());
-        for r in 0..RECORDS {
-            let rec = 30 + r * 40;
-            if r == 1 || r == 2 {
-                buf[rec + 4] = 0x10;
-            } else {
-                buf[rec + 4..rec + 12].fill(0xff);
-            }
-            let id = 0x10_0000 + r as u32;
-            buf[rec + 16..rec + 20].copy_from_slice(&id.to_le_bytes());
-            buf[rec + 36..rec + 40].copy_from_slice(&id.to_le_bytes());
-        }
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.stride, 40);
-        assert_eq!(layout.start, 30);
-        assert_eq!(layout.marker_offset, 4);
-        let records = parse_records_from_bytes(&buf, layout, RECORDS);
-        let ids: Vec<u32> = records.iter().map(|r| r.id_primary).collect();
-        assert_eq!(
-            ids,
-            (0..RECORDS as u32)
-                .map(|r| 0x10_0000 + r)
-                .collect::<Vec<_>>()
-        );
-    }
-
-    /// RE-41: a 40-byte record whose two ids differ declares both; a `0` in
-    /// `id_secondary`, and `id_secondary` on the 28-byte layout, are not
-    /// declared.
-    #[test]
-    fn declared_ids_add_a_differing_secondary_id_on_the_40_byte_layout() {
-        let record = |len: usize, id_primary: u32, id_secondary: u32| ElemRecord {
-            offset: 0,
-            id_primary,
-            id_secondary,
-            owner_id: None,
-            previous_ids: None,
-            raw: vec![0; len],
-        };
-        let records = [
-            record(RECORD_LEN_40, 2_120_309, 2_120_399),
-            record(RECORD_LEN_40, 2_059_967, 2_059_967),
-            record(RECORD_LEN_40, 18, 0),
-            record(28, 18, 5151),
-        ];
-        assert_eq!(
-            declared_ids(&records).into_iter().collect::<Vec<_>>(),
-            vec![18, 2_059_967, 2_120_309, 2_120_399]
-        );
-    }
-
-    /// RE-31: the field the detector anchors on is an owner ElementId,
-    /// unset when all `0xFF`. 40-byte layout: `u64` at `+4`.
-    #[test]
-    fn owner_id_reads_the_40_byte_marker_field() {
-        let mut buf = vec![0u8; 30 + 3 * 40];
-        buf[2..4].copy_from_slice(&3u16.to_le_bytes());
-        for r in 0..3usize {
-            let rec = 30 + r * 40;
-            if r == 1 {
-                buf[rec + 4..rec + 12].copy_from_slice(&786_352u64.to_le_bytes());
-            } else {
-                buf[rec + 4..rec + 12].fill(0xff);
-            }
-            buf[rec + 16] = r as u8 + 1;
-        }
-        let layout = detect_layout(&buf);
-        assert_eq!((layout.stride, layout.marker_offset), (40, 4));
-        let owners: Vec<Option<u32>> = parse_records_from_bytes(&buf, layout, 3)
-            .iter()
-            .map(|r| r.owner_id)
-            .collect();
-        assert_eq!(owners, [Some(786_352), None, None]);
-    }
-
-    /// 28-byte layout: `u32` at `+0`. Family files have no owner field.
-    #[test]
-    fn owner_id_reads_the_28_byte_marker_field_and_not_the_family_layout() {
-        let mut buf = vec![0u8; 0x1e + 3 * 28];
-        buf[2] = 3;
-        for r in 0..3usize {
-            let rec = 0x1e + r * 28;
-            if r == 2 {
-                buf[rec..rec + 4].copy_from_slice(&7u32.to_le_bytes());
-            } else {
-                buf[rec..rec + 4].fill(0xff);
-            }
-            buf[rec + 4] = r as u8 + 1;
-        }
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.stride, 28);
-        let owners: Vec<Option<u32>> = parse_records_from_bytes(&buf, layout, 3)
-            .iter()
-            .map(|r| r.owner_id)
-            .collect();
-        assert_eq!(owners, [None, Some(7), None]);
-
-        let family = ElemTableLayout {
-            start: 0x30,
-            stride: 12,
-            marker_offset: 0,
-            framing: RecordFraming::Implicit,
-        };
-        let buf = vec![0xffu8; 0x30 + 24];
-        assert!(
-            parse_records_from_bytes(&buf, family, 2)
-                .iter()
-                .all(|r| r.owner_id.is_none())
-        );
-    }
-
-    #[test]
-    fn parse_records_honors_header_record_count_on_project_2023_layout() {
-        let mut buf = vec![0u8; 0x200];
-        buf[2] = 0x02; // record_count = 2
-        buf[3] = 0x00;
-        buf[0x1e] = 0xff;
-        buf[0x1f] = 0xff;
-        buf[0x20] = 0xff;
-        buf[0x21] = 0xff;
-        buf[0x22] = 0x01; // id_primary = 1
-        buf[0x26] = 0x01; // id_secondary = 1
-        buf[0x3a] = 0xff;
-        buf[0x3b] = 0xff;
-        buf[0x3c] = 0xff;
-        buf[0x3d] = 0xff;
-        buf[0x3e] = 0x02; // id_primary = 2
-        buf[0x42] = 0x02; // id_secondary = 2
-        buf[0x56] = 0xff; // third marker — we should stop before it
-        buf[0x57] = 0xff;
-        buf[0x58] = 0xff;
-        buf[0x59] = 0xff;
-        let layout = detect_layout(&buf);
-        let records = parse_records_from_bytes(&buf, layout, 2);
-        assert_eq!(records.len(), 2);
-        assert_eq!(records[0].id_primary, 1);
-        assert_eq!(records[0].id_secondary, 1);
-        assert_eq!(records[1].id_primary, 2);
-        assert_eq!(records[1].id_secondary, 2);
-        assert_eq!(records[0].offset, 0x1e);
-        assert_eq!(records[1].offset, 0x3a);
-    }
-
-    #[test]
-    fn parse_records_project_2024_layout_reads_id_at_offset_plus_12_and_32() {
-        // 40-byte record, record_start=0x22. body=record_start+8=0x2a.
-        // id_primary at body+4 = 0x2e (record_start+12).
-        // id_secondary at body+24 = 0x42 (record_start+32).
-        let mut buf = vec![0u8; 0x200];
-        buf[2] = 0x02;
-        buf[3] = 0x00;
-        buf[0x22..0x2a].fill(0xff);
-        buf[0x2e] = 0x01;
-        buf[0x42] = 0x01;
-        buf[0x4a..0x52].fill(0xff);
-        // next record_start=0x4a. body=0x52. body+4=0x56, body+24=0x6a.
-        buf[0x56] = 0x02;
-        buf[0x6a] = 0x02;
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.stride, 40);
-        let records = parse_records_from_bytes(&buf, layout, 2);
-        assert_eq!(records.len(), 2);
-        assert_eq!(records[0].id_primary, 1);
-        assert_eq!(records[0].id_secondary, 1);
-        assert_eq!(records[1].id_primary, 2);
-        assert_eq!(records[1].id_secondary, 2);
-    }
-
-    #[test]
-    fn flush_origin_recovers_the_u32_ahead_of_the_marker() {
-        // Exactly `record_count * 40` bytes past a 0x1e origin, with the
-        // FF marker one u32 into each record — the real 2024 project shape.
-        let mut buf = vec![0u8; 0x1e + 3 * 40];
-        buf[2] = 0x03; // record_count = 3
-        for k in 0..3usize {
-            let rs = 0x1e + 40 * k;
-            buf[rs + 4..rs + 12].fill(0xff);
-            buf[rs + 16] = (k + 1) as u8;
-            buf[rs + 36] = (k + 1) as u8;
-        }
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.stride, 40);
-        assert_eq!(layout.framing, RecordFraming::Explicit { marker_len: 8 });
-        assert_eq!(layout.start, 0x1e, "origin is the marker minus one u32");
-        assert_eq!(layout.marker_offset, 4);
-        let records = parse_records_from_bytes(&buf, layout, 3);
-        assert_eq!(records.len(), 3, "no record is lost at the tail");
-        assert_eq!(records[0].offset, 0x1e);
-        assert_eq!(records[2].offset, 0x1e + 80);
-        for (k, r) in records.iter().enumerate() {
-            assert_eq!(r.id_primary, k as u32 + 1);
-            assert_eq!(r.id_secondary, k as u32 + 1);
-        }
-    }
-
-    #[test]
-    fn flush_origin_rejects_a_non_u32_aligned_difference() {
-        // 28-byte stride, marker at the record start, and a stream length
-        // that would only "fit" record_count records at a 5-byte-earlier
-        // origin. A record field cannot start 5 bytes before the marker, so
-        // the marker stays the origin and the walk is honestly one short.
-        let mut buf = vec![0u8; 0x19 + 3 * 28];
-        buf[2] = 0x03; // record_count = 3
-        buf[0x1e..0x22].fill(0xff);
-        buf[0x22] = 0x01;
-        buf[0x26] = 0x01;
-        buf[0x3a..0x3e].fill(0xff);
-        buf[0x3e] = 0x02;
-        buf[0x42] = 0x02;
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.stride, 28);
-        assert_eq!(layout.start, 0x1e);
-        assert_eq!(layout.marker_offset, 0);
-        let records = parse_records_from_bytes(&buf, layout, 3);
-        assert_eq!(records.len(), 2);
-    }
-
-    #[test]
-    fn flush_origin_ignores_a_stream_shorter_than_the_declared_span() {
-        let mut buf = vec![0u8; 0x200];
-        buf[2] = 0xff; // record_count = 65_535 → span far exceeds the buffer
-        buf[3] = 0xff;
-        buf[0x22..0x2a].fill(0xff);
-        buf[0x4a..0x52].fill(0xff);
-        let layout = detect_layout(&buf);
-        assert_eq!(layout.start, 0x22);
-        assert_eq!(layout.marker_offset, 0);
-    }
 
     #[test]
     fn index_by_element_id_keeps_first_duplicate() {

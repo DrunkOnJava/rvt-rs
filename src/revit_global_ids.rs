@@ -15,10 +15,11 @@
 //!                    byte order) and the byte 0x28
 //!   ```
 //!
-//! - A 40-byte `Global/ElemTable` record (Revit 2024 and later) holds the
-//!   element's episode number at `+0x18`, and a 28-byte one (Revit 2023) at
-//!   `+0x0c`, after its owner and its two ids (RE-108). The element's
-//!   episode GUID is entry `N - 1 - episode` of the list.
+//! - A `Global/ElemTable` record holds the element's episode number at
+//!   `+8`, on the 40-byte records (Revit 2024 and later) and on the 28-byte
+//!   ones (Revit 2023, RE-108) alike: right after the record's first id on
+//!   40 bytes, after its two ids on 28. The element's episode GUID is entry
+//!   `N - 1 - episode` of the list.
 //!
 //! Measured against Revit's own IFC exports, every element rvt-rs exports
 //! that Revit's export also holds gets the GlobalId Revit gives it:
@@ -42,11 +43,14 @@ pub const EPISODE_TABLE_OFFSET: usize = 0x66;
 pub const EPISODE_ENTRY_LEN: usize = 17;
 /// The byte that closes every episode entry.
 pub const EPISODE_TERMINATOR: u8 = 0x28;
-/// Offset of the episode number in a 40-byte `Global/ElemTable` record.
-pub const RECORD_EPISODE_OFFSET: usize = 0x18;
+/// Offset of the episode number in a 40-byte `Global/ElemTable` record,
+/// counted from the record's start at `0x06` (#152). It read `0x18` while
+/// records were framed from `0x1E`, 16 bytes before each record's start.
+pub const RECORD_EPISODE_OFFSET: usize = 8;
 /// Offset of the episode number in a 28-byte `Global/ElemTable` record
-/// (Revit 2023, RE-108): after a `u32` owner and the record's two ids.
-pub const RECORD_EPISODE_OFFSET_28: usize = 0x0c;
+/// (Revit 2023, RE-108), after the record's two ids. It read `0x0c` while
+/// records were framed from `0x1E`, 4 bytes before each record's start.
+pub const RECORD_EPISODE_OFFSET_28: usize = 8;
 
 /// The episode GUIDs of a file, in stored order (newest first).
 #[derive(Debug, Clone, PartialEq, Eq)]

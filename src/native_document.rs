@@ -102,6 +102,10 @@ pub struct Summary {
     pub unsupported_metadata_records: usize,
     pub skipped_embedded_content_groups: usize,
     pub skipped_historical_records: usize,
+    /// Records emitted from the latest partition holding the element's
+    /// records because the partition its stored revision routes to holds
+    /// none of them (RE-145, #548).
+    pub current_records_outside_route: usize,
     pub requested_ids_absent_from_index: Vec<u64>,
     pub selected_ids_without_records: Vec<u64>,
     pub partitions: BTreeMap<String, native_segments::Statistics>,
@@ -240,6 +244,54 @@ pub fn extract(
     summary.definition_diagnostics = diagnostics;
     Ok(summary)
 }
+/// A record group's records, `(id, offset, body start, body end)`: a
+/// 4-byte (Revit 2023) or 8-byte id, a header, the body and its length
+/// repeated after it. The group's declared object count and body bytes must
+/// agree with what is read.
+fn group_records(
+    source: &native_segments::GroupSource,
+    bytes: &[u8],
+    version: u32,
+) -> Result<Vec<(u64, usize, usize, usize)>> {
+    let id_bytes = if version == 2023 { 4 } else { 8 };
+    let header = match source.channel {
+        101 => id_bytes + 4,
+        102 | 103 => id_bytes + 8,
+        _ => anyhow::bail!("unsupported native record channel {}", source.channel),
+    };
+    let mut pos = 0;
+    let mut records = Vec::new();
+    let mut body_sum = 0u64;
+    while pos < bytes.len() {
+        ensure!(
+            bytes.len() - pos >= header + 4,
+            "truncated channel record header"
+        );
+        let id = if id_bytes == 4 {
+            u64::from(u32::from_le_bytes(bytes[pos..pos + 4].try_into()?))
+        } else {
+            u64::from_le_bytes(bytes[pos..pos + 8].try_into()?)
+        };
+        let length = u32::from_le_bytes(bytes[pos + header - 4..pos + header].try_into()?) as usize;
+        let start = pos + header;
+        let end = start
+            .checked_add(length)
+            .ok_or_else(|| anyhow::anyhow!("native record size overflow"))?;
+        ensure!(
+            end + 4 <= bytes.len()
+                && u32::from_le_bytes(bytes[end..end + 4].try_into()?) as usize == length,
+            "native record dual lengths disagree"
+        );
+        records.push((id, pos, start, end));
+        body_sum += length as u64;
+        pos = end + 4;
+    }
+    ensure!(
+        records.len() as u64 == source.declared_objects && body_sum == source.declared_body_bytes,
+        "native group record counts/body sizes disagree"
+    );
+    Ok(records)
+}
 fn extract_records(
     file: &mut RevitFile,
     options: &Options,
@@ -311,6 +363,41 @@ fn extract_records(
         }
         Err(error) => summary.extensible_storage_catalog_diagnostic = Some(format!("{error:#}")),
     }
+    // An element's stored revision routes it to one partition
+    // (`native_index::route_episode`), and its records elsewhere are
+    // historical. On some files that partition holds none of the element's
+    // records: 6 elements of Einhoven route to `Partitions/1` and 10 of
+    // Core Interior to `Partitions/48` (RE-145, #548). Such an element's
+    // current record is its copy in the latest partition that holds one,
+    // the copy the route itself picks wherever it finds one (569 of 571
+    // differing pairs on Core Interior, 887 of 887 on Autodesk's 2021
+    // `rac_advanced`). A first pass finds the partitions that hold each
+    // selected element's records.
+    let mut holders: BTreeMap<(u64, u64), BTreeSet<u32>> = BTreeMap::new();
+    for name in &names {
+        let partition: u32 = name[11..].parse()?;
+        let stored = file.read_stream_with_limit(name, options.max_stream_bytes)?;
+        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        native_segments::walk(
+            &prepared,
+            &registry,
+            options.max_group_bytes,
+            |source, bytes| {
+                if source.content_key.is_some() || !options.channels.contains(&source.channel) {
+                    return Ok(());
+                }
+                for (id, ..) in group_records(source, bytes, version)? {
+                    if selected.contains(&id) {
+                        holders
+                            .entry((source.channel, id))
+                            .or_default()
+                            .insert(partition);
+                    }
+                }
+                Ok(())
+            },
+        )?;
+    }
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
     for name in names {
@@ -326,47 +413,7 @@ fn extract_records(
                     summary.skipped_embedded_content_groups += 1;
                     return Ok(());
                 }
-                let id_bytes = if version == 2023 { 4 } else { 8 };
-                let header = match source.channel {
-                    101 => id_bytes + 4,
-                    102 | 103 => id_bytes + 8,
-                    _ => anyhow::bail!("unsupported native record channel {}", source.channel),
-                };
-                let mut pos = 0;
-                let mut records = Vec::new();
-                let mut body_sum = 0u64;
-                while pos < bytes.len() {
-                    ensure!(
-                        bytes.len() - pos >= header + 4,
-                        "truncated channel record header"
-                    );
-                    let id = if id_bytes == 4 {
-                        u64::from(u32::from_le_bytes(bytes[pos..pos + 4].try_into()?))
-                    } else {
-                        u64::from_le_bytes(bytes[pos..pos + 8].try_into()?)
-                    };
-                    let length =
-                        u32::from_le_bytes(bytes[pos + header - 4..pos + header].try_into()?)
-                            as usize;
-                    let start = pos + header;
-                    let end = start
-                        .checked_add(length)
-                        .ok_or_else(|| anyhow::anyhow!("native record size overflow"))?;
-                    ensure!(
-                        end + 4 <= bytes.len()
-                            && u32::from_le_bytes(bytes[end..end + 4].try_into()?) as usize
-                                == length,
-                        "native record dual lengths disagree"
-                    );
-                    records.push((id, pos, start, end));
-                    body_sum += length as u64;
-                    pos = end + 4;
-                }
-                ensure!(
-                    records.len() as u64 == source.declared_objects
-                        && body_sum == source.declared_body_bytes,
-                    "native group record counts/body sizes disagree"
-                );
+                let records = group_records(source, bytes, version)?;
                 if !options.channels.contains(&source.channel) {
                     return Ok(());
                 }
@@ -375,12 +422,22 @@ fn extract_records(
                         continue;
                     }
                     let identity = &index.identities[&id];
-                    if native_index::route_episode(identity.stored_revision, &increments, &present)?
-                        != partition
-                    {
+                    let routed = native_index::route_episode(
+                        identity.stored_revision,
+                        &increments,
+                        &present,
+                    )?;
+                    let current = match holders.get(&(source.channel, id)) {
+                        Some(held) if !held.contains(&routed) => {
+                            *held.last().expect("an element in holders has a partition")
+                        }
+                        _ => routed,
+                    };
+                    if current != partition {
                         summary.skipped_historical_records += 1;
                         continue;
                     }
+                    summary.current_records_outside_route += usize::from(current != routed);
                     ensure!(
                         seen.insert((source.channel, id)),
                         "ambiguous current record for {id} in channel{}",
