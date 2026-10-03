@@ -101,17 +101,17 @@ Session 2 (2026-10-03, afternoon):
 | # | id | title | lane | size | payoff | evidence | depends | status |
 |---|---|---|---|---|---|---|---|---|
 | 1 | B26 | `InvertElevation` from the pipe's inner diameter (RE-157 report, then the field and the property) | feature | M | 69 values (Plumbing 63, Mechanical 6) | RE-157 run 37142956936 | - | done |
-| 2 | B27 | Run the slim witness verdict even when the full one drifts, so a pinned-count change regenerates both observations in one cycle | tooling | S | halves the approval round trips of every count change | `ci.yml:495`, #603 | - | done (in the queue) |
-| 3 | B28 | `IsExternal`, `LoadBearing`, `ExtendToStructure` from the wall and slab types' and instances' flags (probe, then sets) | research, feature | M | 36 values on Architecture | `psets_vs_ifc` on run 37138175399 | - | done (in the queue) |
-| 4 | B41 | `Pset_CoveringCommon.Finish`: test whether it is the covering's layer materials joined with `;` | research, feature | S | 6 values | RE-156 §3 | - | done (in the queue) |
-| 5 | B30 | `psets_vs_ifc` also scores enumerated values (`Shape`, `ConnectionType`) | tooling | S | shows the gaps the scorer cannot see | `tools/re/psets_vs_ifc.py:87` | - | done (in the queue) |
+| 2 | B27 | Run the slim witness verdict even when the full one drifts, so a pinned-count change regenerates both observations in one cycle | tooling | S | halves the approval round trips of every count change | `ci.yml:495`, #603 | - | done |
+| 3 | B28 | `IsExternal`, `LoadBearing`, `ExtendToStructure` from the wall and slab types' and instances' flags (probe, then sets) | research, feature | M | 36 values on Architecture | `psets_vs_ifc` on run 37138175399 | - | done |
+| 4 | B41 | `Pset_CoveringCommon.Finish`: test whether it is the covering's layer materials joined with `;` | research, feature | S | 6 values | RE-156 §3 | - | done |
+| 5 | B30 | `psets_vs_ifc` also scores enumerated values (`Shape`, `ConnectionType`) | tooling | S | shows the gaps the scorer cannot see | `tools/re/psets_vs_ifc.py:87` | - | done |
 | 6 | B31 | `Pset_DuctConnection` and `Pset_PipeConnection` `ConnectionType` on pipes | feature | S | 2 × 69 enumerated values | Revit's RE1 exports | B30 | blocked (B47) |
-| 7 | B29 | Single gaps: one Plumbing element's Reference, three Electrical proxies' Reference, a railing's sets, two openings' Reference | research | M | about 14 values | `psets_vs_ifc` | - | in review |
+| 7 | B29 | Single gaps: one Plumbing element's Reference, three Electrical proxies' Reference, a railing's sets, two openings' Reference | research | M | about 14 values | `psets_vs_ifc` | - | done |
 | 8 | B32 | `NumberOfPoles`: where an integer project-parameter value is stored (parameter 987675) | research | S | 2 values, and the integer layout for #155 | RE-156 table | - | blocked |
-| 9 | B40 | Every project and shared parameter, not only Serial Number: definitions table, typed values, Pset names by match | feature | L | generalises B21 (#85, #155) | RE-156 | B32 | committed |
-| 10 | B33 | #528 what is left: measure ports and port connections against Revit after RE-141, then `IfcSystem` per system | feature | L | 73 + 126 connections, 26 systems | #528 | - | in progress |
+| 9 | B40 | Every project and shared parameter, not only Serial Number: definitions table, typed values, Pset names by match | feature | L | generalises B21 (#85, #155) | RE-156 | B32 | blocked (a model) |
+| 10 | B33 | #528 what is left: measure ports and port connections against Revit after RE-141, then `IfcSystem` per system | feature | L | 73 + 126 connections, 26 systems | #528 | - | done (in the queue) |
 | 11 | B38 | RE1 Plumbing 442378: why rvt-rs writes an element Revit's export lacks | research | M | one wrong element, maybe a class of them | RE-35 §, `tests/element_records_2025.rs:165` | - | blocked (B46) |
-| 12 | B39 | #228 remainder: the leading 3 of a reference list | research | M | closes #228 | RE-155 | - | in progress |
+| 12 | B39 | #228 remainder: the leading 3 of a reference list | research | M | closes #228 | RE-155 | - | done (in the queue) |
 | 13 | B34 | #501: `probe_elem_table_ownership` takes its files from the command line | fix | S | the RE-152 probe runs anywhere | #501 | - | done |
 | 14 | B35 | #502: Python `part_atom_json_strict` and `schema_json_strict` | feature | S | closes a documented API gap | #502, `docs/python.md` | - | done |
 | 15 | B36 | Close #255 with a pointer to #420 | community | S | tracker hygiene | #255, #420 | - | done |
@@ -243,7 +243,7 @@ Session 2. Each green line is the CI corpus job running `tools/ci/verify-real-fi
 - **B26, done** (#613). RE-157 (#611): a pipe's own `RbsPipeCurve` object holds its inner diameter 549 bytes after its header, then its outer diameter (11 sizes on RE1). `InvertElevation` is a horizontal pipe's axis less half its inner diameter, or a vertical pipe's lower end, above its storey.
   - Red: draft #612, run 37143783049 (6 of 6 Mechanical pipes missing).
   - Green, run 37144139467: `test re1_pipe_invert_elevations_are_revits ... ok`, `test result: ok. 1 passed; 0 failed`.
-- **B27, in the queue** (#614). The slim witness verdict runs whenever the full one ran.
+- **B27, done** (#614). The slim witness verdict runs whenever the full one ran.
   - Red: #603's run 37140112338 skipped the slim step after the full one drifted.
   - Green: scratch #610, run 37144054315, with a drift injected; both observations were published by the one run, each with `IFCPROPERTYSET` 2963.
 - **B34, done** (#616, closes #501). Red on main, Measure run 37144220896: `open error: ... /workspace/... No such file or directory`. Green, Measure run 37144235760: `header element_count=1411 record_count=26425 parsed=26425`.
@@ -252,21 +252,27 @@ Session 2. Each green line is the CI corpus job running `tools/ci/verify-real-fi
   - Green, run 37145055434: `python3 -m pytest tests/python -q -rs` gave `67 passed in 2.83s`.
 - **B36, done.** #255 closed with a pointer to #420.
 - **B37, done.** 49 local branches whose PRs merged were deleted. With the maintainer's approval, the 14 wip and pre-rebuild leftovers were bundled to `~/Developer/archive/rvt-rs-local-branches-2026-10-03.bundle` (verified, 14 refs), then deleted.
-- **B30, in the queue** (#619). psets_vs_ifc scores enumerated and list values. Measure run 37144839798 shows `Shape` (31), `ConnectionType` (2 × 69) and `Pset_PipeFittingTypeCommon.NominalDiameter` (42).
-- **B28, in the queue** (#621). RE-158 (#620): a door's and a floor's `IsExternal` is its type's `FUNCTION_PARAM` (-1001006), 5 of 5 doors (both values) and 2 of 2 floors.
+- **B30, done** (#619). psets_vs_ifc scores enumerated and list values. Measure run 37144839798 shows `Shape` (31), `ConnectionType` (2 × 69) and `Pset_PipeFittingTypeCommon.NominalDiameter` (42).
+- **B28, done** (#621). RE-158 (#620): a door's and a floor's `IsExternal` is its type's `FUNCTION_PARAM` (-1001006), 5 of 5 doors (both values) and 2 of 2 floors.
   - Red: draft #618, run 37145114521 (7 of 7 missing).
   - Green, run 37146230808: `test re1_door_and_slab_is_external_are_revits ... ok`, `test result: ok. 1 passed; 0 failed`.
   - With the maintainer's approval, both witness observations were regenerated: +132 property values on Core Interior's doors.
-- **B41, in the queue** (#623). A ceiling's `Pset_CoveringCommon.Finish` is its finish layers' materials, each followed by `;`.
+- **B41, done** (#623). A ceiling's `Pset_CoveringCommon.Finish` is its finish layers' materials, each followed by `;`.
   - Red: draft #622, run 37145628503 (6 of 6 missing).
   - Green, run 37146317561: `test re1_ceiling_finishes_are_revits ... ok`, `test result: ok. 1 passed; 0 failed`.
-- **B29, in review** (#625). Reference on panel-named equipment (3 Electrical elements), and a pipe's type from its curve object (pipe 444719).
+  - Bugbot found the finish waited on the instance height check meant for the slab layers; it now comes first (6ca485f).
+- **B29, done** (#625). Reference on panel-named equipment (3 Electrical elements), and a pipe's type from its curve object (pipe 444719).
   - Red: draft #624, run 37146624857.
   - Left: railing 462556 (type not resolved) and two Revit-made openings that share their host's Tag (B20).
 - **B31, blocked.** RE-159 (Measure run 37145371415): `Generic`, Revit's `ConnectionType`, occurs 1,250 times in Plumbing's main partition but never in a pipe's or its type's own object. It is likely the name of a connection-type element the routing preferences point to. That link needs a probe; writing the constant would be hard-coding.
 - **B32, blocked** (RE-158). `NumberOfPoles` is 1 on both RE1 elements and matches no entry. Two definitions share the name `Number of Poles`, so the name lookup drops it (B40 must key definitions by id).
 - **B38, blocked.** RE-160 (Measure run 37146818151): no record on any model carries a `PHASE_CREATED` or `PHASE_DEMOLISHED` parameter entry. Phases are the native fields `m_createdPhaseId` and `m_demolishedPhaseId`, which rvt-rs reads only on Revit 2023, 2024 and 2027. 442378 is also not in the partitions' leading record chain.
-- **B33, measured.** On main, rvt-rs writes 132 of Revit's 150 ports and 66 of 73 connections on Mechanical, 242 of 260 and 121 of 126 on Plumbing, and none of 53 ports on Electrical. It writes no `IfcSystem` (Revit: 5, 8 and 13, named like `Mechanical Supply Air 1` or `OTH 1`, each grouping its elements). Systems need the MEP system elements and their members read.
+- **B33, done, in the queue** (#631). Before it, rvt-rs wrote 132 of Revit's 150 ports and 66 of 73 connections on Mechanical, 242 of 260 and 121 of 126 on Plumbing, none of 53 ports on Electrical, and no `IfcSystem` (Revit: 5, 8 and 13). The ports left are #528's; the systems are now written.
+  - RE-162 (#632): each of Revit's 26 systems is one `RbsHvacSystem`, `RbsPipingSystem` or `RbsElectricalSystem` data object, and every member Revit groups holds its id in its own object. HVAC and piping systems are named by the object's first ASCII string, electrical systems by their circuit number (empty on Revit's `<unnamed>` circuit). Measure runs 37148070432, 37148641247, 37148993751.
+  - Red: draft #629, run 37148704032 (Mechanical: 5 of 5 systems missing).
+  - Green, run 37149305337: `test re1_mep_systems_are_revits ... ok`, `test result: ok. 1 passed; 0 failed` (all 26 systems, same name and members).
+- **B39, done, in the queue** (#630). RE-161: the leading 3 of a reference list is ElementId 3, an internal element every ElemTable declares with no name entry; no file is workshared. Closes the #228 remainder as a negative.
+- **B40, blocked.** `tools/re/reference_property_sets.py` (#633, Measure run 37149211122): Revit's RE1 exports write no property sets besides `Pset_` ones (0 values on all four models). The project and shared parameters they carry are `SerialNumber` (done) and `NumberOfPoles` (B32). Writing every parameter has no reference values without a model whose export writes Revit's parameter-group sets.
 
 ## Findings logged this session
 
