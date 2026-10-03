@@ -6122,6 +6122,15 @@ fn attach_slab_layers(
             })
             .collect();
         let type_layers = &type_layers;
+        // B41: a ceiling's finish, its finish layers' materials. It is the
+        // type's, so it does not wait on the height check below.
+        if element.class == "Ceiling" {
+            if let Some(finish) = finish_of_layers(type_layers, &names) {
+                element
+                    .fields
+                    .push((COVERING_FINISH_FIELD.into(), InstanceField::String(finish)));
+            }
+        }
         let height = element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::Float { value, .. } if name == "m_bboxHeight" => Some(*value),
             _ => None,
@@ -6133,14 +6142,6 @@ fn attach_slab_layers(
         let bands = layer_bands_field(type_layers, &appearances, &names);
         if matches!(&bands, InstanceField::Vector(items) if !items.is_empty()) {
             element.fields.push((SLAB_LAYERS_FIELD.into(), bands));
-        }
-        // B41: a ceiling's finish, its finish layers' materials.
-        if element.class == "Ceiling" {
-            if let Some(finish) = finish_of_layers(type_layers, &names) {
-                element
-                    .fields
-                    .push((COVERING_FINISH_FIELD.into(), InstanceField::String(finish)));
-            }
         }
     }
 }
