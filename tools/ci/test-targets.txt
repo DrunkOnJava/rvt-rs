@@ -35,6 +35,7 @@ real      element_names
 real      element_records_2025
 real      ifc_export_overrides
 real      ifc_roundtrip
+real      invert_elevation
 real      iter_elements_typed       skip=production_iter_elements_tier1,decode_instance_prefer_typed_fails_closed
 real      level_names
 real      native_current_records
