@@ -97,6 +97,15 @@ All notable changes will be documented here. This project follows
   887 on Autodesk's 2021 `rac_advanced`). The summary counts them in
   `current_records_outside_route`. Checked by the new real-file target
   `tests/native_current_records.rs`.
+- **The native path walks the partitions of Revit 2016 and 2017 (#421).**
+  `native_segments::walk` required a `SignatureMarker` class, which the 2016
+  and 2017 schemas do not have and their partitions never write, and it took
+  `m_continuationBits` to be 4 to 7, where it is `(n << 2) | flags` with `n` = 1
+  from 2018 and 100 or more before (puzzbobb). The class is now required only
+  where a marker is met, and only the continuation flags are read from the
+  word. Checked by the new real-file target `tests/native_partitions_walk.rs`:
+  every partition of every family of 2016 to 2026 walks to its end. The
+  native record path still admits only 2023, 2024 and 2027.
 
 ### Research
 
