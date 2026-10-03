@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use super::IfcModel;
-use super::entities::{Extrusion, OpeningCut, SolidShape};
+use super::entities::{Extrusion, OpeningCut, Property, PropertySet, PropertyValue, SolidShape};
 
 /// Options controlling STEP serialization.
 #[derive(Debug, Clone, Default)]
@@ -281,6 +281,49 @@ impl StepWriter {
 
     fn emit_entity<S: AsRef<str>>(&mut self, id: usize, body: S) {
         self.out.push_str(&format!("#{id}={};\n", body.as_ref()));
+    }
+
+    /// Emit `pset` as one `IfcPropertySingleValue` per property, the
+    /// `IfcPropertySet` holding them (GlobalId `set_gid`) and the
+    /// `IfcRelDefinesByProperties` (GlobalId `rel_gid`) relating it to
+    /// `object`.
+    fn emit_property_set(
+        &mut self,
+        owner_hist: usize,
+        object: usize,
+        pset: &PropertySet,
+        set_gid: &str,
+        rel_gid: &str,
+    ) {
+        let mut prop_ids: Vec<usize> = Vec::with_capacity(pset.properties.len());
+        for prop in &pset.properties {
+            let p_id = self.id();
+            let name_esc = escape(&prop.name);
+            let value_step = prop.value.to_step();
+            self.emit_entity(
+                p_id,
+                format!("IFCPROPERTYSINGLEVALUE('{name_esc}',$,{value_step},$)"),
+            );
+            prop_ids.push(p_id);
+        }
+        let refs = prop_ids
+            .iter()
+            .map(|id| format!("#{id}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let set_id = self.id();
+        let set_name = escape(&pset.name);
+        self.emit_entity(
+            set_id,
+            format!("IFCPROPERTYSET('{set_gid}',#{owner_hist},'{set_name}',$,({refs}))"),
+        );
+        let rel_id = self.id();
+        self.emit_entity(
+            rel_id,
+            format!(
+                "IFCRELDEFINESBYPROPERTIES('{rel_gid}',#{owner_hist},$,$,(#{object}),#{set_id})"
+            ),
+        );
     }
 
     /// Emit one `IfcProfileDef` subclass from an [`Extrusion`],
@@ -1142,6 +1185,50 @@ impl StepWriter {
                     "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{building_id},({storey_refs}))",
                     gid(&["aggregates", "building"]),
                 ),
+            );
+        }
+
+        // #35: the sets Revit's export gives every storey and the building
+        // on the RE1 models: each storey's name in two sets and its
+        // `AboveGround` unknown, the building's storey count and its
+        // `IsLandmarked` unknown. A model with no decoded Level has neither.
+        let unknown = |name: &str, property: &str| PropertySet {
+            name: name.into(),
+            properties: vec![Property {
+                name: property.into(),
+                value: PropertyValue::Logical(None),
+            }],
+        };
+        for (index, storey) in storeys.iter().enumerate() {
+            let mut sets = PropertySet::name_sets(&storey.name);
+            sets.push(unknown("Pset_BuildingStoreyCommon", "AboveGround"));
+            for set in &sets {
+                let key = [storey_gids[index].as_str(), set.name.as_str()].join("\u{1f}");
+                self.emit_property_set(
+                    owner_hist,
+                    storey_ids[index],
+                    set,
+                    &gid(&["property-set", &key]),
+                    &gid(&["defines-by-properties", &key]),
+                );
+            }
+        }
+        if !storeys.is_empty() {
+            let mut set = unknown("Pset_BuildingCommon", "IsLandmarked");
+            set.properties.insert(
+                0,
+                Property {
+                    name: "NumberOfStoreys".into(),
+                    value: PropertyValue::Integer(storeys.len() as i64),
+                },
+            );
+            let key = ["building", set.name.as_str()].join("\u{1f}");
+            self.emit_property_set(
+                owner_hist,
+                building_id,
+                &set,
+                &gid(&["property-set", &key]),
+                &gid(&["defines-by-properties", &key]),
             );
         }
 
@@ -2473,38 +2560,12 @@ impl StepWriter {
             ]
             .join("\u{1f}");
             *occurrence += 1;
-            let mut prop_ids: Vec<usize> = Vec::with_capacity(pset.properties.len());
-            for prop in &pset.properties {
-                let p_id = self.id();
-                let name_esc = escape(&prop.name);
-                let value_step = prop.value.to_step();
-                self.emit_entity(
-                    p_id,
-                    format!("IFCPROPERTYSINGLEVALUE('{name_esc}',$,{value_step},$)"),
-                );
-                prop_ids.push(p_id);
-            }
-            let refs = prop_ids
-                .iter()
-                .map(|id| format!("#{id}"))
-                .collect::<Vec<_>>()
-                .join(",");
-            let set_id = self.id();
-            let set_name = escape(&pset.name);
-            self.emit_entity(
-                set_id,
-                format!(
-                    "IFCPROPERTYSET('{}',#{owner_hist},'{set_name}',$,({refs}))",
-                    gid(&["property-set", &set_key])
-                ),
-            );
-            let rel_id = self.id();
-            self.emit_entity(
-                rel_id,
-                format!(
-                    "IFCRELDEFINESBYPROPERTIES('{}',#{owner_hist},$,$,(#{el_id}),#{set_id})",
-                    gid(&["defines-by-properties", &set_key])
-                ),
+            self.emit_property_set(
+                owner_hist,
+                *el_id,
+                pset,
+                &gid(&["property-set", &set_key]),
+                &gid(&["defines-by-properties", &set_key]),
             );
         }
 

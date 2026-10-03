@@ -5,13 +5,14 @@ milestones and issues; this file ranks what a session can do now, with the
 evidence that put each item here. Statuses: `open`, `committed`,
 `in progress`, `done`, `blocked`.
 
-## Session settings (2026-10-03)
+## Session settings (2026-10-03, session 2, from 2:40 PM)
 
 - Subagents: off
-- Tests: mirror tests banned; existing suites (c): mirror suites are deleted
-  area by area, each after the E2E or integration coverage of its area
-  passes; keep suites stay (B23).
+- Tests: mirror tests banned; existing suites (a): the remaining suites stay
+  untouched (session 1 chose (c) and deleted the mirror suites in B23).
 - Autonomy: the whole committed backlog, with a checkpoint at each milestone.
+- Committed, in order: B27, B26, B34, B36, B37, B30, B31, B32, B41, B28, B29,
+  B35, B38, B39, B40, B33.
 - Red/green: a new test is pushed alone to a scratch branch with a draft PR.
   CI shows it red, and the commit then goes onto the item branch with the red
   output in its message (same tree, no force push). The scratch branch is
@@ -52,6 +53,18 @@ evidence that put each item here. Statuses: `open`, `committed`,
   - Sampled estimate: about 55% mirror the implementation (hand-built byte buffers shaped to the parser's own layout, asserting internal fields, as in `walker.rs`'s test module). About 45% test pure logic from outside (vector math in `ifc/measure.rs`, bounds, parsers on adversarial input, proptest).
 - **Half-finished.** Native record extraction (`native_document::extract_records`) admits Revit 2023, 2024 and 2027 only. The 2016 to 2022 native path is latent work that puzzbobb's #421 comment maps out (B06).
 
+## Phase 0 findings, session 2 (2026-10-03, 2:30 PM, on `main` at `b798497`)
+
+- **Git.** `main` is green through #605 (CI run on #606's merge in progress). Open PRs: #608 (SerialNumber, armed, in the strict queue) and rosejn's #255, whose work landed as #420 on 2026-09-30 (the contributor said to merge as we see fit) but which is still open. Remote branches: only the two item branches and `re/re157-pipe-inner-diameter`.
+- **Local branches.** About 60 local branches track remotes that are gone (merged and deleted), plus `b09-impl-wip`, `fix/b04-current-record-fallback-wip`, `fix/b06-wip`, `red-b21-duct` and five `feat/b2x` leftovers ahead of an old `main`. Local `main` is 63 behind.
+- **Tracker.** 25 open issues, 0 unanswered community comments (every thread active since 2026-10-02 ends with a maintainer reply, Discussion #112 included).
+- **Markers.** No `TODO`, `FIXME`, `HACK` or `XXX` in `src`.
+- **Build, lint, types.** Green on `main`'s last completed CI run (#605). Not run locally.
+- **Integration and E2E.** 52 targets in CI: 33 `real`, 6 `cli`, 7 `contract`, 6 `unit` (kept as source, not run). A full CI run takes about 3 minutes (corpus tier 2 170 s, IfcOpenShell 107 s, wheel 186 s); Measure about 8 to 10. Fast enough to iterate on. No flaky test seen this session.
+- **Unit suites.** 1,936 lines of inline test modules in 14 `src` files (about 170 tests: vector maths, clipping, colour, compression bounds, redaction, round trip, two CLI parsers), and the 6 `unit` targets (fuzz regressions, proptest, graceful degradation, synthetic projects). None runs in CI or blocks a merge. Sampled: all test pure logic from outside; the mirror suites went in B23 (24,373 lines).
+- **Property-set gap on `main`** (`psets_vs_ifc`, before #603, #605 and #608): Architecture 101 missing, Mechanical 45, Plumbing 74, Electrical 66. #603, #605 and #608 close about 30 + 8 × 3 + 25 + 51. What remains: `InvertElevation` (69), the boolean sets (`IsExternal`, `LoadBearing`, `ExtendToStructure`: 36 on Architecture), `Finish` (6), `FireRating` (14), `PitchAngle` (2), `NumberOfPoles` (2), and single Reference gaps on a railing, two openings and a few proxies.
+- **Research found this session.** RE-157 (branch `re/re157-pipe-inner-diameter`, Measure run 37142956936): a pipe's own data object holds its inner diameter at byte 549 from the header, followed by its outer diameter, on every pipe size of RE1 Mechanical and Plumbing (11 sizes); the segment's size table holds nominal, inner and outer in a row.
+
 ## Ranked items
 
 Rank is payoff over cost, and items that unblock others rank higher. Size: S
@@ -82,6 +95,29 @@ into milestones).
 | 20 | B22 | Held-out validation on licensed models (#408) | test | L | blocked |
 | 21 | B24 | `ClassEntry::tag` is the base's tag (RE-146), but the schema-directed walker, `SchemaTable::tagged_ancestor` and `rvt-analyze` use it as the class's own | fix | M | done (measured, no change) |
 | 22 | B25 | Run the Python API integration suite (`tests/python`, 64 tests) in the wheel job | tooling | S | done |
+
+Session 2 (2026-10-03, afternoon):
+
+| # | id | title | lane | size | payoff | evidence | depends | status |
+|---|---|---|---|---|---|---|---|---|
+| 1 | B26 | `InvertElevation` from the pipe's inner diameter (RE-157 report, then the field and the property) | feature | M | 69 values (Plumbing 63, Mechanical 6) | RE-157 run 37142956936 | - | committed |
+| 2 | B27 | Run the slim witness verdict even when the full one drifts, so a pinned-count change regenerates both observations in one cycle | tooling | S | halves the approval round trips of every count change | `ci.yml:495`, #603 | - | committed |
+| 3 | B28 | `IsExternal`, `LoadBearing`, `ExtendToStructure` from the wall and slab types' and instances' flags (probe, then sets) | research, feature | M | 36 values on Architecture | `psets_vs_ifc` on run 37138175399 | - | committed |
+| 4 | B41 | `Pset_CoveringCommon.Finish`: test whether it is the covering's layer materials joined with `;` | research, feature | S | 6 values | RE-156 §3 | - | committed |
+| 5 | B30 | `psets_vs_ifc` also scores enumerated values (`Shape`, `ConnectionType`) | tooling | S | shows the gaps the scorer cannot see | `tools/re/psets_vs_ifc.py:87` | - | committed |
+| 6 | B31 | `Pset_DuctConnection` and `Pset_PipeConnection` `ConnectionType` on pipes | feature | S | 2 × 69 enumerated values | Revit's RE1 exports | B30 | committed |
+| 7 | B29 | Single gaps: one Plumbing element's Reference, three Electrical proxies' Reference, a railing's sets, two openings' Reference | research | M | about 14 values | `psets_vs_ifc` | - | committed |
+| 8 | B32 | `NumberOfPoles`: where an integer project-parameter value is stored (parameter 987675) | research | S | 2 values, and the integer layout for #155 | RE-156 table | - | committed |
+| 9 | B40 | Every project and shared parameter, not only Serial Number: definitions table, typed values, Pset names by match | feature | L | generalises B21 (#85, #155) | RE-156 | B32 | committed |
+| 10 | B33 | #528 what is left: measure ports and port connections against Revit after RE-141, then `IfcSystem` per system | feature | L | 73 + 126 connections, 26 systems | #528 | - | committed |
+| 11 | B38 | RE1 Plumbing 442378: why rvt-rs writes an element Revit's export lacks | research | M | one wrong element, maybe a class of them | RE-35 §, `tests/element_records_2025.rs:165` | - | committed |
+| 12 | B39 | #228 remainder: the leading 3 of a reference list | research | M | closes #228 | RE-155 | - | committed |
+| 13 | B34 | #501: `probe_elem_table_ownership` takes its files from the command line | fix | S | the RE-152 probe runs anywhere | #501 | - | committed |
+| 14 | B35 | #502: Python `part_atom_json_strict` and `schema_json_strict` | feature | S | closes a documented API gap | #502, `docs/python.md` | - | committed |
+| 15 | B36 | Close #255 with a pointer to #420 | community | S | tracker hygiene | #255, #420 | - | committed |
+| 16 | B37 | Prune local branches whose remotes are gone; inspect the 9 leftovers before deleting any | debt | S | local hygiene | `git branch -vv` | - | committed |
+| - | B42 | `FireRating`: needs a model whose fire rating is longer than one character | research | S | 14 values | RE-154 | a model | blocked |
+| - | B43 | `Pset_DuctSegmentTypeCommon.Shape`: needs the round versus rectangular switch | feature | S | 25 values | RE-134 §5 | a model | blocked |
 
 
 ## Progress log
@@ -179,16 +215,31 @@ Each item lists its PR, its red run on `main` (the test commit's message has the
     | RE1 Electrical | 87 of 153 |
 
     Progress posted on #35, #96 and #227.
+  - #601 (RE-155, #228): an element record's reference list has no fixed slot for its type or Level; within a category the slot is steady, across categories and releases it moves. No code change: the type comes from the name entries and the Level by value. The leading 3 stays unattributed.
+  - #605: a duct's `Length` also in `Pset_DuctSegmentTypeCommon` (25 of 25 RE1 Mechanical ducts).
+    - Red: draft #604, run 37140175260.
+    - `tests/duct_segment_type_common.rs`.
+  - #603: storeys (`Pset_AirSideSystemInformation.Name`, `Pset_ProductRequirements.Name`, `Pset_BuildingStoreyCommon.AboveGround` unknown), the building (`Pset_BuildingCommon`) and spaces (the two `Name` sets).
+    - Red: draft #602, run 37139848516 (29 of 29 missing on RE1 Architecture).
+    - `tests/spatial_property_sets.rs` on all four RE1 models.
+    - With the maintainer's approval, Core Interior's pinned property sets went from 2670 to 2948 (15 × 3 + 1 + 116 × 2), and both witness observations were regenerated.
+  - #606 (RE-156): `SerialNumber` is a text entry whose id is the shared parameter `Serial Number`'s ElementId (490488 on Electrical, 447886 on Plumbing), in the element's own data object; the id's own object holds the parameter's group, name and GUID. `Finish` is stored nowhere as text.
+  - #608, in the queue: `Pset_ManufacturerOccurrence.SerialNumber`, and `Pset_PrecastConcreteElementGeneral.SerialNumber` on proxies (50 on Electrical, 1 on Plumbing).
+    - Red: draft #607, run 37142425779.
+    - `tests/serial_number.rs`.
   - Open, each needing evidence first:
     - `FireRating` is on the wall type, but RE1's one-character value meets four parameter ids;
-    - `IsExternal`, `LoadBearing`, `ExtendToStructure`, `PitchAngle`, `InvertElevation` and `Finish` are not stored text entries;
-    - the storey and building sets need writer support for property sets outside building elements.
-  - #155, #223 and #228 are untouched.
+    - `IsExternal`, `LoadBearing`, `ExtendToStructure` and `PitchAngle` are not stored text entries (B28);
+    - `InvertElevation` needs the pipe's inner diameter, now found (RE-157, B26);
+    - `Finish` is assembled by the exporter, likely from the covering's layer materials (B41).
+  - #155 and #223 are untouched.
 
 ## Findings logged this session
 
 - **RE1 Plumbing: an element Revit does not export.** rvt-rs writes water closet tank 442378 (`Water Closet Tank_M`); Revit's export holds no element with that `Tag`. Probably a nested family instance; not yet investigated.
 - **#227's 63rd opening** is a hole in wall 55840's elevation-profile sketch (RE-151); it needs the wall's edited profile read.
+- **Revit writes `Pset_DuctSegmentTypeCommon` on RE1 Mechanical's 6 pipes but on none of RE1 Plumbing's 63.** An exporter quirk; rvt-rs writes the set on ducts only, as IFC4 defines it (#605).
+- **Witness regeneration takes two CI cycles.** The slim verdict step runs only when the full-project step passes, so a pinned-count change shows the slim drift one push later (#603). B27.
 
 ## Item details
 
@@ -347,11 +398,11 @@ Snowdon-only parts (#328, #309, #358's 165 walls) are not measurable here.
   | `elem_table` | `src/elem_table.rs` (16 of 17 tests) | `elem_table_frame`, `elem_table_corpus` | done in #559, 336 lines |
   | partition and element-record decoders | `src/partition_*.rs`, `src/partitions.rs`, `src/rect_opening_index.rs`, `src/arc_wall_record.rs`, `src/compound_framing.rs`, `src/object_graph.rs`, `src/element_record_*.rs`, `src/revit_global_ids.rs` (2 of 3), `src/transmission_data.rs` | `partition_record_chain`, `element_records_2025`, `arc_wall_corpus`, `iter_elements_typed`, `design_options`, `revit_global_ids`, `rooms_floors_from_records_only`, `re15_geometry_invariants`, `re19_door_window_wall_negative`, `level_names`, `element_names`, `curtain_walls`, `ifc_export_overrides`, `partition_scanner`, `project_count_fixtures`, Measure | this PR, 4,443 lines |
   | typed elements | `src/elements/*.rs` | `iter_elements_typed`, `element_names`, `level_names`, `curtain_walls`, `rooms_floors_from_records_only`, Measure | next |
-  | schema, walker, metadata | `src/walker.rs`, `src/formats.rs`, `src/class_index.rs`, `src/class_tag_map.rs`, `src/es_refs.rs`, `src/metadata.rs`, `src/basic_file_info.rs`, `src/part_atom.rs`, `src/reader.rs`, `src/parse_mode.rs` | `samples`, `field_type_coverage`, `json_schema_contracts`, `rvt_info_cli`, `rvt_inspect_cli`, `rvt_dump_cli`, `schema_registry_catalogs` | open |
-  | IFC, glTF, schedule writers | `src/ifc/` except the keeps, `src/geometry/`, `src/level_bind.rs`, `src/relations.rs` | `walker_to_ifc_integration`, `ifc_roundtrip`, `ifc_export_overrides`, `rvt_ifc_diagnostics_cli`, `rvt_schedule_cli`, the IfcOpenShell job, Measure | open |
-  | CLIs, writer, small modules | `src/bin/*.rs`, `src/writer.rs`, `src/capability.rs`, `src/cli.rs`, `src/corpus.rs`, `src/evidence.rs`, `src/identity.rs` | the six `cli` targets, `cfb_roundtrip_delta`, `binary_inventory` | open |
-  | synthetic-fixture targets | `tests/` unit class except the keeps: `cfb_patch_corpus`, `checksum_page_framing`, `control_cancellation`, `corpus_tier1_health`, `es_remap_golden`, `gen_fixture_roundtrip`, `geometry_recovery`, `ifc_export_modes`, `ifc_synthetic_project`, `ifc_synthetic_structural`, `typed_decoders` | as above per subject | open |
-  | Python | `tests/python/` (pytest, unit-level, not run) | the wheel smoke on real files (`tools/ci/wheel-smoke.py`) | open |
+  | schema, walker, metadata | `src/walker.rs`, `src/formats.rs`, `src/class_index.rs`, `src/class_tag_map.rs`, `src/es_refs.rs`, `src/metadata.rs`, `src/basic_file_info.rs`, `src/part_atom.rs`, `src/reader.rs`, `src/parse_mode.rs` | `samples`, `field_type_coverage`, `json_schema_contracts`, `rvt_info_cli`, `rvt_inspect_cli`, `rvt_dump_cli`, `schema_registry_catalogs` | done in #574, 3,356 lines |
+  | IFC, glTF, schedule writers | `src/ifc/` except the keeps, `src/geometry/`, `src/level_bind.rs`, `src/relations.rs` | `walker_to_ifc_integration`, `ifc_roundtrip`, `ifc_export_overrides`, `rvt_ifc_diagnostics_cli`, `rvt_schedule_cli`, the IfcOpenShell job, Measure | done in #575, 8,443 lines |
+  | CLIs, writer, small modules | `src/bin/*.rs`, `src/writer.rs`, `src/capability.rs`, `src/cli.rs`, `src/corpus.rs`, `src/evidence.rs`, `src/identity.rs` | the six `cli` targets, `cfb_roundtrip_delta`, `binary_inventory` | done in #576, 1,063 lines |
+  | synthetic-fixture targets | `tests/` unit class except the keeps: `cfb_patch_corpus`, `checksum_page_framing`, `control_cancellation`, `corpus_tier1_health`, `es_remap_golden`, `gen_fixture_roundtrip`, `geometry_recovery`, `ifc_export_modes`, `ifc_synthetic_project`, `ifc_synthetic_structural`, `typed_decoders` | as above per subject | done in #577, 2,096 lines |
+  | Python | `tests/python/` (pytest, unit-level, not run) | the wheel smoke on real files (`tools/ci/wheel-smoke.py`) | kept: an integration suite on real files, run in the wheel job (B25) |
 
 ### B21 Parameters (XL)
 
