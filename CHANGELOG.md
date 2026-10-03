@@ -41,6 +41,17 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The native path reads Revit 2018's schema to its end (#421, #154).**
+  `schema_registry::parse` stopped at byte 351,466 of the 2018 catalog
+  (`schema name byte budget`), on Autodesk's 2018 family and 2018
+  `rac_basic`. A composite member that is not itself an array, over a fixed
+  array of plain class references, writes those references once more after
+  the nested descriptor: 2018's `SiteSurface.m_facets` (`0x500d` over
+  `0x100e`), the only member of that shape in any catalog from 2016 to 2027,
+  as puzzbobb found. The parser now reads them. Checked by the new real-file
+  target `tests/schema_registry_catalogs.rs`: every family catalog of 2016 to
+  2026 is read to its end and gives the same classes as
+  `formats::schema_classes`.
 - **The declared ElementIds include the ElemTable's first record (RE-140, #152,
   #421).** The frames `elem_table::parse_records` reads start 24 bytes into
   their records, so none holds the table's first record, which starts at
@@ -89,6 +100,27 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **The ElemTable's invariants hold on a 2014 family and every file of 2016 to
+  2027 (RE-147, #152).** With the table read from `0x06`, all 54 files measured
+  read their stated record count, their ids rise, every owner a record names
+  is an id of the table, and no record owns itself or sits in an owner loop:
+  the Stertil 2014 family STE1200 pointed to (28-byte records, first record
+  1274 with an unset owner), the eleven Autodesk families, the 36 sample
+  projects of 2016 to 2027 and the six reference models. The record size
+  changes once, between 2023 and 2024. The family is pinned in
+  `research/public-families.tsv` and `tools/fetch-public-families.sh` fetches
+  it for a Measure run with `families` set, never stored.
+  `reports/element-framing/RE-147-elemtable-on-2014-to-2027.md`.
+- **The Q4 word is the grandparent's tag, and `ClassEntry::tag` is the base's
+  (RE-146, #154).** On every class `formats::parse_schema` tags, on 53 files of
+  2016 to 2027 (the families, Autodesk's sample projects and the six reference
+  models), the tag it keeps is the base class's tag (never the class's own),
+  and its `ancestor_tag` is the grandparent's, as puzzbobb reported. That
+  answers RE-137's open question: the Q4 addendum looked a grandparent's tag up
+  among base tags. `ClassEntry`'s documentation says so now; the readers that
+  use `ClassEntry::tag` as the class's own tag (the schema-directed walker,
+  `tagged_ancestor`, `rvt-analyze`) are left for a follow-up.
+  `reports/element-framing/RE-146-q4-word-is-the-grandparent.md`.
 - **The positions that carry the header tag and are not a record (RE-144,
   #152).** Steffen asked whether RE1 Architecture's 1,707 such positions come in
   repeated groups, as his scanner's false hits do on Core Interior. They are
@@ -97,6 +129,15 @@ All notable changes will be documented here. This project follows
   bytes. Core Interior's 277 do repeat (26 pairs cover 210 of them) and
   Einhoven's 20 hardly (one pair of three). The probe now prints the grouping.
   `reports/element-framing/RE-144-header-tag-false-hits.md`.
+- **Where an element's copies differ, the native route takes the latest
+  partition's (RE-145, #548).** On 1,518 of 1,522 differing ids across Core
+  Interior, Einhoven, the RE1 models and Autodesk's 2019 and 2021 samples
+  (887 of 887 on 2021 `rac_advanced`, as puzzbobb found),
+  `native_index::route_episode` sends the element to its latest partition's
+  copy. It also sends 6 elements of Einhoven and 10 of Core Interior to
+  partitions that hold none of their records, which the native path then
+  skipped (fixed in #565). `examples/probe_re145_current_copy_routing.rs`,
+  `reports/element-framing/RE-145-current-copy-routing.md`.
 - **The later partition's copy is the newer one on Autodesk's 2021
   `rac_advanced` sample (RE-143, #548).** The project has two partitions and
   4,037 ids with a record in both. Of the 750 whose two records carry the
