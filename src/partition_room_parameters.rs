@@ -393,6 +393,58 @@ pub fn scan_text_parameter(
         .collect()
 }
 
+/// BuiltInParameter `FUNCTION_PARAM`, a type's Function: 0 interior, 1
+/// exterior (RE-158).
+pub const FUNCTION_PARAMETER: i64 = -1_001_006;
+
+/// Each element of `elements`' value of the integer parameter `parameter`,
+/// by ElementId, on Revit 2024 and later (RE-158): an entry `parameter (i64)
+/// · u32 value` in the element's own data object ([`enclosing_data_object`]).
+/// An element whose entries disagree gets nothing. On RE1 Architecture the
+/// door and floor types' [`FUNCTION_PARAMETER`] is Revit's `IsExternal` on
+/// 5 of 5 doors (interior and exterior) and 2 of 2 floors.
+pub fn scan_integer_parameter(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: &BTreeSet<u32>,
+    parameter: i64,
+) -> BTreeMap<u32, u32> {
+    if revit_version < 2024 || elements.is_empty() {
+        return BTreeMap::new();
+    }
+    let tag = parameter.to_le_bytes();
+    let mut found: BTreeMap<u32, Option<u32>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for hit in memchr::memmem::find_iter(buf, &tag) {
+            let Some(value) = read_u32(buf, hit + tag.len()) else {
+                continue;
+            };
+            let Some(element) = enclosing_data_object(buf, hit).filter(|id| elements.contains(id))
+            else {
+                continue;
+            };
+            match found.get_mut(&element) {
+                None => {
+                    found.insert(element, Some(value));
+                }
+                Some(held) => {
+                    if *held != Some(value) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(element, value)| Some((element, value?)))
+        .collect()
+}
+
 /// Prefix of the first string of a project or shared parameter's definition:
 /// its group's ForgeTypeId (RE-156).
 pub const PARAMETER_GROUP_PREFIX: &str = "autodesk.parameter.group:";
