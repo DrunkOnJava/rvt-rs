@@ -85,6 +85,18 @@ All notable changes will be documented here. This project follows
   unchanged. Id 0 is an ordinary id (Einhoven's and Core Interior's
   `AllProjectPhases`). Checked by the new real-file target
   `tests/elem_table_frame.rs`.
+- **The native record path keeps elements whose route finds no record
+  (RE-145, #548).** `native_document::extract` takes an element's current
+  record from the partition its stored revision routes to, and skips records
+  elsewhere as historical. On Einhoven 6 elements route to `Partitions/1` and
+  on Core Interior 10 to `Partitions/48`, partitions that hold none of their
+  records, so the native path emitted 2,609 of Einhoven's 2,615 elements and
+  26,415 of Core Interior's 26,425. Such an element now takes its copy in the
+  latest partition that holds one, which is the copy the route itself picks
+  wherever it finds one (569 of 571 differing pairs on Core Interior, 887 of
+  887 on Autodesk's 2021 `rac_advanced`). The summary counts them in
+  `current_records_outside_route`. Checked by the new real-file target
+  `tests/native_current_records.rs`.
 
 ### Research
 
