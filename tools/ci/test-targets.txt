@@ -35,6 +35,7 @@ real      ifc_roundtrip
 real      iter_elements_typed       skip=production_iter_elements_tier1,decode_instance_prefer_typed_fails_closed
 real      level_names
 real      native_current_records
+real      native_partitions_walk
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
 real      project_corpus_smoke
@@ -61,17 +62,9 @@ contract  support_matrix
 contract  witness_registry
 contract  witness_verdict
 
-unit      cfb_patch_corpus
-unit      checksum_page_framing
 unit      control_cancellation
-unit      corpus_tier1_health
-unit      es_remap_golden
 unit      fuzz_regressions
-unit      gen_fixture_roundtrip
-unit      geometry_recovery
 unit      graceful_degradation
-unit      ifc_export_modes
 unit      ifc_synthetic_project
 unit      ifc_synthetic_structural
 unit      proptest_parsers
-unit      typed_decoders

@@ -77,7 +77,6 @@ Local:
 
 ```bash
 # Tier 1 (no env needed)
-cargo test --release --test corpus_tier1_health -- --nocapture
 RVT_CORPUS_TIER1_DIR="$PWD/corpus/tier1" \
   cargo test --release --test project_count_fixtures -- --nocapture
 

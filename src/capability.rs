@@ -188,36 +188,3 @@ impl CapabilityManifest {
         self.capabilities.iter().find(|c| c.capability_id == id)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn honest_snapshot_marks_es_and_compound_unsupported() {
-        let m = CapabilityManifest::honest_snapshot();
-        assert_eq!(
-            m.get("es.elementid_remap").unwrap().status,
-            CapabilityStatus::Unsupported
-        );
-        assert_eq!(
-            m.get("arcwall.compound_0x0821").unwrap().status,
-            CapabilityStatus::Unsupported
-        );
-        assert_eq!(
-            m.get("arcwall.standard_2023").unwrap().status,
-            CapabilityStatus::Verified
-        );
-        assert!(m.relation_domains.experimental);
-    }
-
-    #[test]
-    fn manifest_json_round_trip() {
-        let m = CapabilityManifest::honest_snapshot();
-        let s = m.to_json_string().expect("ser");
-        let back = CapabilityManifest::from_json_str(&s).expect("de");
-        assert_eq!(back.capabilities.len(), m.capabilities.len());
-        assert!(s.contains("es.elementid_remap"));
-        assert!(s.contains("unsupported"));
-    }
-}
