@@ -4,8 +4,8 @@
 Research tool for #35 (parameters), `reports/element-framing/RE-153-room-finishes.md`
 and `RE-154-pset-parameters.md`.
 
-Every single-value property of every property set Revit's export relates to
-an object is keyed by the object (an element by its `Tag`, a space by its
+Every single-value and enumerated property of every property set Revit's
+export relates to an object is keyed by the object (an element by its `Tag`, a space by its
 `Name`, a storey by its `Name`, the building as `building`), the set's name
 and the property's name. For each key Revit writes, the rvt-rs export either
 has the same value (value type and value as written, numbers within a
@@ -86,6 +86,11 @@ def properties(path):
             for prop in pset.HasProperties or ():
                 if prop.is_a("IfcPropertySingleValue"):
                     out[(key, pset.Name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
+                elif prop.is_a("IfcPropertyEnumeratedValue"):
+                    values = tuple(
+                        value_of(v, metres_per_unit) for v in prop.EnumerationValues or ()
+                    )
+                    out[(key, pset.Name, prop.Name)] = ("enumerated", values)
     return out, objects
 
 
