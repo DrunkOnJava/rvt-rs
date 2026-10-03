@@ -34,8 +34,8 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     CURVE_FIELDS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
-/// Bytes before an element's first connector entry its anchor is looked for
-/// in. The nearest entry lies 1,253 to 1,324 bytes after the anchor on RE1.
+/// Bytes after an anchor its curve's connector entries are looked for in. The
+/// first lies 1,253 to 1,324 bytes after the anchor on RE1.
 pub const ANCHOR_WINDOW: usize = 2_000;
 
 /// Offset of `m_dWidthOrDiameter` from the anchor.
