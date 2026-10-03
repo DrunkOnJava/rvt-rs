@@ -241,13 +241,11 @@ rvt-rs has a stream-level writer, not a semantic Revit editor.
 
 `rvt-write` applies JSON patch manifests atomically: it validates every target
 stream name before writing, writes through a sibling temp file, verifies patched
-streams after write, and preserves unpatched streams. Always-on corpus tests
-(`tests/cfb_patch_corpus.rs`) cover identity, grow, shrink, multi-stream, and
-missing-stream cases on a `gen-fixture` synthetic project plus the MIT-licensed
-`tests/fixtures/families/empty.rfa` family; GUID and history preservation are
-checked when those streams are left unpatched. Optional Autodesk-family /
-project-corpus coverage in `tests/cfb_roundtrip_delta.rs` still runs when
-`RVT_SAMPLES_DIR` / `RVT_PROJECT_CORPUS_DIR` are set.
+streams after write, and preserves unpatched streams. The real-file target
+`tests/cfb_roundtrip_delta.rs` checks identity, grow, shrink and multi-stream
+patches, and GUID and history preservation, on the Autodesk families and the
+project corpus (`RVT_SAMPLES_DIR` / `RVT_PROJECT_CORPUS_DIR`); CI's Writer patch
+corpus job runs it on every pull request.
 
 ```bash
 rvt-write model.rvt --patches patches.json -o patched.rvt
