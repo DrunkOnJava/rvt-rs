@@ -712,7 +712,9 @@ fn related_element(model: &IfcModel, entity_index: usize) -> Option<RelatedEleme
 fn format_property_value(v: &super::entities::PropertyValue) -> String {
     use super::entities::PropertyValue;
     match v {
-        PropertyValue::Text(s) => s.clone(),
+        PropertyValue::Text(s) | PropertyValue::Label(s) | PropertyValue::Identifier(s) => {
+            s.clone()
+        }
         PropertyValue::Integer(i) => i.to_string(),
         PropertyValue::Real(r) => format!("{r:.3}"),
         // Words, not `true` / `false` — the panel is read by people,
@@ -734,7 +736,7 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
 fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
     use super::entities::PropertyValue;
     match v {
-        PropertyValue::Text(_) => "text",
+        PropertyValue::Text(_) | PropertyValue::Label(_) | PropertyValue::Identifier(_) => "text",
         PropertyValue::Integer(_) => "integer",
         PropertyValue::Real(_) => "real",
         PropertyValue::Boolean(_) => "boolean",
@@ -752,7 +754,13 @@ fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
 /// right-align into a tabular column.
 fn property_value_is_numeric(v: &super::entities::PropertyValue) -> bool {
     use super::entities::PropertyValue;
-    !matches!(v, PropertyValue::Text(_) | PropertyValue::Boolean(_))
+    !matches!(
+        v,
+        PropertyValue::Text(_)
+            | PropertyValue::Label(_)
+            | PropertyValue::Identifier(_)
+            | PropertyValue::Boolean(_)
+    )
 }
 
 /// Row of a schedule table (VW1-15) — one per `BuildingElement`

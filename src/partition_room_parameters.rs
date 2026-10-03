@@ -252,6 +252,127 @@ pub fn resolve_unique(found: BTreeMap<u32, Vec<RoomParameters>>) -> BTreeMap<u32
     out
 }
 
+/// BuiltInParameter `ROOM_FINISH_FLOOR`, a room's Floor Finish (RE-153).
+pub const ROOM_FINISH_FLOOR_PARAMETER: i64 = -1_006_903;
+/// Bytes of a data object's header on Revit 2024 and later: `i32 ElementId ·
+/// i32 0 · u32 Adler-32 · i32 size · i32 class`.
+pub const DATA_OBJECT_HEADER: usize = 20;
+/// How far before a parameter entry its data object's header is looked for.
+pub const DATA_OBJECT_SEARCH: usize = 200_000;
+
+/// Adler-32 (RFC 1950) of `data`.
+fn adler32(data: &[u8]) -> u32 {
+    let (mut a, mut s) = (1u32, 0u32);
+    for chunk in data.chunks(5552) {
+        for &byte in chunk {
+            a += u32::from(byte);
+            s += a;
+        }
+        a %= 65521;
+        s %= 65521;
+    }
+    (s << 16) | a
+}
+
+/// The ElementId of the data object whose payload holds the byte at `at`
+/// (RE-153): the last header before it whose `size` bytes of payload end in
+/// the size again and enclose `at`, and whose Adler-32, over the class word
+/// and the payload less its last 4 bytes, verifies. Revit 2024 and later.
+pub fn enclosing_data_object(buf: &[u8], at: usize) -> Option<u32> {
+    let u32_at = |p: usize| {
+        buf.get(p..p.checked_add(4)?)
+            .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
+    };
+    let low = at.saturating_sub(DATA_OBJECT_SEARCH);
+    let mut p = at.checked_sub(DATA_OBJECT_HEADER)?;
+    loop {
+        if let (Some(id), Some(0), Some(sum), Some(size), Some(class)) = (
+            u32_at(p),
+            u32_at(p + 4),
+            u32_at(p + 8),
+            u32_at(p + 12).map(|s| s as usize),
+            u32_at(p + 16),
+        ) {
+            let end = p + DATA_OBJECT_HEADER + size;
+            if size >= 4 && end > at && end <= buf.len() && u32_at(end - 4) == Some(size as u32) {
+                let mut data = Vec::with_capacity(size);
+                data.extend_from_slice(&class.to_le_bytes());
+                data.extend_from_slice(&buf[p + DATA_OBJECT_HEADER..end]);
+                data.truncate(size);
+                if adler32(&data) == sum {
+                    return Some(id);
+                }
+            }
+        }
+        if p <= low {
+            return None;
+        }
+        p -= 1;
+    }
+}
+
+/// Each room's value of the text parameter `parameter`, by ElementId
+/// (RE-153), on Revit 2024 and later. The value is an entry `parameter (i64) ·
+/// u32 n · UTF-16 × n`, joined to its room by the data object holding it
+/// ([`enclosing_data_object`]). A room whose entries disagree gets nothing.
+/// On RE1 Architecture the Floor Finish ([`ROOM_FINISH_FLOOR_PARAMETER`]) of
+/// 11 of 11 rooms is Revit's `Pset_SpaceCommon.FloorCovering`.
+pub fn scan_room_text_parameter(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    rooms: &BTreeSet<u32>,
+    parameter: i64,
+) -> BTreeMap<u32, String> {
+    if revit_version < 2024 || rooms.is_empty() {
+        return BTreeMap::new();
+    }
+    let tag = parameter.to_le_bytes();
+    let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for hit in memchr::memmem::find_iter(buf, &tag) {
+            let Some(value) = utf16_entry(buf, hit + tag.len(), 256) else {
+                continue;
+            };
+            let Some(room) = enclosing_data_object(buf, hit).filter(|id| rooms.contains(id)) else {
+                continue;
+            };
+            match found.get_mut(&room) {
+                None => {
+                    found.insert(room, Some(value));
+                }
+                Some(held) => {
+                    if held.as_ref() != Some(&value) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(room, value)| Some((room, value?)))
+        .collect()
+}
+
+/// `u32 n · UTF-16 × n` at `at`: 1 to `limit` code units, no control character.
+fn utf16_entry(buf: &[u8], at: usize, limit: usize) -> Option<String> {
+    let n = usize::try_from(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?)).ok()?;
+    if !(1..=limit).contains(&n) {
+        return None;
+    }
+    let units: Vec<u16> = buf
+        .get(at + 4..at + 4 + 2 * n)?
+        .chunks_exact(2)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    let text = String::from_utf16(&units).ok()?;
+    (!text.chars().any(char::is_control)).then_some(text)
+}
+
 /// BuiltInParameter `ROOM_NUMBER` (RE-117).
 pub const ROOM_NUMBER_PARAMETER: i64 = -1_006_901;
 /// BuiltInParameter `ROOM_NAME` (RE-117).
