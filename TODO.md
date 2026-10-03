@@ -1,5 +1,11 @@
 # TODO: S-tier rvt-rs
 
+> **Archived decomposition (reconciled 2026-10-03).** Every item below became a
+> GitHub issue (#9 to #68), and each item now names its issue.
+> 59 of 60 are closed. Still open: M4-07 (#35). The plan is the GitHub
+> milestones and issues (see `ROADMAP.md`); this file is kept as the record they
+> grew out of and is not updated item by item.
+
 This file decomposes the remaining work required to turn `rvt-rs`
 from a strong research-grade Revit reader into a first-class,
 open-source utility that non-technical BIM/AEC users can trust.
@@ -103,6 +109,8 @@ public positioning level.
 
 ### M0-01: Restore formatter cleanliness
 
+Issue: #9, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:bug`, `area:ci`
 
 - Run `cargo fmt --all -- --check`.
@@ -116,6 +124,8 @@ Acceptance criteria:
   unless paired with a separate behavior PR.
 
 ### M0-02: Restore clippy cleanliness on current Rust
+
+Issue: #10, closed 2026-04-25.
 
 Labels: `priority:P0`, `type:bug`, `area:ci`
 
@@ -132,6 +142,8 @@ Acceptance criteria:
 - CI toolchain policy is documented in `README.md` or `CONTRIBUTING.md`.
 
 ### M0-03: Finish or park current uncommitted arc-wall work
+
+Issue: #11, closed 2026-04-25.
 
 Labels: `priority:P0`, `type:research`, `area:partitions`
 
@@ -152,6 +164,8 @@ Acceptance criteria:
   than lingering in the working tree.
 
 ### M0-04: Add a local quality script
+
+Issue: #12, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:feature`, `area:ci`
 
@@ -174,6 +188,8 @@ Acceptance criteria:
 
 ### M0-05: Make cargo-audit availability explicit
 
+Issue: #13, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:ci`, `type:security`, `area:ci`
 
 - Decide whether `cargo-audit` is required locally or CI-only.
@@ -189,6 +205,8 @@ Acceptance criteria:
 ## M1: Audit-Honest Documentation and Positioning
 
 ### M1-01: Reconcile README, ROADMAP, compatibility matrix, and docs
+
+Issue: #14, closed 2026-04-25.
 
 Labels: `priority:P0`, `type:docs`, `area:docs`
 
@@ -218,6 +236,8 @@ Acceptance criteria:
   not solved yet.
 
 ### M1-02: Add a single source-of-truth status matrix
+
+Issue: #15, closed 2026-04-25.
 
 Labels: `priority:P0`, `type:docs`, `area:docs`
 
@@ -255,6 +275,8 @@ Acceptance criteria:
 
 ### M1-03: Rewrite public positioning for non-technical clarity
 
+Issue: #16, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:docs`, `area:docs`
 
 - Replace jargon-heavy first-screen text with concrete user outcomes.
@@ -275,6 +297,8 @@ Acceptance criteria:
 
 ### M1-04: Document diagnostic semantics
 
+Issue: #17, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:docs`, `area:reader`
 
 - Document strict vs lossy APIs.
@@ -291,6 +315,8 @@ Acceptance criteria:
 ## M2: Real Project Corpus and Ground Truth
 
 ### M2-01: Curate a redistributable project corpus
+
+Issue: #18, closed 2026-08-29.
 
 Labels: `priority:P0`, `type:test`, `area:corpus`
 
@@ -316,6 +342,8 @@ Acceptance criteria:
 - No committed sample lacks license/provenance metadata.
 
 ### M2-02: Create known-count fixtures
+
+Issue: #19, closed 2026-08-28.
 
 Labels: `priority:P0`, `type:test`, `area:corpus`, `area:elements`
 
@@ -346,6 +374,8 @@ Acceptance criteria:
 
 ### M2-03: Add corpus health CI tiers
 
+Issue: #20, closed 2026-08-29.
+
 Labels: `priority:P1`, `type:ci`, `area:corpus`
 
 - Tier 1: lightweight open/schema/summary test.
@@ -367,6 +397,8 @@ Tier 2, re-runs Tier 3 export validation, and runs Tier 4 family-corpus
 inside Tier 3 when fixtures allow.
 
 ### M2-04: Add corpus triage tooling
+
+Issue: #21, closed 2026-08-28.
 
 Labels: `priority:P1`, `type:feature`, `area:corpus`
 
@@ -390,6 +422,8 @@ Acceptance criteria:
 
 ### M3-01: Version-gate current ArcWall decoder
 
+Issue: #22, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:bug`, `area:partitions`, `area:ifc`
 
 - Ensure the current raw `ArcWallRecord` decoder is only invoked for
@@ -405,6 +439,8 @@ Acceptance criteria:
 - Unsupported versions produce diagnostics, not false positives.
 
 ### M3-02: Reverse-engineer Revit 2024 ArcWall records
+
+Issue: #23, closed 2026-09-27.
 
 Labels: `priority:P0`, `type:research`, `area:partitions`, `area:elements`
 
@@ -426,6 +462,8 @@ Acceptance criteria:
   partition.
 
 ### M3-03: Build a generic partition record scanner
+
+Issue: #24, closed 2026-08-29.
 
 Labels: `priority:P0`, `type:feature`, `area:partitions`
 
@@ -449,6 +487,8 @@ Acceptance criteria:
 
 ### M3-04: Link `ElemTable` ids to partition record offsets
 
+Issue: #25, closed 2026-08-29.
+
 Labels: `priority:P0`, `type:research`, `area:partitions`, `area:walker`
 
 - Determine how `Global/ElemTable` ids map to partition records.
@@ -468,6 +508,8 @@ Acceptance criteria:
 - CLI can print declared-but-unlocated ids.
 
 ### M3-05: Implement typed partition decoders for the MVP classes
+
+Issue: #26, closed 2026-08-29.
 
 Labels: `priority:P0`, `type:feature`, `area:elements`, `area:partitions`
 
@@ -500,6 +542,8 @@ Acceptance criteria:
 
 ### M3-06: Replace `iter_elements` false-positive behavior
 
+Issue: #27, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:bug`, `area:walker`
 
 Status (2026-08-30): **partially landed.** Production
@@ -530,6 +574,8 @@ Acceptance criteria:
 
 ### M3-07: Add decode confidence and provenance to every element
 
+Issue: #28, closed 2026-08-29.
+
 Labels: `priority:P1`, `type:feature`, `area:elements`
 
 **Status (2026-08-29): Done** — `ElementProvenance` on every
@@ -556,6 +602,8 @@ Acceptance criteria:
 
 ### M4-01: Recover project units from Revit bytes
 
+Issue: #29, closed 2026-08-28.
+
 Labels: `priority:P0`, `type:feature`, `area:reader`, `area:ifc`
 
 - Extract `autodesk.unit.*` identifiers from relevant streams.
@@ -575,6 +623,8 @@ Acceptance criteria:
 
 ### M4-02: Recover wall geometry
 
+Issue: #30, closed 2026-09-19.
+
 Labels: `priority:P0`, `type:feature`, `area:geometry`, `area:ifc`
 
 - Decode wall location curve, base level, top constraint/height,
@@ -593,6 +643,8 @@ Acceptance criteria:
 
 ### M4-03: Recover floor and slab geometry
 
+Issue: #31, closed 2026-09-19.
+
 Labels: `priority:P0`, `type:feature`, `area:geometry`, `area:ifc`
 
 - Decode floor boundary loops, thickness, level, and type.
@@ -605,6 +657,8 @@ Acceptance criteria:
   dropped.
 
 ### M4-04: Recover doors and windows with host relationships
+
+Issue: #32, closed 2026-09-19.
 
 Labels: `priority:P0`, `type:feature`, `area:geometry`, `area:ifc`
 
@@ -625,6 +679,8 @@ Acceptance criteria:
 
 ### M4-05: Recover levels and storey assignment
 
+Issue: #33, closed 2026-09-19.
+
 Labels: `priority:P0`, `type:feature`, `area:elements`, `area:ifc`
 
 - Decode Level names/elevations from real project files.
@@ -638,6 +694,8 @@ Acceptance criteria:
 - Viewer scene tree groups by actual levels.
 
 ### M4-06: Recover materials and compound assemblies
+
+Issue: #34, closed 2026-09-27.
 
 Labels: `priority:P1`, `type:feature`, `area:elements`, `area:ifc`
 
@@ -656,6 +714,8 @@ Acceptance criteria:
 - Viewer applies material names/colors.
 
 ### M4-07: Recover common parameters
+
+Issue: #35, open, milestone 0.5.0: element data (parameters) and viewer journey.
 
 Labels: `priority:P1`, `type:feature`, `area:elements`, `area:python`
 
@@ -680,6 +740,8 @@ Acceptance criteria:
 
 ### M4-08: Add unsupported-geometry diagnostics
 
+Issue: #36, closed 2026-08-28.
+
 Labels: `priority:P1`, `type:feature`, `area:geometry`, `area:viewer`
 
 - For unsupported geometry, emit explicit warnings:
@@ -699,6 +761,8 @@ Acceptance criteria:
 
 ### M5-01: Split IFC export modes
 
+Issue: #37, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:feature`, `area:ifc`, `area:cli`
 
 - Add explicit export modes:
@@ -717,6 +781,8 @@ Acceptance criteria:
 
 ### M5-02: Remove misleading generic proxies from default export
 
+Issue: #38, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:bug`, `area:ifc`
 
 - Do not emit `IFCBUILDINGELEMENTPROXY` for low-confidence scan hits
@@ -730,6 +796,8 @@ Acceptance criteria:
 - Diagnostic mode can still show them.
 
 ### M5-03: Validate real-file IFC outputs
+
+Issue: #39, closed 2026-08-28.
 
 Labels: `priority:P0`, `type:test`, `area:ifc`, `area:corpus`
 
@@ -749,6 +817,8 @@ Acceptance criteria:
 
 ### M5-04: Add export diagnostics sidecar
 
+Issue: #40, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:feature`, `area:ifc`, `area:cli`
 
 - Add `--diagnostics out.json` to export commands.
@@ -767,6 +837,8 @@ Acceptance criteria:
 - Diagnostics schema is documented.
 
 ### M5-05: Add comparison tooling against Revit IFC exports
+
+Issue: #41, closed 2026-08-29.
 
 Labels: `priority:P2`, `type:feature`, `area:ifc`, `area:corpus`
 
@@ -792,6 +864,8 @@ Acceptance criteria:
 
 ### M6-01: Show decode/export confidence in the viewer
 
+Issue: #42, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:feature`, `area:viewer`
 
 - Add a status panel that clearly says:
@@ -810,6 +884,8 @@ Acceptance criteria:
 
 ### M6-02: Add supported-file guidance in the viewer
 
+Issue: #43, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:feature`, `area:viewer`
 
 - Add a compact support matrix in the UI:
@@ -826,6 +902,8 @@ Acceptance criteria:
 
 ### M6-03: Add demo gallery with redistributable files
 
+Issue: #44, closed 2026-08-29.
+
 Labels: `priority:P1`, `type:feature`, `area:viewer`, `area:corpus`
 
 - Implement demo loading from `docs/viewer-demos.json` or successor.
@@ -839,6 +917,8 @@ Acceptance criteria:
 - Network behavior still complies with privacy posture.
 
 ### M6-04: Add browser regression tests
+
+Issue: #45, closed 2026-08-28.
 
 Labels: `priority:P1`, `type:test`, `area:viewer`
 
@@ -859,6 +939,8 @@ Acceptance criteria:
 
 ### M6-05: Improve viewer accessibility and responsiveness
 
+Issue: #46, closed 2026-08-29.
+
 Labels: `priority:P2`, `type:feature`, `area:viewer`
 
 - Keyboard support for file picker, panels, tree navigation, and export
@@ -874,6 +956,8 @@ Acceptance criteria:
 - Manual keyboard-only smoke test passes.
 
 ### M6-06: Add desktop distribution investigation
+
+Issue: #47, closed 2026-08-29.
 
 Labels: `priority:P3`, `type:research`, `area:viewer`
 
@@ -899,6 +983,8 @@ Acceptance criteria:
 
 ### M7-01: Add a single user-facing inspect command
 
+Issue: #48, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:feature`, `area:cli`
 
 - Add or refine a command that gives a non-technical summary:
@@ -915,6 +1001,8 @@ Acceptance criteria:
 - `--json` has stable schema.
 
 ### M7-02: Expose decoded model API in Python
+
+Issue: #49, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:feature`, `area:python`, `area:elements`
 
@@ -933,6 +1021,8 @@ Acceptance criteria:
 
 ### M7-03: Add stable JSON schemas
 
+Issue: #50, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:feature`, `area:cli`, `area:python`
 
 - Define JSON schemas for:
@@ -949,6 +1039,8 @@ Acceptance criteria:
 - Python docs link to schemas.
 
 ### M7-04: Improve install paths
+
+Issue: #51, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:release`, `area:python`, `area:cli`
 
@@ -968,6 +1060,8 @@ Acceptance criteria:
 
 ### M8-01: Enforce panic-free parsing in public APIs
 
+Issue: #52, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:security`, `area:reader`
 
 - Audit all public parsing entry points for panics on adversarial input.
@@ -980,6 +1074,8 @@ Acceptance criteria:
 - Any panic found gets a minimized regression input.
 
 ### M8-02: Add WalkerLimits to production scanning
+
+Issue: #53, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:security`, `area:walker`
 
@@ -996,6 +1092,8 @@ Acceptance criteria:
 - Limit hits return diagnostics.
 
 ### M8-03: Add memory/performance budgets
+
+Issue: #54, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:test`, `area:ci`
 
@@ -1015,6 +1113,8 @@ Acceptance criteria:
 
 ### M8-04: Keep supply-chain policy enforceable
 
+Issue: #55, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:security`, `area:ci`
 
 - Keep `cargo deny check` green.
@@ -1029,6 +1129,8 @@ Acceptance criteria:
 - Any ignored advisory has an issue, rationale, and expiry.
 
 ### M8-05: Verify no-network viewer invariant
+
+Issue: #56, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:security`, `area:viewer`
 
@@ -1047,6 +1149,8 @@ Acceptance criteria:
 ## M9: Write Path and Editing
 
 ### M9-01: Keep stream-level writer honest
+
+Issue: #57, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:test`, `area:writer`
 
@@ -1067,6 +1171,8 @@ Acceptance criteria:
 
 ### M9-02: Design semantic write API, do not ship early
 
+Issue: #58, closed 2026-04-25.
+
 Labels: `priority:P2`, `type:research`, `area:writer`
 
 - Draft design for field-level edits:
@@ -1084,6 +1190,8 @@ Acceptance criteria:
 - Any prototype is behind an explicit experimental feature.
 
 ### M9-03: Add Revit-openability validation path
+
+Issue: #59, closed 2026-04-25.
 
 Labels: `priority:P3`, `type:research`, `area:writer`
 
@@ -1103,6 +1211,8 @@ Acceptance criteria:
 
 ### M10-01: Turn this TODO into GitHub milestones
 
+Issue: #60, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:project-management`
 
 - Create milestones:
@@ -1119,6 +1229,8 @@ Acceptance criteria:
 - Milestones have due criteria, not arbitrary dates.
 
 ### M10-02: Add issue forms for decoder work
+
+Issue: #61, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:docs`, `area:github`
 
@@ -1139,6 +1251,8 @@ Acceptance criteria:
 
 ### M10-03: Add issue form for corpus submissions
 
+Issue: #62, closed 2026-04-25.
+
 Labels: `priority:P1`, `type:docs`, `area:github`, `area:corpus`
 
 - Ensure corpus issue form requires:
@@ -1155,6 +1269,8 @@ Acceptance criteria:
 - Corpus submissions are legally triageable without back-and-forth.
 
 ### M10-04: Publish an honest contribution map
+
+Issue: #63, closed 2026-04-25.
 
 Labels: `priority:P2`, `type:docs`, `area:docs`
 
@@ -1173,6 +1289,8 @@ Acceptance criteria:
   roadmap.
 
 ### M10-05: Establish release artifact verification
+
+Issue: #64, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:release`, `area:ci`
 
@@ -1196,6 +1314,8 @@ users should target this vertical slice.
 
 ### M11-01: Supported MVP input profile
 
+Issue: #65, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:feature`, `area:product`
 
 - Define a narrow support statement:
@@ -1212,6 +1332,8 @@ Acceptance criteria:
 - Unsupported files produce clear diagnostics.
 
 ### M11-02: End-to-end MVP workflow
+
+Issue: #66, closed 2026-09-19.
 
 Labels: `priority:P0`, `type:feature`, `area:product`
 
@@ -1235,6 +1357,8 @@ Acceptance criteria:
 
 ### M11-03: User-facing failure modes
 
+Issue: #67, closed 2026-04-25.
+
 Labels: `priority:P0`, `type:feature`, `area:product`
 
 - For unsupported inputs, show one of:
@@ -1252,6 +1376,8 @@ Acceptance criteria:
 - CLI exits non-zero in strict mode for unsupported real-model export.
 
 ### M11-04: Documentation for non-technical users
+
+Issue: #68, closed 2026-04-25.
 
 Labels: `priority:P1`, `type:docs`, `area:docs`
 
@@ -1307,4 +1433,8 @@ The 2026-04-25 numbers previously listed here are superseded by the RE-19 /
 RE-20 negatives and the partition MVP work on `main`.
 
 Do not use this snapshot as a substitute for current CI. Re-run checks
-before closing any issue.
+before closing any issue. Since 2026-09-23 unit tests are banned and not
+run: CI and `tools/check-local.sh` run the real-file, CLI and contract
+targets of `tools/ci/test-targets.txt` through
+`tools/ci/verify-real-files.sh`, so the `cargo test --workspace` count above
+is historical.
