@@ -77,9 +77,25 @@ fn list(field: &str) -> Vec<u64> {
         .collect()
 }
 
-/// One element: its entity (`IFCWALLSTANDARDCASE` read as `IFCWALL`), `Name`
-/// as written, and each property set's `Reference` as written
-/// (`IFCIDENTIFIER('-')`).
+/// The entity an element is compared as: Revit's export writes walls as
+/// `IfcWallStandardCase`, and flow, furnishing and control elements as the
+/// supertypes of the IFC4 entities rvt-rs writes.
+fn supertype(entity: &str) -> &str {
+    match entity {
+        "IFCWALLSTANDARDCASE" => "IFCWALL",
+        "IFCDUCTSEGMENT" | "IFCPIPESEGMENT" => "IFCFLOWSEGMENT",
+        "IFCDUCTFITTING" | "IFCPIPEFITTING" => "IFCFLOWFITTING",
+        "IFCAIRTERMINAL" | "IFCSANITARYTERMINAL" | "IFCLIGHTFIXTURE" | "IFCELECTRICAPPLIANCE" => {
+            "IFCFLOWTERMINAL"
+        }
+        "IFCFURNITURE" => "IFCFURNISHINGELEMENT",
+        "IFCALARM" => "IFCDISTRIBUTIONCONTROLELEMENT",
+        other => other,
+    }
+}
+
+/// One element: its entity ([`supertype`]), `Name` as written, and each
+/// property set's `Reference` as written (`IFCIDENTIFIER('-')`).
 #[derive(Debug, Default)]
 struct Element {
     entity: String,
@@ -103,11 +119,7 @@ fn elements(step: &str) -> BTreeMap<String, Element> {
         if tag.is_empty() || !tag.chars().all(|c| c.is_ascii_digit()) {
             continue;
         }
-        let entity = if entity == "IFCWALLSTANDARDCASE" {
-            "IFCWALL".to_string()
-        } else {
-            entity.clone()
-        };
+        let entity = supertype(entity).to_string();
         by_id.insert(*id, tag.clone());
         out.insert(
             tag,
