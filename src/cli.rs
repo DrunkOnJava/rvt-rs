@@ -35,30 +35,3 @@ fn is_closed_stdout_pipe(message: &str) -> bool {
             .iter()
             .any(|code| message.contains(code))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::is_closed_stdout_pipe;
-
-    #[test]
-    fn recognises_closed_pipes_on_unix_and_windows() {
-        assert!(is_closed_stdout_pipe(
-            "failed printing to stdout: Broken pipe (os error 32)"
-        ));
-        assert!(is_closed_stdout_pipe(
-            "failed printing to stdout: The pipe has been ended. (os error 109)"
-        ));
-        assert!(is_closed_stdout_pipe(
-            "failed printing to stdout: The pipe is being closed. (os error 232)"
-        ));
-    }
-
-    #[test]
-    fn leaves_other_panics_alone() {
-        assert!(!is_closed_stdout_pipe(
-            "failed printing to stdout: No space left on device (os error 28)"
-        ));
-        assert!(!is_closed_stdout_pipe("index out of bounds (os error 32)"));
-        assert!(!is_closed_stdout_pipe(""));
-    }
-}

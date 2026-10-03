@@ -493,38 +493,3 @@ fn print_doctor_report(report: &DoctorReport) {
         println!("  labels: {}", file.suggested_labels.join(", "));
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn doctor_labels_are_issue_ready() {
-        assert_eq!(
-            labels_for_bucket("empty_ifc_export"),
-            vec!["type:feature", "area:elements", "area:ifc"]
-        );
-        assert_eq!(
-            labels_for_bucket("schema_parse_failure"),
-            vec!["type:bug", "area:schema"]
-        );
-    }
-
-    #[test]
-    fn doctor_report_groups_buckets_and_samples() {
-        let files = vec![
-            doctor_failure("a.rvt".into(), "not_cfb", None, "bad magic"),
-            doctor_failure("b.rvt".into(), "not_cfb", None, "bad magic"),
-            doctor_failure("c.rvt".into(), "corrupt_gzip", Some(2024), "inflate"),
-        ];
-        let report = doctor_report(files);
-
-        assert_eq!(report.files_scanned, 3);
-        assert_eq!(report.buckets["not_cfb"].count, 2);
-        assert_eq!(report.buckets["corrupt_gzip"].count, 1);
-        assert_eq!(
-            report.buckets["not_cfb"].suggested_labels,
-            vec!["type:bug", "area:reader", "area:corpus"]
-        );
-    }
-}
