@@ -63,7 +63,7 @@ pub fn scan_partition(
                 continue;
             };
             let index = blocks.partition_point(|(start, _)| *start < at);
-            let Some(&(_, owner)) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
+            let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
                 continue;
             };
             values
@@ -193,7 +193,7 @@ pub fn scan_partition_lengths(
                 continue;
             };
             let index = blocks.partition_point(|(start, _)| *start < at);
-            let Some(&(_, owner)) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
+            let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
                 continue;
             };
             values
@@ -446,14 +446,23 @@ fn type_lengths(
 
 /// Value block starts in `buf`: the mark, not preceded by a further 0xff (a
 /// longer run of 0xff is padding, not a block), with a declared ElementId
-/// before it.
-fn value_blocks(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<(usize, u32)> {
+/// before it, the block's owner. A mark with 0 before it also starts a
+/// block, owned by element 0 only when the table declares one: it ends the
+/// block before it either way. (Until #152 every 2024 and later file
+/// declared a false id 0, read from the bytes after its ElemTable, and the
+/// blocks were cut there; without the cut, RE1 Architecture's curtain wall
+/// type took the next block's `Type Mark`.)
+fn value_blocks(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<(usize, Option<u32>)> {
     memchr::memmem::find_iter(buf, &VALUE_BLOCK_MARK)
         .filter(|&at| at >= 8 && buf[at - 1] != 0xff)
         .filter_map(|at| {
             let id = u64::from_le_bytes(buf[at - 8..at].try_into().ok()?);
             let id = u32::try_from(id).ok()?;
-            declared_ids.contains(&id).then_some((at, id))
+            if declared_ids.contains(&id) {
+                Some((at, Some(id)))
+            } else {
+                (id == 0).then_some((at, None))
+            }
         })
         .collect()
 }
