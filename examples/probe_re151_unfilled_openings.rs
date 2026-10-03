@@ -151,6 +151,45 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
             );
         }
     }
+    // Every sketch line each host owns, to see which of a loop's lines
+    // Revit's opening takes its Tag from.
+    let hosts: BTreeSet<u32> = openings.iter().filter_map(|(_, _, h)| *h).collect();
+    let mut owned: BTreeMap<u32, Vec<(u64, [f64; 6])>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for span in per::partition_record_chain(buf, &marker) {
+            let Some(f) =
+                per::decode_frame_as(&stream, buf, span.start, span.element_id as u32, &marker)
+            else {
+                continue;
+            };
+            if let Some(owner) = f.owner_reference.filter(|o| hosts.contains(o)) {
+                if f.builtin_category == -2000045 {
+                    owned
+                        .entry(owner)
+                        .or_default()
+                        .push((span.element_id, f.bbox_feet));
+                }
+            }
+        }
+    }
+    let mut owned_lines = Vec::new();
+    for (opening, _, host) in openings.iter().take(EXAMPLES) {
+        let Some(host) = host else { continue };
+        let lines: Vec<String> = owned
+            .get(host)
+            .into_iter()
+            .flatten()
+            .map(|(id, b)| format!("[{id},{:.3},{:.3},{:.3},{:.3}]", b[0], b[1], b[3], b[4]))
+            .collect();
+        owned_lines.push(format!(
+            "{{\"host\":{host},\"opening\":{opening},\"owned_sketch_lines\":[{}]}}",
+            lines.join(",")
+        ));
+    }
     let mut by_host: BTreeMap<String, (usize, usize, usize)> = BTreeMap::new();
     let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_category: BTreeMap<i64, usize> = BTreeMap::new();
@@ -206,6 +245,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         by_category.join(",")
     )];
     out.extend(lines);
+    out.extend(owned_lines);
     Ok(out)
 }
 
