@@ -310,7 +310,8 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         for (name, b, objs) in &streams {
             for at in 0..b.len().saturating_sub(8) {
                 let Some(v) = f64_at(b, at) else { continue };
-                if (v - inner).abs() > TOLERANCE_FEET {
+                // NaN compares false either way, so test for the match.
+                if !v.is_finite() || (v - inner).abs() > TOLERANCE_FEET {
                     continue;
                 }
                 count += 1;
