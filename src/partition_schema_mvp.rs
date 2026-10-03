@@ -3598,6 +3598,9 @@ pub const CURVE_SIZE_FIELDS: [&str; 2] = ["m_curve_width", "m_curve_height"];
 /// Field holding a duct's length along its axis, feet: the dimension of its
 /// record box its width and height leave (RE-134).
 pub const DUCT_LENGTH_FIELD: &str = "m_duct_length";
+/// Field holding a pipe's inner diameter, feet, from its curve object
+/// (RE-157).
+pub const PIPE_INNER_DIAMETER_FIELD: &str = "m_pipe_inner_diameter";
 /// How closely a duct's width and height must match two of its box's
 /// dimensions, feet.
 pub const CURVE_BOX_TOLERANCE_FEET: f64 = 2e-3;
@@ -3675,6 +3678,12 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
     if fields.is_empty() {
         return;
     }
+    let pipes: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "Pipe")
+        .filter_map(|element| element.id)
+        .collect();
+    let diameters = pcf::scan_pipe_diameters(rf, revit_version, &pipes).unwrap_or_default();
     let has = |element: &DecodedElement, wanted: &str| {
         element.fields.iter().any(|(name, _)| name == wanted)
     };
@@ -3716,6 +3725,16 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        // A pipe's inner diameter (RE-157).
+        if let Some(&(inner, _)) = element.id.and_then(|id| diameters.get(&id)) {
+            element.fields.push((
+                PIPE_INNER_DIAMETER_FIELD.into(),
+                InstanceField::Float {
+                    value: inner,
+                    size: 8,
+                },
+            ));
         }
         // A duct along one of the model's axes: its box is its section by its
         // length (RE-134: 25 of 25 RE1 ducts).

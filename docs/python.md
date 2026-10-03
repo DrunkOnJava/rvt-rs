@@ -239,12 +239,15 @@ stream can't be parsed; `basic_file_info_json_strict` raises
 
 ```python
 part_atom_json(self) -> str | None
+part_atom_json_strict(self) -> str
 ```
 Full `PartAtom` as a JSON string. Superset of the
 `part_atom_title` getter — also includes `id`, `updated`,
 `taxonomies`, `categories`, `omniclass`, and `raw_xml` (the
-original XML bytes for lossless downstream reuse). Returns `None`
-if the file has no `PartAtom` stream.
+original XML bytes for lossless downstream reuse). `part_atom_json`
+returns `None` if the file has no `PartAtom` stream or it does not
+parse; `part_atom_json_strict` raises `ValueError` naming which
+(`Stream not found: PartAtom` or `Malformed PartAtom XML: ...`).
 
 ```python
 schema_summary(self) -> dict[str, int]
@@ -521,9 +524,10 @@ Not in Python today:
   a round-trip use case.
 - **Streaming large files.** The entire file is read into memory.
   There is no chunked / streaming reader.
-- **Strict variants for every getter.** `basic_file_info_json` and
-  `read_adocument` have `_strict` (and `read_adocument_lossy`) variants;
-  `part_atom_json` and `schema_json` do not yet.
+- **Strict variants for every getter.** `basic_file_info_json`,
+  `part_atom_json` and `read_adocument` have `_strict` (and
+  `read_adocument_lossy`) variants. `schema_json` already raises on
+  failure, so it has none.
 
 ## Troubleshooting
 
