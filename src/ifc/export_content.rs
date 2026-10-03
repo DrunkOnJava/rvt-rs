@@ -523,6 +523,7 @@ pub fn append_typed_production_elements(
         let reference_sets = reference_type
             .map(|type_name| reference_property_sets(&ifc_type, &type_name))
             .unwrap_or_default();
+        let serial_sets = serial_number_property_sets(&decoded, &ifc_type);
         // RE-151: the name of the openings of a floor's tagged voids.
         let opening_name = (!void_bodies.is_empty()).then(|| {
             let type_id = decoded.fields.iter().find_map(|(name, value)| match value {
@@ -645,8 +646,9 @@ pub fn append_typed_production_elements(
                 });
             }
         }
-        // RE-154: the common property sets' Reference, the type's name.
-        for set in reference_sets {
+        // RE-154: the common property sets' Reference, the type's name;
+        // RE-156: the shared parameter Serial Number.
+        for set in reference_sets.into_iter().chain(serial_sets) {
             entities.push(entities::IfcEntity::ElementPropertySet {
                 element: entity_index,
                 set,
@@ -997,6 +999,33 @@ fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> 
                 } else {
                     PropertyValue::Label(type_name.to_string())
                 },
+            }],
+        })
+        .collect()
+}
+
+/// The sets Revit's export gives an element's shared parameter `Serial
+/// Number` in (RE-156): `Pset_ManufacturerOccurrence`, and on a
+/// building-element proxy also `Pset_PrecastConcreteElementGeneral`, each
+/// with `SerialNumber` (`IfcIdentifier`). Empty when the element has none.
+fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<PropertySet> {
+    use crate::partition_schema_mvp as mvp;
+    let serial = decoded.fields.iter().find_map(|(field, value)| match value {
+        InstanceField::String(text) if field == mvp::SERIAL_NUMBER_FIELD => Some(text),
+        _ => None,
+    });
+    let Some(serial) = serial.filter(|text| !text.is_empty()) else {
+        return Vec::new();
+    };
+    let proxy = ifc_type == "IFCBUILDINGELEMENTPROXY";
+    ["Pset_ManufacturerOccurrence", "Pset_PrecastConcreteElementGeneral"]
+        .into_iter()
+        .filter(|set| proxy || *set == "Pset_ManufacturerOccurrence")
+        .map(|set| PropertySet {
+            name: set.into(),
+            properties: vec![Property {
+                name: "SerialNumber".into(),
+                value: PropertyValue::Identifier(serial.clone()),
             }],
         })
         .collect()
