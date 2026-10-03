@@ -100,6 +100,16 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **The Q4 word is the grandparent's tag, and `ClassEntry::tag` is the base's
+  (RE-146, #154).** On every class `formats::parse_schema` tags, on 53 files of
+  2016 to 2027 (the families, Autodesk's sample projects and the six reference
+  models), the tag it keeps is the base class's tag (never the class's own),
+  and its `ancestor_tag` is the grandparent's, as puzzbobb reported. That
+  answers RE-137's open question: the Q4 addendum looked a grandparent's tag up
+  among base tags. `ClassEntry`'s documentation says so now; the readers that
+  use `ClassEntry::tag` as the class's own tag (the schema-directed walker,
+  `tagged_ancestor`, `rvt-analyze`) are left for a follow-up.
+  `reports/element-framing/RE-146-q4-word-is-the-grandparent.md`.
 - **The positions that carry the header tag and are not a record (RE-144,
   #152).** Steffen asked whether RE1 Architecture's 1,707 such positions come in
   repeated groups, as his scanner's false hits do on Core Interior. They are
