@@ -1019,9 +1019,16 @@ this addendum called its parent), `APIVSTAMacroElemTracking` has
 Every base reference of every class resolves, 3,023 of 3,023 on a 2024 file,
 so the grammar's `u16` base reference is a base class and nothing in it
 supports a second, distinct ancestor. The nine "resolutions" below came from
-tags assigned over a schema that was inflated without its page strip. What
-the legacy "flag" word is, is not established. Report:
+tags assigned over a schema that was inflated without its page strip. Report:
 `reports/element-framing/RE-137-q4-base-classes.md`.
+
+**Resolved 2026-10-03 (RE-146, #154): the word is the grandparent's tag.**
+On every class that carries it, on 53 files of 2016 to 2027, the word is the
+tag of the class's base's base, and the "tag" the old parser keeps beside it
+is the base's own tag (puzzbobb's report, reproduced). The nine rows below
+looked up a grandparent's tag among base tags, so each names the class whose
+base is that grandparent. Report:
+`reports/element-framing/RE-146-q4-word-is-the-grandparent.md`.
 
 The u16 word sitting between the parent-class name and the
 field-count pair in a tagged-class record (called "flag" in earlier

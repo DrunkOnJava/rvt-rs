@@ -225,8 +225,13 @@ pub struct ClassEntry {
     pub offset: usize,
     /// Fields declared by this class (best-effort).
     pub fields: Vec<FieldEntry>,
-    /// Serialization tag if this class has one set (u16, 0x8000 flag stripped).
-    /// Absent = the class is not top-level serializable; it's an embedded type.
+    /// The serialization tag of this class's **base** class (u16, 0x8000
+    /// flag stripped), not the class's own: on every tagged class of 53
+    /// files of 2016 to 2027 it equals the tag
+    /// [`schema_classes`] gives the base, and never the class's (RE-146,
+    /// #154). A class's own tag is its definition ordinal, which
+    /// [`schema_classes`] gives as [`SchemaClass::tag`]. `None` when the word
+    /// was not read as a tag.
     pub tag: Option<u16>,
     /// Parent / superclass name if present. Determined by the `[u16 len][name]`
     /// block that follows the tag. For e.g. HostObjAttr → Some("Symbol").
@@ -243,12 +248,12 @@ pub struct ClassEntry {
     #[serde(default)]
     pub was_parent_only: bool,
     /// The preamble's "flag" word (the u16 immediately before the field
-    /// count). The Q4 addendum read non-zero values as a class-tag
-    /// reference to an ancestor distinct from the direct `parent`; that
-    /// reading did not reproduce under the page-stripped schema grammar
-    /// (`schema_classes`, RE-137), and what the word is has not been
-    /// established. See the §Q4 addendum in
-    /// `docs/rvt-moat-break-reconnaissance.md`.
+    /// count): the tag of the base's base, the class's grandparent, on
+    /// every class that has one on 53 files of 2016 to 2027 (RE-146, #154,
+    /// reported by puzzbobb). The parser lands on the base's own base
+    /// reference when the base is defined inline. The Q4 addendum read it
+    /// as a distinct ancestor (RE-137 did not reproduce that); see the §Q4
+    /// addendum in `docs/rvt-moat-break-reconnaissance.md`.
     ///
     /// `None` when the slot was 0x0000. 55% of tagged classes in the 2024
     /// sample have no ancestor_tag.
