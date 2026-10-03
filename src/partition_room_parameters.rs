@@ -279,36 +279,56 @@ fn adler32(data: &[u8]) -> u32 {
 /// the size again and enclose `at`, and whose Adler-32, over the class word
 /// and the payload less its last 4 bytes, verifies. Revit 2024 and later.
 pub fn enclosing_data_object(buf: &[u8], at: usize) -> Option<u32> {
-    let u32_at = |p: usize| {
-        buf.get(p..p.checked_add(4)?)
-            .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
-    };
     let low = at.saturating_sub(DATA_OBJECT_SEARCH);
     let mut p = at.checked_sub(DATA_OBJECT_HEADER)?;
     loop {
-        if let (Some(id), Some(0), Some(sum), Some(size), Some(class)) = (
-            u32_at(p),
-            u32_at(p + 4),
-            u32_at(p + 8),
-            u32_at(p + 12).map(|s| s as usize),
-            u32_at(p + 16),
-        ) {
-            let end = p + DATA_OBJECT_HEADER + size;
-            if size >= 4 && end > at && end <= buf.len() && u32_at(end - 4) == Some(size as u32) {
-                let mut data = Vec::with_capacity(size);
-                data.extend_from_slice(&class.to_le_bytes());
-                data.extend_from_slice(&buf[p + DATA_OBJECT_HEADER..end]);
-                data.truncate(size);
-                if adler32(&data) == sum {
-                    return Some(id);
-                }
-            }
+        if let Some(object) = verified_data_object(buf, p).filter(|object| object.end > at) {
+            return Some(object.element_id);
         }
         if p <= low {
             return None;
         }
         p -= 1;
     }
+}
+
+/// A data object whose header starts at a known offset (RE-153).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DataObject {
+    /// The ElementId in its header.
+    pub element_id: u32,
+    /// Its class word.
+    pub class: u32,
+    /// The offset just past its payload.
+    pub end: usize,
+}
+
+/// The data object whose header starts at `p`, when its payload ends in its
+/// size again and its Adler-32, over the class word and the payload less its
+/// last 4 bytes, verifies. Revit 2024 and later.
+pub fn verified_data_object(buf: &[u8], p: usize) -> Option<DataObject> {
+    let u32_at = |p: usize| {
+        buf.get(p..p.checked_add(4)?)
+            .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
+    };
+    if u32_at(p.checked_add(4)?)? != 0 {
+        return None;
+    }
+    let (id, sum, size, class) = (u32_at(p)?, u32_at(p + 8)?, u32_at(p + 12)?, u32_at(p + 16)?);
+    let size = size as usize;
+    let end = p.checked_add(DATA_OBJECT_HEADER)?.checked_add(size)?;
+    if size < 4 || end > buf.len() || u32_at(end - 4) != Some(size as u32) {
+        return None;
+    }
+    let mut data = Vec::with_capacity(size);
+    data.extend_from_slice(&class.to_le_bytes());
+    data.extend_from_slice(&buf[p + DATA_OBJECT_HEADER..end]);
+    data.truncate(size);
+    (adler32(&data) == sum).then_some(DataObject {
+        element_id: id,
+        class,
+        end,
+    })
 }
 
 /// Each room's value of the text parameter `parameter`, by ElementId
@@ -323,7 +343,21 @@ pub fn scan_room_text_parameter(
     rooms: &BTreeSet<u32>,
     parameter: i64,
 ) -> BTreeMap<u32, String> {
-    if revit_version < 2024 || rooms.is_empty() {
+    scan_text_parameter(rf, revit_version, rooms, parameter)
+}
+
+/// Each element of `elements`' value of the text parameter `parameter`, a
+/// BuiltInParameter or a project or shared parameter's ElementId, by
+/// ElementId, on Revit 2024 and later: an entry `parameter (i64) · u32 n ·
+/// UTF-16 × n` in the element's own data object ([`enclosing_data_object`],
+/// RE-153, RE-156). An element whose entries disagree gets nothing.
+pub fn scan_text_parameter(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: &BTreeSet<u32>,
+    parameter: i64,
+) -> BTreeMap<u32, String> {
+    if revit_version < 2024 || elements.is_empty() {
         return BTreeMap::new();
     }
     let tag = parameter.to_le_bytes();
@@ -337,12 +371,13 @@ pub fn scan_room_text_parameter(
             let Some(value) = utf16_entry(buf, hit + tag.len(), 256) else {
                 continue;
             };
-            let Some(room) = enclosing_data_object(buf, hit).filter(|id| rooms.contains(id)) else {
+            let Some(element) = enclosing_data_object(buf, hit).filter(|id| elements.contains(id))
+            else {
                 continue;
             };
-            match found.get_mut(&room) {
+            match found.get_mut(&element) {
                 None => {
-                    found.insert(room, Some(value));
+                    found.insert(element, Some(value));
                 }
                 Some(held) => {
                     if held.as_ref() != Some(&value) {
@@ -354,7 +389,64 @@ pub fn scan_room_text_parameter(
     }
     found
         .into_iter()
-        .filter_map(|(room, value)| Some((room, value?)))
+        .filter_map(|(element, value)| Some((element, value?)))
+        .collect()
+}
+
+/// Prefix of the first string of a project or shared parameter's definition:
+/// its group's ForgeTypeId (RE-156).
+pub const PARAMETER_GROUP_PREFIX: &str = "autodesk.parameter.group:";
+/// How far past its group string a definition's name is looked for.
+pub const PARAMETER_NAME_WINDOW: usize = 64;
+
+/// Each project or shared parameter's ElementId by its name, on Revit 2024
+/// and later (RE-156). A definition is a data object whose strings are its
+/// group's ForgeTypeId ([`PARAMETER_GROUP_PREFIX`]), its name and, for a
+/// shared parameter, its GUID (`revit.local.shared:…`); the name is the first
+/// `u32 n · UTF-16 × n` entry of 2 or more characters within
+/// [`PARAMETER_NAME_WINDOW`] bytes past the group string. On RE1 Electrical
+/// and Plumbing `Serial Number` is 490488 and 447886. A name two definitions
+/// give different ids gets nothing.
+pub fn find_parameter_definitions(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<String, u32> {
+    if revit_version < 2024 {
+        return BTreeMap::new();
+    }
+    let needle: Vec<u8> = PARAMETER_GROUP_PREFIX
+        .encode_utf16()
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    let mut found: BTreeMap<String, Option<u32>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for hit in memchr::memmem::find_iter(buf, &needle) {
+            let Some(group) = hit.checked_sub(4).and_then(|at| utf16_entry(buf, at, 256)) else {
+                continue;
+            };
+            let after = hit + 2 * group.encode_utf16().count();
+            let name = (after..after + PARAMETER_NAME_WINDOW).find_map(|at| {
+                utf16_entry(buf, at, 256).filter(|name| name.encode_utf16().count() >= 2)
+            });
+            let (Some(name), Some(id)) = (name, enclosing_data_object(buf, hit)) else {
+                continue;
+            };
+            match found.get_mut(&name) {
+                None => {
+                    found.insert(name, Some(id));
+                }
+                Some(held) => {
+                    if *held != Some(id) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(name, id)| Some((name, id?)))
         .collect()
 }
 

@@ -1127,6 +1127,8 @@ fn export_rvt_doc(
     // no-geometry modes (where no record bbox was attached in the
     // first place) find nothing to bind and change nothing.
     apply_element_record_storeys(&mut entities, &mut building_storeys);
+    // RE-157: a pipe's invert is above its storey, known only now.
+    export_content::pipe_inverts_above_storeys(&mut entities, &building_storeys);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
