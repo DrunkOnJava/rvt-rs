@@ -350,6 +350,17 @@ pub fn append_typed_production_elements(
         // (RE1 Electrical: `262416-PANEL:RE-1:428352`), from an instance
         // parameter rvt-rs does not read, so it gets no `Family:Type` name.
         let named_by_type = decoded.class != "ElectricalEquipment";
+        // RE-154: the type name, where the element is named by it. A door or
+        // window whose type draws no geometry is written as its opening
+        // (RE-84), which takes none.
+        let opening_only = matches!(decoded.class.as_str(), "Door" | "Window")
+            && decoded.fields.iter().any(|(name, value)| {
+                name == crate::partition_schema_mvp::TYPE_WITHOUT_GEOMETRY_FIELD
+                    && matches!(value, InstanceField::Bool(true))
+            });
+        let reference_type = family_and_type(&decoded)
+            .filter(|_| own_name.is_none() && named_by_type && !opening_only)
+            .map(|(_, type_name)| type_name);
         let name = match (
             own_name,
             decoded.id,
@@ -494,6 +505,9 @@ pub fn append_typed_production_elements(
             out.level_elementid_binds += 1;
         }
 
+        let reference_sets = reference_type
+            .map(|type_name| reference_property_sets(&ifc_type, &type_name))
+            .unwrap_or_default();
         // RE-151: the name of the openings of a floor's tagged voids.
         let opening_name = (!void_bodies.is_empty()).then(|| {
             let type_id = decoded.fields.iter().find_map(|(name, value)| match value {
@@ -571,6 +585,13 @@ pub fn append_typed_production_elements(
         }
         // RE-153: a room's Pset_SpaceCommon.
         if let Some(set) = space_common_property_set(&decoded) {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set,
+            });
+        }
+        // RE-154: the common property sets' Reference, the type's name.
+        for set in reference_sets {
             entities.push(entities::IfcEntity::ElementPropertySet {
                 element: entity_index,
                 set,
@@ -866,6 +887,64 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
         name: name.into(),
         properties,
     })
+}
+
+/// The property sets whose `Reference` Revit's export gives an element of
+/// `ifc_type` (RE-154), each holding the type's name: `Pset_QuantityTakeOff`,
+/// the entity's common set, and on walls and slabs its reinforcement-pitch
+/// set, which declares `Reference` an `IfcLabel`. Only the entities measured
+/// on the RE1 models' exports are listed, with the IFC4 subtypes rvt-rs writes
+/// for Revit's flow, furnishing and control elements; any other gets none.
+fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> {
+    let common: &[(&str, bool)] = match ifc_type {
+        "IFCWALL" => &[
+            ("Pset_WallCommon", true),
+            ("Pset_ReinforcementBarPitchOfWall", false),
+        ],
+        "IFCSLAB" => &[
+            ("Pset_SlabCommon", true),
+            ("Pset_ReinforcementBarPitchOfSlab", false),
+        ],
+        "IFCDOOR" => &[("Pset_DoorCommon", true)],
+        "IFCCOVERING" => &[("Pset_CoveringCommon", true)],
+        "IFCCURTAINWALL" => &[("Pset_CurtainWallCommon", true)],
+        "IFCMEMBER" => &[("Pset_MemberCommon", true)],
+        "IFCPLATE" => &[("Pset_PlateCommon", true)],
+        "IFCRAILING" => &[("Pset_RailingCommon", true)],
+        "IFCBUILDINGELEMENTPROXY" => &[("Pset_BuildingElementProxyCommon", true)],
+        // Revit's export writes these as IfcFlowTerminal, IfcFlowFitting and
+        // IfcFlowSegment; rvt-rs writes the IFC4 subtypes.
+        "IFCFLOWTERMINAL"
+        | "IFCFLOWFITTING"
+        | "IFCFLOWSEGMENT"
+        | "IFCDUCTSEGMENT"
+        | "IFCPIPESEGMENT"
+        | "IFCDUCTFITTING"
+        | "IFCPIPEFITTING"
+        | "IFCAIRTERMINAL"
+        | "IFCSANITARYTERMINAL"
+        | "IFCLIGHTFIXTURE"
+        | "IFCELECTRICAPPLIANCE" => &[("Pset_DistributionFlowElementCommon", true)],
+        // IfcFurnishingElement and IfcDistributionControlElement in Revit's.
+        "IFCFURNISHINGELEMENT" | "IFCFURNITURE" | "IFCDISTRIBUTIONCONTROLELEMENT" | "IFCALARM" => {
+            &[]
+        }
+        _ => return Vec::new(),
+    };
+    std::iter::once(("Pset_QuantityTakeOff", true))
+        .chain(common.iter().copied())
+        .map(|(name, identifier)| PropertySet {
+            name: name.into(),
+            properties: vec![Property {
+                name: "Reference".into(),
+                value: if identifier {
+                    PropertyValue::Identifier(type_name.to_string())
+                } else {
+                    PropertyValue::Label(type_name.to_string())
+                },
+            }],
+        })
+        .collect()
 }
 
 /// A room's `Pset_SpaceCommon` (RE-153), as Revit's export writes it:
