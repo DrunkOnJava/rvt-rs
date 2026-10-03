@@ -1135,7 +1135,10 @@ fn add_covering_finish(sets: &mut [PropertySet], ifc_type: &str, decoded: &Decod
     let Some(finish) = finish else {
         return;
     };
-    if let Some(set) = sets.iter_mut().find(|set| set.name == "Pset_CoveringCommon") {
+    if let Some(set) = sets
+        .iter_mut()
+        .find(|set| set.name == "Pset_CoveringCommon")
+    {
         set.properties.push(Property {
             name: "Finish".into(),
             value: PropertyValue::Text(finish),
