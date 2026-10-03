@@ -235,6 +235,108 @@ pub fn type_material_names(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u
         .collect()
 }
 
+/// The name Revit's own IFC export gives geometry drawn with no material of
+/// its own.
+pub const UNNAMED_MATERIAL: &str = "<Unnamed>";
+
+/// Largest geometry tag accepted as a key of an all-unset map.
+const MAX_GEOMETRY_TAG: u32 = 0xffff;
+
+/// Whether the block `buf[start..end]` opens with a geometry-material map
+/// whose every value is unset. The first map read in the block decides:
+/// `u32 n` in 1..=[`MAX_ENTRIES`] then `n` entries of `u32 key · u64 value`,
+/// with distinct keys no larger than [`MAX_GEOMETRY_TAG`] (the type's
+/// geometry tags, RE-149), and every value either unset (`0xff` x 8) or a
+/// material of the file. A map with a material in it answers no (a partial
+/// map is the type's, RE-124); one with only unset values answers yes. Such
+/// a type draws its geometry with no material: Revit's export gives its
+/// instances [`UNNAMED_MATERIAL`].
+fn opens_unset_map(buf: &[u8], start: usize, end: usize, materials: &BTreeSet<u32>) -> bool {
+    let mut at = start;
+    while at + 4 <= end {
+        let count = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes")) as usize;
+        let map_end = at + 4 + count * 12;
+        if (1..=MAX_ENTRIES).contains(&count) && map_end <= end {
+            let mut keys = Vec::with_capacity(count);
+            let (mut unset, mut material) = (0usize, 0usize);
+            for entry in 0..count {
+                let e = at + 4 + entry * 12;
+                keys.push(u32::from_le_bytes(
+                    buf[e..e + 4].try_into().expect("4 bytes"),
+                ));
+                let value = &buf[e + 4..e + 12];
+                if value.iter().all(|&b| b == 0xff) {
+                    unset += 1;
+                } else if id_at(value, 0, 8).is_some_and(|id| materials.contains(&id)) {
+                    material += 1;
+                }
+            }
+            let small = keys.iter().all(|&k| k <= MAX_GEOMETRY_TAG);
+            keys.sort_unstable();
+            keys.dedup();
+            if small && keys.len() == count && unset + material == count {
+                return material == 0;
+            }
+        }
+        at += 1;
+    }
+    false
+}
+
+/// The family types whose value block holds no geometry-material map with a
+/// material but opens with one whose every value is unset (RE-149, #355):
+/// types that draw their geometry with no material of their own. On the
+/// reference models these are the column type of `2024_Core_Interior.rvt`
+/// and the RE1 fittings, terminals and fixtures, whose instances Revit's
+/// export gives [`UNNAMED_MATERIAL`]. Empty where [`type_material_names`]
+/// reads nothing.
+pub fn unset_material_types(rf: &mut RevitFile, revit_version: u32) -> BTreeSet<u32> {
+    let with_materials = type_material_names(rf, revit_version);
+    if with_materials.is_empty() {
+        return BTreeSet::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeSet::new();
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
+    else {
+        return BTreeSet::new();
+    };
+    let materials: BTreeSet<u32> = names.keys().copied().collect();
+    let mut out = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let blocks: Vec<(usize, u32)> = memchr::memmem::find_iter(buf, BLOCK_LAYOUT.mark)
+            .filter(|&at| at >= BLOCK_LAYOUT.id_len && buf[at - 1] != 0xff)
+            .filter_map(|at| {
+                let id = id_at(buf, at - BLOCK_LAYOUT.id_len, BLOCK_LAYOUT.id_len)?;
+                declared.contains(&id).then_some((at, id))
+            })
+            .collect();
+        for (index, &(start, owner)) in blocks.iter().enumerate() {
+            if with_materials
+                .get(&owner)
+                .is_some_and(|names| !names.is_empty())
+            {
+                continue;
+            }
+            let end = blocks
+                .get(index + 1)
+                .map_or(buf.len(), |next| next.0.saturating_sub(BLOCK_LAYOUT.id_len))
+                .min(start + MAX_BLOCK_LEN)
+                .min(buf.len());
+            if opens_unset_map(buf, start + BLOCK_LAYOUT.mark.len(), end, &materials) {
+                out.insert(owner);
+            }
+        }
+    }
+    out
+}
+
 /// [`type_material_names`] on Revit 2023 (RE-113). A map value counts as a
 /// material when it is one of [`crate::partition_materials::scan_materials_2023`];
 /// a type whose map names a material with no name read gets none. Only

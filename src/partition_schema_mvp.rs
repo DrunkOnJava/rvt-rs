@@ -466,6 +466,15 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Family instances whose type draws with no material (RE-149, #355) ---
+    let unset_types = crate::partition_type_materials::unset_material_types(rf, revit_version);
+    if !unset_types.is_empty() {
+        for elements in [&mut out.columns, &mut out.products] {
+            attach_unnamed_materials(&unset_types, elements);
+        }
+        attach_joined_wall_materials(&mut out.columns, &out.walls);
+    }
+
     // --- Each window's opening from its type and transform (RE-93, #227) ---
     attach_window_openings(rf, revit_version, &mut out.windows);
     // --- Each door's rough opening from its type (RE-94, #227), after RE-84
@@ -1599,6 +1608,97 @@ fn attach_type_materials(materials: &BTreeMap<u32, Vec<String>>, elements: &mut 
                 TYPE_MATERIAL_FIELD.into(),
                 InstanceField::String(name.clone()),
             ));
+        }
+    }
+}
+
+/// Give each element whose type draws its geometry with no material of its
+/// own, and that has no type material yet, the material Revit's export
+/// writes for such geometry, [`crate::partition_type_materials::UNNAMED_MATERIAL`]
+/// (RE-149). Doors, windows, walls and slabs are left alone: a door or
+/// window type without a material map is written as its opening (RE-84).
+fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [DecodedElement]) {
+    for element in elements.iter_mut() {
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_MATERIAL_FIELD)
+        {
+            continue;
+        }
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        if type_id.is_some_and(|id| unset_types.contains(&id)) {
+            element.fields.push((
+                TYPE_MATERIAL_FIELD.into(),
+                InstanceField::String(crate::partition_type_materials::UNNAMED_MATERIAL.into()),
+            ));
+        }
+    }
+}
+
+/// A column whose type draws with no material and that walls are joined to
+/// takes the joined walls' material (#355): Revit's export gives the 149
+/// columns of `2024_Core_Interior.rvt` that walls are joined to "Default
+/// Wall", the material of those walls, and `<Unnamed>` to the 107 no wall
+/// joins. Only when every joined wall's layers name the same one set of
+/// materials; otherwise the column keeps `<Unnamed>`.
+fn attach_joined_wall_materials(columns: &mut [DecodedElement], walls: &[DecodedElement]) {
+    use crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD;
+    use crate::partition_type_materials::UNNAMED_MATERIAL;
+
+    let wall_materials: BTreeMap<u32, BTreeSet<String>> = walls
+        .iter()
+        .filter_map(|wall| {
+            let layers = element_layers_from_fields(&wall.fields)?;
+            let names: Option<BTreeSet<String>> =
+                layers.layers.iter().map(|band| band.name.clone()).collect();
+            Some((wall.id?, names.filter(|n| !n.is_empty())?))
+        })
+        .collect();
+    for column in columns.iter_mut() {
+        let unnamed_only = column
+            .fields
+            .iter()
+            .filter(|(name, _)| name == TYPE_MATERIAL_FIELD)
+            .all(|(_, value)| matches!(value, InstanceField::String(s) if s == UNNAMED_MATERIAL));
+        let has_material = column
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_MATERIAL_FIELD);
+        if !(unnamed_only && has_material) {
+            continue;
+        }
+        let joined: Vec<u32> = column
+            .fields
+            .iter()
+            .filter_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. } if name == COLUMN_JOINED_WALL_FIELD => {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .collect();
+        let sets: Vec<&BTreeSet<String>> = joined
+            .iter()
+            .filter_map(|id| wall_materials.get(id))
+            .collect();
+        let Some(first) = sets.first() else {
+            continue;
+        };
+        if sets.len() != joined.len() || sets.iter().any(|set| set != first) {
+            continue;
+        }
+        let names = (*first).clone();
+        column
+            .fields
+            .retain(|(name, _)| name != TYPE_MATERIAL_FIELD);
+        for name in names {
+            column
+                .fields
+                .push((TYPE_MATERIAL_FIELD.into(), InstanceField::String(name)));
         }
     }
 }
@@ -5828,10 +5928,17 @@ pub fn column_instances_from_records(
     let selected = select_instance_records(records);
     let instances: Vec<PartitionElementRecord> = selected.values().cloned().collect();
     let cuts = crate::element_record_column_cuts::column_cut_boxes(&instances, wall_records);
+    let joined = crate::element_record_column_cuts::column_joined_walls(&instances, wall_records);
     selected
         .values()
         .map(|record: &PartitionElementRecord| {
             let mut decoded = element_record_decoded(record, "Column", level_ids);
+            for &wall in joined.get(&record.element_id).into_iter().flatten() {
+                decoded.fields.push((
+                    crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD.into(),
+                    InstanceField::ElementId { tag: 0, id: wall },
+                ));
+            }
             if let Some(symbol) = record
                 .type_symbol_reference(&symbol_ids)
                 .and_then(|id| symbols.get(&id).map(|bbox| (id, *bbox)))

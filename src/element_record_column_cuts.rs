@@ -182,6 +182,46 @@ pub fn difference_box(prism: &[f64; 6], cutters: &[[f64; 6]]) -> Option<[f64; 6]
     Some(hull)
 }
 
+/// Field carrying, once per wall, the walls joined to a column that overlap
+/// it: the walls [`column_cut_boxes`] cuts with, whether or not the cut
+/// leaves a box.
+pub const COLUMN_JOINED_WALL_FIELD: &str = "m_column_joined_wall";
+
+/// The walls each column names in its reference list that are recovered
+/// wall instances and overlap its record prism, by column ElementId.
+/// Columns with none are left out. On `2024_Core_Interior.rvt` these are
+/// the 149 columns Revit's export gives the joined walls' material, and the
+/// other 107 are the ones it gives `<Unnamed>` (#355).
+pub fn column_joined_walls(
+    columns: &[PartitionElementRecord],
+    walls: &[PartitionElementRecord],
+) -> BTreeMap<u32, Vec<u32>> {
+    let wall_boxes: BTreeMap<u32, [f64; 6]> = walls
+        .iter()
+        .map(|record| (record.element_id, record.bbox_feet))
+        .collect();
+    let mut out = BTreeMap::new();
+    for column in columns {
+        let mut joined: Vec<u32> = column
+            .references
+            .iter()
+            .filter(|slot| **slot <= u64::from(u32::MAX))
+            .map(|slot| *slot as u32)
+            .filter(|id| {
+                wall_boxes
+                    .get(id)
+                    .is_some_and(|cutter| overlaps(&column.bbox_feet, cutter))
+            })
+            .collect();
+        joined.sort_unstable();
+        joined.dedup();
+        if !joined.is_empty() {
+            out.insert(column.element_id, joined);
+        }
+    }
+    out
+}
+
 /// The cut body of every column in `columns` that a joined wall in
 /// `walls` cuts back, keyed by ElementId.
 ///
