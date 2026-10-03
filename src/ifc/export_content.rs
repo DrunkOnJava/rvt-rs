@@ -350,9 +350,8 @@ pub fn append_typed_production_elements(
         // (RE1 Electrical: `262416-PANEL:RE-1:428352`), from an instance
         // parameter rvt-rs does not read, so it gets no `Family:Type` name.
         let named_by_type = decoded.class != "ElectricalEquipment";
-        // RE-154: the type name, where the element is named by it. A door or
-        // window whose type draws no geometry is written as its opening
-        // (RE-84), which takes none.
+        // RE-154: the type name. A door or window whose type draws no
+        // geometry is written as its opening (RE-84), which takes none.
         let opening_only = matches!(decoded.class.as_str(), "Door" | "Window")
             && decoded.fields.iter().any(|(name, value)| {
                 name == crate::partition_schema_mvp::TYPE_WITHOUT_GEOMETRY_FIELD
@@ -372,8 +371,10 @@ pub fn append_typed_production_elements(
                 })
             })
             .flatten();
+        // The Reference is the type's name however Revit names the element:
+        // electrical equipment named by its panel name has one too (B29).
         let reference_type = family_and_type(&decoded)
-            .filter(|_| own_name.is_none() && named_by_type && !opening_only)
+            .filter(|_| own_name.is_none() && !opening_only)
             .map(|(_, type_name)| type_name)
             .or(duct_type);
         let name = match (
