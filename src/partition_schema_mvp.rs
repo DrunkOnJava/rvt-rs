@@ -4648,8 +4648,9 @@ fn select_instance_records(
     // - the newest frame's type slot in the counted reference list
     //   at `+0x88` equals that `IfcWallType.Tag` on **356 of 360**;
     //   the oldest frame's on 183;
-    // - `Global/ElemTable`'s `u32` at `+0x1c` is a monotone version
-    //   counter that ranks the same way — 36 on every one of the 480
+    // - the `u32` at `+12` of the element's `Global/ElemTable` record
+    //   (from `0x06`, #152; `+0x1c` in the older `0x1E` framing), its
+    //   last-modification counter, ranks the same way — 36 on every one of the 480
     //   instances whose newest frame is `Partitions/59`, 35 on the 12
     //   whose newest is `/55`, 33 on the 18 whose newest is `/51`,
     //   and at most 30 on the 344 framed only in `/46`.
