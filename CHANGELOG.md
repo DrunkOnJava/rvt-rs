@@ -97,9 +97,29 @@ All notable changes will be documented here. This project follows
   887 on Autodesk's 2021 `rac_advanced`). The summary counts them in
   `current_records_outside_route`. Checked by the new real-file target
   `tests/native_current_records.rs`.
+- **The native path walks the partitions of Revit 2016 and 2017 (#421).**
+  `native_segments::walk` required a `SignatureMarker` class, which the 2016
+  and 2017 schemas do not have and their partitions never write, and it took
+  `m_continuationBits` to be 4 to 7, where it is `(n << 2) | flags` with `n` = 1
+  from 2018 and 100 or more before (puzzbobb). The class is now required only
+  where a marker is met, and only the continuation flags are read from the
+  word. Checked by the new real-file target `tests/native_partitions_walk.rs`:
+  every partition of every family of 2016 to 2026 walks to its end. The
+  native record path still admits only 2023, 2024 and 2027.
 
 ### Research
 
+- **The ElemTable's invariants hold on a 2014 family and every file of 2016 to
+  2027 (RE-147, #152).** With the table read from `0x06`, all 54 files measured
+  read their stated record count, their ids rise, every owner a record names
+  is an id of the table, and no record owns itself or sits in an owner loop:
+  the Stertil 2014 family STE1200 pointed to (28-byte records, first record
+  1274 with an unset owner), the eleven Autodesk families, the 36 sample
+  projects of 2016 to 2027 and the six reference models. The record size
+  changes once, between 2023 and 2024. The family is pinned in
+  `research/public-families.tsv` and `tools/fetch-public-families.sh` fetches
+  it for a Measure run with `families` set, never stored.
+  `reports/element-framing/RE-147-elemtable-on-2014-to-2027.md`.
 - **The Q4 word is the grandparent's tag, and `ClassEntry::tag` is the base's
   (RE-146, #154).** On every class `formats::parse_schema` tags, on 53 files of
   2016 to 2027 (the families, Autodesk's sample projects and the six reference
@@ -118,6 +138,15 @@ All notable changes will be documented here. This project follows
   bytes. Core Interior's 277 do repeat (26 pairs cover 210 of them) and
   Einhoven's 20 hardly (one pair of three). The probe now prints the grouping.
   `reports/element-framing/RE-144-header-tag-false-hits.md`.
+- **Where an element's copies differ, the native route takes the latest
+  partition's (RE-145, #548).** On 1,518 of 1,522 differing ids across Core
+  Interior, Einhoven, the RE1 models and Autodesk's 2019 and 2021 samples
+  (887 of 887 on 2021 `rac_advanced`, as puzzbobb found),
+  `native_index::route_episode` sends the element to its latest partition's
+  copy. It also sends 6 elements of Einhoven and 10 of Core Interior to
+  partitions that hold none of their records, which the native path then
+  skipped (fixed in #565). `examples/probe_re145_current_copy_routing.rs`,
+  `reports/element-framing/RE-145-current-copy-routing.md`.
 - **The later partition's copy is the newer one on Autodesk's 2021
   `rac_advanced` sample (RE-143, #548).** The project has two partitions and
   4,037 ids with a record in both. Of the 750 whose two records carry the
@@ -128,6 +157,16 @@ All notable changes will be documented here. This project follows
   newer. The other multi-partition samples repeat only records without a box,
   and Core Interior's own 571 ids are not decided by this one file; #548 stays
   open. `tools/re/copy_vs_neighbours.py` repeats it from a Measure run.
+- **A keyed block belongs to the loaded family whose GUID keys it (RE-148,
+  #421).** On every Autodesk sample project of 2019 to 2027 the keys of the
+  partition blocks after a `ContentMarker` are in `Global/ContentDocuments`
+  (163 of 163 on `rac_basic`, 52 of 52 on `rst_basic`, 121 of 121 on
+  `rac_advanced`, as puzzbobb found), and on every block of every file
+  measured the marker's count is the block's channel-101 records less the one
+  with id -1. RE1 Electrical's 60 keys of 288 are not found in the stream.
+  That answers RE-135's question of which family a record after the chain
+  belongs to. `native_segments::GroupSource` gains `content_element_count`.
+  `reports/element-framing/RE-148-content-keys.md`.
 - **Autodesk's sample projects of 2016 to 2027, and puzzbobb's measurements
   (RE-140, #421, #152, #548).** Autodesk publishes its `rac_basic`, `rst_basic`
   and `rac_advanced` sample projects for every release from 2016 to 2027, 36

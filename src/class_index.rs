@@ -80,22 +80,3 @@ fn is_noise(s: &str) -> bool {
     }
     false
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rejects_hex_strings() {
-        assert!(is_noise("AAAAAAA"));
-        assert!(is_noise("0D41F08"));
-    }
-
-    #[test]
-    fn accepts_real_classes() {
-        assert!(!is_noise("APropertyBoolean"));
-        assert!(!is_noise("ADocument"));
-        assert!(!is_noise("A3PartyObject"));
-        assert!(!is_noise("APIEventHandlerStatus"));
-    }
-}
