@@ -162,11 +162,24 @@ Each item lists its PR, its red run on `main` (the test commit's message has the
     - `tests/common_reference.rs` on all four RE1 models.
     - With the maintainer's approval, the pinned property sets went from 1086 to 2670, and the witness was regenerated.
   - #593: the `psets_vs_ifc` scorer in Measure compares every property Revit writes with rvt-rs's value.
-  - #595, in review: a pipe's `Length` in both flow-segment sets.
+  - #595: a pipe's `Length` in both flow-segment sets.
     - Red: draft #594, run 37136045232.
     - `tests/segment_length.rs`.
+  - #597: the scorer compares numbers within a relative 1e-5, so a micrometre of writer rounding is no longer "different".
+  - #599: RE-134's curve fields read in code (width, height, type at the curve's connector-manager anchor); each duct gets its type, its `Length` and its `Reference`.
+    - Red: draft #598, run 37136951323.
+    - `tests/duct_fields.rs`.
+  - Measured on `main` at #599's merge (Measure run 37138175399), Revit values equal in `psets_vs_ifc`, none different:
+
+    | model | equal |
+    |---|---|
+    | RE1 Architecture | 152 of 253 |
+    | RE1 Mechanical | 210 of 255 |
+    | RE1 Plumbing | 370 of 444 |
+    | RE1 Electrical | 87 of 153 |
+
+    Progress posted on #35, #96 and #227.
   - Open, each needing evidence first:
-    - duct `Length` needs RE-134's width and height read in code;
     - `FireRating` is on the wall type, but RE1's one-character value meets four parameter ids;
     - `IsExternal`, `LoadBearing`, `ExtendToStructure`, `PitchAngle`, `InvertElevation` and `Finish` are not stored text entries;
     - the storey and building sets need writer support for property sets outside building elements.
