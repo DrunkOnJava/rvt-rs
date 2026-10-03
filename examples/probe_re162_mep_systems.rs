@@ -297,6 +297,17 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
                 }
                 q += 1;
             }
+            if class_name == "RbsElectricalSystem" {
+                let from = start + 140;
+                let to = (start + 480).min(*end);
+                let hex: String = b[from..to]
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect();
+                out.push(format!(
+                    "{{\"system_object\":{id},\"hex_from\":140,\"hex\":{hex:?}}}"
+                ));
+            }
             let mut holders: BTreeMap<u32, u32> = BTreeMap::new();
             for (_, b2, objs2) in &streams {
                 for at in memchr::memmem::find_iter(b2, &id.to_le_bytes()) {
