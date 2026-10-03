@@ -180,6 +180,19 @@ pub enum IfcEntity {
         b_id: u32,
         b_index: u32,
     },
+    /// An opening nothing fills (RE-151, #227): a hole in a floor's sketch,
+    /// voiding the building element at `host` (an index into
+    /// `IfcModel::entities`), as Revit's export writes it. The writer places
+    /// it in its host's frame and extrudes `outline_feet` (feet, in that
+    /// frame, counter-clockwise) up `depth_feet`; it lives through its
+    /// `IfcRelVoidsElement`, not in a storey.
+    VoidOpening {
+        host: usize,
+        tag: String,
+        name: String,
+        outline_feet: Vec<(f64, f64)>,
+        depth_feet: f64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

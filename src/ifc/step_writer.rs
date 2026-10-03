@@ -1599,6 +1599,9 @@ impl StepWriter {
         // when resolving `host_element_index` for openings + for
         // IfcRelVoidsElement / IfcRelFillsElement emission.
         let mut entity_index_to_el_id: Vec<Option<usize>> = vec![None; model.entities.len()];
+        // Each building element's IfcLocalPlacement, for the openings placed
+        // in their host's frame (RE-151).
+        let mut entity_index_to_placement: Vec<Option<usize>> = vec![None; model.entities.len()];
         // Void/fill tracking: for each element with a host, note
         // (host_el_id, opening_el_id, element_el_id) so the rels can
         // be emitted after the element loop. Openings themselves are
@@ -2020,6 +2023,7 @@ impl StepWriter {
                     }
                 }
                 entity_index_to_el_id[entity_idx] = Some(el_id);
+                entity_index_to_placement[entity_idx] = Some(placement_id);
                 // IFC-30 / IFC-28: precedence order for material
                 // association is profile_set > layer_set > single
                 // material. Try each in order; `profile_or_layer_applied`
@@ -2216,6 +2220,82 @@ impl StepWriter {
                     }
                 }
             }
+        }
+
+        // RE-151 (#227): an opening nothing fills, a hole in a floor's sketch.
+        // As in Revit's export it is placed in its host's frame, its outline
+        // extruded up through the host, and it voids the host without being
+        // contained in a storey.
+        for entity in &model.entities {
+            let super::entities::IfcEntity::VoidOpening {
+                host,
+                tag,
+                name,
+                outline_feet,
+                depth_feet,
+            } = entity
+            else {
+                continue;
+            };
+            let (Some(Some(host_el_id)), Some(Some(host_placement))) = (
+                entity_index_to_el_id.get(*host),
+                entity_index_to_placement.get(*host),
+            ) else {
+                continue;
+            };
+            let profile_origin = self.id();
+            self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+            let profile_x_axis = self.id();
+            self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
+            let profile_placement = self.id();
+            self.emit_entity(
+                profile_placement,
+                format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
+            );
+            let body = Extrusion {
+                width_feet: 0.0,
+                depth_feet: 0.0,
+                height_feet: *depth_feet,
+                profile_override: Some(super::entities::ProfileDef::ArbitraryClosed {
+                    points: outline_feet.clone(),
+                }),
+            };
+            let profile_id = self.emit_profile_def(&body, profile_placement);
+            let solid_id = self.id();
+            self.emit_entity(
+                solid_id,
+                format!(
+                    "IFCEXTRUDEDAREASOLID(#{profile_id},#{axis_placement},#{z_axis},{:.6})",
+                    depth_feet * 0.3048
+                ),
+            );
+            let rep_id = self.id();
+            self.emit_entity(
+                rep_id,
+                format!("IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','SweptSolid',(#{solid_id}))"),
+            );
+            let prod_shape_id = self.id();
+            self.emit_entity(
+                prod_shape_id,
+                format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{rep_id}))"),
+            );
+            let placement_id = self.id();
+            self.emit_entity(
+                placement_id,
+                format!("IFCLOCALPLACEMENT(#{host_placement},#{axis_placement})"),
+            );
+            let host_gid = el_id_to_gid.get(host_el_id).copied().unwrap_or_default();
+            let opening_gid = gid(&["void-opening", host_gid, tag]);
+            let opening_id = self.id();
+            self.emit_entity(
+                opening_id,
+                format!(
+                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',.OPENING.)",
+                    quoted_or_dollar(&escape(name)),
+                    escape(tag),
+                ),
+            );
+            void_fill_triples.push((*host, opening_id, None, opening_gid));
         }
 
         // IfcRelVoidsElement + IfcRelFillsElement — for each

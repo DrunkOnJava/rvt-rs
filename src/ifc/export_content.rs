@@ -370,7 +370,7 @@ pub fn append_typed_production_elements(
         let mut property_set = None;
         let mut pending_host_id = None;
         let mut piece_bodies: Vec<Extrusion> = Vec::new();
-        let mut void_bodies: Vec<(usize, u32, Extrusion)> = Vec::new();
+        let mut void_bodies: Vec<VoidBody> = Vec::new();
         let mut held_body = None;
         let mut solid_shape = None;
 
@@ -551,23 +551,13 @@ pub fn append_typed_production_elements(
         // the floor, or the piece it is in, named `Family:Type:<type id>` as
         // in Revit's export.
         if let Some(opening_name) = opening_name {
-            for (piece, tag, body) in void_bodies {
-                entities.push(entities::IfcEntity::BuildingElement {
-                    ifc_type: "IFCOPENINGELEMENT".into(),
+            for (piece, tag, outline_feet, depth_feet) in void_bodies {
+                entities.push(entities::IfcEntity::VoidOpening {
+                    host: entity_index + piece,
+                    tag: tag.to_string(),
                     name: opening_name.clone(),
-                    type_guid: Some(tag.to_string()),
-                    predefined_type: Some("OPENING".into()),
-                    storey_index,
-                    material_index: None,
-                    property_set: None,
-                    location_feet,
-                    rotation_radians,
-                    extrusion: Some(body),
-                    host_element_index: Some(entity_index + piece),
-                    material_layer_set_index: None,
-                    material_profile_set_index: None,
-                    solid_shape: None,
-                    representation_map_index: None,
+                    outline_feet,
+                    depth_feet,
                 });
             }
         }
@@ -917,9 +907,13 @@ struct RecordGeometry {
     properties: PropertySet,
     pieces: Vec<Extrusion>,
     /// Each tagged void of a floor's sketch (RE-151): the piece it is in, its
-    /// tag and its outline through the floor's thickness.
-    void_openings: Vec<(usize, u32, Extrusion)>,
+    /// tag, its outline in the body's frame and the floor's thickness.
+    void_openings: Vec<VoidBody>,
 }
+
+/// A tagged void of a floor's sketch (RE-151): the piece it is in, its tag,
+/// its outline in the body's frame, and the floor's thickness, feet.
+type VoidBody = (usize, u32, Vec<(f64, f64)>, f64);
 
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
@@ -1976,7 +1970,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         .unwrap_or_default();
     // RE-151: a floor's tagged void is also an opening voiding it, as Revit's
     // export writes it, the void's outline through the floor's thickness.
-    let void_openings: Vec<(usize, u32, Extrusion)> = profile
+    let void_openings: Vec<VoidBody> = profile
         .as_ref()
         .filter(|_| class == "Floor")
         .map(|profile| {
@@ -1984,13 +1978,8 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 .void_openings
                 .iter()
                 .map(|void| {
-                    let body = Extrusion {
-                        width_feet: width,
-                        depth_feet: depth,
-                        height_feet: height,
-                        profile_override: Some(relative(&void.outline_xy, &[])),
-                    };
-                    (void.piece, void.tag, body)
+                    let outline = void.outline_xy.iter().map(|(px, py)| (px - x, py - y));
+                    (void.piece, void.tag, outline.collect(), height)
                 })
                 .collect()
         })
