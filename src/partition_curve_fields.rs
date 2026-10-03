@@ -135,6 +135,78 @@ fn fields_at(buf: &[u8], anchor: usize) -> Option<CurveFields> {
     })
 }
 
+/// Bytes from the header of a pipe's `RbsPipeCurve` data object to its inner
+/// diameter; its outer diameter follows (RE-157).
+pub const PIPE_INNER_DIAMETER_OFFSET: usize = 549;
+/// Largest diameter, feet, a pipe's two diameters are taken to be under.
+const MAX_PIPE_DIAMETER_FEET: f64 = 10.0;
+
+/// Each pipe of `pipes`' inner and outer diameters, feet, by ElementId
+/// (RE-157): the two `f64`s at [`PIPE_INNER_DIAMETER_OFFSET`] of the verified
+/// data object whose header carries the pipe's id and `RbsPipeCurve`'s tag.
+/// On RE1 Mechanical and Plumbing the inner diameter is the one Revit's
+/// `InvertElevation` implies on every pipe size. A pipe whose objects
+/// disagree, or whose two values are not 0 < inner < outer, is absent. Empty
+/// for a release this layout is not measured on.
+pub fn scan_pipe_diameters(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    pipes: &std::collections::BTreeSet<u32>,
+) -> Result<BTreeMap<u32, (f64, f64)>> {
+    if !supports_revit_version(revit_version) || pipes.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let classes = rf.schema_classes()?;
+    let Some(tag) = classes
+        .classes
+        .iter()
+        .find(|class| class.name == "RbsPipeCurve")
+        .map(|class| u32::from(class.tag))
+    else {
+        return Ok(BTreeMap::new());
+    };
+    let mut found: BTreeMap<u32, Option<(f64, f64)>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for &id in pipes {
+            let mut header = id.to_le_bytes().to_vec();
+            header.extend_from_slice(&0u32.to_le_bytes());
+            for p in memchr::memmem::find_iter(buf, header.as_slice()) {
+                let Some(object) = crate::partition_room_parameters::verified_data_object(buf, p)
+                else {
+                    continue;
+                };
+                if object.class & 0xffff != tag {
+                    continue;
+                }
+                let at = p + PIPE_INNER_DIAMETER_OFFSET;
+                let (Some(inner), Some(outer)) = (read_f64(buf, at), read_f64(buf, at + 8)) else {
+                    continue;
+                };
+                if !(inner > 0.0 && inner < outer && outer < MAX_PIPE_DIAMETER_FEET) {
+                    continue;
+                }
+                match found.get(&id) {
+                    None => {
+                        found.insert(id, Some((inner, outer)));
+                    }
+                    Some(Some(held)) if *held != (inner, outer) => {
+                        found.insert(id, None);
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
+    }
+    Ok(found
+        .into_iter()
+        .filter_map(|(id, diameters)| Some((id, diameters?)))
+        .collect())
+}
+
 /// The curve fields of each duct and pipe of `curves` (their record boxes, by
 /// the partition stream their records are in), by ElementId. An element whose
 /// anchor is not found, or whose fields are not a size and a type, is absent;

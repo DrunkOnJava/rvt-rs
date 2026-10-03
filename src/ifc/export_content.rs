@@ -650,17 +650,31 @@ pub fn append_typed_production_elements(
         // A duct's length is also in its Pset_DuctSegmentTypeCommon, as on
         // every RE1 Mechanical duct.
         let duct_set = (decoded.class == "Duct").then_some("Pset_DuctSegmentTypeCommon");
+        // RE-157: a pipe's invert, here in model height; the storey's
+        // elevation comes off once storeys are bound
+        // (`pipe_inverts_above_storeys`).
+        let invert = match decoded.class.as_str() {
+            "Pipe" => pipe_invert_height(&decoded.fields),
+            _ => None,
+        };
         if let Some(length) = segment_length {
             let sets = ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"];
             for name in sets.into_iter().chain(duct_set) {
+                let mut properties = vec![Property {
+                    name: "Length".into(),
+                    value: PropertyValue::PositiveLengthFeet(length),
+                }];
+                if let (Some(height), "Pset_FlowSegmentPipeSegment") = (invert, name) {
+                    properties.push(Property {
+                        name: INVERT_ELEVATION_PROPERTY.into(),
+                        value: PropertyValue::LengthFeet(height),
+                    });
+                }
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: entity_index,
                     set: PropertySet {
                         name: name.into(),
-                        properties: vec![Property {
-                            name: "Length".into(),
-                            value: PropertyValue::PositiveLengthFeet(length),
-                        }],
+                        properties,
                     },
                 });
             }
@@ -1054,6 +1068,69 @@ fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<
         }],
     })
     .collect()
+}
+
+/// The property of `Pset_FlowSegmentPipeSegment` holding a pipe's invert.
+const INVERT_ELEVATION_PROPERTY: &str = "InvertElevation";
+/// How far a pipe's two ends may differ, feet, along an axis it is taken to
+/// lie across.
+const PIPE_AXIS_TOLERANCE_FEET: f64 = 1e-6;
+
+/// A pipe's invert in model height, feet (RE-157): the lower end of a
+/// vertical pipe, or a horizontal pipe's axis less half its inner diameter.
+/// `None` for a sloped pipe, or a horizontal one whose inner diameter was not
+/// read.
+fn pipe_invert_height(fields: &[(String, InstanceField)]) -> Option<f64> {
+    use crate::partition_schema_mvp as mvp;
+    let pipe = mvp::pipe_body_from_fields(fields)?;
+    let (start, end) = (pipe.start, pipe.end);
+    let near = |a: f64, b: f64| (a - b).abs() <= PIPE_AXIS_TOLERANCE_FEET;
+    let level = near(start[2], end[2]);
+    if !level && near(start[0], end[0]) && near(start[1], end[1]) {
+        return Some(start[2].min(end[2]));
+    }
+    if !level {
+        return None;
+    }
+    let inner = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == mvp::PIPE_INNER_DIAMETER_FIELD => {
+            Some(*value)
+        }
+        _ => None,
+    })?;
+    Some(start[2] - inner / 2.0)
+}
+
+/// Take each pipe's storey elevation off its `InvertElevation`, which
+/// Revit's export gives above the pipe's storey (RE-157). A pipe on no storey
+/// keeps its height above the model's zero.
+pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], storeys: &[Storey]) {
+    let elevations: Vec<f64> = entities
+        .iter()
+        .map(|entity| match entity {
+            entities::IfcEntity::BuildingElement {
+                storey_index: Some(index),
+                ..
+            } => storeys.get(*index).map_or(0.0, |storey| storey.elevation_feet),
+            _ => 0.0,
+        })
+        .collect();
+    for entity in entities.iter_mut() {
+        let entities::IfcEntity::ElementPropertySet { element, set } = entity else {
+            continue;
+        };
+        if set.name != "Pset_FlowSegmentPipeSegment" {
+            continue;
+        }
+        let elevation = elevations.get(*element).copied().unwrap_or(0.0);
+        for property in &mut set.properties {
+            if let (INVERT_ELEVATION_PROPERTY, PropertyValue::LengthFeet(height)) =
+                (property.name.as_str(), &mut property.value)
+            {
+                *height -= elevation;
+            }
+        }
+    }
 }
 
 /// A room's `Pset_SpaceCommon` (RE-153), as Revit's export writes it:
