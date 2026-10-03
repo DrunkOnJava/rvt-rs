@@ -16,7 +16,9 @@
 //! the text (a length prefix when it equals the length), the `i64` before
 //! that (a parameter id when the prefix is a length), the 24 bytes before
 //! the text, and the innermost verified data object holding it (RE-153), by
-//! ElementId and class word.
+//! ElementId and class word. Each property's name is looked for the same
+//! way, under the set `(property name)`, since a parameter of that name
+//! would hold it in the element defining the parameter.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re156_value_sources -- MODEL.rvt ...
@@ -385,6 +387,13 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         {
             slot.entry(w.value.clone()).or_insert((w.element, w.type_id));
         }
+        // The property's own name, as a parameter of that name would hold
+        // it in the element that defines the parameter.
+        values
+            .entry(("(property name)".to_string(), w.property.clone()))
+            .or_default()
+            .entry(w.property.clone())
+            .or_insert((w.element, w.type_id));
     }
     let mut rf = RevitFile::open(path)?;
     let revit = rf.basic_file_info()?.version;
