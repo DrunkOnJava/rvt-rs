@@ -5243,7 +5243,7 @@ fn sketch_plan_profiles(
                     .flat_map(|arc| [arc.point(arc.start_angle), arc.point(arc.end_angle)]),
             )
             .collect();
-        let exact: Option<(Vec<[f64; 4]>, bool)> = segments
+        let exact: Option<(Vec<[f64; 4]>, bool, Vec<(u32, (f64, f64))>)> = segments
             .iter()
             .filter(|(id, bbox)| {
                 let point = [bbox[0], bbox[1], bbox[2]];
@@ -5275,26 +5275,37 @@ fn sketch_plan_profiles(
                     })
                 });
                 match (line, arc) {
-                    (Some(chords), None) => Some((chords, false)),
-                    (None, Some(chords)) => Some((chords, true)),
+                    (Some(chords), None) => Some((*id, chords, false)),
+                    (None, Some(chords)) => Some((*id, chords, true)),
                     _ => None,
                 }
             })
-            .collect::<Option<Vec<(Vec<[f64; 4]>, bool)>>>()
+            .collect::<Option<Vec<(u32, Vec<[f64; 4]>, bool)>>>()
             .map(|curves| {
-                let has_arc = curves.iter().any(|(_, arc)| *arc);
-                let chords: Vec<[f64; 4]> =
-                    curves.into_iter().flat_map(|(chords, _)| chords).collect();
-                (chords, has_arc)
+                let has_arc = curves.iter().any(|(_, _, arc)| *arc);
+                // RE-151: each line's first chord is an edge of its loop.
+                let points = curves
+                    .iter()
+                    .filter_map(|(id, chords, _)| {
+                        let c = chords.first()?;
+                        Some((*id, ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0)))
+                    })
+                    .collect();
+                let chords: Vec<[f64; 4]> = curves
+                    .into_iter()
+                    .flat_map(|(_, chords, _)| chords)
+                    .collect();
+                (chords, has_arc, points)
             });
-        let Some((mut profile, has_arc)) = exact
-            .and_then(|(chords, has_arc)| Some((erpp::plan_profile_from_lines(&chords)?, has_arc)))
-        else {
+        let Some((mut profile, has_arc, points)) = exact.and_then(|(chords, has_arc, points)| {
+            Some((erpp::plan_profile_from_lines(&chords)?, has_arc, points))
+        }) else {
             continue;
         };
         // RE-96: an outline with an arc spans the element's own record box,
         // or the sketch holds curves that are not the element's edge.
         if !(has_arc || relisted.contains(&owner)) || spans_box(owner, &profile) {
+            erpp::tag_voids(&mut profile, &points);
             profile.segment_ids = segments.keys().copied().collect();
             profiles.insert(owner, profile);
         }
