@@ -109,9 +109,9 @@ Session 2 (2026-10-03, afternoon):
 | 7 | B29 | Single gaps: one Plumbing element's Reference, three Electrical proxies' Reference, a railing's sets, two openings' Reference | research | M | about 14 values | `psets_vs_ifc` | - | done |
 | 8 | B32 | `NumberOfPoles`: where an integer project-parameter value is stored (parameter 987675) | research | S | 2 values, and the integer layout for #155 | RE-156 table | - | blocked |
 | 9 | B40 | Every project and shared parameter, not only Serial Number: definitions table, typed values, Pset names by match | feature | L | generalises B21 (#85, #155) | RE-156 | B32 | blocked (a model) |
-| 10 | B33 | #528 what is left: measure ports and port connections against Revit after RE-141, then `IfcSystem` per system | feature | L | 73 + 126 connections, 26 systems | #528 | - | done (in the queue) |
+| 10 | B33 | #528 what is left: measure ports and port connections against Revit after RE-141, then `IfcSystem` per system | feature | L | 73 + 126 connections, 26 systems | #528 | - | done |
 | 11 | B38 | RE1 Plumbing 442378: why rvt-rs writes an element Revit's export lacks | research | M | one wrong element, maybe a class of them | RE-35 §, `tests/element_records_2025.rs:165` | - | blocked (B46) |
-| 12 | B39 | #228 remainder: the leading 3 of a reference list | research | M | closes #228 | RE-155 | - | done (in the queue) |
+| 12 | B39 | #228 remainder: the leading 3 of a reference list | research | M | closes #228 | RE-155 | - | done (narrowed; #228 open on ElementId 3's class) |
 | 13 | B34 | #501: `probe_elem_table_ownership` takes its files from the command line | fix | S | the RE-152 probe runs anywhere | #501 | - | done |
 | 14 | B35 | #502: Python `part_atom_json_strict` and `schema_json_strict` | feature | S | closes a documented API gap | #502, `docs/python.md` | - | done |
 | 15 | B36 | Close #255 with a pointer to #420 | community | S | tracker hygiene | #255, #420 | - | done |
@@ -228,7 +228,7 @@ Each item lists its PR, its red run on `main` (the test commit's message has the
     - `tests/spatial_property_sets.rs` on all four RE1 models.
     - With the maintainer's approval, Core Interior's pinned property sets went from 2670 to 2948 (15 × 3 + 1 + 116 × 2), and both witness observations were regenerated.
   - #606 (RE-156): `SerialNumber` is a text entry whose id is the shared parameter `Serial Number`'s ElementId (490488 on Electrical, 447886 on Plumbing), in the element's own data object; the id's own object holds the parameter's group, name and GUID. `Finish` is stored nowhere as text.
-  - #608, in the queue: `Pset_ManufacturerOccurrence.SerialNumber`, and `Pset_PrecastConcreteElementGeneral.SerialNumber` on proxies (50 on Electrical, 1 on Plumbing).
+  - #608, done: `Pset_ManufacturerOccurrence.SerialNumber`, and `Pset_PrecastConcreteElementGeneral.SerialNumber` on proxies (50 on Electrical, 1 on Plumbing).
     - Red: draft #607, run 37142425779.
     - `tests/serial_number.rs`.
   - Open, each needing evidence first:
@@ -267,11 +267,11 @@ Session 2. Each green line is the CI corpus job running `tools/ci/verify-real-fi
 - **B31, blocked.** RE-159 (Measure run 37145371415): `Generic`, Revit's `ConnectionType`, occurs 1,250 times in Plumbing's main partition but never in a pipe's or its type's own object. It is likely the name of a connection-type element the routing preferences point to. That link needs a probe; writing the constant would be hard-coding.
 - **B32, blocked** (RE-158). `NumberOfPoles` is 1 on both RE1 elements and matches no entry. Two definitions share the name `Number of Poles`, so the name lookup drops it (B40 must key definitions by id).
 - **B38, blocked.** RE-160 (Measure run 37146818151): no record on any model carries a `PHASE_CREATED` or `PHASE_DEMOLISHED` parameter entry. Phases are the native fields `m_createdPhaseId` and `m_demolishedPhaseId`, which rvt-rs reads only on Revit 2023, 2024 and 2027. 442378 is also not in the partitions' leading record chain.
-- **B33, done, in the queue** (#631). Before it, rvt-rs wrote 132 of Revit's 150 ports and 66 of 73 connections on Mechanical, 242 of 260 and 121 of 126 on Plumbing, none of 53 ports on Electrical, and no `IfcSystem` (Revit: 5, 8 and 13). The ports left are #528's; the systems are now written.
+- **B33, done** (#631). Before it, rvt-rs wrote 132 of Revit's 150 ports and 66 of 73 connections on Mechanical, 242 of 260 and 121 of 126 on Plumbing, none of 53 ports on Electrical, and no `IfcSystem` (Revit: 5, 8 and 13). The ports left are #528's; the systems are now written.
   - RE-162 (#632): each of Revit's 26 systems is one `RbsHvacSystem`, `RbsPipingSystem` or `RbsElectricalSystem` data object, and every member Revit groups holds its id in its own object. HVAC and piping systems are named by the object's first ASCII string, electrical systems by their circuit number (empty on Revit's `<unnamed>` circuit). Measure runs 37148070432, 37148641247, 37148993751.
   - Red: draft #629, run 37148704032 (Mechanical: 5 of 5 systems missing).
   - Green, run 37149305337: `test re1_mep_systems_are_revits ... ok`, `test result: ok. 1 passed; 0 failed` (all 26 systems, same name and members).
-- **B39, done, in the queue** (#630). RE-161: the leading 3 of a reference list is ElementId 3, an internal element every ElemTable declares with no name entry; no file is workshared. Closes the #228 remainder as a negative.
+- **B39, done** (#630). RE-161: the leading 3 of a reference list is most likely ElementId 3, an internal element every ElemTable declares with no name entry; it is not a workset (no file is workshared) and not a parameter value. Narrowed, not attributed: #228 stays open on which element ElementId 3 is, whose record is outside the leading chain.
 - **B40, blocked.** `tools/re/reference_property_sets.py` (#633, Measure run 37149211122): Revit's RE1 exports write no property sets besides `Pset_` ones (0 values on all four models). The project and shared parameters they carry are `SerialNumber` (done) and `NumberOfPoles` (B32). Writing every parameter has no reference values without a model whose export writes Revit's parameter-group sets.
 
 ## Findings logged this session
