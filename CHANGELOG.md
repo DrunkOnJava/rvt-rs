@@ -97,6 +97,15 @@ All notable changes will be documented here. This project follows
   bytes. Core Interior's 277 do repeat (26 pairs cover 210 of them) and
   Einhoven's 20 hardly (one pair of three). The probe now prints the grouping.
   `reports/element-framing/RE-144-header-tag-false-hits.md`.
+- **Where an element's copies differ, the native route takes the latest
+  partition's (RE-145, #548).** On 1,518 of 1,522 differing ids across Core
+  Interior, Einhoven, the RE1 models and Autodesk's 2019 and 2021 samples
+  (887 of 887 on 2021 `rac_advanced`, as puzzbobb found),
+  `native_index::route_episode` sends the element to its latest partition's
+  copy. It also sends 6 elements of Einhoven and 10 of Core Interior to
+  partitions that hold none of their records, which the native path then
+  skipped (fixed in #565). `examples/probe_re145_current_copy_routing.rs`,
+  `reports/element-framing/RE-145-current-copy-routing.md`.
 - **The later partition's copy is the newer one on Autodesk's 2021
   `rac_advanced` sample (RE-143, #548).** The project has two partitions and
   4,037 ids with a record in both. Of the 750 whose two records carry the
