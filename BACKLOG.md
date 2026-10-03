@@ -64,23 +64,24 @@ into milestones).
 | 2 | B03 | `schema_registry` reads Revit 2018's `SiteSurface.m_facets` trailing class reference | fix | S | done |
 | 3 | B04 | Single-copy elements routed to another partition are dropped as historical (Core Interior, 2024) | fix/research | M | done |
 | 4 | B05 | #548: does `route_episode` pick the newer copy? Measure on the Autodesk samples and Core Interior | research | M | done |
-| 5 | B10 | #154: the Q4 word is the grandparent's tag; the GUID list starts at 2014 | research | S | in review |
-| 6 | B11 | #152: the Stertil 2014 family as a fetchable, pinned corpus file; tick the 2014 and 2026 items | corpus/research | M | in review |
-| 7 | B12 | #421 §3: a record's family document is the `ContentDocuments` section whose GUID keys its block | research | M | in review |
-| 8 | B06 | Native path on 2016 to 2022: continuation bits `flags & 3`, pre-2018 size accounting, id width per group | feature | M | in review |
-| 9 | B01 | Answer the 13 open community comments with measured replies, each as its item lands | community | M | in progress |
+| 5 | B10 | #154: the Q4 word is the grandparent's tag; the GUID list starts at 2014 | research | S | done |
+| 6 | B11 | #152: the Stertil 2014 family as a fetchable, pinned corpus file; tick the 2014 and 2026 items | corpus/research | M | done |
+| 7 | B12 | #421 §3: a record's family document is the `ContentDocuments` section whose GUID keys its block | research | M | done |
+| 8 | B06 | Native path on 2016 to 2022: continuation bits `flags & 3`, pre-2018 size accounting, id width per group | feature | M | done |
+| 9 | B01 | Answer the 13 open community comments with measured replies, each as its item lands | community | M | done |
 | 10 | B17 | `src/writer.rs:25` names a `TODO-BLINDSIDE.md` that does not exist | debt | S | done |
 | 11 | B18 | `src/elements/structural.rs:210`: curved-beam length | debt | S | done |
-| 12 | B19 | `TODO.md` (1,310 lines): mark items done or superseded by issues | docs | M | in review |
-| 13 | B23 | Unit-suite audit (keep or mirror), then delete mirror suites area by area | tests | L | in progress |
-| 14 | B09 | #355: family-instance materials from `FamilySymbol.m_geomTag2MaterialId`, instance material parameters, render type 4 | feature | L | committed |
-| 15 | B20 | Geometry slices of milestone 0.4.x, starting with #227 | feature | XL | committed |
+| 12 | B19 | `TODO.md` (1,310 lines): mark items done or superseded by issues | docs | M | done |
+| 13 | B23 | Unit-suite audit (keep or mirror), then delete mirror suites area by area | tests | L | done |
+| 14 | B09 | #355: family-instance materials from `FamilySymbol.m_geomTag2MaterialId`, instance material parameters, render type 4 | feature | L | in review |
+| 15 | B20 | Geometry slices of milestone 0.4.x, starting with #227 | feature | XL | in progress |
 | 16 | B08 | #309: door and window types with an empty material map are bare `IfcOpeningElement`s | feature | M | blocked |
-| 17 | B07 | #223: the flag word at `+0x46` is not Room Bounding | research | S | open |
-| 18 | B13 | #421 §2: six curtain system type records on 2021 `rac_advanced` that ElemTable does not list | research | S | open |
+| 17 | B07 | #223: the flag word at `+0x46` is not Room Bounding | research | S | done (reply, unverified) |
+| 18 | B13 | #421 §2: six curtain system type records on 2021 `rac_advanced` that ElemTable does not list | research | S | done (reply) |
 | 19 | B21 | Parameters (0.5.0: #35, #155, #223, #228) | feature | XL | open |
 | 20 | B22 | Held-out validation on licensed models (#408) | test | L | blocked |
-| 21 | B24 | `ClassEntry::tag` is the base's tag (RE-146), but the schema-directed walker, `SchemaTable::tagged_ancestor` and `rvt-analyze` use it as the class's own | fix | M | open |
+| 21 | B24 | `ClassEntry::tag` is the base's tag (RE-146), but the schema-directed walker, `SchemaTable::tagged_ancestor` and `rvt-analyze` use it as the class's own | fix | M | done (measured, no change) |
+| 22 | B25 | Run the Python API integration suite (`tests/python`, 64 tests) in the wheel job | tooling | S | done |
 
 
 ## Progress log
@@ -107,18 +108,38 @@ Each item lists its PR, its red run on `main` (the test commit's message has the
   - it sends 16 elements (Einhoven 6, Core Interior 10) to partitions without their records, which B04 fixed.
 
   Runs 37116666890 and 37117317288.
-- **B10, in review** (#563). RE-146: `ClassEntry::tag` is the base's tag and `ancestor_tag` the grandparent's, on all 53 files (run 37116713027). This opened B24.
-- **B11, in review** (#568). RE-147: the Stertil 2014 family is pinned in `research/public-families.tsv`, and the ElemTable invariants hold on 54 files of 2014 to 2027 (run 37117029420).
-- **B12, in review** (#570). RE-148: block keys are in `Global/ContentDocuments` (163, 52 and 121 on every sample of 2019 to 2027), and the `ContentMarker` count rule holds on all 3,520 blocks; RE1 Electrical's 60 keys are the exception (run 37118135955).
-- **B06, in review** (#571).
+- **B10, done** (#563, merged). RE-146: `ClassEntry::tag` is the base's tag and `ancestor_tag` the grandparent's, on all 53 files (run 37116713027). This opened B24.
+- **B11, done** (#568, merged). RE-147: the Stertil 2014 family is pinned in `research/public-families.tsv`, and the ElemTable invariants hold on 54 files of 2014 to 2027 (run 37117029420).
+- **B12, done** (#570, merged). RE-148: block keys are in `Global/ContentDocuments` (163, 52 and 121 on every sample of 2019 to 2027), and the `ContentMarker` count rule holds on all 3,520 blocks; RE1 Electrical's 60 keys are the exception (run 37118135955).
+- **B06, done** (#571, merged).
   - Red: `tests/native_partitions_walk.rs` on draft #566: 2016 and 2017 stop on `SignatureMarker` (2018's schema stop was fixed by #561).
-  - Measure run 37118576160.
+  - Measure run 37118576160: all outputs identical to `main`.
 - **B17, B18, done** (#562, merged). These are comment-only changes, verified by CI's `cargo doc` and `cargo clippy`.
-- **B19, in review** (#567). `TODO.md` is marked as the archived decomposition. All 60 items name their issues: 59 closed, and M4-07 (#35) open.
-- **B23, in progress.** Areas, each deleted only with its covering targets green:
-  - `elem_table`, done in #559: 336 lines;
-  - partition and element-record decoders, this PR: 4,443 lines.
-- **B01, in progress.** Replies are posted as the items above merge.
+- **B19, done** (#567, merged). `TODO.md` is marked as the archived decomposition. All 60 items name their issues: 59 closed, and M4-07 (#35) open.
+- **B01, done.** All 13 comments are answered:
+  - puzzbobb: #152, #154 (twice), #548 (twice, then closed), #421, #223, #309, #355;
+  - STE1200: #152 and Discussion #112.
+
+  The checklists of #152 and #154 are ticked: the 2014 and 2026 layouts, the first record, and the 3,619-class 2014 schema (reproduced on the Stertil family, run 37120169355).
+- **B13, done.** RE-145's walk finds 7 undeclared channel-101 ids on 2021 `rac_advanced` against 1 on every other sample, consistent with puzzbobb's six. Reported on #421.
+- **B07, done as a reply.** puzzbobb's consecutive-save model is not public; the reply asked for the files, and the finding is recorded as unverified.
+- **B23, done.** Mirror suites deleted, each with its covering targets green on its PR:
+  - `elem_table`: 336 lines (#559);
+  - partition decoders: 4,443 (#572);
+  - typed elements: 4,636 (#573);
+  - schema and walker: 3,356 (#574);
+  - IFC writers: 8,443 (#575);
+  - CLIs and writer: 1,063 (#576);
+  - synthetic-fixture targets: 2,096 (#577).
+
+  That is 24,373 lines in all. The Python suite is an integration test over the public API on real files, so it is kept and now runs in CI (B25).
+- **B24, done (measured, no change)** (#581). RE-150: the walker's `Global/Latest` scan finds 0 candidates at the production threshold on every measured file, with base tags and with own tags alike, so the base-tag lookup changes no output.
+- **B25, done** (#578). `tests/python` (64 tests, plus 1 needing `jsonschema`, now installed) runs on the built wheel in the wheel job against the tier-1 fixtures and the family corpus. First run: 64 passed, 1 skipped.
+- **B09, in review** (#580).
+  - Red on `main` (draft #579): `tests/element_materials.rs` gave 0 of 256 columns Revit's material set.
+  - Measure (run 37120595647): element materials with Revit's set went from 580 to 836 on Core Interior, 0 to 47 on RE1 Electrical, 0 to 43 on RE1 Mechanical and 0 to 60 on RE1 Plumbing, with no wrong set added.
+  - With the maintainer's approval, the pinned material count went from 86 to 87, and the witness observations were regenerated on the runners.
+- **B20, in progress.** RE-151 (#227): every one of Core Interior's 63 unfilled openings is tagged with a sketch line (`CurveElem`, category −2000045) whose owner is the opening's host. They are holes in the host's sketch. Next: which line of the loop gives the Tag, then emit the openings.
 
 ## Item details
 
