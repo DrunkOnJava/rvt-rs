@@ -60,45 +60,96 @@ into milestones).
 
 | # | id | title | lane | size | status |
 |---|---|---|---|---|---|
-| 1 | B02 | ElemTable records from `0x06`: drop the tail frame on 40-byte files, keep the first record, and expose its owner | fix | M | in progress |
-| 2 | B03 | `schema_registry` reads Revit 2018's `SiteSurface.m_facets` trailing class reference | fix | S | in progress |
-| 3 | B04 | Single-copy elements routed to another partition are dropped as historical (Core Interior, 2024) | fix/research | M | in progress |
-| 4 | B05 | #548: does `route_episode` pick the newer copy? Measure on the Autodesk samples and Core Interior | research | M | in progress |
-| 5 | B10 | #154: the Q4 word is the grandparent's tag; the GUID list starts at 2014 | research | S | in progress |
-| 6 | B11 | #152: the Stertil 2014 family as a fetchable, pinned corpus file; tick the 2014 and 2026 items | corpus/research | M | committed |
-| 7 | B12 | #421 §3: a record's family document is the `ContentDocuments` section whose GUID keys its block | research | M | committed |
-| 8 | B06 | Native path on 2016 to 2022: continuation bits `flags & 3`, pre-2018 size accounting, id width per group | feature | M | committed |
-| 9 | B01 | Answer the 13 open community comments with measured replies, each as its item lands | community | M | committed |
+| 1 | B02 | ElemTable records from `0x06`: drop the tail frame on 40-byte files, keep the first record, and expose its owner | fix | M | done |
+| 2 | B03 | `schema_registry` reads Revit 2018's `SiteSurface.m_facets` trailing class reference | fix | S | done |
+| 3 | B04 | Single-copy elements routed to another partition are dropped as historical (Core Interior, 2024) | fix/research | M | done |
+| 4 | B05 | #548: does `route_episode` pick the newer copy? Measure on the Autodesk samples and Core Interior | research | M | done |
+| 5 | B10 | #154: the Q4 word is the grandparent's tag; the GUID list starts at 2014 | research | S | done |
+| 6 | B11 | #152: the Stertil 2014 family as a fetchable, pinned corpus file; tick the 2014 and 2026 items | corpus/research | M | done |
+| 7 | B12 | #421 §3: a record's family document is the `ContentDocuments` section whose GUID keys its block | research | M | done |
+| 8 | B06 | Native path on 2016 to 2022: continuation bits `flags & 3`, pre-2018 size accounting, id width per group | feature | M | done |
+| 9 | B01 | Answer the 13 open community comments with measured replies, each as its item lands | community | M | done |
 | 10 | B17 | `src/writer.rs:25` names a `TODO-BLINDSIDE.md` that does not exist | debt | S | done |
 | 11 | B18 | `src/elements/structural.rs:210`: curved-beam length | debt | S | done |
-| 12 | B19 | `TODO.md` (1,310 lines): mark items done or superseded by issues | docs | M | committed |
-| 13 | B23 | Unit-suite audit (keep or mirror), then delete mirror suites area by area | tests | L | in progress |
-| 14 | B09 | #355: family-instance materials from `FamilySymbol.m_geomTag2MaterialId`, instance material parameters, render type 4 | feature | L | committed |
-| 15 | B20 | Geometry slices of milestone 0.4.x, starting with #227 | feature | XL | committed |
+| 12 | B19 | `TODO.md` (1,310 lines): mark items done or superseded by issues | docs | M | done |
+| 13 | B23 | Unit-suite audit (keep or mirror), then delete mirror suites area by area | tests | L | done |
+| 14 | B09 | #355: family-instance materials from `FamilySymbol.m_geomTag2MaterialId`, instance material parameters, render type 4 | feature | L | done |
+| 15 | B20 | Geometry slices of milestone 0.4.x, starting with #227 | feature | XL | in progress |
 | 16 | B08 | #309: door and window types with an empty material map are bare `IfcOpeningElement`s | feature | M | blocked |
-| 17 | B07 | #223: the flag word at `+0x46` is not Room Bounding | research | S | open |
-| 18 | B13 | #421 §2: six curtain system type records on 2021 `rac_advanced` that ElemTable does not list | research | S | open |
+| 17 | B07 | #223: the flag word at `+0x46` is not Room Bounding | research | S | done (reply, unverified) |
+| 18 | B13 | #421 §2: six curtain system type records on 2021 `rac_advanced` that ElemTable does not list | research | S | done (reply) |
 | 19 | B21 | Parameters (0.5.0: #35, #155, #223, #228) | feature | XL | open |
 | 20 | B22 | Held-out validation on licensed models (#408) | test | L | blocked |
+| 21 | B24 | `ClassEntry::tag` is the base's tag (RE-146), but the schema-directed walker, `SchemaTable::tagged_ancestor` and `rvt-analyze` use it as the class's own | fix | M | done (measured, no change) |
+| 22 | B25 | Run the Python API integration suite (`tests/python`, 64 tests) in the wheel job | tooling | S | done |
+
 
 ## Progress log
 
-- **B02** (PR #559).
-  - Red: `tests/elem_table_frame.rs` failed on `main` (draft #558, run 37115866869).
+Each item lists its PR, its red run on `main` (the test commit's message has the full output), its green run, and its Measure evidence.
+
+- **B02, done** (#559, merged).
+  - Red: `tests/elem_table_frame.rs` on draft #558, run 37115866869.
     - `2016 family: ids rise strictly, but record 1595 has id 18 after 7259 (of 1596)`
     - `Revit_IFC5_Einhoven.rvt: parse_records returns the 2615 records the table states, left: 2614, right: 2615`
-  - Green: every required check on #559, plus corpus tier 2.
-  - Measure against `main` (run 37116473919, families and samples): scorer output and rvt-info output are identical on all 6 models, 11 families and 36 samples; only RE1 Architecture's IFC bytes differ. That IFC is being diffed (run 37116833078).
+  - Green: every required check, plus corpus tier 2.
+  - Measure against `main` (run 37117234625, families and samples): all 6 IFCs are byte-identical, and every scorer, rvt-info and diagnostics output is identical on 6 models, 11 families and 36 samples.
+  - An earlier run (37116833078) caught one change: RE1 Architecture's curtain wall type took a `Type Mark`. The value-block fix in the same PR restored the old output.
   - Five existing tests were updated with the maintainer's approval, in their own commit.
-- **B03** (PR #561).
-  - Red: `tests/schema_registry_catalogs.rs` failed on `main` (draft #560, run 37116554570): `["2018: schema name byte budget at 351466: 786452"]`, the only failing release.
-- **B04, B05.** Probe `probe_re145_current_copy_routing` on branch `re/re145-copy-routing`, Measure run 37116666890 with the samples.
-- **B10.** Probe `probe_re146_q4_word` on branch `re/re146-q4-word`, Measure run 37116713027 with the families and samples.
-- **B17, B18.**
-  - `src/writer.rs` now points at ADR-002 instead of the missing `TODO-BLINDSIDE.md`.
-  - The curved-beam marker in `src/elements/structural.rs` now says the length is the chord and links #94.
-  - These are comment-only changes, verified by CI's `cargo doc` and `cargo clippy`. There is no behaviour to test.
-- **B23.** Area `elem_table`: the inline mirror suite is deleted (336 lines) in #559, landing with that PR's green real-file run. `index_by_element_id_keeps_first_duplicate` is kept as a keep test.
+- **B03, done** (#561, merged).
+  - Red: `tests/schema_registry_catalogs.rs` on draft #560, run 37116554570: `["2018: schema name byte budget at 351466: 786452"]`.
+  - Green: every check on #561.
+- **B04, done** (#565, merged).
+  - Red: `tests/native_current_records.rs` on draft #564 (corpus tier 2): `Revit_IFC5_Einhoven.rvt: 6 declared elements have no emitted record: [2846, 5973, 5974, 5976, 5978, 5979]`.
+  - Green: corpus tier 2 and the required checks.
+  - Measure (run 37117901879, samples): all outputs are identical to `main`.
+- **B05, done.** RE-145 (#569) answers #548:
+  - the route takes the latest copy on 1,518 of 1,522 differing ids;
+  - it sends 16 elements (Einhoven 6, Core Interior 10) to partitions without their records, which B04 fixed.
+
+  Runs 37116666890 and 37117317288.
+- **B10, done** (#563, merged). RE-146: `ClassEntry::tag` is the base's tag and `ancestor_tag` the grandparent's, on all 53 files (run 37116713027). This opened B24.
+- **B11, done** (#568, merged). RE-147: the Stertil 2014 family is pinned in `research/public-families.tsv`, and the ElemTable invariants hold on 54 files of 2014 to 2027 (run 37117029420).
+- **B12, done** (#570, merged). RE-148: block keys are in `Global/ContentDocuments` (163, 52 and 121 on every sample of 2019 to 2027), and the `ContentMarker` count rule holds on all 3,520 blocks; RE1 Electrical's 60 keys are the exception (run 37118135955).
+- **B06, done** (#571, merged).
+  - Red: `tests/native_partitions_walk.rs` on draft #566: 2016 and 2017 stop on `SignatureMarker` (2018's schema stop was fixed by #561).
+  - Measure run 37118576160: all outputs identical to `main`.
+- **B17, B18, done** (#562, merged). These are comment-only changes, verified by CI's `cargo doc` and `cargo clippy`.
+- **B19, done** (#567, merged). `TODO.md` is marked as the archived decomposition. All 60 items name their issues: 59 closed, and M4-07 (#35) open.
+- **B01, done.** All 13 comments are answered:
+  - puzzbobb: #152, #154 (twice), #548 (twice, then closed), #421, #223, #309, #355;
+  - STE1200: #152 and Discussion #112.
+
+  The checklists of #152 and #154 are ticked: the 2014 and 2026 layouts, the first record, and the 3,619-class 2014 schema (reproduced on the Stertil family, run 37120169355).
+- **B13, done.** RE-145's walk finds 7 undeclared channel-101 ids on 2021 `rac_advanced` against 1 on every other sample, consistent with puzzbobb's six. Reported on #421.
+- **B07, done as a reply.** puzzbobb's consecutive-save model is not public; the reply asked for the files, and the finding is recorded as unverified.
+- **B23, done.** Mirror suites deleted, each with its covering targets green on its PR:
+  - `elem_table`: 336 lines (#559);
+  - partition decoders: 4,443 (#572);
+  - typed elements: 4,636 (#573);
+  - schema and walker: 3,356 (#574);
+  - IFC writers: 8,443 (#575);
+  - CLIs and writer: 1,063 (#576);
+  - synthetic-fixture targets: 2,096 (#577).
+
+  That is 24,373 lines in all. The Python suite is an integration test over the public API on real files, so it is kept and now runs in CI (B25).
+- **B24, done (measured, no change)** (#581). RE-150: the walker's `Global/Latest` scan finds 0 candidates at the production threshold on every measured file, with base tags and with own tags alike, so the base-tag lookup changes no output.
+- **B25, done** (#578). `tests/python` (64 tests, plus 1 needing `jsonschema`, now installed) runs on the built wheel in the wheel job against the tier-1 fixtures and the family corpus. First run: 64 passed, 1 skipped.
+- **B09, done** (#580, merged).
+  - Red on `main` (draft #579): `tests/element_materials.rs` gave 0 of 256 columns Revit's material set.
+  - Measure (run 37120595647): element materials with Revit's set went from 580 to 836 on Core Interior, 0 to 47 on RE1 Electrical, 0 to 43 on RE1 Mechanical and 0 to 60 on RE1 Plumbing, with no wrong set added.
+  - With the maintainer's approval, the pinned material count went from 86 to 87, and the witness observations were regenerated on the runners.
+- **B20, in progress.** Milestone #227, the openings Revit's export leaves unfilled (RE-151):
+  - #584: each hole in a floor's or shading device's sketch is an opening voiding it, tagged with the lowest id of the sketch lines on the hole.
+    - Red on `main` (draft #583, run 37126870895): `tests/unfilled_openings.rs` found 62 of Revit's 62 slab and shading-device openings missing.
+    - Measure (run 37128180603): 62 of Revit's 63 unfilled openings, all within 0.001 ft of Revit's box. Every other model's outputs are identical to `main`.
+    - With the maintainer's approval, the Core Interior witness observations were regenerated (surface unchanged, 0 diffs).
+  - Left on #227: the 63rd opening, a hole in wall 55840's elevation-profile sketch. Reading it needs that wall's edited profile, which rvt-rs does not read.
+  - The other 0.4.x milestones are blocked here:
+    - #90, #94, #309, #323, #328, #357 and #358 are measured only on Snowdon, which is local-only;
+    - #356 needs a pitched-roof oracle;
+    - #156 waits on reported format evidence;
+    - #96's open parts need a model with round or oval ducts.
 
 ## Item details
 
@@ -228,7 +279,40 @@ Snowdon-only parts (#328, #309, #358's 165 walls) are not measurable here.
   - Mirror suites are deleted one area per commit, and the message records the lines removed.
   - An area is deleted only after its `real` or `cli` targets pass on the PR's CI run. The run link goes in the area's row.
   - A suite is tagged keep when it states a property from the format's specification or tests pure, stable logic from outside (geometry math, bounds against hostile input, property tests, fuzz regressions).
-- **Areas.** Filled in by the audit.
+- **Audit (2026-10-03).** When in doubt, a suite is tagged mirror: the session's rule is "if unsure whether a test is banned, treat it as banned".
+
+  **Keep.** Pure logic or spec-level behaviour checked from outside:
+
+  | suite | reason |
+  |---|---|
+  | `src/ifc/measure.rs` | vector maths |
+  | `src/ifc/clipping.rs` | plane geometry |
+  | `src/ifc/body_geometry.rs` | triangulated areas and volumes |
+  | `src/ifc/camera.rs` | view maths |
+  | `src/ifc/pbr.rs` | colour conversion |
+  | `src/redact.rs` | PII redaction of paths |
+  | `src/compression.rs` | RFC 1952 headers, inflate bomb limits |
+  | `src/control.rs` | cancellation semantics |
+  | `src/project_information.rs` | ZIP entries and the inflate limit on hostile input |
+  | `src/round_trip.rs` | encode then decode, byte-exact |
+  | `src/elem_table.rs` (1 test) | duplicate ids keep the first |
+  | `src/revit_global_ids.rs` (1 test) | Revit's own GlobalIds for two Snowdon walls |
+  | `tests/fuzz_regressions.rs` | regression inputs from fuzzing |
+  | `tests/proptest_parsers.rs` | property tests |
+  | `tests/graceful_degradation.rs` | corrupted inputs fail closed |
+
+  **Mirror.** These build synthetic byte buffers in a decoder's own layout, assert on internal structs or private helpers, or pin exact STEP/glTF/JSON text from hand-built models (change detectors). Deleted area by area, each with the covering targets named:
+
+  | area | suites | covering targets | status |
+  |---|---|---|---|
+  | `elem_table` | `src/elem_table.rs` (16 of 17 tests) | `elem_table_frame`, `elem_table_corpus` | done in #559, 336 lines |
+  | partition and element-record decoders | `src/partition_*.rs`, `src/partitions.rs`, `src/rect_opening_index.rs`, `src/arc_wall_record.rs`, `src/compound_framing.rs`, `src/object_graph.rs`, `src/element_record_*.rs`, `src/revit_global_ids.rs` (2 of 3), `src/transmission_data.rs` | `partition_record_chain`, `element_records_2025`, `arc_wall_corpus`, `iter_elements_typed`, `design_options`, `revit_global_ids`, `rooms_floors_from_records_only`, `re15_geometry_invariants`, `re19_door_window_wall_negative`, `level_names`, `element_names`, `curtain_walls`, `ifc_export_overrides`, `partition_scanner`, `project_count_fixtures`, Measure | this PR, 4,443 lines |
+  | typed elements | `src/elements/*.rs` | `iter_elements_typed`, `element_names`, `level_names`, `curtain_walls`, `rooms_floors_from_records_only`, Measure | next |
+  | schema, walker, metadata | `src/walker.rs`, `src/formats.rs`, `src/class_index.rs`, `src/class_tag_map.rs`, `src/es_refs.rs`, `src/metadata.rs`, `src/basic_file_info.rs`, `src/part_atom.rs`, `src/reader.rs`, `src/parse_mode.rs` | `samples`, `field_type_coverage`, `json_schema_contracts`, `rvt_info_cli`, `rvt_inspect_cli`, `rvt_dump_cli`, `schema_registry_catalogs` | open |
+  | IFC, glTF, schedule writers | `src/ifc/` except the keeps, `src/geometry/`, `src/level_bind.rs`, `src/relations.rs` | `walker_to_ifc_integration`, `ifc_roundtrip`, `ifc_export_overrides`, `rvt_ifc_diagnostics_cli`, `rvt_schedule_cli`, the IfcOpenShell job, Measure | open |
+  | CLIs, writer, small modules | `src/bin/*.rs`, `src/writer.rs`, `src/capability.rs`, `src/cli.rs`, `src/corpus.rs`, `src/evidence.rs`, `src/identity.rs` | the six `cli` targets, `cfb_roundtrip_delta`, `binary_inventory` | open |
+  | synthetic-fixture targets | `tests/` unit class except the keeps: `cfb_patch_corpus`, `checksum_page_framing`, `control_cancellation`, `corpus_tier1_health`, `es_remap_golden`, `gen_fixture_roundtrip`, `geometry_recovery`, `ifc_export_modes`, `ifc_synthetic_project`, `ifc_synthetic_structural`, `typed_decoders` | as above per subject | open |
+  | Python | `tests/python/` (pytest, unit-level, not run) | the wheel smoke on real files (`tools/ci/wheel-smoke.py`) | open |
 
 ### B21 Parameters (XL)
 

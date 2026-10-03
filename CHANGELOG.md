@@ -8,6 +8,35 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A floor's sketch holes are openings voiding it (RE-151, #227).** Revit's
+  export writes each hole in a floor's or shading device's sketch twice: as a
+  void of the slab's profile, which rvt-rs already wrote, and as an
+  `IfcOpeningElement` voiding the slab, with the hole's outline through the
+  slab's thickness, placed in the slab's frame, named `Family:Type:<type id>`
+  and tagged with the lowest ElementId of the sketch lines on the hole. The
+  IFC export now writes those openings: Core Interior's 42 slab and 20
+  shading-device openings, all within 0.001 ft of Revit's (Measure). Checked
+  by the new real-file target `tests/unfilled_openings.rs`. The 63rd, a hole
+  in wall 55840's elevation profile, is not read.
+  `element_record_plan_profiles::tag_voids`, `PlanProfile::void_openings`
+  and `IfcEntity::VoidOpening`.
+- **Family instances whose type draws with no material take Revit's
+  `<Unnamed>`, and columns walls are joined to take the walls' material
+  (#355).** A family type's geometry-material map (RE-82, puzzbobb's
+  `FamilySymbol.m_geomTag2MaterialId`) whose every value is unset read as no
+  map, and its instances got no material. Revit's export gives them
+  `<Unnamed>`: 107 of Core Interior's 256 columns and 150 of the 152 RE1
+  fittings, terminals and fixtures it relates a material to. Such a type is
+  now recognised by the first map in its value block, distinct geometry-tag
+  keys and only unset values (RE-149), and its columns and products take
+  `<Unnamed>`. A column the record's reference list joins to overlapping
+  walls takes those walls' material instead, as Revit gives Core Interior's
+  other 149 columns "Default Wall" (the module that cuts columns by those
+  walls already found the same 149/107 split). Doors, windows, walls and
+  slabs are unchanged. Checked by the new real-file target
+  `tests/element_materials.rs`: all 256 of Core Interior's columns have
+  Revit's material set. `element_record_column_cuts::column_joined_walls`,
+  `partition_type_materials::unset_material_types` and `UNNAMED_MATERIAL`.
 - **Ports for the joins of duct and pipe fittings (RE-141, #528).** A
   fitting's joins are written in the same list form as a pipe's, with the
   fitting first, and are read wherever they are in a partition. The IFC export
@@ -97,6 +126,15 @@ All notable changes will be documented here. This project follows
   887 on Autodesk's 2021 `rac_advanced`). The summary counts them in
   `current_records_outside_route`. Checked by the new real-file target
   `tests/native_current_records.rs`.
+- **The native path walks the partitions of Revit 2016 and 2017 (#421).**
+  `native_segments::walk` required a `SignatureMarker` class, which the 2016
+  and 2017 schemas do not have and their partitions never write, and it took
+  `m_continuationBits` to be 4 to 7, where it is `(n << 2) | flags` with `n` = 1
+  from 2018 and 100 or more before (puzzbobb). The class is now required only
+  where a marker is met, and only the continuation flags are read from the
+  word. Checked by the new real-file target `tests/native_partitions_walk.rs`:
+  every partition of every family of 2016 to 2026 walks to its end. The
+  native record path still admits only 2023, 2024 and 2027.
 
 ### Research
 

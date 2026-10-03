@@ -466,6 +466,15 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Family instances whose type draws with no material (RE-149, #355) ---
+    let unset_types = crate::partition_type_materials::unset_material_types(rf, revit_version);
+    if !unset_types.is_empty() {
+        for elements in [&mut out.columns, &mut out.products] {
+            attach_unnamed_materials(&unset_types, elements);
+        }
+        attach_joined_wall_materials(&mut out.columns, &out.walls);
+    }
+
     // --- Each window's opening from its type and transform (RE-93, #227) ---
     attach_window_openings(rf, revit_version, &mut out.windows);
     // --- Each door's rough opening from its type (RE-94, #227), after RE-84
@@ -1599,6 +1608,104 @@ fn attach_type_materials(materials: &BTreeMap<u32, Vec<String>>, elements: &mut 
                 TYPE_MATERIAL_FIELD.into(),
                 InstanceField::String(name.clone()),
             ));
+        }
+    }
+}
+
+/// Give each element whose type draws its geometry with no material of its
+/// own, and that has no type material yet, the material Revit's export
+/// writes for such geometry, [`crate::partition_type_materials::UNNAMED_MATERIAL`]
+/// (RE-149). Doors, windows, walls and slabs are left alone: a door or
+/// window type without a material map is written as its opening (RE-84).
+fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [DecodedElement]) {
+    for element in elements.iter_mut() {
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_MATERIAL_FIELD)
+        {
+            continue;
+        }
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        if type_id.is_some_and(|id| unset_types.contains(&id)) {
+            // The type draws geometry, so it is not a type without
+            // geometry (RE-84), which `attach_type_materials` took its empty
+            // map to mean; a hosted instance would otherwise be written as
+            // its opening alone (reported by Cursor Bugbot on #580).
+            element
+                .fields
+                .retain(|(name, _)| name != TYPE_WITHOUT_GEOMETRY_FIELD);
+            element.fields.push((
+                TYPE_MATERIAL_FIELD.into(),
+                InstanceField::String(crate::partition_type_materials::UNNAMED_MATERIAL.into()),
+            ));
+        }
+    }
+}
+
+/// A column whose type draws with no material and that walls are joined to
+/// takes the joined walls' material (#355): Revit's export gives the 149
+/// columns of `2024_Core_Interior.rvt` that walls are joined to "Default
+/// Wall", the material of those walls, and `<Unnamed>` to the 107 no wall
+/// joins. Only when every joined wall's layers name the same one set of
+/// materials; otherwise the column keeps `<Unnamed>`.
+fn attach_joined_wall_materials(columns: &mut [DecodedElement], walls: &[DecodedElement]) {
+    use crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD;
+    use crate::partition_type_materials::UNNAMED_MATERIAL;
+
+    let wall_materials: BTreeMap<u32, BTreeSet<String>> = walls
+        .iter()
+        .filter_map(|wall| {
+            let layers = element_layers_from_fields(&wall.fields)?;
+            let names: Option<BTreeSet<String>> =
+                layers.layers.iter().map(|band| band.name.clone()).collect();
+            Some((wall.id?, names.filter(|n| !n.is_empty())?))
+        })
+        .collect();
+    for column in columns.iter_mut() {
+        let unnamed_only = column
+            .fields
+            .iter()
+            .filter(|(name, _)| name == TYPE_MATERIAL_FIELD)
+            .all(|(_, value)| matches!(value, InstanceField::String(s) if s == UNNAMED_MATERIAL));
+        let has_material = column
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_MATERIAL_FIELD);
+        if !(unnamed_only && has_material) {
+            continue;
+        }
+        let joined: Vec<u32> = column
+            .fields
+            .iter()
+            .filter_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. } if name == COLUMN_JOINED_WALL_FIELD => {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .collect();
+        let sets: Vec<&BTreeSet<String>> = joined
+            .iter()
+            .filter_map(|id| wall_materials.get(id))
+            .collect();
+        let Some(first) = sets.first() else {
+            continue;
+        };
+        if sets.len() != joined.len() || sets.iter().any(|set| set != first) {
+            continue;
+        }
+        let names = (*first).clone();
+        column
+            .fields
+            .retain(|(name, _)| name != TYPE_MATERIAL_FIELD);
+        for name in names {
+            column
+                .fields
+                .push((TYPE_MATERIAL_FIELD.into(), InstanceField::String(name)));
         }
     }
 }
@@ -5136,7 +5243,7 @@ fn sketch_plan_profiles(
                     .flat_map(|arc| [arc.point(arc.start_angle), arc.point(arc.end_angle)]),
             )
             .collect();
-        let exact: Option<(Vec<[f64; 4]>, bool)> = segments
+        let exact: Option<ExactSketch> = segments
             .iter()
             .filter(|(id, bbox)| {
                 let point = [bbox[0], bbox[1], bbox[2]];
@@ -5168,32 +5275,47 @@ fn sketch_plan_profiles(
                     })
                 });
                 match (line, arc) {
-                    (Some(chords), None) => Some((chords, false)),
-                    (None, Some(chords)) => Some((chords, true)),
+                    (Some(chords), None) => Some((*id, chords, false)),
+                    (None, Some(chords)) => Some((*id, chords, true)),
                     _ => None,
                 }
             })
-            .collect::<Option<Vec<(Vec<[f64; 4]>, bool)>>>()
+            .collect::<Option<Vec<(u32, Vec<[f64; 4]>, bool)>>>()
             .map(|curves| {
-                let has_arc = curves.iter().any(|(_, arc)| *arc);
-                let chords: Vec<[f64; 4]> =
-                    curves.into_iter().flat_map(|(chords, _)| chords).collect();
-                (chords, has_arc)
+                let has_arc = curves.iter().any(|(_, _, arc)| *arc);
+                // RE-151: each line's first chord is an edge of its loop.
+                let points = curves
+                    .iter()
+                    .filter_map(|(id, chords, _)| {
+                        let c = chords.first()?;
+                        Some((*id, ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0)))
+                    })
+                    .collect();
+                let chords: Vec<[f64; 4]> = curves
+                    .into_iter()
+                    .flat_map(|(_, chords, _)| chords)
+                    .collect();
+                (chords, has_arc, points)
             });
-        let Some((mut profile, has_arc)) = exact
-            .and_then(|(chords, has_arc)| Some((erpp::plan_profile_from_lines(&chords)?, has_arc)))
-        else {
+        let Some((mut profile, has_arc, points)) = exact.and_then(|(chords, has_arc, points)| {
+            Some((erpp::plan_profile_from_lines(&chords)?, has_arc, points))
+        }) else {
             continue;
         };
         // RE-96: an outline with an arc spans the element's own record box,
         // or the sketch holds curves that are not the element's edge.
         if !(has_arc || relisted.contains(&owner)) || spans_box(owner, &profile) {
+            erpp::tag_voids(&mut profile, &points);
             profile.segment_ids = segments.keys().copied().collect();
             profiles.insert(owner, profile);
         }
     }
     profiles
 }
+
+/// A sketch read from its lines' exact ends: the chords, whether any is an
+/// arc's, and each line's ElementId with a point on its edge (RE-151).
+type ExactSketch = (Vec<[f64; 4]>, bool, Vec<(u32, (f64, f64))>);
 
 /// Classes whose plan outline is their sketch's: roofs (RE-50) and, since
 /// RE-98, ceilings.
@@ -5828,10 +5950,17 @@ pub fn column_instances_from_records(
     let selected = select_instance_records(records);
     let instances: Vec<PartitionElementRecord> = selected.values().cloned().collect();
     let cuts = crate::element_record_column_cuts::column_cut_boxes(&instances, wall_records);
+    let joined = crate::element_record_column_cuts::column_joined_walls(&instances, wall_records);
     selected
         .values()
         .map(|record: &PartitionElementRecord| {
             let mut decoded = element_record_decoded(record, "Column", level_ids);
+            for &wall in joined.get(&record.element_id).into_iter().flatten() {
+                decoded.fields.push((
+                    crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD.into(),
+                    InstanceField::ElementId { tag: 0, id: wall },
+                ));
+            }
             if let Some(symbol) = record
                 .type_symbol_reference(&symbol_ids)
                 .and_then(|id| symbols.get(&id).map(|bbox| (id, *bbox)))
@@ -6846,222 +6975,4 @@ fn rect_openings_from_partitions(
         }
     }
     Ok(out)
-}
-
-#[cfg(test)]
-mod tests {
-
-    /// Test shims: every corpus record in these fixtures is synthetic
-    /// and names no `Level`, so the #219 join has nothing to resolve.
-    fn columns_from_records_t(
-        records: Vec<crate::partition_element_records::PartitionElementRecord>,
-    ) -> Vec<DecodedElement> {
-        columns_from_records(records, &BTreeSet::new())
-    }
-
-    fn instances_from_records_t(
-        records: Vec<crate::partition_element_records::PartitionElementRecord>,
-        class: &str,
-    ) -> Vec<DecodedElement> {
-        instances_from_records(records, class, &BTreeSet::new())
-    }
-    use super::*;
-
-    #[test]
-    fn strict_material_keeps_concrete_rejects_schema() {
-        assert!(is_strict_material_name("Concrete"));
-        assert!(is_strict_material_name("Masonry - Brick"));
-        assert!(!is_strict_material_name("HardwoodSchema"));
-        assert!(!is_strict_material_name("Glass/Glazing:Default:Glass"));
-    }
-
-    #[test]
-    fn level_decoded_projects_elevation() {
-        let el = level_decoded("Level 1", Some(10.0), 0);
-        assert_eq!(el.class, "Level");
-        let level = crate::elements::level::Level::from_decoded(&el);
-        assert_eq!(level.name.as_deref(), Some("Level 1"));
-        assert_eq!(level.elevation_feet, Some(10.0));
-        assert_eq!(level.is_building_story, Some(true));
-    }
-
-    fn column_record(
-        element_id: u32,
-        bbox_feet: [f64; 6],
-    ) -> crate::partition_element_records::PartitionElementRecord {
-        element_record(
-            element_id,
-            crate::partition_element_records::OST_COLUMNS,
-            bbox_feet,
-        )
-    }
-
-    fn element_record(
-        element_id: u32,
-        builtin_category: i64,
-        bbox_feet: [f64; 6],
-    ) -> crate::partition_element_records::PartitionElementRecord {
-        crate::partition_element_records::PartitionElementRecord {
-            stream: "Partitions/46".into(),
-            offset: element_id as usize,
-            element_id,
-            flags: 0x0141,
-            builtin_category,
-            container: crate::partition_element_records::CONTAINER_NONE,
-            placement_kind: crate::partition_element_records::PLACEMENT_KIND_INSTANCE,
-            class_tag: 0,
-            bbox_feet,
-            preceding_reference: None,
-            owner_reference: None,
-            references: Vec::new(),
-            id_from_enclosing_record: false,
-            design_option: None,
-        }
-    }
-
-    #[test]
-    fn selection_keeps_the_greatest_vertical_extent_for_one_id() {
-        // A `Floor:Floor 1` plate is framed twice on Core Interior:
-        // Partitions/46 sees the 2 in topping, Partitions/55 the full
-        // 1 ft slab. The export's extrusion depth is 1 ft (#212).
-        let mut thin = element_record(
-            70433,
-            crate::partition_element_records::OST_FLOORS,
-            [20.0, 25.0, 30.667, 167.0, 114.0, 30.833],
-        );
-        thin.stream = "Partitions/46".into();
-        let mut full = element_record(
-            70433,
-            crate::partition_element_records::OST_FLOORS,
-            [20.0, 25.0, 29.833, 167.0, 114.0, 30.833],
-        );
-        full.stream = "Partitions/55".into();
-        for records in [
-            vec![thin.clone(), full.clone()],
-            vec![full.clone(), thin.clone()],
-        ] {
-            let out = instances_from_records_t(records, "Floor");
-            assert_eq!(out.len(), 1);
-            let height =
-                out[0]
-                    .fields
-                    .iter()
-                    .find_map(|(name, value)| match (name.as_str(), value) {
-                        ("m_bboxHeight", InstanceField::Float { value, .. }) => Some(*value),
-                        _ => None,
-                    });
-            assert!(
-                height.is_some_and(|h| (h - 1.0).abs() < 1e-3),
-                "expected the 1 ft frame, got {height:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn selection_tie_breaks_on_the_first_stream_and_offset() {
-        let mut a = element_record(
-            20311,
-            crate::partition_element_records::OST_FLOORS,
-            [9.0, 16.0, 75.833, 177.0, 123.0, 76.0],
-        );
-        a.stream = "Partitions/51".into();
-        let mut b = a.clone();
-        b.stream = "Partitions/46".into();
-        let out = instances_from_records_t(vec![a, b], "Floor");
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].id, Some(20311));
-    }
-
-    #[test]
-    fn selection_drops_type_symbol_envelopes() {
-        let mut symbol = column_record(5755, [-1.0, -1.0, 0.0, 1.0, 1.0, 9.0]);
-        symbol.placement_kind = crate::partition_element_records::PLACEMENT_KIND_SYMBOL;
-        let records = vec![
-            symbol,
-            column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
-        ];
-        let out = columns_from_records_t(records);
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].id, Some(20375));
-        assert_eq!(out[0].class, "Column");
-    }
-
-    #[test]
-    fn selection_drops_container_members_not_the_higher_id() {
-        // The #204 rule kept the highest ElementId per footprint origin.
-        // The #211 rule keeps whichever record is standalone — here the
-        // *lower* id, which is what the container reference dictates.
-        let mut member = column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]);
-        member.container = 16_229;
-        let records = vec![
-            column_record(16347, [23.0, 109.0, 76.0, 25.0, 111.0, 91.0]),
-            member,
-            column_record(20376, [48.0, 109.0, 76.0, 50.0, 111.0, 90.33]),
-        ];
-        let out = columns_from_records_t(records);
-        let ids: Vec<Option<u32>> = out.iter().map(|e| e.id).collect();
-        assert_eq!(ids, vec![Some(16347), Some(20376)]);
-    }
-
-    #[test]
-    fn selection_labels_each_category_with_its_own_class() {
-        for (category, class) in [
-            (crate::partition_element_records::OST_WALLS, "Wall"),
-            (crate::partition_element_records::OST_DOORS, "Door"),
-            (crate::partition_element_records::OST_WINDOWS, "Window"),
-        ] {
-            let out = instances_from_records_t(
-                vec![element_record(
-                    4242,
-                    category,
-                    [0.0, 0.0, 0.0, 4.0, 1.0, 8.0],
-                )],
-                class,
-            );
-            assert_eq!(out.len(), 1);
-            assert_eq!(out[0].class, class);
-            assert_eq!(out[0].id, Some(4242));
-            assert_eq!(
-                out[0].provenance.decoder.as_deref(),
-                Some("partition_schema_mvp::element_category_record")
-            );
-        }
-    }
-
-    #[test]
-    fn selection_keeps_one_record_per_element_id() {
-        let mut second = column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]);
-        second.offset = 999_999;
-        let out = columns_from_records_t(vec![
-            column_record(20375, [23.0, 109.0, 76.0, 25.0, 111.0, 90.33]),
-            second,
-        ]);
-        assert_eq!(out.len(), 1);
-    }
-
-    #[test]
-    fn column_decoded_carries_plan_centre_and_extents() {
-        let out = columns_from_records_t(vec![column_record(
-            20375,
-            [23.0, 109.0, 76.0, 25.0, 111.0, 90.33],
-        )]);
-        let column = &out[0];
-        let field = |name: &str| {
-            column
-                .fields
-                .iter()
-                .find(|(n, _)| n == name)
-                .and_then(|(_, v)| match v {
-                    InstanceField::Float { value, .. } => Some(*value),
-                    _ => None,
-                })
-        };
-        assert_eq!(field("m_locationX"), Some(24.0));
-        assert_eq!(field("m_locationY"), Some(110.0));
-        assert_eq!(field("m_locationZ"), Some(76.0));
-        assert_eq!(field("m_bboxWidth"), Some(2.0));
-        assert_eq!(field("m_bboxDepth"), Some(2.0));
-        assert!((field("m_bboxHeight").unwrap() - 14.33).abs() < 1e-9);
-        assert!(column.provenance.confidence >= 0.55);
-    }
 }

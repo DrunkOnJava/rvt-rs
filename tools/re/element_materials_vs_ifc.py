@@ -54,12 +54,14 @@ def main():
     ours, revit = by_tag(sys.argv[1]), by_tag(sys.argv[2])
     with_revit = with_ours = same = 0
     differ = collections.Counter()
+    missing = collections.Counter()
     for tag, (entity, theirs) in revit.items():
         if not theirs or tag not in ours:
             continue
         with_revit += 1
         mine = ours[tag][1]
         if not mine:
+            missing[entity] += 1
             continue
         with_ours += 1
         if mine == theirs:
@@ -69,6 +71,7 @@ def main():
     print(f"elements Revit gives materials: {with_revit}")
     print(f"of those, rvt-rs gives materials: {with_ours}, the same set: {same}")
     print(f"different sets by Revit entity: {dict(differ.most_common())}")
+    print(f"no materials from rvt-rs, by Revit entity: {dict(missing.most_common())}")
 
 
 if __name__ == "__main__":

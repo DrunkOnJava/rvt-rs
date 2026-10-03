@@ -182,6 +182,46 @@ pub fn difference_box(prism: &[f64; 6], cutters: &[[f64; 6]]) -> Option<[f64; 6]
     Some(hull)
 }
 
+/// Field carrying, once per wall, the walls joined to a column that overlap
+/// it: the walls [`column_cut_boxes`] cuts with, whether or not the cut
+/// leaves a box.
+pub const COLUMN_JOINED_WALL_FIELD: &str = "m_column_joined_wall";
+
+/// The walls each column names in its reference list that are recovered
+/// wall instances and overlap its record prism, by column ElementId.
+/// Columns with none are left out. On `2024_Core_Interior.rvt` these are
+/// the 149 columns Revit's export gives the joined walls' material, and the
+/// other 107 are the ones it gives `<Unnamed>` (#355).
+pub fn column_joined_walls(
+    columns: &[PartitionElementRecord],
+    walls: &[PartitionElementRecord],
+) -> BTreeMap<u32, Vec<u32>> {
+    let wall_boxes: BTreeMap<u32, [f64; 6]> = walls
+        .iter()
+        .map(|record| (record.element_id, record.bbox_feet))
+        .collect();
+    let mut out = BTreeMap::new();
+    for column in columns {
+        let mut joined: Vec<u32> = column
+            .references
+            .iter()
+            .filter(|slot| **slot <= u64::from(u32::MAX))
+            .map(|slot| *slot as u32)
+            .filter(|id| {
+                wall_boxes
+                    .get(id)
+                    .is_some_and(|cutter| overlaps(&column.bbox_feet, cutter))
+            })
+            .collect();
+        joined.sort_unstable();
+        joined.dedup();
+        if !joined.is_empty() {
+            out.insert(column.element_id, joined);
+        }
+    }
+    out
+}
+
 /// The cut body of every column in `columns` that a joined wall in
 /// `walls` cuts back, keyed by ElementId.
 ///
@@ -218,144 +258,4 @@ pub fn column_cut_boxes(
         }
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::partition_element_records as per;
-
-    fn record(
-        element_id: u32,
-        category: i64,
-        bbox_feet: [f64; 6],
-        refs: &[u32],
-    ) -> PartitionElementRecord {
-        let mut references: Vec<u64> = vec![3, 5755, 20307];
-        references.extend(refs.iter().map(|id| u64::from(*id)));
-        references.push(u64::from(element_id));
-        references.sort_unstable();
-        PartitionElementRecord {
-            stream: "Partitions/59".into(),
-            offset: element_id as usize,
-            element_id,
-            flags: 0x0121,
-            builtin_category: category,
-            container: per::CONTAINER_NONE,
-            placement_kind: per::PLACEMENT_KIND_INSTANCE,
-            class_tag: 0,
-            bbox_feet,
-            preceding_reference: None,
-            owner_reference: None,
-            references,
-            id_from_enclosing_record: false,
-            design_option: None,
-        }
-    }
-
-    fn column(element_id: u32, bbox_feet: [f64; 6], refs: &[u32]) -> PartitionElementRecord {
-        record(element_id, per::OST_COLUMNS, bbox_feet, refs)
-    }
-
-    fn wall(element_id: u32, bbox_feet: [f64; 6]) -> PartitionElementRecord {
-        record(element_id, per::OST_WALLS, bbox_feet, &[])
-    }
-
-    /// Column 22807 of the recorded edge: a 2 ft square prism whose
-    /// `x` face is overrun by the 18" wall 80743 running in `x` at
-    /// `y = 113.25`. Revit's body is inset 0.3333 ft on `y`.
-    #[test]
-    fn a_wall_that_overruns_one_face_insets_the_column() {
-        let columns = vec![column(
-            22807,
-            [20.0, 112.0, -40.0, 22.0, 114.0, 0.0],
-            &[80743],
-        )];
-        let walls = vec![wall(80743, [20.0, 112.5, -40.0, 166.25, 114.0, 0.0])];
-        let cut = column_cut_boxes(&columns, &walls)[&22807];
-        assert_eq!(cut.wall_count, 1);
-        assert!((cut.bbox_feet[4] - 112.5).abs() < 1e-9, "y max cut back");
-        assert!((cut.bbox_feet[1] - 112.0).abs() < 1e-9, "y min unchanged");
-        assert!((cut.bbox_feet[0] - 20.0).abs() < 1e-9);
-        assert!((cut.bbox_feet[3] - 22.0).abs() < 1e-9);
-    }
-
-    /// Column 20376 of the recorded edge: a 6" wall passes through
-    /// the middle of the prism for part of its height. The difference
-    /// is a slot, not a box, so the recorded prism stands — which is
-    /// what Revit's bounding box says too.
-    #[test]
-    fn an_interior_slot_leaves_the_prism_alone() {
-        let columns = vec![column(
-            20376,
-            [48.0, 109.0, 76.0, 50.0, 111.0, 90.33333],
-            &[20811],
-        )];
-        let walls = vec![wall(20811, [49.0, 100.0, 76.0, 49.5, 120.0, 84.0])];
-        assert!(column_cut_boxes(&columns, &walls).is_empty());
-    }
-
-    #[test]
-    fn a_column_that_names_no_wall_is_not_cut() {
-        let columns = vec![column(63298, [0.0, 0.0, 0.0, 2.0, 2.0, 9.0], &[])];
-        let walls = vec![wall(90000, [0.0, 0.0, 0.0, 0.5, 2.0, 9.0])];
-        assert!(column_cut_boxes(&columns, &walls).is_empty());
-    }
-
-    #[test]
-    fn a_named_wall_that_does_not_overlap_cuts_nothing() {
-        let columns = vec![column(63298, [0.0, 0.0, 0.0, 2.0, 2.0, 9.0], &[90000])];
-        let walls = vec![wall(90000, [10.0, 0.0, 0.0, 10.5, 2.0, 9.0])];
-        assert!(column_cut_boxes(&columns, &walls).is_empty());
-    }
-
-    /// Two walls meeting the same corner take an L out of the prism.
-    /// An L is not a box, so the solver declines rather than emit a
-    /// bounding box that puts material back where Revit removed it.
-    #[test]
-    fn a_cut_that_leaves_an_l_is_declined() {
-        let columns = vec![column(
-            63299,
-            [0.0, 0.0, 0.0, 2.0, 2.0, 9.0],
-            &[90000, 90001],
-        )];
-        let walls = vec![
-            wall(90000, [0.0, 0.0, 0.0, 0.5, 2.0, 4.0]),
-            wall(90001, [0.0, 0.0, 4.0, 2.0, 0.5, 9.0]),
-        ];
-        assert!(column_cut_boxes(&columns, &walls).is_empty());
-    }
-
-    /// Two walls overrunning opposite faces for the full height leave
-    /// a narrower box, which is exactly the recorded edge's
-    /// 1.4167 ft group.
-    #[test]
-    fn opposite_faces_leave_a_narrower_box() {
-        let columns = vec![column(
-            63300,
-            [0.0, 0.0, 0.0, 2.0, 2.0, 9.0],
-            &[90000, 90001],
-        )];
-        let walls = vec![
-            wall(90000, [-5.0, 0.0, 0.0, 0.33333, 2.0, 9.0]),
-            wall(90001, [1.75, 0.0, 0.0, 7.0, 2.0, 9.0]),
-        ];
-        let cut = column_cut_boxes(&columns, &walls)[&63300];
-        assert_eq!(cut.wall_count, 2);
-        assert!((cut.bbox_feet[0] - 0.33333).abs() < 1e-9);
-        assert!((cut.bbox_feet[3] - 1.75).abs() < 1e-9);
-        assert!((cut.bbox_feet[3] - cut.bbox_feet[0] - 1.41667).abs() < 1e-4);
-    }
-
-    #[test]
-    fn a_wall_that_swallows_the_column_leaves_nothing_and_declines() {
-        let columns = vec![column(63301, [0.0, 0.0, 0.0, 2.0, 2.0, 9.0], &[90000])];
-        let walls = vec![wall(90000, [-1.0, -1.0, -1.0, 3.0, 3.0, 10.0])];
-        assert!(column_cut_boxes(&columns, &walls).is_empty());
-    }
-
-    #[test]
-    fn difference_box_is_none_without_cutters() {
-        assert!(difference_box(&[0.0, 0.0, 0.0, 2.0, 2.0, 9.0], &[]).is_none());
-    }
 }

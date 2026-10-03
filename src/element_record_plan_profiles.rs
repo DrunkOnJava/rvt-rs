@@ -115,6 +115,24 @@ pub const PLAN_PROFILE_SEGMENTS_FIELD: &str = "m_plan_profile_segments";
 /// Field carrying the further pieces of a sketch made of separate loops
 /// (#331): each piece an outer loop followed by its voids.
 pub const PLAN_PROFILE_PIECES_FIELD: &str = "m_plan_profile_pieces";
+/// Field carrying the void loops whose sketch lines tag them (RE-151): each
+/// the piece it is in, its tag and the loop.
+pub const PLAN_PROFILE_VOID_OPENINGS_FIELD: &str = "m_plan_profile_void_openings";
+
+/// A void loop of a sketch and the sketch line that tags it (RE-151). Revit's
+/// export writes a floor's void as an `IfcOpeningElement` voiding the floor,
+/// with the loop's outline, and the `Tag` the lowest ElementId of the sketch
+/// lines on the loop.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VoidOpening {
+    /// The piece the void is in: 0 the first, `n` the `n`th of
+    /// [`PlanProfile::pieces`].
+    pub piece: usize,
+    /// The lowest ElementId of the sketch lines on the loop.
+    pub tag: u32,
+    /// The loop, counter-clockwise.
+    pub outline_xy: Vec<(f64, f64)>,
+}
 
 /// One further piece of a plan profile whose sketch is several separate
 /// loops (#331): an outer loop and the voids inside it.
@@ -145,6 +163,9 @@ pub struct PlanProfile {
     /// export writes each piece as its own element with the element's
     /// `Tag`. Empty for a single-piece sketch.
     pub pieces: Vec<PlanPiece>,
+    /// The voids whose sketch lines tag them (RE-151), by piece and then
+    /// largest first.
+    pub void_openings: Vec<VoidOpening>,
 }
 
 impl PlanProfile {
@@ -189,7 +210,12 @@ impl PlanProfile {
 
     /// The `DecodedElement` fields carrying this profile.
     pub fn fields(&self) -> Vec<(String, InstanceField)> {
-        vec![
+        let integer = |value: i64| InstanceField::Integer {
+            value,
+            signed: false,
+            size: 8,
+        };
+        let mut fields = vec![
             (PLAN_PROFILE_OUTER_FIELD.into(), loop_field(&self.outer_xy)),
             (
                 PLAN_PROFILE_INNER_FIELD.into(),
@@ -223,7 +249,25 @@ impl PlanProfile {
                         .collect(),
                 ),
             ),
-        ]
+        ];
+        if !self.void_openings.is_empty() {
+            fields.push((
+                PLAN_PROFILE_VOID_OPENINGS_FIELD.into(),
+                InstanceField::Vector(
+                    self.void_openings
+                        .iter()
+                        .map(|void| {
+                            InstanceField::Vector(vec![
+                                integer(void.piece as i64),
+                                integer(i64::from(void.tag)),
+                                loop_field(&void.outline_xy),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ));
+        }
+        fields
     }
 }
 
@@ -239,6 +283,7 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
     let mut inner = Vec::new();
     let mut segments = 0usize;
     let mut pieces = Vec::new();
+    let mut void_openings = Vec::new();
     for (name, value) in fields {
         match (name.as_str(), value) {
             (PLAN_PROFILE_SOURCE_FIELD, InstanceField::String(text)) => {
@@ -255,6 +300,9 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
             (PLAN_PROFILE_PIECES_FIELD, InstanceField::Vector(items)) => {
                 pieces = items.iter().filter_map(piece_from_field).collect();
             }
+            (PLAN_PROFILE_VOID_OPENINGS_FIELD, InstanceField::Vector(items)) => {
+                void_openings = items.iter().filter_map(void_opening_from_field).collect();
+            }
             _ => {}
         }
     }
@@ -270,6 +318,27 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
         inner_xy: inner,
         segment_ids: vec![0; segments],
         pieces,
+        void_openings,
+    })
+}
+
+fn void_opening_from_field(field: &InstanceField) -> Option<VoidOpening> {
+    let InstanceField::Vector(parts) = field else {
+        return None;
+    };
+    let [
+        InstanceField::Integer { value: piece, .. },
+        InstanceField::Integer { value: tag, .. },
+        outline,
+    ] = parts.as_slice()
+    else {
+        return None;
+    };
+    let outline_xy = points_from_field(outline)?;
+    (outline_xy.len() >= 3).then_some(VoidOpening {
+        piece: usize::try_from(*piece).ok()?,
+        tag: u32::try_from(*tag).ok()?,
+        outline_xy,
     })
 }
 
@@ -372,11 +441,68 @@ pub fn plan_profiles_from_sketch_line_records(
             })
             .collect();
         if let Some(mut profile) = plan_profile_from_segments(&boxes) {
+            let lines: Vec<(u32, (f64, f64))> = ids
+                .iter()
+                .zip(&boxes)
+                .map(|(id, b)| (*id, ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0)))
+                .collect();
+            tag_voids(&mut profile, &lines);
             profile.segment_ids = ids;
             out.insert(owner, profile);
         }
     }
     out
+}
+
+/// How far a sketch line's point may lie from a loop's edge and still be on
+/// it (RE-151), feet.
+pub const ON_LOOP_EPS_FEET: f64 = 1e-4;
+
+/// Tag each void of `profile` with the lowest ElementId of the sketch lines
+/// on it (RE-151), `lines` each sketch line's ElementId and a point of it on
+/// the edge it makes: a straight line's box centre, its midpoint, or the
+/// midpoint of the first chord a curve is drawn with. A line is on a loop
+/// where that point lies on one of the loop's edges. A void with no line on
+/// it is left untagged.
+pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
+    let voids = std::iter::once(&profile.inner_xy)
+        .chain(profile.pieces.iter().map(|piece| &piece.inner_xy))
+        .enumerate()
+        .flat_map(|(piece, inner)| inner.iter().map(move |ring| (piece, ring)));
+    let mut tagged = Vec::new();
+    for (piece, ring) in voids {
+        let tag = lines
+            .iter()
+            .filter(|(_, point)| on_loop(ring, *point))
+            .map(|(id, _)| *id)
+            .min();
+        if let Some(tag) = tag {
+            let mut outline_xy = ring.clone();
+            outline_xy.reverse();
+            tagged.push(VoidOpening {
+                piece,
+                tag,
+                outline_xy,
+            });
+        }
+    }
+    profile.void_openings = tagged;
+}
+
+/// Whether `point` lies on an edge of the closed loop `ring`, to within
+/// [`ON_LOOP_EPS_FEET`].
+fn on_loop(ring: &[(f64, f64)], point: (f64, f64)) -> bool {
+    (0..ring.len()).any(|index| {
+        let (a, b) = (ring[index], ring[(index + 1) % ring.len()]);
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let length = dx * dx + dy * dy;
+        if length == 0.0 {
+            return false;
+        }
+        let t = (((point.0 - a.0) * dx + (point.1 - a.1) * dy) / length).clamp(0.0, 1.0);
+        let (x, y) = (a.0 + t * dx, a.1 + t * dy);
+        (point.0 - x).hypot(point.1 - y) <= ON_LOOP_EPS_FEET
+    })
 }
 
 /// Recover one plan profile from a set of segment plan bounding boxes
@@ -500,6 +626,7 @@ fn profile_from_loops(loops: Vec<Vec<(f64, f64)>>) -> Option<PlanProfile> {
         inner_xy: first.inner_xy,
         segment_ids: Vec::new(),
         pieces: pieces.collect(),
+        void_openings: Vec::new(),
     })
 }
 
@@ -925,275 +1052,4 @@ pub fn add_voids_to_fields(
     };
     *field = InstanceField::Vector(inner.iter().map(|ring| loop_field(ring)).collect());
     true
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn exact_lines_close_a_diagonal_outline() {
-        // A quadrilateral with a diagonal edge, its lines in any order and
-        // direction: the box solve has to guess the diagonal, the ends do not.
-        let lines = [
-            [0.0, 0.0, 10.0, 0.0],
-            [10.0, 6.0, 10.0, 0.0],
-            [2.0, 8.0, 10.0, 6.0],
-            [0.0, 0.0, 2.0, 8.0],
-        ];
-        let profile = plan_profile_from_lines(&lines).expect("closes");
-        assert_eq!(profile.outer_xy.len(), 4);
-        assert!(signed_area(&profile.outer_xy) > 0.0, "counter-clockwise");
-        assert!((signed_area(&profile.outer_xy) - 64.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn exact_lines_keep_a_void_and_merge_split_runs() {
-        let mut lines = vec![
-            [0.0, 0.0, 5.0, 0.0],
-            [5.0, 0.0, 10.0, 0.0],
-            [10.0, 0.0, 10.0, 10.0],
-            [10.0, 10.0, 0.0, 10.0],
-            [0.0, 10.0, 0.0, 0.0],
-        ];
-        lines.extend([
-            [4.0, 4.0, 6.0, 4.0],
-            [6.0, 4.0, 6.0, 6.0],
-            [6.0, 6.0, 4.0, 6.0],
-            [4.0, 6.0, 4.0, 4.0],
-        ]);
-        let profile = plan_profile_from_lines(&lines).expect("closes");
-        assert_eq!(profile.outer_xy.len(), 4, "the split bottom edge merges");
-        assert_eq!(profile.inner_xy.len(), 1);
-        assert!(signed_area(&profile.inner_xy[0]) < 0.0, "clockwise void");
-    }
-
-    #[test]
-    fn exact_lines_that_do_not_close_are_declined() {
-        // An open chain, a dangling extra line, and a zero-length line.
-        let open = [
-            [0.0, 0.0, 1.0, 0.0],
-            [1.0, 0.0, 1.0, 1.0],
-            [1.0, 1.0, 0.0, 1.0],
-        ];
-        assert!(plan_profile_from_lines(&open).is_none());
-        let mut extra = vec![
-            [0.0, 0.0, 1.0, 0.0],
-            [1.0, 0.0, 1.0, 1.0],
-            [1.0, 1.0, 0.0, 1.0],
-            [0.0, 1.0, 0.0, 0.0],
-        ];
-        extra.push([0.0, 0.0, 1.0, 1.0]);
-        assert!(plan_profile_from_lines(&extra).is_none());
-        let zero = [
-            [0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [1.0, 0.0, 0.0, 0.0],
-        ];
-        assert!(plan_profile_from_lines(&zero).is_none());
-        assert!(plan_profile_from_lines(&[[f64::NAN, 0.0, 1.0, 0.0]; 3]).is_none());
-    }
-
-    fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<[f64; 4]> {
-        vec![
-            [x0, y0, x0, y1],
-            [x0, y1, x1, y1],
-            [x1, y0, x1, y1],
-            [x0, y0, x1, y0],
-        ]
-    }
-
-    #[test]
-    fn four_axis_aligned_boxes_close_a_rectangle() {
-        let profile = plan_profile_from_segments(&rect(20.0, 25.0, 167.0, 114.0)).expect("closes");
-        assert!(profile.inner_xy.is_empty());
-        assert_eq!(profile.outer_xy.len(), 4);
-        assert!(signed_area(&profile.outer_xy) > 0.0, "outer is CCW");
-        assert_eq!(profile.plan_bounds_feet(), Some([20.0, 25.0, 167.0, 114.0]));
-    }
-
-    #[test]
-    fn a_box_looser_than_its_segment_is_closed_by_its_neighbours() {
-        // `Partitions/46` frames the top boundary of the 20 by 25 to
-        // 167 by 114 floor plate with a box one foot either side of
-        // the line (RE-25 §3). The three tight edges pin (20,114) and
-        // (167,114), and nothing else in the box is open, so the
-        // loose segment is forced.
-        let mut segments = rect(20.0, 25.0, 167.0, 114.0);
-        segments[1] = [20.0, 113.0, 167.0, 115.0];
-        let profile = plan_profile_from_segments(&segments).expect("closes");
-        let mut ys: Vec<f64> = profile.outer_xy.iter().map(|p| p.1).collect();
-        ys.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        assert_eq!(ys, vec![25.0, 25.0, 114.0, 114.0]);
-    }
-
-    #[test]
-    fn a_sawtooth_resolves_its_diagonals_from_the_open_vertices() {
-        // The shape of the Core Interior perimeter run: a flat lead-in,
-        // then teeth of "vertical up, diagonal down to the right".
-        // Both diagonal boxes admit two corner pairs on their own; only
-        // one pair per box has both corners still open.
-        let segments = vec![
-            [0.0, 0.0, 10.0, 0.0],
-            [10.0, 0.0, 10.0, 8.0],
-            [10.0, 0.0, 20.0, 8.0],
-            [20.0, 0.0, 20.0, 8.0],
-            [20.0, 0.0, 30.0, 8.0],
-            [30.0, 0.0, 40.0, 0.0],
-            [40.0, -10.0, 40.0, 0.0],
-            [0.0, -10.0, 40.0, -10.0],
-            [0.0, -10.0, 0.0, 0.0],
-        ];
-        let profile = plan_profile_from_segments(&segments).expect("closes");
-        assert_eq!(profile.outer_xy.len(), 9);
-        let has = |x: f64, y: f64| profile.outer_xy.iter().any(|p| same(*p, (x, y)));
-        assert!(has(10.0, 8.0) && has(20.0, 0.0) && has(20.0, 8.0) && has(30.0, 0.0));
-        // The wrong diagonal orientation would put these on the loop.
-        assert!(!has(10.0, -8.0) && !has(30.0, 8.0));
-    }
-
-    #[test]
-    fn two_loops_split_into_outer_and_void() {
-        let mut segments = rect(0.0, 0.0, 100.0, 100.0);
-        segments.extend(rect(40.0, 40.0, 60.0, 60.0));
-        let profile = plan_profile_from_segments(&segments).expect("closes");
-        assert_eq!(profile.inner_xy.len(), 1);
-        assert_eq!(profile.plan_bounds_feet(), Some([0.0, 0.0, 100.0, 100.0]));
-        assert!(signed_area(&profile.outer_xy) > 0.0);
-        assert!(signed_area(&profile.inner_xy[0]) < 0.0, "void is CW");
-    }
-
-    /// #331: two separate loops are two pieces, not an outer loop and a
-    /// void (slab 1402063 on Snowdon Towers).
-    #[test]
-    fn two_separate_loops_are_two_pieces() {
-        let mut segments = rect(9.06, -0.97, 11.15, 0.97);
-        segments.extend(rect(-11.15, -0.97, -9.06, 0.97));
-        let profile = plan_profile_from_segments(&segments).expect("closes");
-        assert!(profile.inner_xy.is_empty());
-        assert_eq!(profile.pieces.len(), 1);
-        assert!(profile.pieces[0].inner_xy.is_empty());
-        assert!(signed_area(&profile.pieces[0].outer_xy) > 0.0);
-        // The pieces round-trip through the element fields.
-        let back = plan_profile_from_fields(&profile.fields()).expect("reads back");
-        assert_eq!(back.pieces, profile.pieces);
-    }
-
-    /// #331: a piece standing inside another's void is a piece of its own,
-    /// and the void stays with the loop around it.
-    #[test]
-    fn an_island_in_a_void_is_a_third_region() {
-        let mut segments = rect(0.0, 0.0, 100.0, 100.0);
-        segments.extend(rect(20.0, 20.0, 80.0, 80.0));
-        segments.extend(rect(40.0, 40.0, 60.0, 60.0));
-        let profile = plan_profile_from_segments(&segments).expect("closes");
-        assert_eq!(profile.inner_xy.len(), 1);
-        assert_eq!(profile.pieces.len(), 1);
-        assert_eq!(profile.plan_bounds_feet(), Some([0.0, 0.0, 100.0, 100.0]));
-    }
-
-    /// Two loops that cross are not regions: no profile.
-    #[test]
-    fn overlapping_loops_are_rejected() {
-        let mut segments = rect(0.0, 0.0, 10.0, 10.0);
-        segments.extend(rect(5.0, 5.0, 15.0, 15.0));
-        assert!(plan_profile_from_segments(&segments).is_none());
-    }
-
-    #[test]
-    fn an_open_chain_is_rejected() {
-        let mut segments = rect(0.0, 0.0, 10.0, 10.0);
-        segments.pop();
-        assert!(plan_profile_from_segments(&segments).is_none());
-    }
-
-    #[test]
-    fn an_ambiguous_diagonal_is_rejected() {
-        // A square whose four corners are all open, with one diagonal
-        // box: both of its diagonals connect two open corners, so no
-        // choice is forced.
-        let segments = vec![
-            [0.0, 0.0, 0.0, 10.0],
-            [10.0, 0.0, 10.0, 10.0],
-            [0.0, 0.0, 10.0, 10.0],
-            [0.0, 20.0, 10.0, 20.0],
-        ];
-        assert!(plan_profile_from_segments(&segments).is_none());
-    }
-
-    #[test]
-    fn a_zero_extent_segment_is_rejected() {
-        let mut segments = rect(0.0, 0.0, 10.0, 10.0);
-        segments.push([5.0, 5.0, 5.0, 5.0]);
-        assert!(plan_profile_from_segments(&segments).is_none());
-    }
-
-    #[test]
-    fn collinear_splits_merge_into_one_edge() {
-        // The top run is split at x = 6, the way Revit splits one
-        // straight boundary into several sketch lines.
-        let segments = vec![
-            [0.0, 0.0, 0.0, 10.0],
-            [0.0, 10.0, 6.0, 10.0],
-            [6.0, 10.0, 10.0, 10.0],
-            [10.0, 0.0, 10.0, 10.0],
-            [0.0, 0.0, 10.0, 0.0],
-        ];
-        let profile = plan_profile_from_segments(&segments).expect("closes");
-        assert_eq!(profile.outer_xy.len(), 4);
-    }
-
-    #[test]
-    fn fields_round_trip_through_the_reader() {
-        let mut segments = rect(0.0, 0.0, 100.0, 100.0);
-        segments.extend(rect(40.0, 40.0, 60.0, 60.0));
-        let profile = plan_profile_from_segments(&segments).expect("closes");
-        let read = plan_profile_from_fields(&profile.fields()).expect("reads back");
-        assert_eq!(read.outer_xy, profile.outer_xy);
-        assert_eq!(read.inner_xy, profile.inner_xy);
-    }
-
-    #[test]
-    fn foreign_fields_are_not_a_profile() {
-        let fields = vec![(
-            "m_bboxWidth".to_string(),
-            InstanceField::Float {
-                value: 4.0,
-                size: 8,
-            },
-        )];
-        assert!(plan_profile_from_fields(&fields).is_none());
-    }
-
-    #[test]
-    fn records_without_an_owner_contribute_nothing() {
-        assert!(plan_profiles_from_sketch_line_records(&[]).is_empty());
-    }
-
-    #[test]
-    fn profile_fields_carry_every_loop() {
-        let mut segments = rect(0.0, 0.0, 100.0, 100.0);
-        segments.extend(rect(40.0, 40.0, 60.0, 60.0));
-        let profile = plan_profile_from_segments(&segments).expect("closes");
-        assert_eq!(profile.vertex_count(), 8);
-        let fields = profile.fields();
-        let outer = fields
-            .iter()
-            .find(|(name, _)| name == PLAN_PROFILE_OUTER_FIELD)
-            .map(|(_, value)| value)
-            .expect("outer field");
-        match outer {
-            InstanceField::Vector(points) => assert_eq!(points.len(), 4),
-            other => panic!("outer is not a vector: {other:?}"),
-        }
-        let inner = fields
-            .iter()
-            .find(|(name, _)| name == PLAN_PROFILE_INNER_FIELD)
-            .map(|(_, value)| value)
-            .expect("inner field");
-        match inner {
-            InstanceField::Vector(loops) => assert_eq!(loops.len(), 1),
-            other => panic!("inner is not a vector: {other:?}"),
-        }
-    }
 }

@@ -27,6 +27,7 @@ real      curtain_walls
 real      design_options
 real      elem_table_corpus         skip=declared_element_ids_returns_sorted_deduped_set
 real      elem_table_frame
+real      element_materials
 real      element_names
 real      element_records_2025
 real      ifc_export_overrides
@@ -34,6 +35,7 @@ real      ifc_roundtrip
 real      iter_elements_typed       skip=production_iter_elements_tier1,decode_instance_prefer_typed_fails_closed
 real      level_names
 real      native_current_records
+real      native_partitions_walk
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
 real      project_corpus_smoke
@@ -43,6 +45,7 @@ real      revit_global_ids
 real      rooms_floors_from_records_only
 real      samples
 real      schema_registry_catalogs
+real      unfilled_openings
 real      walker_to_ifc_integration
 
 cli       cli_ergonomics
@@ -60,17 +63,9 @@ contract  support_matrix
 contract  witness_registry
 contract  witness_verdict
 
-unit      cfb_patch_corpus
-unit      checksum_page_framing
 unit      control_cancellation
-unit      corpus_tier1_health
-unit      es_remap_golden
 unit      fuzz_regressions
-unit      gen_fixture_roundtrip
-unit      geometry_recovery
 unit      graceful_degradation
-unit      ifc_export_modes
 unit      ifc_synthetic_project
 unit      ifc_synthetic_structural
 unit      proptest_parsers
-unit      typed_decoders

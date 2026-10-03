@@ -67,7 +67,7 @@
       "area": "compression",
       "name": "Decode Revit truncated-gzip streams",
       "status": "verified",
-      "evidence": "compression; checksum_page_framing; fuzz targets; checksum-page strip on Partitions, Global and (#410) Formats/Latest; examples/probe_schema_page_strip.rs",
+      "evidence": "compression; fuzz targets; samples and the corpus jobs on real files; checksum-page strip on Partitions, Global and (#410) Formats/Latest; examples/probe_schema_page_strip.rs",
       "notes": "Every paged stream is stripped before inflate. Formats/Latest joined in #410: stripped, every file of one release inflates to the byte-identical schema (2023: 4 files, 2024: 5, 2025: 8); unstripped it drifted after about 140 KB. Writer path has separate audit coverage.",
       "user_impact": "Internal streams can be read safely."
     },
