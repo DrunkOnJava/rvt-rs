@@ -353,9 +353,8 @@ pub fn append_typed_production_elements(
         // (RE1 Electrical: `262416-PANEL:RE-1:428352`), from an instance
         // parameter rvt-rs does not read, so it gets no `Family:Type` name.
         let named_by_type = decoded.class != "ElectricalEquipment";
-        // RE-154: the type name, where the element is named by it. A door or
-        // window whose type draws no geometry is written as its opening
-        // (RE-84), which takes none.
+        // RE-154: the type name. A door or window whose type draws no
+        // geometry is written as its opening (RE-84), which takes none.
         let opening_only = matches!(decoded.class.as_str(), "Door" | "Window")
             && decoded.fields.iter().any(|(name, value)| {
                 name == crate::partition_schema_mvp::TYPE_WITHOUT_GEOMETRY_FIELD
@@ -375,8 +374,10 @@ pub fn append_typed_production_elements(
                 })
             })
             .flatten();
+        // The Reference is the type's name however Revit names the element:
+        // electrical equipment named by its panel name has one too (B29).
         let reference_type = family_and_type(&decoded)
-            .filter(|_| own_name.is_none() && named_by_type && !opening_only)
+            .filter(|_| own_name.is_none() && !opening_only)
             .map(|(_, type_name)| type_name)
             .or(duct_type);
         let name = match (
@@ -535,6 +536,7 @@ pub fn append_typed_production_elements(
             .map(|type_name| reference_property_sets(&ifc_type, &type_name))
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
+        add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         let serial_sets = serial_number_property_sets(&decoded, &ifc_type);
         // RE-151: the name of the openings of a floor's tagged voids.
         let opening_name = (!void_bodies.is_empty()).then(|| {
@@ -1128,6 +1130,34 @@ fn add_is_external(
             name: common.into(),
             properties: vec![property],
         }),
+    }
+}
+
+/// Add `Finish` (`IfcText`) to a covering's `Pset_CoveringCommon` among
+/// `sets`: its type's finish layers' materials (B41).
+fn add_covering_finish(sets: &mut [PropertySet], ifc_type: &str, decoded: &DecodedElement) {
+    if ifc_type != "IFCCOVERING" {
+        return;
+    }
+    let finish = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::String(text)
+            if name == crate::partition_schema_mvp::COVERING_FINISH_FIELD =>
+        {
+            Some(text.clone())
+        }
+        _ => None,
+    });
+    let Some(finish) = finish else {
+        return;
+    };
+    if let Some(set) = sets
+        .iter_mut()
+        .find(|set| set.name == "Pset_CoveringCommon")
+    {
+        set.properties.push(Property {
+            name: "Finish".into(),
+            value: PropertyValue::Text(finish),
+        });
     }
 }
 
