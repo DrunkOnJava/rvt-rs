@@ -9,6 +9,9 @@ use std::io::Read;
 #[derive(Debug, Clone, Serialize)]
 pub struct GroupSource {
     pub content_key: Option<[u8; 16]>,
+    /// The element count the keyed `ContentMarker` before the group states
+    /// (`m_nElementCount`); `None` outside a keyed block.
+    pub content_element_count: Option<u32>,
     pub channel: u64,
     pub first_marker_offset: usize,
     pub segment_count: usize,
@@ -81,6 +84,7 @@ pub fn walk(
     r.take(8)?;
     let mut stats = Statistics::default();
     let mut content_key = None;
+    let mut content_element_count = None;
     let mut last_size = None;
     let mut active: Option<(GroupSource, Vec<u8>)> = None;
     loop {
@@ -94,6 +98,7 @@ pub fn walk(
             let token = r.u32()?;
             let count = if token == 0 {
                 content_key = None;
+                content_element_count = None;
                 r.u32()?
             } else {
                 ensure!(
@@ -102,6 +107,7 @@ pub fn walk(
                 );
                 let count = r.u32()?;
                 content_key = Some(r.take(16)?.try_into()?);
+                content_element_count = Some(count);
                 count
             };
             if token == 0 && count == u32::MAX {
@@ -178,6 +184,7 @@ pub fn walk(
                 active = Some((
                     GroupSource {
                         content_key,
+                        content_element_count,
                         channel,
                         first_marker_offset: offset,
                         segment_count: 1,
