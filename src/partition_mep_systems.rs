@@ -1,12 +1,14 @@
 //! MEP systems and their members (RE-162, B33, #528).
 //!
 //! An MEP system is an element of its own, a data object (RE-153) of class
-//! `RbsHvacSystem`, `RbsPipingSystem` or `RbsElectricalSystem` whose payload
-//! holds the system's name as `u32 n · UTF-16 × n`. Its members are the
-//! elements whose own data objects hold the system's ElementId. On the RE1
-//! Mechanical, Plumbing and Electrical models (Revit 2025, MIT), against
-//! Revit's own IFC: every one of Revit's `IfcSystem`s is one such object of
-//! the same name, and every element Revit groups in it holds its id.
+//! `RbsHvacSystem`, `RbsPipingSystem` or `RbsElectricalSystem`. An HVAC or
+//! piping system's name is the first string of printable ASCII in its
+//! payload; an electrical system's is its circuit number
+//! ([`circuit_number`]). Its members are the elements whose own data objects
+//! hold the system's ElementId. On the RE1 Mechanical, Plumbing and
+//! Electrical models (Revit 2025, MIT), against Revit's own IFC: every one of
+//! Revit's 26 `IfcSystem`s is one such object of the same name, and every
+//! element Revit groups in it holds its id.
 
 use crate::partition_room_parameters::{
     DATA_OBJECT_HEADER, enclosing_data_object, verified_data_object,
@@ -38,25 +40,60 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     revit_version >= 2024
 }
 
-/// The first `u32 n · UTF-16 × n` string in `payload` of printable ASCII.
-/// Shorter strings of other units come first: a `1` followed by half an
-/// ElementId reads as one.
-fn first_string(payload: &[u8]) -> Option<String> {
-    let mut q = 0;
-    while q + 4 <= payload.len() {
-        let n = u32::from_le_bytes(payload[q..q + 4].try_into().ok()?) as usize;
-        if (1..=MAX_NAME_UNITS).contains(&n) && q + 4 + 2 * n <= payload.len() {
-            let units: Vec<u16> = payload[q + 4..q + 4 + 2 * n]
-                .chunks_exact(2)
-                .map(|c| u16::from_le_bytes([c[0], c[1]]))
-                .collect();
-            if units.iter().all(|u| (0x20..0xd800).contains(u)) {
-                return Some(String::from_utf16_lossy(&units));
-            }
-        }
-        q += 1;
+/// The `u32 n · UTF-16 × n` string at `q` of `bytes`, `n` at most
+/// [`MAX_NAME_UNITS`].
+fn string_at(bytes: &[u8], q: usize) -> Option<Vec<u16>> {
+    let n = u32::from_le_bytes(bytes.get(q..q.checked_add(4)?)?.try_into().ok()?) as usize;
+    if n > MAX_NAME_UNITS {
+        return None;
     }
-    None
+    Some(
+        bytes
+            .get(q + 4..q + 4 + 2 * n)?
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect(),
+    )
+}
+
+/// The first non-empty `u32 n · UTF-16 × n` string in `payload` of printable
+/// ASCII: an HVAC or piping system's name. Shorter strings of other units
+/// come first, a `1` followed by half an ElementId reading as one.
+fn first_string(payload: &[u8]) -> Option<String> {
+    (0..payload.len()).find_map(|q| {
+        let units = string_at(payload, q)?;
+        (!units.is_empty() && units.iter().all(|u| (0x20..0x7f).contains(u)))
+            .then(|| String::from_utf16_lossy(&units))
+    })
+}
+
+/// The marker an electrical system's circuit number is found from:
+/// `0xff` × 8 then `01`.
+const CIRCUIT_MARKER: [u8; 9] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01];
+/// Bytes from the marker's last byte to the count of the entries before the
+/// circuit number.
+const CIRCUIT_LIST_OFFSET: usize = 20;
+/// Bytes of each of those entries.
+const CIRCUIT_ENTRY_BYTES: usize = 32;
+/// The name Revit gives a circuit with no circuit number.
+pub const UNNAMED_CIRCUIT: &str = "<unnamed>";
+
+/// An electrical system's name, its circuit number (RE-162): after the first
+/// [`CIRCUIT_MARKER`] in its object, [`CIRCUIT_LIST_OFFSET`] bytes on, a
+/// `u32` count of [`CIRCUIT_ENTRY_BYTES`]-byte entries, then the number as `u32
+/// n · UTF-16 × n`. An empty number is Revit's [`UNNAMED_CIRCUIT`].
+fn circuit_number(object: &[u8]) -> Option<String> {
+    let marker = memchr::memmem::find(object, &CIRCUIT_MARKER)? + CIRCUIT_MARKER.len() - 1;
+    let list = marker + CIRCUIT_LIST_OFFSET;
+    let count = u32::from_le_bytes(object.get(list..list + 4)?.try_into().ok()?) as usize;
+    let units = string_at(object, list + 4 + count.checked_mul(CIRCUIT_ENTRY_BYTES)?)?;
+    if units.is_empty() {
+        return Some(UNNAMED_CIRCUIT.into());
+    }
+    units
+        .iter()
+        .all(|u| (0x20..0x7f).contains(u))
+        .then(|| String::from_utf16_lossy(&units))
 }
 
 /// Every MEP system in the file, with its members among `elements`. A system
@@ -99,7 +136,11 @@ pub fn scan_mep_systems(
                 if object.class & 0xffff != tag {
                     continue;
                 }
-                let name = first_string(&buf[p + DATA_OBJECT_HEADER..object.end - 4]);
+                let name = if class == "RbsElectricalSystem" {
+                    circuit_number(&buf[p..object.end])
+                } else {
+                    first_string(&buf[p + DATA_OBJECT_HEADER..object.end - 4])
+                };
                 match names.get_mut(&object.element_id) {
                     None => {
                         names.insert(object.element_id, name);
