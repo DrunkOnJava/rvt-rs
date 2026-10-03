@@ -32,6 +32,9 @@ use rvt::compression::prepare_stream_for_inflate;
 use rvt::{RevitFile, native_document, native_index, native_segments, schema_registry};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Elements listed per file in each example list.
+const EXAMPLES: usize = 20;
+
 /// One channel-101 record: the partition and the record's body.
 struct Copy {
     partition: u32,
@@ -138,6 +141,13 @@ fn probe(path: &str) -> anyhow::Result<String> {
     let (mut to_latest, mut to_earliest, mut to_other) = (0usize, 0usize, 0usize);
     let mut route_errors = 0usize;
     let mut undeclared = 0usize;
+    let mut routed_without_copy = 0usize;
+    let mut without_copy = Vec::new();
+    let class_of = |body: &[u8]| {
+        body.get(..2)
+            .and_then(|b| registry.class(u16::from_le_bytes([b[0], b[1]])))
+            .map_or_else(|| "null".to_string(), |c| format!("{:?}", c.name))
+    };
     for (id, list) in &copies {
         let Some(identity) = index.identities.get(id) else {
             undeclared += 1;
@@ -150,6 +160,18 @@ fn probe(path: &str) -> anyhow::Result<String> {
             continue;
         };
         let partitions: BTreeSet<u32> = list.iter().map(|c| c.partition).collect();
+        if !partitions.contains(&routed) {
+            routed_without_copy += 1;
+            if without_copy.len() < EXAMPLES {
+                without_copy.push(format!(
+                    "{{\"id\":{id},\"class\":{},\"partitions\":{partitions:?},\"routed\":{routed},\
+                     \"stored_revision\":{},\"identical\":{}}}",
+                    class_of(&list[0].body),
+                    identity.stored_revision,
+                    list.iter().all(|c| c.body == list[0].body)
+                ));
+            }
+        }
         if partitions.len() == 1 {
             single += 1;
             if !partitions.contains(&routed) {
@@ -185,12 +207,35 @@ fn probe(path: &str) -> anyhow::Result<String> {
             emitted.insert(record.identity.element_id);
             Ok(())
         }) {
-            Ok(summary) => format!(
-                "{{\"skipped_historical_records\":{},\"emitted_elements\":{},\"indexed_elements\":{}}}",
-                summary.skipped_historical_records,
-                emitted.len(),
-                summary.indexed_elements
-            ),
+            Ok(summary) => {
+                let missing: Vec<String> = index
+                    .identities
+                    .keys()
+                    .filter(|id| copies.contains_key(id) && !emitted.contains(id))
+                    .map(|id| {
+                        let list = &copies[id];
+                        let partitions: BTreeSet<u32> = list.iter().map(|c| c.partition).collect();
+                        format!(
+                            "{{\"id\":{id},\"class\":{},\"partitions\":{partitions:?}}}",
+                            class_of(&list[0].body)
+                        )
+                    })
+                    .collect();
+                format!(
+                    "{{\"skipped_historical_records\":{},\"emitted_elements\":{},\"indexed_elements\":{},\
+                     \"with_a_record_not_emitted\":{},\"not_emitted\":[{}]}}",
+                    summary.skipped_historical_records,
+                    emitted.len(),
+                    summary.indexed_elements,
+                    missing.len(),
+                    missing
+                        .iter()
+                        .take(EXAMPLES)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            }
             Err(error) => format!("{{\"error\":{:?}}}", format!("{error:#}")),
         }
     } else {
@@ -201,6 +246,7 @@ fn probe(path: &str) -> anyhow::Result<String> {
         "{{\"file\":{file:?},\"revit\":{revit},\"partitions\":{},\"indexed\":{},\
          \"ids_with_records\":{},\"undeclared_ids_with_records\":{undeclared},\"unsplit_groups\":{unsplit_groups},\
          \"route_errors\":{route_errors},\
+         \"routed_without_copy\":{routed_without_copy},\"routed_without_copy_examples\":[{}],\
          \"single\":{{\"elements\":{single},\"routed_away\":{single_routed_away},\"routed_to\":{}}},\
          \"repeated\":{{\"elements\":{repeated},\"identical\":{identical},\"differing\":{differing},\
          \"to_latest\":{to_latest},\"to_earliest\":{to_earliest},\"to_other\":{to_other}}},\
@@ -208,6 +254,7 @@ fn probe(path: &str) -> anyhow::Result<String> {
         present.len(),
         index.identities.len(),
         copies.len(),
+        without_copy.join(","),
         top(&away_to),
     ))
 }
