@@ -300,10 +300,11 @@ impl StepWriter {
             let p_id = self.id();
             let name_esc = escape(&prop.name);
             let value_step = prop.value.to_step();
-            self.emit_entity(
-                p_id,
-                format!("IFCPROPERTYSINGLEVALUE('{name_esc}',$,{value_step},$)"),
-            );
+            let entity = match prop.value {
+                super::entities::PropertyValue::List(_) => "IFCPROPERTYLISTVALUE",
+                _ => "IFCPROPERTYSINGLEVALUE",
+            };
+            self.emit_entity(p_id, format!("{entity}('{name_esc}',$,{value_step},$)"));
             prop_ids.push(p_id);
         }
         let refs = prop_ids

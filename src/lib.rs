@@ -195,6 +195,7 @@ pub mod partition_curve_fields;
 pub mod partition_design_options;
 pub mod partition_element_records;
 pub mod partition_element_records_2023;
+pub mod partition_fitting_sizes;
 pub mod partition_id_objects;
 pub mod partition_ifc_export_overrides;
 pub mod partition_instance_transforms;

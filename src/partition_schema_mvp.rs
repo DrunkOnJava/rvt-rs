@@ -366,6 +366,8 @@ pub fn recover_partition_schema_mvp(
     attach_pipe_type_names(rf, &mut out.products);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
     attach_curve_fields(rf, revit_version, &mut out.products);
+    // --- Pipe fittings' nominal sizes, from their connectors (RE-165) ---
+    attach_fitting_nominal_diameters(rf, revit_version, &mut out.products);
     // --- The shared parameter Serial Number (RE-156) ---
     attach_serial_numbers(
         rf,
@@ -3759,6 +3761,41 @@ fn attach_serial_numbers(
             element.fields.push((
                 SERIAL_NUMBER_FIELD.into(),
                 InstanceField::String(value.clone()),
+            ));
+        }
+    }
+}
+
+/// Field carrying a pipe fitting's nominal diameter, feet (RE-165).
+pub const FITTING_NOMINAL_DIAMETER_FIELD: &str = "m_fitting_nominal_diameter";
+
+/// Give each pipe fitting its nominal diameter
+/// ([`crate::partition_fitting_sizes`], RE-165). A fitting whose connectors
+/// disagree, or whose object is not found, gets nothing.
+fn attach_fitting_nominal_diameters(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_fitting_sizes as pfs;
+    let fittings: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "PipeFitting")
+        .filter_map(|element| element.id)
+        .collect();
+    let diameters =
+        pfs::scan_fitting_nominal_diameters(rf, revit_version, &fittings).unwrap_or_default();
+    for element in products.iter_mut() {
+        if element.class != "PipeFitting" {
+            continue;
+        }
+        if let Some(&diameter) = element.id.and_then(|id| diameters.get(&id)) {
+            element.fields.push((
+                FITTING_NOMINAL_DIAMETER_FIELD.into(),
+                InstanceField::Float {
+                    value: diameter,
+                    size: 8,
+                },
             ));
         }
     }

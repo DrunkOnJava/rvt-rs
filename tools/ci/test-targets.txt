@@ -36,6 +36,7 @@ real      elem_table_frame
 real      element_materials
 real      element_names
 real      element_records_2025
+real      fitting_nominal_diameter
 real      ifc_export_overrides
 real      ifc_roundtrip
 real      invert_elevation
