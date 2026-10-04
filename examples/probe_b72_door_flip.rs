@@ -128,20 +128,39 @@ fn main() -> anyhow::Result<()> {
         .map(|c| u32::from(c.tag));
     let doors: BTreeSet<u32> = revit.keys().copied().collect();
     let mut originals: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    // Each door's GElement copies: (stream, offset, value, object size).
+    let mut copies: BTreeMap<u32, Vec<(String, usize, u32, usize)>> = BTreeMap::new();
+    // Each element's data object classes, for the values.
+    let mut class_of: BTreeMap<u32, BTreeSet<String>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        for (_, object) in data_objects(buf) {
+        for (p, object) in data_objects(buf) {
+            if let Some(class) = classes
+                .classes
+                .iter()
+                .find(|c| u32::from(c.tag) == object.class & 0xffff)
+            {
+                class_of
+                    .entry(object.element_id)
+                    .or_default()
+                    .insert(class.name.clone());
+            }
             if Some(object.class & 0xffff) == element_tag && doors.contains(&object.element_id) {
                 let at = object.end - 20;
+                let value = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes"));
                 originals
                     .entry(object.element_id)
                     .or_default()
-                    .insert(u32::from_le_bytes(
-                        buf[at..at + 4].try_into().expect("4 bytes"),
-                    ));
+                    .insert(value);
+                copies.entry(object.element_id).or_default().push((
+                    stream.clone(),
+                    p,
+                    value,
+                    object.end - p,
+                ));
             }
         }
     }
@@ -193,6 +212,21 @@ fn main() -> anyhow::Result<()> {
             }
         }
         *forms.entry(form.clone()).or_default() += 1;
+        if values.len() > 1 && printed < 30 {
+            let described: Vec<String> = copies
+                .get(tag)
+                .into_iter()
+                .flatten()
+                .map(|(stream, at, value, size)| {
+                    format!(
+                        "{stream}@{at} size {size} value {value} {:?}",
+                        class_of.get(value)
+                    )
+                })
+                .collect();
+            println!("{tag}: {form}; copies {described:?}");
+            printed += 1;
+        }
         if printed < 12 && form == "none" {
             println!("{tag}: GElement values {values:?}, Revit {gid}: none");
             printed += 1;
