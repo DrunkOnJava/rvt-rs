@@ -1273,8 +1273,9 @@ pub const ORIGINAL_SYMBOL_FROM_END: usize = 20;
 /// Give each family instance ([`REVIT_CLASS_FIELD`] `FamilyInstance`, and
 /// each curtain mullion and panel) its original symbol ([`ORIGINAL_SYMBOL_FIELD`], RE-167): the ElementId its
 /// `GElement` data object holds [`ORIGINAL_SYMBOL_FROM_END`] bytes before its
-/// end, when every such object of the instance gives the same one and it is
-/// an [`ORIGINAL_SYMBOL_CLASSES`] element's, or [`INSTANCE_GEOMETRY`]. On the RE1 models that is the element whose GlobalId Revit
+/// end, when the copies in the highest-numbered partition stream holding one
+/// give the same one and it is an [`ORIGINAL_SYMBOL_CLASSES`] element's, or
+/// [`INSTANCE_GEOMETRY`]. On the RE1 models that is the element whose GlobalId Revit
 /// gives the type of every one of 162 family instances; it is the symbol
 /// itself for most, another FamilySymbol (often the instance's id plus one)
 /// for many furniture, fittings, mullions and panels. Revit 2024 and later.
@@ -1321,12 +1322,19 @@ fn attach_original_symbols<const N: usize>(
         .iter()
         .filter_map(|name| tag_of(name))
         .collect();
-    let mut held: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    // Each instance's GElement values, by the number of the partition stream
+    // holding the copy.
+    let mut held: BTreeMap<u32, BTreeMap<u32, BTreeSet<u32>>> = BTreeMap::new();
     let mut symbols: BTreeSet<u32> = BTreeSet::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
+        let partition = stream
+            .rsplit('/')
+            .next()
+            .and_then(|number| number.parse::<u32>().ok())
+            .unwrap_or(0);
         let buf = inflated.bytes();
         for (p, object) in crate::partition_room_parameters::data_objects(buf) {
             let class = object.class & 0xffff;
@@ -1340,12 +1348,23 @@ fn attach_original_symbols<const N: usize>(
                     continue;
                 }
                 let value = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes"));
-                held.entry(object.element_id).or_default().insert(value);
+                held.entry(object.element_id)
+                    .or_default()
+                    .entry(partition)
+                    .or_default()
+                    .insert(value);
             }
         }
     }
     for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
-        let Some(values) = element.id.and_then(|id| held.get(&id)) else {
+        // Copies in two partitions can disagree; the copy in the highest-
+        // numbered one is the one Revit's export goes by (Core Interior's
+        // doors: Partitions/59 over 46 and 51).
+        let Some((_, values)) = element
+            .id
+            .and_then(|id| held.get(&id))
+            .and_then(|by_partition| by_partition.iter().next_back())
+        else {
             continue;
         };
         let mut values = values.iter();
