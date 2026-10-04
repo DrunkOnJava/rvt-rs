@@ -1188,11 +1188,8 @@ fn export_rvt_doc(
         &element_original_symbols,
         &element_facings,
     );
-    let (material_layer_sets, material_layer_usages) = eprintln!(
-        "[timing] export {:.2}s at: material_layer_sets_from_layers",
-        __timing.elapsed().as_secs_f64()
-    );
-    material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
+    let (material_layer_sets, material_layer_usages) =
+        material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
     let mut material_constituent_sets =
         material_constituent_sets_from_types(&entities, &element_type_materials, &mut materials);
     let layer_constituent_sets = layer_materials_without_layer_sets(
