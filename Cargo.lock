@@ -966,6 +966,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "sha2",
+ "simd-adler32",
  "stream-evidence",
  "thiserror",
  "wasm-bindgen",

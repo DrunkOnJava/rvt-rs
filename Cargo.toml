@@ -74,6 +74,12 @@ encoding_rs = "0.8"
 # crate to the build graph: `memchr` is already a normal (non-dev)
 # transitive dependency through both quick-xml and serde_json.
 memchr = "2"
+# SIMD Adler-32 for the data-object scan (RE-153, B80): a partition stream
+# holds headers that look like objects claiming megabytes, and each is
+# summed before it is rejected (8.4 GB per scan of Autodesk's 2025 MEP
+# sample). Adds no crate to the build graph: miniz_oxide, under flate2,
+# already depends on it.
+simd-adler32 = "0.3.9"
 # Triangulates the planar faces of saved family graphics (#255, rosejn).
 # MIT OR Apache-2.0. From 0.4.10 it calls `is_multiple_of`, which needs Rust
 # 1.87, and it declares no rust-version, so the MSRV-aware resolver cannot
