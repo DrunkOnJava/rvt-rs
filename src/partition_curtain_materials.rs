@@ -21,13 +21,15 @@ use std::collections::{BTreeMap, BTreeSet};
 /// start.
 const MATERIAL_AT: [(&str, usize); 2] = [("SysMullionFamSym", 135), ("SysPanelFamSym", 139)];
 
-/// Revit releases whose types hold the material at [`MATERIAL_AT`].
+/// Revit releases whose mullion and panel types hold their material at +135
+/// and +139.
 pub fn supports_revit_version(revit_version: u32) -> bool {
     (2024..=2026).contains(&revit_version)
 }
 
 /// Each mullion and panel type's material, by the type's ElementId: the
-/// ElementId among `materials` that its data object holds at [`MATERIAL_AT`].
+/// ElementId among `materials` that its data object holds at +135 (a
+/// mullion type) or +139 (a panel type).
 pub fn scan_curtain_type_materials(
     rf: &mut RevitFile,
     revit_version: u32,
