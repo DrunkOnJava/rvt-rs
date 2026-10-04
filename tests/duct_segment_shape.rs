@@ -47,9 +47,11 @@ fn refs(args: &str) -> Vec<u64> {
         .collect()
 }
 
-/// Each element's `Pset_DuctSegmentTypeCommon.Shape`, by its `Tag`: the
-/// property's entity and its value text.
-fn shapes(step: &str) -> BTreeMap<String, (String, String)> {
+/// A `Shape` property: its entity and its value text.
+type Shape = (String, String);
+
+/// Each element's `Pset_DuctSegmentTypeCommon.Shape`, by its `Tag`.
+fn shapes(step: &str) -> BTreeMap<String, Shape> {
     let ents = entities(step);
     let mut out = BTreeMap::new();
     for (entity, args) in ents.values() {
@@ -119,11 +121,7 @@ fn re1_duct_shapes_are_revits() {
         .export_with_diagnostics(&mut rf)
         .expect("export");
     let ours = shapes(&write_step(&result.model));
-    let wrong: Vec<(
-        &String,
-        Option<&(String, String)>,
-        Option<&(String, String)>,
-    )> = ducts
+    let wrong: Vec<(&String, Option<&Shape>, Option<&Shape>)> = ducts
         .iter()
         .filter(|tag| theirs.get(*tag) != ours.get(*tag))
         .map(|tag| (tag, theirs.get(tag), ours.get(tag)))
