@@ -39,7 +39,7 @@ pub fn symbol_port_indices(
         selected_ids: symbols.clone(),
         ..native_document::Options::default()
     };
-    native_document::extract(rf, &options, |record| {
+    native_document::extract_graphs(rf, &options, |record| {
         if record.class_name.as_deref() != Some("FamilySymbol") {
             return Ok(());
         }
@@ -75,7 +75,7 @@ pub fn symbol_port_indices(
         selected_ids: families,
         ..native_document::Options::default()
     };
-    native_document::extract(rf, &options, |record| {
+    native_document::extract_graphs(rf, &options, |record| {
         if record.class_name.as_deref() != Some("Family") {
             return Ok(());
         }
