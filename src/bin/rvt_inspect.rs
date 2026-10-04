@@ -487,9 +487,9 @@ fn print_human_report(report: &InspectReport) {
     }
     let param_values = report.export_diagnostics.decoded.parameter_value_count;
     if param_values > 0 {
-        println!("  Parameter values (AProperty*): {param_values}");
+        println!("  Parameter values: {param_values} in the IFC common property sets (Pset_*)");
     } else {
-        println!("  Parameter values: none recovered (AProperty* host joins pending — #35)");
+        println!("  Parameter values: none in the IFC common property sets (#35)");
     }
 
     println!("\nIFC export readiness");

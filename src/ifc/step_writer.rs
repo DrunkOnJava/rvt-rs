@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use super::IfcModel;
-use super::entities::{Extrusion, OpeningCut, Property, PropertySet, PropertyValue, SolidShape};
+use super::entities::{Extrusion, OpeningCut, PropertySet, SolidShape};
 
 /// Options controlling STEP serialization.
 #[derive(Debug, Clone, Default)]
@@ -1189,20 +1189,9 @@ impl StepWriter {
         }
 
         // #35: the sets Revit's export gives every storey and the building
-        // on the RE1 models: each storey's name in two sets and its
-        // `AboveGround` unknown, the building's storey count and its
-        // `IsLandmarked` unknown. A model with no decoded Level has neither.
-        let unknown = |name: &str, property: &str| PropertySet {
-            name: name.into(),
-            properties: vec![Property {
-                name: property.into(),
-                value: PropertyValue::Logical(None),
-            }],
-        };
+        // on the RE1 models. A model with no decoded Level has neither.
         for (index, storey) in storeys.iter().enumerate() {
-            let mut sets = PropertySet::name_sets(&storey.name);
-            sets.push(unknown("Pset_BuildingStoreyCommon", "AboveGround"));
-            for set in &sets {
+            for set in &PropertySet::storey_sets(&storey.name) {
                 let key = [storey_gids[index].as_str(), set.name.as_str()].join("\u{1f}");
                 self.emit_property_set(
                     owner_hist,
@@ -1214,14 +1203,7 @@ impl StepWriter {
             }
         }
         if !storeys.is_empty() {
-            let mut set = unknown("Pset_BuildingCommon", "IsLandmarked");
-            set.properties.insert(
-                0,
-                Property {
-                    name: "NumberOfStoreys".into(),
-                    value: PropertyValue::Integer(storeys.len() as i64),
-                },
-            );
+            let set = PropertySet::building_set(storeys.len());
             let key = ["building", set.name.as_str()].join("\u{1f}");
             self.emit_property_set(
                 owner_hist,

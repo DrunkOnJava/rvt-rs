@@ -1358,6 +1358,39 @@ impl PropertySet {
             })
             .collect()
     }
+
+    /// The sets Revit's export gives a storey on the RE1 models (#35): its
+    /// [`Self::name_sets`] and `Pset_BuildingStoreyCommon` with `AboveGround`
+    /// unknown.
+    pub fn storey_sets(name: &str) -> Vec<PropertySet> {
+        let mut sets = Self::name_sets(name);
+        sets.push(PropertySet {
+            name: "Pset_BuildingStoreyCommon".into(),
+            properties: vec![Property {
+                name: "AboveGround".into(),
+                value: PropertyValue::Logical(None),
+            }],
+        });
+        sets
+    }
+
+    /// `Pset_BuildingCommon` as Revit's export gives the building on the RE1
+    /// models (#35): its storey count and `IsLandmarked` unknown.
+    pub fn building_set(storeys: usize) -> PropertySet {
+        PropertySet {
+            name: "Pset_BuildingCommon".into(),
+            properties: vec![
+                Property {
+                    name: "NumberOfStoreys".into(),
+                    value: PropertyValue::Integer(storeys as i64),
+                },
+                Property {
+                    name: "IsLandmarked".into(),
+                    value: PropertyValue::Logical(None),
+                },
+            ],
+        }
+    }
 }
 
 /// A single property inside a [`PropertySet`].
