@@ -117,6 +117,41 @@ fn dump(ents: &BTreeMap<u64, (String, String)>, id: u64, depth: usize, budget: &
     }
 }
 
+/// Distance, feet, from `q` to the closed loop `ring`.
+fn distance(ring: &[(f64, f64)], q: (f64, f64)) -> f64 {
+    let mut best = f64::INFINITY;
+    for (i, a) in ring.iter().enumerate() {
+        let b = ring[(i + 1) % ring.len()];
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let length = dx * dx + dy * dy;
+        let s = if length > 0.0 { (((q.0 - a.0) * dx + (q.1 - a.1) * dy) / length).clamp(0.0, 1.0) } else { 0.0 };
+        best = best.min((q.0 - a.0 - s * dx).hypot(q.1 - a.1 - s * dy));
+    }
+    best
+}
+
+/// An element's location, feet, from its `IfcLocalPlacement` chain, adding
+/// each placement's point (the RE1 parents are all at the origin, unturned).
+fn revit_point_feet(ents: &BTreeMap<u64, (String, String)>, placement: u64) -> Option<[f64; 3]> {
+    let mut sum = [0.0; 3];
+    let mut next = Some(placement);
+    while let Some(id) = next {
+        let (entity, args) = ents.get(&id)?;
+        if entity != "IFCLOCALPLACEMENT" {
+            return None;
+        }
+        let f = split_args(args);
+        let axis = references(f.get(1)?).first().copied()?;
+        let point = references(&split_args(&ents.get(&axis)?.1)[0]).first().copied()?;
+        let coords = ents.get(&point)?.1.trim().trim_start_matches('(').trim_end_matches(')').to_string();
+        for (slot, value) in sum.iter_mut().zip(coords.split(',')) {
+            *slot += value.trim().parse::<f64>().ok()? / 304.8;
+        }
+        next = references(f.first()?).first().copied();
+    }
+    Some(sum)
+}
+
 fn place(location: &[f64; 3], rotation: f64, ring: &[(f64, f64)]) -> Vec<(f64, f64)> {
     let (sin, cos) = rotation.sin_cos();
     ring.iter()
@@ -135,6 +170,7 @@ fn main() -> anyhow::Result<()> {
     let theirs_ents = entities(&theirs_text);
     let theirs = containers(&theirs_ents);
     let mut rf = RevitFile::open(&path)?;
+    let version = rf.basic_file_info()?.version;
     let model = RvtDocExporter.export_with_diagnostics(&mut rf)?.model;
     let ours_text = write_step(&model);
     let ours_ents = entities(&ours_text);
@@ -155,9 +191,16 @@ fn main() -> anyhow::Result<()> {
         let (_, args) = &theirs_ents[their_id];
         let f = split_args(args);
         println!("#{their_id}={}({args})", theirs_ents[their_id].0);
-        if let Some(placement) = f.get(5).and_then(|p| references(p).first().copied()) {
+        let placement = f.get(5).and_then(|p| references(p).first().copied());
+        if let Some(placement) = placement {
             dump(&theirs_ents, placement, 1, &mut 40);
         }
+        let revit_point = placement.and_then(|p| revit_point_feet(&theirs_ents, p));
+        println!("Revit's location, feet (parents' offsets summed, rotations ignored): {revit_point:?}");
+        let ids = tag.parse::<u32>().ok().into_iter().collect::<std::collections::BTreeSet<u32>>();
+        let transforms = rvt::partition_instance_transforms::scan_instance_transforms(&mut rf, version, &ids)?;
+        let transform = transforms.values().next().copied();
+        println!("rvt-rs's instance transform: {transform:?}");
         println!("-- rvt-rs's element line and placement:");
         let (_, args) = &ours_ents[our_id];
         println!("#{our_id}={}({args})", ours_ents[our_id].0);
@@ -245,10 +288,16 @@ fn main() -> anyhow::Result<()> {
                 };
                 let within = inside(&outer, point);
                 let in_void = voids.iter().any(|ring| inside(ring, point));
-                if named || within {
+                let origin = transform.map(|t| (t.origin[0], t.origin[1]));
+                let revit = revit_point.map(|p| (p[0], p[1]));
+                let near = |q: Option<(f64, f64)>| q.map(|q| (inside(&outer, q), distance(&outer, q)));
+                if named || within || space_storey == storey_index {
                     println!(
-                        "  space {space_index} {name:?} storey {space_storey:?} location {space_location:?} rotation {rotation}: inside {within}, in a void {in_void}, outline {outer:?}, voids {}",
-                        voids.len()
+                        "  space {space_index} {name:?} storey {space_storey:?}: box point inside {within} at {:.3} ft, in a void {in_void}; transform origin (inside, ft) {:?}; Revit point {:?}; outline {}",
+                        distance(&outer, point),
+                        near(origin),
+                        near(revit),
+                        if named { format!("{outer:?}") } else { format!("{} points", outer.len()) }
                     );
                 }
             }
