@@ -562,7 +562,7 @@ pub fn append_typed_production_elements(
         // RE-151: the name of the openings of a floor's tagged voids.
         // B55: the openings a wall's edited elevation profile cuts, in the
         // wall's plane relative to its placement.
-        let mut profile_openings: Vec<(u32, Vec<(f64, f64)>, f64, f64, f64)> = Vec::new();
+        let mut profile_openings: Vec<ProfileOpening> = Vec::new();
         if let (Some(location), Some(body)) = (location_feet, extrusion.as_ref()) {
             let local_turn = if body.width_feet >= body.depth_feet {
                 0.0
@@ -1559,6 +1559,11 @@ struct RecordGeometry {
 /// A tagged void of a floor's sketch (RE-151): the piece it is in, its tag,
 /// its outline in the body's frame, and the floor's thickness, feet.
 type VoidBody = (usize, u32, Vec<(f64, f64)>, f64);
+
+/// A wall's elevation-profile opening (B55): its tag, its outline along and
+/// up the wall, the wall's axis turn in its placement, the sketch plane's
+/// offset to the axis's left, and the wall's thickness.
+type ProfileOpening = (u32, Vec<(f64, f64)>, f64, f64, f64);
 
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).

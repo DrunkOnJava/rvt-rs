@@ -3235,6 +3235,13 @@ pub const PROFILE_OPENING_FIELD: &str = "m_profile_opening";
 /// plane or a side a point may lie and still be on it (B55), feet.
 const PROFILE_EPS_FEET: f64 = 1e-3;
 
+/// A sketch line: its ElementId, start and end, model feet (B55).
+pub type SketchSegment = (u32, [f64; 3], [f64; 3]);
+
+/// A sketch line in its plane: its ElementId, and its ends along and up the
+/// plane (B55).
+type PlaneEdge = (u32, (f64, f64), (f64, f64));
+
 /// Give each wall whose elevation profile was edited the openings that cuts
 /// (B55, RE-151's 63rd opening).
 ///
@@ -3297,7 +3304,7 @@ fn attach_wall_profile_openings(
         let Some(curve_ids) = wall.id.and_then(|id| lists.get(&id)) else {
             continue;
         };
-        let segments: Option<Vec<(u32, [f64; 3], [f64; 3])>> = curve_ids
+        let segments: Option<Vec<SketchSegment>> = curve_ids
             .iter()
             .map(|id| {
                 let line = curves.get(id)?.line?;
@@ -3345,7 +3352,7 @@ fn attach_wall_profile_openings(
 /// opening (55859, also the last line of its sketch). Empty where the lines
 /// do not lie in one vertical plane, do not close one loop, or never leave
 /// the rectangle.
-pub fn elevation_profile_cuts(segments: &[(u32, [f64; 3], [f64; 3])]) -> Vec<(u32, Vec<[f64; 3]>)> {
+pub fn elevation_profile_cuts(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f64; 3]>)> {
     let eps = PROFILE_EPS_FEET;
     let points: Vec<[f64; 3]> = segments.iter().flat_map(|(_, a, b)| [*a, *b]).collect();
     let plan = |a: [f64; 3], b: [f64; 3]| ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
@@ -3378,7 +3385,7 @@ pub fn elevation_profile_cuts(segments: &[(u32, [f64; 3], [f64; 3])]) -> Vec<(u3
     if points.iter().any(|p| to_uv(*p).1 > eps) {
         return Vec::new();
     }
-    let edges: Vec<(u32, (f64, f64), (f64, f64))> = segments
+    let edges: Vec<PlaneEdge> = segments
         .iter()
         .map(|(id, a, b)| (*id, to_uv(*a).0, to_uv(*b).0))
         .collect();
