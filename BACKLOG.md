@@ -5,6 +5,19 @@ milestones and issues; this file ranks what a session can do now, with the
 evidence that put each item here. Statuses: `open`, `committed`,
 `in progress`, `done`, `blocked`.
 
+## Session settings (2026-10-04, session 3, from 10:15 AM)
+
+- Subagents: off.
+- Tests: mirror tests banned; existing suites (a), left untouched.
+- Autonomy: the whole committed backlog, with a checkpoint at each milestone.
+- Committed, in order: B49, B48, B51, B59, B62, B61, B47, B44, B63, B66, B54,
+  B53, B60, B64, B50, B52, B57. After them, the next-highest open items in the
+  same lanes (B45, B46, B56, B55).
+- Changes to an existing test or fixture (B49's Core Interior `property_sets`
+  rows, any pinned count) wait for the maintainer's approval and go in their own
+  commit.
+- Red/green, compute and the unit-test ban are as in session 2 below.
+
 ## Session settings (2026-10-03, session 2, from 2:40 PM)
 
 - Subagents: off
@@ -65,6 +78,58 @@ evidence that put each item here. Statuses: `open`, `committed`,
 - **Property-set gap on `main`** (`psets_vs_ifc`, before #603, #605 and #608): Architecture 101 missing, Mechanical 45, Plumbing 74, Electrical 66. #603, #605 and #608 close about 30 + 8 × 3 + 25 + 51. What remains: `InvertElevation` (69), the boolean sets (`IsExternal`, `LoadBearing`, `ExtendToStructure`: 36 on Architecture), `Finish` (6), `FireRating` (14), `PitchAngle` (2), `NumberOfPoles` (2), and single Reference gaps on a railing, two openings and a few proxies.
 - **Research found this session.** RE-157 (branch `re/re157-pipe-inner-diameter`, Measure run 37142956936): a pipe's own data object holds its inner diameter at byte 549 from the header, followed by its outer diameter, on every pipe size of RE1 Mechanical and Plumbing (11 sizes); the segment's size table holds nominal, inner and outer in a row.
 
+## Phase 0 findings, session 3 (2026-10-04, 10:10 AM, on `main` at `3503a60`)
+
+- **Git.** `main` is clean. Its last full CI run (#633's merge, run 37158263129) passed every job; the two later commits are docs-only. The nightly corpus (37188508028) and fuzz (37192161099) runs this morning passed. No open pull requests. The only unmerged remote branch is `pr/255` (closed in B36; its work landed as #420).
+- **Local branches.** 16 local branches track remotes that are gone (session 2's squash-merged item, `re/` and `red/` branches), plus `wip/b33-systems`, whose work landed as #631. The shared checkout's `main` is 85 commits behind `origin/main`.
+- **Tracker.** 23 open issues. `tools/maintainer/audit.py`: 11 of 12 checks ok; the Actions cache is at 10.1 GB of its 10 GB limit (B51).
+- **Community.** One comment has no answer: puzzbobb on #421 (2026-10-03, 6:13 PM UTC, about 9,800 characters with a probe). It explains RE-148's one exception: RE1 Electrical's 60 block keys missing from `Global/ContentDocuments` belong to three `Bell Wall` families that were deleted and the 57 fire-alarm families nested in them. A block is listed exactly when the `Family` record at the top of its chain is declared (B48).
+- **Markers and stubs.** No `TODO`, `FIXME`, `HACK` or `XXX` in `src`, `tools`, `tests`, `examples`, `viewer/src`, `rvt-py/src` or `python`. No `todo!`, `unimplemented!` or `#[ignore]`. Two `#[allow(dead_code)]` functions: `src/formats.rs:807` and `src/ifc/export_content.rs:835`, the latter "retained for when opening→host IFC emission lands", which has landed (B50).
+- **Build, lint, types.** Green on `main`'s last CI run (fmt, clippy `-D warnings`, `cargo doc`, the docs.rs preview, MSRV 1.87, three OSes). Not re-run locally (no compute on the Mac).
+- **Honesty drift in the export diagnostics** (B49).
+  - `unsupported_export_features` (`src/ifc/mod.rs:3630`) claims `revit_element_parameters_to_ifc_property_sets` whenever no element's *own* set is a parameter set. The `Pset_` sets session 2 wrote are `ElementPropertySet` entities and do not count, so Core Interior claims it while writing 2,111 `Pset_` values.
+  - `decoded.parameter_value_count` counts walker `AProperty` instances and is 0 on every measured model. That makes the viewer's Parameters row say "Revit's parameter table is not read yet" (`viewer/src/main.ts:2399`).
+  - The Core Interior count fixtures pin the claim as the `property_sets` row's `known_gap` (`tests/fixtures/project-counts/2024-core-interior.json:163`, and the slim fixture), so changing it changes an existing test and needs the maintainer's approval.
+  - Two other claims are made unconditionally, and each may be narrowly true:
+    - `revit_compound_assemblies_and_walltype_widths` (`:3575`) is about layer *widths* (#358 is open; 319 of Core Interior's walls draw one layer);
+    - `opening_index_to_ifc_openingelement_host_join` (`:3609`) is about the opening-index rows, whose emission (`src/ifc/export_content.rs:835`) never landed.
+
+    They are checked against what they assert, not changed by default.
+- **Integration and E2E coverage.**
+  - 58 targets in `tools/ci/test-targets.txt`: 39 `real`, 6 `cli`, 7 `contract` and 6 `unit` (kept as source, not run). Three `real` targets skip 5 synthetic-fixture tests by name (`elem_table_corpus`, `iter_elements_typed`, `partition_scanner`); this is documented in the manifest.
+  - CI takes about 7 minutes wall time (corpus tier 2 is the longest job, at 370 s). Measure takes about 8 to 10. Both are fast enough to iterate on, so speeding them up is not an item.
+  - The viewer's Playwright suite (3 specs) passed on its last 8 runs (`deploy-viewer.yml`). It covers the journey from opening a file through inspect, schedule and export to diagnostics, on Einhoven and Core Interior.
+  - The Python suite (`tests/python`, 67 tests) runs in the wheel job.
+  - No flaky test is known. Every CI failure since 2026-10-02 was a deliberate red run or a fmt, clippy or doc fix made inside its own PR.
+  - **Critical flows with no real-file E2E** (B53). Six of the 19 shipped binaries are run by no test except `--help` (`tests/cli_ergonomics.rs:181`) and by no workflow: `rvt-diff`, `rvt-history`, `rvt-analyze`, `rvt-elem-table`, `rvt-ifc-compare` and `rvt-write`.
+- **Unit suites.** None runs in CI, so none blocks a merge.
+  - 141 inline `#[test]`s in 14 `src` files (1,936 lines of test modules).
+  - The 6 `unit` targets (2,275 lines).
+  - Sampled estimate: about 85% test pure logic from outside: vector maths, clipping, compression and inflate limits, redaction, encode-then-decode round trips, property tests, fuzz regressions, corrupted input and cancellation.
+  - About 15% are mirror-like: `ifc_synthetic_project` and `ifc_synthetic_structural` (934 lines) pin exact counts and strings of hand-built models, and are kept as the generators of `synthetic-project.ifc` and the viewer's structural demo (#577). The two CLI parser modules in `src/bin` are the rest.
+  - The Python suite is an integration suite on real files and is not counted here.
+- **Record drift.** B23's table lists `control_cancellation`, `ifc_synthetic_project` and `ifc_synthetic_structural` among the targets #577 deleted. #577 kept them, and its description says so (B57).
+- **Docs drift.** `docs/launch/reddit-r-rust.md:20` and `docs/launch/twitter-x-thread.md:84` give MSRV 1.85 (it is 1.87), and the thread says 9 CLIs (19 binaries ship) (B57).
+- **Half-finished.** Native record extraction admits Revit 2023, 2024 and 2027. Revit 2025 element records come from the partition record path, so the native phase fields (`m_createdPhaseId`, `m_demolishedPhaseId`) are not read on 2025 (B46).
+- **Measured on `main`** (Measure run 37207000836, `3503a60`, no base). Revit's values equal in `psets_vs_ifc`, none different:
+
+  | model | equal | missing, by property |
+  |---|---|---|
+  | RE1 Architecture | 195 of 253 | `IsExternal` 21 (walls 7, members 10, plates 2, curtain wall 1, railing 1), `FireRating` 14 (B42), `LoadBearing` 9, `ExtendToStructure` 7, `PitchAngle` 2, railing 3 (B45), two openings' `Reference` (B20), one `Pset_QuantityTakeOff.Reference` |
+  | RE1 Mechanical | 249 of 298 | `Shape` 31 (B43), `ConnectionType` 2 × 6 (B31), duct-type `Length` 6 |
+  | RE1 Plumbing | 444 of 612 | `ConnectionType` 2 × 63 (B31), fitting `NominalDiameter` 42 (B44) |
+  | RE1 Electrical | 151 of 153 | `NumberOfPoles` 2 (B32) |
+
+  RE-158 found the walls' booleans need a model where they take both values; they stay with B28's note. The other scorers show these gaps:
+  - **Ducts.** RE1 Mechanical's 25 ducts carry a `Name` and `ObjectType` that differ from Revit's, and have no type object (`names_vs_ifc`, `type_objects_vs_ifc`: typed 49 of 74, untyped `IfcFlowSegment` 25) (B59).
+  - **Type entities.** 18 type objects are a different IFC entity from Revit's: 5 door types and 7 flow terminals on Architecture, 6 flow terminals on Plumbing (B61).
+  - **Type GlobalIds.** 545 of 1,147 typed elements carry a type object whose GlobalId differs from Revit's type: Core Interior 416 of 854 (columns, doors, windows, slabs, shading devices), Plumbing 54 of 123, Mechanical 37 of 49 typed, Architecture 36 of 72, Electrical 2 of 49. System-family types (walls) agree, and element GlobalIds all equal Revit's (B60).
+  - **Ports.** Revit writes 53 ports on Electrical, rvt-rs 0. Mechanical is 132 of 150 ports and 66 of 73 connections; Plumbing 242 of 260 and 120 of 126. One Plumbing connection rvt-rs writes is not in Revit's export (B54, B62).
+  - **Spaces.** 39 of RE1 Architecture's 73 elements are on the right storey, but Revit contains them in an `IfcSpace` (B63).
+  - **Materials.** RE1 Architecture's 10 mullions, 2 curtain panels, a proxy and the railing get no materials (58 of 72) (B66). On Core Interior, 6 windows get a material set that differs from Revit's (836 of 854 equal).
+  - **Door host.** One of RE1 Architecture's 5 doors has no host wall in rvt-rs's file (B64).
+  - **Exact.** Wall bodies, wall ends, room names, storeys, element GlobalIds and opening hosts are exact on every model.
+
 ## Ranked items
 
 Rank is payoff over cost, and items that unblock others rank higher. Size: S
@@ -122,6 +187,32 @@ Session 2 (2026-10-03, afternoon):
 | 20 | B47 | The connection-type element pipes route to (`Generic`) | research | M | unblocks B31, 2 × 69 values | RE-159 | - | open |
 | - | B42 | `FireRating`: needs a model whose fire rating is longer than one character | research | S | 14 values | RE-154 | a model | blocked |
 | - | B43 | `Pset_DuctSegmentTypeCommon.Shape`: needs the round versus rectangular switch | feature | S | 25 values | RE-134 §5 | a model | blocked |
+
+Session 3 (2026-10-04). Evidence runs: Measure 37207000836 on `main` at `3503a60`. Carried items keep their ids and rows above; they are ranked again here.
+
+| # | id | title | lane | size | payoff | evidence | depends | status |
+|---|---|---|---|---|---|---|---|---|
+| 1 | B49 | Export diagnostics count the Revit parameters the export writes: the parameters claim and `parameter_value_count` see the `Pset_` sets | hardening | M | every diagnostics reader (viewer status and element panels, `rvt-inspect`, `rvt-ifc --diagnostics`) on every model; Core Interior claims no parameters while writing 2,111 `Pset_` values | `src/ifc/mod.rs:3630`, `:3679`; `viewer/src/main.ts:2399`; Measure core-interior `diagnostics.json:31`, `:257` | approval to change the Core Interior fixtures' `property_sets` rows | committed |
+| 2 | B48 | #421: reproduce puzzbobb's `ContentDocuments` rule with a fresh probe, RE-163, reply | community, research | M | the one unanswered contributor comment; settles which embedded family documents a reader may report | #421 comment of 2026-10-03, 6:13 PM UTC; `src/native_document.rs:412` | - | committed |
+| 3 | B51 | Actions cache at 10.1 GB of 10 GB: clear stale caches | ops | S | the audit's one failing check; cache eviction slows every CI run | `tools/maintainer/audit.py` | - | committed |
+| 4 | B59 | RE1 Mechanical's 25 ducts: Revit's `Name`, `ObjectType` and a duct type object | fix | M | 25 elements named and typed as Revit's | `names_vs_ifc`, `type_objects_vs_ifc` | - | committed |
+| 5 | B62 | RE1 Plumbing: the one port connection rvt-rs writes that Revit's export lacks | fix | S | removes a false connection | `ports_vs_ifc` | - | committed |
+| 6 | B61 | Type objects: 5 door types and 13 flow-terminal types are a different IFC entity from Revit's | fix | M | 18 types | `type_objects_vs_ifc` | - | committed |
+| 7 | B47 | The connection-type element pipes route to (`Generic`) | research | M | unblocks B31, 2 × 69 values | RE-159 | - | committed |
+| 8 | B44 | `Pset_PipeFittingTypeCommon.NominalDiameter`: a fitting's nominal size | research | M | 42 values on Plumbing | `psets_vs_ifc` | - | committed |
+| 9 | B63 | Elements Revit contains in an `IfcSpace` | feature | M | 39 elements on RE1 Architecture | `storeys_vs_ifc` | - | committed |
+| 10 | B66 | Curtain wall mullion and panel materials | research, feature | M | 12 elements' materials (10 members, 2 plates) | `element_materials_vs_ifc` | - | committed |
+| 11 | B54 | #528: the 65 ports with nothing connected (Electrical 53, Plumbing 8, Mechanical 4) and the 13 connections not read (Mechanical 7, Plumbing 6) | research, feature | L | 65 ports, 13 connections | `ports_vs_ifc` | B62 shares the probe | committed |
+| 12 | B53 | Real-file E2E for the six CLIs only `--help` checks: `rvt-elem-table`, `rvt-history`, `rvt-analyze`, `rvt-diff`, `rvt-ifc-compare`, `rvt-write` | hardening | L | six shipped tools gain their first real-file check | `tests/cli_ergonomics.rs:181`; no workflow runs them | - | committed |
+| 13 | B60 | Type GlobalIds of family types: 545 of 1,147 typed elements' types differ from Revit's | research | L | the type GlobalIds IFC consumers key on, on every model | `type_objects_vs_ifc` | - | committed |
+| 14 | B64 | RE1 Architecture: one door with no host wall in rvt-rs's file | fix | S | one door's opening and body | `door_bodies_vs_ifc` | - | committed |
+| 15 | B50 | Dead code: `scan_fields_until_next_class` (unused), and `opening_index_property_set` (kept for an emission that never landed) | debt | S | less dead code | `src/formats.rs:807`, `src/ifc/export_content.rs:835` | B49's check of the opening-index claim | committed |
+| 16 | B52 | Local branches: 16 whose remotes are gone, and `wip/b33-systems` | debt | S | local hygiene | `git branch -vv` | - | committed |
+| 17 | B57 | Docs drift: the launch drafts' MSRV and CLI count, B23's record of #577 | docs | S | public text matches the code | `docs/launch/reddit-r-rust.md:20`, `docs/launch/twitter-x-thread.md:84`; #577 | - | committed |
+| 18 | B45 | Railing 462556: resolve its type, for its `Reference`, `Pset_RailingCommon.Height` and material | research | M | 4 values on Architecture | B29, `type_objects_vs_ifc` (untyped `IfcRailing`) | - | open |
+| 19 | B46 | Revit 2025 native element fields (`m_createdPhaseId`, `m_demolishedPhaseId`), for phase filtering | feature | L | unblocks B38 and #328 | RE-160 | - | open |
+| 20 | B56 | #228: which internal element ElementId 3 is | research | M | closes #228 | RE-161 | - | open |
+| 21 | B55 | #227's 63rd opening: wall 55840's edited elevation profile | research, feature | L | the last of Revit's 63 unfilled openings | RE-151 | - | open |
 
 
 ## Progress log
@@ -453,3 +544,40 @@ list). Milestone 0.5.0.
 
 #408 needs licensed models not used to develop the decoder. It is blocked on
 obtaining them.
+
+### Session 3 items
+
+Every new test is seen red on CI before the change it covers. For B53, which covers behaviour that already exists, red is shown by pushing the test with a fault injected into the binary on a scratch branch.
+
+- **B49 Diagnostics on parameters.**
+  - *Definition of done:* a `cli` test runs the built `rvt-ifc` with `--diagnostics` on Core Interior and the four RE1 models and checks the diagnostics against the IFC file the same run wrote:
+    - `decoded.parameter_value_count` equals the property values in its `Pset_` sets;
+    - `revit_element_parameters_to_ifc_property_sets` is claimed only when there are none. Where some are written and others are not, a narrower claim says so, the way `partial_element_geometry` does.
+  - The viewer suite checks that Core Interior's Parameters status row reports the count instead of "Revit's parameter table is not read yet".
+  - The Core Interior fixtures' `property_sets` rows change from `known_gap` with that feature, after the maintainer approves the change to those existing fixtures. Their notes' "no set carries a Revit element parameter yet" is corrected, and both witness observations are regenerated.
+  - The two unconditional claims (compound widths, opening-index host join) are each checked against what they assert, and changed only if false.
+  - Measure diff: only the diagnostics change.
+- **B48 #421 `ContentDocuments`.**
+  - *Definition of done:* a probe written from the stated rule (not from the comment's code, per `CLEANROOM.md`) runs with Measure on RE1 Electrical, Core Interior, Einhoven and the samples. It counts keyed blocks, listed blocks, and the declared state of the top `Family` of each block's chain.
+  - Report RE-163 gives the counts, and the reply on #421 links the run. rvt-rs reads no keyed block today (`native_document.rs:412`), so no reader changes; the report says so.
+- **B51 Actions cache.** *Definition of done:* `tools/maintainer/clean_caches.py --delete` removes caches of merged branches; `audit.py` reports 12 of 12.
+- **B59 Ducts.** *Definition of done:* a `real` test reads RE1 Mechanical's export and Revit's, and every duct has Revit's `Name`, `ObjectType` and a type object of Revit's entity and name. Measure: `names_vs_ifc` 25 equal, typed 74 of 74.
+- **B62 False connection.** *Definition of done:* a `real` test checks that every connection rvt-rs writes on RE1 Plumbing and Mechanical is in Revit's export. Measure `ports_vs_ifc`: 0 written that are not in Revit's.
+- **B61 Type entities.** *Definition of done:* a `real` test checks that each typed element's type object is Revit's entity on the four RE1 models. Measure: entity agrees on every typed element.
+- **B47, B44.** As in session 2: a probe and report first, then the property, with a `real` test against Revit's export.
+- **B63 Spaces.** *Definition of done:* a `real` test checks that each RE1 Architecture element Revit contains in an `IfcSpace` is contained in the same space by `IfcRelContainedInSpatialStructure`, with no element moved off its storey on the other models. Measure `storeys_vs_ifc`: 73 same.
+- **B66 Curtain materials.** A probe for where a mullion's and a panel's material is stored, then the material, with a `real` test against Revit's sets.
+- **B54 Ports.** A probe for where an unconnected connector is stored (RE-138 read only joined pairs), then the ports, with a `real` test against `ports_vs_ifc`'s counts.
+- **B53 CLI E2E** (milestones, one per CLI). Each is a `cli` target on corpus files, asserting what the tool's own documentation promises:
+  - `rvt-elem-table`'s count equals the table header's;
+  - `rvt-history` ends with the file's own release;
+  - `rvt-analyze --json` parses and agrees with `rvt-info`;
+  - `rvt-diff` of a file with itself reports no differing stream;
+  - `rvt-ifc-compare` of an export with itself exits 0 with no divergence, and against Revit's export with `--fail-on-diff` exits 2;
+  - an identity `rvt-write` patch round-trips.
+- **B60 Type GlobalIds.** A probe that compares rvt-rs's type GlobalIds with Revit's on all five models. It finds the rule for family types, such as a per-symbol suffix or the instance's mapped geometry, and tests it before any change.
+- **B64, B50, B52, B57.**
+  - B64: a probe of the unhosted door, then a fix or a finding.
+  - B50: delete the unused scanner, and the opening-index set unless B49 finds its emission is planned work; `cargo clippy` and `cargo doc` stay green.
+  - B52: delete the local branches whose PRs merged. Each branch's tree is diffed against `origin/main` first, because `--no-merged` cannot see squash merges.
+  - B57: correct the two launch drafts and B23's row.
