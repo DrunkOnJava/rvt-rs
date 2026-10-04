@@ -560,7 +560,48 @@ pub fn append_typed_production_elements(
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         let serial_sets = serial_number_property_sets(&decoded, &ifc_type);
         // RE-151: the name of the openings of a floor's tagged voids.
-        let opening_name = (!void_bodies.is_empty()).then(|| {
+        // B55: the openings a wall's edited elevation profile cuts, in the
+        // wall's plane relative to its placement.
+        let mut profile_openings: Vec<(u32, Vec<(f64, f64)>, f64, f64, f64)> = Vec::new();
+        if let (Some(location), Some(body)) = (location_feet, extrusion.as_ref()) {
+            let local_turn = if body.width_feet >= body.depth_feet {
+                0.0
+            } else {
+                std::f64::consts::FRAC_PI_2
+            };
+            let turn = rotation_radians.unwrap_or(0.0) + local_turn;
+            let (axis, left) = ([turn.cos(), turn.sin()], [-turn.sin(), turn.cos()]);
+            let offset = |p: &[f64; 3], direction: [f64; 2]| {
+                (p[0] - location[0]) * direction[0] + (p[1] - location[1]) * direction[1]
+            };
+            for (tag, outline) in
+                crate::partition_schema_mvp::profile_openings_from_fields(&decoded.fields)
+            {
+                let Some(plane) = outline.first().map(|p| offset(p, left)) else {
+                    continue;
+                };
+                let mut uv: Vec<(f64, f64)> = outline
+                    .iter()
+                    .map(|p| (offset(p, axis), p[2] - location[2]))
+                    .collect();
+                let area: f64 = uv
+                    .iter()
+                    .zip(uv.iter().cycle().skip(1))
+                    .map(|(a, b)| a.0 * b.1 - b.0 * a.1)
+                    .sum();
+                if area < 0.0 {
+                    uv.reverse();
+                }
+                profile_openings.push((
+                    tag,
+                    uv,
+                    local_turn,
+                    plane,
+                    body.width_feet.min(body.depth_feet),
+                ));
+            }
+        }
+        let opening_name = (!void_bodies.is_empty() || !profile_openings.is_empty()).then(|| {
             let type_id = decoded.fields.iter().find_map(|(name, value)| match value {
                 InstanceField::ElementId { id, .. }
                     if name == crate::partition_schema_mvp::TYPE_ID_FIELD =>
@@ -623,6 +664,19 @@ pub fn append_typed_production_elements(
                     name: opening_name.clone(),
                     outline_feet,
                     depth_feet,
+                });
+            }
+            for (tag, outline_feet, axis_turn_radians, plane_offset_feet, thickness_feet) in
+                profile_openings
+            {
+                entities.push(entities::IfcEntity::WallProfileOpening {
+                    host: entity_index,
+                    tag: tag.to_string(),
+                    name: opening_name.clone(),
+                    outline_feet,
+                    axis_turn_radians,
+                    plane_offset_feet,
+                    thickness_feet,
                 });
             }
         }

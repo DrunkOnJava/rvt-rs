@@ -203,6 +203,23 @@ pub enum IfcEntity {
         outline_feet: Vec<(f64, f64)>,
         depth_feet: f64,
     },
+    /// The opening a wall's edited elevation profile cuts (B55): voiding the
+    /// wall at `host` (an index into `IfcModel::entities`), placed in its
+    /// frame. `outline_feet` lies in the wall's vertical plane, along the
+    /// wall's axis and up from the placement's origin, counter-clockwise; the
+    /// axis is turned `axis_turn_radians` from the placement's X, the plane
+    /// lies `plane_offset_feet` to the axis's left of the origin, and the
+    /// outline is extruded `thickness_feet` through the wall, centred on the
+    /// plane, as Revit's export writes it.
+    WallProfileOpening {
+        host: usize,
+        tag: String,
+        name: String,
+        outline_feet: Vec<(f64, f64)>,
+        axis_turn_radians: f64,
+        plane_offset_feet: f64,
+        thickness_feet: f64,
+    },
     /// The building elements a room's space contains (B63): `elements`
     /// (indices into `IfcModel::entities`) are contained in the `IfcSpace` at
     /// `space` instead of their storey, as Revit's export contains a room's
