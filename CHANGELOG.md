@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A wall's edited elevation profile cuts an opening (RE-151, B55, #227).**
+  Wall 55840's sketch on Core Interior is a loop of 11 lines in its vertical
+  plane; the lines that leave the loop's bounding rectangle cut the region
+  Revit's export writes as opening 55859 voiding the wall. rvt-rs now writes
+  it, in the wall's plane and frame, extruded through its thickness: 63 of
+  Revit's 63 unfilled openings, the wall's within 0.001 ft of Revit's box.
+  Checked by `tests/wall_profile_openings.rs`.
+- **The native record path reads Revit 2025 and 2026 (B46, #328).** Its
+  framing, record-count and body-size checks hold on all nine 2025 files
+  (RE1 and Autodesk's samples) and all five 2026 samples, so
+  `native_document::extract` now admits 2023 to 2027, and with it each
+  element's `m_createdPhaseId` and `m_demolishedPhaseId`. Checked by
+  `tests/native_phases.rs` on the four RE1 models.
 - **A railing whose list names no type takes the one its own data object
   names (B45).** RE1 Architecture's railing 462556 holds its type 446543 in
   its `BaseRailing` data object and is written with Revit's `IfcRailingType`
