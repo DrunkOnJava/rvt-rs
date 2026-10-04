@@ -146,7 +146,7 @@ pub fn is_misleading_proxy_class(class_name: &str) -> bool {
 /// Whether an IFC4 entity name is an `IfcDistributionElement` among those the
 /// exporter writes: the only kind of element an `IfcDistributionPort` may be
 /// tied to (RE-138). Equipment written as a building element proxy is not.
-fn is_distribution_element(ifc_type: &str) -> bool {
+pub(crate) fn is_distribution_element(ifc_type: &str) -> bool {
     ifc_type.starts_with("IFCFLOW")
         || matches!(
             ifc_type,
