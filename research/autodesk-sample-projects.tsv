@@ -1,4 +1,4 @@
-# Autodesk's published sample projects, one row per release (#421, RE-140).
+# Autodesk's published sample projects, one row per release and model (#421, RE-140).
 # Fetched from Autodesk's own download host for a measurement run by
 # tools/fetch-autodesk-samples.sh and never stored or committed. They are on the host the
 # family corpus comes from, which phi-ag/rvt lists under CC BY-NC-SA 3.0; the projects' own
@@ -41,3 +41,13 @@
 2027	racbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/racbasicsampleproject.rvt	c9ce4d013b630028973e4549d3be4b38b3640641948b035680eeea7306491a01	19828736
 2027	rstbasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/rstbasicsampleproject.rvt	01685786d262fc89c5f81462694e6d87a31643d2eb7bc545497c663feeed1453	6737920
 2027	racadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/racadvancedsampleproject.rvt	a88eb9f85e1e2d47bbc91ee214b178c2d7075822b6d08694f59e3e6f259024ed	17133568
+# The MEP sample projects, rme_basic and rme_advanced, 2024 to 2027 (B68): ducts of every
+# shape, fittings, connectors and systems the reference models lack. Measured 2026-10-04.
+2024	rmebasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/rmebasicsampleproject.rvt	d09d415f0fcaf3edcbffded953ccf2370ebf53278ec9a8ac9a2f8f4c6c12e955	32444416
+2024	rmeadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/rmeadvancedsampleproject.rvt	ad735f9f024e6364c01075132ebb7a5566a072b6c93f2f7b0042a29e997b5313	39055360
+2025	rmebasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2025RVT_RTM/Docs/InProd/rmebasicsampleproject.rvt	037165e5d317667f3cc8b522b187b4a2025da5b8664ae3deb4ed0767180c8099	32632832
+2025	rmeadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2025RVT_RTM/Docs/InProd/rmeadvancedsampleproject.rvt	0845729234e073b52d42ece73680b9c6d8ef13bb0bc768fe4e9c59e3ec8886d5	39096320
+2026	rmebasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2026RVT_RTM/Docs/InProd/rmebasicsampleproject.rvt	37127cf55f7488f16124c6149c0d46e974faf64fe1a87d541149c8715f3ead94	32653312
+2026	rmeadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2026RVT_RTM/Docs/InProd/rmeadvancedsampleproject.rvt	1f34a8f14d51d4baf9d010b0db689ba924fc36fcf9e7721ea5fee3ef1305d7af	39112704
+2027	rmebasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/rmebasicsampleproject.rvt	886bb0d17b1db51c70c770248f36a7a131ec268fced70da89e126b2a141ae1a7	32944128
+2027	rmeadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/rmeadvancedsampleproject.rvt	899ea8a69366b0c2c00aab7db45465ce722af5c26782c50833193bc654ffca7a	39178240
