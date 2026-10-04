@@ -1,5 +1,7 @@
 # Reading the two proprietary formats that run building design — dwg-rs + rvt-rs
 
+> Written for 0.1.2 (2026-04-20) and not brought up to date since; see [README.md](README.md) before posting.
+
 *Draft blog post — April 2026. To be published under DrunkOnJava's
 personal blog / Medium / dev.to.*
 

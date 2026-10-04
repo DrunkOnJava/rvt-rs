@@ -203,6 +203,11 @@ pub enum IfcEntity {
         outline_feet: Vec<(f64, f64)>,
         depth_feet: f64,
     },
+    /// The building elements a room's space contains (B63): `elements`
+    /// (indices into `IfcModel::entities`) are contained in the `IfcSpace` at
+    /// `space` instead of their storey, as Revit's export contains a room's
+    /// furniture, fixtures and equipment. They keep their `storey_index`.
+    SpaceContainment { space: usize, elements: Vec<usize> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1358,6 +1363,39 @@ impl PropertySet {
             })
             .collect()
     }
+
+    /// The sets Revit's export gives a storey on the RE1 models (#35): its
+    /// [`Self::name_sets`] and `Pset_BuildingStoreyCommon` with `AboveGround`
+    /// unknown.
+    pub fn storey_sets(name: &str) -> Vec<PropertySet> {
+        let mut sets = Self::name_sets(name);
+        sets.push(PropertySet {
+            name: "Pset_BuildingStoreyCommon".into(),
+            properties: vec![Property {
+                name: "AboveGround".into(),
+                value: PropertyValue::Logical(None),
+            }],
+        });
+        sets
+    }
+
+    /// `Pset_BuildingCommon` as Revit's export gives the building on the RE1
+    /// models (#35): its storey count and `IsLandmarked` unknown.
+    pub fn building_set(storeys: usize) -> PropertySet {
+        PropertySet {
+            name: "Pset_BuildingCommon".into(),
+            properties: vec![
+                Property {
+                    name: "NumberOfStoreys".into(),
+                    value: PropertyValue::Integer(storeys as i64),
+                },
+                Property {
+                    name: "IsLandmarked".into(),
+                    value: PropertyValue::Logical(None),
+                },
+            ],
+        }
+    }
 }
 
 /// A single property inside a [`PropertySet`].
@@ -1424,6 +1462,10 @@ pub enum PropertyValue {
     /// Mass in pounds (writer converts to kilograms).
     /// Maps to `IfcMassMeasure`. (IFC-32)
     MassPounds(f64),
+    /// A list of values: the writer emits an `IfcPropertyListValue`, as
+    /// standard property sets declare for values given once per port, such as
+    /// `Pset_PipeFittingTypeCommon.NominalDiameter` (B44).
+    List(Vec<PropertyValue>),
 }
 
 impl PropertyValue {
@@ -1474,6 +1516,14 @@ impl PropertyValue {
                 let kg = lb * 0.45359237;
                 format!("IFCMASSMEASURE({kg:.6})")
             }
+            PropertyValue::List(items) => format!(
+                "({})",
+                items
+                    .iter()
+                    .map(PropertyValue::to_step)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
         }
     }
 }

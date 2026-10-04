@@ -488,8 +488,9 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         storey.is_some(),
         material.is_some(),
         property_group
-            .as_ref()
-            .is_some_and(|g| !g.properties.is_empty()),
+            .iter()
+            .chain(&further_property_groups)
+            .any(|g| !g.properties.is_empty()),
         !placement_rows.is_empty(),
         !extent_rows.is_empty(),
     );
@@ -733,6 +734,11 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
         PropertyValue::CountValue(c) => c.to_string(),
         PropertyValue::TimeSeconds(t) => format!("{t:.1} s"),
         PropertyValue::MassPounds(m) => format!("{m:.2} lb"),
+        PropertyValue::List(items) => items
+            .iter()
+            .map(format_property_value)
+            .collect::<Vec<_>>()
+            .join(", "),
     }
 }
 
@@ -753,6 +759,7 @@ fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
         PropertyValue::CountValue(_) => "count",
         PropertyValue::TimeSeconds(_) => "time",
         PropertyValue::MassPounds(_) => "mass",
+        PropertyValue::List(_) => "list",
     }
 }
 
@@ -760,14 +767,19 @@ fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
 /// right-align into a tabular column.
 fn property_value_is_numeric(v: &super::entities::PropertyValue) -> bool {
     use super::entities::PropertyValue;
-    !matches!(
-        v,
-        PropertyValue::Text(_)
-            | PropertyValue::Label(_)
-            | PropertyValue::Identifier(_)
-            | PropertyValue::Boolean(_)
-            | PropertyValue::Logical(_)
-    )
+    match v {
+        PropertyValue::List(items) => {
+            !items.is_empty() && items.iter().all(property_value_is_numeric)
+        }
+        _ => !matches!(
+            v,
+            PropertyValue::Text(_)
+                | PropertyValue::Label(_)
+                | PropertyValue::Identifier(_)
+                | PropertyValue::Boolean(_)
+                | PropertyValue::Logical(_)
+        ),
+    }
 }
 
 /// Row of a schedule table (VW1-15) — one per `BuildingElement`

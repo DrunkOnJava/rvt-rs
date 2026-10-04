@@ -1,5 +1,7 @@
 # Twitter/X thread — rvt-rs
 
+> Written for 0.1.2 (2026-04-20) and not brought up to date since; see [README.md](README.md) before posting.
+
 Ten-tweet thread, audit-honest framing, same tone as `hn-show-hn.md`. Each tweet is self-contained enough to survive a quote-tweet. Character counts verified against Twitter's 280-character limit (em-dash, en-dash, and ASCII punctuation each count as 1 code unit).
 
 ---

@@ -478,40 +478,51 @@ pub const MEP_CURVE_TYPE_NAME_OFFSET: usize = 306;
 /// id whose occurrences give different names is dropped.
 pub fn find_mep_curve_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, String> {
     let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
-    for &id in wanted {
-        let bytes = u64::from(id).to_le_bytes();
-        for at in memchr::memmem::find_iter(buf, &bytes) {
-            if read_u64(buf, at + MEP_CURVE_TYPE_ID_REPEAT) != Some(u64::from(id)) {
-                continue;
+    let (Some(&low), Some(&high)) = (wanted.first(), wanted.last()) else {
+        return BTreeMap::new();
+    };
+    // B70: one pass, each offset first asked whether a `u64` there repeats
+    // MEP_CURVE_TYPE_ID_REPEAT bytes on, rather than a search per id.
+    let last = buf.len().saturating_sub(MEP_CURVE_TYPE_ID_REPEAT + 8);
+    for at in 0..last {
+        let value = read_u64(buf, at).expect("in bounds");
+        if value < u64::from(low)
+            || value > u64::from(high)
+            || read_u64(buf, at + MEP_CURVE_TYPE_ID_REPEAT) != Some(value)
+        {
+            continue;
+        }
+        let id = value as u32;
+        if !wanted.contains(&id) {
+            continue;
+        }
+        let Some(units) = read_u32(buf, at + MEP_CURVE_TYPE_NAME_OFFSET)
+            .and_then(|n| usize::try_from(n).ok())
+            .filter(|n| (1..=NAME_MAX_UNITS).contains(n))
+        else {
+            continue;
+        };
+        let start = at + MEP_CURVE_TYPE_NAME_OFFSET + 4;
+        let Some(bytes) = buf.get(start..start + units * 2) else {
+            continue;
+        };
+        let code_units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        let Ok(name) = String::from_utf16(&code_units) else {
+            continue;
+        };
+        if name.trim().is_empty() || name.chars().any(char::is_control) {
+            continue;
+        }
+        match found.get_mut(&id) {
+            None => {
+                found.insert(id, Some(name));
             }
-            let Some(units) = read_u32(buf, at + MEP_CURVE_TYPE_NAME_OFFSET)
-                .and_then(|n| usize::try_from(n).ok())
-                .filter(|n| (1..=NAME_MAX_UNITS).contains(n))
-            else {
-                continue;
-            };
-            let start = at + MEP_CURVE_TYPE_NAME_OFFSET + 4;
-            let Some(bytes) = buf.get(start..start + units * 2) else {
-                continue;
-            };
-            let code_units: Vec<u16> = bytes
-                .chunks_exact(2)
-                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-                .collect();
-            let Ok(name) = String::from_utf16(&code_units) else {
-                continue;
-            };
-            if name.trim().is_empty() || name.chars().any(char::is_control) {
-                continue;
-            }
-            match found.get_mut(&id) {
-                None => {
-                    found.insert(id, Some(name));
-                }
-                Some(slot) => {
-                    if slot.as_deref() != Some(name.as_str()) {
-                        *slot = None;
-                    }
+            Some(slot) => {
+                if slot.as_deref() != Some(name.as_str()) {
+                    *slot = None;
                 }
             }
         }

@@ -6,6 +6,13 @@ keyed by its Tag (the ElementId), compare the type rvt-rs gives the
 element with the same Tag: its entity, its Name (`Family:Type`), its Tag
 (the type's ElementId) and its GlobalId.
 
+rvt-rs writes IFC4. The RE1 exports are IFC2X3 (CoordinationView 2.0),
+which has no IfcDoorType or IfcWindowType, only IfcDoorStyle and
+IfcWindowStyle, and which types some elements by a supertype
+(IfcDistributionElementType for sanitary terminals). An entity agrees
+when ours is Revit's, its IFC4 counterpart, or a subtype of either in
+IFC4 (B61).
+
 Usage:
     python3 tools/re/type_objects_vs_ifc.py OURS.ifc REVIT.ifc
 """
@@ -19,6 +26,24 @@ import ifcopenshell.util.element
 VERBOSE = "-v" in sys.argv
 if VERBOSE:
     sys.argv.remove("-v")
+
+IFC4 = ifcopenshell.ifcopenshell_wrapper.schema_by_name("IFC4")
+# IFC2X3 type entities and their IFC4 counterparts.
+IFC4_COUNTERPART = {"IfcDoorStyle": "IfcDoorType", "IfcWindowStyle": "IfcWindowType"}
+
+
+def entity_agrees(revit, ours):
+    """Whether `ours` (IFC4) is `revit`, its IFC4 counterpart, or a subtype."""
+    wanted = {revit, IFC4_COUNTERPART.get(revit, revit)}
+    try:
+        declaration = IFC4.declaration_by_name(ours)
+    except Exception:
+        return ours in wanted
+    while declaration is not None:
+        if declaration.name() in wanted:
+            return True
+        declaration = declaration.supertype()
+    return False
 
 
 def typed(path):
@@ -53,7 +78,7 @@ def main():
             continue
         both += 1
         for field, e, g in zip(fields, expected, got[1:]):
-            if e == g:
+            if e == g or (field == "entity" and entity_agrees(e, g)):
                 agree[field] += 1
             else:
                 wrong[(field, occurrence)] += 1

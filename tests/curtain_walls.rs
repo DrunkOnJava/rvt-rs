@@ -3,8 +3,8 @@
 //!
 //! On `RE1-Architecture.rvt` (Revit 2025, MIT) Revit's export writes wall
 //! 445961 as `IFCCURTAINWALL` with no representation and aggregates its 2
-//! panels and 10 mullions (and a panel door, which is not read). Corpus-gated
-//! through `RVT_PROJECT_CORPUS_DIR`.
+//! panels, 10 mullions and its panel door (B64). Corpus-gated through
+//! `RVT_PROJECT_CORPUS_DIR`.
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
@@ -99,6 +99,10 @@ fn re1_curtain_wall_aggregates_its_panels_and_mullions() {
     }
     assert_eq!(
         parts,
-        BTreeMap::from([("IFCMEMBER".to_string(), 10), ("IFCPLATE".to_string(), 2)])
+        BTreeMap::from([
+            ("IFCDOOR".to_string(), 1),
+            ("IFCMEMBER".to_string(), 10),
+            ("IFCPLATE".to_string(), 2)
+        ])
     );
 }
