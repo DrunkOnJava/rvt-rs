@@ -56,8 +56,10 @@ values read) are the cross-check for any reader of them.
 
 Autodesk publishes `rac_basic`, `rst_basic` and `rac_advanced` sample projects
 for every Revit release from 2016 to 2027 on its own download host, 36 files,
-the host the sample families of the phi-ag/rvt corpus (CC BY-NC-SA 3.0) come
-from; the projects' own terms were not checked. They are pinned by hash in
+and the MEP projects `rme_basic` and `rme_advanced`, of which 2024 to 2027 are
+pinned (8 files: ducts of every shape, fittings, connectors and systems the
+reference models lack). It is the host the sample families of the phi-ag/rvt
+corpus (CC BY-NC-SA 3.0) come from; the projects' own terms were not checked. They are pinned by hash in
 [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv)
 and fetched by `tools/fetch-autodesk-samples.sh`; the Measure workflow reads
 them with `-f samples=true` (`rvt-info`, the IFC export's diagnostics, and the
