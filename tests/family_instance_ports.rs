@@ -77,11 +77,14 @@ fn port_key(args: &str) -> Option<(u32, u32)> {
     Some((id.parse().ok()?, index.parse().ok()?))
 }
 
+/// Each port's key, with the `Tag` of the element it is tied to.
+type Ports = BTreeMap<(u32, u32), Option<u32>>;
+
 /// Each port's key, with the `Tag` of the element it is tied to, and each
 /// element's entity by `Tag`.
-fn ports_and_entities(step: &str) -> (BTreeMap<(u32, u32), Option<u32>>, BTreeMap<u32, String>) {
+fn ports_and_entities(step: &str) -> (Ports, BTreeMap<u32, String>) {
     let ents = entities(step);
-    let mut ports: BTreeMap<(u32, u32), Option<u32>> = ents
+    let mut ports: Ports = ents
         .values()
         .filter(|(entity, _)| entity == "IFCDISTRIBUTIONPORT")
         .filter_map(|(_, args)| Some((port_key(args)?, None)))
