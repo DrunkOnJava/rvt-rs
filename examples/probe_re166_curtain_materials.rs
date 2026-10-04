@@ -15,6 +15,10 @@
 //! BuiltInParameter id where the value is a parameter entry) or else its
 //! offset, and the probe prints how many elements each key explains.
 //!
+//! On every file, with or without a reference export, it then surveys the
+//! data objects of the `MullionType` and `PanelType` classes: how many hold
+//! a material's ElementId at [`MATERIAL_AT`] bytes from their header.
+//!
 //! Usage:
 //!   cargo run --profile ci --example probe_re166_curtain_materials -- MODEL.rvt ...
 
@@ -25,6 +29,11 @@ use std::path::Path;
 
 const ENTITIES: [&str; 2] = ["IFCMEMBER", "IFCPLATE"];
 const KEYS_SHOWN: usize = 15;
+/// Where RE1 Architecture's mullion type object holds its material: bytes
+/// from the object's header.
+const MATERIAL_AT: usize = 135;
+/// The classes surveyed on every file, with or without a reference export.
+const SURVEYED: [&str; 2] = ["MullionType", "PanelType"];
 
 /// `#id -> (entity, args)` for every line of a STEP file.
 fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
@@ -159,6 +168,80 @@ fn i64_at(b: &[u8], at: usize) -> Option<i64> {
     ))
 }
 
+/// Every data object of the schema class `class_name` in the file: how many,
+/// how many hold a material's ElementId as the `u64` at [`MATERIAL_AT`] from
+/// their header, and up to 8 of them with that value and its material name.
+fn survey(rf: &mut RevitFile, class_name: &str) -> anyhow::Result<String> {
+    let revit = rf.basic_file_info()?.version;
+    let classes = rf.schema_classes()?;
+    let Some(tag) = classes
+        .classes
+        .iter()
+        .find(|class| class.name == class_name)
+        .map(|class| u32::from(class.tag))
+    else {
+        return Ok(format!("{{\"class\":{class_name:?},\"tag\":null}}"));
+    };
+    let declared: BTreeSet<u32> = elem_table::declared_element_ids(rf)?.into_iter().collect();
+    let materials = partition_materials::scan_material_names(rf, revit, &declared)?;
+    let entry_names = rf.element_names();
+    let mut objects: BTreeMap<u32, Option<u64>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let b = inflated.bytes();
+        let word = (0xffff_0000u32 | tag).to_le_bytes();
+        for hit in memchr::memmem::find_iter(b, &word) {
+            let Some(start) = hit.checked_sub(16) else {
+                continue;
+            };
+            let Some(object) = verified_data_object(b, start) else {
+                continue;
+            };
+            if object.class & 0xffff != tag {
+                continue;
+            }
+            let value = (object.end >= start + MATERIAL_AT + 8)
+                .then(|| {
+                    u64::from_le_bytes(
+                        b[start + MATERIAL_AT..start + MATERIAL_AT + 8]
+                            .try_into()
+                            .ok()?,
+                    )
+                    .into()
+                })
+                .flatten();
+            objects.insert(object.element_id, value);
+        }
+    }
+    let is_material = |v: &Option<u64>| {
+        v.and_then(|v| u32::try_from(v).ok())
+            .is_some_and(|id| materials.contains_key(&id))
+    };
+    let with_material = objects.values().filter(|v| is_material(v)).count();
+    let examples: Vec<String> = objects
+        .iter()
+        .take(8)
+        .map(|(id, value)| {
+            let material = value
+                .and_then(|v| u32::try_from(v).ok())
+                .and_then(|v| materials.get(&v));
+            format!(
+                "{{\"id\":{id},\"name\":{:?},\"value\":{},\"material\":{:?}}}",
+                entry_names.entries.get(id).map(|e| e.name.as_str()),
+                value.map_or("null".into(), |v| v.to_string()),
+                material
+            )
+        })
+        .collect();
+    Ok(format!(
+        "{{\"class\":{class_name:?},\"tag\":\"{tag:#x}\",\"objects\":{},\"material_at_{MATERIAL_AT}\":{with_material},\"examples\":[{}]}}",
+        objects.len(),
+        examples.join(",")
+    ))
+}
+
 fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     let model = Path::new(path);
     let stem = model.file_stem().unwrap_or_default().to_string_lossy();
@@ -168,9 +251,15 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         .map(|n| dir.join(n))
         .find(|p| p.exists());
     let Some(reference) = reference else {
-        return Ok(vec![format!(
-            "{{\"file\":{path:?},\"skipped\":\"no reference export\"}}"
-        )]);
+        let mut rf = RevitFile::open(path)?;
+        let mut out = Vec::new();
+        for class in SURVEYED {
+            out.push(format!(
+                "{{\"file\":{path:?},\"survey\":{}}}",
+                survey(&mut rf, class)?
+            ));
+        }
+        return Ok(out);
     };
     let elements = elements(&std::fs::read_to_string(&reference)?);
     if elements.is_empty() {
@@ -253,6 +342,12 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     )];
     for (key, tags) in ranked.into_iter().take(KEYS_SHOWN) {
         out.push(format!("{{\"key\":{key:?},\"elements\":{}}}", tags.len()));
+    }
+    for class in SURVEYED {
+        out.push(format!(
+            "{{\"file\":{path:?},\"survey\":{}}}",
+            survey(&mut rf, class)?
+        ));
     }
     Ok(out)
 }
