@@ -55,6 +55,8 @@ pub struct TypedProductionAppend {
     pub element_type_ids: BTreeMap<u32, u32>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
+    /// Each door's and window's plan facing, by ElementId (B72).
+    pub element_facings: BTreeMap<u32, [f64; 2]>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -296,6 +298,12 @@ pub fn append_typed_production_elements(
                 _ => None,
             }) {
                 out.element_original_symbols.insert(id, original);
+            }
+            // B72: a door's or window's facing, for its type's flip.
+            if let Some(facing) =
+                crate::partition_schema_mvp::opening_facing_from_fields(&decoded.fields)
+            {
+                out.element_facings.insert(id, facing);
             }
         }
 
