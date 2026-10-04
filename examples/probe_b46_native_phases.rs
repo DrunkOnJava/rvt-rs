@@ -32,10 +32,9 @@ fn main() -> anyhow::Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
     let exported = exported_tags(&path);
-    let options = native_document::Options {
-        channels: BTreeSet::from([101]),
-        ..native_document::Options::default()
-    };
+    let options = native_document::Options::default();
+    let mut root_keys: BTreeMap<String, usize> = BTreeMap::new();
+    let mut classes_with_phase: BTreeMap<String, usize> = BTreeMap::new();
     let mut statuses: BTreeMap<String, usize> = BTreeMap::new();
     let mut phases: BTreeMap<(Option<i64>, Option<i64>), usize> = BTreeMap::new();
     let mut demolished: Vec<(u64, Option<String>, i64, Option<bool>)> = Vec::new();
@@ -46,6 +45,14 @@ fn main() -> anyhow::Result<()> {
         let id = record.identity.element_id;
         if let Some(metadata) = &record.saved_metadata {
             with_metadata += 1;
+            for key in metadata.root_references.keys() {
+                *root_keys.entry(key.clone()).or_default() += 1;
+            }
+            if metadata.root_references.contains_key("m_createdPhaseId") {
+                *classes_with_phase
+                    .entry(record.class_name.clone().unwrap_or_default())
+                    .or_default() += 1;
+            }
             let created = metadata.root_references.get("m_createdPhaseId").copied();
             let gone = metadata.root_references.get("m_demolishedPhaseId").copied();
             *phases.entry((created, gone)).or_default() += 1;
@@ -82,6 +89,8 @@ fn main() -> anyhow::Result<()> {
         }
     }
     println!("statuses {statuses:?}");
+    println!("root reference keys {root_keys:?}");
+    println!("classes with a created phase {classes_with_phase:?}");
     let mut by_count: Vec<_> = phases.into_iter().collect();
     by_count.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
     for ((created, gone), count) in by_count.iter().take(12) {
