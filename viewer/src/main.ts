@@ -2399,7 +2399,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
         'Parameters',
         parameterValueCount > 0 ? 'ok' : 'warn',
         parameterValueCount > 0
-          ? `${parameterValueCount} parameter ${parameterValueCount === 1 ? 'value' : 'values'} read`
+          ? `${parameterValueCount.toLocaleString('en-US')} ${parameterValueCount === 1 ? 'value' : 'values'} in Revit's common property sets · the rest of each element's parameters are still to be decoded`
           : "Revit's parameter table is not read yet · each element lists the properties rvt-rs decodes",
       ),
     );

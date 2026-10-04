@@ -56,7 +56,7 @@
       "field": "entity_counts.IFCPROPERTYSET",
       "reason": "known_gap",
       "tracking_issue": 35,
-      "unsupported_feature": "revit_element_parameters_to_ifc_property_sets"
+      "unsupported_feature": "partial_revit_element_parameters"
     },
     {
       "category": "shading_devices",
@@ -101,10 +101,15 @@
     "rvt-rs": {
       "input_hash_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
       "role": "source",
-      "witness_version": "0.2.0"
+      "witness_version": "0.4.0"
     }
   },
   "insufficient_witnesses": false,
+  "replay": {
+    "ifc-lite": "match",
+    "ifcopenshell": "match",
+    "rvt-rs": "match"
+  },
   "schema_version": "1.0.0",
   "semantic_surface": [
     "entity_counts.IFCBUILDINGSTOREY",
@@ -115,7 +120,7 @@
     "storeys.IFCBUILDINGSTOREY"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "9615ba4e5f2f812aa1ff271d629f2e59d594eeab5a3e10e43fc4ee5837c71ae6",
+  "verdict_hash_sha256": "f972dcfffdab042a3f1f1dbbc4e75b11aeae0ddc04c1cdbcd475f8f928e670f0",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

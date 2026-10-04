@@ -488,8 +488,9 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         storey.is_some(),
         material.is_some(),
         property_group
-            .as_ref()
-            .is_some_and(|g| !g.properties.is_empty()),
+            .iter()
+            .chain(&further_property_groups)
+            .any(|g| !g.properties.is_empty()),
         !placement_rows.is_empty(),
         !extent_rows.is_empty(),
     );
