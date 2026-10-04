@@ -236,6 +236,60 @@ fn main() -> anyhow::Result<()> {
         }
     }
     println!("rule: {rule:?}");
+    // A type written a second time, under another entity, conflicts with its
+    // own GlobalId; revit-ifc then keys it by entity and predefined type:
+    // MD5 of `<type GlobalId>Sub-element: Entity: <IfcType>:<predefined>
+    // InAssembly: False`.
+    let entities_tried = [
+        "IfcSlabType",
+        "IfcShadingDeviceType",
+        "IfcCoveringType",
+        "IfcRoofType",
+        "IfcWallType",
+        "IfcBuildingElementProxyType",
+    ];
+    let predefined_tried = [
+        "",
+        "NOTDEFINED",
+        "USERDEFINED",
+        "FLOOR",
+        "ROOF",
+        "LANDING",
+        "BASESLAB",
+        "JALOUSIE",
+        "SHUTTER",
+        "AWNING",
+        "SUNSHADE",
+        "CEILING",
+        "STANDARD",
+    ];
+    for row in rows.iter().filter(|r| r.origin.is_none()) {
+        let Some(own) = row.tag.and_then(|t| ids.get(&t)) else {
+            continue;
+        };
+        let mut found = None;
+        for entity in entities_tried {
+            for predefined in predefined_tried {
+                for assembly in ["False", "True"] {
+                    let key = format!(
+                        "{own}Sub-element: Entity: {entity}:{predefined} InAssembly: {assembly}"
+                    );
+                    if hashed(&key) == row.gid {
+                        found = Some(key);
+                    }
+                }
+            }
+        }
+        if !row.entity.ends_with("DOORTYPE")
+            && !row.entity.ends_with("DOORSTYLE")
+            && row.entity != "IFCSPACETYPE"
+        {
+            println!(
+                "entity key {} tag {:?} {}: {found:?}",
+                row.entity, row.tag, row.gid
+            );
+        }
+    }
     // For types no element of the file owns: each instance's own GlobalId in
     // Revit's export, and the low 32 bits of both after the episode XOR, to
     // read revit-ifc's native sub-element GUIDs.
