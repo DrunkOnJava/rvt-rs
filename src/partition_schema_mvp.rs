@@ -1258,6 +1258,12 @@ pub const ORIGINAL_SYMBOL_FIELD: &str = "m_original_symbol";
 /// type a sub-element GlobalId of the instance's own (RE-167): all 164 such
 /// columns of Core Interior.
 pub const INSTANCE_GEOMETRY: u32 = u32::MAX;
+/// The schema classes of the elements an original symbol may be: a family's
+/// symbol, and the mullion and panel types curtain parts take theirs from
+/// (RE-166, RE-167: RE1 Architecture's mullions' original symbols are
+/// `SysMullionFamSym` objects, its panels' `SysPanelFamSym`).
+pub const ORIGINAL_SYMBOL_CLASSES: [&str; 3] =
+    ["FamilySymbol", "SysMullionFamSym", "SysPanelFamSym"];
 /// Bytes before the end of a family instance's `GElement` data object
 /// (RE-153) where it holds its original symbol's ElementId (RE-167): at +300
 /// of 320 bytes on RE1 Architecture, +330 of 350 and +392 of 412 on the MEP
@@ -1267,8 +1273,8 @@ pub const ORIGINAL_SYMBOL_FROM_END: usize = 20;
 /// Give each family instance ([`REVIT_CLASS_FIELD`] `FamilyInstance`, and
 /// each curtain mullion and panel) its original symbol ([`ORIGINAL_SYMBOL_FIELD`], RE-167): the ElementId its
 /// `GElement` data object holds [`ORIGINAL_SYMBOL_FROM_END`] bytes before its
-/// end, when every such object of the instance gives the same one and it is a
-/// FamilySymbol's, or [`INSTANCE_GEOMETRY`]. On the RE1 models that is the element whose GlobalId Revit
+/// end, when every such object of the instance gives the same one and it is
+/// an [`ORIGINAL_SYMBOL_CLASSES`] element's, or [`INSTANCE_GEOMETRY`]. On the RE1 models that is the element whose GlobalId Revit
 /// gives the type of every one of 162 family instances; it is the symbol
 /// itself for most, another FamilySymbol (often the instance's id plus one)
 /// for many furniture, fittings, mullions and panels. Revit 2024 and later.
@@ -1308,9 +1314,13 @@ fn attach_original_symbols<const N: usize>(
             .find(|class| class.name == name)
             .map(|class| u32::from(class.tag))
     };
-    let (Some(element_tag), Some(symbol_tag)) = (tag_of("GElement"), tag_of("FamilySymbol")) else {
+    let Some(element_tag) = tag_of("GElement") else {
         return;
     };
+    let symbol_tags: BTreeSet<u32> = ORIGINAL_SYMBOL_CLASSES
+        .iter()
+        .filter_map(|name| tag_of(name))
+        .collect();
     let mut held: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let mut symbols: BTreeSet<u32> = BTreeSet::new();
     for stream in rf.partition_stream_names() {
@@ -1320,7 +1330,7 @@ fn attach_original_symbols<const N: usize>(
         let buf = inflated.bytes();
         for (p, object) in crate::partition_room_parameters::data_objects(buf) {
             let class = object.class & 0xffff;
-            if class == symbol_tag {
+            if symbol_tags.contains(&class) {
                 symbols.insert(object.element_id);
             } else if class == element_tag && instances.contains(&object.element_id) {
                 let Some(at) = object.end.checked_sub(ORIGINAL_SYMBOL_FROM_END) else {
