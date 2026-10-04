@@ -266,7 +266,9 @@ fn ifc_compare_tells_an_export_from_itself_and_from_revits() {
     let json: Value =
         serde_json::from_slice(&std::fs::read(&report).expect("report")).expect("report JSON");
     assert_eq!(
-        json["entity_count_deltas"].as_array().map(Vec::len),
+        json["entity_count_deltas"]
+            .as_object()
+            .map(|deltas| deltas.len()),
         Some(0),
         "entity count deltas against itself: {}",
         json["entity_count_deltas"]
