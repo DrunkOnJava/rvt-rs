@@ -3706,26 +3706,26 @@ fn attach_serial_numbers(
     }
 }
 
-/// Field carrying a pipe fitting's nominal diameter, feet: the diameter its
-/// connectors all give (RE-165).
+/// Field carrying a pipe fitting's nominal diameter, feet: the diameter of
+/// its nominal radius and diameter parameters (RE-165).
 pub const FITTING_NOMINAL_DIAMETER_FIELD: &str = "m_fitting_nominal_diameter";
 
-/// Give each pipe fitting the one diameter its connectors give
-/// ([`crate::partition_fitting_connectors`], RE-165). A fitting whose
-/// connectors disagree, or whose object is not found, gets nothing.
+/// Give each pipe fitting its nominal diameter
+/// ([`crate::partition_fitting_sizes`], RE-165). A fitting whose radius and
+/// diameter pairs disagree, or whose object is not found, gets nothing.
 fn attach_fitting_nominal_diameters(
     rf: &mut RevitFile,
     revit_version: u32,
     products: &mut [DecodedElement],
 ) {
-    use crate::partition_fitting_connectors as pfc;
+    use crate::partition_fitting_sizes as pfs;
     let fittings: BTreeSet<u32> = products
         .iter()
         .filter(|element| element.class == "PipeFitting")
         .filter_map(|element| element.id)
         .collect();
     let diameters =
-        pfc::scan_fitting_nominal_diameters(rf, revit_version, &fittings).unwrap_or_default();
+        pfs::scan_fitting_nominal_diameters(rf, revit_version, &fittings).unwrap_or_default();
     for element in products.iter_mut() {
         if element.class != "PipeFitting" {
             continue;
