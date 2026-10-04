@@ -982,7 +982,7 @@ impl WalkerLimitHit {
 ///     ..WalkerLimits::default()
 /// };
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WalkerLimits {
     /// Maximum decompressed `Global/Latest` bytes considered by
     /// brute-force walker scans. Bytes beyond this cap are ignored
@@ -1443,6 +1443,12 @@ pub fn iter_elements_with_control(
     control: &WalkerControl,
 ) -> Result<impl Iterator<Item = DecodedElement> + use<>> {
     control.check()?;
+    // B71: an export walks once to write and again for its diagnostics'
+    // class counts; the second reuses the first.
+    if let Some(elements) = rf.cached_walk(min_score, limits) {
+        control.report(Stage::PartitionScan, 1, Some(1));
+        return Ok(Vec::clone(&elements).into_iter());
+    }
     control.report(Stage::SchemaParse, 0, None);
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
     let formats_d = compression::inflate_stream_at(streams::FORMATS_LATEST, &formats_raw, 0)?;
@@ -1547,6 +1553,7 @@ pub fn iter_elements_with_control(
 
     control.check()?;
     control.report(Stage::PartitionScan, 1, Some(1));
+    rf.store_walk(min_score, limits, std::sync::Arc::new(out.clone()));
     Ok(out.into_iter())
 }
 
