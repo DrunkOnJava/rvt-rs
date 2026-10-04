@@ -670,14 +670,21 @@ fn attach_system_type_names(
         })
         .map(|(_, id)| *id)
         .collect();
-    if revit_version >= 2024 && !railing_types.is_empty() {
+    let railing_tags = rf
+        .schema_classes()
+        .ok()
+        .and_then(|classes| crate::partition_names::RailingTypeTags::from_classes(&classes));
+    if let Some(tags) = railing_tags.filter(|_| revit_version >= 2024 && !railing_types.is_empty())
+    {
         for stream in rf.partition_stream_names() {
             let Ok(inflated) = rf.inflated_partition(&stream) else {
                 continue;
             };
-            for (id, name) in
-                crate::partition_names::find_railing_type_names(inflated.bytes(), &railing_types)
-            {
+            for (id, name) in crate::partition_names::find_railing_type_names(
+                inflated.bytes(),
+                &railing_types,
+                tags,
+            ) {
                 match names.get(&id) {
                     Some(Some(held)) if *held != name => {
                         names.insert(id, None);
@@ -723,6 +730,7 @@ fn railing_type_picks(
     else {
         return Default::default();
     };
+    let name_tags = crate::partition_names::RailingTypeTags::from_classes(&classes);
     let wanted: BTreeSet<u32> = railings.iter().map(|(_, id)| *id).collect();
     let mut types: std::collections::BTreeMap<u32, Option<String>> =
         std::collections::BTreeMap::new();
@@ -736,7 +744,9 @@ fn railing_type_picks(
         for (p, object) in crate::partition_room_parameters::data_objects(buf) {
             let class = object.class & 0xffff;
             if class == type_tag {
-                let name = crate::partition_names::railing_type_name_in(&buf[p..object.end]);
+                let name = name_tags.and_then(|tags| {
+                    crate::partition_names::railing_type_name_in(&buf[p..object.end], tags)
+                });
                 let held_name = types.entry(object.element_id).or_insert(name.clone());
                 if *held_name != name {
                     *held_name = None;
