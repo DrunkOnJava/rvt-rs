@@ -3026,6 +3026,68 @@ impl StepWriter {
             );
         }
 
+        // B78: each room is typed by an `IfcSpaceType` of its own, as Revit's
+        // export types all 116 of Core Interior's: named `<name> <number>:
+        // <ElementId>`, its Tag the room's ElementId, and its GlobalId the
+        // room's as a sub-element (`InstanceAsType`).
+        for (entity_idx, entity) in model.entities.iter().enumerate() {
+            let super::entities::IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid: Some(tag),
+                property_set,
+                ..
+            } = entity
+            else {
+                continue;
+            };
+            if !ifc_type.eq_ignore_ascii_case("IFCSPACE") {
+                continue;
+            }
+            let Some(el_id) = entity_index_to_el_id.get(entity_idx).and_then(|slot| *slot) else {
+                continue;
+            };
+            let room_text = |key: &str| {
+                property_set.as_ref().and_then(|set| {
+                    set.properties.iter().find_map(|p| match &p.value {
+                        super::entities::PropertyValue::Text(text)
+                            if p.name == key && !text.trim().is_empty() =>
+                        {
+                            Some(text.clone())
+                        }
+                        _ => None,
+                    })
+                })
+            };
+            let (Some(number), Some(room_name), Some(space_gid)) = (
+                room_text(super::export_content::ROOM_NUMBER_PROPERTY),
+                room_text(super::export_content::ROOM_NAME_PROPERTY),
+                el_id_to_gid.get(&el_id),
+            ) else {
+                continue;
+            };
+            let type_gid =
+                crate::revit_global_ids::sub_element_global_id(space_gid, super::INSTANCE_AS_TYPE)
+                    .filter(|global_id| used_gids.insert(global_id.clone()))
+                    .unwrap_or_else(|| gid(&["space-type", tag]));
+            let type_el_id = self.id();
+            self.emit_entity(
+                type_el_id,
+                format!(
+                    "IFCSPACETYPE('{type_gid}',#{owner_hist},'{}',$,$,$,$,'{}',$,.NOTDEFINED.,$)",
+                    escape(&format!("{room_name} {number}:{tag}")),
+                    escape(tag),
+                ),
+            );
+            let rel_id = self.id();
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELDEFINESBYTYPE('{}',#{owner_hist},$,$,(#{el_id}),#{type_el_id})",
+                    gid(&["defines-by-type", &type_gid]),
+                ),
+            );
+        }
+
         for (idx, element_ids) in per_storey_elements
             .iter()
             .enumerate()

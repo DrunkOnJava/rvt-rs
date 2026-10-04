@@ -46,7 +46,7 @@
       "IFCRELASSOCIATESMATERIAL": 412,
       "IFCRELCONTAINEDINSPATIALSTRUCTURE": 13,
       "IFCRELDEFINESBYPROPERTIES": 2948,
-      "IFCRELDEFINESBYTYPE": 199,
+      "IFCRELDEFINESBYTYPE": 315,
       "IFCRELFILLSELEMENT": 138,
       "IFCRELVOIDSELEMENT": 201,
       "IFCSHADINGDEVICE": 20,
@@ -57,6 +57,7 @@
       "IFCSLAB": 80,
       "IFCSLABTYPE": 7,
       "IFCSPACE": 116,
+      "IFCSPACETYPE": 116,
       "IFCSTYLEDITEM": 86,
       "IFCSURFACESTYLE": 86,
       "IFCSURFACESTYLERENDERING": 86,
@@ -698,7 +699,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "e8cc66b0b8968a989f8d609b6e8e6f99c1ca79b950fe23f0baa63bedca0df749",
+  "observation_hash_sha256": "a3c9c3e2fdaa2e4ce975b5efdda57df4980cb579bed34866d3640865e6f5689c",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
