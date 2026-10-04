@@ -1,5 +1,7 @@
 # OSArch / IfcOpenShell forum post — rvt-rs
 
+> Written for 0.1.2 (2026-04-20) and not brought up to date since; see [README.md](README.md) before posting.
+
 Target venues: community.osarch.org and the IfcOpenShell discussions board. One post text serves both, with small header adjustments per venue.
 
 Category on OSArch: "Software / open-bim-tools" (discussions about open BIM tooling, not support requests).

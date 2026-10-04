@@ -1,5 +1,7 @@
 # HN Show HN draft — rvt-rs
 
+> Written for 0.1.2 (2026-04-20) and not brought up to date since; see [README.md](README.md) before posting.
+
 ## Title options
 
 1. Show HN: rvt-rs – a Rust library that reads Revit files and exports IFC4
