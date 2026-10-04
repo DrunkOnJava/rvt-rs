@@ -108,8 +108,13 @@ pub fn recover_partition_schema_mvp(
     revit_version: u32,
     limits: WalkerLimits,
 ) -> Result<PartitionSchemaMvp> {
+    let __timing = std::time::Instant::now();
     let mut out = PartitionSchemaMvp::default();
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Levels + Materials from partition strings / ArcWall elev",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Levels + Materials from partition strings / ArcWall elev ---
     let strings = rf.partition_string_records().unwrap_or_default();
     let string_values: Vec<&str> = strings.iter().map(|r| r.value.as_str()).collect();
@@ -140,11 +145,19 @@ pub fn recover_partition_schema_mvp(
     // exports hold none, and no 2023 plan loop (mostly triangles) came
     // within 10% of the plan area of a slab in two paired exports.
 
+    eprintln!(
+        "[timing] schema {:.2}s at: 2024 opening index (not Door/Window)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- 2024 opening index (not Door/Window) ---
     if ArcWallRectOpeningIndex::supports_revit_version(revit_version) {
         out.rect_openings = rect_openings_from_partitions(rf, revit_version, limits)?;
     }
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Revit 2023 element records (RE-81, #421): identity, category and",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Revit 2023 element records (RE-81, #421): identity, category and
     // box only; nothing else 2024 decodes on top of records is read. ---
     if revit_version == crate::partition_element_records_2023::REVIT_2023 {
@@ -218,6 +231,10 @@ pub fn recover_partition_schema_mvp(
         return Ok(out);
     }
 
+    eprintln!(
+        "[timing] schema {:.2}s at: 2024 partition element records (#204 columns, #211 the rest)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- 2024 partition element records (#204 columns, #211 the rest) ---
     //
     // The `Level` ElementId set costs one partition sweep and is read
@@ -258,12 +275,20 @@ pub fn recover_partition_schema_mvp(
         &level_ids,
     )?;
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Slab instances from element records (#212, RE-22)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Slab instances from element records (#212, RE-22) ---
     //
     // Record-backed slabs carry an ElementId, a model bounding box,
     // a measured thickness and a storey.
     out.slabs = slabs_from_partition_category_records(rf, revit_version, &level_ids)?;
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Room instances from element records (#90, RE-29)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Room instances from element records (#90, RE-29) ---
     //
     // A record-backed room carries an ElementId, a model bounding box
@@ -274,8 +299,16 @@ pub fn recover_partition_schema_mvp(
     // Their outlines from the faces of their stored solids (RE-101).
     attach_room_outlines(rf, revit_version, &mut out.rooms);
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Other product categories from element records (RE-33)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
+    eprintln!(
+        "[timing] schema {:.2}s at: Base constraints of elements naming two Levels (RE-59), then",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Base constraints of elements naming two Levels (RE-59), then
     // railings by their host and elements by the Level objects they name
     // (RE-60) ---
@@ -298,8 +331,16 @@ pub fn recover_partition_schema_mvp(
     resolve_base_at_level(&level_elevations, &mut record_backed);
     resolve_hosted_levels(rf, &level_elevations, &mut record_backed);
     resolve_remaining_levels(&level_elevations, &mut record_backed);
+    eprintln!(
+        "[timing] schema {:.2}s at: Stair parts under their stairs (#323)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Curtain walls and their panels and mullions (RE-46)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Curtain walls and their panels and mullions (RE-46) ---
     attach_curtain_walls(
         rf,
@@ -308,24 +349,60 @@ pub fn recover_partition_schema_mvp(
         &mut out.products,
         [&mut out.doors, &mut out.windows],
     );
+    eprintln!(
+        "[timing] schema {:.2}s at: Doors and windows in the nearest listed wall that is not a curtain wall (#439)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
     bind_opening_hosts(&out.walls, &mut out.windows);
+    eprintln!(
+        "[timing] schema {:.2}s at: Stair and flight riser and tread dimensions (RE-47)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Stair and flight riser and tread dimensions (RE-47) ---
     attach_stair_dimensions(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Stair runs' treads and risers, and their run type (RE-52)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Stair runs' treads and risers, and their run type (RE-52) ---
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Beams along their location lines (RE-49)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Beams along their location lines (RE-49) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Pipes as cylinders along their ends (RE-131)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Pipes as cylinders along their ends (RE-131) ---
     attach_pipe_axes(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Which element each end of a duct or pipe is joined to (RE-138)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Which element each end of a duct or pipe is joined to (RE-138) ---
     attach_connector_pairs(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Roof outlines from their sketch lines (RE-50)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Roof outlines from their sketch lines (RE-50) ---
     attach_roof_profiles(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Shaft openings cut the outlines within their height (RE-99)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Shaft openings cut the outlines within their height (RE-99) ---
     attach_shaft_voids(rf, revit_version, [&mut out.slabs, &mut out.products]);
 
+    eprintln!(
+        "[timing] schema {:.2}s at: The Revit class each record names at +0x4a (RE-76, #154)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- The Revit class each record names at +0x4a (RE-76, #154) ---
     if let Ok(classes) = rf.schema_classes() {
         for elements in [
@@ -341,17 +418,33 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    eprintln!(
+        "[timing] schema {:.2}s at: A turned family instance's plan axis (RE-87)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- A turned family instance's plan axis (RE-87) ---
     attach_instance_axes(
         rf,
         revit_version,
         [&mut out.doors, &mut out.windows, &mut out.products],
     );
+    eprintln!(
+        "[timing] schema {:.2}s at: Curtain mullions and panels turned or tilted off the model's axes,",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Curtain mullions and panels turned or tilted off the model's axes,
     // with their three axes (RE-106) ---
     attach_curtain_axes(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Each door's and window's facing, for its type's flip (B72)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Each door's and window's facing, for its type's flip (B72) ---
     attach_opening_facings(rf, revit_version, [&mut out.doors, &mut out.windows]);
+    eprintln!(
+        "[timing] schema {:.2}s at: Each family instance's original symbol, whose GlobalId Revit's",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Each family instance's original symbol, whose GlobalId Revit's
     // export gives its type (RE-167, B60) ---
     attach_original_symbols(
@@ -365,6 +458,10 @@ pub fn recover_partition_schema_mvp(
         ],
     );
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Family and type names (RE-38)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Family and type names (RE-38) ---
     for elements in [
         &mut out.walls,
@@ -376,12 +473,28 @@ pub fn recover_partition_schema_mvp(
     ] {
         attach_family_and_type_names(rf, elements);
     }
+    eprintln!(
+        "[timing] schema {:.2}s at: Pipes' types, which have no name entry (RE-130)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Pipes' types, which have no name entry (RE-130) ---
     attach_pipe_type_names(rf, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Ducts' and pipes' sizes, and ducts' types (RE-134)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
     attach_curve_fields(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Pipe fittings' nominal sizes, from their connectors (RE-165)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Pipe fittings' nominal sizes, from their connectors (RE-165) ---
     attach_fitting_nominal_diameters(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: The shared parameter Serial Number (RE-156)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- The shared parameter Serial Number (RE-156) ---
     attach_serial_numbers(
         rf,
@@ -394,6 +507,10 @@ pub fn recover_partition_schema_mvp(
             &mut out.slabs,
             &mut out.products,
         ],
+    );
+    eprintln!(
+        "[timing] schema {:.2}s at: The MEP systems each element is a member of (RE-162)",
+        __timing.elapsed().as_secs_f64()
     );
     // --- The MEP systems each element is a member of (RE-162) ---
     attach_mep_systems(
@@ -408,6 +525,10 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    eprintln!(
+        "[timing] schema {:.2}s at: System-family type names (#322)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- System-family type names (#322) ---
     let mut unnamed: Vec<&mut DecodedElement> = [&mut out.walls, &mut out.slabs, &mut out.products]
         .into_iter()
@@ -420,8 +541,16 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
+    eprintln!(
+        "[timing] schema {:.2}s at: A door's and a floor's type Function (RE-158)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- A door's and a floor's type Function (RE-158) ---
     attach_type_functions(rf, revit_version, [&mut out.doors, &mut out.slabs]);
+    eprintln!(
+        "[timing] schema {:.2}s at: Curtain panels that are walls (RE-64)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Curtain panels that are walls (RE-64) ---
     let mut unnamed_panels: Vec<&mut DecodedElement> = out
         .products
@@ -435,16 +564,40 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_panel_wall_types(rf, revit_version, &mut unnamed_panels);
+    eprintln!(
+        "[timing] schema {:.2}s at: Model text (RE-67)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Model text (RE-67) ---
     attach_model_text_types(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Wall sweeps (RE-69)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Wall sweeps (RE-69) ---
     attach_wall_sweep_types(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Walls' layers and exterior side (RE-53)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Walls' layers and exterior side (RE-53) ---
     attach_wall_layers(rf, revit_version, &mut out.walls);
+    eprintln!(
+        "[timing] schema {:.2}s at: The openings a wall's edited elevation profile cuts (B55)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- The openings a wall's edited elevation profile cuts (B55) ---
     attach_wall_profile_openings(rf, revit_version, &mut out.walls);
+    eprintln!(
+        "[timing] schema {:.2}s at: A shed roof's slope (RE-56)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- A shed roof's slope (RE-56) ---
     attach_roof_slopes(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: Floors', roofs' and ceilings' layers (RE-57)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Floors', roofs' and ceilings' layers (RE-57) ---
     attach_slab_layers(
         rf,
@@ -454,14 +607,26 @@ pub fn recover_partition_schema_mvp(
             .chain(out.products.iter_mut())
             .collect(),
     );
+    eprintln!(
+        "[timing] schema {:.2}s at: System families' names (RE-63)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- System families' names (RE-63) ---
     attach_system_family_names(
         rf,
         revit_version,
         &mut [&mut out.walls, &mut out.slabs, &mut out.products],
     );
+    eprintln!(
+        "[timing] schema {:.2}s at: Stairs and their parts named as Revit names them (RE-65)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Stairs and their parts named as Revit names them (RE-65) ---
     attach_stair_names(rf, revit_version, &mut out.products);
+    eprintln!(
+        "[timing] schema {:.2}s at: IFC export overrides, the element's own or its type's (RE-45)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -475,9 +640,17 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    eprintln!(
+        "[timing] schema {:.2}s at: Empty curtain panels are left out, as Revit leaves them out (#309)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Empty curtain panels are left out, as Revit leaves them out (#309) ---
     out.products
         .retain(|product| !is_empty_curtain_panel(product));
+    eprintln!(
+        "[timing] schema {:.2}s at: Curtain panels that are walls export as curtain walls (RE-72)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Curtain panels that are walls export as curtain walls (RE-72) ---
     // Last, so every step above still sees them as panels.
     for product in &mut out.products {
@@ -490,6 +663,10 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Type text parameters (RE-77, #35)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Type text parameters (RE-77, #35) ---
     let type_parameters = crate::partition_type_parameters::type_text_parameters(rf, revit_version);
     if !type_parameters.is_empty() {
@@ -505,6 +682,10 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    eprintln!(
+        "[timing] schema {:.2}s at: The materials each family type's geometry uses (RE-82, #355)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- The materials each family type's geometry uses (RE-82, #355) ---
     let type_materials = crate::partition_type_materials::type_material_names(rf, revit_version);
     if !type_materials.is_empty() {
@@ -520,6 +701,10 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Family instances whose type draws with no material (RE-149, #355)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Family instances whose type draws with no material (RE-149, #355) ---
     let unset_types = crate::partition_type_materials::unset_material_types(rf, revit_version);
     if !unset_types.is_empty() {
@@ -529,14 +714,30 @@ pub fn recover_partition_schema_mvp(
         attach_joined_wall_materials(&mut out.columns, &out.walls);
     }
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Curtain mullions' and panels' materials, from their types (RE-166, B66)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
     attach_curtain_materials(rf, revit_version, &mut out.products);
 
+    eprintln!(
+        "[timing] schema {:.2}s at: Each window's opening from its type and transform (RE-93, #227)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Each window's opening from its type and transform (RE-93, #227) ---
     attach_window_openings(rf, revit_version, &mut out.windows);
+    eprintln!(
+        "[timing] schema {:.2}s at: Each door's rough opening from its type (RE-94, #227), after RE-84",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Each door's rough opening from its type (RE-94, #227), after RE-84
     // marks the doors that are openings alone ---
     attach_door_openings(rf, revit_version, &mut out.doors);
+    eprintln!(
+        "[timing] schema {:.2}s at: Steel beams' and columns' I sections from their type (RE-103, RE-104)",
+        __timing.elapsed().as_secs_f64()
+    );
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     Ok(out)
