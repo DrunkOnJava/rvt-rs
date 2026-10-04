@@ -1252,6 +1252,12 @@ fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [D
 /// Revit's export gives the instance's type object while its `Tag` stays the
 /// instance's symbol.
 pub const ORIGINAL_SYMBOL_FIELD: &str = "m_original_symbol";
+/// The [`ORIGINAL_SYMBOL_FIELD`] of an instance that has no original symbol
+/// because it uses its own geometry (Revit's invalid ElementId, -1): its
+/// `GElement` object holds `0xffffffff` there. Revit's export then gives its
+/// type a sub-element GlobalId of the instance's own (RE-167): all 164 such
+/// columns of Core Interior.
+pub const INSTANCE_GEOMETRY: u32 = u32::MAX;
 /// Bytes before the end of a family instance's `GElement` data object
 /// (RE-153) where it holds its original symbol's ElementId (RE-167): at +300
 /// of 320 bytes on RE1 Architecture, +330 of 350 and +392 of 412 on the MEP
@@ -1262,7 +1268,7 @@ pub const ORIGINAL_SYMBOL_FROM_END: usize = 20;
 /// each curtain mullion and panel) its original symbol ([`ORIGINAL_SYMBOL_FIELD`], RE-167): the ElementId its
 /// `GElement` data object holds [`ORIGINAL_SYMBOL_FROM_END`] bytes before its
 /// end, when every such object of the instance gives the same one and it is a
-/// FamilySymbol's. On the RE1 models that is the element whose GlobalId Revit
+/// FamilySymbol's, or [`INSTANCE_GEOMETRY`]. On the RE1 models that is the element whose GlobalId Revit
 /// gives the type of every one of 162 family instances; it is the symbol
 /// itself for most, another FamilySymbol (often the instance's id plus one)
 /// for many furniture, fittings, mullions and panels. Revit 2024 and later.
@@ -1334,7 +1340,7 @@ fn attach_original_symbols<const N: usize>(
         };
         let mut values = values.iter();
         if let (Some(&original), None) = (values.next(), values.next()) {
-            if symbols.contains(&original) {
+            if symbols.contains(&original) || original == INSTANCE_GEOMETRY {
                 element.fields.push((
                     ORIGINAL_SYMBOL_FIELD.into(),
                     InstanceField::ElementId {

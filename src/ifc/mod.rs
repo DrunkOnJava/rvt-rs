@@ -2014,7 +2014,20 @@ fn revit_model_global_ids(
         })
         .collect();
     for (element, original) in element_original_symbols {
-        if element_type_ids.get(element) == Some(original) || doors_and_windows.contains(element) {
+        if doors_and_windows.contains(element) {
+            continue;
+        }
+        // An instance that uses its own geometry has no original symbol;
+        // its type is a sub-element of it (RE-167, `InstanceAsType`).
+        if *original == crate::partition_schema_mvp::INSTANCE_GEOMETRY {
+            if let Some(global_id) = ids.get(element).and_then(|own| {
+                crate::revit_global_ids::sub_element_global_id(own, INSTANCE_AS_TYPE)
+            }) {
+                out.element_types.insert(*element, global_id);
+            }
+            continue;
+        }
+        if element_type_ids.get(element) == Some(original) {
             continue;
         }
         if let Some(global_id) = ids.get(original) {
@@ -2023,6 +2036,10 @@ fn revit_model_global_ids(
     }
     out
 }
+
+/// revit-ifc's sub-element index for a family instance written as its own
+/// type (`IFCFamilyInstanceSubElements.InstanceAsType`).
+const INSTANCE_AS_TYPE: u16 = 2048;
 
 /// True when an emitted `IFCSLAB` carries no resolved thickness.
 ///
