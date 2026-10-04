@@ -16,10 +16,10 @@
 //! Design principle: string-based emission, no external IFC library
 //! dependency, fully `#![deny(unsafe_code)]`-clean.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::IfcModel;
-use super::entities::{Extrusion, OpeningCut, Property, PropertySet, PropertyValue, SolidShape};
+use super::entities::{Extrusion, OpeningCut, PropertySet, SolidShape};
 
 /// Options controlling STEP serialization.
 #[derive(Debug, Clone, Default)]
@@ -300,10 +300,11 @@ impl StepWriter {
             let p_id = self.id();
             let name_esc = escape(&prop.name);
             let value_step = prop.value.to_step();
-            self.emit_entity(
-                p_id,
-                format!("IFCPROPERTYSINGLEVALUE('{name_esc}',$,{value_step},$)"),
-            );
+            let entity = match prop.value {
+                super::entities::PropertyValue::List(_) => "IFCPROPERTYLISTVALUE",
+                _ => "IFCPROPERTYSINGLEVALUE",
+            };
+            self.emit_entity(p_id, format!("{entity}('{name_esc}',$,{value_step},$)"));
             prop_ids.push(p_id);
         }
         let refs = prop_ids
@@ -1189,20 +1190,9 @@ impl StepWriter {
         }
 
         // #35: the sets Revit's export gives every storey and the building
-        // on the RE1 models: each storey's name in two sets and its
-        // `AboveGround` unknown, the building's storey count and its
-        // `IsLandmarked` unknown. A model with no decoded Level has neither.
-        let unknown = |name: &str, property: &str| PropertySet {
-            name: name.into(),
-            properties: vec![Property {
-                name: property.into(),
-                value: PropertyValue::Logical(None),
-            }],
-        };
+        // on the RE1 models. A model with no decoded Level has neither.
         for (index, storey) in storeys.iter().enumerate() {
-            let mut sets = PropertySet::name_sets(&storey.name);
-            sets.push(unknown("Pset_BuildingStoreyCommon", "AboveGround"));
-            for set in &sets {
+            for set in &PropertySet::storey_sets(&storey.name) {
                 let key = [storey_gids[index].as_str(), set.name.as_str()].join("\u{1f}");
                 self.emit_property_set(
                     owner_hist,
@@ -1214,14 +1204,7 @@ impl StepWriter {
             }
         }
         if !storeys.is_empty() {
-            let mut set = unknown("Pset_BuildingCommon", "IsLandmarked");
-            set.properties.insert(
-                0,
-                Property {
-                    name: "NumberOfStoreys".into(),
-                    value: PropertyValue::Integer(storeys.len() as i64),
-                },
-            );
+            let set = PropertySet::building_set(storeys.len());
             let key = ["building", set.name.as_str()].join("\u{1f}");
             self.emit_property_set(
                 owner_hist,
@@ -1674,6 +1657,20 @@ impl StepWriter {
         // and putting them on a named storey would state a containment
         // nothing measured.
         let mut unplaced_elements: Vec<usize> = Vec::new();
+        // B63: the elements a space contains, by the space's entity index;
+        // they are left out of their storey's containment.
+        let space_of: HashMap<usize, usize> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::SpaceContainment { space, elements } => {
+                    Some(elements.iter().map(move |element| (*element, *space)))
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let mut per_space_elements: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         // Track (element_id, material_index) pairs so we can emit
         // IfcRelAssociatesMaterial per material after the element
         // loop completes.
@@ -2103,6 +2100,8 @@ impl StepWriter {
                     ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some();
                 if let (true, Some(h_idx)) = (hosted_opening, host_element_index) {
                     void_fill_triples.push((*h_idx, el_id, None, global_id.to_string()));
+                } else if let Some(&space) = space_of.get(&entity_idx) {
+                    per_space_elements.entry(space).or_default().push(el_id);
                 } else if !aggregate_parts.contains(&entity_idx) {
                     match idx {
                         Some(index) => per_storey_elements[index].push(el_id),
@@ -2812,6 +2811,25 @@ impl StepWriter {
                 rel_id,
                 format!(
                     "IFCRELCONTAINEDINSPATIALSTRUCTURE('{container_gid}',#{owner_hist},$,$,({refs_list}),#{target_storey})",
+                ),
+            );
+        }
+        // B63: each space's furniture, fixtures and equipment.
+        for (space, element_ids) in &per_space_elements {
+            let Some(space_id) = entity_index_to_el_id.get(*space).and_then(|slot| *slot) else {
+                continue;
+            };
+            let container_gid = gid(&["contains", el_id_to_gid[&space_id]]);
+            let refs_list = element_ids
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let rel_id = self.id();
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELCONTAINEDINSPATIALSTRUCTURE('{container_gid}',#{owner_hist},$,$,({refs_list}),#{space_id})",
                 ),
             );
         }

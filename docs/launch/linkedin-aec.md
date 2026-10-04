@@ -1,3 +1,5 @@
+> Written for 0.1.2 (2026-04-20) and not brought up to date since; see [README.md](README.md) before posting.
+
 Revit files have been closed to everyone outside the Autodesk runtime for two decades. If you wanted to read a .rvt programmatically, your options were Dynamo/pyRevit inside a running Revit, the Forge API in the cloud, or commercial SDKs with per-seat licensing. Nothing you could link into a Rust service or a batch job.
 
 rvt-rs is an Apache-2.0 Rust library that opens .rvt and .rfa files directly. No Autodesk install, no network call, no seat license. It reads the OLE container, decodes the schema, walks the element graph, and exports IFC4 STEP that opens cleanly in BlenderBIM and IfcOpenShell. Revit 2016 through 2026. Works on the project file on your disk right now.

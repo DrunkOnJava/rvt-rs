@@ -492,10 +492,10 @@ pub struct DecodedExportDiagnostics {
     /// Production `iter_elements` class histogram (ArcWall / Level / Floor / …).
     #[serde(default)]
     pub production_class_counts: std::collections::BTreeMap<String, usize>,
-    /// Count of AProperty* value carriers seen on the production path.
-    /// Host↔parameter joins are not recovered yet, so this is usually
-    /// 0 on real projects even when ParameterElement definitions exist
-    /// in schema (#35 honest empty).
+    /// The property values the export writes in IFC common property sets
+    /// (`Pset_*`), the sets Revit's exporter fills from element parameters
+    /// (#35): each building element's sets, and the storey and building sets.
+    /// It equals the values of the file's `Pset_` sets (B49).
     #[serde(default)]
     pub parameter_value_count: usize,
     /// Mean provenance confidence across production `iter_elements` (M3-07).
@@ -1129,6 +1129,9 @@ fn export_rvt_doc(
     apply_element_record_storeys(&mut entities, &mut building_storeys);
     // RE-157: a pipe's invert is above its storey, known only now.
     export_content::pipe_inverts_above_storeys(&mut entities, &building_storeys);
+    // B63: a room's furniture, fixtures and equipment are contained in its
+    // space, which needs both on their storeys.
+    export_content::contain_in_spaces(&mut entities);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -3218,9 +3221,7 @@ pub fn build_export_diagnostics_with_limits(
             diagnostic_proxy_candidates: diagnostic_candidates.candidates.len(),
             arcwall_records,
             class_counts: candidate_class_counts,
-            parameter_value_count: parameter_value_count_from_class_counts(
-                &production_class_counts,
-            ),
+            parameter_value_count: pset_property_value_count(model),
             production_class_counts,
             mean_element_confidence: walker_stats.mean_element_confidence,
             elements_below_min_confidence: walker_stats.elements_below_min_confidence,
@@ -3625,17 +3626,13 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
     if !has_schema_wall {
         features.push("schema_field_wall_instances".into());
     }
-    // #35: no exported property set carries Revit element parameters —
-    // every set emitted today is rvt-rs provenance about a recovered body.
-    let has_parameter_property_set = model.entities.iter().any(|e| {
-        matches!(
-            e,
-            entities::IfcEntity::BuildingElement { property_set: Some(set), .. }
-                if !set.name.starts_with("Rvt")
-        )
-    });
-    if !has_parameter_property_set {
+    // #35: Revit's parameters reach IFC through the common property sets.
+    // rvt-rs writes the values it reads (B49); the rest of an element's
+    // parameters are not read, so a model with some is still partial.
+    if pset_property_value_count(model) == 0 {
         features.push("revit_element_parameters_to_ifc_property_sets".into());
+    } else {
+        features.push("partial_revit_element_parameters".into());
     }
     features
 }
@@ -3676,14 +3673,53 @@ fn production_walker_stats(
     stats
 }
 
-fn parameter_value_count_from_class_counts(
-    class_counts: &std::collections::BTreeMap<String, usize>,
-) -> usize {
-    class_counts
+/// The property values `write_step` writes in `Pset_` sets, counted as it
+/// emits them: every building element's own set and further sets, then each
+/// storey's sets and the building's when the model has a storey.
+fn pset_property_value_count(model: &IfcModel) -> usize {
+    let values = |set: &entities::PropertySet| {
+        if set.name.starts_with("Pset_") {
+            set.properties.len()
+        } else {
+            0
+        }
+    };
+    let is_building_element = |index: usize| {
+        matches!(
+            model.entities.get(index),
+            Some(entities::IfcEntity::BuildingElement { .. })
+        )
+    };
+    let elements: usize = model
+        .entities
         .iter()
-        .filter(|(class, _)| crate::elements::parameters::is_aproperty_class(class))
-        .map(|(_, n)| *n)
-        .sum()
+        .map(|entity| match entity {
+            entities::IfcEntity::BuildingElement {
+                property_set: Some(set),
+                ..
+            } => values(set),
+            entities::IfcEntity::ElementPropertySet { element, set }
+                if is_building_element(*element) =>
+            {
+                values(set)
+            }
+            _ => 0,
+        })
+        .sum();
+    let storeys: usize = model
+        .building_storeys
+        .iter()
+        .flat_map(|storey| entities::PropertySet::storey_sets(&storey.name))
+        .map(|set| values(&set))
+        .sum();
+    let building = if model.building_storeys.is_empty() {
+        0
+    } else {
+        values(&entities::PropertySet::building_set(
+            model.building_storeys.len(),
+        ))
+    };
+    elements + storeys + building
 }
 
 fn export_confidence_summary(

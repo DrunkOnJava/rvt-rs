@@ -135,6 +135,14 @@ recovered body, and `partial_element_geometry` when some do and some do not
 (Core Interior after #204: 256 `IFCCOLUMN` with bodies, 82 slabs/spaces
 without). Neither appears once every exported element carries geometry.
 
+It also carries one parameter code (#35):
+`revit_element_parameters_to_ifc_property_sets` when the export writes no value
+into an IFC common property set (`Pset_*`), and
+`partial_revit_element_parameters` when it writes some. Revit's exporter fills
+those sets from element parameters, and rvt-rs writes the ones it reads, such as
+`Reference`, `SerialNumber`, a door's `IsExternal` and a pipe's
+`InvertElevation`; the rest of an element's parameters are not read yet.
+
 Important nested fields:
 
 | Field | Type | Meaning |
@@ -142,6 +150,7 @@ Important nested fields:
 | `decoded.production_walker_elements` | integer | Elements accepted by the conservative production walker path. |
 | `decoded.diagnostic_proxy_candidates` | integer | Low-confidence candidates available to diagnostic export. |
 | `decoded.arcwall_records` | integer | Version-gated ArcWall records exported as `IFCWALL`. |
+| `decoded.parameter_value_count` | integer | Property values the export writes in `Pset_*` sets: each element's, and the storeys' and the building's. It equals the values of the IFC file's `Pset_` sets. |
 | `decoded.recovered_unit_identifiers` | array | Revit `autodesk.unit.*` identifiers selected for IFC unit assignment. |
 | `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |

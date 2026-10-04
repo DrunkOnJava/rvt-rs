@@ -804,19 +804,10 @@ fn looks_like_cpp_type(bytes: &[u8]) -> bool {
 ///         06 00 00 00  6d 5f 70 41 43 44                     u32=6, "m_pACD" (field name)
 ///         0e 03 00 00 00 00 00 00 00 00                      field type code block
 /// ```
-#[allow(dead_code)]
-fn scan_fields_until_next_class(
-    data: &[u8],
-    start: usize,
-    cpp_types: &mut std::collections::BTreeSet<String>,
-) -> (usize, Vec<FieldEntry>) {
-    scan_fields_until_next_class_bounded(data, start, cpp_types, None)
-}
-
-/// Same as `scan_fields_until_next_class` but stops early once
-/// `max_fields` fields have been emitted. Used when the caller already
-/// knows the declared field count from the class's preamble, preventing
-/// the scanner from bleeding into the parent class's field list.
+///
+/// Stops early once `max_fields` fields have been emitted, when the caller
+/// knows the declared field count from the class's preamble, so the scanner
+/// does not bleed into the parent class's field list.
 fn scan_fields_until_next_class_bounded(
     data: &[u8],
     start: usize,

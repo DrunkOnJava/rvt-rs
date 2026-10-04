@@ -301,7 +301,13 @@ pub fn recover_partition_schema_mvp(
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
-    attach_curtain_walls(rf, revit_version, &mut out.walls, &mut out.products);
+    attach_curtain_walls(
+        rf,
+        revit_version,
+        &mut out.walls,
+        &mut out.products,
+        [&mut out.doors, &mut out.windows],
+    );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
     bind_opening_hosts(&out.walls, &mut out.windows);
@@ -360,6 +366,8 @@ pub fn recover_partition_schema_mvp(
     attach_pipe_type_names(rf, &mut out.products);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
     attach_curve_fields(rf, revit_version, &mut out.products);
+    // --- Pipe fittings' nominal sizes, from their connectors (RE-165) ---
+    attach_fitting_nominal_diameters(rf, revit_version, &mut out.products);
     // --- The shared parameter Serial Number (RE-156) ---
     attach_serial_numbers(
         rf,
@@ -504,6 +512,9 @@ pub fn recover_partition_schema_mvp(
         }
         attach_joined_wall_materials(&mut out.columns, &out.walls);
     }
+
+    // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
+    attach_curtain_materials(rf, revit_version, &mut out.products);
 
     // --- Each window's opening from its type and transform (RE-93, #227) ---
     attach_window_openings(rf, revit_version, &mut out.windows);
@@ -1673,6 +1684,57 @@ fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [Decoded
                 InstanceField::String(crate::partition_type_materials::UNNAMED_MATERIAL.into()),
             ));
         }
+    }
+}
+
+/// Give each curtain wall mullion and panel ([`CURTAIN_AXES_CLASSES`]) that
+/// has no type material yet the material its type holds
+/// ([`crate::partition_curtain_materials`], RE-166), by name, as Revit's
+/// export associates it.
+fn attach_curtain_materials(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_curtain_materials as pcm;
+    let is_part = |element: &DecodedElement| CURTAIN_AXES_CLASSES.contains(&element.class.as_str());
+    if !pcm::supports_revit_version(revit_version) || !products.iter().any(is_part) {
+        return;
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return;
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
+    else {
+        return;
+    };
+    let materials: BTreeSet<u32> = names.keys().copied().collect();
+    let Ok(type_materials) = pcm::scan_curtain_type_materials(rf, revit_version, &materials) else {
+        return;
+    };
+    for element in products.iter_mut().filter(|element| is_part(element)) {
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_MATERIAL_FIELD)
+        {
+            continue;
+        }
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        let Some(name) = type_id
+            .and_then(|id| type_materials.get(&id))
+            .and_then(|material| names.get(material))
+        else {
+            continue;
+        };
+        element.fields.push((
+            TYPE_MATERIAL_FIELD.into(),
+            InstanceField::String(name.clone()),
+        ));
     }
 }
 
@@ -3704,6 +3766,41 @@ fn attach_serial_numbers(
     }
 }
 
+/// Field carrying a pipe fitting's nominal diameter, feet (RE-165).
+pub const FITTING_NOMINAL_DIAMETER_FIELD: &str = "m_fitting_nominal_diameter";
+
+/// Give each pipe fitting its nominal diameter
+/// ([`crate::partition_fitting_sizes`], RE-165). A fitting whose connectors
+/// disagree, or whose object is not found, gets nothing.
+fn attach_fitting_nominal_diameters(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_fitting_sizes as pfs;
+    let fittings: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "PipeFitting")
+        .filter_map(|element| element.id)
+        .collect();
+    let diameters =
+        pfs::scan_fitting_nominal_diameters(rf, revit_version, &fittings).unwrap_or_default();
+    for element in products.iter_mut() {
+        if element.class != "PipeFitting" {
+            continue;
+        }
+        if let Some(&diameter) = element.id.and_then(|id| diameters.get(&id)) {
+            element.fields.push((
+                FITTING_NOMINAL_DIAMETER_FIELD.into(),
+                InstanceField::Float {
+                    value: diameter,
+                    size: 8,
+                },
+            ));
+        }
+    }
+}
+
 /// Prefix of the field naming an MEP system an element is a member of: the
 /// system's ElementId follows, and the field holds its name, empty where it
 /// has none (RE-162).
@@ -4065,11 +4162,19 @@ fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut
 /// one curtain wall whose record box contains its own (RE-62). That is
 /// Revit's parent for all 89 such mullions and the 3 such panels that
 /// Revit's export aggregates.
+///
+/// A door or window set in a curtain wall's grid in place of a panel is one
+/// of its parts too, as Revit's export aggregates RE1 Architecture's door
+/// 445975 under curtain wall 445961 (B64). It takes the curtain wall of the
+/// one grid its record names. Naming a curtain wall directly is not enough:
+/// on Snowdon Towers three doors name curtain wall 1506500 and Revit leaves
+/// them standalone (RE-46). No record box decides a door either.
 fn attach_curtain_walls(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &mut [DecodedElement],
     products: &mut [DecodedElement],
+    openings: [&mut Vec<DecodedElement>; 2],
 ) {
     let wall_ids: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
     if wall_ids.is_empty() {
@@ -4094,10 +4199,20 @@ fn attach_curtain_walls(
         }
         references.push(list);
     }
+    let opening_references: Vec<Vec<Option<Vec<u64>>>> = openings
+        .iter()
+        .map(|elements| {
+            elements
+                .iter()
+                .map(|element| record_references(rf, element).map(|(list, _)| list))
+                .collect()
+        })
+        .collect();
     // RE-72: a part names the curtain grid it lies on, and the grid's own
     // data names its curtain wall.
     let unrecorded: BTreeSet<u32> = references
         .iter()
+        .chain(opening_references.iter().flatten())
         .flatten()
         .flatten()
         .filter_map(|&id| u32::try_from(id).ok())
@@ -4152,6 +4267,25 @@ fn attach_curtain_walls(
                 AGGREGATE_WHOLE_FIELD.into(),
                 InstanceField::ElementId { tag: 0, id: whole },
             ));
+        }
+    }
+    for (elements, lists) in openings.into_iter().zip(opening_references) {
+        for (element, list) in elements.iter_mut().zip(lists) {
+            let Some(list) = list else {
+                continue;
+            };
+            let ids: Vec<u32> = list
+                .iter()
+                .filter_map(|&id| u32::try_from(id).ok())
+                .collect();
+            let on_grid: BTreeSet<u32> =
+                ids.iter().filter_map(|id| grids.get(id).copied()).collect();
+            if let (1, Some(&whole)) = (on_grid.len(), on_grid.iter().next()) {
+                element.fields.push((
+                    AGGREGATE_WHOLE_FIELD.into(),
+                    InstanceField::ElementId { tag: 0, id: whole },
+                ));
+            }
         }
     }
 }
@@ -4800,9 +4934,15 @@ fn bind_opening_hosts(walls: &[DecodedElement], openings: &mut [DecodedElement])
         if candidates.is_empty() {
             continue;
         }
+        // A curtain wall's door or window (B64) is set in no wall.
+        let part_of_curtain_wall = element
+            .fields
+            .iter()
+            .any(|(name, _)| name == AGGREGATE_WHOLE_FIELD);
         let host = candidates
             .into_iter()
-            .find(|id| !curtain_walls.contains(id));
+            .find(|id| !curtain_walls.contains(id))
+            .filter(|_| !part_of_curtain_wall);
         element.fields.retain(|(name, _)| {
             name != OPENING_HOST_CANDIDATES_FIELD
                 && name != OPENING_HOST_FIELD

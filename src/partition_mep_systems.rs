@@ -10,9 +10,7 @@
 //! Revit's 26 `IfcSystem`s is one such object of the same name, and every
 //! element Revit groups in it holds its id.
 
-use crate::partition_room_parameters::{
-    DATA_OBJECT_HEADER, enclosing_data_object, verified_data_object,
-};
+use crate::partition_room_parameters::{DATA_OBJECT_HEADER, data_objects, verified_data_object};
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -162,17 +160,28 @@ pub fn scan_mep_systems(
             }
         }
     }
+    // B70: one pass per stream over the objects of `elements`, looking in each
+    // payload for a system's id, instead of a backward search for the object
+    // around every place a system's id occurs.
+    let (Some(&low), Some(&high)) = (systems.keys().next(), systems.keys().next_back()) else {
+        return Ok(Vec::new());
+    };
     for stream in &streams {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        for system in systems.values_mut() {
-            for hit in memchr::memmem::find_iter(buf, &system.id.to_le_bytes()) {
-                if let Some(holder) = enclosing_data_object(buf, hit)
-                    .filter(|holder| *holder != system.id && elements.contains(holder))
-                {
-                    system.members.insert(holder);
+        for (p, object) in data_objects(buf) {
+            if !elements.contains(&object.element_id) {
+                continue;
+            }
+            for word in buf[p + DATA_OBJECT_HEADER..object.end].windows(4) {
+                let id = u32::from_le_bytes(word.try_into().expect("4 bytes"));
+                if !(low..=high).contains(&id) || id == object.element_id {
+                    continue;
+                }
+                if let Some(system) = systems.get_mut(&id) {
+                    system.members.insert(object.element_id);
                 }
             }
         }
