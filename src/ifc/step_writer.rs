@@ -2570,6 +2570,38 @@ impl StepWriter {
             );
         }
 
+        // B54: a duct's or pipe's connector no join has given a port.
+        for entity in &model.entities {
+            let super::entities::IfcEntity::Port { element, id, index } = entity else {
+                continue;
+            };
+            if ports.contains_key(&(*id, *index)) {
+                continue;
+            }
+            let Some(element_id) = entity_index_to_el_id.get(*element).and_then(|slot| *slot)
+            else {
+                continue;
+            };
+            let (id_text, index_text) = (id.to_string(), index.to_string());
+            let port = self.id();
+            self.emit_entity(
+                port,
+                format!(
+                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,$,$)",
+                    gid(&["port", &id_text, &index_text]),
+                ),
+            );
+            let to_element = self.id();
+            self.emit_entity(
+                to_element,
+                format!(
+                    "IFCRELCONNECTSPORTTOELEMENT('{}',#{owner_hist},$,$,#{port},#{element_id})",
+                    gid(&["port_to_element", &id_text, &index_text]),
+                ),
+            );
+            ports.insert((*id, *index), port);
+        }
+
         // RE-162 (#528): each MEP system, an `IfcSystem` grouping its members
         // and serving the building.
         for entity in &model.entities {
