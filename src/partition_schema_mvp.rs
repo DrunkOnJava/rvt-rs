@@ -732,7 +732,10 @@ fn railing_type_picks(
     };
     let name_tags = crate::partition_names::RailingTypeTags::from_classes(&classes);
     let wanted: BTreeSet<u32> = railings.iter().map(|(_, id)| *id).collect();
-    let mut types: std::collections::BTreeMap<u32, Option<String>> =
+    let mut type_ids: BTreeSet<u32> = BTreeSet::new();
+    // Each type's name where its copies that read one agree; a copy whose
+    // name does not read takes no part.
+    let mut type_names: std::collections::BTreeMap<u32, Option<String>> =
         std::collections::BTreeMap::new();
     let mut held: std::collections::BTreeMap<u32, BTreeSet<u32>> =
         std::collections::BTreeMap::new();
@@ -747,9 +750,14 @@ fn railing_type_picks(
                 let name = name_tags.and_then(|tags| {
                     crate::partition_names::railing_type_name_in(&buf[p..object.end], tags)
                 });
-                let held_name = types.entry(object.element_id).or_insert(name.clone());
-                if *held_name != name {
-                    *held_name = None;
+                type_ids.insert(object.element_id);
+                if let Some(name) = name {
+                    let held = type_names
+                        .entry(object.element_id)
+                        .or_insert_with(|| Some(name.clone()));
+                    if held.as_deref() != Some(name.as_str()) {
+                        *held = None;
+                    }
                 }
             } else if class == railing_tag && wanted.contains(&object.element_id) {
                 let payload =
@@ -761,7 +769,6 @@ fn railing_type_picks(
             }
         }
     }
-    let type_ids: BTreeSet<u32> = types.keys().copied().collect();
     let picks: Vec<(usize, u32)> = railings
         .iter()
         .filter_map(|(index, id)| {
@@ -774,7 +781,7 @@ fn railing_type_picks(
         .collect();
     let names = picks
         .iter()
-        .filter_map(|(_, type_id)| Some((*type_id, types.get(type_id)?.clone()?)))
+        .filter_map(|(_, type_id)| Some((*type_id, type_names.get(type_id)?.clone()?)))
         .collect();
     (picks, names)
 }
