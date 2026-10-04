@@ -4072,11 +4072,12 @@ fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut
 /// Revit's parent for all 89 such mullions and the 3 such panels that
 /// Revit's export aggregates.
 ///
-/// A door or window set in a curtain wall in place of a panel is one of its
-/// parts too, as Revit's export aggregates RE1 Architecture's door 445975
-/// under curtain wall 445961 (B64). It takes the curtain wall its record
-/// names, through a grid or directly; a door named by neither is in a wall,
-/// and no record box decides it.
+/// A door or window set in a curtain wall's grid in place of a panel is one
+/// of its parts too, as Revit's export aggregates RE1 Architecture's door
+/// 445975 under curtain wall 445961 (B64). It takes the curtain wall of the
+/// one grid its record names. Naming a curtain wall directly is not enough:
+/// on Snowdon Towers three doors name curtain wall 1506500 and Revit leaves
+/// them standalone (RE-46). No record box decides a door either.
 fn attach_curtain_walls(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -4188,17 +4189,7 @@ fn attach_curtain_walls(
                 .collect();
             let on_grid: BTreeSet<u32> =
                 ids.iter().filter_map(|id| grids.get(id).copied()).collect();
-            let named: BTreeSet<u32> = ids
-                .iter()
-                .copied()
-                .filter(|id| curtain_walls.contains(id))
-                .collect();
-            let whole = match (on_grid.len(), named.len()) {
-                (1, _) => on_grid.iter().next().copied(),
-                (0, 1) => named.iter().next().copied(),
-                _ => None,
-            };
-            if let Some(whole) = whole {
+            if let (1, Some(&whole)) = (on_grid.len(), on_grid.iter().next()) {
                 element.fields.push((
                     AGGREGATE_WHOLE_FIELD.into(),
                     InstanceField::ElementId { tag: 0, id: whole },
