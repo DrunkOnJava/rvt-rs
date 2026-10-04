@@ -163,18 +163,34 @@ fn main() -> anyhow::Result<()> {
             let IfcEntity::BuildingElement {
                 location_feet: Some(wall),
                 rotation_radians,
+                extrusion: Some(body),
                 ..
             } = model.entities.get(host)?
             else {
                 return None;
             };
-            let r = rotation_radians.unwrap_or(0.0);
+            // The wall's axis runs along the longer side of its plan box,
+            // turned by its rotation; its sign cancels out of the rule.
+            let r = rotation_radians.unwrap_or(0.0)
+                + if body.width_feet >= body.depth_feet {
+                    0.0
+                } else {
+                    std::f64::consts::FRAC_PI_2
+                };
             let wall_y = [-r.sin(), r.cos()];
             let offset = (location[0] - wall[0]) * wall_y[0] + (location[1] - wall[1]) * wall_y[1];
             let pos_hinge_side = offset > -1e-9;
             let door_y = transforms.get(tag)?.axes[1];
-            let facing = wall_y[0] * door_y[0] + wall_y[1] * door_y[1] > -1e-9;
-            Some((pos_hinge_side != facing, offset, facing))
+            let dot = wall_y[0] * door_y[0] + wall_y[1] * door_y[1];
+            let facing = dot > -1e-9;
+            Some((
+                pos_hinge_side != facing,
+                offset,
+                dot,
+                body.width_feet,
+                body.depth_feet,
+                *rotation_radians,
+            ))
         });
         println!(
             "{tag}: original {original:?}, Revit's flip {actual:?}, rule from rvt-rs {predicted:?}, host {:?}",
