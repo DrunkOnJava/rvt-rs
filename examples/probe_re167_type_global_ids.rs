@@ -253,7 +253,10 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
     let mut shown = 0;
-    for row in rows.iter().filter(|r| r.origin.is_none()) {
+    for row in rows
+        .iter()
+        .filter(|r| r.origin.is_none() && r.entity != "IFCCOLUMNTYPE" && r.entity != "IFCSPACETYPE")
+    {
         for element in &row.elements {
             let (Some(own), Some(t), Some(e)) = (
                 element_gid.get(element),
