@@ -4710,6 +4710,7 @@ fn attach_mep_systems(
 /// [`crate::partition_names::find_mep_curve_type_names`], RE-130). An element
 /// whose anchor is not found gets nothing.
 fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    let __sub = std::time::Instant::now();
     use crate::partition_curve_fields as pcf;
     if !pcf::supports_revit_version(revit_version) {
         return;
@@ -4725,18 +4726,21 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
             by_stream.entry(stream).or_default().push((id, bbox));
         }
     }
+    eprintln!("[subtiming] curve fields: boxes {:.2}s", __sub.elapsed().as_secs_f64());
     let Ok(fields) = pcf::scan_curve_fields(rf, revit_version, &by_stream) else {
         return;
     };
     if fields.is_empty() {
         return;
     }
+    eprintln!("[subtiming] curve fields: scan_curve_fields {:.2}s", __sub.elapsed().as_secs_f64());
     let pipes: BTreeSet<u32> = products
         .iter()
         .filter(|element| element.class == "Pipe")
         .filter_map(|element| element.id)
         .collect();
     let diameters = pcf::scan_pipe_diameters(rf, revit_version, &pipes).unwrap_or_default();
+    eprintln!("[subtiming] curve fields: scan_pipe_diameters {:.2}s", __sub.elapsed().as_secs_f64());
     let has = |element: &DecodedElement, wanted: &str| {
         element.fields.iter().any(|(name, _)| name == wanted)
     };
@@ -4767,6 +4771,7 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
             }
         }
     }
+    eprintln!("[subtiming] curve fields: type names {:.2}s", __sub.elapsed().as_secs_f64());
     for element in products.iter_mut().filter(|element| is_curve(element)) {
         let Some(curve) = element.id.and_then(|id| fields.get(&id)).copied() else {
             continue;
