@@ -3523,8 +3523,8 @@ pub fn elevation_profile_cuts(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f64;
     cuts
 }
 
-/// The openings [`attach_wall_profile_openings`] gave a wall: each one's tag
-/// and outline (B55).
+/// The openings a wall's edited elevation profile cuts, as the partition MVP
+/// gives them ([`PROFILE_OPENING_FIELD`]): each one's tag and outline (B55).
 pub fn profile_openings_from_fields(
     fields: &[(String, InstanceField)],
 ) -> Vec<(u32, Vec<[f64; 3]>)> {
