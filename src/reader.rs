@@ -287,10 +287,22 @@ impl RevitFile {
         if let Some(cached) = self.data_objects.get(name) {
             return Ok(Arc::clone(cached));
         }
+        let __inflate = std::time::Instant::now();
         let inflated = self.inflated_partition(name)?;
+        let __inflate = __inflate.elapsed().as_secs_f64();
+        let __t = std::time::Instant::now();
         let objects = Arc::new(crate::partition_room_parameters::data_objects(
             inflated.bytes(),
         ));
+        let __covered: usize = objects.iter().map(|(p, o)| o.end - p).sum();
+        eprintln!(
+            "[subtiming] data_objects {name}: {} bytes, {} objects, {} bytes in objects, inflate {:.3}s, scan {:.3}s",
+            inflated.bytes().len(),
+            objects.len(),
+            __covered,
+            __inflate,
+            __t.elapsed().as_secs_f64()
+        );
         self.data_objects
             .insert(name.to_string(), Arc::clone(&objects));
         Ok(objects)
