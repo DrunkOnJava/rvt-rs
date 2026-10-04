@@ -171,33 +171,27 @@ pub fn scan_pipe_diameters(
             continue;
         };
         let buf = inflated.bytes();
-        for &id in pipes {
-            let mut header = id.to_le_bytes().to_vec();
-            header.extend_from_slice(&0u32.to_le_bytes());
-            for p in memchr::memmem::find_iter(buf, header.as_slice()) {
-                let Some(object) = crate::partition_room_parameters::verified_data_object(buf, p)
-                else {
-                    continue;
-                };
-                if object.class & 0xffff != tag {
-                    continue;
+        // B70: one pass over the stream's data objects, not a search per pipe.
+        for (p, object) in crate::partition_room_parameters::data_objects(buf) {
+            let id = object.element_id;
+            if object.class & 0xffff != tag || !pipes.contains(&id) {
+                continue;
+            }
+            let at = p + PIPE_INNER_DIAMETER_OFFSET;
+            let (Some(inner), Some(outer)) = (read_f64(buf, at), read_f64(buf, at + 8)) else {
+                continue;
+            };
+            if !(inner > 0.0 && inner < outer && outer < MAX_PIPE_DIAMETER_FEET) {
+                continue;
+            }
+            match found.get(&id) {
+                None => {
+                    found.insert(id, Some((inner, outer)));
                 }
-                let at = p + PIPE_INNER_DIAMETER_OFFSET;
-                let (Some(inner), Some(outer)) = (read_f64(buf, at), read_f64(buf, at + 8)) else {
-                    continue;
-                };
-                if !(inner > 0.0 && inner < outer && outer < MAX_PIPE_DIAMETER_FEET) {
-                    continue;
+                Some(Some(held)) if *held != (inner, outer) => {
+                    found.insert(id, None);
                 }
-                match found.get(&id) {
-                    None => {
-                        found.insert(id, Some((inner, outer)));
-                    }
-                    Some(Some(held)) if *held != (inner, outer) => {
-                        found.insert(id, None);
-                    }
-                    Some(_) => {}
-                }
+                Some(_) => {}
             }
         }
     }
