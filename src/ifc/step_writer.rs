@@ -16,7 +16,7 @@
 //! Design principle: string-based emission, no external IFC library
 //! dependency, fully `#![deny(unsafe_code)]`-clean.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::IfcModel;
 use super::entities::{Extrusion, OpeningCut, PropertySet, SolidShape};
@@ -1656,6 +1656,20 @@ impl StepWriter {
         // and putting them on a named storey would state a containment
         // nothing measured.
         let mut unplaced_elements: Vec<usize> = Vec::new();
+        // B63: the elements a space contains, by the space's entity index;
+        // they are left out of their storey's containment.
+        let space_of: HashMap<usize, usize> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::SpaceContainment { space, elements } => {
+                    Some(elements.iter().map(move |element| (*element, *space)))
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let mut per_space_elements: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         // Track (element_id, material_index) pairs so we can emit
         // IfcRelAssociatesMaterial per material after the element
         // loop completes.
@@ -2085,6 +2099,8 @@ impl StepWriter {
                     ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some();
                 if let (true, Some(h_idx)) = (hosted_opening, host_element_index) {
                     void_fill_triples.push((*h_idx, el_id, None, global_id.to_string()));
+                } else if let Some(&space) = space_of.get(&entity_idx) {
+                    per_space_elements.entry(space).or_default().push(el_id);
                 } else if !aggregate_parts.contains(&entity_idx) {
                     match idx {
                         Some(index) => per_storey_elements[index].push(el_id),
@@ -2794,6 +2810,25 @@ impl StepWriter {
                 rel_id,
                 format!(
                     "IFCRELCONTAINEDINSPATIALSTRUCTURE('{container_gid}',#{owner_hist},$,$,({refs_list}),#{target_storey})",
+                ),
+            );
+        }
+        // B63: each space's furniture, fixtures and equipment.
+        for (space, element_ids) in &per_space_elements {
+            let Some(space_id) = entity_index_to_el_id.get(*space).and_then(|slot| *slot) else {
+                continue;
+            };
+            let container_gid = gid(&["contains", el_id_to_gid[&space_id]]);
+            let refs_list = element_ids
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let rel_id = self.id();
+            self.emit_entity(
+                rel_id,
+                format!(
+                    "IFCRELCONTAINEDINSPATIALSTRUCTURE('{container_gid}',#{owner_hist},$,$,({refs_list}),#{space_id})",
                 ),
             );
         }
