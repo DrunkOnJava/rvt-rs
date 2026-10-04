@@ -3706,13 +3706,12 @@ fn attach_serial_numbers(
     }
 }
 
-/// Field carrying a pipe fitting's nominal diameter, feet: the diameter of
-/// its nominal radius and diameter parameters (RE-165).
+/// Field carrying a pipe fitting's nominal diameter, feet (RE-165).
 pub const FITTING_NOMINAL_DIAMETER_FIELD: &str = "m_fitting_nominal_diameter";
 
 /// Give each pipe fitting its nominal diameter
-/// ([`crate::partition_fitting_sizes`], RE-165). A fitting whose radius and
-/// diameter pairs disagree, or whose object is not found, gets nothing.
+/// ([`crate::partition_fitting_sizes`], RE-165). A fitting whose connectors
+/// disagree, or whose object is not found, gets nothing.
 fn attach_fitting_nominal_diameters(
     rf: &mut RevitFile,
     revit_version: u32,
