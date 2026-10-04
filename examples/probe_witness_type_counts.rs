@@ -116,6 +116,17 @@ fn main() -> anyhow::Result<()> {
         Some(step) => {
             println!("Revit's export: {:?}", counts(&step));
             println!("Revit's typed elements (element, type): {:?}", typed(&step));
+            let space_types: Vec<&str> = step
+                .lines()
+                .filter(|line| line.contains("=IFCSPACETYPE("))
+                .collect();
+            println!("Revit's IfcSpaceType: {}", space_types.len());
+            for line in space_types.iter().take(6) {
+                println!("  {}", line.chars().take(240).collect::<String>());
+            }
+            for line in step.lines().filter(|l| l.contains("=IFCSPACE(")).take(3) {
+                println!("  space: {}", line.chars().take(240).collect::<String>());
+            }
         }
         None => println!("no reference export found"),
     }
