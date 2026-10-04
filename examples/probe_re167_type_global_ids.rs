@@ -236,5 +236,44 @@ fn main() -> anyhow::Result<()> {
         }
     }
     println!("rule: {rule:?}");
+    // For types no element of the file owns: each instance's own GlobalId in
+    // Revit's export, and the low 32 bits of both after the episode XOR, to
+    // read revit-ifc's native sub-element GUIDs.
+    let decode = |gid: &str| -> Option<u128> {
+        const ALPHABET: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
+        gid.bytes().try_fold(0u128, |n, c| {
+            Some(n * 64 + ALPHABET.iter().position(|&a| a == c)? as u128)
+        })
+    };
+    let element_gid: BTreeMap<u32, String> = ents
+        .values()
+        .filter_map(|(_, a)| {
+            let tag: u32 = a.rsplit('\'').nth(1)?.parse().ok()?;
+            Some((tag, a.split('\'').nth(1)?.to_string()))
+        })
+        .collect();
+    let mut shown = 0;
+    for row in rows.iter().filter(|r| r.origin.is_none()) {
+        for element in &row.elements {
+            let (Some(own), Some(t), Some(e)) = (
+                element_gid.get(element),
+                decode(&row.gid),
+                element_gid.get(element).and_then(|g| decode(g)),
+            ) else {
+                continue;
+            };
+            if shown < 24 {
+                println!(
+                    "sub {} {element}: element {own} type {} high same {} low xor {:#x} element low ^ id {:#x}",
+                    row.entity,
+                    row.gid,
+                    (t >> 32) == (e >> 32),
+                    (t ^ e) as u32,
+                    (e as u32) ^ element
+                );
+                shown += 1;
+            }
+        }
+    }
     Ok(())
 }
