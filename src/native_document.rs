@@ -301,7 +301,7 @@ fn extract_records(
 ) -> Result<Summary> {
     let version = file.basic_file_info()?.version;
     ensure!(
-        matches!(version, 2023 | 2024 | 2027),
+        matches!(version, 2023..=2027),
         "native record framing is unvalidated for Revit {version}"
     );
     let mut global_streams = BTreeMap::new();
