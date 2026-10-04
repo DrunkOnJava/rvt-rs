@@ -150,8 +150,39 @@ pub enum StreamFraming {
 /// unchanged (if it already existed) or absent. This prevents the
 /// previous corrupt-on-mid-write behaviour that a truncating
 /// `OpenOptions::truncate(true).open(dst)` call caused.
-pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Result<()> {
+/// A patch's bytes as they are stored, framed as it asks.
+///
+/// Revit stores the streams [`crate::compression::is_checksum_paged_stream`]
+/// names in pages of [`crate::compression::REVIT_STORED_PAGE_BYTES`] bytes,
+/// each ending in a checksum rvt-rs cannot compute, and every reader strips
+/// those trailers. Framed bytes that fit in one page carry no trailer and are
+/// written as they are; longer ones would be read back wrong, so the patch is
+/// refused with [`crate::Error::WriteRefused`] before anything is written (B69).
+fn framed_patch_bytes(p: &StreamPatch) -> Result<Vec<u8>> {
     use crate::compression;
+    let data = match p.framing {
+        StreamFraming::RawGzipFromZero => compression::truncated_gzip_encode(&p.new_decompressed)?,
+        StreamFraming::CustomPrefix8 => {
+            compression::truncated_gzip_encode_with_prefix8(&p.new_decompressed)?
+        }
+        StreamFraming::Verbatim => p.new_decompressed.clone(),
+    };
+    if compression::is_checksum_paged_stream(&p.stream_name)
+        && data.len() >= compression::REVIT_STORED_PAGE_BYTES
+    {
+        return Err(crate::Error::WriteRefused(format!(
+            "stream '{}': its {} stored bytes span a {}-byte stored page; Revit ends each \
+             page of this stream with a {}-byte checksum rvt-rs cannot compute",
+            p.stream_name,
+            data.len(),
+            compression::REVIT_STORED_PAGE_BYTES,
+            compression::REVIT_PAGE_CHECKSUM_BYTES
+        )));
+    }
+    Ok(data)
+}
+
+pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Result<()> {
     let mut rf = RevitFile::open(src)?;
     let streams = rf.stream_names();
 
@@ -163,6 +194,12 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
             return Err(crate::Error::StreamNotFound(p.stream_name.clone()));
         }
     }
+    // B69: every patch is framed before any file is touched, so a refused
+    // one leaves nothing behind.
+    let framed: Vec<Vec<u8>> = patches
+        .iter()
+        .map(framed_patch_bytes)
+        .collect::<Result<_>>()?;
 
     // WRT-10.3 fast-path: empty-patch round-trip bypasses CFB
     // round-tripping entirely and copies the source file byte-for-
@@ -229,16 +266,7 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         {
             let mut rw = cfb::open_rw(&tmp_path)
                 .map_err(|e| crate::Error::Cfb(format!("open_rw {}: {e}", tmp_path.display())))?;
-            for p in patches {
-                let data = match p.framing {
-                    StreamFraming::RawGzipFromZero => {
-                        compression::truncated_gzip_encode(&p.new_decompressed)?
-                    }
-                    StreamFraming::CustomPrefix8 => {
-                        compression::truncated_gzip_encode_with_prefix8(&p.new_decompressed)?
-                    }
-                    StreamFraming::Verbatim => p.new_decompressed.clone(),
-                };
+            for (p, data) in patches.iter().zip(&framed) {
                 let path = if p.stream_name.starts_with('/') {
                     p.stream_name.clone()
                 } else {
@@ -251,7 +279,7 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
                 let mut s = rw
                     .create_stream(&path)
                     .map_err(|e| crate::Error::Cfb(format!("create_stream {path}: {e}")))?;
-                s.write_all(&data)
+                s.write_all(data)
                     .map_err(|e| crate::Error::Cfb(format!("write_all {path}: {e}")))?;
                 s.flush()
                     .map_err(|e| crate::Error::Cfb(format!("flush {path}: {e}")))?;
@@ -320,19 +348,10 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     }
 
     for name in streams {
-        let patch = patches.iter().find(|p| p.stream_name == name);
-        let data = if let Some(p) = patch {
-            match p.framing {
-                StreamFraming::RawGzipFromZero => {
-                    compression::truncated_gzip_encode(&p.new_decompressed)?
-                }
-                StreamFraming::CustomPrefix8 => {
-                    compression::truncated_gzip_encode_with_prefix8(&p.new_decompressed)?
-                }
-                StreamFraming::Verbatim => p.new_decompressed.clone(),
-            }
-        } else {
-            rf.read_stream(&name)?
+        let patched = patches.iter().position(|p| p.stream_name == name);
+        let data = match patched {
+            Some(index) => framed[index].clone(),
+            None => rf.read_stream(&name)?,
         };
         let path = if name.starts_with('/') {
             name.clone()
@@ -500,7 +519,10 @@ impl StreamVerificationReport {
 /// [`crate::compression::inflate_stream_at`]: blindly stripping every
 /// 65_249-byte boundary would corrupt writer-produced streams that happen
 /// to be ≥ one stored page. Identity copies (`read_stream` / empty-patch)
-/// remain stored-byte accurate; a paged encoder is still out of scope.
+/// remain stored-byte accurate. A paged encoder is still out of scope, so
+/// the writer refuses a patch whose stored bytes would span a page of a paged
+/// stream (B69): every stream it writes reads back the same through the
+/// stripping path.
 pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Result<Vec<u8>> {
     let mut rf = RevitFile::open(dst)?;
     let raw = rf.read_stream(name)?;
