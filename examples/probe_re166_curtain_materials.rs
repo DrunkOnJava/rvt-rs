@@ -197,6 +197,9 @@ fn survey_tag(rf: &mut RevitFile, tag: u32) -> anyhow::Result<String> {
     let materials = partition_materials::scan_material_names(rf, revit, &declared)?;
     let entry_names = rf.element_names();
     let mut objects: BTreeMap<u32, Option<u64>> = BTreeMap::new();
+    // Offset from the header -> how many objects hold a material's ElementId
+    // there as a `u64`.
+    let mut material_offsets: BTreeMap<usize, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -224,33 +227,52 @@ fn survey_tag(rf: &mut RevitFile, tag: u32) -> anyhow::Result<String> {
                 })
                 .flatten();
             objects.insert(object.element_id, value);
+            for at in start + 20..object.end.saturating_sub(8) {
+                let v = u64::from_le_bytes(b[at..at + 8].try_into().expect("8 bytes"));
+                if u32::try_from(v).is_ok_and(|id| materials.contains_key(&id)) {
+                    material_offsets
+                        .entry(at - start)
+                        .or_default()
+                        .insert(object.element_id);
+                }
+            }
         }
     }
+    let mut offsets: Vec<(usize, usize)> = material_offsets
+        .iter()
+        .map(|(at, ids)| (*at, ids.len()))
+        .collect();
+    offsets.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    offsets.truncate(8);
     let is_material = |v: &Option<u64>| {
         v.and_then(|v| u32::try_from(v).ok())
             .is_some_and(|id| materials.contains_key(&id))
     };
     let with_material = objects.values().filter(|v| is_material(v)).count();
-    let examples: Vec<String> = objects
+    let examples: Vec<serde_json::Value> = objects
         .iter()
         .take(8)
         .map(|(id, value)| {
             let material = value
                 .and_then(|v| u32::try_from(v).ok())
                 .and_then(|v| materials.get(&v));
-            format!(
-                "{{\"id\":{id},\"name\":{:?},\"value\":{},\"material\":{:?}}}",
-                entry_names.entries.get(id).map(|e| e.name.as_str()),
-                value.map_or("null".into(), |v| v.to_string()),
-                material
-            )
+            serde_json::json!({
+                "id": id,
+                "name": entry_names.entries.get(id).map(|e| e.name.as_str()),
+                "value": value,
+                "material": material,
+            })
         })
         .collect();
-    Ok(format!(
-        "{{\"class\":{class_name:?},\"tag\":\"{tag:#x}\",\"objects\":{},\"material_at_{MATERIAL_AT}\":{with_material},\"examples\":[{}]}}",
-        objects.len(),
-        examples.join(",")
-    ))
+    Ok(serde_json::json!({
+        "class": class_name,
+        "tag": format!("{tag:#x}"),
+        "objects": objects.len(),
+        "material_at": [MATERIAL_AT, with_material],
+        "material_offsets": offsets,
+        "examples": examples,
+    })
+    .to_string())
 }
 
 fn probe(path: &str) -> anyhow::Result<Vec<String>> {
