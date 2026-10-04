@@ -158,6 +158,7 @@ fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String,
         | "IFCCOLUMN"
         | "IFCMEMBER"
         | "IFCPLATE"
+        | "IFCRAILING"
         | "IFCCOVERING"
         | "IFCCURTAINWALL"
         | "IFCFOOTING"
@@ -195,6 +196,7 @@ fn revit_ifc_type_entity_name(step_name: &str) -> Option<&'static str> {
         "IFCCOLUMNTYPE" => "IfcColumnType",
         "IFCMEMBERTYPE" => "IfcMemberType",
         "IFCPLATETYPE" => "IfcPlateType",
+        "IFCRAILINGTYPE" => "IfcRailingType",
         "IFCCOVERINGTYPE" => "IfcCoveringType",
         "IFCCURTAINWALLTYPE" => "IfcCurtainWallType",
         "IFCFOOTINGTYPE" => "IfcFootingType",

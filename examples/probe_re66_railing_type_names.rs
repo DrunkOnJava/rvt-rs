@@ -66,6 +66,10 @@ fn main() -> rvt::Result<()> {
     let wanted: BTreeSet<u32> = railings.values().flatten().copied().collect();
     let mut data_names = BTreeMap::new();
     let mut object_names = BTreeMap::new();
+    let railing_tags = rf
+        .schema_classes()
+        .ok()
+        .and_then(|classes| rvt::partition_names::RailingTypeTags::from_classes(&classes));
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -74,7 +78,11 @@ fn main() -> rvt::Result<()> {
         data_names.extend(rvt::partition_names::find_element_data_names(
             buf, &header, &wanted,
         ));
-        object_names.extend(rvt::partition_names::find_railing_type_names(buf, &wanted));
+        if let Some(tags) = railing_tags {
+            object_names.extend(rvt::partition_names::find_railing_type_names(
+                buf, &wanted, tags,
+            ));
+        }
     }
     eprintln!(
         "Revit {version}: {} railing records, {} railing types named by them, {} with element data, {} with a type-object name",
