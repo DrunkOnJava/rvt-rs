@@ -1025,7 +1025,7 @@ fn export_rvt_doc(
         unplaced_wall_layers,
         element_type_ids,
         element_original_symbols,
-        element_facings,
+        element_flips,
     ) = append_production_walker_elements(
         rf,
         &mut entities,
@@ -1161,7 +1161,7 @@ fn export_rvt_doc(
         &building_storeys,
         &element_type_ids,
         &element_original_symbols,
-        &element_facings,
+        &element_flips,
     );
     let (material_layer_sets, material_layer_usages) =
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
@@ -1957,7 +1957,7 @@ fn revit_model_global_ids(
     storeys: &[Storey],
     element_type_ids: &std::collections::BTreeMap<u32, u32>,
     element_original_symbols: &std::collections::BTreeMap<u32, u32>,
-    element_facings: &std::collections::BTreeMap<u32, [f64; 2]>,
+    element_flips: &std::collections::BTreeMap<u32, bool>,
 ) -> RevitGlobalIds {
     let mut out = RevitGlobalIds {
         document: rf
@@ -2014,8 +2014,8 @@ fn revit_model_global_ids(
     // GlobalId, and a door's or window's a hash of it with the door's flip
     // (B72). An instance that uses its own geometry has no original symbol;
     // its type, a door's too, is a sub-element of it (`InstanceAsType`).
-    let mut doors_and_windows: std::collections::BTreeMap<u32, usize> = Default::default();
-    for (index, entity) in entities.iter().enumerate() {
+    let mut doors_and_windows: std::collections::BTreeSet<u32> = Default::default();
+    for entity in entities {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             type_guid: Some(tag),
@@ -2028,7 +2028,7 @@ fn revit_model_global_ids(
             continue;
         }
         if let Ok(id) = tag.parse::<u32>() {
-            doors_and_windows.entry(id).or_insert(index);
+            doors_and_windows.insert(id);
         }
     }
     for (element, original) in element_original_symbols {
@@ -2043,8 +2043,8 @@ fn revit_model_global_ids(
         let Some(global_id) = ids.get(original) else {
             continue;
         };
-        if let Some(&index) = doors_and_windows.get(element) {
-            let flipped = door_symbol_flipped(entities, index, element_facings.get(element));
+        if doors_and_windows.contains(element) {
+            let flipped = element_flips.get(element).copied().unwrap_or(false);
             out.element_types.insert(
                 *element,
                 door_type_global_id(global_id, flipped, revit_version),
@@ -2104,53 +2104,6 @@ fn attach_family_instance_ports(
             entities.push(entities::IfcEntity::Port { element, id, index });
         }
     }
-}
-
-/// Whether Revit's exporter takes a door's or window's symbol as flipped
-/// (B72, revit-ifc `DoorWindowInfo.CalculateDoorWindowInformation`): whether
-/// the side of its host wall's axis its box centre lies on differs from the
-/// side its own Y axis (`facing`) points to, a side being +Y of the wall's
-/// direction. The direction's sign cancels out; the axis runs along the
-/// longer side of the wall's plan box, turned by its rotation. A door with no
-/// host wall, or no facing read, is not flipped, as Revit's exporter has it
-/// for a door without a wall.
-fn door_symbol_flipped(
-    entities: &[entities::IfcEntity],
-    index: usize,
-    facing: Option<&[f64; 2]>,
-) -> bool {
-    const EPS: f64 = 1e-9;
-    let (
-        Some(facing),
-        Some(entities::IfcEntity::BuildingElement {
-            location_feet: Some(location),
-            host_element_index: Some(host),
-            ..
-        }),
-    ) = (facing, entities.get(index))
-    else {
-        return false;
-    };
-    let Some(entities::IfcEntity::BuildingElement {
-        location_feet: Some(wall),
-        rotation_radians,
-        extrusion: Some(body),
-        ..
-    }) = entities.get(*host)
-    else {
-        return false;
-    };
-    let turn = rotation_radians.unwrap_or(0.0)
-        + if body.width_feet >= body.depth_feet {
-            0.0
-        } else {
-            std::f64::consts::FRAC_PI_2
-        };
-    let wall_y = [-turn.sin(), turn.cos()];
-    let offset = (location[0] - wall[0]) * wall_y[0] + (location[1] - wall[1]) * wall_y[1];
-    let positive_hinge_side = offset > -EPS;
-    let facing_positive = wall_y[0] * facing[0] + wall_y[1] * facing[1] > -EPS;
-    positive_hinge_side != facing_positive
 }
 
 /// A door's or window's type GlobalId as Revit's exporter makes it (B72,
@@ -2805,7 +2758,7 @@ type WalkerElementData = (
     std::collections::BTreeMap<u32, Vec<LayerBand>>,
     std::collections::BTreeMap<u32, u32>,
     std::collections::BTreeMap<u32, u32>,
-    std::collections::BTreeMap<u32, [f64; 2]>,
+    std::collections::BTreeMap<u32, bool>,
 );
 
 fn append_production_walker_elements(
@@ -2837,7 +2790,7 @@ fn append_production_walker_elements(
             append.unplaced_wall_layers,
             append.element_type_ids,
             append.element_original_symbols,
-            append.element_facings,
+            append.element_flips,
         );
     }
     Default::default()

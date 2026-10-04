@@ -55,8 +55,10 @@ pub struct TypedProductionAppend {
     pub element_type_ids: BTreeMap<u32, u32>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
-    /// Each door's and window's plan facing, by ElementId (B72).
-    pub element_facings: BTreeMap<u32, [f64; 2]>,
+    /// Whether Revit's exporter takes each door's and window's symbol as
+    /// flipped, by ElementId (B72): read in every quality mode, as the flip
+    /// is part of the type's GlobalId (B74).
+    pub element_flips: BTreeMap<u32, bool>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -162,6 +164,77 @@ pub(crate) fn is_distribution_element(ifc_type: &str) -> bool {
         )
 }
 
+/// An element's place in plan, for a door's or window's flip (B72).
+struct PlanFrame {
+    location: [f64; 2],
+    /// The direction of the element's axis, where it has a body.
+    axis_turn: Option<f64>,
+    /// The same, from the body an aggregate whole holds until its parts
+    /// are known.
+    held_axis_turn: Option<f64>,
+}
+
+/// The direction of a body's axis in plan: its rotation, turned a quarter
+/// where the body is deeper than it is wide, so the axis runs along its
+/// longer side.
+fn plan_axis_turn(rotation_radians: Option<f64>, body: &Extrusion) -> f64 {
+    rotation_radians.unwrap_or(0.0)
+        + if body.width_feet >= body.depth_feet {
+            0.0
+        } else {
+            std::f64::consts::FRAC_PI_2
+        }
+}
+
+/// Whether Revit's exporter takes a door's or window's symbol as flipped
+/// (B72, revit-ifc `DoorWindowInfo.CalculateDoorWindowInformation`): whether
+/// the side of its host wall's axis its box centre lies on differs from the
+/// side its own Y axis (`facing`) points to, a side being +Y of the wall's
+/// direction. The direction's sign cancels out. A door with no host wall, or
+/// no facing read, is not flipped, as Revit's exporter has it for a door
+/// without a wall.
+fn door_symbol_flipped(door: [f64; 2], wall: [f64; 2], wall_turn: f64, facing: [f64; 2]) -> bool {
+    const EPS: f64 = 1e-9;
+    let wall_y = [-wall_turn.sin(), wall_turn.cos()];
+    let offset = (door[0] - wall[0]) * wall_y[0] + (door[1] - wall[1]) * wall_y[1];
+    let positive_hinge_side = offset > -EPS;
+    let facing_positive = wall_y[0] * facing[0] + wall_y[1] * facing[1] > -EPS;
+    positive_hinge_side != facing_positive
+}
+
+/// The record properties that say what an element is rather than where it
+/// is or how it is drawn, which an export without geometry keeps (B74),
+/// along with the type's text parameters (RE-77).
+const IDENTITY_PROPERTIES: [&str; 10] = [
+    crate::element_record_level_refs::LEVEL_ELEMENT_ID_PROPERTY,
+    "LevelBindSource",
+    ROOM_ELEMENT_ID_PROPERTY,
+    ROOM_NUMBER_PROPERTY,
+    ROOM_NAME_PROPERTY,
+    "SourceStream",
+    "RevitClass",
+    FAMILY_NAME_PROPERTY,
+    "FamilyNameSource",
+    TYPE_NAME_PROPERTY,
+];
+
+/// `set` less every property that is not one of [`IDENTITY_PROPERTIES`] or
+/// a type text parameter of `decoded` (B74).
+fn identity_property_set(mut set: PropertySet, decoded: &DecodedElement) -> PropertySet {
+    let type_parameters: Vec<&str> = decoded
+        .fields
+        .iter()
+        .filter_map(|(name, _)| {
+            name.strip_prefix(crate::partition_schema_mvp::TYPE_PARAMETER_FIELD_PREFIX)
+        })
+        .collect();
+    set.properties.retain(|property| {
+        IDENTITY_PROPERTIES.contains(&property.name.as_str())
+            || type_parameters.contains(&property.name.as_str())
+    });
+    set
+}
+
 /// Strip placement / body / host claims so an export cannot over-claim geometry.
 pub fn strip_building_element_geometry(entities: &mut [entities::IfcEntity]) {
     for entity in entities.iter_mut() {
@@ -209,6 +282,11 @@ pub fn append_typed_production_elements(
     // whole that no part names keeps its own body.
     let mut held_bodies: std::collections::BTreeMap<usize, Extrusion> =
         std::collections::BTreeMap::new();
+    // B72: each element's plan frame by entity index, and each door's and
+    // window's facing and host, for the flip its type's GlobalId hashes.
+    let mut frames: std::collections::HashMap<usize, PlanFrame> = Default::default();
+    let mut facings: BTreeMap<u32, [f64; 2]> = BTreeMap::new();
+    let mut opening_hosts: Vec<(usize, u32, u32)> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
 
     for decoded in decoded_iter {
@@ -305,7 +383,7 @@ pub fn append_typed_production_elements(
             if let Some(facing) =
                 crate::partition_schema_mvp::opening_facing_from_fields(&decoded.fields)
             {
-                out.element_facings.insert(id, facing);
+                facings.insert(id, facing);
             }
         }
 
@@ -428,7 +506,11 @@ pub fn append_typed_production_elements(
         let mut held_body = None;
         let mut solid_shape = None;
 
-        if policy.include_geometry {
+        // Read in every mode: a door's or window's type GlobalId hangs on
+        // its flip against its host wall (B72), and the record's property
+        // set says what the element is (B74). A mode without geometry keeps
+        // only the plan frames and that, below.
+        {
             // Partition element records carry their own model bbox for
             // every category, so one envelope path serves all of them
             // (#204 columns, #211 walls / doors / windows). Checked
@@ -507,9 +589,39 @@ pub fn append_typed_production_elements(
             }
         }
 
+        let frame = location_feet.map(|location| PlanFrame {
+            location: [location[0], location[1]],
+            axis_turn: extrusion
+                .as_ref()
+                .map(|body| plan_axis_turn(rotation_radians, body)),
+            held_axis_turn: held_body
+                .as_ref()
+                .map(|body| plan_axis_turn(rotation_radians, body)),
+        });
+        let opening_host = pending_host_id;
+        if !policy.include_geometry {
+            location_feet = None;
+            rotation_radians = None;
+            extrusion = None;
+            property_set = property_set
+                .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
+                .map(|set| identity_property_set(set, &decoded));
+            pending_host_id = None;
+            piece_bodies.clear();
+            void_bodies.clear();
+            held_body = None;
+            solid_shape = None;
+        }
+
         let entity_index = entities.len();
         if let Some(id) = decoded.id {
             out.id_to_entity.insert(id, entity_index);
+            if let Some(host_id) = opening_host {
+                opening_hosts.push((entity_index, id, host_id));
+            }
+        }
+        if let Some(frame) = frame {
+            frames.insert(entity_index, frame);
         }
         if let Some(host_id) = pending_host_id {
             pending_hosts.push((entity_index, host_id));
@@ -858,6 +970,31 @@ pub fn append_typed_production_elements(
             entities.get_mut(index)
         {
             *extrusion = Some(body);
+        }
+    }
+    // B72: each door's and window's flip against its host wall's axis; a
+    // host carried by its parts has no body of its own to give one.
+    for (index, id, host_id) in opening_hosts {
+        let Some(&host_index) = out.id_to_entity.get(&host_id) else {
+            continue;
+        };
+        let (Some(opening), Some(host), Some(facing)) = (
+            frames.get(&index),
+            frames.get(&host_index),
+            facings.get(&id),
+        ) else {
+            continue;
+        };
+        let host_turn = if parts_by_whole.contains_key(&host_index) {
+            host.axis_turn
+        } else {
+            host.axis_turn.or(host.held_axis_turn)
+        };
+        if let Some(turn) = host_turn {
+            out.element_flips.insert(
+                id,
+                door_symbol_flipped(opening.location, host.location, turn, *facing),
+            );
         }
     }
     for (whole, parts) in parts_by_whole {
