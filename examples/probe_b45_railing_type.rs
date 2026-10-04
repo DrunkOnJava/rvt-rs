@@ -161,6 +161,22 @@ fn main() -> anyhow::Result<()> {
                     "  marker at {marks:?}; railing_type_name_in {:?}",
                     rvt::partition_names::railing_type_name_in(bytes)
                 );
+                // The classes whose tags follow an `ffffffff` sentinel.
+                let mut tags: Vec<u32> = Vec::new();
+                for at in memchr::memmem::find_iter(bytes, &[0xff, 0xff, 0xff, 0xff]) {
+                    if let Some(tag) = bytes.get(at + 4..at + 6) {
+                        let tag = u32::from(u16::from_le_bytes([tag[0], tag[1]]));
+                        if tag != 0xffff && !tags.contains(&tag) {
+                            tags.push(tag);
+                        }
+                    }
+                }
+                for tag in tags.iter().take(24) {
+                    println!("  tag {tag:#06x} after a sentinel: {}", class_name(*tag));
+                }
+                for tag in [0x020b_u32, 0x0220, 0x0fdb, 0x103c] {
+                    println!("  tag {tag:#06x}: {}", class_name(tag));
+                }
                 for row in (520..bytes.len().min(640)).step_by(16) {
                     let end = (row + 16).min(bytes.len());
                     let hex: Vec<String> =
