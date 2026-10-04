@@ -53,6 +53,10 @@ on:
         type: boolean
         required: false
         default: false
+      ifc_flags:
+        description: Further rvt-ifc flags for every export (e.g. --saved-meshes), empty for none
+        required: false
+        default: ""
       samples:
         description: Also read Autodesk's sample projects of every release 2016 to 2027 (research/autodesk-sample-projects.tsv) with rvt-info, rvt-ifc diagnostics and the probe (Autodesk-owned, fetched for the run and never stored)
         type: boolean
@@ -129,6 +133,7 @@ jobs:
       - name: Measure
         env:
           PROBE: ${{ inputs.probe }}
+          RVT_IFC_FLAGS: ${{ inputs.ifc_flags }}
           PROBE_SCORER: ${{ inputs.probe_scorer }}
           PROBE_SCORER_DIR: measured/tools/re
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
