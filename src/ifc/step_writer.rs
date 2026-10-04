@@ -182,6 +182,42 @@ fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String,
     Some((format!("{ifc_upper}TYPE"), tail))
 }
 
+/// revit-ifc's name for a type entity the writer emits (its `IFCEntityType`
+/// enum), as its GUID keys spell it (B73).
+fn revit_ifc_type_entity_name(step_name: &str) -> Option<&'static str> {
+    Some(match step_name {
+        "IFCDOORTYPE" => "IfcDoorType",
+        "IFCWINDOWTYPE" => "IfcWindowType",
+        "IFCFURNITURETYPE" => "IfcFurnitureType",
+        "IFCWALLTYPE" => "IfcWallType",
+        "IFCSLABTYPE" => "IfcSlabType",
+        "IFCBEAMTYPE" => "IfcBeamType",
+        "IFCCOLUMNTYPE" => "IfcColumnType",
+        "IFCMEMBERTYPE" => "IfcMemberType",
+        "IFCPLATETYPE" => "IfcPlateType",
+        "IFCCOVERINGTYPE" => "IfcCoveringType",
+        "IFCCURTAINWALLTYPE" => "IfcCurtainWallType",
+        "IFCFOOTINGTYPE" => "IfcFootingType",
+        "IFCRAMPTYPE" => "IfcRampType",
+        "IFCROOFTYPE" => "IfcRoofType",
+        "IFCSTAIRTYPE" => "IfcStairType",
+        "IFCSTAIRFLIGHTTYPE" => "IfcStairFlightType",
+        "IFCSHADINGDEVICETYPE" => "IfcShadingDeviceType",
+        "IFCBUILDINGELEMENTPROXYTYPE" => "IfcBuildingElementProxyType",
+        "IFCAIRTERMINALTYPE" => "IfcAirTerminalType",
+        "IFCALARMTYPE" => "IfcAlarmType",
+        "IFCDUCTFITTINGTYPE" => "IfcDuctFittingType",
+        "IFCDUCTSEGMENTTYPE" => "IfcDuctSegmentType",
+        "IFCELECTRICAPPLIANCETYPE" => "IfcElectricApplianceType",
+        "IFCLIGHTFIXTURETYPE" => "IfcLightFixtureType",
+        "IFCPIPEFITTINGTYPE" => "IfcPipeFittingType",
+        "IFCPIPESEGMENTTYPE" => "IfcPipeSegmentType",
+        "IFCSANITARYTERMINALTYPE" => "IfcSanitaryTerminalType",
+        "IFCTRANSPORTELEMENTTYPE" => "IfcTransportElementType",
+        _ => return None,
+    })
+}
+
 /// Render the attribute tail for one building element.
 ///
 /// `tag_quoted` and `name_quoted` are already STEP-quoted (`'…'` or
@@ -2692,7 +2728,9 @@ impl StepWriter {
             entity: String,
             name: String,
             tail: String,
+            predefined: String,
             global_id: Option<String>,
+            first_element: u32,
             elements: Vec<usize>,
         }
         let mut type_groups: Vec<TypeGroup> = Vec::new();
@@ -2744,43 +2782,83 @@ impl StepWriter {
                 .and_then(|tag| tag.parse::<u32>().ok())
                 .and_then(|id| model.global_ids.element_types.get(&id))
                 .cloned();
+            let element_id = type_guid
+                .as_deref()
+                .and_then(|tag| tag.parse::<u32>().ok())
+                .unwrap_or(u32::MAX);
+            // Revit writes a type object per entity and predefined type (B73).
             match type_groups.iter_mut().find(|group| {
                 group.type_id == *type_id
                     && group.entity == entity_name
+                    && group.tail == tail
                     && group.global_id == global_id
             }) {
-                Some(group) => group.elements.push(el_id),
+                Some(group) => {
+                    group.elements.push(el_id);
+                    group.first_element = group.first_element.min(element_id);
+                }
                 None => type_groups.push(TypeGroup {
                     type_id: *type_id,
                     entity: entity_name,
                     name: format!("{family}:{type_name}"),
                     tail,
+                    predefined: predefined_type
+                        .as_deref()
+                        .and_then(step_enum_token)
+                        .unwrap_or_else(|| "NOTDEFINED".into()),
                     global_id,
+                    first_element: element_id,
                     elements: vec![el_id],
                 }),
             }
         }
-        let mut typed_ids: std::collections::BTreeSet<u32> = Default::default();
+        // B73: of the type objects a type is written as, the one holding its
+        // lowest ElementId takes the type's own GlobalId; Revit's exporter
+        // keys the others by entity and predefined type.
+        let mut plain_owner: std::collections::BTreeMap<u32, (u32, usize)> = Default::default();
+        for (index, group) in type_groups.iter().enumerate() {
+            if group.global_id.is_some() {
+                continue;
+            }
+            let owner = plain_owner
+                .entry(group.type_id)
+                .or_insert((group.first_element, index));
+            if group.first_element < owner.0 {
+                *owner = (group.first_element, index);
+            }
+        }
         let mut used_gids: std::collections::BTreeSet<String> = Default::default();
-        for TypeGroup {
-            type_id,
-            entity: entity_name,
-            name,
-            tail,
-            global_id,
-            elements,
-        } in &type_groups
+        for (
+            index,
+            TypeGroup {
+                type_id,
+                entity: entity_name,
+                name,
+                tail,
+                predefined,
+                global_id,
+                elements,
+                ..
+            },
+        ) in type_groups.iter().enumerate()
         {
             let tag = type_id.to_string();
-            // A type split across two entities keeps Revit's GlobalId once.
             let revit = match global_id {
                 Some(global_id) => Some(global_id.clone()),
-                None => model
-                    .global_ids
-                    .types
-                    .get(type_id)
-                    .filter(|_| typed_ids.insert(*type_id))
-                    .cloned(),
+                None => model.global_ids.types.get(type_id).and_then(|own| {
+                    if plain_owner.get(type_id).map(|(_, owner)| *owner) == Some(index) {
+                        return Some(own.clone());
+                    }
+                    let entity = revit_ifc_type_entity_name(entity_name)?;
+                    let suffix = if model.global_ids.revit_version.unwrap_or(0) >= 2025 {
+                        " InAssembly: False"
+                    } else {
+                        ""
+                    };
+                    Some(crate::revit_global_ids::hashed_global_id(&format!(
+                        "{own}Sub-element: Entity: {entity}:{predefined}{suffix}"
+                    )))
+                }),
             };
             let type_gid = match revit {
                 Some(global_id) if used_gids.insert(global_id.clone()) => global_id,

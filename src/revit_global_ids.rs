@@ -148,6 +148,18 @@ pub fn expand_ifc_guid(global_id: &str) -> Option<[u8; 16]> {
     Some(n.to_be_bytes())
 }
 
+/// The GlobalId Revit's exporter makes from a hash key (revit-ifc
+/// `GUIDUtil.GenerateIFCGuidFrom`): the MD5 of the key's UTF-8, read as a
+/// .NET GUID (RE-167).
+pub fn hashed_global_id(key: &str) -> String {
+    use md5::{Digest, Md5};
+    let digest: [u8; 16] = Md5::digest(key.as_bytes())
+        .as_slice()
+        .try_into()
+        .expect("an MD5 digest is 16 bytes");
+    compress_ifc_guid(canonical_guid(digest))
+}
+
 /// The GlobalId Revit's exporter gives sub-element `index` of the element
 /// whose GlobalId is `global_id` (`ExporterIFCUtils.CreateSubElementGUID`):
 /// the element's with `index` XORed, big-endian, into bytes 10 and 11 of the

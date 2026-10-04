@@ -258,6 +258,10 @@ pub struct RevitGlobalIds {
     /// GlobalId of the instance's original symbol (RE-167).
     #[serde(default)]
     pub element_types: std::collections::BTreeMap<u32, String>,
+    /// The file's Revit release, which picks the form of the GlobalId keys
+    /// Revit's exporter hashes (B73).
+    #[serde(default)]
+    pub revit_version: Option<u32>,
 }
 
 /// A single building storey derived from a Revit `Level` element.
@@ -1957,6 +1961,7 @@ fn revit_model_global_ids(
             .and_then(|info| info.document_guid().map(str::to_owned)),
         ..RevitGlobalIds::default()
     };
+    out.revit_version = rf.basic_file_info().ok().map(|info| info.version);
     let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
         return out;
     };

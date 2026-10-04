@@ -100,6 +100,7 @@ dhat = { version = "0.3", optional = true }
 # Optional WASM bindings (VW1-01). See the `wasm` feature above.
 wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
+md-5 = "0.11"
 
 [dev-dependencies]
 # Discussion #112 / #151 stream-evidence harness. Only
