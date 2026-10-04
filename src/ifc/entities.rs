@@ -1490,6 +1490,10 @@ pub enum PropertyValue {
     /// standard property sets declare for values given once per port, such as
     /// `Pset_PipeFittingTypeCommon.NominalDiameter` (B44).
     List(Vec<PropertyValue>),
+    /// Values of an enumeration, as labels: the writer emits an
+    /// `IfcPropertyEnumeratedValue`, as Revit's export writes
+    /// `Pset_DuctSegmentTypeCommon.Shape` (B43).
+    Enumerated(Vec<String>),
 }
 
 impl PropertyValue {
@@ -1545,6 +1549,14 @@ impl PropertyValue {
                 items
                     .iter()
                     .map(PropertyValue::to_step)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            PropertyValue::Enumerated(labels) => format!(
+                "({})",
+                labels
+                    .iter()
+                    .map(|label| format!("IFCLABEL('{}')", escape_step_string(label)))
                     .collect::<Vec<_>>()
                     .join(",")
             ),

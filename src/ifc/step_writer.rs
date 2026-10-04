@@ -340,6 +340,7 @@ impl StepWriter {
             let value_step = prop.value.to_step();
             let entity = match prop.value {
                 super::entities::PropertyValue::List(_) => "IFCPROPERTYLISTVALUE",
+                super::entities::PropertyValue::Enumerated(_) => "IFCPROPERTYENUMERATEDVALUE",
                 _ => "IFCPROPERTYSINGLEVALUE",
             };
             self.emit_entity(p_id, format!("{entity}('{name_esc}',$,{value_step},$)"));

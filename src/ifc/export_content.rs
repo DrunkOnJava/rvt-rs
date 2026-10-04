@@ -769,6 +769,14 @@ pub fn append_typed_production_elements(
         // A duct's length is also in its Pset_DuctSegmentTypeCommon, as on
         // every RE1 Mechanical duct.
         let duct_set = (decoded.class == "Duct").then_some("Pset_DuctSegmentTypeCommon");
+        let duct_shape = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(shape)
+                if name == crate::partition_schema_mvp::DUCT_SHAPE_FIELD =>
+            {
+                Some(shape.clone())
+            }
+            _ => None,
+        });
         // RE-157: a pipe's invert, here in model height; the storey's
         // elevation comes off once storeys are bound
         // (`pipe_inverts_above_storeys`).
@@ -787,6 +795,13 @@ pub fn append_typed_production_elements(
                     properties.push(Property {
                         name: INVERT_ELEVATION_PROPERTY.into(),
                         value: PropertyValue::LengthFeet(height),
+                    });
+                }
+                // B43: a duct's shape, its type's, as Revit's export gives it.
+                if let (Some(shape), "Pset_DuctSegmentTypeCommon") = (duct_shape.as_ref(), name) {
+                    properties.push(Property {
+                        name: "Shape".into(),
+                        value: PropertyValue::Enumerated(vec![shape.clone()]),
                     });
                 }
                 entities.push(entities::IfcEntity::ElementPropertySet {
