@@ -4615,6 +4615,62 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
             InstanceField::String(type_name.clone()),
         ));
     }
+    attach_duct_system_families(rf, products);
+}
+
+/// Give each typed duct the system family its type's shape names
+/// (`Rectangular Duct`, `Round Duct`, `Oval Duct`,
+/// [`crate::native_duct_shapes`], B59), so it is named
+/// `Family:Type:ElementId` as Revit names it. A file whose release the native
+/// record path does not read leaves its ducts without one.
+fn attach_duct_system_families(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let has = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().any(|(name, _)| name == wanted)
+    };
+    let types: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| {
+            element.class == "Duct"
+                && has(element, TYPE_NAME_FIELD)
+                && !has(element, FAMILY_NAME_FIELD)
+        })
+        .filter_map(type_of)
+        .map(u64::from)
+        .collect();
+    if types.is_empty() {
+        return;
+    }
+    let Ok(shapes) = crate::native_duct_shapes::duct_type_shapes(rf, &types) else {
+        return;
+    };
+    let locale = rf.basic_file_info().ok().and_then(|info| info.locale);
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "Duct")
+    {
+        if has(element, FAMILY_NAME_FIELD) {
+            continue;
+        }
+        let Some(shape) = type_of(element).and_then(|id| shapes.get(&u64::from(id))) else {
+            continue;
+        };
+        element.fields.push((
+            FAMILY_NAME_FIELD.into(),
+            InstanceField::String(
+                localized_system_family(shape.system_family(), locale.as_deref()).into(),
+            ),
+        ));
+        element.fields.push((
+            FAMILY_NAME_SOURCE_FIELD.into(),
+            InstanceField::String(SYSTEM_FAMILY_SOURCE.into()),
+        ));
+    }
 }
 
 /// The cylinder the partition MVP gave a pipe, when its connector entries
