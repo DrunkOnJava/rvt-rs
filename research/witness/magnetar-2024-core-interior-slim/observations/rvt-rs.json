@@ -20,7 +20,7 @@
       "IFCCOLUMNTYPE": 175,
       "IFCDIRECTION": 1172,
       "IFCDOOR": 132,
-      "IFCDOORTYPE": 3,
+      "IFCDOORTYPE": 10,
       "IFCEXTRUDEDAREASOLID": 1170,
       "IFCGEOMETRICREPRESENTATIONCONTEXT": 1,
       "IFCLOCALPLACEMENT": 1187,
@@ -46,7 +46,7 @@
       "IFCRELASSOCIATESMATERIAL": 412,
       "IFCRELCONTAINEDINSPATIALSTRUCTURE": 13,
       "IFCRELDEFINESBYPROPERTIES": 2948,
-      "IFCRELDEFINESBYTYPE": 192,
+      "IFCRELDEFINESBYTYPE": 199,
       "IFCRELFILLSELEMENT": 138,
       "IFCRELVOIDSELEMENT": 200,
       "IFCSHADINGDEVICE": 20,
@@ -698,7 +698,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "5db8afa79d1495c9379261891d28c84d3ea8a332f580eaecd54f87f4c68e86b1",
+  "observation_hash_sha256": "d8367f3a418c92ae0f061aea5a13d45796d115c1cfeedccadcb46c834d02fd47",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
