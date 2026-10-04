@@ -16,7 +16,7 @@
 //! offset, and the probe prints how many elements each key explains.
 //!
 //! On every file, with or without a reference export, it then surveys the
-//! data objects of the `MullionType` and `PanelType` classes: how many hold
+//! data objects of `SysMullionFamSym` (the mullion type, RE1) and of every class whose name holds `Panel` and ends in `FamSym` or `Type`: how many hold
 //! a material's ElementId at [`MATERIAL_AT`] bytes from their header.
 //!
 //! Usage:
@@ -33,7 +33,7 @@ const KEYS_SHOWN: usize = 15;
 /// from the object's header.
 const MATERIAL_AT: usize = 135;
 /// The classes surveyed on every file, with or without a reference export.
-const SURVEYED: [&str; 2] = ["MullionType", "PanelType"];
+const SURVEYED: [&str; 1] = ["SysMullionFamSym"];
 
 /// `#id -> (entity, args)` for every line of a STEP file.
 fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
@@ -263,14 +263,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         .find(|p| p.exists());
     let Some(reference) = reference else {
         let mut rf = RevitFile::open(path)?;
-        let mut out = Vec::new();
-        for class in SURVEYED {
-            out.push(format!(
-                "{{\"file\":{path:?},\"survey\":{}}}",
-                survey(&mut rf, class)?
-            ));
-        }
-        return Ok(out);
+        return survey_all(&mut rf, path);
     };
     let elements = elements(&std::fs::read_to_string(&reference)?);
     if elements.is_empty() {
@@ -362,10 +355,31 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
             survey_tag(&mut rf, *tag)?
         ));
     }
-    for class in SURVEYED {
+    out.extend(survey_all(&mut rf, path)?);
+    Ok(out)
+}
+
+/// [`survey`] of [`SURVEYED`] and of every schema class whose name holds
+/// `Panel` and ends in `FamSym` or `Type`, the candidates for a curtain
+/// panel's type.
+fn survey_all(rf: &mut RevitFile, path: &str) -> anyhow::Result<Vec<String>> {
+    let mut names: Vec<String> = SURVEYED.iter().map(|name| name.to_string()).collect();
+    names.extend(
+        rf.schema_classes()?
+            .classes
+            .iter()
+            .map(|class| class.name.clone())
+            .filter(|name| {
+                name.contains("Panel") && (name.ends_with("FamSym") || name.ends_with("Type"))
+            }),
+    );
+    names.sort();
+    names.dedup();
+    let mut out = Vec::new();
+    for class in &names {
         out.push(format!(
             "{{\"file\":{path:?},\"survey\":{}}}",
-            survey(&mut rf, class)?
+            survey(rf, class)?
         ));
     }
     Ok(out)
