@@ -301,7 +301,13 @@ pub fn recover_partition_schema_mvp(
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
-    attach_curtain_walls(rf, revit_version, &mut out.walls, &mut out.products);
+    attach_curtain_walls(
+        rf,
+        revit_version,
+        &mut out.walls,
+        &mut out.products,
+        [&mut out.doors, &mut out.windows],
+    );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
     bind_opening_hosts(&out.walls, &mut out.windows);
@@ -4156,11 +4162,19 @@ fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut
 /// one curtain wall whose record box contains its own (RE-62). That is
 /// Revit's parent for all 89 such mullions and the 3 such panels that
 /// Revit's export aggregates.
+///
+/// A door or window set in a curtain wall's grid in place of a panel is one
+/// of its parts too, as Revit's export aggregates RE1 Architecture's door
+/// 445975 under curtain wall 445961 (B64). It takes the curtain wall of the
+/// one grid its record names. Naming a curtain wall directly is not enough:
+/// on Snowdon Towers three doors name curtain wall 1506500 and Revit leaves
+/// them standalone (RE-46). No record box decides a door either.
 fn attach_curtain_walls(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &mut [DecodedElement],
     products: &mut [DecodedElement],
+    openings: [&mut Vec<DecodedElement>; 2],
 ) {
     let wall_ids: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
     if wall_ids.is_empty() {
@@ -4185,10 +4199,20 @@ fn attach_curtain_walls(
         }
         references.push(list);
     }
+    let opening_references: Vec<Vec<Option<Vec<u64>>>> = openings
+        .iter()
+        .map(|elements| {
+            elements
+                .iter()
+                .map(|element| record_references(rf, element).map(|(list, _)| list))
+                .collect()
+        })
+        .collect();
     // RE-72: a part names the curtain grid it lies on, and the grid's own
     // data names its curtain wall.
     let unrecorded: BTreeSet<u32> = references
         .iter()
+        .chain(opening_references.iter().flatten())
         .flatten()
         .flatten()
         .filter_map(|&id| u32::try_from(id).ok())
@@ -4243,6 +4267,25 @@ fn attach_curtain_walls(
                 AGGREGATE_WHOLE_FIELD.into(),
                 InstanceField::ElementId { tag: 0, id: whole },
             ));
+        }
+    }
+    for (elements, lists) in openings.into_iter().zip(opening_references) {
+        for (element, list) in elements.iter_mut().zip(lists) {
+            let Some(list) = list else {
+                continue;
+            };
+            let ids: Vec<u32> = list
+                .iter()
+                .filter_map(|&id| u32::try_from(id).ok())
+                .collect();
+            let on_grid: BTreeSet<u32> =
+                ids.iter().filter_map(|id| grids.get(id).copied()).collect();
+            if let (1, Some(&whole)) = (on_grid.len(), on_grid.iter().next()) {
+                element.fields.push((
+                    AGGREGATE_WHOLE_FIELD.into(),
+                    InstanceField::ElementId { tag: 0, id: whole },
+                ));
+            }
         }
     }
 }
@@ -4891,9 +4934,15 @@ fn bind_opening_hosts(walls: &[DecodedElement], openings: &mut [DecodedElement])
         if candidates.is_empty() {
             continue;
         }
+        // A curtain wall's door or window (B64) is set in no wall.
+        let part_of_curtain_wall = element
+            .fields
+            .iter()
+            .any(|(name, _)| name == AGGREGATE_WHOLE_FIELD);
         let host = candidates
             .into_iter()
-            .find(|id| !curtain_walls.contains(id));
+            .find(|id| !curtain_walls.contains(id))
+            .filter(|_| !part_of_curtain_wall);
         element.fields.retain(|(name, _)| {
             name != OPENING_HOST_CANDIDATES_FIELD
                 && name != OPENING_HOST_FIELD
