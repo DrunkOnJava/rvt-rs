@@ -8,6 +8,12 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **The native record path reads Revit 2025 and 2026 (B46, #328).** Its
+  framing, record-count and body-size checks hold on all nine 2025 files
+  (RE1 and Autodesk's samples) and all five 2026 samples, so
+  `native_document::extract` now admits 2023 to 2027, and with it each
+  element's `m_createdPhaseId` and `m_demolishedPhaseId`. Checked by the new
+  real-file target `tests/native_phases.rs` on the four RE1 models.
 - **The `Reference` of Revit's common property sets (RE-154, #35).** Revit's
   export gives every element `Pset_QuantityTakeOff.Reference`, its entity's
   common set's `Reference` (`Pset_WallCommon`, `Pset_DoorCommon`,
