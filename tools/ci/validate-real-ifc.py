@@ -211,7 +211,7 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
     if material_count > 0:
         assert_at_least(model, "IfcMaterial", material_count)
     else:
-        require_unsupported(diagnostics, "revit_materials_and_compound_assemblies")
+        require_unsupported(diagnostics, "revit_material_display_names")
 
     unit_count = int(exported.get("unit_assignment_count", 0))
     if unit_count < 1:
