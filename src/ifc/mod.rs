@@ -1968,6 +1968,7 @@ fn revit_model_global_ids(
     let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
         return out;
     };
+    let revit_version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
     if ids.is_empty() {
         return out;
     }
@@ -2042,8 +2043,10 @@ fn revit_model_global_ids(
         };
         if let Some(&index) = doors_and_windows.get(element) {
             let flipped = door_symbol_flipped(entities, index, element_facings.get(element));
-            out.element_types
-                .insert(*element, door_type_global_id(global_id, flipped));
+            out.element_types.insert(
+                *element,
+                door_type_global_id(global_id, flipped, revit_version),
+            );
         } else if element_type_ids.get(element) != Some(original) {
             out.element_types.insert(*element, global_id.clone());
         }
@@ -2104,12 +2107,20 @@ fn door_symbol_flipped(
 
 /// A door's or window's type GlobalId as Revit's exporter makes it (B72,
 /// revit-ifc `GUIDUtil`): MD5 of `<original symbol's GlobalId>Sub-element:
-/// Flipped: <True|False> InAssembly: False`, read as a .NET GUID.
-fn door_type_global_id(symbol_global_id: &str, flipped: bool) -> String {
+/// Flipped: <True|False>`, then ` InAssembly: False` from revit-ifc 25.4 on,
+/// read as a .NET GUID. A file of Revit 2025 or later takes the suffix (RE1,
+/// exported by Revit 2026), one of 2024 not (Core Interior, exported by
+/// Revit 2024, all 138 of its doors and windows).
+fn door_type_global_id(symbol_global_id: &str, flipped: bool, revit_version: u32) -> String {
     use md5::{Digest, Md5};
     let key = format!(
-        "{symbol_global_id}Sub-element:Flipped: {} InAssembly: False",
-        if flipped { "True" } else { "False" }
+        "{symbol_global_id}Sub-element:Flipped: {}{}",
+        if flipped { "True" } else { "False" },
+        if revit_version >= 2025 {
+            " InAssembly: False"
+        } else {
+            ""
+        }
     );
     let digest: [u8; 16] = Md5::digest(key.as_bytes())
         .as_slice()
