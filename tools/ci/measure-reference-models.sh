@@ -78,8 +78,10 @@ while IFS='|' read -r name rvt ref; do
   dir="$OUT/$name"; mkdir -p "$dir"
   echo "::group::$name"
   # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+  started=$(date +%s%N)
   "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
   echo "exit $?" >> "$dir/rvt-ifc.log"
+  echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/rvt-ifc.log"
   "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
   info "$MODELS/$rvt" "$dir"
@@ -132,8 +134,10 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     echo "::group::$(basename "$sample")"
     info "$sample" "$dir"
     # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+    started=$(date +%s%N)
     "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
     echo "exit $?" >> "$dir/rvt-ifc.log"
+    echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/rvt-ifc.log"
     [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
     if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
       timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
