@@ -1,5 +1,5 @@
 //! Native project identities and creation-episode UniqueIds.
-//! Explicit four-field (2023) and five-field (2024/2027) ElemTable contracts.
+//! Explicit four-field (2023) and five-field (2024 to 2027) ElemTable contracts.
 //! Original identity suffixes are retained; they are not current record locators.
 use crate::{native_parameters, schema_registry::Registry};
 use anyhow::{Result, ensure};
