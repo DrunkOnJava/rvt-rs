@@ -180,11 +180,12 @@ pub enum IfcEntity {
         b_id: u32,
         b_index: u32,
     },
-    /// Connector `index` of the duct or pipe at `element` (ElementId `id`,
-    /// an index into `IfcModel::entities`) (B54): the writer gives it its
-    /// `IfcDistributionPort`, tied to the element, where no join has. Revit's
-    /// export writes connectors 0 and 1 of every duct and pipe whether or not
-    /// anything is connected to them.
+    /// Connector `index` of the distribution element at `element` (ElementId
+    /// `id`, an index into `IfcModel::entities`) (B54): the writer gives it
+    /// its `IfcDistributionPort`, tied to the element, where no join has.
+    /// Revit's export writes connectors 0 and 1 of every duct and pipe, and
+    /// each connector of a family instance's symbol, whether or not anything
+    /// is connected to them.
     Port { element: usize, id: u32, index: u32 },
     /// An MEP system (RE-162, #528): the Revit system element `id`, named
     /// `name`, grouping the building elements at `members` (indices into

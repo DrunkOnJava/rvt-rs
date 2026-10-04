@@ -1147,6 +1147,8 @@ fn export_rvt_doc(
     // B63: a room's furniture, fixtures and equipment are contained in its
     // space, which needs both on their storeys.
     export_content::contain_in_spaces(&mut entities);
+    // B54: a family instance's connectors are ports, joined or not.
+    attach_family_instance_ports(rf, &mut entities, &element_type_ids);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -2057,6 +2059,52 @@ fn revit_model_global_ids(
 /// revit-ifc's sub-element index for a family instance written as its own
 /// type (`IFCFamilyInstanceSubElements.InstanceAsType`).
 const INSTANCE_AS_TYPE: u16 = 2048;
+
+/// Give each family instance written as a distribution element a port for
+/// each of its symbol's connectors that Revit's export writes one for
+/// ([`crate::native_connectors::symbol_port_indices`], B54), joined or not;
+/// the writer skips a port a join has already given it. A file whose release
+/// the native record path does not read keeps the ports of its joins only.
+fn attach_family_instance_ports(
+    rf: &mut crate::RevitFile,
+    entities: &mut Vec<entities::IfcEntity>,
+    element_type_ids: &std::collections::BTreeMap<u32, u32>,
+) {
+    let instances: Vec<(usize, u32, u32)> = entities
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entity)| {
+            let entities::IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid: Some(tag),
+                ..
+            } = entity
+            else {
+                return None;
+            };
+            if !export_content::is_distribution_element(ifc_type) {
+                return None;
+            }
+            let id = tag.parse::<u32>().ok()?;
+            Some((index, id, *element_type_ids.get(&id)?))
+        })
+        .collect();
+    if instances.is_empty() {
+        return;
+    }
+    let symbols = instances
+        .iter()
+        .map(|(_, _, symbol)| u64::from(*symbol))
+        .collect();
+    let Ok(ports) = crate::native_connectors::symbol_port_indices(rf, &symbols) else {
+        return;
+    };
+    for (element, id, symbol) in instances {
+        for &index in ports.get(&u64::from(symbol)).into_iter().flatten() {
+            entities.push(entities::IfcEntity::Port { element, id, index });
+        }
+    }
+}
 
 /// Whether Revit's exporter takes a door's or window's symbol as flipped
 /// (B72, revit-ifc `DoorWindowInfo.CalculateDoorWindowInformation`): whether
