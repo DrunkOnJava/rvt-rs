@@ -39,6 +39,12 @@ pub enum Error {
     #[error("Invalid UTF-16: {0}")]
     Utf16(String),
 
+    /// The writer refused a patch it cannot write as Revit stores it: a
+    /// stream kept in checksummed pages whose new bytes would span one, when
+    /// rvt-rs cannot compute the page checksum (B69).
+    #[error("write refused: {0}")]
+    WriteRefused(String),
+
     /// A caller-supplied [`crate::control::CancelToken`] was cancelled
     /// while a scan was running. Partial results are discarded; the
     /// file itself is fine.

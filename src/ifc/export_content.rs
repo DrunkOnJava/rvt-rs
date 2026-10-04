@@ -53,6 +53,8 @@ pub struct TypedProductionAppend {
     pub element_type_materials: BTreeMap<u32, Vec<String>>,
     /// Each element's type, by ElementId (RE-110).
     pub element_type_ids: BTreeMap<u32, u32>,
+    /// Each family instance's original symbol, by ElementId (RE-167).
+    pub element_original_symbols: BTreeMap<u32, u32>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -283,6 +285,17 @@ pub fn append_typed_production_elements(
                 _ => None,
             }) {
                 out.element_type_ids.insert(id, type_id);
+            }
+            // RE-167: the original symbol, whose GlobalId the type takes.
+            if let Some(original) = decoded.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. }
+                    if name == crate::partition_schema_mvp::ORIGINAL_SYMBOL_FIELD =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            }) {
+                out.element_original_symbols.insert(id, original);
             }
         }
 
@@ -661,6 +674,30 @@ pub fn append_typed_production_elements(
             }),
             _ => None,
         };
+        // RE-165 (B44): a pipe fitting's nominal size, the one diameter its
+        // connectors give, as Revit's export writes it: a list of one length.
+        let fitting_diameter = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. }
+                if name == crate::partition_schema_mvp::FITTING_NOMINAL_DIAMETER_FIELD =>
+            {
+                Some(*value)
+            }
+            _ => None,
+        });
+        if let Some(diameter) = fitting_diameter {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set: PropertySet {
+                    name: "Pset_PipeFittingTypeCommon".into(),
+                    properties: vec![Property {
+                        name: "NominalDiameter".into(),
+                        value: PropertyValue::List(vec![PropertyValue::PositiveLengthFeet(
+                            diameter,
+                        )]),
+                    }],
+                },
+            });
+        }
         // A duct's length is also in its Pset_DuctSegmentTypeCommon, as on
         // every RE1 Mechanical duct.
         let duct_set = (decoded.class == "Duct").then_some("Pset_DuctSegmentTypeCommon");

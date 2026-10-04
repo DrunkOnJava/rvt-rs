@@ -1462,6 +1462,10 @@ pub enum PropertyValue {
     /// Mass in pounds (writer converts to kilograms).
     /// Maps to `IfcMassMeasure`. (IFC-32)
     MassPounds(f64),
+    /// A list of values: the writer emits an `IfcPropertyListValue`, as
+    /// standard property sets declare for values given once per port, such as
+    /// `Pset_PipeFittingTypeCommon.NominalDiameter` (B44).
+    List(Vec<PropertyValue>),
 }
 
 impl PropertyValue {
@@ -1512,6 +1516,14 @@ impl PropertyValue {
                 let kg = lb * 0.45359237;
                 format!("IFCMASSMEASURE({kg:.6})")
             }
+            PropertyValue::List(items) => format!(
+                "({})",
+                items
+                    .iter()
+                    .map(PropertyValue::to_step)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
         }
     }
 }

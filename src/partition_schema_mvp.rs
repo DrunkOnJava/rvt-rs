@@ -301,7 +301,13 @@ pub fn recover_partition_schema_mvp(
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
     // --- Curtain walls and their panels and mullions (RE-46) ---
-    attach_curtain_walls(rf, revit_version, &mut out.walls, &mut out.products);
+    attach_curtain_walls(
+        rf,
+        revit_version,
+        &mut out.walls,
+        &mut out.products,
+        [&mut out.doors, &mut out.windows],
+    );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
     bind_opening_hosts(&out.walls, &mut out.windows);
@@ -344,6 +350,18 @@ pub fn recover_partition_schema_mvp(
     // --- Curtain mullions and panels turned or tilted off the model's axes,
     // with their three axes (RE-106) ---
     attach_curtain_axes(rf, revit_version, &mut out.products);
+    // --- Each family instance's original symbol, whose GlobalId Revit's
+    // export gives its type (RE-167, B60) ---
+    attach_original_symbols(
+        rf,
+        revit_version,
+        [
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.columns,
+            &mut out.products,
+        ],
+    );
 
     // --- Family and type names (RE-38) ---
     for elements in [
@@ -360,6 +378,8 @@ pub fn recover_partition_schema_mvp(
     attach_pipe_type_names(rf, &mut out.products);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
     attach_curve_fields(rf, revit_version, &mut out.products);
+    // --- Pipe fittings' nominal sizes, from their connectors (RE-165) ---
+    attach_fitting_nominal_diameters(rf, revit_version, &mut out.products);
     // --- The shared parameter Serial Number (RE-156) ---
     attach_serial_numbers(
         rf,
@@ -504,6 +524,9 @@ pub fn recover_partition_schema_mvp(
         }
         attach_joined_wall_materials(&mut out.columns, &out.walls);
     }
+
+    // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
+    attach_curtain_materials(rf, revit_version, &mut out.products);
 
     // --- Each window's opening from its type and transform (RE-93, #227) ---
     attach_window_openings(rf, revit_version, &mut out.windows);
@@ -1224,6 +1247,122 @@ fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [D
     }
 }
 
+/// Field carrying a family instance's original symbol (RE-167): the
+/// FamilySymbol `ExporterIFCUtils.GetOriginalSymbol` returns, whose GlobalId
+/// Revit's export gives the instance's type object while its `Tag` stays the
+/// instance's symbol.
+pub const ORIGINAL_SYMBOL_FIELD: &str = "m_original_symbol";
+/// The [`ORIGINAL_SYMBOL_FIELD`] of an instance that has no original symbol
+/// because it uses its own geometry (Revit's invalid ElementId, -1): its
+/// `GElement` object holds `0xffffffff` there. Revit's export then gives its
+/// type a sub-element GlobalId of the instance's own (RE-167): all 164 such
+/// columns of Core Interior.
+pub const INSTANCE_GEOMETRY: u32 = u32::MAX;
+/// The schema classes of the elements an original symbol may be: a family's
+/// symbol, and the mullion and panel types curtain parts take theirs from
+/// (RE-166, RE-167: RE1 Architecture's mullions' original symbols are
+/// `SysMullionFamSym` objects, its panels' `SysPanelFamSym`).
+pub const ORIGINAL_SYMBOL_CLASSES: [&str; 3] =
+    ["FamilySymbol", "SysMullionFamSym", "SysPanelFamSym"];
+/// Bytes before the end of a family instance's `GElement` data object
+/// (RE-153) where it holds its original symbol's ElementId (RE-167): at +300
+/// of 320 bytes on RE1 Architecture, +330 of 350 and +392 of 412 on the MEP
+/// models.
+pub const ORIGINAL_SYMBOL_FROM_END: usize = 20;
+
+/// Give each family instance ([`REVIT_CLASS_FIELD`] `FamilyInstance`, and
+/// each curtain mullion and panel) its original symbol ([`ORIGINAL_SYMBOL_FIELD`], RE-167): the ElementId its
+/// `GElement` data object holds [`ORIGINAL_SYMBOL_FROM_END`] bytes before its
+/// end, when every such object of the instance gives the same one and it is
+/// an [`ORIGINAL_SYMBOL_CLASSES`] element's, or [`INSTANCE_GEOMETRY`]. On the RE1 models that is the element whose GlobalId Revit
+/// gives the type of every one of 162 family instances; it is the symbol
+/// itself for most, another FamilySymbol (often the instance's id plus one)
+/// for many furniture, fittings, mullions and panels. Revit 2024 and later.
+fn attach_original_symbols<const N: usize>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; N],
+) {
+    if revit_version < 2024 {
+        return;
+    }
+    // Curtain mullions and panels are family instances too, of classes of
+    // their own.
+    let is_instance = |element: &DecodedElement| {
+        CURTAIN_AXES_CLASSES.contains(&element.class.as_str())
+            || element.fields.iter().any(|(name, value)| {
+                name == REVIT_CLASS_FIELD
+                    && matches!(value, InstanceField::String(class) if class == "FamilyInstance")
+            })
+    };
+    let instances: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter())
+        .filter(|element| is_instance(element))
+        .filter_map(|element| element.id)
+        .collect();
+    if instances.is_empty() {
+        return;
+    }
+    let Ok(classes) = rf.schema_classes() else {
+        return;
+    };
+    let tag_of = |name: &str| {
+        classes
+            .classes
+            .iter()
+            .find(|class| class.name == name)
+            .map(|class| u32::from(class.tag))
+    };
+    let Some(element_tag) = tag_of("GElement") else {
+        return;
+    };
+    let symbol_tags: BTreeSet<u32> = ORIGINAL_SYMBOL_CLASSES
+        .iter()
+        .filter_map(|name| tag_of(name))
+        .collect();
+    let mut held: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut symbols: BTreeSet<u32> = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for (p, object) in crate::partition_room_parameters::data_objects(buf) {
+            let class = object.class & 0xffff;
+            if symbol_tags.contains(&class) {
+                symbols.insert(object.element_id);
+            } else if class == element_tag && instances.contains(&object.element_id) {
+                let Some(at) = object.end.checked_sub(ORIGINAL_SYMBOL_FROM_END) else {
+                    continue;
+                };
+                if at < p {
+                    continue;
+                }
+                let value = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes"));
+                held.entry(object.element_id).or_default().insert(value);
+            }
+        }
+    }
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(values) = element.id.and_then(|id| held.get(&id)) else {
+            continue;
+        };
+        let mut values = values.iter();
+        if let (Some(&original), None) = (values.next(), values.next()) {
+            if symbols.contains(&original) || original == INSTANCE_GEOMETRY {
+                element.fields.push((
+                    ORIGINAL_SYMBOL_FIELD.into(),
+                    InstanceField::ElementId {
+                        tag: 0,
+                        id: original,
+                    },
+                ));
+            }
+        }
+    }
+}
+
 /// Fields holding the plan direction of a family instance turned off the
 /// model's axes (RE-87), from its transform: its X axis where its Z axis is
 /// the model's, or else its first flat axis where one axis is vertical, as
@@ -1673,6 +1812,57 @@ fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [Decoded
                 InstanceField::String(crate::partition_type_materials::UNNAMED_MATERIAL.into()),
             ));
         }
+    }
+}
+
+/// Give each curtain wall mullion and panel ([`CURTAIN_AXES_CLASSES`]) that
+/// has no type material yet the material its type holds
+/// ([`crate::partition_curtain_materials`], RE-166), by name, as Revit's
+/// export associates it.
+fn attach_curtain_materials(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_curtain_materials as pcm;
+    let is_part = |element: &DecodedElement| CURTAIN_AXES_CLASSES.contains(&element.class.as_str());
+    if !pcm::supports_revit_version(revit_version) || !products.iter().any(is_part) {
+        return;
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return;
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
+    else {
+        return;
+    };
+    let materials: BTreeSet<u32> = names.keys().copied().collect();
+    let Ok(type_materials) = pcm::scan_curtain_type_materials(rf, revit_version, &materials) else {
+        return;
+    };
+    for element in products.iter_mut().filter(|element| is_part(element)) {
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_MATERIAL_FIELD)
+        {
+            continue;
+        }
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        let Some(name) = type_id
+            .and_then(|id| type_materials.get(&id))
+            .and_then(|material| names.get(material))
+        else {
+            continue;
+        };
+        element.fields.push((
+            TYPE_MATERIAL_FIELD.into(),
+            InstanceField::String(name.clone()),
+        ));
     }
 }
 
@@ -3704,6 +3894,41 @@ fn attach_serial_numbers(
     }
 }
 
+/// Field carrying a pipe fitting's nominal diameter, feet (RE-165).
+pub const FITTING_NOMINAL_DIAMETER_FIELD: &str = "m_fitting_nominal_diameter";
+
+/// Give each pipe fitting its nominal diameter
+/// ([`crate::partition_fitting_sizes`], RE-165). A fitting whose connectors
+/// disagree, or whose object is not found, gets nothing.
+fn attach_fitting_nominal_diameters(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_fitting_sizes as pfs;
+    let fittings: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "PipeFitting")
+        .filter_map(|element| element.id)
+        .collect();
+    let diameters =
+        pfs::scan_fitting_nominal_diameters(rf, revit_version, &fittings).unwrap_or_default();
+    for element in products.iter_mut() {
+        if element.class != "PipeFitting" {
+            continue;
+        }
+        if let Some(&diameter) = element.id.and_then(|id| diameters.get(&id)) {
+            element.fields.push((
+                FITTING_NOMINAL_DIAMETER_FIELD.into(),
+                InstanceField::Float {
+                    value: diameter,
+                    size: 8,
+                },
+            ));
+        }
+    }
+}
+
 /// Prefix of the field naming an MEP system an element is a member of: the
 /// system's ElementId follows, and the field holds its name, empty where it
 /// has none (RE-162).
@@ -4065,11 +4290,19 @@ fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut
 /// one curtain wall whose record box contains its own (RE-62). That is
 /// Revit's parent for all 89 such mullions and the 3 such panels that
 /// Revit's export aggregates.
+///
+/// A door or window set in a curtain wall's grid in place of a panel is one
+/// of its parts too, as Revit's export aggregates RE1 Architecture's door
+/// 445975 under curtain wall 445961 (B64). It takes the curtain wall of the
+/// one grid its record names. Naming a curtain wall directly is not enough:
+/// on Snowdon Towers three doors name curtain wall 1506500 and Revit leaves
+/// them standalone (RE-46). No record box decides a door either.
 fn attach_curtain_walls(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &mut [DecodedElement],
     products: &mut [DecodedElement],
+    openings: [&mut Vec<DecodedElement>; 2],
 ) {
     let wall_ids: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
     if wall_ids.is_empty() {
@@ -4094,10 +4327,20 @@ fn attach_curtain_walls(
         }
         references.push(list);
     }
+    let opening_references: Vec<Vec<Option<Vec<u64>>>> = openings
+        .iter()
+        .map(|elements| {
+            elements
+                .iter()
+                .map(|element| record_references(rf, element).map(|(list, _)| list))
+                .collect()
+        })
+        .collect();
     // RE-72: a part names the curtain grid it lies on, and the grid's own
     // data names its curtain wall.
     let unrecorded: BTreeSet<u32> = references
         .iter()
+        .chain(opening_references.iter().flatten())
         .flatten()
         .flatten()
         .filter_map(|&id| u32::try_from(id).ok())
@@ -4152,6 +4395,25 @@ fn attach_curtain_walls(
                 AGGREGATE_WHOLE_FIELD.into(),
                 InstanceField::ElementId { tag: 0, id: whole },
             ));
+        }
+    }
+    for (elements, lists) in openings.into_iter().zip(opening_references) {
+        for (element, list) in elements.iter_mut().zip(lists) {
+            let Some(list) = list else {
+                continue;
+            };
+            let ids: Vec<u32> = list
+                .iter()
+                .filter_map(|&id| u32::try_from(id).ok())
+                .collect();
+            let on_grid: BTreeSet<u32> =
+                ids.iter().filter_map(|id| grids.get(id).copied()).collect();
+            if let (1, Some(&whole)) = (on_grid.len(), on_grid.iter().next()) {
+                element.fields.push((
+                    AGGREGATE_WHOLE_FIELD.into(),
+                    InstanceField::ElementId { tag: 0, id: whole },
+                ));
+            }
         }
     }
 }
@@ -4800,9 +5062,15 @@ fn bind_opening_hosts(walls: &[DecodedElement], openings: &mut [DecodedElement])
         if candidates.is_empty() {
             continue;
         }
+        // A curtain wall's door or window (B64) is set in no wall.
+        let part_of_curtain_wall = element
+            .fields
+            .iter()
+            .any(|(name, _)| name == AGGREGATE_WHOLE_FIELD);
         let host = candidates
             .into_iter()
-            .find(|id| !curtain_walls.contains(id));
+            .find(|id| !curtain_walls.contains(id))
+            .filter(|_| !part_of_curtain_wall);
         element.fields.retain(|(name, _)| {
             name != OPENING_HOST_CANDIDATES_FIELD
                 && name != OPENING_HOST_FIELD

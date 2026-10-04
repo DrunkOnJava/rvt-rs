@@ -300,10 +300,11 @@ impl StepWriter {
             let p_id = self.id();
             let name_esc = escape(&prop.name);
             let value_step = prop.value.to_step();
-            self.emit_entity(
-                p_id,
-                format!("IFCPROPERTYSINGLEVALUE('{name_esc}',$,{value_step},$)"),
-            );
+            let entity = match prop.value {
+                super::entities::PropertyValue::List(_) => "IFCPROPERTYLISTVALUE",
+                _ => "IFCPROPERTYSINGLEVALUE",
+            };
+            self.emit_entity(p_id, format!("{entity}('{name_esc}',$,{value_step},$)"));
             prop_ids.push(p_id);
         }
         let refs = prop_ids
@@ -2691,6 +2692,7 @@ impl StepWriter {
             entity: String,
             name: String,
             tail: String,
+            global_id: Option<String>,
             elements: Vec<usize>,
         }
         let mut type_groups: Vec<TypeGroup> = Vec::new();
@@ -2735,33 +2737,53 @@ impl StepWriter {
             else {
                 continue;
             };
-            match type_groups
-                .iter_mut()
-                .find(|group| group.type_id == *type_id && group.entity == entity_name)
-            {
+            // RE-167: Revit writes a type object per original symbol, with
+            // that symbol's GlobalId and the instance's symbol's Tag.
+            let global_id = type_guid
+                .as_deref()
+                .and_then(|tag| tag.parse::<u32>().ok())
+                .and_then(|id| model.global_ids.element_types.get(&id))
+                .cloned();
+            match type_groups.iter_mut().find(|group| {
+                group.type_id == *type_id
+                    && group.entity == entity_name
+                    && group.global_id == global_id
+            }) {
                 Some(group) => group.elements.push(el_id),
                 None => type_groups.push(TypeGroup {
                     type_id: *type_id,
                     entity: entity_name,
                     name: format!("{family}:{type_name}"),
                     tail,
+                    global_id,
                     elements: vec![el_id],
                 }),
             }
         }
         let mut typed_ids: std::collections::BTreeSet<u32> = Default::default();
+        let mut used_gids: std::collections::BTreeSet<String> = Default::default();
         for TypeGroup {
             type_id,
             entity: entity_name,
             name,
             tail,
+            global_id,
             elements,
         } in &type_groups
         {
             let tag = type_id.to_string();
             // A type split across two entities keeps Revit's GlobalId once.
-            let type_gid = match model.global_ids.types.get(type_id) {
-                Some(global_id) if typed_ids.insert(*type_id) => global_id.clone(),
+            let revit = match global_id {
+                Some(global_id) => Some(global_id.clone()),
+                None => model
+                    .global_ids
+                    .types
+                    .get(type_id)
+                    .filter(|_| typed_ids.insert(*type_id))
+                    .cloned(),
+            };
+            let type_gid = match revit {
+                Some(global_id) if used_gids.insert(global_id.clone()) => global_id,
                 _ => gid(&["type", entity_name, &tag]),
             };
             let type_el_id = self.id();

@@ -25,6 +25,8 @@ real      cfb_roundtrip_delta
 real      common_reference
 real      corpus_tier2_health
 real      covering_finish
+real      curtain_part_materials
+real      curtain_wall_doors
 real      curtain_walls
 real      design_options
 real      duct_fields
@@ -34,6 +36,7 @@ real      elem_table_frame
 real      element_materials
 real      element_names
 real      element_records_2025
+real      fitting_nominal_diameter
 real      ifc_export_overrides
 real      ifc_roundtrip
 real      invert_elevation
@@ -58,10 +61,12 @@ real      serial_number
 real      space_common
 real      space_containment
 real      spatial_property_sets
+real      type_global_ids
 real      unfilled_openings
 real      walker_to_ifc_integration
 
 cli       cli_ergonomics
+cli       cli_real_files
 cli       parameter_diagnostics
 cli       rvt_dump_cli
 cli       rvt_ifc_diagnostics_cli
