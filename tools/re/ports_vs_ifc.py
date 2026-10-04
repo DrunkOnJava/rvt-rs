@@ -42,13 +42,21 @@ def port_schema_findings(path):
 
 
 def read(path):
-    """Ports, connections as unordered pairs, and the ElementIds that are ducts or pipes."""
+    """Ports, connections as unordered pairs, the ElementIds that are ducts or
+    pipes, each port's element, and each port key's description."""
     model = ifcopenshell.open(path)
     ports = {}
+    described = {}
     for port in model.by_type("IfcDistributionPort"):
         match = PORT_NAME.match(port.Name or "")
         if match:
-            ports[port.id()] = (int(match.group(1)), int(match.group(2)))
+            key = (int(match.group(1)), int(match.group(2)))
+            ports[port.id()] = key
+            described[key] = (
+                getattr(port, "FlowDirection", None),
+                getattr(port, "PredefinedType", None),
+                getattr(port, "SystemType", None),
+            )
     connections = set()
     for rel in model.by_type("IfcRelConnectsPorts"):
         a, b = ports.get(rel.RelatingPort.id()), ports.get(rel.RelatedPort.id())
@@ -59,7 +67,10 @@ def read(path):
     for rel in model.by_type("IfcRelConnectsPortToElement"):
         element = rel.RelatedElement
         tied[rel.RelatingPort.id()] = int(element.Tag) if getattr(element, "Tag", None) and str(element.Tag).isdigit() else None
-    return ports, connections, segments, tied
+        key = ports.get(rel.RelatingPort.id())
+        if key:
+            described[key] = described[key] + (element.is_a(), element.Name)
+    return ports, connections, segments, tied, described
 
 
 def main():
@@ -69,8 +80,8 @@ def main():
     parser.add_argument("--list", action="store_true", help="list the connections not matched")
     args = parser.parse_args()
 
-    ports, connections, segments, tied = read(args.rvt_rs_ifc)
-    revit_ports, revit_connections, revit_segments, _ = read(args.revit_ifc)
+    ports, connections, segments, tied, described = read(args.rvt_rs_ifc)
+    revit_ports, revit_connections, revit_segments, _, revit_described = read(args.revit_ifc)
 
     def involves(connection, segment_ids):
         return any(element in segment_ids for element, _ in connection)
@@ -93,6 +104,20 @@ def main():
     print(f"{len(reproduced_all)} of all {len(revit_connections)} of Revit's connections are written ({rate_all:.1f}%), {len(missed_all)} are not")
     print(f"{len(extra)} connections written are not in Revit's export")
     print(f"{wrongly_tied} of rvt-rs's {len(ports)} ports are not tied to the element their name gives")
+    # B54: Revit's ports rvt-rs does not write, by their element's entity and
+    # the port's system type, and whether anything is connected to them.
+    connected = {key for pair in revit_connections for key in pair}
+    unwritten = sorted(set(revit_described) - set(described))
+    by_kind = {}
+    for key in unwritten:
+        info = revit_described[key]
+        kind = (info[3] if len(info) > 3 else None, info[2], key in connected)
+        by_kind[kind] = by_kind.get(kind, 0) + 1
+    print(f"{len(unwritten)} of Revit's {len(revit_described)} ports are not written; by element entity, system type, connected:")
+    for (entity, system, joined), count in sorted(by_kind.items(), key=lambda item: -item[1]):
+        print(f"  {count:4d}  {entity}  {system}  {'connected' if joined else 'open'}")
+    for key in unwritten[:60]:
+        print(f"  not written: {key} {revit_described[key]}")
     try:
         findings, about_ports = port_schema_findings(args.rvt_rs_ifc)
         print(f"schema validation of rvt-rs's file: {len(findings)} findings, {len(about_ports)} about the port entities")
