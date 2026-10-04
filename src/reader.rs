@@ -108,7 +108,14 @@ pub struct RevitFile {
     /// score and walker limits. An export walks once to write and again for
     /// its diagnostics' class counts; the second reuses the first.
     walk: Option<CachedWalk>,
+    /// Memoised data objects (RE-153) of each partition stream (B80): the
+    /// original symbols, railing types and MEP systems each scanned every
+    /// partition for them.
+    data_objects: std::collections::HashMap<String, PartitionDataObjects>,
 }
+
+/// A partition stream's data objects, each at its offset (RE-153).
+pub type PartitionDataObjects = Arc<Vec<(usize, crate::partition_room_parameters::DataObject)>>;
 
 /// A memoised walk: its minimum score, its limits and its elements.
 type CachedWalk = (
@@ -244,6 +251,7 @@ impl RevitFile {
             element_names: None,
             design_options: None,
             walk: None,
+            data_objects: std::collections::HashMap::new(),
         })
     }
 
@@ -270,6 +278,22 @@ impl RevitFile {
         self.inflated
             .insert(name.to_string(), Arc::clone(&inflated));
         Ok(inflated)
+    }
+
+    /// The data objects (RE-153) of partition stream `name`, each at its
+    /// offset in the stream's inflated bytes ([`Self::inflated_partition`]),
+    /// memoised (B80).
+    pub fn partition_data_objects(&mut self, name: &str) -> Result<PartitionDataObjects> {
+        if let Some(cached) = self.data_objects.get(name) {
+            return Ok(Arc::clone(cached));
+        }
+        let inflated = self.inflated_partition(name)?;
+        let objects = Arc::new(crate::partition_room_parameters::data_objects(
+            inflated.bytes(),
+        ));
+        self.data_objects
+            .insert(name.to_string(), Arc::clone(&objects));
+        Ok(objects)
     }
 
     /// ElementIds [`crate::partition_element_records::assign_second_prologue_ids`]
