@@ -441,6 +441,8 @@ pub fn recover_partition_schema_mvp(
     attach_wall_sweep_types(rf, revit_version, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
     attach_wall_layers(rf, revit_version, &mut out.walls);
+    // --- The openings a wall's edited elevation profile cuts (B55) ---
+    attach_wall_profile_openings(rf, revit_version, &mut out.walls);
     // --- A shed roof's slope (RE-56) ---
     attach_roof_slopes(rf, revit_version, &mut out.products);
     // --- Floors', roofs' and ceilings' layers (RE-57) ---
@@ -3332,6 +3334,339 @@ fn attach_system_family_names(
 /// centreline and its type's thickness, from which the exporter builds its
 /// body (RE-54). A wall without a type, a location line or an orientation
 /// gets none of these. Membranes, which have no width, are left out.
+/// The field prefix of the openings a wall's edited elevation profile cuts
+/// (B55): `m_profile_opening_<k>`, the opening's outline as model-feet
+/// points in the wall's vertical plane, and `m_profile_opening_<k>_tag`, the
+/// ElementId it is tagged with.
+pub const PROFILE_OPENING_FIELD: &str = "m_profile_opening";
+
+/// How far apart two sketch points may lie and still meet, and how far off a
+/// plane or a side a point may lie and still be on it (B55), feet.
+const PROFILE_EPS_FEET: f64 = 1e-3;
+
+/// A sketch line: its ElementId, start and end, model feet (B55).
+pub type SketchSegment = (u32, [f64; 3], [f64; 3]);
+
+/// A sketch line in its plane: its ElementId, and its ends along and up the
+/// plane (B55).
+type PlaneEdge = (u32, (f64, f64), (f64, f64));
+
+/// Give each wall whose elevation profile was edited the openings that cuts
+/// (B55, RE-151's 63rd opening).
+///
+/// The profile is the wall's sketch, the curves its sketch lists (RE-97),
+/// each read as a straight line
+/// ([`crate::partition_beam_axes::scan_sketch_curves`]) whose ends lie in its
+/// record's box. Where every line lies in one vertical plane and they close
+/// one loop, each run of lines that leaves the loop's bounding rectangle cuts
+/// the region between it and the rectangle's edge, which Revit's export
+/// writes as an opening voiding the wall ([`elevation_profile_cuts`]). A wall
+/// whose sketch holds an arc, or does not close, is left alone.
+///
+/// Measured on Core Interior's wall 55840 (Revit 2024), whose one opening
+/// Revit's export tags 55859.
+fn attach_wall_profile_openings(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &mut [DecodedElement],
+) {
+    use crate::partition_element_records as per;
+    let wall_ids: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
+    if wall_ids.is_empty() || !crate::partition_beam_axes::supports_revit_version(revit_version) {
+        return;
+    }
+    let declared = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let Ok(lines) =
+        per::scan_category_records_multi(rf, revit_version, &[per::OST_SKETCH_LINES], &declared)
+    else {
+        return;
+    };
+    let line_ids: BTreeSet<u32> = lines.iter().map(|record| record.element_id).collect();
+    let lists: BTreeMap<u32, Vec<u32>> =
+        crate::element_record_plan_profiles::scan_sketch_curve_lists(rf, revit_version, &line_ids)
+            .into_iter()
+            .filter(|(owner, _)| wall_ids.contains(owner))
+            .collect();
+    if lists.is_empty() {
+        return;
+    }
+    let wanted: BTreeSet<u32> = lists.values().flatten().copied().collect();
+    let Ok(curves) = crate::partition_beam_axes::scan_sketch_curves(rf, revit_version, &wanted)
+    else {
+        return;
+    };
+    let boxes: BTreeMap<u32, [f64; 6]> = lines
+        .iter()
+        .filter(|record| wanted.contains(&record.element_id))
+        .map(|record| (record.element_id, record.bbox_feet))
+        .collect();
+    let in_box = |point: [f64; 3], bbox: &[f64; 6]| {
+        (0..3).all(|axis| {
+            point[axis] >= bbox[axis] - PROFILE_EPS_FEET
+                && point[axis] <= bbox[axis + 3] + PROFILE_EPS_FEET
+        })
+    };
+    for wall in walls.iter_mut() {
+        let Some(curve_ids) = wall.id.and_then(|id| lists.get(&id)) else {
+            continue;
+        };
+        let segments: Option<Vec<SketchSegment>> = curve_ids
+            .iter()
+            .map(|id| {
+                let line = curves.get(id)?.line?;
+                let bbox = boxes.get(id)?;
+                let (start, end) = (line.start(), line.end());
+                (in_box(start, bbox) && in_box(end, bbox)).then_some((*id, start, end))
+            })
+            .collect();
+        let Some(segments) = segments else {
+            continue;
+        };
+        for (k, (tag, outline)) in elevation_profile_cuts(&segments).into_iter().enumerate() {
+            let points = outline
+                .iter()
+                .map(|point| {
+                    InstanceField::Vector(
+                        point
+                            .iter()
+                            .map(|value| InstanceField::Float {
+                                value: *value,
+                                size: 8,
+                            })
+                            .collect(),
+                    )
+                })
+                .collect();
+            wall.fields.push((
+                format!("{PROFILE_OPENING_FIELD}_{k}"),
+                InstanceField::Vector(points),
+            ));
+            wall.fields.push((
+                format!("{PROFILE_OPENING_FIELD}_{k}_tag"),
+                InstanceField::ElementId { tag: 0, id: tag },
+            ));
+        }
+    }
+}
+
+/// The openings a wall's edited elevation profile cuts, from its sketch
+/// lines (ElementId, start, end, model feet) (B55): each region between a
+/// run of lines that leaves the profile's bounding rectangle and the
+/// rectangle's edge, as model-feet points in the profile's plane,
+/// counter-clockwise in its own along-and-up coordinates, tagged with the
+/// highest ElementId of the run, as Revit's export tags wall 55840's one
+/// opening (55859, also the last line of its sketch). Empty where the lines
+/// do not lie in one vertical plane, do not close one loop, or never leave
+/// the rectangle.
+pub fn elevation_profile_cuts(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f64; 3]>)> {
+    let eps = PROFILE_EPS_FEET;
+    let points: Vec<[f64; 3]> = segments.iter().flat_map(|(_, a, b)| [*a, *b]).collect();
+    let plan = |a: [f64; 3], b: [f64; 3]| ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+    let mut far = (0.0, [0.0; 3], [0.0; 3]);
+    for a in &points {
+        for b in &points {
+            let distance = plan(*a, *b);
+            if distance > far.0 {
+                far = (distance, *a, *b);
+            }
+        }
+    }
+    let (length, origin, toward) = far;
+    if length <= eps {
+        return Vec::new();
+    }
+    let axis = [
+        (toward[0] - origin[0]) / length,
+        (toward[1] - origin[1]) / length,
+    ];
+    // A point's place along the plane's axis and up it, and how far off the
+    // plane it lies.
+    let to_uv = |p: [f64; 3]| {
+        let (dx, dy) = (p[0] - origin[0], p[1] - origin[1]);
+        (
+            (dx * axis[0] + dy * axis[1], p[2]),
+            (dx * axis[1] - dy * axis[0]).abs(),
+        )
+    };
+    if points.iter().any(|p| to_uv(*p).1 > eps) {
+        return Vec::new();
+    }
+    let edges: Vec<PlaneEdge> = segments
+        .iter()
+        .map(|(id, a, b)| (*id, to_uv(*a).0, to_uv(*b).0))
+        .collect();
+    let meets = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() <= eps && (a.1 - b.1).abs() <= eps;
+    // Chain the lines into one loop: its corners, and the line leaving each.
+    let Some(first) = edges.first() else {
+        return Vec::new();
+    };
+    let mut corners = vec![first.1];
+    let mut ids = vec![first.0];
+    let mut end = first.2;
+    let mut used = vec![false; edges.len()];
+    used[0] = true;
+    for _ in 1..edges.len() {
+        let Some((index, next)) = edges.iter().enumerate().find_map(|(index, (_, a, b))| {
+            if used[index] {
+                None
+            } else if meets(*a, end) {
+                Some((index, *b))
+            } else if meets(*b, end) {
+                Some((index, *a))
+            } else {
+                None
+            }
+        }) else {
+            return Vec::new();
+        };
+        used[index] = true;
+        corners.push(end);
+        ids.push(edges[index].0);
+        end = next;
+    }
+    if !meets(end, corners[0]) {
+        return Vec::new();
+    }
+    let count = corners.len();
+    let area: f64 = (0..count)
+        .map(|i| {
+            let (a, b) = (corners[i], corners[(i + 1) % count]);
+            a.0 * b.1 - b.0 * a.1
+        })
+        .sum();
+    if area < 0.0 {
+        corners = std::iter::once(corners[0])
+            .chain(corners[1..].iter().rev().copied())
+            .collect();
+        ids.reverse();
+    }
+    let corner = |i: usize| corners[i % count];
+    let (u_min, u_max, v_min, v_max) = corners.iter().fold(
+        (f64::MAX, f64::MIN, f64::MAX, f64::MIN),
+        |(a, b, c, d), (u, v)| (a.min(*u), b.max(*u), c.min(*v), d.max(*v)),
+    );
+    let (width, height) = (u_max - u_min, v_max - v_min);
+    let perimeter = 2.0 * (width + height);
+    // Where a point lies along the rectangle's edge, counter-clockwise from
+    // its lower left corner; `None` off the edge.
+    let along = |(u, v): (f64, f64)| {
+        if (v - v_min).abs() <= eps {
+            Some(u - u_min)
+        } else if (u - u_max).abs() <= eps {
+            Some(width + v - v_min)
+        } else if (v - v_max).abs() <= eps {
+            Some(width + height + u_max - u)
+        } else if (u - u_min).abs() <= eps {
+            Some(2.0 * width + height + v_max - v)
+        } else {
+            None
+        }
+    };
+    let on_side = |a: (f64, f64), b: (f64, f64)| {
+        [
+            (a.1 - v_min, b.1 - v_min),
+            (a.0 - u_max, b.0 - u_max),
+            (a.1 - v_max, b.1 - v_max),
+            (a.0 - u_min, b.0 - u_min),
+        ]
+        .iter()
+        .any(|(x, y)| x.abs() <= eps && y.abs() <= eps)
+    };
+    let inside: Vec<bool> = (0..count)
+        .map(|i| !on_side(corner(i), corner(i + 1)))
+        .collect();
+    let Some(start) = (0..count).find(|i| !inside[*i] && inside[(i + 1) % count]) else {
+        return Vec::new();
+    };
+    let rectangle = [
+        ((u_min, v_min), 0.0),
+        ((u_max, v_min), width),
+        ((u_max, v_max), width + height),
+        ((u_min, v_max), 2.0 * width + height),
+    ];
+    let mut cuts = Vec::new();
+    let mut i = start + 1;
+    while i <= start + count {
+        if !inside[i % count] {
+            i += 1;
+            continue;
+        }
+        let run_start = i;
+        while inside[i % count] {
+            i += 1;
+        }
+        let (a, b) = (corner(run_start), corner(i));
+        let (Some(at_a), Some(at_b)) = (along(a), along(b)) else {
+            return Vec::new();
+        };
+        let back = (at_b - at_a).rem_euclid(perimeter);
+        if back <= eps {
+            continue;
+        }
+        // The run from A to B, then back along the rectangle's edge,
+        // clockwise, to A; reversed to run counter-clockwise.
+        let mut outline: Vec<(f64, f64)> = (run_start..=i).map(corner).collect();
+        let mut passed: Vec<(f64, (f64, f64))> = rectangle
+            .iter()
+            .map(|(point, at)| ((at_b - at).rem_euclid(perimeter), *point))
+            .filter(|(distance, _)| *distance > eps && *distance < back - eps)
+            .collect();
+        passed.sort_by(|x, y| x.0.total_cmp(&y.0));
+        outline.extend(passed.into_iter().map(|(_, point)| point));
+        outline.reverse();
+        let tag = (run_start..i)
+            .map(|edge| ids[edge % count])
+            .max()
+            .expect("a run holds a line");
+        cuts.push((
+            tag,
+            outline
+                .into_iter()
+                .map(|(u, v)| [origin[0] + axis[0] * u, origin[1] + axis[1] * u, v])
+                .collect(),
+        ));
+    }
+    cuts
+}
+
+/// The openings a wall's edited elevation profile cuts, as the partition MVP
+/// gives them ([`PROFILE_OPENING_FIELD`]): each one's tag and outline (B55).
+pub fn profile_openings_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Vec<(u32, Vec<[f64; 3]>)> {
+    (0..)
+        .map_while(|k| {
+            let outline_name = format!("{PROFILE_OPENING_FIELD}_{k}");
+            let tag_name = format!("{outline_name}_tag");
+            let outline = fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Vector(points) if *name == outline_name => Some(points),
+                _ => None,
+            })?;
+            let tag = fields.iter().find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. } if *name == tag_name => Some(*id),
+                _ => None,
+            })?;
+            let points: Option<Vec<[f64; 3]>> = outline
+                .iter()
+                .map(|point| {
+                    let InstanceField::Vector(values) = point else {
+                        return None;
+                    };
+                    let mut xyz = values.iter().map(|value| match value {
+                        InstanceField::Float { value, .. } => Some(*value),
+                        _ => None,
+                    });
+                    Some([xyz.next()??, xyz.next()??, xyz.next()??])
+                })
+                .collect();
+            Some((tag, points?))
+        })
+        .collect()
+}
+
 fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [DecodedElement]) {
     use crate::partition_compound_structure as pcs;
     if !pcs::WALL_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
