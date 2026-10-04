@@ -177,16 +177,18 @@ fn main() -> anyhow::Result<()> {
                 continue;
             };
             for flip in [false, true] {
-                if hashed(&format!(
-                    "{symbol}Sub-element:Flipped: {} InAssembly: False",
-                    if flip { "True" } else { "False" }
-                )) == *gid
-                {
-                    form = format!(
-                        "hash, flip {flip}, value {} of {}",
-                        values.iter().position(|v| v == value).unwrap_or(0) + 1,
-                        values.len()
-                    );
+                for suffix in [" InAssembly: False", ""] {
+                    if hashed(&format!(
+                        "{symbol}Sub-element:Flipped: {}{suffix}",
+                        if flip { "True" } else { "False" }
+                    )) == *gid
+                    {
+                        form = format!(
+                            "hash, flip {flip}, suffix {suffix:?}, value {} of {}",
+                            values.iter().position(|v| v == value).unwrap_or(0) + 1,
+                            values.len()
+                        );
+                    }
                 }
             }
         }
