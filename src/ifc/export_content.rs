@@ -661,6 +661,30 @@ pub fn append_typed_production_elements(
             }),
             _ => None,
         };
+        // RE-165 (B44): a pipe fitting's nominal size, the one diameter its
+        // connectors give, as Revit's export writes it: a list of one length.
+        let fitting_diameter = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. }
+                if name == crate::partition_schema_mvp::FITTING_NOMINAL_DIAMETER_FIELD =>
+            {
+                Some(*value)
+            }
+            _ => None,
+        });
+        if let Some(diameter) = fitting_diameter {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set: PropertySet {
+                    name: "Pset_PipeFittingTypeCommon".into(),
+                    properties: vec![Property {
+                        name: "NominalDiameter".into(),
+                        value: PropertyValue::List(vec![PropertyValue::PositiveLengthFeet(
+                            diameter,
+                        )]),
+                    }],
+                },
+            });
+        }
         // A duct's length is also in its Pset_DuctSegmentTypeCommon, as on
         // every RE1 Mechanical duct.
         let duct_set = (decoded.class == "Duct").then_some("Pset_DuctSegmentTypeCommon");
