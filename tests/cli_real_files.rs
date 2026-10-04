@@ -14,9 +14,11 @@
 //!   releases of the same family differ in some stream;
 //! - `rvt-ifc-compare --fail-on-diff`: an export against itself exits 0 with
 //!   no entity count delta, and against Revit's own export exits 2;
-//! - `rvt-write`: patching a stream with its own decompressed bytes writes a
-//!   file whose patched stream decodes to the same bytes and whose other
-//!   streams are byte-identical.
+//! - `rvt-write`: patching `Formats/Latest` or `Global/Latest` with its own
+//!   decompressed bytes either writes a file whose patched stream rvt-rs reads
+//!   back as the same bytes, the other streams byte-identical, or is refused
+//!   with an error naming the stored pages; never exits 0 with a stream that
+//!   does not decode.
 //!
 //! Runs against `RVT_SAMPLES_DIR` (the phi-ag family corpus) and
 //! `RVT_PROJECT_CORPUS_DIR`. Skips what is absent.
@@ -293,51 +295,84 @@ fn ifc_compare_tells_an_export_from_itself_and_from_revits() {
 }
 
 #[test]
-fn write_with_a_streams_own_bytes_round_trips() {
-    let source = sample_for_year(2024);
-    if !source.exists() {
+fn write_round_trips_or_refuses_a_streams_own_bytes() {
+    let files = families();
+    if files.is_empty() {
         eprintln!("skipping: family corpus missing");
         return;
     }
-    let stream = "Formats/Latest";
-    let mut rf = rvt::RevitFile::open(&source).expect("open source");
-    let decoded = rvt::native_document::read_single(&mut rf, stream).expect("decode source stream");
     let dir = scratch("write");
-    let manifest = dir.join("patches.json");
-    let patches = serde_json::json!({
-        "patches": [{ "stream_name": stream, "new_decompressed": decoded, "framing": "RawGzipFromZero" }]
-    });
-    std::fs::write(&manifest, serde_json::to_vec(&patches).expect("manifest"))
-        .expect("write manifest");
-    let target = dir.join("patched.rfa");
-    ok(
-        "rvt-write",
-        &run(
-            env!("CARGO_BIN_EXE_rvt-write"),
-            &[
-                "--src".as_ref(),
-                source.as_os_str(),
-                "--dst".as_ref(),
-                target.as_os_str(),
-                "--patches".as_ref(),
-                manifest.as_os_str(),
-            ],
-        ),
-    );
-    let mut written = rvt::RevitFile::open(&target).expect("open written file");
-    assert_eq!(
-        rvt::native_document::read_single(&mut written, stream).expect("decode written stream"),
-        decoded,
-        "{stream} decodes to other bytes after the round trip"
-    );
-    let names = rf.stream_names();
-    assert_eq!(written.stream_names(), names, "the written file's streams");
-    for name in names.iter().filter(|n| n.as_str() != stream) {
-        assert_eq!(
-            written.read_stream(name).expect("written stream"),
-            rf.read_stream(name).expect("source stream"),
-            "{name} changed though no patch named it"
-        );
+    let (mut written_ok, mut refused) = (0, 0);
+    for (year, source) in &files {
+        for (stream, framing) in [
+            ("Formats/Latest", "RawGzipFromZero"),
+            ("Global/Latest", "CustomPrefix8"),
+        ] {
+            let mut rf = rvt::RevitFile::open(source).expect("open source");
+            let decoded =
+                rvt::native_document::read_single(&mut rf, stream).expect("decode source stream");
+            let manifest = dir.join("patches.json");
+            let patches = serde_json::json!({
+                "patches": [{ "stream_name": stream, "new_decompressed": decoded, "framing": framing }]
+            });
+            std::fs::write(&manifest, serde_json::to_vec(&patches).expect("manifest"))
+                .expect("write manifest");
+            let target = dir.join(format!("patched-{year}.rfa"));
+            let _ = std::fs::remove_file(&target);
+            let output = run(
+                env!("CARGO_BIN_EXE_rvt-write"),
+                &[
+                    "--src".as_ref(),
+                    source.as_os_str(),
+                    "--dst".as_ref(),
+                    target.as_os_str(),
+                    "--patches".as_ref(),
+                    manifest.as_os_str(),
+                ],
+            );
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert!(
+                    stderr.contains("page"),
+                    "{year} {stream}: rvt-write failed for another reason than the stored pages:\n{stderr}"
+                );
+                assert!(
+                    !target.exists(),
+                    "{year} {stream}: a refused patch left a file"
+                );
+                refused += 1;
+                continue;
+            }
+            // rvt-write said it wrote the stream: rvt-rs's reader must read
+            // back the bytes it was given, and nothing else may change.
+            let mut written = rvt::RevitFile::open(&target).expect("open written file");
+            let read_back =
+                rvt::native_document::read_single(&mut written, stream).unwrap_or_else(|e| {
+                    panic!(
+                        "{year} {stream}: rvt-write exited 0 but the stream does not decode: {e:#}"
+                    )
+                });
+            assert!(
+                read_back == decoded,
+                "{year} {stream}: decodes to other bytes after the round trip"
+            );
+            let names = rf.stream_names();
+            assert_eq!(
+                written.stream_names(),
+                names,
+                "{year}: the written file's streams"
+            );
+            for name in names.iter().filter(|n| n.as_str() != stream) {
+                assert_eq!(
+                    written.read_stream(name).expect("written stream"),
+                    rf.read_stream(name).expect("source stream"),
+                    "{year}: {name} changed though no patch named it"
+                );
+            }
+            written_ok += 1;
+        }
     }
     let _ = std::fs::remove_dir_all(&dir);
+    eprintln!("rvt-write: {written_ok} patches round-tripped, {refused} refused");
+    assert!(written_ok > 0, "no patch round-tripped");
 }
