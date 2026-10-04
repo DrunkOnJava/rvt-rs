@@ -60,7 +60,12 @@ fn hashed(key: &str) -> String {
 
 fn main() -> anyhow::Result<()> {
     let path = PathBuf::from(std::env::args().nth(1).expect("model path"));
-    let reference = path.with_extension("ifc");
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let dir = path.parent().unwrap_or(std::path::Path::new("."));
+    let reference = [dir.join(format!("{stem}_slim.ifc")), path.with_extension("ifc")]
+        .into_iter()
+        .find(|p| p.exists())
+        .unwrap_or_else(|| path.with_extension("ifc"));
     if !reference.exists() {
         println!("no reference export");
         return Ok(());
@@ -136,10 +141,11 @@ fn main() -> anyhow::Result<()> {
     let transforms =
         rvt::partition_instance_transforms::scan_instance_transforms(&mut rf, version, &doors)?;
     let model = RvtDocExporter.export_with_diagnostics(&mut rf)?.model;
+    let mut forms: BTreeMap<String, usize> = BTreeMap::new();
+    let mut printed = 0;
     for (tag, gid) in &revit {
-        let original = originals
-            .get(tag)
-            .and_then(|v| (v.len() == 1).then(|| *v.iter().next().expect("one")));
+        let values: Vec<u32> = originals.get(tag).into_iter().flatten().copied().collect();
+        let original = (values.len() == 1).then(|| values[0]);
         let actual = original.and_then(|o| ids.get(&o)).and_then(|symbol| {
             [false, true].into_iter().find(|flip| {
                 hashed(&format!(
@@ -148,6 +154,40 @@ fn main() -> anyhow::Result<()> {
                 )) == *gid
             })
         });
+        // Which GElement value, and which form, reproduces Revit's GlobalId.
+        let mut form = "none".to_string();
+        for value in &values {
+            if *value == u32::MAX {
+                let sub = ids
+                    .get(tag)
+                    .and_then(|own| rvt::revit_global_ids::sub_element_global_id(own, 2048));
+                if sub.as_deref() == Some(gid.as_str()) {
+                    form = "sub-element of the door".into();
+                }
+                continue;
+            }
+            let Some(symbol) = ids.get(value) else {
+                continue;
+            };
+            for flip in [false, true] {
+                if hashed(&format!(
+                    "{symbol}Sub-element:Flipped: {} InAssembly: False",
+                    if flip { "True" } else { "False" }
+                )) == *gid
+                {
+                    form = format!(
+                        "hash, flip {flip}, value {} of {}",
+                        values.iter().position(|v| v == value).unwrap_or(0) + 1,
+                        values.len()
+                    );
+                }
+            }
+        }
+        *forms.entry(form.clone()).or_default() += 1;
+        if printed < 12 && form == "none" {
+            println!("{tag}: GElement values {values:?}, Revit {gid}: none");
+            printed += 1;
+        }
         // rvt-rs's model: the door, its host wall, and its transform.
         let door = model.entities.iter().find_map(|e| match e {
             IfcEntity::BuildingElement {
@@ -192,10 +232,13 @@ fn main() -> anyhow::Result<()> {
                 *rotation_radians,
             ))
         });
-        println!(
-            "{tag}: original {original:?}, Revit's flip {actual:?}, rule from rvt-rs {predicted:?}, host {:?}",
-            door.map(|(_, h)| h)
-        );
+        if revit.len() <= 12 {
+            println!(
+                "{tag}: original {original:?}, Revit's flip {actual:?}, rule from rvt-rs {predicted:?}, host {:?}",
+                door.map(|(_, h)| h)
+            );
+        }
     }
+    println!("forms: {forms:?}");
     Ok(())
 }
