@@ -95,6 +95,12 @@ fn main() -> anyhow::Result<()> {
         rvt::partition_materials::scan_material_names(&mut rf, version, &declared)?
             .into_keys()
             .collect();
+    let levels: Vec<u32> =
+        rvt::partition_level_records::recover_partition_levels(&mut rf, version)?
+            .into_iter()
+            .map(|level| level.element_id)
+            .collect();
+    println!("levels {levels:?}, materials {}", materials.len());
     let mut our_type: BTreeMap<u32, u32> = BTreeMap::new();
     for element in rvt::walker::iter_elements(&mut rf)? {
         let type_id = element.fields.iter().find_map(|(name, value)| match value {
@@ -147,18 +153,44 @@ fn main() -> anyhow::Result<()> {
                 continue;
             }
             for flip in [None, Some(false), Some(true)] {
-                for material in std::iter::once(None).chain(materials.iter().map(Some)) {
-                    for assembly in [false, true] {
-                        let mut key = String::new();
-                        if let Some(flip) = flip {
-                            key += &format!("Flipped: {}", if flip { "True" } else { "False" });
-                        }
-                        if let Some(material) = material {
-                            key += &format!(" Material: {material}");
-                        }
-                        key += &format!(" InAssembly: {}", if assembly { "True" } else { "False" });
-                        if hashed(&format!("{symbol_gid}Sub-element:{key}")) == revit_gid {
-                            matched.push(format!("{whose} {symbol}: hash of {key:?}"));
+                for index in [None, Some(1), Some(2)] {
+                    for level in std::iter::once(None).chain(levels.iter().map(Some)) {
+                        for copy in [None, Some(1), Some(2)] {
+                            for material in std::iter::once(None).chain(materials.iter().map(Some))
+                            {
+                                for assembly in [false, true] {
+                                    let mut key = String::new();
+                                    if let Some(flip) = flip {
+                                        key += if flip {
+                                            "Flipped: True"
+                                        } else {
+                                            "Flipped: False"
+                                        };
+                                    }
+                                    if let Some(index) = index {
+                                        key += &format!(" Index: {index}");
+                                    }
+                                    if let Some(level) = level {
+                                        key += &format!(" Level: {level}");
+                                    }
+                                    if let Some(copy) = copy {
+                                        key += &format!(" Copy: {copy}");
+                                    }
+                                    if let Some(material) = material {
+                                        key += &format!(" Material: {material}");
+                                    }
+                                    key += if assembly {
+                                        " InAssembly: True"
+                                    } else {
+                                        " InAssembly: False"
+                                    };
+                                    if hashed(&format!("{symbol_gid}Sub-element:{key}"))
+                                        == revit_gid
+                                    {
+                                        matched.push(format!("{whose} {symbol}: hash of {key:?}"));
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -167,13 +199,22 @@ fn main() -> anyhow::Result<()> {
         let form = matched
             .first()
             .map(|m| {
-                let m = m.split(": ").skip(1).collect::<Vec<_>>().join(": ");
-                m.split(" Material: ").next().unwrap_or("").to_string()
-                    + if matched[0].contains("Material") {
-                        " + material"
-                    } else {
-                        ""
+                let mut shape = String::new();
+                for part in [
+                    "Flipped",
+                    "Index",
+                    "Level",
+                    "Copy",
+                    "Material",
+                    "InAssembly: True",
+                    "own GlobalId",
+                ] {
+                    if m.contains(part) {
+                        shape += part;
+                        shape += " ";
                     }
+                }
+                shape
             })
             .unwrap_or_else(|| "none".into());
         *summary.entry(format!("{ty_entity}: {form}")).or_default() += 1;
