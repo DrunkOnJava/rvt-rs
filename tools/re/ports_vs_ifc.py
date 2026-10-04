@@ -118,6 +118,23 @@ def main():
         print(f"  {count:4d}  {entity}  {system}  {'connected' if joined else 'open'}")
     for key in unwritten[:60]:
         print(f"  not written: {key} {revit_described[key]}")
+    # The connector indices each of Revit's ducts and pipes has a port for,
+    # and rvt-rs's for the same element.
+    def indices_by_element(described_ports, segment_ids):
+        out = {}
+        for element, index in described_ports:
+            if element in segment_ids:
+                out.setdefault(element, set()).add(index)
+        return out
+    revit_segment_ports = indices_by_element(revit_described, revit_segments)
+    ours_segment_ports = indices_by_element(described, revit_segments)
+    shapes = {}
+    for element in revit_segments:
+        shape = tuple(sorted(revit_segment_ports.get(element, ())))
+        shapes[shape] = shapes.get(shape, 0) + 1
+    print(f"Revit's {len(revit_segments)} ducts and pipes by the connector indices they have ports for: {sorted(shapes.items())}")
+    short = [e for e in revit_segments if ours_segment_ports.get(e, set()) != revit_segment_ports.get(e, set())]
+    print(f"{len(short)} of them rvt-rs gives other ports; first: {[(e, sorted(ours_segment_ports.get(e, ())), sorted(revit_segment_ports.get(e, ()))) for e in sorted(short)[:10]]}")
     try:
         findings, about_ports = port_schema_findings(args.rvt_rs_ifc)
         print(f"schema validation of rvt-rs's file: {len(findings)} findings, {len(about_ports)} about the port entities")
