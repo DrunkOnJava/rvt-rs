@@ -244,6 +244,24 @@ pub fn extract(
     summary.definition_diagnostics = diagnostics;
     Ok(summary)
 }
+/// Extract selected current indexed records' object graphs without the
+/// parameter-definition pass [`extract`] makes over every definition owner
+/// first, for callers that read objects' fields rather than saved parameter
+/// values (B80). Each record's saved metadata is read against no
+/// definitions.
+pub fn extract_graphs(
+    file: &mut RevitFile,
+    options: &Options,
+    emit: impl FnMut(Record) -> Result<()>,
+) -> Result<Summary> {
+    extract_records(
+        file,
+        options,
+        false,
+        &crate::native_parameter_definitions::Registry::default(),
+        emit,
+    )
+}
 /// A record group's records, `(id, offset, body start, body end)`: a
 /// 4-byte (Revit 2023) or 8-byte id, a header, the body and its length
 /// repeated after it. The group's declared object count and body bytes must

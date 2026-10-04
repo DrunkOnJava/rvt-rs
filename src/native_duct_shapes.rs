@@ -63,7 +63,7 @@ pub fn duct_type_shapes(
         selected_ids: types.clone(),
         ..native_document::Options::default()
     };
-    native_document::extract(rf, &options, |record| {
+    native_document::extract_graphs(rf, &options, |record| {
         if record.class_name.as_deref() != Some("AbsDuctType") {
             return Ok(());
         }
