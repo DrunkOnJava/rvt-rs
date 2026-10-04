@@ -1025,6 +1025,7 @@ fn export_rvt_doc(
         unplaced_wall_layers,
         element_type_ids,
         element_original_symbols,
+        element_facings,
     ) = append_production_walker_elements(
         rf,
         &mut entities,
@@ -1158,6 +1159,7 @@ fn export_rvt_doc(
         &building_storeys,
         &element_type_ids,
         &element_original_symbols,
+        &element_facings,
     );
     let (material_layer_sets, material_layer_usages) =
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
@@ -1953,6 +1955,7 @@ fn revit_model_global_ids(
     storeys: &[Storey],
     element_type_ids: &std::collections::BTreeMap<u32, u32>,
     element_original_symbols: &std::collections::BTreeMap<u32, u32>,
+    element_facings: &std::collections::BTreeMap<u32, [f64; 2]>,
 ) -> RevitGlobalIds {
     let mut out = RevitGlobalIds {
         document: rf
@@ -1965,6 +1968,7 @@ fn revit_model_global_ids(
     let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
         return out;
     };
+    let revit_version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
     if ids.is_empty() {
         return out;
     }
@@ -2005,25 +2009,27 @@ fn revit_model_global_ids(
         }
     }
     // RE-167: Revit gives a family instance's type its original symbol's
-    // GlobalId. A door's or window's is a hash of it with the door's flip
-    // (B72), not read yet, so those keep their symbol's.
-    let doors_and_windows: std::collections::BTreeSet<u32> = entities
-        .iter()
-        .filter_map(|entity| match entity {
-            entities::IfcEntity::BuildingElement {
-                ifc_type,
-                type_guid: Some(tag),
-                ..
-            } if ifc_type == "IFCDOOR" || ifc_type == "IFCWINDOW" => tag.parse().ok(),
-            _ => None,
-        })
-        .collect();
-    for (element, original) in element_original_symbols {
-        if doors_and_windows.contains(element) {
+    // GlobalId, and a door's or window's a hash of it with the door's flip
+    // (B72). An instance that uses its own geometry has no original symbol;
+    // its type, a door's too, is a sub-element of it (`InstanceAsType`).
+    let mut doors_and_windows: std::collections::BTreeMap<u32, usize> = Default::default();
+    for (index, entity) in entities.iter().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if ifc_type != "IFCDOOR" && ifc_type != "IFCWINDOW" {
             continue;
         }
-        // An instance that uses its own geometry has no original symbol;
-        // its type is a sub-element of it (RE-167, `InstanceAsType`).
+        if let Ok(id) = tag.parse::<u32>() {
+            doors_and_windows.entry(id).or_insert(index);
+        }
+    }
+    for (element, original) in element_original_symbols {
         if *original == crate::partition_schema_mvp::INSTANCE_GEOMETRY {
             if let Some(global_id) = ids.get(element).and_then(|own| {
                 crate::revit_global_ids::sub_element_global_id(own, INSTANCE_AS_TYPE)
@@ -2032,10 +2038,16 @@ fn revit_model_global_ids(
             }
             continue;
         }
-        if element_type_ids.get(element) == Some(original) {
+        let Some(global_id) = ids.get(original) else {
             continue;
-        }
-        if let Some(global_id) = ids.get(original) {
+        };
+        if let Some(&index) = doors_and_windows.get(element) {
+            let flipped = door_symbol_flipped(entities, index, element_facings.get(element));
+            out.element_types.insert(
+                *element,
+                door_type_global_id(global_id, flipped, revit_version),
+            );
+        } else if element_type_ids.get(element) != Some(original) {
             out.element_types.insert(*element, global_id.clone());
         }
     }
@@ -2045,6 +2057,71 @@ fn revit_model_global_ids(
 /// revit-ifc's sub-element index for a family instance written as its own
 /// type (`IFCFamilyInstanceSubElements.InstanceAsType`).
 const INSTANCE_AS_TYPE: u16 = 2048;
+
+/// Whether Revit's exporter takes a door's or window's symbol as flipped
+/// (B72, revit-ifc `DoorWindowInfo.CalculateDoorWindowInformation`): whether
+/// the side of its host wall's axis its box centre lies on differs from the
+/// side its own Y axis (`facing`) points to, a side being +Y of the wall's
+/// direction. The direction's sign cancels out; the axis runs along the
+/// longer side of the wall's plan box, turned by its rotation. A door with no
+/// host wall, or no facing read, is not flipped, as Revit's exporter has it
+/// for a door without a wall.
+fn door_symbol_flipped(
+    entities: &[entities::IfcEntity],
+    index: usize,
+    facing: Option<&[f64; 2]>,
+) -> bool {
+    const EPS: f64 = 1e-9;
+    let (
+        Some(facing),
+        Some(entities::IfcEntity::BuildingElement {
+            location_feet: Some(location),
+            host_element_index: Some(host),
+            ..
+        }),
+    ) = (facing, entities.get(index))
+    else {
+        return false;
+    };
+    let Some(entities::IfcEntity::BuildingElement {
+        location_feet: Some(wall),
+        rotation_radians,
+        extrusion: Some(body),
+        ..
+    }) = entities.get(*host)
+    else {
+        return false;
+    };
+    let turn = rotation_radians.unwrap_or(0.0)
+        + if body.width_feet >= body.depth_feet {
+            0.0
+        } else {
+            std::f64::consts::FRAC_PI_2
+        };
+    let wall_y = [-turn.sin(), turn.cos()];
+    let offset = (location[0] - wall[0]) * wall_y[0] + (location[1] - wall[1]) * wall_y[1];
+    let positive_hinge_side = offset > -EPS;
+    let facing_positive = wall_y[0] * facing[0] + wall_y[1] * facing[1] > -EPS;
+    positive_hinge_side != facing_positive
+}
+
+/// A door's or window's type GlobalId as Revit's exporter makes it (B72,
+/// revit-ifc `GUIDUtil`): MD5 of `<original symbol's GlobalId>Sub-element:
+/// Flipped: <True|False>`, then ` InAssembly: False` from revit-ifc 25.4 on,
+/// read as a .NET GUID. A file of Revit 2025 or later takes the suffix (RE1,
+/// exported by Revit 2026), one of 2024 not (Core Interior, exported by
+/// Revit 2024, all 138 of its doors and windows).
+fn door_type_global_id(symbol_global_id: &str, flipped: bool, revit_version: u32) -> String {
+    crate::revit_global_ids::hashed_global_id(&format!(
+        "{symbol_global_id}Sub-element:Flipped: {}{}",
+        if flipped { "True" } else { "False" },
+        if revit_version >= 2025 {
+            " InAssembly: False"
+        } else {
+            ""
+        }
+    ))
+}
 
 /// True when an emitted `IFCSLAB` carries no resolved thickness.
 ///
@@ -2680,6 +2757,7 @@ type WalkerElementData = (
     std::collections::BTreeMap<u32, Vec<LayerBand>>,
     std::collections::BTreeMap<u32, u32>,
     std::collections::BTreeMap<u32, u32>,
+    std::collections::BTreeMap<u32, [f64; 2]>,
 );
 
 fn append_production_walker_elements(
@@ -2711,6 +2789,7 @@ fn append_production_walker_elements(
             append.unplaced_wall_layers,
             append.element_type_ids,
             append.element_original_symbols,
+            append.element_facings,
         );
     }
     Default::default()

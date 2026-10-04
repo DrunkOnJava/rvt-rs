@@ -350,6 +350,8 @@ pub fn recover_partition_schema_mvp(
     // --- Curtain mullions and panels turned or tilted off the model's axes,
     // with their three axes (RE-106) ---
     attach_curtain_axes(rf, revit_version, &mut out.products);
+    // --- Each door's and window's facing, for its type's flip (B72) ---
+    attach_opening_facings(rf, revit_version, [&mut out.doors, &mut out.windows]);
     // --- Each family instance's original symbol, whose GlobalId Revit's
     // export gives its type (RE-167, B60) ---
     attach_original_symbols(
@@ -1354,6 +1356,56 @@ fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [D
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
     }
+}
+
+/// Fields holding a door's or window's facing (B72): the plan direction of
+/// its transform's Y axis (RE-87), which Revit's exporter sets against its
+/// host wall to decide whether the door's symbol is flipped.
+pub const OPENING_FACING_FIELDS: [&str; 2] = ["m_opening_facing_x", "m_opening_facing_y"];
+
+/// Give each door and window whose transform (RE-87) is found its facing
+/// ([`OPENING_FACING_FIELDS`], B72).
+fn attach_opening_facings(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    let ids: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter())
+        .filter_map(|element| element.id)
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+    else {
+        return;
+    };
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(transform) = element.id.and_then(|id| transforms.get(&id)) else {
+            continue;
+        };
+        let [x, y, _] = transform.axes[1];
+        for (name, value) in OPENING_FACING_FIELDS.iter().zip([x, y]) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+}
+
+/// The plan facing [`OPENING_FACING_FIELDS`] record.
+pub fn opening_facing_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [x, y] = OPENING_FACING_FIELDS.map(float);
+    Some([x?, y?])
 }
 
 /// Field carrying a family instance's original symbol (RE-167): the
