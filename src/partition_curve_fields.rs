@@ -167,37 +167,33 @@ pub fn scan_pipe_diameters(
     };
     let mut found: BTreeMap<u32, Option<(f64, f64)>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.partition_data_objects(&stream),
+        ) else {
             continue;
         };
         let buf = inflated.bytes();
-        for &id in pipes {
-            let mut header = id.to_le_bytes().to_vec();
-            header.extend_from_slice(&0u32.to_le_bytes());
-            for p in memchr::memmem::find_iter(buf, header.as_slice()) {
-                let Some(object) = crate::partition_room_parameters::verified_data_object(buf, p)
-                else {
-                    continue;
-                };
-                if object.class & 0xffff != tag {
-                    continue;
+        for &(p, object) in objects.iter() {
+            let id = object.element_id;
+            if object.class & 0xffff != tag || !pipes.contains(&id) {
+                continue;
+            }
+            let at = p + PIPE_INNER_DIAMETER_OFFSET;
+            let (Some(inner), Some(outer)) = (read_f64(buf, at), read_f64(buf, at + 8)) else {
+                continue;
+            };
+            if !(inner > 0.0 && inner < outer && outer < MAX_PIPE_DIAMETER_FEET) {
+                continue;
+            }
+            match found.get(&id) {
+                None => {
+                    found.insert(id, Some((inner, outer)));
                 }
-                let at = p + PIPE_INNER_DIAMETER_OFFSET;
-                let (Some(inner), Some(outer)) = (read_f64(buf, at), read_f64(buf, at + 8)) else {
-                    continue;
-                };
-                if !(inner > 0.0 && inner < outer && outer < MAX_PIPE_DIAMETER_FEET) {
-                    continue;
+                Some(Some(held)) if *held != (inner, outer) => {
+                    found.insert(id, None);
                 }
-                match found.get(&id) {
-                    None => {
-                        found.insert(id, Some((inner, outer)));
-                    }
-                    Some(Some(held)) if *held != (inner, outer) => {
-                        found.insert(id, None);
-                    }
-                    Some(_) => {}
-                }
+                Some(_) => {}
             }
         }
     }

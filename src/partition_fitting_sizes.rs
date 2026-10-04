@@ -24,7 +24,7 @@
 //! connector record, its smallest pair's. A fitting whose connectors disagree
 //! (a reducer) has no single nominal size and is given none.
 
-use crate::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
+use crate::partition_room_parameters::DATA_OBJECT_HEADER;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -147,31 +147,29 @@ pub fn scan_fitting_nominal_diameters(
     }
     let mut found: BTreeMap<u32, Option<f64>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.partition_data_objects(&stream),
+        ) else {
             continue;
         };
         let buf = inflated.bytes();
-        for &id in fittings {
-            for start in memchr::memmem::find_iter(buf, &id.to_le_bytes()) {
-                let Some(object) = verified_data_object(buf, start) else {
-                    continue;
-                };
-                if object.element_id != id {
-                    continue;
+        for (start, object) in objects.iter() {
+            let id = object.element_id;
+            if !fittings.contains(&id) {
+                continue;
+            }
+            let Some(size) = nominal_diameter(&buf[start + DATA_OBJECT_HEADER..object.end]) else {
+                continue;
+            };
+            match found.get(&id) {
+                None => {
+                    found.insert(id, size);
                 }
-                let Some(size) = nominal_diameter(&buf[start + DATA_OBJECT_HEADER..object.end])
-                else {
-                    continue;
-                };
-                match found.get(&id) {
-                    None => {
-                        found.insert(id, size);
-                    }
-                    Some(held) if *held != size => {
-                        found.insert(id, None);
-                    }
-                    Some(_) => {}
+                Some(held) if *held != size => {
+                    found.insert(id, None);
                 }
+                Some(_) => {}
             }
         }
     }
