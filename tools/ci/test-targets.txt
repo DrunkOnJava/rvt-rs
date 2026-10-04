@@ -65,6 +65,7 @@ real      spatial_property_sets
 real      type_global_ids
 real      unfilled_openings
 real      walker_to_ifc_integration
+real      wall_profile_openings
 
 cli       cli_ergonomics
 cli       cli_real_files
