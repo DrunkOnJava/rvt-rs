@@ -1297,7 +1297,10 @@ fn space_plan_outline(
 /// Contain each room's furniture, fixtures and equipment in its space, as
 /// Revit's export does (B63): a family instance written as one of
 /// [`ROOM_CONTENT_TYPES`], hosted by nothing, whose location lies in the plan
-/// outline of a space on its storey. Everything else stays in its storey.
+/// outline of a space on its storey, or, where it lies in none, whose plan box
+/// overlaps exactly one, as a cabinet recessed into a room's wall does (RE1
+/// Architecture's 375441, 0.08 ft outside its room). Everything else stays in
+/// its storey.
 pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
     use crate::element_record_plan_profiles::inside;
     let mut spaces = Vec::new();
@@ -1336,6 +1339,8 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             ifc_type,
             storey_index: Some(storey),
             location_feet: Some(location),
+            rotation_radians,
+            extrusion,
             host_element_index: None,
             property_set,
             ..
@@ -1346,14 +1351,41 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
         if !ROOM_CONTENT_TYPES.contains(&ifc_type.as_str()) || !is_family_instance(property_set) {
             continue;
         }
+        let holds = |outer: &PlanLoop, voids: &[PlanLoop], point: (f64, f64)| {
+            inside(outer, point) && !voids.iter().any(|ring| inside(ring, point))
+        };
         let point = (location[0], location[1]);
-        let space = spaces.iter().find(|(_, space_storey, outer, voids)| {
-            space_storey == storey
-                && inside(outer, point)
-                && !voids.iter().any(|ring| inside(ring, point))
-        });
-        if let Some((space, ..)) = space {
-            contents.entry(*space).or_default().push(index);
+        let on_storey = || {
+            spaces
+                .iter()
+                .filter(|(_, space_storey, ..)| space_storey == storey)
+        };
+        let mut space = on_storey()
+            .find(|(_, _, outer, voids)| holds(outer, voids, point))
+            .map(|(space, ..)| *space);
+        if space.is_none() {
+            let plan_box = extrusion
+                .as_ref()
+                .filter(|body| body.profile_override.is_none())
+                .and_then(|body| {
+                    space_plan_outline(location, rotation_radians.unwrap_or(0.0), body)
+                })
+                .map(|(outline, _)| outline);
+            if let Some(plan_box) = plan_box {
+                let overlapping: Vec<usize> = on_storey()
+                    .filter(|(_, _, outer, voids)| {
+                        plan_box.iter().any(|&corner| holds(outer, voids, corner))
+                            || outer.iter().any(|&vertex| inside(&plan_box, vertex))
+                    })
+                    .map(|(space, ..)| *space)
+                    .collect();
+                if let [only] = overlapping[..] {
+                    space = Some(only);
+                }
+            }
+        }
+        if let Some(space) = space {
+            contents.entry(space).or_default().push(index);
         }
     }
     for (space, elements) in contents {

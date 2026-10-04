@@ -369,9 +369,8 @@ pub fn write_adocument_field(value: &InstanceField, ft: &formats::FieldType, out
 ///
 /// Callers producing a new Global/Latest payload append the result
 /// to the decoded prefix bytes (everything before `entry_offset`),
-/// then re-encode with `truncated_gzip_encode_with_prefix8` and
-/// pass through `write_with_patches` as a `CustomPrefix8` stream
-/// patch.
+/// then pass it to `write_with_patches` as a `CustomPrefix8` stream
+/// patch, which encodes it.
 pub fn encode_adocument_fields(
     schema: &formats::ClassEntry,
     fields: &[(String, InstanceField)],

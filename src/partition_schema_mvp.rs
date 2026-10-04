@@ -507,6 +507,9 @@ pub fn recover_partition_schema_mvp(
         attach_joined_wall_materials(&mut out.columns, &out.walls);
     }
 
+    // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
+    attach_curtain_materials(rf, revit_version, &mut out.products);
+
     // --- Each window's opening from its type and transform (RE-93, #227) ---
     attach_window_openings(rf, revit_version, &mut out.windows);
     // --- Each door's rough opening from its type (RE-94, #227), after RE-84
@@ -1675,6 +1678,57 @@ fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [Decoded
                 InstanceField::String(crate::partition_type_materials::UNNAMED_MATERIAL.into()),
             ));
         }
+    }
+}
+
+/// Give each curtain wall mullion and panel ([`CURTAIN_AXES_CLASSES`]) that
+/// has no type material yet the material its type holds
+/// ([`crate::partition_curtain_materials`], RE-166), by name, as Revit's
+/// export associates it.
+fn attach_curtain_materials(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_curtain_materials as pcm;
+    let is_part = |element: &DecodedElement| CURTAIN_AXES_CLASSES.contains(&element.class.as_str());
+    if !pcm::supports_revit_version(revit_version) || !products.iter().any(is_part) {
+        return;
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return;
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
+    else {
+        return;
+    };
+    let materials: BTreeSet<u32> = names.keys().copied().collect();
+    let Ok(type_materials) = pcm::scan_curtain_type_materials(rf, revit_version, &materials) else {
+        return;
+    };
+    for element in products.iter_mut().filter(|element| is_part(element)) {
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_MATERIAL_FIELD)
+        {
+            continue;
+        }
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        let Some(name) = type_id
+            .and_then(|id| type_materials.get(&id))
+            .and_then(|material| names.get(material))
+        else {
+            continue;
+        };
+        element.fields.push((
+            TYPE_MATERIAL_FIELD.into(),
+            InstanceField::String(name.clone()),
+        ));
     }
 }
 
