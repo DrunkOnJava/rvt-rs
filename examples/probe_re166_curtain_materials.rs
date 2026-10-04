@@ -172,7 +172,6 @@ fn i64_at(b: &[u8], at: usize) -> Option<i64> {
 /// how many hold a material's ElementId as the `u64` at [`MATERIAL_AT`] from
 /// their header, and up to 8 of them with that value and its material name.
 fn survey(rf: &mut RevitFile, class_name: &str) -> anyhow::Result<String> {
-    let revit = rf.basic_file_info()?.version;
     let classes = rf.schema_classes()?;
     let Some(tag) = classes
         .classes
@@ -182,6 +181,18 @@ fn survey(rf: &mut RevitFile, class_name: &str) -> anyhow::Result<String> {
     else {
         return Ok(format!("{{\"class\":{class_name:?},\"tag\":null}}"));
     };
+    survey_tag(rf, tag)
+}
+
+/// [`survey`] by the class's tag, naming the class.
+fn survey_tag(rf: &mut RevitFile, tag: u32) -> anyhow::Result<String> {
+    let revit = rf.basic_file_info()?.version;
+    let class_name = rf
+        .schema_classes()?
+        .classes
+        .iter()
+        .find(|class| u32::from(class.tag) == tag)
+        .map_or_else(|| "?".to_string(), |class| class.name.clone());
     let declared: BTreeSet<u32> = elem_table::declared_element_ids(rf)?.into_iter().collect();
     let materials = partition_materials::scan_material_names(rf, revit, &declared)?;
     let entry_names = rf.element_names();
@@ -278,6 +289,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         by_name.entry(name.as_str()).or_default().push(*id);
     }
     let mut keys: BTreeMap<String, BTreeSet<u32>> = BTreeMap::new();
+    let mut classes_seen: BTreeSet<u32> = BTreeSet::new();
     let mut materials_found = BTreeMap::new();
     let streams = rf.partition_stream_names();
     for (tag, _, material, type_tag) in &elements {
@@ -325,6 +337,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
                                     ),
                                 };
                                 keys.entry(key).or_default().insert(*tag);
+                                classes_seen.insert(object.class & 0xffff);
                             }
                         }
                     }
@@ -342,6 +355,12 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     )];
     for (key, tags) in ranked.into_iter().take(KEYS_SHOWN) {
         out.push(format!("{{\"key\":{key:?},\"elements\":{}}}", tags.len()));
+    }
+    for tag in &classes_seen {
+        out.push(format!(
+            "{{\"file\":{path:?},\"survey_of_hit_class\":{}}}",
+            survey_tag(&mut rf, *tag)?
+        ));
     }
     for class in SURVEYED {
         out.push(format!(
