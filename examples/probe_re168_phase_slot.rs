@@ -120,7 +120,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
     let mut ranked: Vec<(u64, (usize, usize))> = first.into_iter().collect();
-    ranked.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    ranked.sort_by_key(|(_, (records, _))| std::cmp::Reverse(*records));
     for (slot, (records, in_export)) in ranked.into_iter().take(10) {
         let phase = u32::try_from(slot)
             .ok()
