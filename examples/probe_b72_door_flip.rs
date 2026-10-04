@@ -60,12 +60,19 @@ fn hashed(key: &str) -> String {
 
 fn main() -> anyhow::Result<()> {
     let path = PathBuf::from(std::env::args().nth(1).expect("model path"));
-    let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let stem = path
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
     let dir = path.parent().unwrap_or(std::path::Path::new("."));
-    let reference = [dir.join(format!("{stem}_slim.ifc")), path.with_extension("ifc")]
-        .into_iter()
-        .find(|p| p.exists())
-        .unwrap_or_else(|| path.with_extension("ifc"));
+    let reference = [
+        dir.join(format!("{stem}_slim.ifc")),
+        path.with_extension("ifc"),
+    ]
+    .into_iter()
+    .find(|p| p.exists())
+    .unwrap_or_else(|| path.with_extension("ifc"));
     if !reference.exists() {
         println!("no reference export");
         return Ok(());
