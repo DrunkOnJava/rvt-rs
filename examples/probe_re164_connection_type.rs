@@ -21,7 +21,7 @@
 //!   cargo run --profile ci --example probe_re164_connection_type -- MODEL.rvt ...
 
 use rvt::RevitFile;
-use rvt::partition_room_parameters::{enclosing_data_object, verified_data_object};
+use rvt::partition_room_parameters::{DATA_OBJECT_HEADER, data_objects};
 use std::collections::{BTreeMap, BTreeSet};
 
 const NAME: &str = "Generic";
@@ -58,15 +58,16 @@ fn probe(path: &str) -> anyhow::Result<String> {
         needle.extend(unit.to_le_bytes());
     }
     let streams = rf.partition_stream_names();
+    // One pass per stream over its data objects (B70): which hold the text.
     let mut holding_text: BTreeSet<u32> = BTreeSet::new();
     for stream in &streams {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        for hit in memchr::memmem::find_iter(buf, &needle) {
-            if let Some(owner) = enclosing_data_object(buf, hit) {
-                holding_text.insert(owner);
+        for (p, object) in data_objects(buf) {
+            if memchr::memmem::find(&buf[p + DATA_OBJECT_HEADER..object.end], &needle).is_some() {
+                holding_text.insert(object.element_id);
             }
         }
     }
@@ -86,27 +87,34 @@ fn probe(path: &str) -> anyhow::Result<String> {
             None => format!("{{\"id\":{id},\"name\":null}}"),
         }
     };
-    let mut out = Vec::new();
-    for &candidate in &candidates {
-        let mut holders: BTreeMap<u32, usize> = BTreeMap::new();
-        let mut own_objects = 0usize;
-        for stream in &streams {
-            let Ok(inflated) = rf.inflated_partition(stream) else {
-                continue;
-            };
-            let buf = inflated.bytes();
-            for hit in memchr::memmem::find_iter(buf, &candidate.to_le_bytes()) {
-                if verified_data_object(buf, hit).is_some() {
-                    own_objects += 1;
-                    continue;
-                }
-                if let Some(holder) =
-                    enclosing_data_object(buf, hit).filter(|holder| *holder != candidate)
-                {
-                    *holders.entry(holder).or_default() += 1;
+    // candidate -> holder -> hits, and candidate -> its own objects.
+    let mut held: BTreeMap<u32, BTreeMap<u32, usize>> = BTreeMap::new();
+    let mut own: BTreeMap<u32, usize> = BTreeMap::new();
+    for stream in &streams {
+        let Ok(inflated) = rf.inflated_partition(stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for (p, object) in data_objects(buf) {
+            if candidates.contains(&object.element_id) {
+                *own.entry(object.element_id).or_default() += 1;
+            }
+            for word in buf[p + DATA_OBJECT_HEADER..object.end].windows(4) {
+                let id = u32::from_le_bytes(word.try_into().expect("4 bytes"));
+                if id != object.element_id && candidates.contains(&id) {
+                    *held
+                        .entry(id)
+                        .or_default()
+                        .entry(object.element_id)
+                        .or_default() += 1;
                 }
             }
         }
+    }
+    let mut out = Vec::new();
+    for &candidate in &candidates {
+        let holders = held.get(&candidate).cloned().unwrap_or_default();
+        let own_objects = own.get(&candidate).copied().unwrap_or(0);
         let listed: Vec<String> = holders
             .iter()
             .take(MAX_HOLDERS)
