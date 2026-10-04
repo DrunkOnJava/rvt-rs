@@ -419,29 +419,71 @@ pub const TYPE_OBJECT_TAG_OFFSET: usize = 0x47;
 /// Where a railing type's name is looked for in its type object (RE-66,
 /// Revit 2024), as offsets from the ElementId.
 pub const RAILING_TYPE_NAME_WINDOW: std::ops::Range<usize> = 0x100..0x300;
-/// The bytes that follow a railing type's name: an unset field frame with
-/// tag `0x020b`.
-pub const RAILING_TYPE_NAME_END: [u8; 6] = [0xff, 0xff, 0xff, 0xff, 0x0b, 0x02];
+/// The class whose tag sits at [`TYPE_OBJECT_TAG_OFFSET`] of a railing
+/// type's object: [`TYPE_OBJECT_TAG`] on Revit 2024, `0x103c` on RE1's 2025
+/// schema (B45).
+pub const TYPE_OBJECT_CLASS: &str = "SymbolInfo";
+/// The class of the unset field frame that follows a railing type's name:
+/// `0x020b` on Revit 2024, `0x0220` on RE1's 2025 schema (B45).
+pub const RAILING_TYPE_NAME_END_CLASS: &str = "BalusterPattern";
+
+/// The tags a railing type's object is found and its name ended by
+/// ([`TYPE_OBJECT_CLASS`], [`RAILING_TYPE_NAME_END_CLASS`]). A class's tag
+/// is its definition ordinal, which moves between releases, so both are
+/// read from the file's own schema.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RailingTypeTags {
+    pub type_object: u16,
+    pub name_end: u16,
+}
+
+impl RailingTypeTags {
+    /// Both tags from a file's schema, `None` when it lacks either class.
+    pub fn from_classes(classes: &crate::formats::SchemaClasses) -> Option<Self> {
+        let tag = |name: &str| {
+            classes
+                .classes
+                .iter()
+                .find(|class| class.name == name)
+                .map(|class| class.tag)
+        };
+        Some(Self {
+            type_object: tag(TYPE_OBJECT_CLASS)?,
+            name_end: tag(RAILING_TYPE_NAME_END_CLASS)?,
+        })
+    }
+
+    /// The bytes that follow a railing type's name: the unset frame
+    /// `ff ff ff ff · name_end`.
+    fn name_end_frame(self) -> [u8; 6] {
+        let [low, high] = self.name_end.to_le_bytes();
+        [0xff, 0xff, 0xff, 0xff, low, high]
+    }
+}
 
 /// The names railing types keep in their type objects (RE-66), by
 /// ElementId, for the ids in `wanted`.
 ///
 /// Most railing types also have element data that [`find_element_data_names`]
 /// reads. Those that do not keep their name only in their type object
-/// ([`TYPE_OBJECT_TAG`]). The name is the one `u32 n · n UTF-16 units` that
-/// ends where [`RAILING_TYPE_NAME_END`] first starts within
-/// [`RAILING_TYPE_NAME_WINDOW`]. What comes before it varies: on Autodesk's
+/// (`tags.type_object` at [`TYPE_OBJECT_TAG_OFFSET`]). The name is the one
+/// `u32 n · n UTF-16 units` that ends where the frame of `tags.name_end`
+/// first starts within [`RAILING_TYPE_NAME_WINDOW`]. What comes before it varies: on Autodesk's
 /// Snowdon Towers 2024 sample most types put it at `+0x1ae`, and the two
 /// that carry a Uniformat code parameter put it at `+0x1cb`. An id whose
 /// occurrences give different names is dropped.
-pub fn find_railing_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, String> {
+pub fn find_railing_type_names(
+    buf: &[u8],
+    wanted: &BTreeSet<u32>,
+    tags: RailingTypeTags,
+) -> BTreeMap<u32, String> {
     let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
     for (id, id_at) in crate::partition_id_objects::find_id_objects(buf, wanted) {
         let tag_at = id_at + TYPE_OBJECT_TAG_OFFSET;
-        if buf.get(tag_at..tag_at + 2) != Some(&TYPE_OBJECT_TAG[..]) {
+        if buf.get(tag_at..tag_at + 2) != Some(&tags.type_object.to_le_bytes()[..]) {
             continue;
         }
-        let Some(name) = railing_type_name_at(buf, id_at) else {
+        let Some(name) = railing_type_name_at(buf, id_at, tags) else {
             continue;
         };
         match found.get_mut(&id) {
@@ -648,14 +690,28 @@ fn framed_string(buf: &[u8], start: usize, stop: usize, tag: [u8; 2]) -> Option<
     Some((text, end))
 }
 
-/// The one name that ends at the first [`RAILING_TYPE_NAME_END`] of the
-/// type object whose ElementId starts at `id_at`.
-fn railing_type_name_at(buf: &[u8], id_at: usize) -> Option<String> {
+/// The one name that ends at the first name-end frame of the type object
+/// whose ElementId starts at `id_at`.
+fn railing_type_name_at(buf: &[u8], id_at: usize, tags: RailingTypeTags) -> Option<String> {
     let start = id_at.checked_add(RAILING_TYPE_NAME_WINDOW.start)?;
     let stop = id_at
         .checked_add(RAILING_TYPE_NAME_WINDOW.end)?
         .min(buf.len());
-    let end = start + memchr::memmem::find(buf.get(start..stop)?, &RAILING_TYPE_NAME_END)?;
+    let end = start + memchr::memmem::find(buf.get(start..stop)?, &tags.name_end_frame())?;
+    name_ending_at(buf, end)
+}
+
+/// A railing type's name in its `StairsRailingAttr` data object (RE-153,
+/// B45, Revit 2025): the one name that ends at the object's first name-end
+/// frame, as in RE-66's type objects. RE1 Architecture's type 446543 holds
+/// "-" there, at +571 of its 1,253-byte object.
+pub fn railing_type_name_in(object: &[u8], tags: RailingTypeTags) -> Option<String> {
+    let end = memchr::memmem::find(object, &tags.name_end_frame())?;
+    name_ending_at(object, end)
+}
+
+/// The one `u32 n · n UTF-16 units` name that ends at `end` of `buf`.
+fn name_ending_at(buf: &[u8], end: usize) -> Option<String> {
     let mut names = (1..=NAME_MAX_UNITS).filter_map(|units| {
         let at = end.checked_sub(4 + 2 * units)?;
         if read_u32(buf, at)? as usize != units {

@@ -178,9 +178,10 @@ fn re1_names_are_revits() {
     // its opening alone since RE-84, as Revit writes it, so it is not a
     // named element. Mechanical's 6 pipes and Plumbing's 62 of 63 are named
     // from the type in their reference list (RE-130), and the 63rd from its
-    // curve object (RE-134, B29).
+    // curve object (RE-134, B29). Architecture's railing 462556 is named from
+    // the type its own data object names (B45).
     for (model, expected) in [
-        ("Architecture", 72),
+        ("Architecture", 73),
         ("Mechanical", 49),
         ("Plumbing", 124),
         ("Electrical", 46),
@@ -294,13 +295,15 @@ fn re1_system_type_names_are_revits() {
         eprintln!("skipping: no RE1 Architecture model and reference export");
         return;
     }
-    // Seven basic walls and the curtain wall (RE-46), whose type is also `-`.
+    // Seven basic walls and the curtain wall (RE-46), whose type is also `-`,
+    // and the railing, typed `-` from its own data object (B45).
     assert_eq!(
         check_system_type_names(&rvt, &reference, 2025),
         [
             ("Ceiling".to_string(), 6),
             ("CurtainWall".to_string(), 1),
             ("Floor".to_string(), 2),
+            ("Railing".to_string(), 1),
             ("Wall".to_string(), 7),
         ]
     );

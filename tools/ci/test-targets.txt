@@ -30,6 +30,7 @@ real      curtain_wall_doors
 real      curtain_walls
 real      design_options
 real      door_type_global_ids
+real      duct_and_pipe_ports
 real      duct_fields
 real      duct_segment_type_common
 real      elem_table_corpus         skip=declared_element_ids_returns_sorted_deduped_set
@@ -50,6 +51,7 @@ real      native_partitions_walk
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
 real      project_corpus_smoke
+real      railing_type
 real      re15_geometry_invariants
 real      re19_door_window_wall_negative
 real      reference_values
