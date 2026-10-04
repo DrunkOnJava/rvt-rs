@@ -301,18 +301,47 @@ pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
     let u32_at = |p: usize| u32::from_le_bytes(buf[p..p + 4].try_into().expect("4 bytes"));
     let mut out = Vec::new();
     let mut p = 0;
+    let (mut failed, mut failed_bytes, mut gap_steps) = (0usize, 0usize, 0usize);
+    let mut failed_time = std::time::Duration::ZERO;
+    let mut ok_time = std::time::Duration::ZERO;
     while p + DATA_OBJECT_HEADER <= buf.len() {
         let size = u32_at(p + 12) as usize;
         let end = p + DATA_OBJECT_HEADER + size;
         let plausible =
             u32_at(p + 4) == 0 && size >= 4 && end <= buf.len() && u32_at(end - 4) as usize == size;
-        match plausible.then(|| verified_data_object(buf, p)).flatten() {
+        let verified = if plausible {
+            let t = std::time::Instant::now();
+            let verified = verified_data_object(buf, p);
+            if verified.is_some() {
+                ok_time += t.elapsed();
+            } else {
+                failed_time += t.elapsed();
+                failed += 1;
+                failed_bytes += size;
+            }
+            verified
+        } else {
+            None
+        };
+        match verified {
             Some(object) => {
                 out.push((p, object));
                 p = object.end;
             }
-            None => p += 1,
+            None => {
+                gap_steps += 1;
+                p += 1
+            }
         }
+    }
+    if buf.len() > 1_000_000 {
+        eprintln!(
+            "[subtiming] data_objects counters: {} bytes, {} objects in {:.3}s, {failed} failed plausible headers of {failed_bytes} bytes in {:.3}s, {gap_steps} single steps",
+            buf.len(),
+            out.len(),
+            ok_time.as_secs_f64(),
+            failed_time.as_secs_f64()
+        );
     }
     out
 }
