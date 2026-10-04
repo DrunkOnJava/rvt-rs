@@ -63,6 +63,7 @@ real      unfilled_openings
 real      walker_to_ifc_integration
 
 cli       cli_ergonomics
+cli       cli_real_files
 cli       parameter_diagnostics
 cli       rvt_dump_cli
 cli       rvt_ifc_diagnostics_cli
