@@ -939,7 +939,9 @@ fn export_rvt_doc(
     quality_mode: ExportQualityMode,
     walker_limits: crate::walker::WalkerLimits,
 ) -> Result<IfcModel> {
+    let __timing = std::time::Instant::now();
     let policy = export_content::ExportContentPolicy::for_quality_mode(quality_mode);
+    eprintln!("[timing] export {:.1}s before line 943", __timing.elapsed().as_secs_f64());
     // Identity from PartAtom if present; fall back to
     // BasicFileInfo's original path.
     let part = rf.part_atom().ok();
@@ -972,6 +974,7 @@ fn export_rvt_doc(
         }
     };
 
+    eprintln!("[timing] export {:.1}s before line 975", __timing.elapsed().as_secs_f64());
     // OmniClass / Uniformat classification references, if present
     // in PartAtom.
     let mut classifications = Vec::new();
@@ -994,6 +997,7 @@ fn export_rvt_doc(
         }
     }
 
+    eprintln!("[timing] export {:.1}s before line 997", __timing.elapsed().as_secs_f64());
     // A single IfcProject entity at the model level (step_writer
     // emits its STEP form; other entity types are wired in below
     // from the walker's element stream).
@@ -1003,6 +1007,7 @@ fn export_rvt_doc(
         long_name: part.as_ref().and_then(|p| p.title.clone()),
     }];
 
+    eprintln!("[timing] export {:.1}s before line 1006", __timing.elapsed().as_secs_f64());
     // L5B-11.7 / Lane Seven — production walker elements honour the
     // quality-mode content policy: HostObjAttr never emits, Levels
     // become storeys, and geometry/host recovery attaches only when
@@ -1023,6 +1028,7 @@ fn export_rvt_doc(
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
 
+    eprintln!("[timing] export {:.1}s before line 1026", __timing.elapsed().as_secs_f64());
     // #218 / RE-24 — the Revit `Level` elements themselves, with their
     // own names and elevations, replace whatever the walker produced.
     // Runs before the ArcWall path so its `building_storeys.is_empty()`
@@ -1040,6 +1046,7 @@ fn export_rvt_doc(
         );
     }
 
+    eprintln!("[timing] export {:.1}s before line 1043", __timing.elapsed().as_secs_f64());
     // RE-14.3 / RE-15 — shared partition ArcWall path. Production
     // `iter_elements` also merges validated ArcWalls as
     // `DecodedElement`s for API consumers; IFC emission of those
@@ -1114,6 +1121,7 @@ fn export_rvt_doc(
         }
     }
 
+    eprintln!("[timing] export {:.1}s before line 1117", __timing.elapsed().as_secs_f64());
     // #219 / RE-27 — every element whose record named exactly one
     // Revit `Level` is contained in that Level's storey. Runs before
     // the #213 elevation join because the file *states* this binding
@@ -1121,12 +1129,14 @@ fn export_rvt_doc(
     // leaves an already-bound element alone.
     apply_record_level_reference_storeys(&mut entities, &building_storeys, &level_storey_bind);
 
+    eprintln!("[timing] export {:.1}s before line 1124", __timing.elapsed().as_secs_f64());
     // #213 — element-record base elevations become storey elevations,
     // then bind. Runs after every element source has contributed so it
     // sees the whole record set, and before the geometry strip so the
     // no-geometry modes (where no record bbox was attached in the
     // first place) find nothing to bind and change nothing.
     apply_element_record_storeys(&mut entities, &mut building_storeys);
+    eprintln!("[timing] export {:.1}s before line 1130", __timing.elapsed().as_secs_f64());
     // RE-157: a pipe's invert is above its storey, known only now.
     export_content::pipe_inverts_above_storeys(&mut entities, &building_storeys);
 
@@ -1152,6 +1162,7 @@ fn export_rvt_doc(
         material_profile_sets_from_sections(&mut entities, &mut material_constituent_sets);
     let opening_cuts = opening_cuts_through_hosts(&entities);
 
+    eprintln!("[timing] export {:.1}s total", __timing.elapsed().as_secs_f64());
     Ok(IfcModel {
         project_name,
         description,

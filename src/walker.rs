@@ -1443,6 +1443,7 @@ pub fn iter_elements_with_control(
     limits: WalkerLimits,
     control: &WalkerControl,
 ) -> Result<impl Iterator<Item = DecodedElement> + use<>> {
+    let __timing = std::time::Instant::now();
     control.check()?;
     control.report(Stage::SchemaParse, 0, None);
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
@@ -1509,6 +1510,7 @@ pub fn iter_elements_with_control(
     control.report(Stage::ElementDecode, candidate_total, Some(candidate_total));
     control.report(Stage::PartitionScan, 0, None);
 
+    eprintln!("[timing] walker {:.1}s before line 1512", __timing.elapsed().as_secs_f64());
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.
     if let Ok(bfi) = rf.basic_file_info() {
@@ -1548,6 +1550,7 @@ pub fn iter_elements_with_control(
 
     control.check()?;
     control.report(Stage::PartitionScan, 1, Some(1));
+    eprintln!("[timing] walker {:.1}s total", __timing.elapsed().as_secs_f64());
     Ok(out.into_iter())
 }
 

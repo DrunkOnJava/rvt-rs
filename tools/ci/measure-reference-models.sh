@@ -129,8 +129,11 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     [ -f "$sample" ] || continue
     dir="$OUT/sample-$(basename "$sample" .rvt)"; mkdir -p "$dir"
     echo "::group::$(basename "$sample")"
+    echo "info start $(date +%T)"
     info "$sample" "$dir"
+    echo "ifc start $(date +%T)"
     "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" > "$dir/rvt-ifc.log" 2>&1
+    echo "ifc end $(date +%T)"
     echo "exit $?" >> "$dir/rvt-ifc.log"
     [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
     if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
