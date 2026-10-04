@@ -184,6 +184,11 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **`--saved-meshes` keeps to the releases it read before (B77).** With the
+  native record path reading Revit 2025 and 2026, `rvt-ifc` and `rvt-gltf`
+  would have drawn 2025 and 2026 family instances from saved scenes no run
+  has compared with Revit's export. Until that is measured, the flag reads
+  2023, 2024 and 2027 only, and on other files keeps the bodies and says so.
 - **`rvt-write` refuses a patch it cannot write readably (B69).** Revit stores
   `Formats/Latest`, `Global/Latest` and the partitions in 65,249-byte pages
   ending in a checksum rvt-rs cannot compute; a patch reaching a full page is
