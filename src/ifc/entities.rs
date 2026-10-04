@@ -203,6 +203,11 @@ pub enum IfcEntity {
         outline_feet: Vec<(f64, f64)>,
         depth_feet: f64,
     },
+    /// The building elements a room's space contains (B63): `elements`
+    /// (indices into `IfcModel::entities`) are contained in the `IfcSpace` at
+    /// `space` instead of their storey, as Revit's export contains a room's
+    /// furniture, fixtures and equipment. They keep their `storey_index`.
+    SpaceContainment { space: usize, elements: Vec<usize> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -838,7 +838,7 @@ fn merge_collinear(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
 }
 
 /// Whether `point` lies inside the closed loop `polygon` (even-odd rule).
-fn inside(polygon: &[(f64, f64)], point: (f64, f64)) -> bool {
+pub fn inside(polygon: &[(f64, f64)], point: (f64, f64)) -> bool {
     let mut within = false;
     let mut previous = match polygon.last() {
         Some(last) => *last,

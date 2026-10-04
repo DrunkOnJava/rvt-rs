@@ -1129,6 +1129,9 @@ fn export_rvt_doc(
     apply_element_record_storeys(&mut entities, &mut building_storeys);
     // RE-157: a pipe's invert is above its storey, known only now.
     export_content::pipe_inverts_above_storeys(&mut entities, &building_storeys);
+    // B63: a room's furniture, fixtures and equipment are contained in its
+    // space, which needs both on their storeys.
+    export_content::contain_in_spaces(&mut entities);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);

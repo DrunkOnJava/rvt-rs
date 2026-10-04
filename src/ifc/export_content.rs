@@ -1226,6 +1226,114 @@ pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], s
     }
 }
 
+/// The entities a room's space contains in Revit's export (B63): on RE1
+/// Architecture its furniture, sanitary terminals and equipment written as
+/// proxies, and no wall, door, slab, covering or curtain wall.
+const ROOM_CONTENT_TYPES: [&str; 3] = [
+    "IFCFURNITURE",
+    "IFCSANITARYTERMINAL",
+    "IFCBUILDINGELEMENTPROXY",
+];
+
+/// A space's plan outline and voids in model coordinates: its body's profile
+/// moved to its placement.
+fn space_plan_outline(
+    location: &[f64; 3],
+    rotation: f64,
+    extrusion: &entities::Extrusion,
+) -> Option<(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)> {
+    let (sin, cos) = rotation.sin_cos();
+    let place = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
+        ring.iter()
+            .map(|(x, y)| {
+                (
+                    location[0] + x * cos - y * sin,
+                    location[1] + x * sin + y * cos,
+                )
+            })
+            .collect()
+    };
+    match &extrusion.profile_override {
+        Some(entities::ProfileDef::ArbitraryClosed { points }) => Some((place(points), Vec::new())),
+        Some(entities::ProfileDef::ArbitraryWithVoids { points, voids }) => Some((
+            place(points),
+            voids.iter().map(|ring| place(ring)).collect(),
+        )),
+        None => {
+            let (w, d) = (extrusion.width_feet / 2.0, extrusion.depth_feet / 2.0);
+            Some((place(&[(-w, -d), (w, -d), (w, d), (-w, d)]), Vec::new()))
+        }
+        Some(_) => None,
+    }
+}
+
+/// Contain each room's furniture, fixtures and equipment in its space, as
+/// Revit's export does (B63): a family instance written as one of
+/// [`ROOM_CONTENT_TYPES`], hosted by nothing, whose location lies in the plan
+/// outline of a space on its storey. Everything else stays in its storey.
+pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
+    use crate::element_record_plan_profiles::inside;
+    let mut spaces = Vec::new();
+    for (index, entity) in entities.iter().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            ifc_type,
+            storey_index: Some(storey),
+            location_feet: Some(location),
+            rotation_radians,
+            extrusion: Some(extrusion),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if ifc_type != "IFCSPACE" {
+            continue;
+        }
+        if let Some((outer, voids)) =
+            space_plan_outline(location, rotation_radians.unwrap_or(0.0), extrusion)
+        {
+            spaces.push((index, *storey, outer, voids));
+        }
+    }
+    let is_family_instance = |set: &Option<PropertySet>| {
+        set.as_ref().is_some_and(|set| {
+            set.properties.iter().any(|p| {
+                p.name == "RevitClass"
+                    && matches!(&p.value, PropertyValue::Text(class) if class == "FamilyInstance")
+            })
+        })
+    };
+    let mut contents: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (index, entity) in entities.iter().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            ifc_type,
+            storey_index: Some(storey),
+            location_feet: Some(location),
+            host_element_index: None,
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if !ROOM_CONTENT_TYPES.contains(&ifc_type.as_str()) || !is_family_instance(property_set) {
+            continue;
+        }
+        let point = (location[0], location[1]);
+        let space = spaces.iter().find(|(_, space_storey, outer, voids)| {
+            space_storey == storey
+                && inside(outer, point)
+                && !voids.iter().any(|ring| inside(ring, point))
+        });
+        if let Some((space, ..)) = space {
+            contents.entry(*space).or_default().push(index);
+        }
+    }
+    for (space, elements) in contents {
+        entities.push(entities::IfcEntity::SpaceContainment { space, elements });
+    }
+}
+
 /// A room's `Pset_SpaceCommon` (RE-153), as Revit's export writes it:
 /// `Reference` (`IfcIdentifier`) its name and number, and `FloorCovering`
 /// (`IfcLabel`) its Floor Finish. `None` when neither was read.
