@@ -155,7 +155,7 @@ fn re1_fitting_nominal_diameters_are_revits() {
     };
     let mut compared = 0;
     let mut failures = Vec::new();
-    for model in ["Plumbing", "Mechanical"] {
+    for (model, expected) in [("Plumbing", 42), ("Mechanical", 0)] {
         let rvt = dir.join(format!("RE1-{model}.rvt"));
         let reference = dir.join(format!("RE1-{model}.ifc"));
         if !rvt.exists() || !reference.exists() {
@@ -164,6 +164,11 @@ fn re1_fitting_nominal_diameters_are_revits() {
         }
         let theirs =
             nominal_diameters(&std::fs::read_to_string(&reference).expect("reference IFC"));
+        assert_eq!(
+            theirs.values().filter(|v| v.is_some()).count(),
+            expected,
+            "RE1 {model}: pipe fittings with Revit's NominalDiameter in the reference export"
+        );
         let mut rf = RevitFile::open(&rvt).expect("open");
         let result = RvtDocExporter
             .export_with_diagnostics(&mut rf)
