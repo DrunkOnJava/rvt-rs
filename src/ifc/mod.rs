@@ -2112,8 +2112,7 @@ fn door_symbol_flipped(
 /// exported by Revit 2026), one of 2024 not (Core Interior, exported by
 /// Revit 2024, all 138 of its doors and windows).
 fn door_type_global_id(symbol_global_id: &str, flipped: bool, revit_version: u32) -> String {
-    use md5::{Digest, Md5};
-    let key = format!(
+    crate::revit_global_ids::hashed_global_id(&format!(
         "{symbol_global_id}Sub-element:Flipped: {}{}",
         if flipped { "True" } else { "False" },
         if revit_version >= 2025 {
@@ -2121,12 +2120,7 @@ fn door_type_global_id(symbol_global_id: &str, flipped: bool, revit_version: u32
         } else {
             ""
         }
-    );
-    let digest: [u8; 16] = Md5::digest(key.as_bytes())
-        .as_slice()
-        .try_into()
-        .expect("an MD5 digest is 16 bytes");
-    crate::revit_global_ids::compress_ifc_guid(crate::revit_global_ids::canonical_guid(digest))
+    ))
 }
 
 /// True when an emitted `IFCSLAB` carries no resolved thickness.
