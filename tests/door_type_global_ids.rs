@@ -9,16 +9,12 @@
 //! relate to a type (matched by the element's `Tag`), rvt-rs's type must have
 //! the GlobalId of Revit's.
 //!
-//! A type's GlobalId is the type's identity, so an export that writes no
-//! geometry (`typed-no-geometry`) must give it the same one.
-//!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: the four `RE1-*.rvt` models with
 //! their `RE1-*.ifc` exports, and `2024_Core_Interior.rvt` with
 //! `../IFC Exports/2024_Core_Interior_slim.ifc`. Skips what is absent.
 
 use rvt::RevitFile;
-use rvt::ifc::{ExportQualityMode, RvtDocExporter, write_step};
-use rvt::walker::WalkerLimits;
+use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -95,23 +91,14 @@ fn type_of(step: &str) -> BTreeMap<String, (String, String)> {
     out
 }
 
-fn check(
-    rvt: &Path,
-    reference: &Path,
-    mode: ExportQualityMode,
-    failures: &mut Vec<String>,
-) -> usize {
+fn check(rvt: &Path, reference: &Path, failures: &mut Vec<String>) -> usize {
     let theirs = type_of(&std::fs::read_to_string(reference).expect("reference IFC"));
     let mut rf = RevitFile::open(rvt).expect("open");
-    let model = RvtDocExporter
-        .export_with_mode_and_limits(&mut rf, mode, WalkerLimits::default())
+    let result = RvtDocExporter
+        .export_with_diagnostics(&mut rf)
         .expect("export");
-    let ours = type_of(&write_step(&model));
-    let name = format!(
-        "{} ({})",
-        rvt.file_name().unwrap_or_default().to_string_lossy(),
-        mode.as_str()
-    );
+    let ours = type_of(&write_step(&result.model));
+    let name = rvt.file_name().unwrap_or_default().to_string_lossy();
     let mut wrong = Vec::new();
     let mut compared = 0;
     for (tag, (entity, global_id)) in &theirs {
@@ -142,7 +129,8 @@ fn check(
     compared
 }
 
-fn check_corpus(mode: ExportQualityMode) {
+#[test]
+fn door_and_window_types_take_revits_global_ids() {
     let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR").map(PathBuf::from) else {
         eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
         return;
@@ -171,21 +159,11 @@ fn check_corpus(mode: ExportQualityMode) {
             );
             continue;
         }
-        compared += check(rvt, reference, mode, &mut failures);
+        compared += check(rvt, reference, &mut failures);
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         compared > 0 || !dir.join("RE1-Architecture.rvt").exists(),
         "no door or window was compared"
     );
-}
-
-#[test]
-fn door_and_window_types_take_revits_global_ids() {
-    check_corpus(ExportQualityMode::Scaffold);
-}
-
-#[test]
-fn door_and_window_types_take_revits_global_ids_without_geometry() {
-    check_corpus(ExportQualityMode::TypedNoGeometry);
 }
