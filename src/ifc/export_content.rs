@@ -1235,15 +1235,18 @@ const ROOM_CONTENT_TYPES: [&str; 3] = [
     "IFCBUILDINGELEMENTPROXY",
 ];
 
+/// A closed plan loop, model feet.
+type PlanLoop = Vec<(f64, f64)>;
+
 /// A space's plan outline and voids in model coordinates: its body's profile
 /// moved to its placement.
 fn space_plan_outline(
     location: &[f64; 3],
     rotation: f64,
     extrusion: &entities::Extrusion,
-) -> Option<(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)> {
+) -> Option<(PlanLoop, Vec<PlanLoop>)> {
     let (sin, cos) = rotation.sin_cos();
-    let place = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
+    let place = |ring: &[(f64, f64)]| -> PlanLoop {
         ring.iter()
             .map(|(x, y)| {
                 (
