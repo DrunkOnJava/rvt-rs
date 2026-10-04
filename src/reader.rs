@@ -103,7 +103,19 @@ pub struct RevitFile {
     element_names: Option<Arc<crate::partition_names::ElementNames>>,
     /// Memoised design option sets and their primary options (RE-40).
     design_options: Option<Arc<crate::partition_design_options::DesignOptions>>,
+    /// Memoised production walk (B71): the elements
+    /// [`crate::walker::iter_elements_with_control`] yields for a minimum
+    /// score and walker limits. An export walks once to write and again for
+    /// its diagnostics' class counts; the second reuses the first.
+    walk: Option<CachedWalk>,
 }
+
+/// A memoised walk: its minimum score, its limits and its elements.
+type CachedWalk = (
+    i64,
+    crate::walker::WalkerLimits,
+    Arc<Vec<crate::walker::DecodedElement>>,
+);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
@@ -231,6 +243,7 @@ impl RevitFile {
             second_prologue_ids: None,
             element_names: None,
             design_options: None,
+            walk: None,
         })
     }
 
@@ -285,6 +298,30 @@ impl RevitFile {
             Arc::new(crate::partition_names::compute_element_names(self).unwrap_or_default());
         self.element_names = Some(Arc::clone(&computed));
         computed
+    }
+
+    /// The elements a production walk with `min_score` and `limits` yielded
+    /// on this file, when one ran (B71).
+    pub(crate) fn cached_walk(
+        &self,
+        min_score: i64,
+        limits: crate::walker::WalkerLimits,
+    ) -> Option<Arc<Vec<crate::walker::DecodedElement>>> {
+        self.walk
+            .as_ref()
+            .filter(|(score, held, _)| *score == min_score && *held == limits)
+            .map(|(_, _, elements)| Arc::clone(elements))
+    }
+
+    /// Keep a production walk's elements for later walks with the same
+    /// `min_score` and `limits` (B71).
+    pub(crate) fn store_walk(
+        &mut self,
+        min_score: i64,
+        limits: crate::walker::WalkerLimits,
+        elements: Arc<Vec<crate::walker::DecodedElement>>,
+    ) {
+        self.walk = Some((min_score, limits, elements));
     }
 
     /// Design option sets and their primary options, memoised (RE-40).
