@@ -949,7 +949,10 @@ fn railing_type_picks(
             continue;
         };
         let buf = inflated.bytes();
-        for (p, object) in crate::partition_room_parameters::data_objects(buf) {
+        let Ok(objects) = rf.partition_data_objects(&stream) else {
+            continue;
+        };
+        for &(p, object) in objects.iter() {
             let class = object.class & 0xffff;
             if class == type_tag {
                 let name = name_tags.and_then(|tags| {
@@ -1700,7 +1703,10 @@ fn attach_original_symbols<const N: usize>(
             .and_then(|number| number.parse::<u32>().ok())
             .unwrap_or(0);
         let buf = inflated.bytes();
-        for (p, object) in crate::partition_room_parameters::data_objects(buf) {
+        let Ok(objects) = rf.partition_data_objects(&stream) else {
+            continue;
+        };
+        for &(p, object) in objects.iter() {
             let class = object.class & 0xffff;
             if symbol_tags.contains(&class) {
                 symbols.insert(object.element_id);
