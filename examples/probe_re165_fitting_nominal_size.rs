@@ -12,7 +12,8 @@
 //! or the radius, and the `i64` just before it (a parameter id where the
 //! value is a parameter entry) or else its offset from the object's start.
 //! The probe prints how many fittings each key explains, so a key that
-//! explains all of them is the stored value.
+//! explains all of them is the stored value. For four fittings ([`DUMPED`])
+//! it also prints every hit with the bytes before it.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re165_fitting_nominal_size -- MODEL.rvt ...
@@ -26,6 +27,11 @@ use std::path::Path;
 const TOLERANCE_FEET: f64 = 1e-6;
 /// Keys printed, most fittings first.
 const KEYS_SHOWN: usize = 15;
+/// Fittings whose every hit is dumped: an elbow and a tee (both found at the
+/// common offset), and the cap and the vent tee that are not.
+const DUMPED: [u32; 4] = [443813, 443941, 443957, 447853];
+/// Bytes shown before each dumped hit.
+const DUMP_BEFORE: usize = 64;
 
 /// `#id -> (entity, args)` for every line of a STEP file.
 fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
@@ -180,6 +186,8 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     // key -> the fittings it explains
     let mut keys: BTreeMap<String, BTreeSet<u32>> = BTreeMap::new();
     let mut with_objects: BTreeSet<u32> = BTreeSet::new();
+    // For the fittings in DUMPED: every hit's offset, and the bytes before it.
+    let mut dumps: Vec<String> = Vec::new();
     for name in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&name) else {
             continue;
@@ -214,6 +222,19 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
                         None => format!("class {:#x} {what} at +{}", object.class, at - start),
                     };
                     keys.entry(key).or_default().insert(tag);
+                    if DUMPED.contains(&tag) {
+                        let from = at.saturating_sub(DUMP_BEFORE);
+                        let hex: String = b[from..at + 8]
+                            .iter()
+                            .map(|byte| format!("{byte:02x}"))
+                            .collect();
+                        dumps.push(format!(
+                            "{{\"dump\":{tag},\"class\":\"{:#x}\",\"size\":{},\"what\":\"{what}\",\"at\":{},\"hex_before\":\"{hex}\"}}",
+                            object.class,
+                            object.end - start,
+                            at - start
+                        ));
+                    }
                 }
             }
         }
@@ -240,6 +261,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
             tags.len()
         ));
     }
+    out.extend(dumps);
     Ok(out)
 }
 
