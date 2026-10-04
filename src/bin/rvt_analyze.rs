@@ -274,7 +274,7 @@ fn build_identity(
     Ok(Identity {
         file_path: path.display().to_string(),
         file_size_bytes: file_size,
-        revit_version: bfi.as_ref().map(|b| b.version),
+        revit_version: bfi.as_ref().map(|b| b.version + 1),
         build_tag: bfi.as_ref().and_then(|b| b.build.clone()),
         creator_path: bfi.as_ref().and_then(|b| b.original_path.clone()),
         file_guid: bfi.as_ref().and_then(|b| b.guid.clone()),

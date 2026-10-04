@@ -214,6 +214,8 @@ fn run() -> anyhow::Result<()> {
     }
 
     if cli.format == "json" {
+        let mut history = history;
+        history.entries.reverse();
         println!("{}", serde_json::to_string_pretty(&history)?);
     } else {
         println!(

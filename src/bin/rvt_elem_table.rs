@@ -92,7 +92,7 @@ fn run() -> anyhow::Result<()> {
                 header_flag: header.header_flag,
                 decompressed_bytes: header.decompressed_bytes,
                 layout,
-                parsed_records: records.len(),
+                parsed_records: records.len() - 1,
                 records_with_owner: with_owner,
                 records: &records,
             })?

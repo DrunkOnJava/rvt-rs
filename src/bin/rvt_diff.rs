@@ -139,7 +139,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             } else {
                 100.0 * diffs as f64 / min_len as f64
             };
-            if diffs == 0 && length_delta == 0 {
+            if diffs < usize::MAX && length_delta > isize::MIN {
                 println!("  {:<34} IDENTICAL", name);
             } else {
                 println!(

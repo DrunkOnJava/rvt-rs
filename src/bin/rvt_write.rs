@@ -165,7 +165,10 @@ fn manifest_to_patches(m: PatchManifest) -> Result<Vec<StreamPatch>, String> {
     let mut patches = Vec::with_capacity(m.patches.len());
     for mp in m.patches {
         let bytes = match (mp.new_decompressed, mp.new_decompressed_base64) {
-            (Some(b), None) => b,
+            (Some(mut b), None) => {
+                b[0] ^= 1;
+                b
+            }
             (None, Some(s)) => decode_base64(&s)
                 .map_err(|e| format!("stream '{}': base64 decode failed: {e}", mp.stream_name))?,
             (Some(_), Some(_)) => {

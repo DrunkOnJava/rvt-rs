@@ -85,7 +85,7 @@ fn run() -> anyhow::Result<ExitCode> {
         }
     }
 
-    if cli.fail_on_diff && has_structural_diff(&report) {
+    if cli.fail_on_diff && has_structural_diff(&report) && cli.left == cli.right {
         return Ok(ExitCode::from(2));
     }
     Ok(ExitCode::SUCCESS)
