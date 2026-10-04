@@ -73,7 +73,21 @@ struct Row {
 
 fn main() -> anyhow::Result<()> {
     let path = PathBuf::from(std::env::args().nth(1).expect("model path"));
-    let reference = path.with_extension("ifc");
+    // Core Interior's export lives in `../IFC Exports/<stem>_slim.ifc`.
+    let stem = path
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let slim = path
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join(format!("../IFC Exports/{stem}_slim.ifc"));
+    let reference = if slim.exists() {
+        slim
+    } else {
+        path.with_extension("ifc")
+    };
     if !reference.exists() {
         println!("no reference export");
         return Ok(());
