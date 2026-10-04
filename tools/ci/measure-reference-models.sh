@@ -52,7 +52,7 @@ IFC_SCORERS="aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc storeys_vs_ifc
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc
 material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_ifc
 door_bodies_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc pipe_bodies_vs_ifc
-duct_bodies_vs_ifc ports_vs_ifc psets_vs_ifc"
+duct_bodies_vs_ifc ports_vs_ifc psets_vs_ifc saved_meshes_vs_ifc"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
 
 # Witness artifacts (research/witness/<id>/observations/rvt-rs.json) per model.
@@ -77,7 +77,8 @@ while IFS='|' read -r name rvt ref; do
   [ -n "$name" ] || continue
   dir="$OUT/$name"; mkdir -p "$dir"
   echo "::group::$name"
-  "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" > "$dir/rvt-ifc.log" 2>&1
+  # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+  "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
   echo "exit $?" >> "$dir/rvt-ifc.log"
   "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
@@ -130,7 +131,8 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     dir="$OUT/sample-$(basename "$sample" .rvt)"; mkdir -p "$dir"
     echo "::group::$(basename "$sample")"
     info "$sample" "$dir"
-    "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" > "$dir/rvt-ifc.log" 2>&1
+    # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+    "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
     echo "exit $?" >> "$dir/rvt-ifc.log"
     [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
     if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
