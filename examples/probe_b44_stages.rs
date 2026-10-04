@@ -113,13 +113,65 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     let tags: BTreeSet<u32> = theirs.keys().copied().collect();
-    println!("reference: {} elements with a NominalDiameter; first {:?}", tags.len(), theirs.iter().next());
+    println!(
+        "reference: {} elements with a NominalDiameter; first {:?}",
+        tags.len(),
+        theirs.iter().next()
+    );
 
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
     println!("version {version}");
 
-    let scanned = rvt::partition_fitting_connectors::scan_fitting_nominal_diameters(&mut rf, version, &tags)?;
+    let scanned =
+        rvt::partition_fitting_sizes::scan_fitting_nominal_diameters(&mut rf, version, &tags)?;
+    let shown: Vec<u32> = tags
+        .iter()
+        .copied()
+        .take(4)
+        .chain([443957, 447853])
+        .collect();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for &id in &shown {
+            for start in memchr::memmem::find_iter(buf, &id.to_le_bytes()) {
+                let Some(object) = rvt::partition_room_parameters::verified_data_object(buf, start)
+                else {
+                    continue;
+                };
+                if object.element_id != id {
+                    continue;
+                }
+                let payload =
+                    &buf[start + rvt::partition_room_parameters::DATA_OBJECT_HEADER..object.end];
+                let pairs = rvt::partition_fitting_sizes::nominal_diameters(payload);
+                let near: Vec<String> = (0..payload.len().saturating_sub(8))
+                    .filter_map(|at| {
+                        let v = f64::from_le_bytes(payload[at..at + 8].try_into().ok()?);
+                        ((v - 0.0492126).abs() < 1e-6 || (v - 0.0656168).abs() < 1e-6).then(|| {
+                            let from = at.saturating_sub(38);
+                            format!(
+                                "+{} {}",
+                                at + 20,
+                                payload[from..at]
+                                    .iter()
+                                    .map(|b| format!("{b:02x}"))
+                                    .collect::<String>()
+                            )
+                        })
+                    })
+                    .take(4)
+                    .collect();
+                println!(
+                    "object {id} in {stream} at {start} size {}: pairs {pairs:?}; diameter hits {near:?}",
+                    object.end - start
+                );
+            }
+        }
+    }
     println!(
         "stage 1, connector scan given the reference tags: {} of {}; first {:?}",
         scanned.len(),
@@ -128,9 +180,15 @@ fn main() -> anyhow::Result<()> {
     );
 
     let has_field = |fields: &[(String, rvt::walker::InstanceField)]| {
-        fields.iter().any(|(name, _)| name == FITTING_NOMINAL_DIAMETER_FIELD)
+        fields
+            .iter()
+            .any(|(name, _)| name == FITTING_NOMINAL_DIAMETER_FIELD)
     };
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())?;
+    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+        &mut rf,
+        version,
+        WalkerLimits::default(),
+    )?;
     let mut classes: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     for element in mvp.into_elements() {
         if element.id.is_some_and(|id| tags.contains(&id)) {
@@ -161,8 +219,14 @@ fn main() -> anyhow::Result<()> {
         .entities
         .iter()
         .filter_map(|e| match e {
-            IfcEntity::BuildingElement { ifc_type, type_guid, .. }
-                if type_guid.as_deref().and_then(|t| t.parse::<u32>().ok()).is_some_and(|t| tags.contains(&t)) =>
+            IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid,
+                ..
+            } if type_guid
+                .as_deref()
+                .and_then(|t| t.parse::<u32>().ok())
+                .is_some_and(|t| tags.contains(&t)) =>
             {
                 Some(ifc_type.clone())
             }
@@ -173,7 +237,9 @@ fn main() -> anyhow::Result<()> {
     for t in &fittings {
         *by_type.entry(t.as_str()).or_default() += 1;
     }
-    println!("stage 4, exporter: {sets} Pset_PipeFittingTypeCommon property sets; entities with the tags by type {by_type:?}");
+    println!(
+        "stage 4, exporter: {sets} Pset_PipeFittingTypeCommon property sets; entities with the tags by type {by_type:?}"
+    );
 
     let step = write_step(&model);
     let ours = nominal_diameters(&step);
@@ -183,7 +249,11 @@ fn main() -> anyhow::Result<()> {
         ours.keys().filter(|t| tags.contains(t)).count(),
         ours.iter().next()
     );
-    for line in step.lines().filter(|l| l.contains("NominalDiameter")).take(3) {
+    for line in step
+        .lines()
+        .filter(|l| l.contains("NominalDiameter"))
+        .take(3)
+    {
         println!("  {line}");
     }
     Ok(())
