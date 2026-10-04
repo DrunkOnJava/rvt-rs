@@ -57,6 +57,25 @@ fn strings_at(bytes: &[u8]) -> Vec<(usize, String)> {
 
 fn main() -> anyhow::Result<()> {
     let path = PathBuf::from(std::env::args().nth(1).expect("model path"));
+    // The railing classes' tags in every model, for the release each holds.
+    if let Ok(mut rf) = RevitFile::open(&path) {
+        let version = rf.basic_file_info().map(|info| info.version).ok();
+        if let Ok(classes) = rf.schema_classes() {
+            for name in [
+                "BalusterPattern",
+                "SymbolInfo",
+                "StairsRailingAttr",
+                "BaseRailing",
+            ] {
+                let tag = classes
+                    .classes
+                    .iter()
+                    .find(|c| c.name == name)
+                    .map(|c| format!("{:#06x}", c.tag));
+                println!("release {version:?}: {name} tag {tag:?}");
+            }
+        }
+    }
     if !path.to_string_lossy().contains("Architecture") {
         println!("not RE1 Architecture");
         return Ok(());
