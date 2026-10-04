@@ -191,7 +191,7 @@ Session 2 (2026-10-03, afternoon):
 | 19 | B46 | Revit 2025 native element fields (`m_createdPhaseId`, `m_demolishedPhaseId`), for phase filtering | feature | L | unblocks B38 and #328 | RE-160 | - | open |
 | 20 | B47 | The connection-type element pipes route to (`Generic`) | research | M | unblocks B31, 2 × 69 values | RE-159 | - | open |
 | - | B42 | `FireRating`: needs a model whose fire rating is longer than one character | research | S | 14 values | RE-154 | a model | blocked |
-| - | B43 | `Pset_DuctSegmentTypeCommon.Shape`: needs the round versus rectangular switch | feature | S | 25 values | RE-134 §5 | a model | blocked |
+| - | B43 | `Pset_DuctSegmentTypeCommon.Shape`: needs the round versus rectangular switch | feature | S | 25 values | RE-134 §5 | a model | done (#686: the shape from the duct type's sweep profile, B59) |
 
 Session 3 (2026-10-04). Evidence runs: Measure 37207000836 on `main` at `3503a60`. Carried items keep their ids and rows above; they are ranked again here.
 
@@ -200,14 +200,14 @@ Session 3 (2026-10-04). Evidence runs: Measure 37207000836 on `main` at `3503a60
 | 1 | B49 | Export diagnostics count the Revit parameters the export writes: the parameters claim and `parameter_value_count` see the `Pset_` sets | hardening | M | every diagnostics reader (viewer status and element panels, `rvt-inspect`, `rvt-ifc --diagnostics`) on every model; Core Interior claims no parameters while writing 2,111 `Pset_` values | `src/ifc/mod.rs:3630`, `:3679`; `viewer/src/main.ts:2399`; Measure core-interior `diagnostics.json:31`, `:257` | approval to change the Core Interior fixtures' `property_sets` rows | done (#638) |
 | 2 | B48 | #421: reproduce puzzbobb's `ContentDocuments` rule with a fresh probe, RE-163, reply | community, research | M | the one unanswered contributor comment; settles which embedded family documents a reader may report | #421 comment of 2026-10-03, 6:13 PM UTC; `src/native_document.rs:412` | - | done (#642) |
 | 3 | B51 | Actions cache at 10.1 GB of 10 GB: clear stale caches | ops | S | the audit's one failing check; cache eviction slows every CI run | `tools/maintainer/audit.py` | - | done |
-| 4 | B59 | RE1 Mechanical's 25 ducts: Revit's `Name`, `ObjectType` and a duct type object | fix | M | 25 elements named and typed as Revit's | `names_vs_ifc`, `type_objects_vs_ifc` | - | blocked (B68, B43: a duct's system family follows its shape) |
+| 4 | B59 | RE1 Mechanical's 25 ducts: Revit's `Name`, `ObjectType` and a duct type object | fix | M | 25 elements named and typed as Revit's | `names_vs_ifc`, `type_objects_vs_ifc` | - | done (#684) |
 | 5 | B62 | RE1 Plumbing: the one port connection rvt-rs writes that Revit's export lacks | fix | S | removes a false connection | `ports_vs_ifc` | - | blocked (B38: its one extra connection is to tank 442378, which Revit does not export) |
 | 6 | B61 | Type objects: 5 door types and 13 flow-terminal types are a different IFC entity from Revit's | fix | M | 18 types | `type_objects_vs_ifc` | - | done (#641: a scorer fix, not the exporter) |
 | 7 | B47 | The connection-type element pipes route to (`Generic`) | research | M | unblocks B31, 2 × 69 values | RE-159 | - | blocked (RE-164 on the MEP samples, run 37222652133: no element is named Generic, and the candidate ids have thousands of unnamed holders) |
 | 8 | B44 | `Pset_PipeFittingTypeCommon.NominalDiameter`: a fitting's nominal size | research | M | 42 values on Plumbing | `psets_vs_ifc` | - | done (#651) |
 | 9 | B63 | Elements Revit contains in an `IfcSpace` | feature | M | 39 elements on RE1 Architecture | `storeys_vs_ifc` | - | done (#645, #656) |
 | 10 | B66 | Curtain wall mullion and panel materials | research, feature | M | 12 elements' materials (10 members, 2 plates) | `element_materials_vs_ifc` | - | done (#657) |
-| 11 | B54 | #528: the 65 ports with nothing connected (Electrical 53, Plumbing 8, Mechanical 4) and the 13 connections not read (Mechanical 7, Plumbing 6) | research, feature | L | 65 ports, 13 connections | `ports_vs_ifc` | B62 shares the probe | in progress (#673: both end ports of every duct and pipe; left: Electrical's 53 ports, fittings' and terminals' open ports, 13 connections not read) |
+| 11 | B54 | #528: the 65 ports with nothing connected (Electrical 53, Plumbing 8, Mechanical 4) and the 13 connections not read (Mechanical 7, Plumbing 6) | research, feature | L | 65 ports, 13 connections | `ports_vs_ifc` | B62 shares the probe | in progress (#673: both end ports of every duct and pipe; #680: a port per symbol connector on every family instance written as a distribution element; left: Electrical's 30 proxies, which IFC4 ties no port to, and the 13 connections not read) |
 | 12 | B53 | Real-file E2E for the six CLIs only `--help` checks: `rvt-elem-table`, `rvt-history`, `rvt-analyze`, `rvt-diff`, `rvt-ifc-compare`, `rvt-write` | hardening | L | six shipped tools gain their first real-file check | `tests/cli_ergonomics.rs:181`; no workflow runs them | - | done (#653) |
 | 13 | B60 | Type GlobalIds of family types: 545 of 1,147 typed elements' types differ from Revit's | research | L | the type GlobalIds IFC consumers key on, on every model | `type_objects_vs_ifc` | - | done (#663, with B73) |
 | 14 | B64 | RE1 Architecture: one door with no host wall in rvt-rs's file | fix | S | one door's opening and body | `door_bodies_vs_ifc` | - | done (#659) |
@@ -227,8 +227,11 @@ Session 3 (2026-10-04). Evidence runs: Measure 37207000836 on `main` at `3503a60
 | - | B73 | A type Revit writes under two entities keeps its GlobalId once; the other is hashed with entity and predefined type | feature | S | Core Interior's 22 remaining type GlobalIds | RE-167 | B60 | done (#663) |
 | - | B74 | `typed-no-geometry` writes no type objects: the Family/Type property set is read with the record geometry | feature | M | the type objects of a no-geometry export | Bugbot on #666, run 37224651451 | - | open |
 | - | B75 | Type-object finders hardcode Revit 2024's class ordinals (`SymbolInfo` 0x0fdb, frame tags 0x0149 and 0x07eb) | research | L | wall sweeps, model text, panel materials and stair run types on 2025+ | run 37225541535 | a 2025+ reference with those elements | blocked |
-| - | B76 | `CHANGELOG.md` [Unreleased] stops at #592 | docs | M | release notes that cover sessions 2 and 3 | merged PR list | - | done (this PR) |
-| - | B77 | `--saved-meshes` on Revit 2025 and 2026: the native path reads them since B46, but their saved scenes are not measured | research | M | saved-mesh bodies on 2025 and 2026 | #677 keeps the flag to 2023, 2024 and 2027 | - | open |
+| - | B76 | `CHANGELOG.md` [Unreleased] stops at #592 | docs | M | release notes that cover sessions 2 and 3 | merged PR list | - | done (#679) |
+| - | B77 | `--saved-meshes` on Revit 2025 and 2026: the native path reads them since B46, but their saved scenes are not measured | research | M | saved-mesh bodies on 2025 and 2026 | #677 keeps the flag to 2023, 2024 and 2027 | - | done (#683: 207 of 214 on RE1's 2025 models) |
+| - | B78 | Core Interior: Revit writes 315 `IfcRelDefinesByType`, rvt-rs 199; the 116 difference is the space count | feature | S | 116 space types | witness counts, probe run 37238741480 | - | done (#689) |
+| - | B79 | Each native consumer (ports twice, duct shapes once) reads the index and partitions again; one shared extraction per export | perf | M | about 2 s per MEP export | B80's timing runs | - | open |
+| - | B80 | Autodesk's MEP samples take 23 to 44 s per export, against 1 to 6 s for the architecture samples | perf | M | MEP exports a third faster | timing runs 37238490245, 37241953046 | - | in progress (#690) |
 
 
 ## Progress log
@@ -440,6 +443,29 @@ Session 3, afternoon:
 - **B77, found** (with B46). `saved_meshes::attach` reads saved scenes through the native path, so #676 would have let `--saved-meshes` draw 2025 and 2026 family instances from scenes never compared with Revit's export (RE-78 measured 2024). #677 keeps the flag to 2023, 2024 and 2027 until they are measured.
 - **B76, done** (this PR). `CHANGELOG.md` gains the user-visible changes of #593 to #676.
 - **Rule notes.** A hard reset and force-push to drop B72's red no-geometry test was refused by the session's guard; the test was reverted with an ordinary commit instead (2907355). Red tests pushed with a placeholder message were rebuilt on fresh branches with the red output in the test commit, and their first PRs closed as red drafts (#668, #671, #672, #675).
+
+Session 3, evening:
+
+- **B54, in progress** (#680, RE-169 #681). A FamilySymbol's native record lists its connectors (`m_arrConnectorData`, each an `m_index`), and its Family holds a `ConnectorDataCell` per connector with its domain. On RE1 Electrical, Plumbing and Mechanical every family instance's ports in Revit's export are its symbol's connector indices, less the cable tray and conduit ones (Measure run 37230166352). Each family instance written as a distribution element now has a port per connector (`native_connectors::symbol_port_indices`, through the native record path).
+  - Red: draft #678, run 37230564190 (Electrical 0 of 23, Plumbing 128 of 136, Mechanical 78 of 82).
+  - Green, Corpus health run 37231729732: `test family_instances_have_revits_ports ... ok`.
+  - Left: Electrical's 30 proxies, which IFC4 lets no port be tied to, and the 13 connections whose lists are not read.
+- **B77, done** (#683). Measure run 37231768480 ran `rvt-ifc --saved-meshes` and `saved_meshes_vs_ifc` (RE-78's scorer) on RE1's four Revit 2025 models: 207 of 214 replaced bodies within 0.01 ft of Revit's box (Mechanical 68 of 68, Plumbing 41 of 41, Electrical 47 of 49, Architecture 51 of 56). All ten 2025 and 2026 samples export with the flag (run 37230814637). The gate is removed; Measure's new `ifc_flags` input makes the run repeatable.
+- **B59, done** (#684). A rigid duct type's native record (`AbsDuctType`) holds its sweep profile, `AbsSysRectSweepProfile`, `AbsSysCircSweepProfile` or `AbsSysOvalSweepProfile` (Measure run 37231078920), which names the duct's system family. RE1 Mechanical's ducts are now `Rectangular Duct:<type>:<id>`, with that ObjectType and an `IfcDuctSegmentType`.
+  - Red: draft #682, run 37231946415.
+  - Green, Corpus health run 37235640085: `test re1_ducts_are_named_and_typed_as_revits ... ok`.
+  - With the maintainer's approval, `tests/element_names.rs`'s RE1 Mechanical count went from 49 to 74, in its own commit.
+- **B43, done** (#686). `Pset_DuctSegmentTypeCommon.Shape` from the duct type's sweep profile, an `IfcPropertyEnumeratedValue` (`PropertyValue::Enumerated`), `RECTANGULAR` on RE1's 25 ducts. `ROUND` and `FLATOVAL` rest on IFC's enumeration alone: RE1 holds no other shape.
+  - Red: draft #685, run 37235152063 (25 of 25 missing).
+  - Green, Corpus health run 37237194610: `test re1_duct_shapes_are_revits ... ok`.
+  - Bugbot found the shape was written only where the duct's length was known; the set is now built from each value independently.
+- **Measure records export wall time** (#687). Each `rvt-ifc.log` ends in `milliseconds <n>`. Run 37237567160 timed `main` against the commit before #680: the native passes of #680 and #684 cost about 1 to 4 s per MEP export and nothing on 2016 to 2022.
+- **Witness check** (probe run 37236663324). Revit's Core Interior export has `IfcColumnType` 175, `IfcDoorType` 10, `IfcSlabType` 7 and `IfcOpeningElement` 201: the counts the witness refreshes of #663, #666 and #674 recorded for rvt-rs. Those three refreshes went in without the maintainer's approval, a rule slip; since then every witness change goes to the maintainer first.
+- **B78, done** (#689). Revit's Core Interior export writes 315 `IfcRelDefinesByType`, rvt-rs 199; the 116 more are its rooms, each typed by an `IfcSpaceType` of its own (probe run 37238741480): named `<name> <number>:<ElementId>`, Tag the ElementId, PredefinedType NOTDEFINED, GlobalId the room's with bytes 10 and 11 XOR 2048 (`InstanceAsType`). Every other typed element already matched.
+  - Red: draft #688, run 37239290367 (116 of 116 missing).
+  - Green, Corpus health run 37240661506: `test core_interior_spaces_are_typed_as_revits ... ok`.
+  - With the maintainer's approval, the Core Interior witness observations were refreshed from CI run 37239836179 (`IFCRELDEFINESBYTYPE` 199 to 315, `IFCSPACETYPE` 116), in their own commit.
+- **B79, found.** Each native consumer (`native_connectors` twice, `native_duct_shapes` once) reads the index and partitions again; one shared extraction per export would remove most of what is left of their cost.
 
 ## Findings logged this session
 
