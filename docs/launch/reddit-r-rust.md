@@ -1,5 +1,7 @@
 # r/rust post — rvt-rs
 
+> Written for 0.1.2 (2026-04-20) and not brought up to date since; see [README.md](README.md) before posting.
+
 Target: [r/rust](https://reddit.com/r/rust). Rust-first audience. No marketing copy. Technical specificity. Markdown supported.
 
 ## Title options

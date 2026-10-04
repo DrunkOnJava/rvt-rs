@@ -1,5 +1,7 @@
 # Email draft — thanks to phi-ag for the `rac_basic_sample_family` corpus
 
+> Written for 0.1.2 (2026-04-20) and not brought up to date since; see [README.md](README.md) before posting.
+
 This is a draft. Before sending, fill in `{{recipient_name}}`, pick a
 recipient address for the To: line, and confirm the sign-off. The body
 is written to be sent as-is once those three substitutions are made.
