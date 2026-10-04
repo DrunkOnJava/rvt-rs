@@ -656,6 +656,19 @@ fn railing_type_name_at(buf: &[u8], id_at: usize) -> Option<String> {
         .checked_add(RAILING_TYPE_NAME_WINDOW.end)?
         .min(buf.len());
     let end = start + memchr::memmem::find(buf.get(start..stop)?, &RAILING_TYPE_NAME_END)?;
+    name_ending_at(buf, end)
+}
+
+/// A railing type's name in its `StairsRailingAttr` data object (RE-153,
+/// B45, Revit 2025): the one name that ends at the object's first
+/// [`RAILING_TYPE_NAME_END`], as in RE-66's type objects.
+pub fn railing_type_name_in(object: &[u8]) -> Option<String> {
+    let end = memchr::memmem::find(object, &RAILING_TYPE_NAME_END)?;
+    name_ending_at(object, end)
+}
+
+/// The one `u32 n · n UTF-16 units` name that ends at `end` of `buf`.
+fn name_ending_at(buf: &[u8], end: usize) -> Option<String> {
     let mut names = (1..=NAME_MAX_UNITS).filter_map(|units| {
         let at = end.checked_sub(4 + 2 * units)?;
         if read_u32(buf, at)? as usize != units {

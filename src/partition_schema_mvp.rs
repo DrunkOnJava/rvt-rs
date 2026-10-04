@@ -650,8 +650,11 @@ fn attach_system_type_names(
         })
         .filter_map(|(index, element)| Some((index, element.id?)))
         .collect();
+    let mut railing_names = std::collections::BTreeMap::new();
     if revit_version >= 2024 && !unpicked.is_empty() {
-        picks.extend(railing_type_picks(rf, &unpicked));
+        let (railing_picks, names) = railing_type_picks(rf, &unpicked);
+        picks.extend(railing_picks);
+        railing_names = names;
     }
     if picks.is_empty() {
         return;
@@ -687,6 +690,11 @@ fn attach_system_type_names(
             }
         }
     }
+    for (id, name) in railing_names {
+        if !matches!(names.get(&id), Some(Some(_))) {
+            names.insert(id, Some(name));
+        }
+    }
     attach_type_picks(elements, picks, &names);
 }
 
@@ -694,10 +702,15 @@ fn attach_system_type_names(
 /// `BaseRailing` data object (RE-153) names (B45): the one ElementId in the
 /// object's payload, at any offset, of a railing type's `StairsRailingAttr`
 /// object. RE1 Architecture's railing 462556 holds its type 446543, Revit's
-/// `IfcRailingType` Tag, at +283 of its 329-byte object. Revit 2024 and later.
-fn railing_type_picks(rf: &mut RevitFile, railings: &[(usize, u32)]) -> Vec<(usize, u32)> {
+/// `IfcRailingType` Tag, at +283 of its 329-byte object. With the picks, the
+/// picked types' names their own objects hold
+/// ([`crate::partition_names::railing_type_name_in`]). Revit 2024 and later.
+fn railing_type_picks(
+    rf: &mut RevitFile,
+    railings: &[(usize, u32)],
+) -> (Vec<(usize, u32)>, std::collections::BTreeMap<u32, String>) {
     let Ok(classes) = rf.schema_classes() else {
-        return Vec::new();
+        return Default::default();
     };
     let tag_of = |name: &str| {
         classes
@@ -708,10 +721,11 @@ fn railing_type_picks(rf: &mut RevitFile, railings: &[(usize, u32)]) -> Vec<(usi
     };
     let (Some(railing_tag), Some(type_tag)) = (tag_of("BaseRailing"), tag_of("StairsRailingAttr"))
     else {
-        return Vec::new();
+        return Default::default();
     };
     let wanted: BTreeSet<u32> = railings.iter().map(|(_, id)| *id).collect();
-    let mut types: BTreeSet<u32> = BTreeSet::new();
+    let mut types: std::collections::BTreeMap<u32, Option<String>> =
+        std::collections::BTreeMap::new();
     let mut held: std::collections::BTreeMap<u32, BTreeSet<u32>> =
         std::collections::BTreeMap::new();
     for stream in rf.partition_stream_names() {
@@ -722,7 +736,11 @@ fn railing_type_picks(rf: &mut RevitFile, railings: &[(usize, u32)]) -> Vec<(usi
         for (p, object) in crate::partition_room_parameters::data_objects(buf) {
             let class = object.class & 0xffff;
             if class == type_tag {
-                types.insert(object.element_id);
+                let name = crate::partition_names::railing_type_name_in(&buf[p..object.end]);
+                let held_name = types.entry(object.element_id).or_insert(name.clone());
+                if *held_name != name {
+                    *held_name = None;
+                }
             } else if class == railing_tag && wanted.contains(&object.element_id) {
                 let payload =
                     &buf[p + crate::partition_room_parameters::DATA_OBJECT_HEADER..object.end];
@@ -733,16 +751,22 @@ fn railing_type_picks(rf: &mut RevitFile, railings: &[(usize, u32)]) -> Vec<(usi
             }
         }
     }
-    railings
+    let type_ids: BTreeSet<u32> = types.keys().copied().collect();
+    let picks: Vec<(usize, u32)> = railings
         .iter()
         .filter_map(|(index, id)| {
-            let mut named = held.get(id)?.intersection(&types);
+            let mut named = held.get(id)?.intersection(&type_ids);
             match (named.next(), named.next()) {
                 (Some(&type_id), None) => Some((*index, type_id)),
                 _ => None,
             }
         })
-        .collect()
+        .collect();
+    let names = picks
+        .iter()
+        .filter_map(|(_, type_id)| Some((*type_id, types.get(type_id)?.clone()?)))
+        .collect();
+    (picks, names)
 }
 
 /// Each wanted type's name, read from its serialised data
