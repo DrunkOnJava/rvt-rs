@@ -17,13 +17,35 @@ fn strings(bytes: &[u8]) -> Vec<String> {
     let mut q = 0;
     while q + 4 <= bytes.len() {
         let n = u32::from_le_bytes(bytes[q..q + 4].try_into().expect("4 bytes")) as usize;
-        if (2..=80).contains(&n) && q + 4 + 2 * n <= bytes.len() {
+        if (1..=80).contains(&n) && q + 4 + 2 * n <= bytes.len() {
             let units: Vec<u16> = bytes[q + 4..q + 4 + 2 * n]
                 .chunks_exact(2)
                 .map(|c| u16::from_le_bytes([c[0], c[1]]))
                 .collect();
             if units.iter().all(|u| (0x20..0x7f).contains(u)) {
                 out.push(String::from_utf16_lossy(&units));
+                q += 4 + 2 * n;
+                continue;
+            }
+        }
+        q += 1;
+    }
+    out
+}
+
+/// Each `u32 n · UTF-16 × n` string of printable units, with its offset.
+fn strings_at(bytes: &[u8]) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    let mut q = 0;
+    while q + 4 <= bytes.len() {
+        let n = u32::from_le_bytes(bytes[q..q + 4].try_into().expect("4 bytes")) as usize;
+        if (1..=80).contains(&n) && q + 4 + 2 * n <= bytes.len() {
+            let units: Vec<u16> = bytes[q + 4..q + 4 + 2 * n]
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            if units.iter().all(|u| (0x20..0x7f).contains(u)) {
+                out.push((q, String::from_utf16_lossy(&units)));
                 q += 4 + 2 * n;
                 continue;
             }
@@ -69,6 +91,26 @@ fn main() -> anyhow::Result<()> {
         }
     }
     let mut rf = RevitFile::open(&path)?;
+    let names = rf.element_names();
+    println!(
+        "name entry of {TYPE}: {:?}",
+        names.entries.get(&TYPE).map(|e| e.name.clone())
+    );
+    let version = rf.basic_file_info()?.version;
+    let wanted: std::collections::BTreeSet<u32> = [TYPE].into_iter().collect();
+    if let Some(header) = rvt::partition_names::element_data_header(version) {
+        for stream in rf.partition_stream_names() {
+            let Ok(inflated) = rf.inflated_partition(&stream) else {
+                continue;
+            };
+            let data =
+                rvt::partition_names::find_element_data_names(inflated.bytes(), &header, &wanted);
+            let railing = rvt::partition_names::find_railing_type_names(inflated.bytes(), &wanted);
+            if !data.is_empty() || !railing.is_empty() {
+                println!("{stream}: element data names {data:?}, railing type names {railing:?}");
+            }
+        }
+    }
     let classes = rf.schema_classes()?;
     let class_name = |class: u32| {
         classes
@@ -102,7 +144,7 @@ fn main() -> anyhow::Result<()> {
                 "{whose} object in {stream} at {p}: class {}, {} bytes, the other's id at {at:?}, strings {:?}",
                 class_name(object.class),
                 bytes.len(),
-                strings(bytes)
+                strings_at(bytes)
             );
         }
         // Occurrences of the type id anywhere in the stream near the railing id.
