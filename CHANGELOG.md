@@ -8,6 +8,78 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A railing whose list names no type takes the one its own data object
+  names (B45).** RE1 Architecture's railing 462556 holds its type 446543 in
+  its `BaseRailing` data object and is written with Revit's `IfcRailingType`
+  `Railing:-`, its Tag and GlobalId, and `Reference` `-`. The type's name is
+  read from its `StairsRailingAttr` object, ended by a `BalusterPattern`
+  frame; the tags RE-66 measured on 2024 are class ordinals that move every
+  release, so they are now read from the file's schema by name. A typed
+  railing is now written with its `IfcRailingType`. Checked by
+  `tests/railing_type.rs`.
+- **Every duct and pipe has a port at each end (#528, B54).** Revit's export
+  writes connectors 0 and 1 of 92 of RE1's 94 ducts and pipes as
+  `IfcDistributionPort`s, joined or not; rvt-rs wrote a port only for a join
+  it read. Each duct and pipe exported as a distribution element now has both
+  (RE1 Mechanical 62 of 62, Plumbing 122 of 122). Checked by
+  `tests/duct_and_pipe_ports.rs`.
+- **Door and window types take Revit's hashed GlobalId (RE-167, B72).** Revit
+  keys a door's or window's type by the MD5 of its original symbol's GlobalId
+  with the door's flip (`Sub-element:Flipped: True|False`, and
+  ` InAssembly: False` from revit-ifc 25.4), the flip from the door's box
+  against its host wall's axis (revit-ifc `DoorWindowInfo`). A door type is
+  written once per flip. Checked by `tests/door_type_global_ids.rs` on RE1 and
+  Core Interior.
+- **A family instance's type takes its original symbol's GlobalId (RE-167,
+  B60, B73).** The original symbol is the `u32` 20 bytes before the end of the
+  instance's `GElement` data object (a FamilySymbol, SysMullionFamSym or
+  SysPanelFamSym); Revit writes one type object per original symbol, keeping
+  the symbol's Tag. An instance that uses its own geometry takes a sub-element
+  GlobalId of itself (revit-ifc `InstanceAsType`), and a type written under
+  several entities keeps its own GlobalId once, the others hashed with the
+  entity and predefined type. Checked by `tests/type_global_ids.rs`.
+- **A door or window in a curtain grid is one of its curtain wall's parts
+  (B64).** As in Revit's export, with no opening and no host wall. Checked by
+  `tests/curtain_wall_doors.rs`.
+- **Curtain wall mullions and panels take their type's material (RE-166,
+  B66).** A mullion type's material at byte 135 of its data object, a panel
+  type's at 139, Revit 2024 to 2026. Checked by `tests/curtain_part_materials.rs`.
+- **A pipe fitting's `NominalDiameter` (RE-165, B44, #35).** From its
+  connector records, or on a fitting with none (a cap) its smallest
+  parameter pair, as an `IfcPropertyListValue` (`PropertyValue::List`); 42 of
+  42 on RE1 Plumbing. Checked by `tests/fitting_nominal_diameter.rs`.
+- **A room's furniture, fixtures and equipment are contained in its space
+  (B63).** A family instance written as furniture, a sanitary terminal or a
+  proxy, hosted by nothing, is contained in the `IfcSpace` whose outline holds
+  it on its storey; 39 of 39 on RE1 Architecture. Checked by
+  `tests/space_containment.rs`.
+- **MEP systems as `IfcSystem` (RE-162, B33, #528).** Each `RbsHvacSystem`,
+  `RbsPipingSystem` or `RbsElectricalSystem` data object, grouping the members
+  that hold its id and serving the building; all 26 of RE1's systems with
+  Revit's names and members. Checked by `tests/mep_systems.rs`.
+- **Reference on equipment named by its panel name, and a pipe's type from its
+  curve object (B29, #35).**
+- **A ceiling's `Pset_CoveringCommon.Finish` (B41, #35):** its finish layers'
+  materials, each followed by `;`. Checked by `tests/covering_finish.rs`.
+- **A door's and a slab's `IsExternal`, from its type's Function (RE-158, B28,
+  #35).** Checked by `tests/is_external.rs`.
+- **A pipe's `InvertElevation` (RE-157, B26, #35):** a horizontal pipe's axis
+  less half its inner diameter, read from its own curve object, or a vertical
+  pipe's lower end, above its storey. Checked by `tests/invert_elevation.rs`.
+- **The shared parameter Serial Number (RE-156, #35)** in
+  `Pset_ManufacturerOccurrence.SerialNumber`, and on proxies in
+  `Pset_PrecastConcreteElementGeneral`. Checked by `tests/serial_number.rs`.
+- **Storeys, the building and spaces carry Revit's spatial property sets
+  (#35).** Checked by `tests/spatial_property_sets.rs`.
+- **A duct's size, type, `Length` and `Reference` from its curve object
+  (RE-134, #35, #96), and a pipe's `Length` (#35),** in the flow-segment sets
+  and `Pset_DuctSegmentTypeCommon`. Checked by `tests/duct_fields.rs`,
+  `tests/segment_length.rs` and `tests/duct_segment_type_common.rs`.
+- **Python: `part_atom_json_strict` (#502).** Names a missing or malformed
+  PartAtom instead of returning nothing.
+- **Six CLIs run end to end on real files (B53).** `rvt-elem-table`,
+  `rvt-history`, `rvt-analyze`, `rvt-diff`, `rvt-ifc-compare` and `rvt-write`,
+  in `tests/cli_real_files.rs`.
 - **The `Reference` of Revit's common property sets (RE-154, #35).** Revit's
   export gives every element `Pset_QuantityTakeOff.Reference`, its entity's
   common set's `Reference` (`Pset_WallCommon`, `Pset_DoorCommon`,
@@ -72,6 +144,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **An export walks the file once (B71).** `RevitFile` keeps the production
+  walk, and the export's diagnostics reuse it instead of walking again; IFC
+  and diagnostics are byte-identical on all six reference models.
+- **MEP models export in seconds, not half an hour (B70).** MEP system
+  membership and pipe type names are found in one pass per partition stream
+  (`partition_room_parameters::data_objects`) instead of a search per id; a
+  walk of Autodesk's 2024 MEP sample went from 1,037 s to 9.8 s, with the IFC
+  byte-identical on all six reference models.
+- **The slim witness verdict runs whenever the full one ran (B27),** so a
+  pinned-count change regenerates both observations in one CI cycle.
 - **The minimum supported Rust version is 1.87, up from 1.85.** quick-xml 0.42
   needs 1.86 and earcut 0.4.10 and later call `is_multiple_of`, stabilised in
   1.87, and both updates were being held back for it (earcut's bound in
@@ -89,6 +171,16 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **`rvt-write` refuses a patch it cannot write readably (B69).** Revit stores
+  `Formats/Latest`, `Global/Latest` and the partitions in 65,249-byte pages
+  ending in a checksum rvt-rs cannot compute; a patch reaching a full page is
+  now refused instead of written unreadable, and every patched stream is
+  written as a whole gzip member, with the CRC32 and ISIZE trailer Revit's
+  own streams carry.
+- **Export diagnostics count the Revit parameter values the export writes
+  (B49).** The parameters claim and `parameter_value_count` now see the
+  `Pset_` sets, which they read as zero before.
+- **`probe_elem_table_ownership` takes its files from the command line (#501).**
 - **The native path reads Revit 2018's schema to its end (#421, #154).**
   `schema_registry::parse` stopped at byte 351,466 of the 2018 catalog
   (`schema name byte budget`), on Autodesk's 2018 family and 2018
@@ -157,6 +249,34 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **RE-168: an element record's leading reference slot is its phase (#228).**
+  ElementId 3 is the `ProjectPhase` "New Construction" in Core Interior and
+  RE1's MEP models; where a file's phases are 1 and 3 the leading slot is one
+  of them on all but a handful of records.
+- **Autodesk's MEP sample projects, 2024 to 2027, are pinned for Measure
+  (B68):** ducts of every shape, fittings, open connectors and systems, the
+  evidence RE1 lacks.
+- **RE-163: a keyed block is listed when the family at the top of its chain is
+  declared (#421)**, both ways, on all 42 files measured.
+- **RE-162: an MEP system is an element of its own, and its members hold its
+  id (#528).**
+- **RE-161: the leading 3 of a reference list is ElementId 3 (#228)**, not a
+  workset or a parameter.
+- **RE-160: an element's phases are not parameter entries in its data object
+  (#328)** but its native fields `m_createdPhaseId` and `m_demolishedPhaseId`.
+- **RE-159: a pipe's `ConnectionType` is not stored on the pipe or its type
+  (#35).**
+- **RE-158: a door's and a floor's `IsExternal` is its type's Function (#35).**
+- **RE-157: a pipe's inner and outer diameters are in its own curve object
+  (#35).**
+- **RE-156: Serial Number is a shared parameter's text entry in the element's
+  own data object (#35).**
+- **RE-155: an element record's reference list has no fixed slot for its type
+  or Level (#228).**
+- **Scorers for Measure:** `psets_vs_ifc` scores every property Revit writes,
+  numbers within a relative 1e-5 and enumerated and list values too;
+  `reference_property_sets` lists the sets of Revit's own export;
+  `type_objects_vs_ifc` accepts an IFC4 type entity for Revit's IFC2X3 one.
 - **The ElemTable's invariants hold on a 2014 family and every file of 2016 to
   2027 (RE-147, #152).** With the table read from `0x06`, all 54 files measured
   read their stated record count, their ids rise, every owner a record names
