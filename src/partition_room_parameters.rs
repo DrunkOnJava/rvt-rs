@@ -292,6 +292,31 @@ pub fn enclosing_data_object(buf: &[u8], at: usize) -> Option<u32> {
     }
 }
 
+/// Every verified data object in `buf` (RE-153), with its header's offset,
+/// in one pass: a header is tried only where its zero word, its size and the
+/// size that ends its payload agree, before its Adler-32 is computed. Use it
+/// where [`enclosing_data_object`] would be called for many offsets of one
+/// buffer, each a backward search of up to [`DATA_OBJECT_SEARCH`] bytes.
+pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
+    let u32_at = |p: usize| u32::from_le_bytes(buf[p..p + 4].try_into().expect("4 bytes"));
+    let mut out = Vec::new();
+    let mut p = 0;
+    while p + DATA_OBJECT_HEADER <= buf.len() {
+        let size = u32_at(p + 12) as usize;
+        let end = p + DATA_OBJECT_HEADER + size;
+        let plausible =
+            u32_at(p + 4) == 0 && size >= 4 && end <= buf.len() && u32_at(end - 4) as usize == size;
+        match plausible.then(|| verified_data_object(buf, p)).flatten() {
+            Some(object) => {
+                out.push((p, object));
+                p = object.end;
+            }
+            None => p += 1,
+        }
+    }
+    out
+}
+
 /// A data object whose header starts at a known offset (RE-153).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DataObject {
