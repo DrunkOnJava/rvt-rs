@@ -739,6 +739,7 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
             .map(format_property_value)
             .collect::<Vec<_>>()
             .join(", "),
+        PropertyValue::Enumerated(labels) => labels.join(", "),
     }
 }
 
@@ -760,6 +761,7 @@ fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
         PropertyValue::TimeSeconds(_) => "time",
         PropertyValue::MassPounds(_) => "mass",
         PropertyValue::List(_) => "list",
+        PropertyValue::Enumerated(_) => "text",
     }
 }
 
@@ -778,6 +780,7 @@ fn property_value_is_numeric(v: &super::entities::PropertyValue) -> bool {
                 | PropertyValue::Identifier(_)
                 | PropertyValue::Boolean(_)
                 | PropertyValue::Logical(_)
+                | PropertyValue::Enumerated(_)
         ),
     }
 }

@@ -4670,8 +4670,16 @@ fn attach_duct_system_families(rf: &mut RevitFile, products: &mut [DecodedElemen
             FAMILY_NAME_SOURCE_FIELD.into(),
             InstanceField::String(SYSTEM_FAMILY_SOURCE.into()),
         ));
+        element.fields.push((
+            DUCT_SHAPE_FIELD.into(),
+            InstanceField::String(shape.ifc_shape().into()),
+        ));
     }
 }
+
+/// Field carrying a duct's shape as IFC names it (`RECTANGULAR`, `ROUND`,
+/// `FLATOVAL`), from its type (B43).
+pub const DUCT_SHAPE_FIELD: &str = "m_duct_shape";
 
 /// The cylinder the partition MVP gave a pipe, when its connector entries
 /// and record box made one (RE-131).

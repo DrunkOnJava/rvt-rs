@@ -30,6 +30,17 @@ impl DuctShape {
         })
     }
 
+    /// The `Pset_DuctSegmentTypeCommon.Shape` value of this shape (IFC's
+    /// `PEnum_DuctSegmentShape`), as Revit's export writes `RECTANGULAR` on
+    /// RE1's ducts (B43).
+    pub fn ifc_shape(self) -> &'static str {
+        match self {
+            Self::Rectangular => "RECTANGULAR",
+            Self::Round => "ROUND",
+            Self::Oval => "FLATOVAL",
+        }
+    }
+
     /// The system family Revit names a duct of this shape by.
     pub fn system_family(self) -> &'static str {
         match self {
