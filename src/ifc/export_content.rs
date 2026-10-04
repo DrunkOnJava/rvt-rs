@@ -766,9 +766,14 @@ pub fn append_typed_production_elements(
                 },
             });
         }
-        // A duct's length is also in its Pset_DuctSegmentTypeCommon, as on
-        // every RE1 Mechanical duct.
-        let duct_set = (decoded.class == "Duct").then_some("Pset_DuctSegmentTypeCommon");
+        let duct_shape = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(shape)
+                if name == crate::partition_schema_mvp::DUCT_SHAPE_FIELD =>
+            {
+                Some(shape.clone())
+            }
+            _ => None,
+        });
         // RE-157: a pipe's invert, here in model height; the storey's
         // elevation comes off once storeys are bound
         // (`pipe_inverts_above_storeys`).
@@ -777,8 +782,7 @@ pub fn append_typed_production_elements(
             _ => None,
         };
         if let Some(length) = segment_length {
-            let sets = ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"];
-            for name in sets.into_iter().chain(duct_set) {
+            for name in ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"] {
                 let mut properties = vec![Property {
                     name: "Length".into(),
                     value: PropertyValue::PositiveLengthFeet(length),
@@ -793,6 +797,30 @@ pub fn append_typed_production_elements(
                     element: entity_index,
                     set: PropertySet {
                         name: name.into(),
+                        properties,
+                    },
+                });
+            }
+        }
+        // A duct's Pset_DuctSegmentTypeCommon: its length, as on every RE1
+        // Mechanical duct, and its type's shape (B43), each where it is known.
+        if decoded.class == "Duct" {
+            let properties: Vec<Property> = segment_length
+                .map(|length| Property {
+                    name: "Length".into(),
+                    value: PropertyValue::PositiveLengthFeet(length),
+                })
+                .into_iter()
+                .chain(duct_shape.map(|shape| Property {
+                    name: "Shape".into(),
+                    value: PropertyValue::Enumerated(vec![shape]),
+                }))
+                .collect();
+            if !properties.is_empty() {
+                entities.push(entities::IfcEntity::ElementPropertySet {
+                    element: entity_index,
+                    set: PropertySet {
+                        name: "Pset_DuctSegmentTypeCommon".into(),
                         properties,
                     },
                 });
