@@ -40,6 +40,60 @@ fn counts(step: &str) -> BTreeMap<&'static str, usize> {
     out
 }
 
+/// How many elements of each entity an `IfcRelDefinesByType` relates, by
+/// the type entity they are related to.
+fn typed(step: &str) -> BTreeMap<(String, String), usize> {
+    let mut entities: BTreeMap<u64, (String, String)> = BTreeMap::new();
+    for line in step.lines() {
+        let Some(rest) = line.strip_prefix('#') else {
+            continue;
+        };
+        let Some((id, body)) = rest.split_once('=') else {
+            continue;
+        };
+        let Some((entity, args)) = body.split_once('(') else {
+            continue;
+        };
+        if let Ok(id) = id.trim().parse() {
+            entities.insert(id, (entity.trim().to_string(), args.to_string()));
+        }
+    }
+    let refs = |args: &str| -> Vec<u64> {
+        args.split('#')
+            .skip(1)
+            .filter_map(|s| {
+                s.chars()
+                    .take_while(char::is_ascii_digit)
+                    .collect::<String>()
+                    .parse()
+                    .ok()
+            })
+            .collect()
+    };
+    let mut out = BTreeMap::new();
+    for (entity, args) in entities.values() {
+        if entity != "IFCRELDEFINESBYTYPE" {
+            continue;
+        }
+        let all = refs(args);
+        let Some((&ty, related)) = all.split_last() else {
+            continue;
+        };
+        let ty_entity = entities
+            .get(&ty)
+            .map(|(e, _)| e.clone())
+            .unwrap_or_default();
+        for element in related.iter().skip(1) {
+            let element_entity = entities
+                .get(element)
+                .map(|(e, _)| e.clone())
+                .unwrap_or_default();
+            *out.entry((element_entity, ty_entity.clone())).or_default() += 1;
+        }
+    }
+    out
+}
+
 fn reference(model: &Path) -> Option<String> {
     let stem = model.file_stem()?.to_string_lossy().to_string();
     let dir = model.parent()?;
@@ -59,11 +113,19 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     match reference(&path) {
-        Some(step) => println!("Revit's export: {:?}", counts(&step)),
+        Some(step) => {
+            println!("Revit's export: {:?}", counts(&step));
+            println!("Revit's typed elements (element, type): {:?}", typed(&step));
+        }
         None => println!("no reference export found"),
     }
     let mut rf = RevitFile::open(&path)?;
     let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
-    println!("rvt-rs's export: {:?}", counts(&write_step(&result.model)));
+    let ours = write_step(&result.model);
+    println!("rvt-rs's export: {:?}", counts(&ours));
+    println!(
+        "rvt-rs's typed elements (element, type): {:?}",
+        typed(&ours)
+    );
     Ok(())
 }
