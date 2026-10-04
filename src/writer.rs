@@ -114,7 +114,7 @@ pub struct StreamPatch {
 /// How a stream's compressed body should be framed on disk. Revit uses
 /// two distinct conventions:
 ///
-/// - `Global/*` streams: 8-byte custom prefix (`00 × 8`), then truncated gzip.
+/// - `Global/*` streams: 8-byte custom prefix (`00 × 8`), then gzip.
 /// - `Formats/Latest` and `Global/ContentDocuments`: gzip from byte 0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamFraming {
@@ -150,7 +150,9 @@ pub enum StreamFraming {
 /// unchanged (if it already existed) or absent. This prevents the
 /// previous corrupt-on-mid-write behaviour that a truncating
 /// `OpenOptions::truncate(true).open(dst)` call caused.
-/// A patch's bytes as they are stored, framed as it asks.
+/// A patch's bytes as they are stored, framed as it asks: one complete gzip
+/// member, with the CRC32 and ISIZE trailer Revit's own streams carry and a
+/// conforming reader checks (B69).
 ///
 /// Revit stores the streams [`crate::compression::is_checksum_paged_stream`]
 /// names in pages of [`crate::compression::REVIT_STORED_PAGE_BYTES`] bytes,
@@ -161,10 +163,12 @@ pub enum StreamFraming {
 fn framed_patch_bytes(p: &StreamPatch) -> Result<Vec<u8>> {
     use crate::compression;
     let data = match p.framing {
-        StreamFraming::RawGzipFromZero => compression::truncated_gzip_encode(&p.new_decompressed)?,
-        StreamFraming::CustomPrefix8 => {
-            compression::truncated_gzip_encode_with_prefix8(&p.new_decompressed)?
-        }
+        StreamFraming::RawGzipFromZero => compression::gzip_member_encode(&p.new_decompressed)?,
+        StreamFraming::CustomPrefix8 => [
+            &[0u8; 8][..],
+            &compression::gzip_member_encode(&p.new_decompressed)?,
+        ]
+        .concat(),
         StreamFraming::Verbatim => p.new_decompressed.clone(),
     };
     if compression::is_checksum_paged_stream(&p.stream_name)
@@ -512,9 +516,10 @@ impl StreamVerificationReport {
 ///
 /// # Checksum-page policy (Finding 1 / #151)
 ///
-/// The writer re-encodes patches with `truncated_gzip_encode` /
-/// `truncated_gzip_encode_with_prefix8` — **strip-clean** truncated-gzip,
-/// not Revit's stored checksum-paged layout. Verification therefore uses
+/// The writer re-encodes patches with
+/// [`crate::compression::gzip_member_encode`], behind the 8-byte prefix for
+/// `CustomPrefix8` — **strip-clean** gzip, not Revit's stored checksum-paged
+/// layout. Verification therefore uses
 /// bare [`crate::compression::inflate_at`], not
 /// [`crate::compression::inflate_stream_at`]: blindly stripping every
 /// 65_249-byte boundary would corrupt writer-produced streams that happen
