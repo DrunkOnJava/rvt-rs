@@ -25,6 +25,7 @@ real      cfb_roundtrip_delta
 real      common_reference
 real      corpus_tier2_health
 real      covering_finish
+real      curtain_part_materials
 real      curtain_walls
 real      design_options
 real      duct_fields
