@@ -168,6 +168,7 @@ pub mod level_bind;
 pub mod metadata;
 pub mod native_connectors;
 pub mod native_document;
+pub mod native_duct_shapes;
 pub mod native_element;
 pub mod native_empty_faces;
 pub mod native_es_catalog;

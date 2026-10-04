@@ -179,10 +179,11 @@ fn re1_names_are_revits() {
     // named element. Mechanical's 6 pipes and Plumbing's 62 of 63 are named
     // from the type in their reference list (RE-130), and the 63rd from its
     // curve object (RE-134, B29). Architecture's railing 462556 is named from
-    // the type its own data object names (B45).
+    // the type its own data object names (B45). Mechanical's 25 ducts take
+    // the system family their type's shape names (B59).
     for (model, expected) in [
         ("Architecture", 73),
-        ("Mechanical", 49),
+        ("Mechanical", 74),
         ("Plumbing", 124),
         ("Electrical", 46),
     ] {

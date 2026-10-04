@@ -383,8 +383,9 @@ pub fn append_typed_production_elements(
                 name == crate::partition_schema_mvp::TYPE_WITHOUT_GEOMETRY_FIELD
                     && matches!(value, InstanceField::Bool(true))
             });
-        // A duct's type is read (RE-134) but not its system family, which
-        // follows its shape; its Reference is still its type's name.
+        // A duct's system family follows its type's shape, read through the
+        // native record path (B59); where it is not read, the duct's
+        // Reference is still its type's name (RE-134).
         let duct_type = (decoded.class == "Duct")
             .then(|| {
                 decoded.fields.iter().find_map(|(name, value)| match value {
