@@ -270,10 +270,8 @@ fn main() -> anyhow::Result<()> {
         let mut found = None;
         for entity in entities_tried {
             for predefined in predefined_tried {
-                for assembly in ["False", "True"] {
-                    let key = format!(
-                        "{own}Sub-element: Entity: {entity}:{predefined} InAssembly: {assembly}"
-                    );
+                for suffix in [" InAssembly: False", " InAssembly: True", ""] {
+                    let key = format!("{own}Sub-element: Entity: {entity}:{predefined}{suffix}");
                     if hashed(&key) == row.gid {
                         found = Some(key);
                     }
