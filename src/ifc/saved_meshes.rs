@@ -41,11 +41,6 @@ pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result
     // The native path reads Revit 2025 and 2026 since B46, but their saved
     // scenes are not measured against Revit's export (B77), so the meshes are
     // read on the releases the native path read before.
-    let version = rf.basic_file_info()?.version;
-    anyhow::ensure!(
-        matches!(version, 2023 | 2024 | 2027),
-        "saved graphics are not measured on Revit {version}"
-    );
     let mut report = SavedMeshReport::default();
     let mut by_id: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     // A stair or curtain wall is drawn by its parts; its own saved graphics

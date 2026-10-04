@@ -77,7 +77,8 @@ while IFS='|' read -r name rvt ref; do
   [ -n "$name" ] || continue
   dir="$OUT/$name"; mkdir -p "$dir"
   echo "::group::$name"
-  "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" > "$dir/rvt-ifc.log" 2>&1
+  # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+  "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
   echo "exit $?" >> "$dir/rvt-ifc.log"
   "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
@@ -130,7 +131,8 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     dir="$OUT/sample-$(basename "$sample" .rvt)"; mkdir -p "$dir"
     echo "::group::$(basename "$sample")"
     info "$sample" "$dir"
-    "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" > "$dir/rvt-ifc.log" 2>&1
+    # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+    "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
     echo "exit $?" >> "$dir/rvt-ifc.log"
     [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
     if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
