@@ -317,6 +317,7 @@ fn extract_records(
     definitions: &crate::native_parameter_definitions::Registry,
     mut emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
+    let __t = std::time::Instant::now();
     let version = file.basic_file_info()?.version;
     ensure!(
         matches!(version, 2023..=2027),
@@ -381,6 +382,7 @@ fn extract_records(
         }
         Err(error) => summary.extensible_storage_catalog_diagnostic = Some(format!("{error:#}")),
     }
+    eprintln!("[subtiming] native preamble {:.3}s (selected {}, definitions_only {definitions_only})", __t.elapsed().as_secs_f64(), selected.len());
     // An element's stored revision routes it to one partition
     // (`native_index::route_episode`), and its records elsewhere are
     // historical. On some files that partition holds none of the element's
@@ -416,6 +418,7 @@ fn extract_records(
             },
         )?;
     }
+    eprintln!("[subtiming] native holders walk {:.3}s", __t.elapsed().as_secs_f64());
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
     for name in names {
@@ -622,5 +625,6 @@ fn extract_records(
         summary.partitions.insert(name, stats);
     }
     summary.selected_ids_without_records = selected.difference(&seen_ids).copied().collect();
+    eprintln!("[subtiming] native records walk {:.3}s", __t.elapsed().as_secs_f64());
     Ok(summary)
 }
