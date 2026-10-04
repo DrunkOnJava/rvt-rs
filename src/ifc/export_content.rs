@@ -53,6 +53,8 @@ pub struct TypedProductionAppend {
     pub element_type_materials: BTreeMap<u32, Vec<String>>,
     /// Each element's type, by ElementId (RE-110).
     pub element_type_ids: BTreeMap<u32, u32>,
+    /// Each family instance's original symbol, by ElementId (RE-167).
+    pub element_original_symbols: BTreeMap<u32, u32>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -283,6 +285,17 @@ pub fn append_typed_production_elements(
                 _ => None,
             }) {
                 out.element_type_ids.insert(id, type_id);
+            }
+            // RE-167: the original symbol, whose GlobalId the type takes.
+            if let Some(original) = decoded.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. }
+                    if name == crate::partition_schema_mvp::ORIGINAL_SYMBOL_FIELD =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            }) {
+                out.element_original_symbols.insert(id, original);
             }
         }
 

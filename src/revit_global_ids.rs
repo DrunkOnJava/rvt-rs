@@ -133,6 +133,46 @@ pub fn compress_ifc_guid(value: [u8; 16]) -> String {
     out.iter().map(|&b| char::from(b)).collect()
 }
 
+/// A 22-character IFC `GlobalId` as the 128-bit value it writes, `None` when
+/// it is not one.
+pub fn expand_ifc_guid(global_id: &str) -> Option<[u8; 16]> {
+    const ALPHABET: &[u8; 64] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
+    if global_id.len() != 22 {
+        return None;
+    }
+    let mut n: u128 = 0;
+    for byte in global_id.bytes() {
+        let digit = ALPHABET.iter().position(|&a| a == byte)?;
+        n = n.checked_mul(64)?.checked_add(digit as u128)?;
+    }
+    Some(n.to_be_bytes())
+}
+
+/// The GlobalId Revit's exporter makes from a hash key (revit-ifc
+/// `GUIDUtil.GenerateIFCGuidFrom`): the MD5 of the key's UTF-8, read as a
+/// .NET GUID (RE-167).
+pub fn hashed_global_id(key: &str) -> String {
+    use md5::{Digest, Md5};
+    let digest: [u8; 16] = Md5::digest(key.as_bytes())
+        .as_slice()
+        .try_into()
+        .expect("an MD5 digest is 16 bytes");
+    compress_ifc_guid(canonical_guid(digest))
+}
+
+/// The GlobalId Revit's exporter gives sub-element `index` of the element
+/// whose GlobalId is `global_id` (`ExporterIFCUtils.CreateSubElementGUID`):
+/// the element's with `index` XORed, big-endian, into bytes 10 and 11 of the
+/// GUID (RE-167: a column's type, index 2048 `InstanceAsType`, on all 164
+/// columns of Core Interior that use their own geometry).
+pub fn sub_element_global_id(global_id: &str, index: u16) -> Option<String> {
+    let mut value = expand_ifc_guid(global_id)?;
+    let [high, low] = index.to_be_bytes();
+    value[10] ^= high;
+    value[11] ^= low;
+    Some(compress_ifc_guid(value))
+}
+
 /// The GlobalId Revit's exporter gives element `element_id` of an episode
 /// whose GUID is `episode_guid` (Windows byte order).
 pub fn revit_ifc_global_id(episode_guid: [u8; 16], element_id: u32) -> String {

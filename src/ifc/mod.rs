@@ -253,6 +253,15 @@ pub struct RevitGlobalIds {
     /// (RE-110).
     #[serde(default)]
     pub types: std::collections::BTreeMap<u32, String>,
+    /// By an element's ElementId: its type object's GlobalId where that is
+    /// not its type's own, as Revit gives a family instance's type the
+    /// GlobalId of the instance's original symbol (RE-167).
+    #[serde(default)]
+    pub element_types: std::collections::BTreeMap<u32, String>,
+    /// The file's Revit release, which picks the form of the GlobalId keys
+    /// Revit's exporter hashes (B73).
+    #[serde(default)]
+    pub revit_version: Option<u32>,
 }
 
 /// A single building storey derived from a Revit `Level` element.
@@ -1010,15 +1019,20 @@ fn export_rvt_doc(
     // element entities — we never regress the metadata-only baseline.
     let mut building_storeys = Vec::new();
     let mut materials = Vec::new();
-    let (element_layers, element_type_materials, unplaced_wall_layers, element_type_ids) =
-        append_production_walker_elements(
-            rf,
-            &mut entities,
-            &mut building_storeys,
-            &mut materials,
-            policy,
-            walker_limits,
-        );
+    let (
+        element_layers,
+        element_type_materials,
+        unplaced_wall_layers,
+        element_type_ids,
+        element_original_symbols,
+    ) = append_production_walker_elements(
+        rf,
+        &mut entities,
+        &mut building_storeys,
+        &mut materials,
+        policy,
+        walker_limits,
+    );
     if mode == RvtDocExportMode::DiagnosticProxies {
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
@@ -1138,7 +1152,13 @@ fn export_rvt_doc(
     }
 
     let recovered_units = recover_project_units(rf);
-    let global_ids = revit_model_global_ids(rf, &entities, &building_storeys, &element_type_ids);
+    let global_ids = revit_model_global_ids(
+        rf,
+        &entities,
+        &building_storeys,
+        &element_type_ids,
+        &element_original_symbols,
+    );
     let (material_layer_sets, material_layer_usages) =
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
     let mut material_constituent_sets =
@@ -1932,6 +1952,7 @@ fn revit_model_global_ids(
     entities: &[entities::IfcEntity],
     storeys: &[Storey],
     element_type_ids: &std::collections::BTreeMap<u32, u32>,
+    element_original_symbols: &std::collections::BTreeMap<u32, u32>,
 ) -> RevitGlobalIds {
     let mut out = RevitGlobalIds {
         document: rf
@@ -1940,6 +1961,7 @@ fn revit_model_global_ids(
             .and_then(|info| info.document_guid().map(str::to_owned)),
         ..RevitGlobalIds::default()
     };
+    out.revit_version = rf.basic_file_info().ok().map(|info| info.version);
     let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
         return out;
     };
@@ -1982,8 +2004,47 @@ fn revit_model_global_ids(
             out.types.insert(*type_id, global_id.clone());
         }
     }
+    // RE-167: Revit gives a family instance's type its original symbol's
+    // GlobalId. A door's or window's is a hash of it with the door's flip
+    // (B72), not read yet, so those keep their symbol's.
+    let doors_and_windows: std::collections::BTreeSet<u32> = entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid: Some(tag),
+                ..
+            } if ifc_type == "IFCDOOR" || ifc_type == "IFCWINDOW" => tag.parse().ok(),
+            _ => None,
+        })
+        .collect();
+    for (element, original) in element_original_symbols {
+        if doors_and_windows.contains(element) {
+            continue;
+        }
+        // An instance that uses its own geometry has no original symbol;
+        // its type is a sub-element of it (RE-167, `InstanceAsType`).
+        if *original == crate::partition_schema_mvp::INSTANCE_GEOMETRY {
+            if let Some(global_id) = ids.get(element).and_then(|own| {
+                crate::revit_global_ids::sub_element_global_id(own, INSTANCE_AS_TYPE)
+            }) {
+                out.element_types.insert(*element, global_id);
+            }
+            continue;
+        }
+        if element_type_ids.get(element) == Some(original) {
+            continue;
+        }
+        if let Some(global_id) = ids.get(original) {
+            out.element_types.insert(*element, global_id.clone());
+        }
+    }
     out
 }
+
+/// revit-ifc's sub-element index for a family instance written as its own
+/// type (`IFCFamilyInstanceSubElements.InstanceAsType`).
+const INSTANCE_AS_TYPE: u16 = 2048;
 
 /// True when an emitted `IFCSLAB` carries no resolved thickness.
 ///
@@ -2618,6 +2679,7 @@ type WalkerElementData = (
     std::collections::BTreeMap<u32, Vec<String>>,
     std::collections::BTreeMap<u32, Vec<LayerBand>>,
     std::collections::BTreeMap<u32, u32>,
+    std::collections::BTreeMap<u32, u32>,
 );
 
 fn append_production_walker_elements(
@@ -2648,6 +2710,7 @@ fn append_production_walker_elements(
             append.element_type_materials,
             append.unplaced_wall_layers,
             append.element_type_ids,
+            append.element_original_symbols,
         );
     }
     Default::default()
