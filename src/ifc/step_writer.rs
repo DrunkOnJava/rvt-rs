@@ -2424,6 +2424,110 @@ impl StepWriter {
             void_fill_triples.push((*host, opening_id, None, opening_gid));
         }
 
+        // B55: the opening a wall's edited elevation profile cuts. As in
+        // Revit's export it is placed in the wall's frame, its outline in the
+        // wall's vertical plane extruded through the wall's thickness.
+        for entity in &model.entities {
+            let super::entities::IfcEntity::WallProfileOpening {
+                host,
+                tag,
+                name,
+                outline_feet,
+                axis_turn_radians,
+                plane_offset_feet,
+                thickness_feet,
+            } = entity
+            else {
+                continue;
+            };
+            let (Some(Some(host_el_id)), Some(Some(host_placement))) = (
+                entity_index_to_el_id.get(*host),
+                entity_index_to_placement.get(*host),
+            ) else {
+                continue;
+            };
+            let profile_origin = self.id();
+            self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+            let profile_x_axis = self.id();
+            self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
+            let profile_placement = self.id();
+            self.emit_entity(
+                profile_placement,
+                format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
+            );
+            let body = Extrusion {
+                width_feet: 0.0,
+                depth_feet: 0.0,
+                height_feet: *thickness_feet,
+                profile_override: Some(super::entities::ProfileDef::ArbitraryClosed {
+                    points: outline_feet.clone(),
+                }),
+            };
+            let profile_id = self.emit_profile_def(&body, profile_placement);
+            // The profile's X runs along the wall and its Y up; it is extruded
+            // from the plane's far face back through the wall.
+            let (sin, cos) = axis_turn_radians.sin_cos();
+            let start = (plane_offset_feet + thickness_feet / 2.0) * 0.3048;
+            let solid_origin = self.id();
+            self.emit_entity(
+                solid_origin,
+                format!(
+                    "IFCCARTESIANPOINT(({:.6},{:.6},0.))",
+                    -sin * start,
+                    cos * start
+                ),
+            );
+            let solid_axis = self.id();
+            self.emit_entity(
+                solid_axis,
+                format!("IFCDIRECTION(({sin:.9},{:.9},0.))", -cos),
+            );
+            let solid_x = self.id();
+            self.emit_entity(solid_x, format!("IFCDIRECTION(({cos:.9},{sin:.9},0.))"));
+            let solid_position = self.id();
+            self.emit_entity(
+                solid_position,
+                format!("IFCAXIS2PLACEMENT3D(#{solid_origin},#{solid_axis},#{solid_x})"),
+            );
+            let solid_id = self.id();
+            self.emit_entity(
+                solid_id,
+                format!(
+                    "IFCEXTRUDEDAREASOLID(#{profile_id},#{solid_position},#{z_axis},{:.6})",
+                    thickness_feet * 0.3048
+                ),
+            );
+            let rep_id = self.id();
+            self.emit_entity(
+                rep_id,
+                format!("IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','SweptSolid',(#{solid_id}))"),
+            );
+            let prod_shape_id = self.id();
+            self.emit_entity(
+                prod_shape_id,
+                format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{rep_id}))"),
+            );
+            let opening_axis = self.id();
+            self.emit_entity(opening_axis, format!("IFCAXIS2PLACEMENT3D(#{origin},$,$)"));
+            let placement_id = self.id();
+            self.emit_entity(
+                placement_id,
+                format!("IFCLOCALPLACEMENT(#{host_placement},#{opening_axis})"),
+            );
+            let host_gid = el_id_to_gid.get(host_el_id).copied().unwrap_or_default();
+            let opening_gid = gid(&["wall-profile-opening", host_gid, tag]);
+            let opening_id = self.id();
+            self.emit_entity(
+                opening_id,
+                format!(
+                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',.OPENING.)",
+                    quoted_or_dollar(&escape(name)),
+                    escape(tag),
+                ),
+            );
+            void_fill_triples.push((*host, opening_id, None, opening_gid));
+        }
+
         // IfcRelVoidsElement + IfcRelFillsElement — for each
         // (host, opening, element) triple we collected during
         // element emission, emit:
