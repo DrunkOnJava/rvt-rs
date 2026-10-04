@@ -10,7 +10,7 @@
 //! Revit's 26 `IfcSystem`s is one such object of the same name, and every
 //! element Revit groups in it holds its id.
 
-use crate::partition_room_parameters::{DATA_OBJECT_HEADER, data_objects, verified_data_object};
+use crate::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -171,7 +171,10 @@ pub fn scan_mep_systems(
             continue;
         };
         let buf = inflated.bytes();
-        for (p, object) in data_objects(buf) {
+        let Ok(objects) = rf.partition_data_objects(stream) else {
+            continue;
+        };
+        for &(p, object) in objects.iter() {
             if !elements.contains(&object.element_id) {
                 continue;
             }
