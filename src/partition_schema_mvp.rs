@@ -1258,8 +1258,8 @@ pub const ORIGINAL_SYMBOL_FIELD: &str = "m_original_symbol";
 /// models.
 pub const ORIGINAL_SYMBOL_FROM_END: usize = 20;
 
-/// Give each family instance ([`REVIT_CLASS_FIELD`] `FamilyInstance`) its
-/// original symbol ([`ORIGINAL_SYMBOL_FIELD`], RE-167): the ElementId its
+/// Give each family instance ([`REVIT_CLASS_FIELD`] `FamilyInstance`, and
+/// each curtain mullion and panel) its original symbol ([`ORIGINAL_SYMBOL_FIELD`], RE-167): the ElementId its
 /// `GElement` data object holds [`ORIGINAL_SYMBOL_FROM_END`] bytes before its
 /// end, when every such object of the instance gives the same one and it is a
 /// FamilySymbol's. On the RE1 models that is the element whose GlobalId Revit
@@ -1274,11 +1274,14 @@ fn attach_original_symbols<const N: usize>(
     if revit_version < 2024 {
         return;
     }
+    // Curtain mullions and panels are family instances too, of classes of
+    // their own.
     let is_instance = |element: &DecodedElement| {
-        element.fields.iter().any(|(name, value)| {
-            name == REVIT_CLASS_FIELD
-                && matches!(value, InstanceField::String(class) if class == "FamilyInstance")
-        })
+        CURTAIN_AXES_CLASSES.contains(&element.class.as_str())
+            || element.fields.iter().any(|(name, value)| {
+                name == REVIT_CLASS_FIELD
+                    && matches!(value, InstanceField::String(class) if class == "FamilyInstance")
+            })
     };
     let instances: BTreeSet<u32> = groups
         .iter()
