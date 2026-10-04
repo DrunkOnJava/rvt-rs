@@ -12,9 +12,10 @@
 //!
 //! Usage: probe_re167_type_global_ids <model.rvt>
 
+use md5::{Digest, Md5};
 use rvt::RevitFile;
 use rvt::partition_room_parameters::data_objects;
-use rvt::revit_global_ids::revit_global_ids;
+use rvt::revit_global_ids::{canonical_guid, compress_ifc_guid, revit_global_ids};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -171,5 +172,54 @@ fn main() -> anyhow::Result<()> {
         );
     }
     println!("summary: {summary:?}");
+    // The rule: the u32 20 bytes before the end of the instance's GElement
+    // object names its original symbol; the type's GlobalId is that
+    // symbol's, or for a door or window the hash of it with the flip key.
+    let hashed = |key: &str| {
+        let digest = Md5::digest(key.as_bytes());
+        compress_ifc_guid(canonical_guid(
+            digest.as_slice().try_into().expect("16 bytes"),
+        ))
+    };
+    let mut rule: BTreeMap<String, usize> = BTreeMap::new();
+    for row in &rows {
+        for element in &row.elements {
+            let originals: BTreeSet<u32> = objects
+                .get(element)
+                .into_iter()
+                .flatten()
+                .filter(|(class, bytes)| class == "GElement" && bytes.len() >= 24)
+                .map(|(_, bytes)| {
+                    let at = bytes.len() - 20;
+                    u32::from_le_bytes(bytes[at..at + 4].try_into().expect("4 bytes"))
+                })
+                .collect();
+            let verdict = match originals.iter().next().copied() {
+                None => "no GElement object".to_string(),
+                Some(_) if originals.len() > 1 => "GElement objects disagree".to_string(),
+                Some(original) => match ids.get(&original) {
+                    None => format!("end-20 value {original} has no GlobalId"),
+                    Some(gid) if *gid == row.gid => "original symbol's GlobalId".to_string(),
+                    Some(gid) => {
+                        let flips = [
+                            "Flipped: False InAssembly: False",
+                            "Flipped: True InAssembly: False",
+                        ];
+                        match flips
+                            .iter()
+                            .find(|key| hashed(&format!("{gid}Sub-element:{key}")) == row.gid)
+                        {
+                            Some(key) => format!("hash of the original symbol's GlobalId, {key}"),
+                            None => "neither".to_string(),
+                        }
+                    }
+                },
+            };
+            *rule
+                .entry(format!("{}: {verdict}", row.entity))
+                .or_default() += 1;
+        }
+    }
+    println!("rule: {rule:?}");
     Ok(())
 }
