@@ -181,6 +181,15 @@ jobs:
                 if cmp -s "$d/info.json" "measure-base/$f/info.json" && cmp -s "$d/info.exit" "measure-base/$f/info.exit"; then echo "- $f: identical ($(cat "$d/info.exit"))"; else echo "- $f: **differs**"; fi
               done
               echo
+              echo "### rvt-ifc wall time, base → head (ms)"
+              echo
+              for d in measure-head/*/; do
+                m=$(basename "$d")
+                h=$(grep -h '^milliseconds' "$d/rvt-ifc.log" 2>/dev/null | cut -d' ' -f2)
+                b=$(grep -h '^milliseconds' "measure-base/$m/rvt-ifc.log" 2>/dev/null | cut -d' ' -f2)
+                [ -n "$h" ] && [ -n "$b" ] && echo "- $m: $b → $h"
+              done
+              echo
               echo "### Scorer differences (base → head)"
               echo
               echo '```diff'
