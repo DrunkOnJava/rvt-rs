@@ -48,6 +48,7 @@ real      level_names
 real      mep_systems
 real      native_current_records
 real      native_partitions_walk
+real      native_phases
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
 real      project_corpus_smoke
