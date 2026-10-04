@@ -20,6 +20,19 @@ fn main() -> anyhow::Result<()> {
         println!("not a model with ducts");
         return Ok(());
     }
+    if let Ok(step) = std::fs::read_to_string(path.with_extension("ifc")) {
+        let mut shown = 0;
+        for line in step.lines() {
+            let wanted = line.contains("'Shape'")
+                || line.contains("IFCDUCTSEGMENTTYPE(")
+                || line.contains("IFCFLOWSEGMENTTYPE(")
+                || (line.contains("IFCFLOWSEGMENT(") && line.contains("Duct"));
+            if wanted && shown < 30 {
+                println!("revit: {}", line.chars().take(260).collect::<String>());
+                shown += 1;
+            }
+        }
+    }
     let mut rf = RevitFile::open(&path)?;
     let mut used: BTreeMap<u64, usize> = BTreeMap::new();
     let mut types = Vec::new();
