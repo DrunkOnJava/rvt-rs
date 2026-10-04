@@ -51,6 +51,7 @@ real      native_partitions_walk
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
 real      project_corpus_smoke
+real      railing_type
 real      re15_geometry_invariants
 real      re19_door_window_wall_negative
 real      reference_values

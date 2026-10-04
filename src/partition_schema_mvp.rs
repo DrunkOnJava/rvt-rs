@@ -642,13 +642,29 @@ fn attach_system_type_names(
             picks.push((index, type_id));
         }
     }
+    // B45: a railing whose reference list names no type definition holds its
+    // type in its own data object.
+    let unpicked: Vec<(usize, u32)> = elements
+        .iter()
+        .enumerate()
+        .filter(|(index, element)| {
+            element.class == "Railing" && !picks.iter().any(|(picked, _)| picked == index)
+        })
+        .filter_map(|(index, element)| Some((index, element.id?)))
+        .collect();
+    let mut railing_names = std::collections::BTreeMap::new();
+    if revit_version >= 2024 && !unpicked.is_empty() {
+        let (railing_picks, names) = railing_type_picks(rf, &unpicked);
+        picks.extend(railing_picks);
+        railing_names = names;
+    }
     if picks.is_empty() {
         return;
     }
     let wanted: BTreeSet<u32> = picks.iter().map(|(_, id)| *id).collect();
     let mut names = type_data_names(rf, &header, &wanted);
     // A railing type with no element data keeps its name in its type object
-    // (RE-66, measured on Revit 2024 only).
+    // (RE-66, measured on Revit 2024, and B45's RE1 railing on 2025).
     let railing_types: BTreeSet<u32> = picks
         .iter()
         .filter(|(index, id)| {
@@ -656,14 +672,21 @@ fn attach_system_type_names(
         })
         .map(|(_, id)| *id)
         .collect();
-    if revit_version == 2024 && !railing_types.is_empty() {
+    let railing_tags = rf
+        .schema_classes()
+        .ok()
+        .and_then(|classes| crate::partition_names::RailingTypeTags::from_classes(&classes));
+    if let Some(tags) = railing_tags.filter(|_| revit_version >= 2024 && !railing_types.is_empty())
+    {
         for stream in rf.partition_stream_names() {
             let Ok(inflated) = rf.inflated_partition(&stream) else {
                 continue;
             };
-            for (id, name) in
-                crate::partition_names::find_railing_type_names(inflated.bytes(), &railing_types)
-            {
+            for (id, name) in crate::partition_names::find_railing_type_names(
+                inflated.bytes(),
+                &railing_types,
+                tags,
+            ) {
                 match names.get(&id) {
                     Some(Some(held)) if *held != name => {
                         names.insert(id, None);
@@ -676,7 +699,93 @@ fn attach_system_type_names(
             }
         }
     }
+    for (id, name) in railing_names {
+        if !matches!(names.get(&id), Some(Some(_))) {
+            names.insert(id, Some(name));
+        }
+    }
     attach_type_picks(elements, picks, &names);
+}
+
+/// The type of each of `railings` (index, ElementId) that its own
+/// `BaseRailing` data object (RE-153) names (B45): the one ElementId in the
+/// object's payload, at any offset, of a railing type's `StairsRailingAttr`
+/// object. RE1 Architecture's railing 462556 holds its type 446543, Revit's
+/// `IfcRailingType` Tag, at +283 of its 329-byte object. With the picks, the
+/// picked types' names their own objects hold
+/// ([`crate::partition_names::railing_type_name_in`]). Revit 2024 and later.
+fn railing_type_picks(
+    rf: &mut RevitFile,
+    railings: &[(usize, u32)],
+) -> (Vec<(usize, u32)>, std::collections::BTreeMap<u32, String>) {
+    let Ok(classes) = rf.schema_classes() else {
+        return Default::default();
+    };
+    let tag_of = |name: &str| {
+        classes
+            .classes
+            .iter()
+            .find(|class| class.name == name)
+            .map(|class| u32::from(class.tag))
+    };
+    let (Some(railing_tag), Some(type_tag)) = (tag_of("BaseRailing"), tag_of("StairsRailingAttr"))
+    else {
+        return Default::default();
+    };
+    let name_tags = crate::partition_names::RailingTypeTags::from_classes(&classes);
+    let wanted: BTreeSet<u32> = railings.iter().map(|(_, id)| *id).collect();
+    let mut type_ids: BTreeSet<u32> = BTreeSet::new();
+    // Each type's name where its copies that read one agree; a copy whose
+    // name does not read takes no part.
+    let mut type_names: std::collections::BTreeMap<u32, Option<String>> =
+        std::collections::BTreeMap::new();
+    let mut held: std::collections::BTreeMap<u32, BTreeSet<u32>> =
+        std::collections::BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for (p, object) in crate::partition_room_parameters::data_objects(buf) {
+            let class = object.class & 0xffff;
+            if class == type_tag {
+                let name = name_tags.and_then(|tags| {
+                    crate::partition_names::railing_type_name_in(&buf[p..object.end], tags)
+                });
+                type_ids.insert(object.element_id);
+                if let Some(name) = name {
+                    let held = type_names
+                        .entry(object.element_id)
+                        .or_insert_with(|| Some(name.clone()));
+                    if held.as_deref() != Some(name.as_str()) {
+                        *held = None;
+                    }
+                }
+            } else if class == railing_tag && wanted.contains(&object.element_id) {
+                let payload =
+                    &buf[p + crate::partition_room_parameters::DATA_OBJECT_HEADER..object.end];
+                let values = held.entry(object.element_id).or_default();
+                for word in payload.windows(4) {
+                    values.insert(u32::from_le_bytes(word.try_into().expect("4 bytes")));
+                }
+            }
+        }
+    }
+    let picks: Vec<(usize, u32)> = railings
+        .iter()
+        .filter_map(|(index, id)| {
+            let mut named = held.get(id)?.intersection(&type_ids);
+            match (named.next(), named.next()) {
+                (Some(&type_id), None) => Some((*index, type_id)),
+                _ => None,
+            }
+        })
+        .collect();
+    let names = picks
+        .iter()
+        .filter_map(|(_, type_id)| Some((*type_id, type_names.get(type_id)?.clone()?)))
+        .collect();
+    (picks, names)
 }
 
 /// Each wanted type's name, read from its serialised data
