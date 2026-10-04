@@ -247,6 +247,14 @@ patches, and GUID and history preservation, on the Autodesk families and the
 project corpus (`RVT_SAMPLES_DIR` / `RVT_PROJECT_CORPUS_DIR`); CI's Writer patch
 corpus job runs it on every pull request.
 
+Revit keeps `Formats/Latest`, `Global/Latest`, the partitions and a few other
+streams in 65,249-byte pages, each ending in a checksum rvt-rs cannot compute.
+A patch to one of them is written only while its new stored bytes fit in one
+page; a longer one is refused with `write refused: ...` and nothing is written,
+rather than leaving a stream no reader can decode. `tests/cli_real_files.rs`
+patches both streams of every Autodesk family through the built `rvt-write`
+and checks that each either reads back the same or is refused.
+
 ```bash
 rvt-write model.rvt --patches patches.json -o patched.rvt
 ```
