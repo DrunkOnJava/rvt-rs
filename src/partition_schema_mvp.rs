@@ -350,6 +350,18 @@ pub fn recover_partition_schema_mvp(
     // --- Curtain mullions and panels turned or tilted off the model's axes,
     // with their three axes (RE-106) ---
     attach_curtain_axes(rf, revit_version, &mut out.products);
+    // --- Each family instance's original symbol, whose GlobalId Revit's
+    // export gives its type (RE-167, B60) ---
+    attach_original_symbols(
+        rf,
+        revit_version,
+        [
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.columns,
+            &mut out.products,
+        ],
+    );
 
     // --- Family and type names (RE-38) ---
     for elements in [
@@ -1231,6 +1243,103 @@ fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [D
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+}
+
+/// Field carrying a family instance's original symbol (RE-167): the
+/// FamilySymbol `ExporterIFCUtils.GetOriginalSymbol` returns, whose GlobalId
+/// Revit's export gives the instance's type object while its `Tag` stays the
+/// instance's symbol.
+pub const ORIGINAL_SYMBOL_FIELD: &str = "m_original_symbol";
+/// Bytes before the end of a family instance's `GElement` data object
+/// (RE-153) where it holds its original symbol's ElementId (RE-167): at +300
+/// of 320 bytes on RE1 Architecture, +330 of 350 and +392 of 412 on the MEP
+/// models.
+pub const ORIGINAL_SYMBOL_FROM_END: usize = 20;
+
+/// Give each family instance ([`REVIT_CLASS_FIELD`] `FamilyInstance`) its
+/// original symbol ([`ORIGINAL_SYMBOL_FIELD`], RE-167): the ElementId its
+/// `GElement` data object holds [`ORIGINAL_SYMBOL_FROM_END`] bytes before its
+/// end, when every such object of the instance gives the same one and it is a
+/// FamilySymbol's. On the RE1 models that is the element whose GlobalId Revit
+/// gives the type of every one of 162 family instances; it is the symbol
+/// itself for most, another FamilySymbol (often the instance's id plus one)
+/// for many furniture, fittings, mullions and panels. Revit 2024 and later.
+fn attach_original_symbols<const N: usize>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; N],
+) {
+    if revit_version < 2024 {
+        return;
+    }
+    let is_instance = |element: &DecodedElement| {
+        element.fields.iter().any(|(name, value)| {
+            name == REVIT_CLASS_FIELD
+                && matches!(value, InstanceField::String(class) if class == "FamilyInstance")
+        })
+    };
+    let instances: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter())
+        .filter(|element| is_instance(element))
+        .filter_map(|element| element.id)
+        .collect();
+    if instances.is_empty() {
+        return;
+    }
+    let Ok(classes) = rf.schema_classes() else {
+        return;
+    };
+    let tag_of = |name: &str| {
+        classes
+            .classes
+            .iter()
+            .find(|class| class.name == name)
+            .map(|class| u32::from(class.tag))
+    };
+    let (Some(element_tag), Some(symbol_tag)) = (tag_of("GElement"), tag_of("FamilySymbol")) else {
+        return;
+    };
+    let mut held: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut symbols: BTreeSet<u32> = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for (p, object) in crate::partition_room_parameters::data_objects(buf) {
+            let class = object.class & 0xffff;
+            if class == symbol_tag {
+                symbols.insert(object.element_id);
+            } else if class == element_tag && instances.contains(&object.element_id) {
+                let Some(at) = object.end.checked_sub(ORIGINAL_SYMBOL_FROM_END) else {
+                    continue;
+                };
+                if at < p {
+                    continue;
+                }
+                let value = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes"));
+                held.entry(object.element_id).or_default().insert(value);
+            }
+        }
+    }
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(values) = element.id.and_then(|id| held.get(&id)) else {
+            continue;
+        };
+        let mut values = values.iter();
+        if let (Some(&original), None) = (values.next(), values.next()) {
+            if symbols.contains(&original) {
+                element.fields.push((
+                    ORIGINAL_SYMBOL_FIELD.into(),
+                    InstanceField::ElementId {
+                        tag: 0,
+                        id: original,
+                    },
+                ));
+            }
         }
     }
 }
