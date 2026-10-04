@@ -12,11 +12,61 @@ use std::path::PathBuf;
 const RAILING: u32 = 462556;
 const TYPE: u32 = 446543;
 
+fn strings(bytes: &[u8]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut q = 0;
+    while q + 4 <= bytes.len() {
+        let n = u32::from_le_bytes(bytes[q..q + 4].try_into().expect("4 bytes")) as usize;
+        if (2..=80).contains(&n) && q + 4 + 2 * n <= bytes.len() {
+            let units: Vec<u16> = bytes[q + 4..q + 4 + 2 * n]
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            if units.iter().all(|u| (0x20..0x7f).contains(u)) {
+                out.push(String::from_utf16_lossy(&units));
+                q += 4 + 2 * n;
+                continue;
+            }
+        }
+        q += 1;
+    }
+    out
+}
+
 fn main() -> anyhow::Result<()> {
     let path = PathBuf::from(std::env::args().nth(1).expect("model path"));
     if !path.to_string_lossy().contains("Architecture") {
         println!("not RE1 Architecture");
         return Ok(());
+    }
+    let reference = path.with_extension("ifc");
+    if let Ok(step) = std::fs::read_to_string(&reference) {
+        for line in step.lines() {
+            if line.contains("IFCRAILINGTYPE(")
+                || line.contains("'462556'")
+                || line.contains("Pset_RailingCommon")
+            {
+                println!("revit: {}", line.chars().take(300).collect::<String>());
+            }
+        }
+        // The values of Pset_RailingCommon's properties.
+        let ids: Vec<&str> = step
+            .lines()
+            .filter(|l| l.contains("'Pset_RailingCommon'"))
+            .flat_map(|l| {
+                l.split('#')
+                    .skip(2)
+                    .map(|s| s.split(|c: char| !c.is_ascii_digit()).next().unwrap_or(""))
+            })
+            .collect();
+        for line in step.lines() {
+            if ids
+                .iter()
+                .any(|id| !id.is_empty() && line.starts_with(&format!("#{id}=")))
+            {
+                println!("revit property: {line}");
+            }
+        }
     }
     let mut rf = RevitFile::open(&path)?;
     let classes = rf.schema_classes()?;
@@ -49,9 +99,10 @@ fn main() -> anyhow::Result<()> {
             let bytes = &buf[p..object.end];
             let at: Vec<usize> = memchr::memmem::find_iter(bytes, &other.to_le_bytes()).collect();
             println!(
-                "{whose} object in {stream} at {p}: class {}, {} bytes, the other's id at {at:?}",
+                "{whose} object in {stream} at {p}: class {}, {} bytes, the other's id at {at:?}, strings {:?}",
                 class_name(object.class),
-                bytes.len()
+                bytes.len(),
+                strings(bytes)
             );
         }
         // Occurrences of the type id anywhere in the stream near the railing id.
