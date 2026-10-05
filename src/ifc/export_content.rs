@@ -1002,8 +1002,9 @@ pub fn append_typed_production_elements(
     }
 
     // RE-138 (#528): a join is written when both elements are exported as
-    // distribution elements, the only elements a port may be tied to, and once
-    // however many of the two it was read from.
+    // elements that take ports, distribution elements and proxies (whose
+    // ports are nested in them, B83, B86), and once however many of the two
+    // it was read from.
     let is_distribution = |index: usize| {
         matches!(
             entities.get(index),
@@ -1011,13 +1012,21 @@ pub fn append_typed_production_elements(
                 if is_distribution_element(ifc_type)
         )
     };
+    let takes_ports = |index: usize| {
+        is_distribution(index)
+            || matches!(
+                entities.get(index),
+                Some(entities::IfcEntity::BuildingElement { ifc_type, .. })
+                    if ifc_type == "IFCBUILDINGELEMENTPROXY"
+            )
+    };
     let mut connections: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
     for (entity, id, joins) in pending_joins {
         for (index, other_id, other_index) in joins {
             let Some(&other) = out.id_to_entity.get(&other_id) else {
                 continue;
             };
-            if !is_distribution(entity) || !is_distribution(other) {
+            if !takes_ports(entity) || !takes_ports(other) {
                 continue;
             }
             let mut ends = [(entity, id, index), (other, other_id, other_index)];

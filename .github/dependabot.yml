@@ -1,11 +1,20 @@
 version: 2
+# Commit titles read `build(deps): ...` (Conventional Commits), and a release
+# waits a few days before Dependabot proposes it, a week for a major one, so
+# a version pulled soon after publication never lands (C10).
 updates:
   - package-ecosystem: cargo
-    # The fuzz workspace has its own lockfile, so a bump to the crate's
-    # dependencies has to reach it too.
+    # The fuzz workspace and the IFClite witness have their own lockfiles,
+    # so a bump to their dependencies has to reach them too.
     directories:
       - /
       - /fuzz
+      - /tools/ci/witness-ifc-lite
+    # The witness pins ifc-lite-core exactly (`=7.1.1`): a different version is a
+    # different witness, recorded in research/witness-registry.json, so it
+    # moves by hand, never by Dependabot.
+    ignore:
+      - dependency-name: ifc-lite-core
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -20,8 +29,11 @@ updates:
       - dependencies
       - rust
     commit-message:
-      prefix: deps
+      prefix: build
       include: scope
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
   - package-ecosystem: github-actions
     # The workflows, and the composite actions under .github/actions, which pin
     # actions of their own.
@@ -39,8 +51,11 @@ updates:
       - dependencies
       - github-actions
     commit-message:
-      prefix: deps
+      prefix: build
       include: scope
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
   - package-ecosystem: npm
     directory: /viewer
     schedule:
@@ -55,8 +70,11 @@ updates:
       - viewer
       - javascript
     commit-message:
-      prefix: deps
+      prefix: build
       include: scope
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
   - package-ecosystem: docker
     # The release container image's base, pinned by digest in docker/Dockerfile.
     directory: /docker
@@ -66,5 +84,8 @@ updates:
       - dependencies
       - docker
     commit-message:
-      prefix: deps
+      prefix: build
       include: scope
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
