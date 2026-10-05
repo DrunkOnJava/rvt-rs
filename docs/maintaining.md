@@ -125,7 +125,7 @@ Configured on the repository, with the rulesets kept as code in
   `.github/actions`), the viewer's npm packages and the release image's base in
   `docker/Dockerfile`, with minor and patch updates grouped; major updates
   arrive one at a time and are migrated by hand when they need it. A release
-  waits three days (seven for a major one) before it is proposed, and commit
+  waits three days (seven for a major Cargo or npm one) before it is proposed, and commit
   titles read `build(deps): ...`. The witness's `ifc-lite-core` is never
   proposed: it is pinned to an exact version on purpose, as a different version
   is a different witness.
