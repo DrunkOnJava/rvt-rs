@@ -263,7 +263,7 @@ From an audit of all nine workflows, the fetch-corpus action, dependabot.yml, bo
   - on main, 2 failures in 91 completed runs (2.2%), both `space_containment` right after #645 landed (runs 37213000439, 37213656572): a real regression, fixed by #656, that landed because Corpus health was not required;
   - red drafts (`red/`), 37 failures in 43, on purpose under the red-then-green rule;
   - other pull requests, 45 failures in 292, every one on a work-in-progress branch before its fix landed.
-  No failure passed on a rerun of the same commit, so no flaky test is logged.
+  Main's two failures are explained; the pull request failures were not checked one by one for a rerun of the same commit that passed. No flaky test is logged until one is shown.
 - **A merge queue is not available.** GitHub offers merge queues to organization-owned repositories, and DrunkOnJava/rvt-rs is owned by a user account, so pull requests still land one update-branch cycle at a time, ordered by what they conflict with.
 
 ## Progress log
