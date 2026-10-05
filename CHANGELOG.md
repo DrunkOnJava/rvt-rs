@@ -8,6 +8,10 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Release binaries carry their dependency list (C10).** Each binary of a
+  GitHub release is built with `cargo auditable`, which embeds the crates
+  and versions it was built from, so `cargo audit bin` and other scanners
+  can check a downloaded binary against the RustSec advisories.
 - **A wall's edited elevation profile cuts an opening (RE-151, B55, #227).**
   Wall 55840's sketch on Core Interior is a loop of 11 lines in its vertical
   plane; the lines that leave the loop's bounding rectangle cut the region

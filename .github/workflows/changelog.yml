@@ -34,6 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # Full history so git-cliff can walk every tag back to the
           # initial commit. `fetch-depth: 0` is the documented way.
           fetch-depth: 0
