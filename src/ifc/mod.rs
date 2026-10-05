@@ -1170,7 +1170,6 @@ fn export_rvt_doc(
         &element_flips,
     );
     let (material_layer_sets, material_layer_usages) =
-    eprintln!("[timing] t {:.3}s at: export: material_layer_sets_from_layers", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
     let mut material_constituent_sets =
         material_constituent_sets_from_types(&entities, &element_type_materials, &mut materials);
