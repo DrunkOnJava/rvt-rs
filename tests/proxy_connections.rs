@@ -83,7 +83,7 @@ fn read(step: &str) -> (BTreeSet<Connection>, BTreeMap<u32, String>) {
             continue;
         }
         let all = refs(args);
-        if let (Some(a), Some(b)) = (all.get(1).and_then(&key), all.get(2).and_then(&key)) {
+        if let (Some(a), Some(b)) = (all.get(1).and_then(key), all.get(2).and_then(key)) {
             let mut ends = [a, b];
             ends.sort();
             connections.insert(ends);
