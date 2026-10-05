@@ -5,9 +5,11 @@ name: Release binaries
 #
 #   - `publish.yml` calls this on a `v*` tag with `upload: true`, which
 #     attaches the archives and SHA256SUMS to that tag's GitHub Release.
-#   - Pull requests that touch this workflow or the Cargo manifests run the
-#     full matrix without uploading, so a release never depends on an
-#     untested matrix.
+#   - Pull requests that touch this workflow or docker/ run the full matrix
+#     without uploading, and so does a weekly run of main, so a release
+#     never depends on an untested matrix. A dependency bump alone no
+#     longer runs it: Cargo.lock in the paths ran the whole five-platform
+#     LTO build 16 times in five days (C7).
 #   - `workflow_dispatch` builds any ref; the archives are downloadable from
 #     the run's artifacts. Its `tag` input names them for a release (for
 #     staging a draft GitHub Release) without uploading anything.
@@ -40,9 +42,10 @@ on:
   pull_request:
     paths:
       - .github/workflows/release-binaries.yml
-      - Cargo.toml
-      - Cargo.lock
       - docker/**
+  schedule:
+    # Sundays at 04:23 UTC.
+    - cron: "23 4 * * 0"
 
 permissions:
   contents: read

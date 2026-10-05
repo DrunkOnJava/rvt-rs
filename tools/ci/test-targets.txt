@@ -59,6 +59,7 @@ real      native_partitions_walk
 real      native_phases
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
+real      port_nesting
 real      project_corpus_smoke
 real      proxy_ports
 real      railing_type

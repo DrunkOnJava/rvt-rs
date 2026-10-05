@@ -32,7 +32,7 @@ Install and local build paths are documented in
 
 ```bash
 # 1. Build the WASM into viewer/pkg/
-(cd .. && wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features)
+(cd .. && wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt)
 
 # 2. Install node deps
 cd viewer

@@ -2607,20 +2607,13 @@ impl StepWriter {
 
         // RE-138 (#528): the joins of ducts and pipes. A connector is an
         // `IfcDistributionPort` named after its element and index, with no
-        // flow direction (the file's lists carry none), tied to its element
-        // by an `IfcRelConnectsPortToElement`; a join is an
-        // `IfcRelConnectsPorts` between two of them. A port is shared by every
-        // join it is in. A proxy's ports are nested in it instead (B83): IFC4
-        // ties a port to a distribution element only, and Revit's IFC4 export
-        // nests every port in its element.
+        // flow direction (the file's lists carry none), nested in its element
+        // by one `IfcRelNests` per element, as Revit's IFC4 export nests them
+        // (B83, B84): IFC4 keeps `IfcRelConnectsPortToElement` for a dynamic
+        // connection and restricts it to distribution elements. A join is an
+        // `IfcRelConnectsPorts` between two ports; a port is shared by every
+        // join it is in.
         let mut ports: HashMap<(u32, u32), usize> = HashMap::new();
-        let is_proxy = |element: usize| {
-            matches!(
-                model.entities.get(element),
-                Some(super::entities::IfcEntity::BuildingElement { ifc_type, .. })
-                    if ifc_type == "IFCBUILDINGELEMENTPROXY"
-            )
-        };
         let mut nested: BTreeMap<u32, (usize, Vec<usize>)> = BTreeMap::new();
         for entity in &model.entities {
             let super::entities::IfcEntity::PortConnection {
@@ -2640,9 +2633,9 @@ impl StepWriter {
             ) else {
                 continue;
             };
-            let ends = [(*a, a_el, *a_id, *a_index), (*b, b_el, *b_id, *b_index)];
+            let ends = [(a_el, *a_id, *a_index), (b_el, *b_id, *b_index)];
             let mut port_ids = [0usize; 2];
-            for (slot, &(host, element, id, index)) in ends.iter().enumerate() {
+            for (slot, &(element, id, index)) in ends.iter().enumerate() {
                 if let Some(&port) = ports.get(&(id, index)) {
                     port_ids[slot] = port;
                     continue;
@@ -2656,22 +2649,11 @@ impl StepWriter {
                         gid(&["port", &id_text, &index_text]),
                     ),
                 );
-                if is_proxy(host) {
-                    nested
-                        .entry(id)
-                        .or_insert((element, Vec::new()))
-                        .1
-                        .push(port);
-                } else {
-                    let to_element = self.id();
-                    self.emit_entity(
-                        to_element,
-                        format!(
-                            "IFCRELCONNECTSPORTTOELEMENT('{}',#{owner_hist},$,$,#{port},#{element})",
-                            gid(&["port_to_element", &id_text, &index_text]),
-                        ),
-                    );
-                }
+                nested
+                    .entry(id)
+                    .or_insert((element, Vec::new()))
+                    .1
+                    .push(port);
                 ports.insert((id, index), port);
                 port_ids[slot] = port;
             }
@@ -2714,22 +2696,11 @@ impl StepWriter {
                     gid(&["port", &id_text, &index_text]),
                 ),
             );
-            if is_proxy(*element) {
-                nested
-                    .entry(*id)
-                    .or_insert((element_id, Vec::new()))
-                    .1
-                    .push(port);
-            } else {
-                let to_element = self.id();
-                self.emit_entity(
-                    to_element,
-                    format!(
-                        "IFCRELCONNECTSPORTTOELEMENT('{}',#{owner_hist},$,$,#{port},#{element_id})",
-                        gid(&["port_to_element", &id_text, &index_text]),
-                    ),
-                );
-            }
+            nested
+                .entry(*id)
+                .or_insert((element_id, Vec::new()))
+                .1
+                .push(port);
             ports.insert((*id, *index), port);
         }
         for (id, (element, element_ports)) in nested {
@@ -3248,11 +3219,11 @@ fn iso_timestamp_from(secs: i64) -> String {
 /// platform"), which made the browser viewer's Export IFC fail on every
 /// click; the wasm build reads the JavaScript host clock instead.
 fn unix_seconds() -> i64 {
-    #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     {
-        (crate::wasm::host_now_millis() / 1000.0) as i64
+        (js_sys::Date::now() / 1000.0) as i64
     }
-    #[cfg(not(all(target_arch = "wasm32", feature = "wasm")))]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
