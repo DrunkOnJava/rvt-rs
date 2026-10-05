@@ -41,6 +41,7 @@
 
 use crate::element_record_plan_profiles::{PlanProfile, plan_profile_from_lines};
 use crate::{Result, RevitFile};
+use std::collections::BTreeMap;
 
 /// Value of [`crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD`]
 /// on a room outline read here.
@@ -237,6 +238,27 @@ pub fn solid_headers(buf: &[u8], room_id: u32) -> Vec<usize> {
         .collect()
 }
 
+/// [`solid_headers`] for every ElementId at once, in one pass over `buf`
+/// (B85): each [`ROOM_SOLID_TAG`] with the `u64` before it, or before
+/// `ff ff ff ff` before it.
+pub fn solid_headers_by_id(buf: &[u8]) -> BTreeMap<u64, Vec<usize>> {
+    let mut out: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for tag in memchr::memmem::find_iter(buf, &ROOM_SOLID_TAG) {
+        let direct = tag.checked_sub(8);
+        let after_ff = tag
+            .checked_sub(12)
+            .filter(|&header| buf[header + 8..tag] == [0xff; 4]);
+        for header in [direct, after_ff].into_iter().flatten() {
+            let id = u64::from_le_bytes(buf[header..header + 8].try_into().expect("8 bytes"));
+            out.entry(id).or_default().push(header);
+        }
+    }
+    for headers in out.values_mut() {
+        headers.sort_unstable();
+    }
+    out
+}
+
 /// Move every end within [`ROOM_VERTEX_TOLERANCE_FEET`] of an earlier one
 /// onto it.
 fn snap_ends(lines: &mut [[f64; 4]]) {
@@ -268,16 +290,23 @@ pub fn room_outline(
 ) -> Result<Option<PlanProfile>> {
     let inflated = rf.inflated_partition(stream)?;
     let buf = inflated.bytes();
+    Ok(outline_of_solids(buf, &solid_headers(buf, room_id), bbox))
+}
+
+/// The outline the solids whose headers are at `headers` give, checked
+/// against the room's record box; where more than one passes, every one
+/// must give the same outline.
+pub fn outline_of_solids(buf: &[u8], headers: &[usize], bbox: [f64; 6]) -> Option<PlanProfile> {
     let mut found: Option<PlanProfile> = None;
-    for at in solid_headers(buf, room_id) {
+    for &at in headers {
         let Some(profile) = room_outline_at(buf, at, bbox) else {
             continue;
         };
         match &found {
             None => found = Some(profile),
             Some(held) if *held == profile => {}
-            Some(_) => return Ok(None),
+            Some(_) => return None,
         }
     }
-    Ok(found)
+    found
 }
