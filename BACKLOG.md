@@ -259,7 +259,12 @@ From an audit of all nine workflows, the fetch-corpus action, dependabot.yml, bo
 | C10 | Polish: Dependabot `prefix: build`, cooldown, the witness-ifc-lite lockfile and inline Python pins watched, publish.yml concurrency, zizmor, OpenSSF Scorecard, `cargo auditable`, a pre-commit fmt hook | audit P2 | open (CodSpeed or Bencher needs an account, so it is the maintainer's) |
 
 - **Decision: the strict up-to-date rule stays.** The audit suggests turning it off once `CI passed` exists. #647's failure was a conflict between two pull requests that only shows when the combination is tested; strict up-to-date is what makes the tested combination the one that lands, and with `CI passed` it now covers Corpus health too.
-- **Corpus health's failure rate.** The audit's 18% counts this session's red drafts (`red/` branches), which fail Corpus health on purpose under the red-then-green rule. The rate without them is measured below.
+- **Corpus health's failure rate (no flaky test found).** Of the 479 CI runs created 2026-10-01 to 05 (a side agent's note: leave out the red drafts):
+  - on main, 2 failures in 91 completed runs (2.2%), both `space_containment` right after #645 landed (runs 37213000439, 37213656572): a real regression, fixed by #656, that landed because Corpus health was not required;
+  - red drafts (`red/`), 37 failures in 43, on purpose under the red-then-green rule;
+  - other pull requests, 45 failures in 292, every one on a work-in-progress branch before its fix landed.
+  No failure passed on a rerun of the same commit, so no flaky test is logged.
+- **A merge queue is not available.** GitHub offers merge queues to organization-owned repositories, and DrunkOnJava/rvt-rs is owned by a user account, so pull requests still land one update-branch cycle at a time, ordered by what they conflict with.
 
 ## Progress log
 
