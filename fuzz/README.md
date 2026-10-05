@@ -144,7 +144,10 @@ security task ids that introduced them (SEC-14 onwards) are tracked in
 ## Related
 
 - `.github/workflows/fuzz.yml` runs every target nightly (07:17 UTC)
-  with a bounded `-max_total_time` budget and uploads the crash corpus
-  as a workflow artifact when a target fails.
+  for 300 s forked across four cores, on a corpus kept in the Actions
+  cache from night to night: seeded with `corpus/tier1/*/*.rvt` and the
+  IFC fixtures, minimised with `cargo fuzz cmin` after each run. A target
+  that crashes uploads the crashing input and its corpus as an artifact,
+  and a nightly crash opens or comments on a `fuzz-crash` issue.
 - Stable, nightly-free regression coverage for crash-shaped inputs
   lives in `tests/fuzz_regressions.rs` and runs in normal CI.
