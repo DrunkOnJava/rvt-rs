@@ -46,6 +46,10 @@ env:
   # A dated nightly (C2): a floating one made a new 110 MB cache every night
   # that the next night could not restore.
   NIGHTLY: nightly-2026-10-01
+  # install-action's cargo-fuzz is a static musl binary, and cargo-fuzz
+  # builds targets for its own host triple by default; the sanitizers need
+  # glibc, so the triple is named.
+  FUZZ_TARGET_TRIPLE: x86_64-unknown-linux-gnu
 
 jobs:
   # The targets this run fuzzes: all of them, or the one a manual run names.
@@ -123,7 +127,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           BUDGET: ${{ inputs.duration_seconds || '300' }}
         run: |
-          cargo +"$NIGHTLY" fuzz run "$TARGET" -- \
+          cargo +"$NIGHTLY" fuzz run --target "$FUZZ_TARGET_TRIPLE" "$TARGET" -- \
             -max_total_time="$BUDGET" \
             -rss_limit_mb=2048 \
             -timeout=30 \
@@ -135,7 +139,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          cargo +"$NIGHTLY" fuzz cmin "$TARGET"
+          cargo +"$NIGHTLY" fuzz cmin --target "$FUZZ_TARGET_TRIPLE" "$TARGET"
           echo "corpus after cmin: $(find "corpus/${TARGET}" -type f | wc -l) inputs"
 
       - name: Save the corpus
