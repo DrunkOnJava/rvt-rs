@@ -269,7 +269,6 @@ jobs:
         run: cargo test --profile ci --test project_count_fixtures -- --nocapture
 
   ifcopenshell-validate:
-<<<<<<< HEAD
     # IFC-41 / C9: the independent-validator gate. IfcOpenShell parses what
     # the exporter writes through the full IFC4 schema, so errors a
     # substring count can't see (dangling refs, wrong attribute arity,
@@ -277,30 +276,11 @@ jobs:
     # the committed tests/fixtures/synthetic-*.ifc, which only a test that
     # never runs regenerates, so it checked a fixed file rather than the
     # current exporter (CI audit, 2026-10-05); it now exports the three
-    # tier-1 projects and real projects and validates those.
+    # tier-1 projects and real projects and validates those. The tier-1
+    # exports are small (24 instances each); the real projects carry most of
+    # what this job validates.
     name: IfcOpenShell validates exports
-    runs-on: ubuntu-latest
-||||||| 1d6496d
-    # IFC-41: load the committed synthetic-project.ifc fixture in
-    # IfcOpenShell and assert it opens without errors, carries the
-    # right spatial hierarchy, and resolves every IfcRel* link. This
-    # is the independent-validator gate: IfcOpenShell parses the STEP
-    # file through the full IFC4 schema, so errors a substring count
-    # can't see (dangling refs, wrong attribute
-    # arity, enum values outside the spec vocabulary) fail here.
-    name: IfcOpenShell validates synthetic project
-    runs-on: ubuntu-latest
-=======
-    # IFC-41: load the committed synthetic-project.ifc fixture in
-    # IfcOpenShell and assert it opens without errors, carries the
-    # right spatial hierarchy, and resolves every IfcRel* link. This
-    # is the independent-validator gate: IfcOpenShell parses the STEP
-    # file through the full IFC4 schema, so errors a substring count
-    # can't see (dangling refs, wrong attribute
-    # arity, enum values outside the spec vocabulary) fail here.
-    name: IfcOpenShell validates synthetic project
     runs-on: ubuntu-24.04
->>>>>>> origin/main
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus
