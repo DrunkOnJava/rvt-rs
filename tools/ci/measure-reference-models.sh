@@ -124,9 +124,9 @@ fi
 # Autodesk's sample projects (research/autodesk-sample-projects.tsv), one per
 # release and model: each gets OUT_DIR/sample-<year>-<file>/ with info.json and
 # info.exit, the export's diagnostics (what rvt-rs reads of it today) and its
-# exit status, and the probe's output (called with --records, which a probe may
-# take to list what it read). There is no Revit export of them, so nothing is
-# scored.
+# exit status, schema.txt (the IFC4 schema's findings on the export), and the
+# probe's output (called with --records, which a probe may take to list what it
+# read). There is no Revit export of them, so nothing else is scored.
 if [ -d "${SAMPLE_DIR:-}" ]; then
   for sample in "$SAMPLE_DIR"/*.rvt; do
     [ -f "$sample" ] || continue
@@ -138,6 +138,24 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
     echo "exit $?" >> "$dir/rvt-ifc.log"
     echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/rvt-ifc.log"
+    # C9: the IFC4 schema's view of the export, so a writer path only the
+    # samples reach (I-shape profiles and profile set usages on the
+    # structural samples) is checked somewhere. Attribute counts on every
+    # export; IfcOpenShell's full validation on exports up to 30 MB, the
+    # rest marked as skipped.
+    if [ -s "$dir/model.ifc" ]; then
+      {
+        echo "arity:"
+        timeout 600 python "$(dirname "$0")/ifc_schema_arity.py" "$dir/model.ifc" 2>&1 \
+          | grep -v '^IFC schema conformance passed\|^  instances checked' || true
+        if [ "$(stat -c %s "$dir/model.ifc")" -le 31457280 ]; then
+          echo "validate:"
+          timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$dir/model.ifc" 2>&1
+        else
+          echo "validate: skipped, over 30 MB"
+        fi
+      } > "$dir/schema.txt"
+    fi
     [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
     if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
       timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
