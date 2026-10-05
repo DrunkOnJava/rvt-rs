@@ -362,6 +362,7 @@ fn extract_records(
         matches!(version, 2023..=2027),
         "native record framing is unvalidated for Revit {version}"
     );
+    eprintln!("[timing] t {:.3}s at: native: preamble", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     let preamble = file.native_preamble()?;
     let Preamble {
         global_streams,
@@ -370,6 +371,7 @@ fn extract_records(
         increments,
         es_catalog,
     } = &*preamble;
+    eprintln!("[timing] t {:.3}s at: native: names and selection", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     let mut names: Vec<_> = file
         .stream_names()
         .iter()
@@ -439,6 +441,7 @@ fn extract_records(
     // differing pairs on Core Interior, 887 of 887 on Autodesk's 2021
     // `rac_advanced`). A first pass finds the partitions that hold each
     // selected element's records.
+    eprintln!("[timing] t {:.3}s at: native: holders walk", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     let mut holders: BTreeMap<(u64, u64), BTreeSet<u32>> = BTreeMap::new();
     for name in &names {
         let partition: u32 = name[11..].parse()?;
@@ -466,6 +469,7 @@ fn extract_records(
             },
         )?;
     }
+    eprintln!("[timing] t {:.3}s at: native: records walk", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
     for name in names {
@@ -673,6 +677,7 @@ fn extract_records(
         )?;
         summary.partitions.insert(name, stats);
     }
+    eprintln!("[timing] t {:.3}s at: native: end", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     summary.selected_ids_without_records = selected.difference(&seen_ids).copied().collect();
     Ok(summary)
 }

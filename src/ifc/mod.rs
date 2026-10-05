@@ -1134,6 +1134,7 @@ fn export_rvt_doc(
     // the #213 elevation join because the file *states* this binding
     // where the elevation join infers one, and the elevation join
     // leaves an already-bound element alone.
+    eprintln!("[timing] t {:.3}s at: export: apply_record_level_reference_storeys", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     apply_record_level_reference_storeys(&mut entities, &building_storeys, &level_storey_bind);
 
     // #213 — element-record base elevations become storey elevations,
@@ -1141,20 +1142,25 @@ fn export_rvt_doc(
     // sees the whole record set, and before the geometry strip so the
     // no-geometry modes (where no record bbox was attached in the
     // first place) find nothing to bind and change nothing.
+    eprintln!("[timing] t {:.3}s at: export: apply_element_record_storeys", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     apply_element_record_storeys(&mut entities, &mut building_storeys);
     // RE-157: a pipe's invert is above its storey, known only now.
     export_content::pipe_inverts_above_storeys(&mut entities, &building_storeys);
     // B63: a room's furniture, fixtures and equipment are contained in its
     // space, which needs both on their storeys.
+    eprintln!("[timing] t {:.3}s at: export: export_content::contain_in_spaces", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     export_content::contain_in_spaces(&mut entities);
     // B54: a family instance's connectors are ports, joined or not.
+    eprintln!("[timing] t {:.3}s at: export: attach_family_instance_ports", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     attach_family_instance_ports(rf, &mut entities, &element_type_ids);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
     }
 
+    eprintln!("[timing] t {:.3}s at: export: recovered_units = recover_project_units", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     let recovered_units = recover_project_units(rf);
+    eprintln!("[timing] t {:.3}s at: export: global_ids = revit_model_global_ids", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
     let global_ids = revit_model_global_ids(
         rf,
         &entities,
@@ -1164,6 +1170,7 @@ fn export_rvt_doc(
         &element_flips,
     );
     let (material_layer_sets, material_layer_usages) =
+    eprintln!("[timing] t {:.3}s at: export: material_layer_sets_from_layers", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64());
         material_layer_sets_from_layers(&mut entities, &element_layers, &mut materials);
     let mut material_constituent_sets =
         material_constituent_sets_from_types(&entities, &element_type_materials, &mut materials);
