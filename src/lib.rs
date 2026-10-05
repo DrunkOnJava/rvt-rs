@@ -237,15 +237,7 @@ pub mod writer;
 // The wheel on PyPI is still called `rvt`; build it with
 // `maturin build --manifest-path rvt-py/Cargo.toml`.
 
-// WASM bindings (VW1-01). Only compiled when the `wasm` feature is
-// enabled (typically via
-// `wasm-pack build --target web --features wasm --no-default-features`).
-// Default Rust builds and the Python wheel build are unaffected.
-// The wasm bindings are pure-safe Rust — wasm-bindgen macros do not
-// expand into `unsafe`, so this module is compatible with the
-// root crate's `#![forbid(unsafe_code)]`.
-#[cfg(feature = "wasm")]
-pub mod wasm;
+// The WASM bindings (VW1-01) are their own crate, `rvt-wasm` (C6).
 
 pub use error::{Error, Result};
 pub use reader::RevitFile;

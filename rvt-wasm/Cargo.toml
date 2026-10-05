@@ -1,0 +1,45 @@
+[package]
+name = "rvt-wasm"
+version = "0.4.0"
+edition = "2024"
+rust-version = "1.87"
+license = "Apache-2.0"
+description = "WebAssembly bindings for the `rvt` crate, behind the browser viewer. Kept in a separate crate so `rvt` builds as a plain `rlib`: a `cdylib` crate type on the core library linked a shared library on every native build, test run and `cargo install` (C6)."
+authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]
+repository = "https://github.com/DrunkOnJava/rvt-rs"
+homepage = "https://github.com/DrunkOnJava/rvt-rs"
+publish = false  # Built by wasm-pack into viewer/pkg, not published.
+
+[lib]
+# wasm-pack's output names come from `--out-name rvt`, so the viewer still
+# loads `pkg/rvt.js` and `pkg/rvt_bg.wasm`.
+crate-type = ["cdylib"]
+
+[dependencies]
+rvt = { path = ".." }
+wasm-bindgen = "0.2"
+serde-wasm-bindgen = "0.6"
+serde = { version = "1", features = ["derive"] }
+
+# wasm-pack configuration. The bundled `wasm-opt` in wasm-pack 0.14
+# doesn't accept rustc's bulk-memory output — it prints a wall of
+# "[wasm-validator error in function N] unexpected false: Bulk
+# memory operations require bulk memory" warnings, then returns a
+# non-zero exit in CI that kills the whole build (locally it also
+# emits the warnings but happens to write artifacts anyway).
+#
+# Bulk-memory is supported in every browser ≥ 2019 (Chrome 75+,
+# Firefox 79+, Safari 15+, Edge 79+), so we ship the raw output
+# from wasm-bindgen-cli — 728 KB uncompressed, ~180 KB gzipped — and
+# skip wasm-opt entirely. If we ever want the ~15 % size win back,
+# a newer binaryen (installed out-of-band) accepts
+# `--enable-bulk-memory` and the stanza can change to
+# `wasm-opt = ["-O", "--enable-bulk-memory"]`.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.profiling]
+wasm-opt = false

@@ -3248,11 +3248,11 @@ fn iso_timestamp_from(secs: i64) -> String {
 /// platform"), which made the browser viewer's Export IFC fail on every
 /// click; the wasm build reads the JavaScript host clock instead.
 fn unix_seconds() -> i64 {
-    #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     {
-        (crate::wasm::host_now_millis() / 1000.0) as i64
+        (js_sys::Date::now() / 1000.0) as i64
     }
-    #[cfg(not(all(target_arch = "wasm32", feature = "wasm")))]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

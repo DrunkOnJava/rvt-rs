@@ -90,11 +90,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y wabt
 
       - name: Build WASM
-        # wasm-pack argument parsing is order-sensitive. Everything before
-        # `--` goes to wasm-pack (including `--out-dir`); everything after
-        # goes to cargo. Putting `--out-dir` before `--` writes straight into
-        # viewer/pkg, so no rm/mv shuffle is needed.
-        run: wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
+        # The bindings are their own crate, rvt-wasm (C6). `--out-dir` is
+        # relative to that crate, so `../viewer/pkg` writes straight into the
+        # viewer; `--out-name rvt` keeps the files `rvt.js` and
+        # `rvt_bg.wasm`.
+        run: wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
 
       - name: Verify no network imports in wasm (VW1-21)
         run: |

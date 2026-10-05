@@ -91,7 +91,7 @@ deactivate
 
 # --- 6. WebAssembly viewer -------------------------------------------------
 log "Build WASM package into viewer/pkg"
-wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
+wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
 
 log "Viewer pnpm dependencies + type check + build"
 (

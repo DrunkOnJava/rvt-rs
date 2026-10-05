@@ -292,7 +292,7 @@ jobs:
           package-manager-cache: false
       - name: Build WASM package
         run: |
-          wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
+          wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
       - name: Install viewer dependencies
         working-directory: viewer
         run: pnpm install --frozen-lockfile
