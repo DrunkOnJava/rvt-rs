@@ -58,7 +58,7 @@ milestone is for.
 
 | Issue | Remainder |
 |---|---|
-| [#528](https://github.com/DrunkOnJava/rvt-rs/issues/528) | MEP connectivity: ports and port-to-port connections (IfcDistributionPort, IfcRelConnectsPortToElement, IfcRelConnectsPorts) |
+| [#528](https://github.com/DrunkOnJava/rvt-rs/issues/528) | MEP connectivity: ports and port-to-port connections (IfcDistributionPort, IfcRelNests, IfcRelConnectsPorts) |
 | [#154](https://github.com/DrunkOnJava/rvt-rs/issues/154) | RE: Reproduce complete Formats/Latest parsing and serialization-tag assignment |
 | [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) | RE: Validate ElementHeader framing for ElementId and class-tag recovery |
 | [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) | RE: Validate Global/ElemTable body as a versioned ownership tree |
