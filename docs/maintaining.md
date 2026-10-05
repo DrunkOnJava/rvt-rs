@@ -48,7 +48,10 @@ when a release ships.
 
 ## Pull requests
 
-- A pull request is required for everyone; only the maintainer can bypass it.
+- A pull request is required for everyone, and nobody can bypass the ruleset,
+  the maintainer included: a bypass let an admin merge without `CI passed`
+  (2026-10-05). An emergency change goes through a pull request like any other,
+  or the ruleset is edited deliberately and the edit committed.
   Merges are **squash only**, commits must be **signed**, history is linear, and
   the branch must be up to date with `main`. The one required check is
   `CI passed`, CI's summary job, which passes only when every CI job (macOS
