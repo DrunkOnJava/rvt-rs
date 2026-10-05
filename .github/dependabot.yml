@@ -91,3 +91,21 @@ updates:
     # default-days here.
     cooldown:
       default-days: 3
+  - package-ecosystem: pip
+    # The Python packages CI installs, pinned in tools/ci/requirements-*.txt.
+    directory: /tools/ci
+    schedule:
+      interval: weekly
+    groups:
+      python-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - area:python
+    commit-message:
+      prefix: build
+      include: scope
+    cooldown:
+      default-days: 3

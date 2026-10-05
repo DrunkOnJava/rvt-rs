@@ -50,7 +50,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
           components: rustfmt
@@ -61,7 +63,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
           components: clippy
@@ -111,6 +115,8 @@ jobs:
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # Windows runners have slow disk I/O on C:. Putting the cargo home
       # and target directories on a ReFS dev drive is the single biggest
       # Windows speed-up (the job took ~12 min vs ~7 on Ubuntu before).
@@ -133,7 +139,7 @@ jobs:
         with:
           repository: phi-ag/rvt
           path: _corpus
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
           toolchain: ${{ matrix.rust }}
       # sccache on Windows only (C2). There rust-cache saves the checkout's
@@ -200,6 +206,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Fetch project corpus (magnetar MIT)
         uses: $/.github/actions/fetch-corpus
         with:
@@ -227,7 +235,7 @@ jobs:
           RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
           RE1-Electrical.ifc c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16
           LIST
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -262,6 +270,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Fetch family corpus
         uses: $/.github/actions/fetch-corpus
         with:
@@ -272,7 +282,7 @@ jobs:
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -304,6 +314,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Fetch project corpus
         uses: $/.github/actions/fetch-corpus
         with:
@@ -312,7 +324,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -322,11 +334,11 @@ jobs:
       - name: Install IfcOpenShell (prebuilt wheel)
         run: |
           python -m pip install --upgrade pip
-          # ifcopenshell ships prebuilt wheels on PyPI as
-          # `ifcopenshell-python` for Linux/macOS/Windows x64. Pin
-          # to a stable 0.8.x series — the 0.7 API has semantic
-          # differences in entity-by-type iteration.
-          python -m pip install 'ifcopenshell>=0.8.0,<0.9.0'
+          # ifcopenshell ships prebuilt wheels on PyPI for Linux, macOS
+          # and Windows x64. The 0.7 API differs in entity-by-type
+          # iteration; tools/ci/requirements-ifc.txt pins 0.8 until a
+          # 0.9 update is checked.
+          python -m pip install -r tools/ci/requirements-ifc.txt
       # C9: what the exporter writes now for the three tier-1 projects
       # (architectural 2024, MEP 2024, structural 2023; synthetic files
       # made by gen-fixture, in the repository), validated against the IFC4
@@ -501,7 +513,9 @@ jobs:
       RUSTDOCFLAGS: "-D warnings"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -528,7 +542,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -561,12 +577,14 @@ jobs:
       RUSTDOCFLAGS: "--cfg docsrs -D warnings"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # docs.rs builds with nightly — any `#[cfg_attr(docsrs, ...)]`
       # attributes + `#![feature(...)]` gates must be available.
       # A dated nightly (C2): the toolchain is part of rust-cache's key, so
       # a floating nightly saved a new cache every day and restored none.
       # Move the date forward when docs.rs needs a newer feature.
-      - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
+      - uses: dtolnay/rust-toolchain@0e28dd9a7764e5f83064112bb1f24025a14c313c # nightly
         with:
           toolchain: nightly-2026-10-01
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -596,6 +614,8 @@ jobs:
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # The wheel smoke opens a real Autodesk family on Linux; macOS and
       # Windows skip the multi-hundred-MB fetch and smoke the tier-one
       # project file only.
@@ -608,7 +628,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -666,7 +686,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install 'pytest>=8,<9' 'jsonschema>=4,<5'
+          python3 -m pip install -r tools/ci/requirements-test.txt
           if [ -d _corpus/examples/Autodesk ]; then
             export RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk"
           fi
@@ -689,7 +709,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
       # install-action retries the download and verifies its checksum;
@@ -711,7 +733,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
       - name: Install cargo-audit
@@ -726,6 +750,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # pnpm at the version `packageManager` pins in viewer/package.json.
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -786,6 +812,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Scan for PII-shaped leak patterns
         run: |
           set -e
@@ -837,6 +865,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # shellcheck is preinstalled on ubuntu-24.04 runners.
       - name: ShellCheck .cursor/install.sh
         run: shellcheck .cursor/install.sh
@@ -849,7 +879,7 @@ jobs:
       # changes the schema.
       - name: Validate .cursor/environment.json against the Cursor schema
         run: |
-          python -m pip install --upgrade jsonschema
+          python -m pip install -r tools/ci/requirements-test.txt
           python - <<'PY'
           import json
           import jsonschema

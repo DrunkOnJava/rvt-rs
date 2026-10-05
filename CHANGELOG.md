@@ -8,6 +8,10 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Release binaries carry their dependency list (C10).** Each binary of a
+  GitHub release is built with `cargo auditable`, which embeds the crates
+  and versions it was built from, so `cargo audit bin` and other scanners
+  can check a downloaded binary against the RustSec advisories.
 - **Every join of an MEP model is read from its family instances' connectors
   (B86).** A family instance's native `Connector` objects list the elements
   joined to each connector (RE-171), so the export writes those joins
