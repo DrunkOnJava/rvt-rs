@@ -40,10 +40,14 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
+# Linux jobs run on ubuntu-24.04, not ubuntu-latest (C5): ubuntu-latest moves
+# to Ubuntu 26 from 2026-10-19, which would change apt packages, Playwright's
+# system dependencies and the preinstalled tools under every job without a
+# commit here. Moving to 26.04 is a deliberate edit of this label.
 jobs:
   fmt:
     name: cargo fmt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -54,7 +58,7 @@ jobs:
 
   clippy:
     name: cargo clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -65,6 +69,8 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets --all-features -- -D warnings
+      # The wasm bindings are their own crate (C6); it builds natively too.
+      - run: cargo clippy -p rvt-wasm --all-targets -- -D warnings
 
   test:
     # Unit tests are banned (maintainer directive, 2026-09-23): this job
@@ -77,14 +83,11 @@ jobs:
     # check name does not change when `rust-version` does.
     name: build + real files / ${{ matrix.os }} / ${{ matrix.label || matrix.rust }}
     runs-on: ${{ matrix.os }}
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: sccache
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             rust: stable
             with_corpus: true
           - os: windows-latest
@@ -93,7 +96,7 @@ jobs:
           - os: macos-latest
             rust: stable
             with_corpus: false
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             rust: "1.87"  # MSRV, `rust-version` in Cargo.toml
             label: msrv
             with_corpus: false
@@ -126,17 +129,29 @@ jobs:
       # cached across runs keyed on the corpus repository's HEAD.
       - name: Fetch phi-ag/rvt sample corpus
         if: matrix.with_corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: ${{ matrix.rust }}
-      # sccache caches compilation units (rust-cache only caches the dep
-      # tree), so unchanged code never recompiles across runs.
-      - name: Set up sccache
+      # sccache on Windows only (C2). There rust-cache saves the checkout's
+      # target directory while the dev drive builds into its own, so sccache
+      # is what keeps compiled units (95% hits). On Linux and macOS it hit 0
+      # of 303 requests, filled the Actions cache with small objects, and
+      # its RUSTC_WRAPPER changed rust-cache's key, so the jobs sharing
+      # `ci-release` never restored it. It is set through GITHUB_ENV so the
+      # variable does not exist at all off Windows.
+      - name: Set up sccache (Windows)
+        if: runner.os == 'Windows'
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - name: Use sccache (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
       # The platform test matrix owns the shared release caches. Compatible
       # fan-out jobs restore them without racing to save partial targets.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -144,18 +159,32 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-release
       - name: Build
+        if: matrix.label != 'msrv'
         # Linux owns the shared `ci-release` cache and compiles every
         # target so benches and examples stay green. macOS and Windows
         # never run benches or examples in this job, so they skip them:
         # on windows-latest the all-targets build was 181 s of a 4.1 min
         # job.
         run: cargo build --profile ci ${{ runner.os == 'Linux' && '--all-targets' || '--lib --bins --tests' }}
+      # The MSRV entry checks that every target compiles on the oldest
+      # supported release; the stable entries run the checks (C6). It took
+      # 2 min 48 s to build and run them again for 5 s of tests.
+      - name: Check every target on the MSRV
+        if: matrix.label == 'msrv'
+        run: cargo check --profile ci --all-targets
       # Real-file, end-to-end CLI and contract checks only; the manifest
       # names every tests/*.rs target and the script fails on one it does
       # not classify, so a new target cannot run or skip unnoticed (#206).
       # With the family corpus present, a missing release fails the
       # coverage and ElemTable gates instead of skipping them.
+      # cargo-nextest runs the manifest's test binaries in parallel (C6).
+      - name: Install cargo-nextest
+        if: matrix.label != 'msrv'
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
       - name: Real-file, CLI and contract verification
+        if: matrix.label != 'msrv'
         shell: bash
         env:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
@@ -168,11 +197,11 @@ jobs:
     # and runs lightweight health + known-count checks. Local runs skip
     # when RVT_PROJECT_CORPUS_DIR is unset.
     name: Corpus health (tier 2 — external)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus (magnetar MIT)
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
@@ -211,6 +240,11 @@ jobs:
       # way (26424 of 26425 declared records on the 2024 project). Every
       # tests/*.rs now runs against the project corpus, so a new
       # corpus-reading target is gated the moment it exists.
+      # cargo-nextest runs the manifest's test binaries in parallel (C6).
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
       - name: Tier-two gates (real-file, CLI and contract targets against the project corpus)
         shell: bash
         env:
@@ -225,16 +259,16 @@ jobs:
     # from silently regressing while semantic editing remains out of
     # scope.
     name: Writer patch corpus
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch family corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus
       - name: Fetch project corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
@@ -256,19 +290,22 @@ jobs:
         run: cargo test --profile ci --test project_count_fixtures -- --nocapture
 
   ifcopenshell-validate:
-    # IFC-41: load the committed synthetic-project.ifc fixture in
-    # IfcOpenShell and assert it opens without errors, carries the
-    # right spatial hierarchy, and resolves every IfcRel* link. This
-    # is the independent-validator gate: IfcOpenShell parses the STEP
-    # file through the full IFC4 schema, so errors a substring count
-    # can't see (dangling refs, wrong attribute
-    # arity, enum values outside the spec vocabulary) fail here.
-    name: IfcOpenShell validates synthetic project
-    runs-on: ubuntu-latest
+    # IFC-41 / C9: the independent-validator gate. IfcOpenShell parses what
+    # the exporter writes through the full IFC4 schema, so errors a
+    # substring count can't see (dangling refs, wrong attribute arity,
+    # enum values outside the spec vocabulary) fail here. It used to check
+    # the committed tests/fixtures/synthetic-*.ifc, which only a test that
+    # never runs regenerates, so it checked a fixed file rather than the
+    # current exporter (CI audit, 2026-10-05); it now exports the three
+    # tier-1 projects and real projects and validates those. The tier-1
+    # exports are small (24 instances each); the real projects carry most of
+    # what this job validates.
+    name: IfcOpenShell validates exports
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
@@ -290,99 +327,20 @@ jobs:
           # to a stable 0.8.x series — the 0.7 API has semantic
           # differences in entity-by-type iteration.
           python -m pip install 'ifcopenshell>=0.8.0,<0.9.0'
-      - name: Validate synthetic-project fixture
+      # C9: what the exporter writes now for the three tier-1 projects
+      # (architectural 2024, MEP 2024, structural 2023; synthetic files
+      # made by gen-fixture, in the repository), validated against the IFC4
+      # schema and its declared attribute counts.
+      - name: Export and validate the tier-1 projects
         run: |
-          python - <<'PY'
-          import ifcopenshell
-          path = "tests/fixtures/synthetic-project.ifc"
-          f = ifcopenshell.open(path)
-          # Schema identifier — we only ship IFC4.
-          assert f.schema == "IFC4", f"expected IFC4, got {f.schema}"
-          # Spatial hierarchy: 1 project, 1 site, 1 building, 3 storeys.
-          assert len(f.by_type("IfcProject")) == 1
-          assert len(f.by_type("IfcSite")) == 1
-          assert len(f.by_type("IfcBuilding")) == 1
-          assert len(f.by_type("IfcBuildingStorey")) == 3, (
-              f"expected 3 storeys, got {len(f.by_type('IfcBuildingStorey'))}"
-          )
-          # Per-element entities.
-          assert len(f.by_type("IfcWall")) == 4
-          assert len(f.by_type("IfcSlab")) == 1
-          assert len(f.by_type("IfcDoor")) == 1
-          assert len(f.by_type("IfcWindow")) == 2
-          # Openings + rels must have resolved references (no
-          # dangling pointers — IfcOpenShell would raise during
-          # open() if they did; double-check here).
-          openings = f.by_type("IfcOpeningElement")
-          assert len(openings) == 1
-          for op in openings:
-              voids = [r for r in f.by_type("IfcRelVoidsElement")
-                       if r.RelatedOpeningElement.id() == op.id()]
-              fills = [r for r in f.by_type("IfcRelFillsElement")
-                       if r.RelatingOpeningElement.id() == op.id()]
-              assert len(voids) == 1, f"opening {op} has {len(voids)} voids"
-              assert len(fills) == 1, f"opening {op} has {len(fills)} fills"
-          print("IfcOpenShell validation passed:")
-          print(f"  schema: {f.schema}")
-          print(f"  entities: {len(list(f))}")
-          print(f"  walls/slabs/doors/windows: 4/1/1/2")
-          print(f"  storeys: 3")
-          PY
-
-      # IFC-44: second fixture — structural framing + shared
-      # RepresentationMap + faceted-brep furniture. Validates IFC-17 /
-      # IFC-20 / IFC-21 / IFC-24 / IFC-30 paths that the project
-      # fixture above doesn't exercise.
-      - name: Validate synthetic-structural fixture
-        run: |
-          python - <<'PY'
-          import ifcopenshell
-          path = "tests/fixtures/synthetic-structural.ifc"
-          f = ifcopenshell.open(path)
-          assert f.schema == "IFC4"
-          assert len(f.by_type("IfcColumn")) == 2, "expected 2 columns"
-          assert len(f.by_type("IfcBeam")) == 2, "expected 2 beams"
-          assert len(f.by_type("IfcDoor")) == 3, "expected 3 doors"
-          assert len(f.by_type("IfcFurniture")) == 1, "expected 1 furniture"
-          # IFC-21: shared representation map, one entity, three
-          # mapped items referencing it.
-          reps = f.by_type("IfcRepresentationMap")
-          assert len(reps) == 1, f"expected 1 IfcRepresentationMap, got {len(reps)}"
-          mapped_items = f.by_type("IfcMappedItem")
-          assert len(mapped_items) == 3, (
-              f"expected 3 IfcMappedItem instances, got {len(mapped_items)}"
-          )
-          # All three mapped items must reference the same map.
-          for mi in mapped_items:
-              assert mi.MappingSource.id() == reps[0].id(), (
-                  "mapped item points at a different representation map"
-              )
-          # IFC-20: one faceted brep for the furniture.
-          assert len(f.by_type("IfcFacetedBrep")) == 1
-          # IFC-30: MaterialProfileSet usage on the 2 beams.
-          assert len(f.by_type("IfcMaterialProfileSetUsage")) >= 1
-          # IFC-24: I-shape profiles (3 total) + 1 circle profile.
-          assert len(f.by_type("IfcIShapeProfileDef")) == 3
-          assert len(f.by_type("IfcCircleProfileDef")) == 1
-          print("IFC-44 structural fixture validation passed:")
-          print(f"  columns/beams/doors/furniture: 2/2/3/1")
-          print(f"  IfcRepresentationMap/IfcMappedItem: 1/3 (3:1 sharing ratio)")
-          print(f"  IfcFacetedBrep: 1 (tetrahedron)")
-          PY
-
-      # #214: IfcOpenShell's parser accepts a record that lists fewer
-      # attributes than its entity type declares — the failure only
-      # surfaces when a consumer reads the missing attribute, which is
-      # how IFCCOLUMN shipped eight attributes against a declared nine
-      # for as long as it did. Re-derive every entity's declared
-      # attribute count from the IFC4 EXPRESS schema and compare it
-      # with what the STEP text actually wrote, for every instance in
-      # every committed fixture.
-      - name: Validate IFC4 schema arity of the committed fixtures
-        run: |
-          python tools/ci/ifc_schema_arity.py \
-            tests/fixtures/synthetic-project.ifc \
-            tests/fixtures/synthetic-structural.ifc
+          set -euo pipefail
+          cargo build --profile ci --bin rvt-ifc
+          for f in corpus/tier1/*/*.rvt; do
+            out="/tmp/tier1-$(basename "$f" .rvt).ifc"
+            ./target/ci/rvt-ifc "$f" -o "$out"
+            python -m ifcopenshell.validate "$out"
+          done
+          python tools/ci/ifc_schema_arity.py /tmp/tier1-*.ifc
 
       # M5-03: real-project walker → IFC end-to-end gate. Emit a
       # fresh IFC4 STEP from the small 2023 Einhoven project via
@@ -538,7 +496,7 @@ jobs:
 
   doc:
     name: cargo doc
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       RUSTDOCFLAGS: "-D warnings"
     steps:
@@ -567,7 +525,7 @@ jobs:
   # high-value, low-noise version we can enforce on every push.
   bench-build:
     name: cargo bench --no-run
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -596,7 +554,7 @@ jobs:
   # properly on docs.rs before the release cut.
   docs-rs-preview:
     name: docs.rs build preview
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Same flags docs.rs passes, plus -D warnings so this job fails
       # instead of silently publishing broken docs.
@@ -605,16 +563,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # docs.rs builds with nightly — any `#[cfg_attr(docsrs, ...)]`
       # attributes + `#![feature(...)]` gates must be available.
+      # A dated nightly (C2): the toolchain is part of rust-cache's key, so
+      # a floating nightly saved a new cache every day and restored none.
+      # Move the date forward when docs.rs needs a newer feature.
       - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-10-01
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-docs-rs
       # Mirror the [package.metadata.docs.rs] settings from Cargo.toml
       # (`all-features = true`) — if these drift, update both.
-      - run: cargo +nightly doc --no-deps --all-features
+      - run: cargo +nightly-2026-10-01 doc --no-deps --all-features
 
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
@@ -626,7 +587,7 @@ jobs:
         # matrix runs on pushes to main, where the wheels are consumed.
         # Frees two scarce macOS/Windows runners per PR without loosening
         # the merge gate, which never required the wheel jobs.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-latest", "windows-latest"]') }}
     steps:
       # Windows CFB stream names need the same autocrlf=false guard
       # we use for the Rust Windows integration job, or LFS-bound
@@ -640,7 +601,7 @@ jobs:
       # project file only.
       - name: Fetch phi-ag/rvt sample corpus
         if: runner.os == 'Linux'
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus
@@ -725,7 +686,7 @@ jobs:
   # project grows.
   deny:
     name: cargo deny
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -747,7 +708,7 @@ jobs:
   # fresh advisories the moment they land.
   audit:
     name: cargo audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -762,7 +723,7 @@ jobs:
 
   viewer-dependencies:
     name: viewer dependency audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # pnpm at the version `packageManager` pins in viewer/package.json.
@@ -771,7 +732,7 @@ jobs:
           package_json_file: viewer/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '24'
           package-manager-cache: false
       - name: Locate pnpm store
         id: pnpm-store
@@ -822,7 +783,7 @@ jobs:
 
   pii-guard:
     name: PII guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Scan for PII-shaped leak patterns
@@ -873,26 +834,27 @@ jobs:
   # from silently drifting into an invalid state on any PR.
   env-config:
     name: env config lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # shellcheck is preinstalled on ubuntu-latest runners.
+      # shellcheck is preinstalled on ubuntu-24.04 runners.
       - name: ShellCheck .cursor/install.sh
         run: shellcheck .cursor/install.sh
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+      # Against a copy of https://cursor.com/schemas/environment.schema.json
+      # taken 2026-10-05 (C8): downloading it on every pull request made the
+      # check depend on cursor.com. Refresh the copy by hand when Cursor
+      # changes the schema.
       - name: Validate .cursor/environment.json against the Cursor schema
         run: |
           python -m pip install --upgrade jsonschema
-          curl --retry 3 --retry-delay 2 -fsSL \
-            https://cursor.com/schemas/environment.schema.json \
-            -o /tmp/environment.schema.json
           python - <<'PY'
           import json
           import jsonschema
 
-          schema = json.load(open("/tmp/environment.schema.json"))
+          schema = json.load(open("tools/ci/cursor-environment.schema.json"))
           config = json.load(open(".cursor/environment.json"))
           jsonschema.validate(config, schema)
           print(".cursor/environment.json validates against the Cursor environment schema")
@@ -921,7 +883,7 @@ jobs:
       - viewer-dependencies
       - pii-guard
       - env-config
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Every job passed
         env:

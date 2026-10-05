@@ -18,25 +18,25 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Matches CI's, so rust-cache computes the `ci-release` key CI saves (C2).
+  RUSTFLAGS: "-D warnings"
 
 jobs:
   perf-budget:
     name: Runtime and memory budgets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch small family corpus
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus
-          lfs: true
       - name: Fetch medium project corpus
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
-          lfs: true
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable

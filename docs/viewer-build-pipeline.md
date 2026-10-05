@@ -23,6 +23,12 @@ cancelling each other
 
 ### Cargo.toml changes
 
+> **Current layout (C6, 2026-10-05).** The bindings are their own crate,
+> `rvt-wasm/` (a `cdylib` depending on `rvt`), and `rvt` builds as a plain
+> `rlib` with no `wasm` feature; the IFC header's clock comes from `js-sys`
+> on `wasm32-unknown-unknown`. The design below is the original plan, kept
+> as history; the build commands further down are current.
+
 Add an optional `wasm` feature alongside the existing `python` one:
 
 ```toml
@@ -90,8 +96,8 @@ pub mod wasm;
 cargo install wasm-pack
 
 # Build
-wasm-pack build --target web --features wasm --no-default-features
-# → pkg/rvt_bg.wasm + pkg/rvt.js + pkg/rvt.d.ts
+wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
+# → viewer/pkg/rvt_bg.wasm + rvt.js + rvt.d.ts
 ```
 
 ### Makefile target
@@ -99,7 +105,7 @@ wasm-pack build --target web --features wasm --no-default-features
 ```make
 .PHONY: wasm
 wasm:
-	wasm-pack build --target web --features wasm --no-default-features
+	wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
 ```
 
 ### CI check (VW1-01)
@@ -113,7 +119,7 @@ wasm-build:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - run: cargo install wasm-pack
-    - run: wasm-pack build --target web --features wasm --no-default-features
+    - run: wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
     - name: Verify no network imports
       run: |
         # VW1-21 invariant check — no fetch / XMLHttpRequest / WebSocket
@@ -222,7 +228,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: cargo install wasm-pack
-      - run: wasm-pack build --target web --features wasm --no-default-features
+      - run: wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
              --out-dir viewer/pkg
       - uses: pnpm/action-setup@v6
         with: { package_json_file: viewer/package.json }
