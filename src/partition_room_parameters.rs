@@ -260,20 +260,6 @@ pub const DATA_OBJECT_HEADER: usize = 20;
 /// How far before a parameter entry its data object's header is looked for.
 pub const DATA_OBJECT_SEARCH: usize = 200_000;
 
-/// Adler-32 (RFC 1950) of `data`.
-fn adler32(data: &[u8]) -> u32 {
-    let (mut a, mut s) = (1u32, 0u32);
-    for chunk in data.chunks(5552) {
-        for &byte in chunk {
-            a += u32::from(byte);
-            s += a;
-        }
-        a %= 65521;
-        s %= 65521;
-    }
-    (s << 16) | a
-}
-
 /// The ElementId of the data object whose payload holds the byte at `at`
 /// (RE-153): the last header before it whose `size` bytes of payload end in
 /// the size again and enclose `at`, and whose Adler-32, over the class word
@@ -345,11 +331,10 @@ pub fn verified_data_object(buf: &[u8], p: usize) -> Option<DataObject> {
     if size < 4 || end > buf.len() || u32_at(end - 4) != Some(size as u32) {
         return None;
     }
-    let mut data = Vec::with_capacity(size);
-    data.extend_from_slice(&class.to_le_bytes());
-    data.extend_from_slice(&buf[p + DATA_OBJECT_HEADER..end]);
-    data.truncate(size);
-    (adler32(&data) == sum).then_some(DataObject {
+    let mut adler = simd_adler32::Adler32::new();
+    adler.write(&class.to_le_bytes());
+    adler.write(&buf[p + DATA_OBJECT_HEADER..end - 4]);
+    (adler.finish() == sum).then_some(DataObject {
         element_id: id,
         class,
         end,
