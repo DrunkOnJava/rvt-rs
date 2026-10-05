@@ -3,8 +3,8 @@ name: Deploy viewer
 # VW1-18 — build the WASM + the Vite site and publish to
 # https://drunkonjava.github.io/rvt-rs/ via GitHub Pages (Pages root;
 # the old `/viewer/` sub-path 404s).
-# Runs on every push to main that touches viewer/ or src/ (so the
-# WASM stays fresh), plus manual runs.
+# Runs on every push to main that touches viewer/, src/ or rvt-wasm/ (so
+# the WASM stays fresh), plus manual runs.
 #
 # C3: the viewer is published only from a commit whose CI passed. The deploy
 # job waits for CI's `CI passed` check on the pushed commit; a commit CI's
@@ -16,6 +16,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'rvt-wasm/**'
       - 'viewer/**'
       - 'docs/viewer-demos.json'
       - 'Cargo.toml'
@@ -25,6 +26,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'rvt-wasm/**'
       - 'viewer/**'
       - 'docs/viewer-demos.json'
       - 'Cargo.toml'
