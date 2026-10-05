@@ -2610,8 +2610,18 @@ impl StepWriter {
         // flow direction (the file's lists carry none), tied to its element
         // by an `IfcRelConnectsPortToElement`; a join is an
         // `IfcRelConnectsPorts` between two of them. A port is shared by every
-        // join it is in.
+        // join it is in. A proxy's ports are nested in it instead (B83): IFC4
+        // ties a port to a distribution element only, and Revit's IFC4 export
+        // nests every port in its element.
         let mut ports: HashMap<(u32, u32), usize> = HashMap::new();
+        let is_proxy = |element: usize| {
+            matches!(
+                model.entities.get(element),
+                Some(super::entities::IfcEntity::BuildingElement { ifc_type, .. })
+                    if ifc_type == "IFCBUILDINGELEMENTPROXY"
+            )
+        };
+        let mut nested: BTreeMap<u32, (usize, Vec<usize>)> = BTreeMap::new();
         for entity in &model.entities {
             let super::entities::IfcEntity::PortConnection {
                 a,
@@ -2630,9 +2640,9 @@ impl StepWriter {
             ) else {
                 continue;
             };
-            let ends = [(a_el, *a_id, *a_index), (b_el, *b_id, *b_index)];
+            let ends = [(*a, a_el, *a_id, *a_index), (*b, b_el, *b_id, *b_index)];
             let mut port_ids = [0usize; 2];
-            for (slot, &(element, id, index)) in ends.iter().enumerate() {
+            for (slot, &(host, element, id, index)) in ends.iter().enumerate() {
                 if let Some(&port) = ports.get(&(id, index)) {
                     port_ids[slot] = port;
                     continue;
@@ -2646,14 +2656,22 @@ impl StepWriter {
                         gid(&["port", &id_text, &index_text]),
                     ),
                 );
-                let to_element = self.id();
-                self.emit_entity(
-                    to_element,
-                    format!(
-                        "IFCRELCONNECTSPORTTOELEMENT('{}',#{owner_hist},$,$,#{port},#{element})",
-                        gid(&["port_to_element", &id_text, &index_text]),
-                    ),
-                );
+                if is_proxy(host) {
+                    nested
+                        .entry(id)
+                        .or_insert((element, Vec::new()))
+                        .1
+                        .push(port);
+                } else {
+                    let to_element = self.id();
+                    self.emit_entity(
+                        to_element,
+                        format!(
+                            "IFCRELCONNECTSPORTTOELEMENT('{}',#{owner_hist},$,$,#{port},#{element})",
+                            gid(&["port_to_element", &id_text, &index_text]),
+                        ),
+                    );
+                }
                 ports.insert((id, index), port);
                 port_ids[slot] = port;
             }
@@ -2696,15 +2714,38 @@ impl StepWriter {
                     gid(&["port", &id_text, &index_text]),
                 ),
             );
-            let to_element = self.id();
+            if is_proxy(*element) {
+                nested
+                    .entry(*id)
+                    .or_insert((element_id, Vec::new()))
+                    .1
+                    .push(port);
+            } else {
+                let to_element = self.id();
+                self.emit_entity(
+                    to_element,
+                    format!(
+                        "IFCRELCONNECTSPORTTOELEMENT('{}',#{owner_hist},$,$,#{port},#{element_id})",
+                        gid(&["port_to_element", &id_text, &index_text]),
+                    ),
+                );
+            }
+            ports.insert((*id, *index), port);
+        }
+        for (id, (element, element_ports)) in nested {
+            let refs: Vec<String> = element_ports
+                .iter()
+                .map(|port| format!("#{port}"))
+                .collect();
+            let rel = self.id();
             self.emit_entity(
-                to_element,
+                rel,
                 format!(
-                    "IFCRELCONNECTSPORTTOELEMENT('{}',#{owner_hist},$,$,#{port},#{element_id})",
-                    gid(&["port_to_element", &id_text, &index_text]),
+                    "IFCRELNESTS('{}',#{owner_hist},'NestedPorts','Flow',#{element},({}))",
+                    gid(&["nested_ports", &id.to_string()]),
+                    refs.join(","),
                 ),
             );
-            ports.insert((*id, *index), port);
         }
 
         // RE-162 (#528): each MEP system, an `IfcSystem` grouping its members
