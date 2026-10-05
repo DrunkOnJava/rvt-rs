@@ -48,7 +48,10 @@ when a release ships.
 
 ## Pull requests
 
-- A pull request is required for everyone; only the maintainer can bypass it.
+- A pull request is required for everyone, and nobody can bypass the ruleset,
+  the maintainer included: a bypass let an admin merge without `CI passed`
+  (2026-10-05). An emergency change goes through a pull request like any other,
+  or the ruleset is edited deliberately and the edit committed.
   Merges are **squash only**, commits must be **signed**, history is linear, and
   the branch must be up to date with `main`. The one required check is
   `CI passed`, CI's summary job, which passes only when every CI job (macOS
@@ -117,13 +120,15 @@ Configured on the repository, with the rulesets kept as code in
 
 - Private vulnerability reporting, secret scanning with push protection,
   Dependabot alerts and security updates are on. Dependabot opens weekly version
-  updates for Cargo (the crate and the fuzz workspace), GitHub Actions (the
-  workflows and the composite actions under `.github/actions`), the viewer's npm
-  packages and the release image's base in `docker/Dockerfile`, with minor and
-  patch updates grouped; major updates arrive one at a time and are migrated by
-  hand when they need it. `tools/ci/witness-ifc-lite` gets no version updates,
-  since its third-party witness is pinned to an exact version on purpose, but
-  its lockfile is in the dependency graph and so covered by the alerts.
+  updates for Cargo (the crate, the fuzz workspace and `tools/ci/witness-ifc-lite`),
+  GitHub Actions (the workflows and the composite actions under
+  `.github/actions`), the viewer's npm packages and the release image's base in
+  `docker/Dockerfile`, with minor and patch updates grouped; major updates
+  arrive one at a time and are migrated by hand when they need it. A release
+  waits three days (seven for a major Cargo or npm one) before it is proposed, and commit
+  titles read `build(deps): ...`. The witness's `ifc-lite-core` is never
+  proposed: it is pinned to an exact version on purpose, as a different version
+  is a different witness.
 - CodeQL (`.github/workflows/codeql.yml`) analyses the workflows, the
   viewer's TypeScript and JavaScript, the Python bindings and the Rust crate,
   on every pull request, push to main and weekly. The default setup stays

@@ -101,11 +101,12 @@ TestPyPI runs.
 
 ## Post-Publish Verification
 
-Verify crates.io from a clean shell **only if `cargo publish` succeeded
-for this tag**. As of `v0.1.2` the crate name `rvt` was **not** on
-crates.io (API: crate does not exist; docs.rs 404). If publish was
-skipped or rejected, record `crates.io: NOT PUBLISHED` in the release
-notes and do not claim docs.rs:
+Verify crates.io from a clean shell once the publish job has succeeded
+for this tag. The job publishes by Trusted Publishing in the `crates-io`
+environment, and a tag release fails when crates.io cannot publish, so
+PyPI never ships a version crates.io lacks (C3, 2026-10-05). If the job
+failed, the release did not ship; fix the cause rather than recording
+`crates.io: NOT PUBLISHED`:
 
 ```bash
 rm -rf /tmp/rvt-crates-smoke
