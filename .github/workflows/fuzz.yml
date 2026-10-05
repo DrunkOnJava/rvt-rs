@@ -88,7 +88,7 @@ jobs:
           persist-credentials: false
 
       - name: Install nightly Rust
-        uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
+        uses: dtolnay/rust-toolchain@0e28dd9a7764e5f83064112bb1f24025a14c313c # nightly
         with:
           toolchain: ${{ env.NIGHTLY }}
 
