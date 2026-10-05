@@ -35,63 +35,53 @@ pub fn symbol_port_indices(
     symbols: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, Vec<u32>>> {
     let mut connectors: BTreeMap<u64, (u64, Vec<i64>)> = BTreeMap::new();
+    let mut domains: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
+    // One pass reads the symbols and every family (B79): which families the
+    // symbols name is known only once they are read, and a second pass over
+    // the partitions costs more than decoding the families none names.
     let options = native_document::Options {
         selected_ids: symbols.clone(),
+        selected_classes: BTreeSet::from(["Family".to_string()]),
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {
-        if record.class_name.as_deref() != Some("FamilySymbol") {
-            return Ok(());
-        }
-        let Some(root) = record
-            .graph
-            .as_ref()
-            .and_then(|graph| graph.objects.first())
-        else {
-            return Ok(());
-        };
-        let indices: Vec<i64> = root
-            .fields
-            .get("m_arrConnectorData")
-            .and_then(|entries| entries.as_array())
-            .into_iter()
-            .flatten()
-            .filter_map(|entry| entry.get("m_index")?.as_i64())
-            .collect();
-        if let (false, Some(family)) = (
-            indices.is_empty(),
-            root.fields.get("m_familyId").and_then(element_id),
-        ) {
-            connectors.insert(record.identity.element_id, (family, indices));
-        }
-        Ok(())
-    })?;
-    if connectors.is_empty() {
-        return Ok(BTreeMap::new());
-    }
-    let families: BTreeSet<u64> = connectors.values().map(|(family, _)| *family).collect();
-    let mut domains: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
-    let options = native_document::Options {
-        selected_ids: families,
-        ..native_document::Options::default()
-    };
-    native_document::extract_graphs(rf, &options, |record| {
-        if record.class_name.as_deref() != Some("Family") {
-            return Ok(());
-        }
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
-        let cells = domains.entry(record.identity.element_id).or_default();
-        for object in graph
-            .objects
-            .iter()
-            .filter(|object| object.class_name == "ConnectorDataCell")
-        {
-            let value = |name: &str| object.fields.get(name).and_then(|v| v.as_i64());
-            if let (Some(index), Some(domain)) = (value("m_index"), value("m_domain")) {
-                cells.insert(index, domain);
+        match record.class_name.as_deref() {
+            Some("FamilySymbol") => {
+                let Some(root) = graph.objects.first() else {
+                    return Ok(());
+                };
+                let indices: Vec<i64> = root
+                    .fields
+                    .get("m_arrConnectorData")
+                    .and_then(|entries| entries.as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|entry| entry.get("m_index")?.as_i64())
+                    .collect();
+                if let (false, Some(family)) = (
+                    indices.is_empty(),
+                    root.fields.get("m_familyId").and_then(element_id),
+                ) {
+                    connectors.insert(record.identity.element_id, (family, indices));
+                }
             }
+            Some("Family") => {
+                let cells = domains.entry(record.identity.element_id).or_default();
+                for object in graph
+                    .objects
+                    .iter()
+                    .filter(|object| object.class_name == "ConnectorDataCell")
+                {
+                    let value = |name: &str| object.fields.get(name).and_then(|v| v.as_i64());
+                    if let (Some(index), Some(domain)) = (value("m_index"), value("m_domain")) {
+                        cells.insert(index, domain);
+                    }
+                }
+            }
+            _ => {}
         }
         Ok(())
     })?;
