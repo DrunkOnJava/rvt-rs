@@ -290,6 +290,12 @@ When you discover something new about the file format:
    a workflow file that is not yet on `main`, dispatch with `--ref <branch with
    the workflow> -f ref=<branch to measure>`.
 
+   The summary's `rvt-ifc` wall times come from the base and head jobs, which
+   run on different runners; runner speed alone moves them by up to about
+   1.7x. For a speed claim, add `-f timing=true`: one runner then builds both
+   refs and exports each model (and each sample, with `-f samples=true`) with
+   both in turn, and reports the medians and their ratio.
+
 This keeps every claim independently verifiable, which is the
 whole point of open reverse-engineering work.
 
