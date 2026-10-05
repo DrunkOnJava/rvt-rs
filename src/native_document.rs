@@ -121,7 +121,7 @@ pub struct Summary {
 }
 /// Integrity-checked member boundaries. The suffix is retained as opaque storage
 /// evidence; its meaning and checksum algorithm are not yet decoded.
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct StreamEnvelope {
     pub prepared_bytes: usize,
     pub member_offset: usize,
@@ -173,6 +173,41 @@ fn read_single_envelope(file: &mut RevitFile, name: &str) -> Result<(Vec<u8>, St
     let stored = file.read_stream_with_limit(name, 512 * 1024 * 1024)?;
     let prepared = compression::prepare_stream_for_inflate(name, &stored);
     decode_single(&prepared, if name == "Formats/Latest" { 0 } else { 8 })
+}
+/// What every native extraction reads before the partitions: the global
+/// streams' envelopes, the schema, the element index, the storage increments
+/// and the extensible storage catalog, read once per file
+/// ([`RevitFile::native_preamble`], B82).
+pub(crate) struct Preamble {
+    global_streams: BTreeMap<String, StreamEnvelope>,
+    registry: schema_registry::Registry,
+    index: native_index::ProjectIndex,
+    increments: Vec<native_index::Increment>,
+    es_catalog:
+        std::result::Result<(crate::native_extensible_storage::Catalog, serde_json::Value), String>,
+}
+pub(crate) fn read_preamble(file: &mut RevitFile) -> Result<Preamble> {
+    let mut global_streams = BTreeMap::new();
+    let mut read = |name: &str| -> Result<Vec<u8>> {
+        let (bytes, envelope) = read_single_envelope(file, name)?;
+        global_streams.insert(name.to_string(), envelope);
+        Ok(bytes)
+    };
+    let registry = schema_registry::parse(&read("Formats/Latest")?)?;
+    let episodes = native_index::creation_episodes(&read("Global/History")?, &registry)?;
+    let index = native_index::parse(&read("Global/ElemTable")?, &registry, &episodes)?;
+    let increments =
+        native_index::storage_increments(&read("Global/DocumentIncrementTable")?, &registry)?;
+    let es_catalog = read("Global/Latest")
+        .and_then(|bytes| crate::native_es_catalog::decode(&bytes, &registry))
+        .map_err(|error| format!("{error:#}"));
+    Ok(Preamble {
+        global_streams,
+        registry,
+        index,
+        increments,
+        es_catalog,
+    })
 }
 /// Extract selected current indexed records. Unsupported individual object
 /// graphs produce explicit records and do not discard other decoded owners.
@@ -327,19 +362,14 @@ fn extract_records(
         matches!(version, 2023..=2027),
         "native record framing is unvalidated for Revit {version}"
     );
-    let mut global_streams = BTreeMap::new();
-    let mut read = |name: &str| -> Result<Vec<u8>> {
-        let (bytes, envelope) = read_single_envelope(file, name)?;
-        global_streams.insert(name.to_string(), envelope);
-        Ok(bytes)
-    };
-    let registry = schema_registry::parse(&read("Formats/Latest")?)?;
-    let episodes = native_index::creation_episodes(&read("Global/History")?, &registry)?;
-    let index = native_index::parse(&read("Global/ElemTable")?, &registry, &episodes)?;
-    let increments =
-        native_index::storage_increments(&read("Global/DocumentIncrementTable")?, &registry)?;
-    let es_catalog =
-        read("Global/Latest").and_then(|bytes| crate::native_es_catalog::decode(&bytes, &registry));
+    let preamble = file.native_preamble()?;
+    let Preamble {
+        global_streams,
+        registry,
+        index,
+        increments,
+        es_catalog,
+    } = &*preamble;
     let mut names: Vec<_> = file
         .stream_names()
         .iter()
@@ -377,7 +407,7 @@ fn extract_records(
             max_graph_values: options.max_graph_values,
             max_graph_objects: options.max_graph_objects,
         },
-        global_streams,
+        global_streams: global_streams.clone(),
         revit_version: version,
         schema_sha256: registry.source_sha256.clone(),
         indexed_elements: index.identities.len(),
@@ -394,10 +424,10 @@ fn extract_records(
     };
     match es_catalog {
         Ok((catalog, source)) => {
-            summary.extensible_storage_catalog = Some(catalog);
-            summary.extensible_storage_catalog_source = Some(source);
+            summary.extensible_storage_catalog = Some(catalog.clone());
+            summary.extensible_storage_catalog_source = Some(source.clone());
         }
-        Err(error) => summary.extensible_storage_catalog_diagnostic = Some(format!("{error:#}")),
+        Err(error) => summary.extensible_storage_catalog_diagnostic = Some(error.clone()),
     }
     // An element's stored revision routes it to one partition
     // (`native_index::route_episode`), and its records elsewhere are
@@ -414,9 +444,11 @@ fn extract_records(
         let partition: u32 = name[11..].parse()?;
         let stored = file.read_stream_with_limit(name, options.max_stream_bytes)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
-        native_segments::walk(
+        let inflated = file.inflated_partition(name).ok();
+        native_segments::walk_inflated(
             &prepared,
-            &registry,
+            inflated.as_deref(),
+            registry,
             options.max_group_bytes,
             |source, bytes| {
                 if source.content_key.is_some() || !options.channels.contains(&source.channel) {
@@ -440,9 +472,11 @@ fn extract_records(
         let partition: u32 = name[11..].parse()?;
         let stored = file.read_stream_with_limit(&name, options.max_stream_bytes)?;
         let prepared = compression::prepare_stream_for_inflate(&name, &stored);
-        let stats = native_segments::walk(
+        let inflated = file.inflated_partition(&name).ok();
+        let stats = native_segments::walk_inflated(
             &prepared,
-            &registry,
+            inflated.as_deref(),
+            registry,
             options.max_group_bytes,
             |source, bytes| {
                 if source.content_key.is_some() {
@@ -460,7 +494,7 @@ fn extract_records(
                     let identity = &index.identities[&id];
                     let routed = native_index::route_episode(
                         identity.stored_revision,
-                        &increments,
+                        increments,
                         &present,
                     )?;
                     let current = match holders.get(&(source.channel, id)) {
@@ -511,7 +545,7 @@ fn extract_records(
                     }
                     let decoded = native_parameters::decode_graph_with_catalog_usage(
                         body,
-                        &registry,
+                        registry,
                         &native_parameters::GraphLimits {
                             max_values: options.max_graph_values,
                             max_objects: options.max_graph_objects,

@@ -112,6 +112,9 @@ pub struct RevitFile {
     /// original symbols, railing types and MEP systems each scanned every
     /// partition for them.
     data_objects: std::collections::HashMap<String, PartitionDataObjects>,
+    /// Memoised native extraction preamble (B82): each native consumer read
+    /// the schema, the element index and the increments again.
+    native_preamble: Option<Arc<crate::native_document::Preamble>>,
 }
 
 /// A partition stream's data objects, each at its offset (RE-153).
@@ -252,6 +255,7 @@ impl RevitFile {
             design_options: None,
             walk: None,
             data_objects: std::collections::HashMap::new(),
+            native_preamble: None,
         })
     }
 
@@ -294,6 +298,19 @@ impl RevitFile {
         self.data_objects
             .insert(name.to_string(), Arc::clone(&objects));
         Ok(objects)
+    }
+
+    /// What every native extraction reads before the partitions
+    /// ([`crate::native_document::Preamble`]), memoised (B82).
+    pub(crate) fn native_preamble(
+        &mut self,
+    ) -> anyhow::Result<Arc<crate::native_document::Preamble>> {
+        if let Some(cached) = &self.native_preamble {
+            return Ok(Arc::clone(cached));
+        }
+        let preamble = Arc::new(crate::native_document::read_preamble(self)?);
+        self.native_preamble = Some(Arc::clone(&preamble));
+        Ok(preamble)
     }
 
     /// ElementIds [`crate::partition_element_records::assign_second_prologue_ids`]
