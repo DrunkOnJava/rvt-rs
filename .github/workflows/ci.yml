@@ -269,14 +269,17 @@ jobs:
         run: cargo test --profile ci --test project_count_fixtures -- --nocapture
 
   ifcopenshell-validate:
-    # IFC-41: load the committed synthetic-project.ifc fixture in
-    # IfcOpenShell and assert it opens without errors, carries the
-    # right spatial hierarchy, and resolves every IfcRel* link. This
-    # is the independent-validator gate: IfcOpenShell parses the STEP
-    # file through the full IFC4 schema, so errors a substring count
-    # can't see (dangling refs, wrong attribute
-    # arity, enum values outside the spec vocabulary) fail here.
-    name: IfcOpenShell validates synthetic project
+    # IFC-41 / C9: the independent-validator gate. IfcOpenShell parses what
+    # the exporter writes through the full IFC4 schema, so errors a
+    # substring count can't see (dangling refs, wrong attribute arity,
+    # enum values outside the spec vocabulary) fail here. It used to check
+    # the committed tests/fixtures/synthetic-*.ifc, which only a test that
+    # never runs regenerates, so it checked a fixed file rather than the
+    # current exporter (CI audit, 2026-10-05); it now exports the three
+    # tier-1 projects and real projects and validates those. The tier-1
+    # exports are small (24 instances each); the real projects carry most of
+    # what this job validates.
+    name: IfcOpenShell validates exports
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -303,99 +306,20 @@ jobs:
           # to a stable 0.8.x series — the 0.7 API has semantic
           # differences in entity-by-type iteration.
           python -m pip install 'ifcopenshell>=0.8.0,<0.9.0'
-      - name: Validate synthetic-project fixture
+      # C9: what the exporter writes now for the three tier-1 projects
+      # (architectural 2024, MEP 2024, structural 2023; synthetic files
+      # made by gen-fixture, in the repository), validated against the IFC4
+      # schema and its declared attribute counts.
+      - name: Export and validate the tier-1 projects
         run: |
-          python - <<'PY'
-          import ifcopenshell
-          path = "tests/fixtures/synthetic-project.ifc"
-          f = ifcopenshell.open(path)
-          # Schema identifier — we only ship IFC4.
-          assert f.schema == "IFC4", f"expected IFC4, got {f.schema}"
-          # Spatial hierarchy: 1 project, 1 site, 1 building, 3 storeys.
-          assert len(f.by_type("IfcProject")) == 1
-          assert len(f.by_type("IfcSite")) == 1
-          assert len(f.by_type("IfcBuilding")) == 1
-          assert len(f.by_type("IfcBuildingStorey")) == 3, (
-              f"expected 3 storeys, got {len(f.by_type('IfcBuildingStorey'))}"
-          )
-          # Per-element entities.
-          assert len(f.by_type("IfcWall")) == 4
-          assert len(f.by_type("IfcSlab")) == 1
-          assert len(f.by_type("IfcDoor")) == 1
-          assert len(f.by_type("IfcWindow")) == 2
-          # Openings + rels must have resolved references (no
-          # dangling pointers — IfcOpenShell would raise during
-          # open() if they did; double-check here).
-          openings = f.by_type("IfcOpeningElement")
-          assert len(openings) == 1
-          for op in openings:
-              voids = [r for r in f.by_type("IfcRelVoidsElement")
-                       if r.RelatedOpeningElement.id() == op.id()]
-              fills = [r for r in f.by_type("IfcRelFillsElement")
-                       if r.RelatingOpeningElement.id() == op.id()]
-              assert len(voids) == 1, f"opening {op} has {len(voids)} voids"
-              assert len(fills) == 1, f"opening {op} has {len(fills)} fills"
-          print("IfcOpenShell validation passed:")
-          print(f"  schema: {f.schema}")
-          print(f"  entities: {len(list(f))}")
-          print(f"  walls/slabs/doors/windows: 4/1/1/2")
-          print(f"  storeys: 3")
-          PY
-
-      # IFC-44: second fixture — structural framing + shared
-      # RepresentationMap + faceted-brep furniture. Validates IFC-17 /
-      # IFC-20 / IFC-21 / IFC-24 / IFC-30 paths that the project
-      # fixture above doesn't exercise.
-      - name: Validate synthetic-structural fixture
-        run: |
-          python - <<'PY'
-          import ifcopenshell
-          path = "tests/fixtures/synthetic-structural.ifc"
-          f = ifcopenshell.open(path)
-          assert f.schema == "IFC4"
-          assert len(f.by_type("IfcColumn")) == 2, "expected 2 columns"
-          assert len(f.by_type("IfcBeam")) == 2, "expected 2 beams"
-          assert len(f.by_type("IfcDoor")) == 3, "expected 3 doors"
-          assert len(f.by_type("IfcFurniture")) == 1, "expected 1 furniture"
-          # IFC-21: shared representation map, one entity, three
-          # mapped items referencing it.
-          reps = f.by_type("IfcRepresentationMap")
-          assert len(reps) == 1, f"expected 1 IfcRepresentationMap, got {len(reps)}"
-          mapped_items = f.by_type("IfcMappedItem")
-          assert len(mapped_items) == 3, (
-              f"expected 3 IfcMappedItem instances, got {len(mapped_items)}"
-          )
-          # All three mapped items must reference the same map.
-          for mi in mapped_items:
-              assert mi.MappingSource.id() == reps[0].id(), (
-                  "mapped item points at a different representation map"
-              )
-          # IFC-20: one faceted brep for the furniture.
-          assert len(f.by_type("IfcFacetedBrep")) == 1
-          # IFC-30: MaterialProfileSet usage on the 2 beams.
-          assert len(f.by_type("IfcMaterialProfileSetUsage")) >= 1
-          # IFC-24: I-shape profiles (3 total) + 1 circle profile.
-          assert len(f.by_type("IfcIShapeProfileDef")) == 3
-          assert len(f.by_type("IfcCircleProfileDef")) == 1
-          print("IFC-44 structural fixture validation passed:")
-          print(f"  columns/beams/doors/furniture: 2/2/3/1")
-          print(f"  IfcRepresentationMap/IfcMappedItem: 1/3 (3:1 sharing ratio)")
-          print(f"  IfcFacetedBrep: 1 (tetrahedron)")
-          PY
-
-      # #214: IfcOpenShell's parser accepts a record that lists fewer
-      # attributes than its entity type declares — the failure only
-      # surfaces when a consumer reads the missing attribute, which is
-      # how IFCCOLUMN shipped eight attributes against a declared nine
-      # for as long as it did. Re-derive every entity's declared
-      # attribute count from the IFC4 EXPRESS schema and compare it
-      # with what the STEP text actually wrote, for every instance in
-      # every committed fixture.
-      - name: Validate IFC4 schema arity of the committed fixtures
-        run: |
-          python tools/ci/ifc_schema_arity.py \
-            tests/fixtures/synthetic-project.ifc \
-            tests/fixtures/synthetic-structural.ifc
+          set -euo pipefail
+          cargo build --profile ci --bin rvt-ifc
+          for f in corpus/tier1/*/*.rvt; do
+            out="/tmp/tier1-$(basename "$f" .rvt).ifc"
+            ./target/ci/rvt-ifc "$f" -o "$out"
+            python -m ifcopenshell.validate "$out"
+          done
+          python tools/ci/ifc_schema_arity.py /tmp/tier1-*.ifc
 
       # M5-03: real-project walker → IFC end-to-end gate. Emit a
       # fresh IFC4 STEP from the small 2023 Einhoven project via
