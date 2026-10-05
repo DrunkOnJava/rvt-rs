@@ -7,14 +7,20 @@ name: Deploy viewer
 # A pull request that touches the viewer's inputs builds and tests it. On
 # main the viewer is published only from a commit whose CI passed (C3): the
 # workflow runs when CI completes on main, builds that commit when it
-# changed the viewer's inputs, and deploys it. A manual run on main deploys
-# too.
+# changed the viewer's inputs, and deploys it. A commit that changes only
+# the demo catalog (docs/viewer-demos.json) and other files CI ignores never
+# runs CI, so a push of the catalog deploys that commit directly. A manual
+# run on main deploys too.
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'docs/viewer-demos.json'
   pull_request:
     branches: [main]
     paths:
@@ -38,7 +44,7 @@ permissions:
 # PR build and deploy made PR checks cancel each other whenever two
 # runs queued.
 concurrency:
-  group: viewer-${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
+  group: viewer-${{ (github.event_name == 'workflow_run' || github.event_name == 'push') && 'main' || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -51,10 +57,10 @@ jobs:
       viewer: ${{ steps.changed.outputs.viewer }}
     steps:
       - name: Checkout
-        if: github.event_name == 'workflow_run'
+        if: github.event_name == 'workflow_run' || github.event_name == 'push'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 2
           persist-credentials: false
       - name: Viewer inputs changed
@@ -63,7 +69,16 @@ jobs:
           EVENT: ${{ github.event_name }}
           CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
-          if [ "$EVENT" != "workflow_run" ]; then
+          if [ "$EVENT" = "push" ]; then
+            # The catalog changed; deploy here only when CI's push filter
+            # skipped the commit, as workflow_run deploys every other one.
+            if git diff --name-only HEAD^ HEAD | grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)'; then
+              echo "the commit also changed files CI runs on; CI's completion deploys it"
+              echo "viewer=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "viewer=true" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "$EVENT" != "workflow_run" ]; then
             echo "viewer=true" >> "$GITHUB_OUTPUT"
           elif [ "$CI_CONCLUSION" != "success" ]; then
             echo "CI concluded ${CI_CONCLUSION} on this commit; not publishing it"
@@ -188,7 +203,7 @@ jobs:
           path: viewer/dist
 
   deploy:
-    if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_run' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
     permissions:
