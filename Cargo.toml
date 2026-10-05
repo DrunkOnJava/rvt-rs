@@ -113,7 +113,7 @@ stream-evidence = { path = "tools/stream_evidence" }
 # powers the criterion-based cells in `docs/benchmarks.md` (Q-05).
 # `html_reports` renders per-run HTML + SVG so CI artefacts are
 # browsable. Version 0.7 builds on the MSRV.
-criterion ={ version = "0.7", features = ["html_reports"] }
+criterion ={ version = "0.8", features = ["html_reports"] }
 # Property-based never-panic / round-trip suites in tests/proptest_parsers.rs.
 proptest = "1"
 # Tier-one corpus health: hex-encode license-sidecar SHA256 checks of
