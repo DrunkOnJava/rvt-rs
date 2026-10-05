@@ -283,11 +283,11 @@ jobs:
         env:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: cargo test --profile ci --test integration -- cfb_roundtrip_delta:: --nocapture
+        run: 'cargo test --profile ci --test integration -- cfb_roundtrip_delta:: --nocapture'
       - name: Run project known-count fixture tests
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: cargo test --profile ci --test integration -- project_count_fixtures:: --nocapture
+        run: 'cargo test --profile ci --test integration -- project_count_fixtures:: --nocapture'
 
   ifcopenshell-validate:
     # IFC-41 / C9: the independent-validator gate. IfcOpenShell parses what
