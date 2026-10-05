@@ -8,6 +8,18 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Every join of an MEP model is read from its family instances' connectors
+  (B86).** A family instance's native `Connector` objects list the elements
+  joined to each connector (RE-171), so the export writes those joins
+  wherever the native record path reads the file (Revit 2023 to 2027), joins
+  to equipment written as a proxy included. RE1 Mechanical writes all 73 of
+  Revit's joins and RE1 Plumbing all 126, and Autodesk's MEP samples write
+  about 2,600 each on 2024, 2025 and 2026 alike. Checked by
+  `tests/mep_connections.rs`.
+- **Every port is nested in its element (B84).** Ports are related to their
+  elements with an `IfcRelNests`, one per element, as Revit's own IFC4 export
+  writes them; no `IfcRelConnectsPortToElement` is written. Checked by
+  `tests/port_nesting.rs`.
 - **A family instance written as a proxy has its ports (B83).** Each port
   is nested in its element with an `IfcRelNests`, as Revit's own IFC4 export
   nests ports, since IFC4 ties a port to a distribution element only. RE1
@@ -193,6 +205,11 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The WebAssembly bindings are their own crate, `rvt-wasm` (C6).** `rvt`
+  builds as a plain `rlib` and has no `wasm` feature; build the viewer's
+  package with `wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg
+  --out-name rvt`. Native builds no longer link a shared library they never
+  use.
 - **MEP models export several times faster (B80).** With the IFC
   byte-identical on all six reference models and 36 samples:
   - family-instance ports and duct shapes read object graphs without the
@@ -211,6 +228,8 @@ All notable changes will be documented here. This project follows
     already inflated (B82).
   - a partition stream's room solids are found in one pass rather than one
     search per room (B85).
+  - a curve's connector entries are searched for only after its anchor, not
+    across its whole partition (B87).
   Measured step by step inside one export, the 2025 `rme_advanced` sample's
   ports step went from 6.1 s to 1.7 s, its MEP systems from 4.6 s to 0.06 s,
   its curve and fitting sizes from 14.7 s to 1.0 s, and its first data-object
