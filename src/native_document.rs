@@ -25,6 +25,9 @@ pub struct ResourceBudget {
 #[derive(Debug, Clone)]
 pub struct Options {
     pub selected_ids: BTreeSet<u64>,
+    /// Records whose class is one of these are selected as well as
+    /// `selected_ids`; with `selected_ids` empty, only they are (B79).
+    pub selected_classes: BTreeSet<String>,
     pub channels: BTreeSet<u64>,
     pub max_stream_bytes: u64,
     pub max_group_bytes: usize,
@@ -35,6 +38,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             selected_ids: BTreeSet::new(),
+            selected_classes: BTreeSet::new(),
             channels: BTreeSet::from([102]),
             max_stream_bytes: 512 * 1024 * 1024,
             max_group_bytes: 256 * 1024 * 1024,
@@ -184,6 +188,7 @@ pub fn extract(
     let mut diagnostics = BTreeMap::new();
     let mut definition_options = options.clone();
     definition_options.selected_ids.clear();
+    definition_options.selected_classes.clear();
     definition_options.channels = BTreeSet::from([102]);
     let definition_summary =
         extract_records(
@@ -349,9 +354,22 @@ fn extract_records(
     let selected: BTreeSet<_> = index
         .identities
         .keys()
-        .filter(|id| options.selected_ids.is_empty() || options.selected_ids.contains(id))
+        .filter(|id| {
+            (options.selected_ids.is_empty() && options.selected_classes.is_empty())
+                || options.selected_ids.contains(id)
+        })
         .copied()
         .collect();
+    // A record is selected by its id or by the class its body's tag names.
+    let is_selected = |id: u64, body: &[u8]| {
+        selected.contains(&id)
+            || (!options.selected_classes.is_empty()
+                && index.identities.contains_key(&id)
+                && body
+                    .get(..2)
+                    .and_then(|b| registry.class(u16::from_le_bytes([b[0], b[1]])))
+                    .is_some_and(|class| options.selected_classes.contains(&class.name)))
+    };
     let mut summary = Summary {
         budgets: ResourceBudget {
             max_stream_bytes: options.max_stream_bytes,
@@ -404,8 +422,8 @@ fn extract_records(
                 if source.content_key.is_some() || !options.channels.contains(&source.channel) {
                     return Ok(());
                 }
-                for (id, ..) in group_records(source, bytes, version)? {
-                    if selected.contains(&id) {
+                for (id, _, start, end) in group_records(source, bytes, version)? {
+                    if is_selected(id, &bytes[start..end]) {
                         holders
                             .entry((source.channel, id))
                             .or_default()
@@ -436,7 +454,7 @@ fn extract_records(
                     return Ok(());
                 }
                 for (id, offset, start, end) in records {
-                    if !selected.contains(&id) {
+                    if !is_selected(id, &bytes[start..end]) {
                         continue;
                     }
                     let identity = &index.identities[&id];
