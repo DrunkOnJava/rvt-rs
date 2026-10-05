@@ -1,7 +1,7 @@
 version: 2
 # Commit titles read `build(deps): ...` (Conventional Commits), and a release
-# waits a few days before Dependabot proposes it, a week for a major one, so
-# a version pulled soon after publication never lands (C10).
+# waits three days before Dependabot proposes it (a week for a major Cargo or
+# npm one), so a version pulled soon after publication never lands (C10).
 updates:
   - package-ecosystem: cargo
     # The fuzz workspace and the IFClite witness have their own lockfiles,
@@ -53,9 +53,10 @@ updates:
     commit-message:
       prefix: build
       include: scope
+    # No semver cooldowns for this ecosystem: Dependabot accepts only
+    # default-days here.
     cooldown:
       default-days: 3
-      semver-major-days: 7
   - package-ecosystem: npm
     directory: /viewer
     schedule:
@@ -86,6 +87,7 @@ updates:
     commit-message:
       prefix: build
       include: scope
+    # No semver cooldowns for this ecosystem: Dependabot accepts only
+    # default-days here.
     cooldown:
       default-days: 3
-      semver-major-days: 7
