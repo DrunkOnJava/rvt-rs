@@ -7,6 +7,8 @@
 # tests/*.rs target must appear here exactly once, so a new target cannot
 # silently run or silently skip; tools/ci/verify-real-files.sh fails when one
 # is missing.
+# Each target is a module of tests/integration/main.rs, one test binary (C6),
+# so its tests are named <target>::<test>.
 #
 # Format: <class> <target> [skip=<test name substring>,...]
 #   real      reads real Revit files from the corpora and checks what the

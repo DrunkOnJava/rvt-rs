@@ -99,6 +99,10 @@ CLIs, and by the contract checks that keep the published claims honest.
 but `unit`, in CI on every OS (with the family corpus on Linux and Windows)
 and again against the project corpora in the tier-2 job. The script fails
 on a file the manifest does not class, so a new target cannot slip past.
+Every file under `tests/` is a module of `tests/integration/main.rs`, one
+test binary, so a new file also needs its two lines there (the script fails
+without them), and its tests are named `<file>::<test>`: `cargo test --test
+integration -- proxy_ports::` runs one file.
 Targets that read a corpus must skip cleanly when their environment
 variable is unset: the macOS and MSRV runs have no corpus.
 

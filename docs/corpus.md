@@ -96,8 +96,8 @@ tools/corpus-health.sh _corpus_candidates
 Run the smoke test directly:
 
 ```bash
-RVT_PROJECT_CORPUS_DIR=path/to/corpus cargo test --test project_corpus_smoke -- --nocapture
-RVT_PROJECT_CORPUS_DIR=path/to/corpus cargo test --test project_count_fixtures -- --nocapture
+RVT_PROJECT_CORPUS_DIR=path/to/corpus cargo test --test integration -- project_corpus_smoke:: --nocapture
+RVT_PROJECT_CORPUS_DIR=path/to/corpus cargo test --test integration -- project_count_fixtures:: --nocapture
 ```
 
 The test suite skips gracefully when corpus paths are absent for Tier two.

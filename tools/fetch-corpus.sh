@@ -10,7 +10,7 @@
 #
 # After cloning, run the corpus smoke test with:
 #   RVT_PROJECT_CORPUS_DIR="$(realpath _corpus_candidates)" \
-#     cargo test --test project_corpus_smoke
+#     cargo test --test integration -- project_corpus_smoke::
 #
 # Safe to re-run: existing clones get `git pull` instead of re-cloning.
 
@@ -65,5 +65,5 @@ echo
 echo "To run the smoke test on every fetched .rvt:"
 echo "  for rvt in \$(find $TARGET_DIR -name '*.rvt' -not -path '*/.git/*'); do"
 echo "    RVT_PROJECT_CORPUS_DIR=\$(dirname \"\$rvt\") \\"
-echo "      cargo test --test project_corpus_smoke 2>&1 | tail -5"
+echo "      cargo test --test integration -- project_corpus_smoke:: 2>&1 | tail -5"
 echo "  done"

@@ -53,4 +53,4 @@ fi
 
 echo
 echo "Running project corpus smoke test..."
-RVT_PROJECT_CORPUS_DIR="$corpus_dir" cargo test --test project_corpus_smoke -- --nocapture
+RVT_PROJECT_CORPUS_DIR="$corpus_dir" cargo test --test integration -- project_corpus_smoke:: --nocapture

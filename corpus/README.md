@@ -78,11 +78,11 @@ Local:
 ```bash
 # Tier 1 (no env needed)
 RVT_CORPUS_TIER1_DIR="$PWD/corpus/tier1" \
-  cargo test --release --test project_count_fixtures -- --nocapture
+  cargo test --release --test integration -- project_count_fixtures:: --nocapture
 
 # Tier 2 (skips without corpus)
 RVT_PROJECT_CORPUS_DIR=/path/to/magnetar/Revit \
-  cargo test --release --test corpus_tier2_health -- --nocapture
+  cargo test --release --test integration -- corpus_tier2_health:: --nocapture
 ```
 
 ## Sidecar schema (fixture.json)

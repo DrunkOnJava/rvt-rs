@@ -148,7 +148,7 @@ PY
 
 # Regenerate the fixture from current source (verifies the fixture
 # stays in sync with the writer):
-DUMP_IFC=1 cargo test --release --test ifc_synthetic_project
+DUMP_IFC=1 cargo test --release --test integration -- ifc_synthetic_project::
 ```
 
 ## Known limitations

@@ -191,7 +191,7 @@ contributor. The project should treat it as an optional higher tier:
 This ADR is documentation-only. The current enforced write-path evidence
 remains:
 
-- `cargo test --test cfb_roundtrip_delta` for family/project stream patch
+- `cargo test --test integration -- cfb_roundtrip_delta::` for family/project stream patch
   coverage;
 - `cargo test writer::tests:: --lib` for patch verification,
   corrupt-gzip reporting, GUID, and history helpers;

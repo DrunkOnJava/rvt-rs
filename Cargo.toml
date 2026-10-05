@@ -23,6 +23,9 @@ exclude = [
     # docs/data/tag-drift-2016-2026.csv, and excluding it made the packaged
     # crate fail `cargo publish --dry-run` verification.
 ]
+# Every tests/*.rs file is a module of tests/integration/main.rs, one test
+# binary rather than one per file (C6).
+autotests = false
 
 # The SPDX identifier `Apache-2.0` is set above. The full license text
 # is in LICENSE at the crate root.
@@ -251,3 +254,7 @@ incremental = false
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[[test]]
+name = "integration"
+path = "tests/integration/main.rs"

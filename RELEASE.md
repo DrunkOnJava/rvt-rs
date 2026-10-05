@@ -65,12 +65,12 @@ project treats a silent skipped step the same as an untested change.
    matrix (ubuntu/macos/windows × stable + MSRV 1.87 on ubuntu) are all
    green. `cargo deny check` and `cargo audit` are green.
 2. **Synthetic-project IFC integration test.** `cargo test --release
-   --test ifc_synthetic_project`. This is the end-to-end regression
-   gate — a synthesised document is written, re-read, and round-tripped
-   through the IFC4 STEP exporter.
+   --test integration -- ifc_synthetic_project::`. This is the end-to-end
+   regression gate — a synthesised document is written, re-read, and
+   round-tripped through the IFC4 STEP exporter.
 3. **Corpus integration tests.** If the phi-ag/rvt corpus is available
-   locally, `RVT_SAMPLES_DIR=... cargo test --release --test samples
-   --test ifc_roundtrip --test field_type_coverage`. CI runs these on
+   locally, `RVT_SAMPLES_DIR=... cargo test --release --test integration --
+   samples:: ifc_roundtrip:: field_type_coverage::`. CI runs these on
    every push, but running once locally against the checked-out corpus
    before tagging catches anything a stale cache might mask.
 4. **Bump version.** Edit `Cargo.toml` `[package].version`. If the

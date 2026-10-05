@@ -93,7 +93,10 @@ fn rvt_inspect_json_reports_corrupt_file_failure_mode() {
     let path = std::env::temp_dir().join(format!(
         "rvt-inspect-corrupt-{}-{}.rvt",
         std::process::id(),
-        std::thread::current().name().unwrap_or("test")
+        std::thread::current()
+            .name()
+            .unwrap_or("test")
+            .replace(':', "-")
     ));
     std::fs::write(&path, b"not a revit container").expect("write corrupt fixture");
 

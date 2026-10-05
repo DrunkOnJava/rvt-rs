@@ -205,6 +205,12 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The integration tests are one test binary, `integration` (C6).** Every
+  `tests/*.rs` file is a module of `tests/integration/main.rs`, and its tests
+  are named `<file>::<test>`: run one file with `cargo test --test
+  integration -- <file>::` where `cargo test --test <file>` ran it before.
+  Building them went from 118 s of build units for 77 binaries to 13 s for
+  one.
 - **The WebAssembly bindings are their own crate, `rvt-wasm` (C6).** `rvt`
   builds as a plain `rlib` and has no `wasm` feature; build the viewer's
   package with `wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg
