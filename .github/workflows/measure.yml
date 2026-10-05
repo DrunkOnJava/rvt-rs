@@ -83,7 +83,7 @@ env:
 jobs:
   measure:
     name: Measure ${{ matrix.side }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -163,7 +163,7 @@ jobs:
   compare:
     name: Compare
     needs: measure
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -221,7 +221,7 @@ jobs:
   timing:
     name: Timing (one runner)
     if: inputs.timing && inputs.base != 'none'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - name: Workflow tools

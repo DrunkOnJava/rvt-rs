@@ -30,6 +30,10 @@ UNWATCHED = {"/tools/ci/witness-ifc-lite": "its third-party witness is pinned to
 results = []
 
 
+# The languages .github/workflows/codeql.yml analyses.
+CODEQL_LANGUAGES = ("actions", "javascript-typescript", "python", "rust")
+
+
 def gh(*args):
     p = subprocess.run(["gh", "api", *args], capture_output=True, text=True)
     if p.returncode != 0:
@@ -232,8 +236,15 @@ def settings(repo):
         problems.append("the default workflow token is not read-only")
     if not gh(f"repos/{repo}/private-vulnerability-reporting").get("enabled"):
         problems.append("private vulnerability reporting is off")
-    if gh(f"repos/{repo}/code-scanning/default-setup").get("state") != "configured":
-        problems.append("CodeQL default setup is not configured")
+    # CodeQL runs from .github/workflows/codeql.yml (C3), the only way to scan
+    # Rust; the default setup must stay off, since GitHub refuses an advanced
+    # setup's results while it is on.
+    if gh(f"repos/{repo}/code-scanning/default-setup").get("state") == "configured":
+        problems.append("CodeQL default setup is on, so codeql.yml's results are refused")
+    analysed = {a.get("category") for a in gh(f"repos/{repo}/code-scanning/analyses?ref=refs/heads/main&tool_name=CodeQL&per_page=100")}
+    missing = sorted(f"/language:{lang}" for lang in CODEQL_LANGUAGES if f"/language:{lang}" not in analysed)
+    if missing:
+        problems.append(f"main has no CodeQL analysis for {', '.join(missing)}")
     return problems
 
 
