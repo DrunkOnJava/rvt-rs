@@ -273,6 +273,7 @@ From an audit of all nine workflows, the fetch-corpus action, dependabot.yml, bo
 - **A merge queue is not available.** GitHub offers merge queues to organization-owned repositories, and DrunkOnJava/rvt-rs is owned by a user account, so pull requests still land one update-branch cycle at a time, ordered by what they conflict with.
 - **CodeQL's runner (C5, missed).** #715 moved every Linux job to `ubuntu-24.04` but `codeql.yml`, added by #711 the same day, still says `ubuntu-latest`; the C10 hygiene pull request fixes it.
 - **Remote branches.** 46 branches whose pull requests merged or closed are archived as a git bundle (all 46 refs, `git bundle verify` OK) in the maintainer's archive folder; deleting them on GitHub waits for the maintainer.
+- **`ifc_synthetic_project` fails on main, and nothing runs it.** `synthetic_project_emits_valid_ifc4` asserts 2 `IFCPROPERTYSET` and the export writes 12 (`tests/ifc_synthetic_project.rs:423`), as its own binary on `6373a2f` (scratch run 37346485303: 1 passed, 1 failed) and as a module of one merged binary alike, so the merge did not cause it. It is classed `unit` in `tools/ci/test-targets.txt`, which CI never runs, and under this session's interview choice the unit suites stay untouched, so the assertion waits for the maintainer.
 
 ## Progress log
 
