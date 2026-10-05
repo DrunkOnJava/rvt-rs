@@ -19,15 +19,14 @@ on:
   pull_request:
     branches: [main]
 
-# Supersede any in-flight run for the same ref when a new push
-# arrives. Prevents #52a → #52b → #52c back-to-back pushes from
-# burning 3× runner-minutes on stale Windows matrices nobody will
-# look at. `cancel-in-progress: true` is the budget saver; the
-# group key is per-ref so concurrent PR + push on different refs
-# don't cancel each other.
+# Supersede a pull request's in-flight run when a new push arrives, so
+# back-to-back pushes do not burn runner-minutes on stale matrices. A run
+# on main is never cancelled: two merges in a row used to cancel the first
+# one's run, and that commit never got a full result. The group key is per
+# ref, so a pull request and main never cancel each other.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least-privilege at the workflow level. No CI job here modifies the
 # repo, opens issues, comments on PRs, or otherwise needs write
@@ -75,8 +74,7 @@ jobs:
     # ubuntu-stable (primary) and windows-stable (CFB path-separator
     # regression); elsewhere the corpus checks skip and the CLI and
     # contract checks still run. The MSRV entry is labelled `msrv`, so its
-    # check name, which the main-protection ruleset requires, does not change
-    # when `rust-version` does.
+    # check name does not change when `rust-version` does.
     name: build + real files / ${{ matrix.os }} / ${{ matrix.label || matrix.rust }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -911,3 +909,37 @@ jobs:
           jsonschema.validate(config, schema)
           print(".cursor/environment.json validates against the Cursor environment schema")
           PY
+
+  # The one check the main-protection ruleset requires (C1). It passes only
+  # when every job above passed or was skipped, so a pull request cannot
+  # merge while Corpus health, the writer corpus or IfcOpenShell is still
+  # running or has failed, and renaming a job never touches the ruleset.
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs:
+      - fmt
+      - clippy
+      - test
+      - corpus-tier2
+      - writer-patch-corpus
+      - ifcopenshell-validate
+      - doc
+      - bench-build
+      - docs-rs-preview
+      - python-wheel
+      - deny
+      - audit
+      - viewer-dependencies
+      - pii-guard
+      - env-config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: ${RESULTS}"
+          case " ${RESULTS} " in
+            *" failure "*|*" cancelled "*) echo "::error::a CI job failed or was cancelled"; exit 1 ;;
+          esac

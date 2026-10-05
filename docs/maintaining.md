@@ -50,12 +50,12 @@ when a release ships.
 
 - A pull request is required for everyone; only the maintainer can bypass it.
   Merges are **squash only**, commits must be **signed**, history is linear, and
-  the branch must be up to date with `main`. The required checks are `cargo fmt`,
-  `cargo clippy`, `build + real files / ubuntu-latest / stable`,
-  `build + real files / ubuntu-latest / msrv`, `cargo doc` and `PII guard`. The
-  others (macOS and Windows, IfcOpenShell validation, corpus tier 2, wheels, the
-  audits) are not required, so read the whole check list before merging
-  anything they cover.
+  the branch must be up to date with `main`. The one required check is
+  `CI passed`, CI's summary job, which passes only when every CI job (macOS
+  and Windows, corpus tier 2, the writer corpus, IfcOpenShell validation,
+  wheels and the audits included) passed or was skipped, so auto-merge waits
+  for all of them. Measure and the release and deploy workflows are not part
+  of it.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
   history: fix it before merging.
@@ -75,9 +75,9 @@ when a release ships.
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
-the MSRV job in CI builds on exactly that release. The job is a required check,
-named `build + real files / ubuntu-latest / msrv` so that the name does not
-change when the release does. The MSRV is never lower than the
+the MSRV job in CI builds on exactly that release. It is one of the jobs
+`CI passed` requires, named `build + real files / ubuntu-latest / msrv` so that
+the name does not change when the release does. The MSRV is never lower than the
 floor the 2024 edition sets (1.85), and it moves up when a dependency worth
 taking needs a newer compiler: quick-xml 0.42 needs 1.86 and earcut 0.4.10 and
 later call `is_multiple_of`, which is stable from 1.87, so the MSRV is 1.87. It

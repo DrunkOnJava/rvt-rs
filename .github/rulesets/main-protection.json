@@ -50,22 +50,7 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           {
-            "context": "cargo fmt"
-          },
-          {
-            "context": "cargo clippy"
-          },
-          {
-            "context": "build + real files / ubuntu-latest / stable"
-          },
-          {
-            "context": "build + real files / ubuntu-latest / msrv"
-          },
-          {
-            "context": "cargo doc"
-          },
-          {
-            "context": "PII guard"
+            "context": "CI passed"
           }
         ]
       }
