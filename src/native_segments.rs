@@ -1,10 +1,10 @@
 //! Forward-only physical partition markers and continuation groups.
 //! Class tags come from the structural registry, never gzip/name searching.
-use crate::schema_registry::Registry;
+use crate::{compression::InflatedStream, schema_registry::Registry};
 use anyhow::{Result, ensure};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::io::Read;
+use std::{borrow::Cow, io::Read};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GroupSource {
@@ -55,12 +55,47 @@ impl<'a> Reader<'a> {
         Ok(u64::from_le_bytes(self.take(8)?.try_into()?))
     }
 }
+/// The member of `inflated` at `offset` where it is the whole gzip member
+/// `compressed`, as the decoder in [`walk_inflated`] would read it: a header
+/// with no optional fields, the DEFLATE stream, then a CRC and ISIZE that
+/// match the member, ending at the segment's end, within the group budget.
+fn whole_member<'a>(
+    inflated: &'a InflatedStream,
+    offset: usize,
+    compressed: &[u8],
+    max_group_bytes: usize,
+) -> Option<&'a [u8]> {
+    let (member, consumed) = inflated.member_at(offset)?;
+    let trailer = compressed.get(consumed..)?;
+    if compressed.get(3) != Some(&0) || trailer.len() != 8 || member.len() > max_group_bytes {
+        return None;
+    }
+    let mut crc = flate2::Crc::new();
+    crc.update(member);
+    (trailer[..4] == crc.sum().to_le_bytes() && trailer[4..] == (member.len() as u32).to_le_bytes())
+        .then_some(member)
+}
 /// Walk a checksum-prepared partition. Each callback receives a complete
 /// continuation group, not a claimed live element. Maximum reassembled group
 /// size is an explicit caller budget. Gzip CRC, ISIZE, boundary, checkback and
 /// continuation flags are checked before a group is exposed.
 pub fn walk(
     prepared: &[u8],
+    registry: &Registry,
+    max_group_bytes: usize,
+    callback: impl FnMut(&GroupSource, &[u8]) -> Result<()>,
+) -> Result<Statistics> {
+    walk_inflated(prepared, None, registry, max_group_bytes, callback)
+}
+/// [`walk`], taking each segment's inflated bytes from `inflated`, the same
+/// stream's members inflated once for every reader of the file
+/// ([`crate::RevitFile::inflated_partition`]), where it holds them, rather
+/// than inflating them again (B82). A member is taken only where it is the
+/// whole segment, with a CRC and ISIZE that match it; any other segment is
+/// inflated and checked as [`walk`] does.
+pub fn walk_inflated(
+    prepared: &[u8],
+    inflated: Option<&InflatedStream>,
     registry: &Registry,
     max_group_bytes: usize,
     mut callback: impl FnMut(&GroupSource, &[u8]) -> Result<()>,
@@ -88,7 +123,7 @@ pub fn walk(
     let mut content_key = None;
     let mut content_element_count = None;
     let mut last_size = None;
-    let mut active: Option<(GroupSource, Vec<u8>)> = None;
+    let mut active: Option<(GroupSource, Cow<[u8]>)> = None;
     loop {
         let offset = r.pos;
         let next = r.u16()?;
@@ -148,20 +183,29 @@ pub fn walk(
                 "unsupported segment flags/size at {offset}"
             );
             let channel = r.u64()?;
+            let compressed_at = r.pos;
             let compressed = r.take(size as usize - 8)?;
-            let mut decoder = flate2::bufread::GzDecoder::new(compressed);
-            let mut bytes = Vec::new();
-            (&mut decoder)
-                .take(max_group_bytes as u64 + 1)
-                .read_to_end(&mut bytes)?;
-            ensure!(
-                bytes.len() <= max_group_bytes,
-                "inflated segment group budget exceeded"
-            );
-            ensure!(
-                decoder.get_ref().is_empty(),
-                "gzip does not consume exact declared segment boundary"
-            );
+            let bytes = match inflated
+                .and_then(|stream| whole_member(stream, compressed_at, compressed, max_group_bytes))
+            {
+                Some(member) => Cow::Borrowed(member),
+                None => {
+                    let mut decoder = flate2::bufread::GzDecoder::new(compressed);
+                    let mut bytes = Vec::new();
+                    (&mut decoder)
+                        .take(max_group_bytes as u64 + 1)
+                        .read_to_end(&mut bytes)?;
+                    ensure!(
+                        bytes.len() <= max_group_bytes,
+                        "inflated segment group budget exceeded"
+                    );
+                    ensure!(
+                        decoder.get_ref().is_empty(),
+                        "gzip does not consume exact declared segment boundary"
+                    );
+                    Cow::Owned(bytes)
+                }
+            };
             stats.segments += 1;
             stats.inflated_bytes += bytes.len() as u64;
             last_size = Some(size);
@@ -182,7 +226,7 @@ pub fn walk(
                         .is_some_and(|n| n <= max_group_bytes),
                     "reassembled group budget exceeded"
                 );
-                data.extend(bytes);
+                data.to_mut().extend_from_slice(&bytes);
                 source.segment_count += 1;
                 source.declared_objects += u64::from(count);
                 source.declared_body_bytes += u64::from(raw);

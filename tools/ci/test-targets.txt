@@ -55,6 +55,7 @@ real      native_phases
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
 real      project_corpus_smoke
+real      proxy_ports
 real      railing_type
 real      re15_geometry_invariants
 real      re19_door_window_wall_negative
@@ -70,6 +71,7 @@ real      space_containment
 real      space_types
 real      spatial_property_sets
 real      type_global_ids
+real      typed_no_geometry_types
 real      unfilled_openings
 real      walker_to_ifc_integration
 real      wall_profile_openings
