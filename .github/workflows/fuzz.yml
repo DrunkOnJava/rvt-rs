@@ -40,7 +40,7 @@ concurrency:
 jobs:
   fuzz:
     name: Fuzz ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -59,10 +59,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # A dated nightly (C2): with a floating one, every night's toolchain
+      # made a new 110 MB cache that the next night could not restore.
       - name: Install nightly Rust
         uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-10-01
 
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -89,7 +91,7 @@ jobs:
         run: |
           budget='${{ inputs.duration_seconds }}'
           if [[ -z "$budget" ]]; then budget=300; fi
-          cargo fuzz run ${{ matrix.target }} -- \
+          cargo +nightly-2026-10-01 fuzz run ${{ matrix.target }} -- \
             -max_total_time="$budget" \
             -rss_limit_mb=2048 \
             -timeout=30

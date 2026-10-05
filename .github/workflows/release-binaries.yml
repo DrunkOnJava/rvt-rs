@@ -60,7 +60,7 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04
             smoke: true
           - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04-arm
@@ -162,7 +162,7 @@ jobs:
   checksums:
     name: SHA256SUMS
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -183,7 +183,7 @@ jobs:
   image:
     name: Container image
     needs: checksums
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -282,7 +282,7 @@ jobs:
     name: Attach to the GitHub Release
     if: inputs.upload
     needs: checksums
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       # Build provenance for the archives (actions/attest).
