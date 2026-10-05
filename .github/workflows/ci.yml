@@ -159,18 +159,32 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-release
       - name: Build
+        if: matrix.label != 'msrv'
         # Linux owns the shared `ci-release` cache and compiles every
         # target so benches and examples stay green. macOS and Windows
         # never run benches or examples in this job, so they skip them:
         # on windows-latest the all-targets build was 181 s of a 4.1 min
         # job.
         run: cargo build --profile ci ${{ runner.os == 'Linux' && '--all-targets' || '--lib --bins --tests' }}
+      # The MSRV entry checks that every target compiles on the oldest
+      # supported release; the stable entries run the checks (C6). It took
+      # 2 min 48 s to build and run them again for 5 s of tests.
+      - name: Check every target on the MSRV
+        if: matrix.label == 'msrv'
+        run: cargo check --profile ci --all-targets
       # Real-file, end-to-end CLI and contract checks only; the manifest
       # names every tests/*.rs target and the script fails on one it does
       # not classify, so a new target cannot run or skip unnoticed (#206).
       # With the family corpus present, a missing release fails the
       # coverage and ElemTable gates instead of skipping them.
+      # cargo-nextest runs the manifest's test binaries in parallel (C6).
+      - name: Install cargo-nextest
+        if: matrix.label != 'msrv'
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
       - name: Real-file, CLI and contract verification
+        if: matrix.label != 'msrv'
         shell: bash
         env:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
@@ -226,6 +240,11 @@ jobs:
       # way (26424 of 26425 declared records on the 2024 project). Every
       # tests/*.rs now runs against the project corpus, so a new
       # corpus-reading target is gated the moment it exists.
+      # cargo-nextest runs the manifest's test binaries in parallel (C6).
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
       - name: Tier-two gates (real-file, CLI and contract targets against the project corpus)
         shell: bash
         env:

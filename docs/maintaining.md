@@ -78,7 +78,7 @@ when a release ships.
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
-the MSRV job in CI builds on exactly that release. It is one of the jobs
+the MSRV job in CI checks every target (`cargo check --all-targets`) on exactly that release. It is one of the jobs
 `CI passed` requires, named `build + real files / ubuntu-24.04 / msrv` so that
 the name does not change when the release does. The MSRV is never lower than the
 floor the 2024 edition sets (1.85), and it moves up when a dependency worth
