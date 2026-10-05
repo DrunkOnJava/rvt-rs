@@ -58,6 +58,19 @@ jobs:
           ms=$(( ($(date +%s%N) - start) / 1000000 ))
           echo "merged: 1 binary, $ms ms" | tee -a "$GITHUB_STEP_SUMMARY"
           mv target/cargo-timings target/timings-merged
+      - name: Clippy on the merged binary
+        run: |
+          set -euo pipefail
+          rustup component add clippy
+          cargo clippy --profile ci --tests -- -D warnings 2>&1 | tee clippy.log
+          echo "clippy exit ${PIPESTATUS[0]}" | tee -a "$GITHUB_STEP_SUMMARY"
+        continue-on-error: true
+      - name: Check every target, merged
+        run: |
+          set -euo pipefail
+          start=$(date +%s%N)
+          cargo check --profile ci --all-targets
+          echo "check merged: $(( ($(date +%s%N) - start) / 1000000 )) ms" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Merged binary runs the same tests
         run: |
           set -euo pipefail
@@ -74,3 +87,4 @@ jobs:
             target/timings-separate
             target/timings-merged
             merged-run.log
+            clippy.log
