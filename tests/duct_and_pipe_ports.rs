@@ -60,7 +60,9 @@ fn port_key(args: &str) -> Option<(u32, u32)> {
     Some((id.parse().ok()?, index.parse().ok()?))
 }
 
-/// Each port's key, with the `Tag` of the element it is tied to.
+/// Each port's key, with the `Tag` of the element it is tied to: by an
+/// `IfcRelConnectsPortToElement` (Revit's IFC2X3 export) or an `IfcRelNests`
+/// (rvt-rs's IFC4 export, B84).
 fn ports(step: &str) -> BTreeMap<(u32, u32), Option<u32>> {
     let ents = entities(step);
     let mut out: BTreeMap<(u32, u32), Option<u32>> = ents
@@ -69,23 +71,31 @@ fn ports(step: &str) -> BTreeMap<(u32, u32), Option<u32>> {
         .filter_map(|(_, args)| Some((port_key(args)?, None)))
         .collect();
     for (entity, args) in ents.values() {
-        if entity != "IFCRELCONNECTSPORTTOELEMENT" {
-            continue;
-        }
         let all = refs(args);
-        let (Some(port), Some(element)) = (all.get(1), all.get(2)) else {
-            continue;
+        let pairs: Vec<(u64, u64)> = match entity.as_str() {
+            "IFCRELCONNECTSPORTTOELEMENT" => match (all.get(1), all.get(2)) {
+                (Some(port), Some(element)) => vec![(*port, *element)],
+                _ => continue,
+            },
+            "IFCRELNESTS" => match all.get(1) {
+                Some(element) => all.iter().skip(2).map(|part| (*part, *element)).collect(),
+                None => continue,
+            },
+            _ => continue,
         };
-        let (Some((_, port_args)), Some((_, element_args))) = (ents.get(port), ents.get(element))
-        else {
-            continue;
-        };
-        if let Some(key) = port_key(port_args) {
-            let tag = element_args
-                .rsplit('\'')
-                .nth(1)
-                .and_then(|t| t.parse().ok());
-            out.insert(key, tag);
+        for (port, element) in pairs {
+            let (Some((_, port_args)), Some((_, element_args))) =
+                (ents.get(&port), ents.get(&element))
+            else {
+                continue;
+            };
+            if let Some(key) = port_key(port_args) {
+                let tag = element_args
+                    .rsplit('\'')
+                    .nth(1)
+                    .and_then(|t| t.parse().ok());
+                out.insert(key, tag);
+            }
         }
     }
     out

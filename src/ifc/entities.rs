@@ -169,8 +169,8 @@ pub enum IfcEntity {
     /// connected to connector `b_index` of the element at `b` (ElementId
     /// `b_id`). Both are indices into `IfcModel::entities`. The writer gives
     /// each connector an `IfcDistributionPort` named after its element and
-    /// index, joins the two with an `IfcRelConnectsPorts`, and ties each to
-    /// its element with an `IfcRelConnectsPortToElement`. The ports have no
+    /// index, joins the two with an `IfcRelConnectsPorts`, and nests each in
+    /// its element with an `IfcRelNests` (B84). The ports have no
     /// flow direction: the file's lists do not carry one.
     PortConnection {
         a: usize,

@@ -78,7 +78,7 @@ when a release ships.
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
-the MSRV job in CI builds on exactly that release. It is one of the jobs
+the MSRV job in CI checks every target (`cargo check --all-targets`) on exactly that release. It is one of the jobs
 `CI passed` requires, named `build + real files / ubuntu-24.04 / msrv` so that
 the name does not change when the release does. The MSRV is never lower than the
 floor the 2024 edition sets (1.85), and it moves up when a dependency worth
@@ -120,13 +120,15 @@ Configured on the repository, with the rulesets kept as code in
 
 - Private vulnerability reporting, secret scanning with push protection,
   Dependabot alerts and security updates are on. Dependabot opens weekly version
-  updates for Cargo (the crate and the fuzz workspace), GitHub Actions (the
-  workflows and the composite actions under `.github/actions`), the viewer's npm
-  packages and the release image's base in `docker/Dockerfile`, with minor and
-  patch updates grouped; major updates arrive one at a time and are migrated by
-  hand when they need it. `tools/ci/witness-ifc-lite` gets no version updates,
-  since its third-party witness is pinned to an exact version on purpose, but
-  its lockfile is in the dependency graph and so covered by the alerts.
+  updates for Cargo (the crate, the fuzz workspace and `tools/ci/witness-ifc-lite`),
+  GitHub Actions (the workflows and the composite actions under
+  `.github/actions`), the viewer's npm packages and the release image's base in
+  `docker/Dockerfile`, with minor and patch updates grouped; major updates
+  arrive one at a time and are migrated by hand when they need it. A release
+  waits three days (seven for a major Cargo or npm one) before it is proposed, and commit
+  titles read `build(deps): ...`. The witness's `ifc-lite-core` is never
+  proposed: it is pinned to an exact version on purpose, as a different version
+  is a different witness.
 - CodeQL (`.github/workflows/codeql.yml`) analyses the workflows, the
   viewer's TypeScript and JavaScript, the Python bindings and the Rust crate,
   on every pull request, push to main and weekly. The default setup stays

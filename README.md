@@ -55,7 +55,7 @@ Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`
 | CSV schedules | partial | `rvt-schedule`, the viewer's Schedule panel and `RevitFile.schedule_csv()` write element and room schedules for Excel / Sheets; rows are exactly what decodes (typed on Revit 2024 projects with element records). |
 | 2D plan-view SVG export | ✓ | `render_plan_svg()` produces per-category-coloured SVG (walls black, doors amber, columns red, …) (VW1-11), each element drawn as its body's plan outline, rotated and with holes open, with slabs beneath the walls. `rvt-sheet` CLI. |
 | Browser viewer | ✓ | Live at <https://drunkonjava.github.io/rvt-rs/>. WebAssembly build of the core library + Three.js + Vite. Zero-upload, in-tab parse, Export glTF/IFC/SVG buttons, URL-based share via `share::ViewerState`. (VW1-01 through VW1-24 shipped.) |
-| Fuzz-regression harness | ✓ | 9 libFuzzer targets + 38 synthetic adversarial regression cases under `tests/fuzz_regressions.rs`. Caught a real `gzip_header_len` bounds bug on 9-byte truncated headers (Q-04). |
+| Fuzz-regression harness | ✓ | 11 libFuzzer targets, run nightly, and 38 adversarial regression cases in `tests/fuzz_regressions.rs`, run by CI on every pull request. Caught a real `gzip_header_len` bounds bug on 9-byte truncated headers (Q-04). |
 
 ## What rvt-rs reads from real projects
 
@@ -246,7 +246,7 @@ All modules compile under both the default build and the `wasm` feature flag. Se
 | `ifc` | Full IFC4 spatial tree + elements + materials + properties + openings + extrusion geometry + glTF 2.0 binary (`gltf::model_to_glb`) + plan-view SVG (`sheet::render_plan_svg`) + viewer data model (`scene_graph`, `camera`, `clipping`, `sheet`, `share`, `measure`, `annotation`, `pbr`) |
 | `streams` | Named constants for every invariant OLE stream in a Revit file |
 | `redact` | Shared PII scrubbers for all CLIs (`--redact` flag) |
-| `wasm` | `#[cfg(feature = "wasm")]` — 14 JS-callable wasm-bindgen bindings powering the browser viewer |
+| (`rvt-wasm` crate) | the 14 JS-callable wasm-bindgen bindings powering the browser viewer, a crate of its own so `rvt` builds as a plain `rlib` |
 | `error` | Structured error type (`Error` / `Result`) |
 
 Runtime capabilities:
@@ -487,7 +487,8 @@ corpus-backed tests skip themselves while `RVT_PROJECT_CORPUS_DIR` is unset.
   add the optional gates.
 - **Where the tests live:** unit tests next to the code in `src/`; integration
   tests in `tests/` (corpus-gated ones skip without `RVT_PROJECT_CORPUS_DIR`);
-  `tests/fuzz_regressions.rs` replays crash-shaped inputs on stable Rust;
+  `tests/fuzz_regressions.rs` replays crash-shaped inputs on stable Rust in
+  CI;
   libFuzzer targets in `fuzz/`; Playwright browser tests in `viewer/tests/`;
   Python tests in `tests/python/`.
 - **What "done" looks like:** the gate is green, the pull-request template's

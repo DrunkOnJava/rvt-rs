@@ -15,11 +15,15 @@
 #   contract  checks a published claim (support matrix, binary inventory,
 #             witness verdicts, JSON schemas, field-type coverage) against
 #             the code and artifacts
-#   unit      synthetic-only, property or fuzz-regression tests: kept as
-#             source, not run
+#   hardening replays inputs that crashed or overran a parser of untrusted
+#             files (fuzz findings) through the public API: run, as a
+#             parser of hostile input must keep surviving them (the
+#             maintainer's choice, 2026-10-05, C9)
+#   unit      synthetic-only or property tests: kept as source, not run
 #
 # `skip=` leaves out the synthetic-fixture tests inside a real-file target.
 
+hardening fuzz_regressions
 real      arc_wall_corpus
 real      cfb_roundtrip_delta
 real      common_reference
@@ -55,6 +59,7 @@ real      native_partitions_walk
 real      native_phases
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
+real      port_nesting
 real      project_corpus_smoke
 real      proxy_ports
 real      railing_type
@@ -95,7 +100,6 @@ contract  witness_registry
 contract  witness_verdict
 
 unit      control_cancellation
-unit      fuzz_regressions
 unit      graceful_degradation
 unit      ifc_synthetic_project
 unit      ifc_synthetic_structural

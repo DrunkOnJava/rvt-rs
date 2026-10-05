@@ -127,7 +127,7 @@ jobs:
         run: tools/fetch-reference-models.sh models
       - name: Fetch the family corpus
         if: inputs.families || github.event_name == 'pull_request'
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus

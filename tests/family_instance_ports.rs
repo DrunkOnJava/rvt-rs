@@ -94,25 +94,36 @@ fn ports_and_entities(step: &str) -> (Ports, BTreeMap<u32, String>) {
         if let Some(tag) = args.rsplit('\'').nth(1).and_then(|t| t.parse().ok()) {
             entity_of.entry(tag).or_insert_with(|| entity.clone());
         }
-        if entity != "IFCRELCONNECTSPORTTOELEMENT" {
-            continue;
-        }
+        // A port is tied to its element by an IfcRelConnectsPortToElement
+        // (Revit's IFC2X3 export) or nested in it by an IfcRelNests
+        // (rvt-rs's IFC4 export, B84).
         let all = refs(args);
-        let (Some(port), Some(element)) = (all.get(1), all.get(2)) else {
-            continue;
+        let pairs: Vec<(u64, u64)> = match entity.as_str() {
+            "IFCRELCONNECTSPORTTOELEMENT" => match (all.get(1), all.get(2)) {
+                (Some(port), Some(element)) => vec![(*port, *element)],
+                _ => continue,
+            },
+            "IFCRELNESTS" => match all.get(1) {
+                Some(element) => all.iter().skip(2).map(|part| (*part, *element)).collect(),
+                None => continue,
+            },
+            _ => continue,
         };
-        let (Some((_, port_args)), Some((_, element_args))) = (ents.get(port), ents.get(element))
-        else {
-            continue;
-        };
-        if let Some(key) = port_key(port_args) {
-            ports.insert(
-                key,
-                element_args
-                    .rsplit('\'')
-                    .nth(1)
-                    .and_then(|t| t.parse().ok()),
-            );
+        for (port, element) in pairs {
+            let (Some((_, port_args)), Some((_, element_args))) =
+                (ents.get(&port), ents.get(&element))
+            else {
+                continue;
+            };
+            if let Some(key) = port_key(port_args) {
+                ports.insert(
+                    key,
+                    element_args
+                        .rsplit('\'')
+                        .nth(1)
+                        .and_then(|t| t.parse().ok()),
+                );
+            }
         }
     }
     (ports, entity_of)
