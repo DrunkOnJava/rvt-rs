@@ -31,6 +31,13 @@
 //! (a tee's are 1, 2 and 3), where a duct's or pipe's earlier copy is
 //! inverted. A fitting's own record holds only the sorted ids of the elements
 //! it refers to.
+//!
+//! A terminal's or a piece of equipment's joins are lists of the same form
+//! with it first, both indices as Revit numbers them (RE-170): RE1 Plumbing's
+//! fixtures to their pipes, in the later block after the pipe's anchor, and
+//! RE1 Mechanical's air terminals to their duct fittings and its air handling
+//! unit to two of its ducts and pipes, anywhere. A duct's or pipe's own lists
+//! do not hold those joins.
 
 use crate::{Result, RevitFile};
 use std::collections::BTreeSet;
@@ -70,9 +77,10 @@ const UNSET: u64 = u64::MAX;
 /// A duct or pipe has two connectors, numbered 0 and 1.
 const CURVE_CONNECTORS: u32 = 2;
 
-/// A connector index of a fitting or of the element it is joined to is below
-/// this: a fitting has a few connectors, numbered from 1.
-const FITTING_CONNECTORS: u32 = 8;
+/// A connector index of a fitting, terminal or piece of equipment, or of the
+/// element it is joined to, is below this: RE1 Mechanical's air handling unit
+/// numbers its connectors to 11.
+const LISTED_CONNECTORS: u32 = 32;
 
 /// One connector of a duct, pipe or fitting and the connector it is joined to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -223,8 +231,8 @@ pub fn scan_connector_pairs(
     Ok(pairs.into_iter().collect())
 }
 
-/// The list at `at` in `buf` when it joins one of `fittings` to one of
-/// `others` (RE-141).
+/// The list at `at` in `buf` when it joins one of `fittings` (or terminals
+/// and equipment, RE-170) to one of `others` (RE-141).
 fn fitting_list_at(
     buf: &[u8],
     at: usize,
@@ -239,8 +247,8 @@ fn fitting_list_at(
     (fittings.contains(&element)
         && others.contains(&other)
         && other != element
-        && index < FITTING_CONNECTORS
-        && other_index < FITTING_CONNECTORS
+        && index < LISTED_CONNECTORS
+        && other_index < LISTED_CONNECTORS
         && own_flag == REFERENCE_FLAG
         && other_flag == REFERENCE_FLAG)
         .then_some(ConnectorPair {
@@ -252,8 +260,9 @@ fn fitting_list_at(
 }
 
 /// The connector pairs of `fittings` (the ElementIds of duct and pipe
-/// fittings) joined to one of `others`, sorted and without repeats (RE-141).
-/// Empty for a release this layout is not measured on.
+/// fittings, terminals and equipment) joined to one of `others`, sorted and
+/// without repeats (RE-141, RE-170). Empty for a release this layout is not
+/// measured on.
 pub fn scan_fitting_pairs(
     rf: &mut RevitFile,
     fittings: &BTreeSet<u64>,
