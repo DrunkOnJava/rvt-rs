@@ -898,17 +898,18 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+      # Against a copy of https://cursor.com/schemas/environment.schema.json
+      # taken 2026-10-05 (C8): downloading it on every pull request made the
+      # check depend on cursor.com. Refresh the copy by hand when Cursor
+      # changes the schema.
       - name: Validate .cursor/environment.json against the Cursor schema
         run: |
           python -m pip install --upgrade jsonschema
-          curl --retry 3 --retry-delay 2 -fsSL \
-            https://cursor.com/schemas/environment.schema.json \
-            -o /tmp/environment.schema.json
           python - <<'PY'
           import json
           import jsonschema
 
-          schema = json.load(open("/tmp/environment.schema.json"))
+          schema = json.load(open("tools/ci/cursor-environment.schema.json"))
           config = json.load(open(".cursor/environment.json"))
           jsonschema.validate(config, schema)
           print(".cursor/environment.json validates against the Cursor environment schema")
