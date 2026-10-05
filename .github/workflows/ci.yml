@@ -40,10 +40,14 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
+# Linux jobs run on ubuntu-24.04, not ubuntu-latest (C5): ubuntu-latest moves
+# to Ubuntu 26 from 2026-10-19, which would change apt packages, Playwright's
+# system dependencies and the preinstalled tools under every job without a
+# commit here. Moving to 26.04 is a deliberate edit of this label.
 jobs:
   fmt:
     name: cargo fmt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -54,7 +58,7 @@ jobs:
 
   clippy:
     name: cargo clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -84,7 +88,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             rust: stable
             with_corpus: true
           - os: windows-latest
@@ -93,7 +97,7 @@ jobs:
           - os: macos-latest
             rust: stable
             with_corpus: false
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             rust: "1.87"  # MSRV, `rust-version` in Cargo.toml
             label: msrv
             with_corpus: false
@@ -168,7 +172,7 @@ jobs:
     # and runs lightweight health + known-count checks. Local runs skip
     # when RVT_PROJECT_CORPUS_DIR is unset.
     name: Corpus health (tier 2 — external)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus (magnetar MIT)
@@ -225,7 +229,7 @@ jobs:
     # from silently regressing while semantic editing remains out of
     # scope.
     name: Writer patch corpus
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch family corpus
@@ -264,7 +268,7 @@ jobs:
     # can't see (dangling refs, wrong attribute
     # arity, enum values outside the spec vocabulary) fail here.
     name: IfcOpenShell validates synthetic project
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus
@@ -538,7 +542,7 @@ jobs:
 
   doc:
     name: cargo doc
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       RUSTDOCFLAGS: "-D warnings"
     steps:
@@ -567,7 +571,7 @@ jobs:
   # high-value, low-noise version we can enforce on every push.
   bench-build:
     name: cargo bench --no-run
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -596,7 +600,7 @@ jobs:
   # properly on docs.rs before the release cut.
   docs-rs-preview:
     name: docs.rs build preview
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Same flags docs.rs passes, plus -D warnings so this job fails
       # instead of silently publishing broken docs.
@@ -626,7 +630,7 @@ jobs:
         # matrix runs on pushes to main, where the wheels are consumed.
         # Frees two scarce macOS/Windows runners per PR without loosening
         # the merge gate, which never required the wheel jobs.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-latest", "windows-latest"]') }}
     steps:
       # Windows CFB stream names need the same autocrlf=false guard
       # we use for the Rust Windows integration job, or LFS-bound
@@ -725,7 +729,7 @@ jobs:
   # project grows.
   deny:
     name: cargo deny
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -747,7 +751,7 @@ jobs:
   # fresh advisories the moment they land.
   audit:
     name: cargo audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -762,7 +766,7 @@ jobs:
 
   viewer-dependencies:
     name: viewer dependency audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # pnpm at the version `packageManager` pins in viewer/package.json.
@@ -771,7 +775,7 @@ jobs:
           package_json_file: viewer/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '24'
           package-manager-cache: false
       - name: Locate pnpm store
         id: pnpm-store
@@ -822,7 +826,7 @@ jobs:
 
   pii-guard:
     name: PII guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Scan for PII-shaped leak patterns
@@ -873,10 +877,10 @@ jobs:
   # from silently drifting into an invalid state on any PR.
   env-config:
     name: env config lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # shellcheck is preinstalled on ubuntu-latest runners.
+      # shellcheck is preinstalled on ubuntu-24.04 runners.
       - name: ShellCheck .cursor/install.sh
         run: shellcheck .cursor/install.sh
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -921,7 +925,7 @@ jobs:
       - viewer-dependencies
       - pii-guard
       - env-config
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Every job passed
         env:
