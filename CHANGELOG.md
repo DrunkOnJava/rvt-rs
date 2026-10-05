@@ -8,6 +8,54 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Every join of an MEP model is read from its family instances' connectors
+  (B86).** A family instance's native `Connector` objects list the elements
+  joined to each connector (RE-171), so the export writes those joins
+  wherever the native record path reads the file (Revit 2023 to 2027), joins
+  to equipment written as a proxy included. RE1 Mechanical writes all 73 of
+  Revit's joins and RE1 Plumbing all 126, and Autodesk's MEP samples write
+  about 2,600 each on 2024, 2025 and 2026 alike. Checked by
+  `tests/mep_connections.rs`.
+- **Every port is nested in its element (B84).** Ports are related to their
+  elements with an `IfcRelNests`, one per element, as Revit's own IFC4 export
+  writes them; no `IfcRelConnectsPortToElement` is written. Checked by
+  `tests/port_nesting.rs`.
+- **A family instance written as a proxy has its ports (B83).** Each port
+  is nested in its element with an `IfcRelNests`, as Revit's own IFC4 export
+  nests ports, since IFC4 ties a port to a distribution element only. RE1
+  Electrical's 53 and RE1 Mechanical's 150 ports are all written.
+- **Each room is typed by an `IfcSpaceType` of its own (B78).** Revit's export
+  of Core Interior types every `IfcSpace`: the type is named
+  `<room name> <room number>:<ElementId>`, its Tag is the room's ElementId,
+  its PredefinedType NOTDEFINED, and its GlobalId the room's with bytes 10
+  and 11 XOR 2048 (revit-ifc `InstanceAsType`). rvt-rs now writes the same 116
+  types and relations. Checked by `tests/space_types.rs`.
+- **A duct's `Pset_DuctSegmentTypeCommon.Shape` (B43).** Written as Revit's
+  export writes it, an `IfcPropertyEnumeratedValue` of `RECTANGULAR`, `ROUND`
+  or `FLATOVAL` from the duct type's sweep profile, through a new
+  `PropertyValue::Enumerated`; the viewer's property panel shows it as text.
+  RE1 Mechanical's 25 ducts are all rectangular, so `ROUND` and `FLATOVAL`
+  rest on IFC's enumeration alone. Checked by `tests/duct_segment_shape.rs`.
+- **A duct takes the system family its type's shape names (B59).** A rigid
+  duct type's native record holds its sweep profile
+  (`AbsSysRectSweepProfile`, `AbsSysCircSweepProfile` or
+  `AbsSysOvalSweepProfile`), and Revit names the duct's system family by it.
+  RE1 Mechanical's ducts are now named `Rectangular Duct:<type>:<id>`, with
+  that ObjectType and an `IfcDuctSegmentType`, as in Revit's export
+  (`native_duct_shapes`, Revit 2023 to 2027). Checked by `tests/duct_names.rs`.
+- **A family instance has a port for each of its symbol's connectors (RE-169,
+  B54, #528).** A FamilySymbol's native record lists its connectors
+  (`m_arrConnectorData`); each family instance written as a distribution
+  element now has a port per connector, joined or not, the cable tray and
+  conduit ones aside, as in Revit's export (`native_connectors`). Electrical's
+  proxies keep none: IFC4 ties a port only to a distribution element. Checked
+  by `tests/family_instance_ports.rs` on RE1 Electrical, Plumbing and
+  Mechanical.
+- **`--saved-meshes` reads Revit 2025 and 2026 (B77).** On RE1's four 2025
+  models 207 of 214 replaced bodies are within 0.01 ft of Revit's box
+  (Mechanical 68 of 68, Plumbing 41 of 41, Electrical 47 of 49, Architecture
+  51 of 56), and all ten 2025 and 2026 samples export with the flag, so it
+  now reads every release the native record path reads.
 - **A wall's edited elevation profile cuts an opening (RE-151, B55, #227).**
   Wall 55840's sketch on Core Interior is a loop of 11 lines in its vertical
   plane; the lines that leave the loop's bounding rectangle cut the region
@@ -157,6 +205,43 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The WebAssembly bindings are their own crate, `rvt-wasm` (C6).** `rvt`
+  builds as a plain `rlib` and has no `wasm` feature; build the viewer's
+  package with `wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg
+  --out-name rvt`. Native builds no longer link a shared library they never
+  use.
+- **MEP models export several times faster (B80).** With the IFC
+  byte-identical on all six reference models and 36 samples:
+  - family-instance ports and duct shapes read object graphs without the
+    parameter-definition pass (`native_document::extract_graphs`);
+  - each partition stream's data objects are scanned once per file
+    (`RevitFile::partition_data_objects`), and MEP systems, pipe diameters
+    and fitting sizes read that scan instead of searching every stream once
+    per element;
+  - a data object's Adler-32 is summed in place with SIMD (`simd-adler32`),
+    as a stream's false headers claimed gigabytes that were copied before
+    being rejected.
+  - a family instance's ports are read in one native pass, the symbols by id
+    and every family by class (B79);
+  - each native extraction reuses the schema, element index and increments
+    the file has already read, and the partition members the export has
+    already inflated (B82).
+  - a partition stream's room solids are found in one pass rather than one
+    search per room (B85).
+  - a curve's connector entries are searched for only after its anchor, not
+    across its whole partition (B87).
+  Measured step by step inside one export, the 2025 `rme_advanced` sample's
+  ports step went from 6.1 s to 1.7 s, its MEP systems from 4.6 s to 0.06 s,
+  its curve and fitting sizes from 14.7 s to 1.0 s, and its first data-object
+  scan from 3.2 s to 0.4 s.
+- **Measure records each `rvt-ifc` export's wall time, takes `rvt-ifc`
+  flags, and can time both refs on one runner (B81).** Each model's and
+  sample's `rvt-ifc.log` ends in `milliseconds <n>`, and the summary's table
+  names each side's CPU: the base and head jobs run on different runners,
+  whose speed alone moves those times by up to about 1.7x. The `timing` input
+  builds both refs on one runner and exports every file with each in turn.
+  The `ifc_flags` input passes flags such as `--saved-meshes`, scored by
+  `saved_meshes_vs_ifc`.
 - **An export walks the file once (B71).** `RevitFile` keeps the production
   walk, and the export's diagnostics reuse it instead of walking again; IFC
   and diagnostics are byte-identical on all six reference models.
@@ -184,11 +269,13 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
-- **`--saved-meshes` keeps to the releases it read before (B77).** With the
-  native record path reading Revit 2025 and 2026, `rvt-ifc` and `rvt-gltf`
-  would have drawn 2025 and 2026 family instances from saved scenes no run
-  has compared with Revit's export. Until that is measured, the flag reads
-  2023, 2024 and 2027 only, and on other files keeps the bodies and says so.
+- **An export without geometry keeps its elements' types and names (B74).**
+  `--mode typed-no-geometry` read the record property set, which carries an
+  element's family and type, only with its geometry, so it typed no element
+  and wrote no type object. It now writes the same `ObjectType` and type
+  objects as the default export (RE1 and Core Interior, every typed element),
+  a room's number and name, and the Level an element's record names, without
+  bodies or placements. Checked by `tests/typed_no_geometry_types.rs`.
 - **`rvt-write` refuses a patch it cannot write readably (B69).** Revit stores
   `Formats/Latest`, `Global/Latest` and the partitions in 65,249-byte pages
   ending in a checksum rvt-rs cannot compute; a patch reaching a full page is
@@ -267,6 +354,12 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **RE-169: a family instance's ports are its symbol's connectors (#528).**
+  On RE1 Electrical, Plumbing and Mechanical every family instance's ports in
+  Revit's export are its FamilySymbol's connector indices, less the cable tray
+  and conduit ones. RE1 Plumbing's tank 442378, which Revit's export leaves
+  out, is in New Construction, demolished in no phase, in the main model and
+  unflagged; why Revit leaves it out stays open.
 - **RE-168: an element record's leading reference slot is its phase (#228).**
   ElementId 3 is the `ProjectPhase` "New Construction" in Core Interior and
   RE1's MEP models; where a file's phases are 1 and 3 the leading slot is one
