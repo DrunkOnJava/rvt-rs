@@ -52,7 +52,7 @@ jobs:
   # viewer is built from. A squash merge is one commit, so its parent is the
   # previous state of main.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       viewer: ${{ steps.changed.outputs.viewer }}
     steps:
@@ -93,7 +93,7 @@ jobs:
   build:
     needs: changes
     if: needs.changes.outputs.viewer == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -156,26 +156,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
-          node-version: '20'
+          node-version: '24'
           package-manager-cache: false
 
       - name: Install dependencies
         working-directory: viewer
         run: pnpm install --frozen-lockfile
 
-      - name: Restore native build cache (shared with CI)
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
-        with:
-          save-if: false
-          shared-key: ci-release
-
       - name: Stage redistributable demos
         working-directory: viewer
         run: |
           # gen-fixture generates the synthetic-mvp demo. Build it with the
-          # CI profile so the shared cache serves its dependencies; the
-          # release profile's full LTO rebuilt the crate from scratch here
-          # (39 s per run). The stager finds the binary on PATH.
+          # CI profile, which the viewer-wasm cache above keeps from the last
+          # run on main; the release profile's full LTO rebuilt the crate
+          # from scratch here (39 s per run). The stager finds the binary on
+          # PATH.
           cargo build --profile ci --bin gen-fixture
           PATH="$(pwd)/../target/ci:$PATH" pnpm run stage:demos
 
@@ -205,7 +200,7 @@ jobs:
   deploy:
     if: github.event_name == 'workflow_run' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write

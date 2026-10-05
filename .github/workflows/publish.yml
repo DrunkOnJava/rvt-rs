@@ -68,9 +68,9 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { name: linux-x86_64, os: ubuntu-latest, target: x86_64, manylinux: "2014" }
+          - { name: linux-x86_64, os: ubuntu-24.04, target: x86_64, manylinux: "2014" }
           - { name: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64, manylinux: "2014" }
-          - { name: musllinux-x86_64, os: ubuntu-latest, target: x86_64, manylinux: musllinux_1_2 }
+          - { name: musllinux-x86_64, os: ubuntu-24.04, target: x86_64, manylinux: musllinux_1_2 }
           - { name: musllinux-aarch64, os: ubuntu-24.04-arm, target: aarch64, manylinux: musllinux_1_2 }
           - { name: macos-arm64, os: macos-latest, target: aarch64-apple-darwin }
           - { name: macos-x86_64, os: macos-latest, target: x86_64-apple-darwin }
@@ -116,7 +116,7 @@ jobs:
   # Debian, nixpkgs) can build from source if needed.
   build-sdist:
     name: Build sdist
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -152,13 +152,16 @@ jobs:
           # Linux wheels are installed in the oldest environment their tag
           # claims: the manylinux2014 image (glibc 2.17) with the oldest
           # CPython it still ships, and Alpine (musl).
-          - { name: linux-x86_64, os: ubuntu-latest, image: "quay.io/pypa/manylinux2014_x86_64", python: oldest }
+          - { name: linux-x86_64, os: ubuntu-24.04, image: "quay.io/pypa/manylinux2014_x86_64", python: oldest }
           - { name: linux-aarch64, os: ubuntu-24.04-arm, image: "quay.io/pypa/manylinux2014_aarch64", python: oldest }
-          - { name: musllinux-x86_64, os: ubuntu-latest, image: "python:3.12-alpine", python: python3 }
+          - { name: musllinux-x86_64, os: ubuntu-24.04, image: "python:3.12-alpine", python: python3 }
           - { name: musllinux-aarch64, os: ubuntu-24.04-arm, image: "python:3.12-alpine", python: python3 }
           - { name: macos-arm64, os: macos-latest }
           # The x86_64 macOS wheel is cross-built on arm64; this is the
           # Intel runner that proves it loads.
+          # macos-15-intel is GitHub's last Intel macOS image (C5). When it
+          # retires, this wheel is cross-built on arm64 macOS
+          # (--target x86_64-apple-darwin) and checked under Rosetta.
           - { name: macos-x86_64, os: macos-15-intel }
           - { name: windows-x64, os: windows-latest }
     steps:
@@ -203,7 +206,7 @@ jobs:
 
   release-source-smoke:
     name: Cargo install + CLI sample smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch sample corpus
@@ -239,7 +242,7 @@ jobs:
 
   docs-rs-preview:
     name: docs.rs build preview
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       RUSTDOCFLAGS: "--cfg docsrs -D warnings"
     steps:
@@ -256,7 +259,7 @@ jobs:
 
   viewer-release-smoke:
     name: Viewer artifact load smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Same corpus and sample as deploy-viewer.yml: viewer-regression.spec.ts's
@@ -285,7 +288,7 @@ jobs:
           package_json_file: viewer/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          node-version: "24"
           package-manager-cache: false
       - name: Build WASM package
         run: |
@@ -346,7 +349,7 @@ jobs:
   # doesn't offer a test/staging environment).
   publish-crate:
     name: Publish to crates.io
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - build-wheels
       - build-sdist
@@ -406,7 +409,7 @@ jobs:
 
   publish-testpypi:
     name: Publish to TestPyPI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.test-pypi }}
     needs:
       - build-wheels
@@ -454,7 +457,7 @@ jobs:
   # package ships but the matching Rust crate was rejected.
   publish:
     name: Publish to PyPI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     needs:
       - build-wheels
