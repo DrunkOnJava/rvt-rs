@@ -20,9 +20,9 @@ git clone --depth 1 https://github.com/magnetar-io/revit-test-datasets _project_
 git -C _project_corpus lfs pull
 
 export RVT_PROJECT_CORPUS_DIR="$PWD/_project_corpus/Revit"
-cargo test --release --test corpus_tier2_health -- --nocapture
-cargo test --release --test project_corpus_smoke -- --nocapture
-cargo test --release --test project_count_fixtures -- --nocapture
+cargo test --release --test integration -- corpus_tier2_health:: --nocapture
+cargo test --release --test integration -- project_corpus_smoke:: --nocapture
+cargo test --release --test integration -- project_count_fixtures:: --nocapture
 tools/corpus-health.sh "$RVT_PROJECT_CORPUS_DIR"
 ```
 

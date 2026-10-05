@@ -17,7 +17,7 @@
 #
 # Then:
 #   RVT_PROJECT_CORPUS_DIR="$(realpath _project_corpus/Revit)" \
-#     cargo test --profile ci --test revit_global_ids --test element_records_2025
+#     cargo test --profile ci --test integration -- revit_global_ids:: element_records_2025::
 
 set -euo pipefail
 

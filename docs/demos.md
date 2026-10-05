@@ -230,8 +230,8 @@ longer runs; the committed file is validated by IfcOpenShell in CI.
 Regenerate it by hand with:
 
 ```bash
-DUMP_IFC=1 cargo test --release --test ifc_synthetic_project \
-    synthetic_project_emits_valid_ifc4
+DUMP_IFC=1 cargo test --release --test integration -- \
+    ifc_synthetic_project::synthetic_project_emits_valid_ifc4
 ```
 
 What the fixture contains:

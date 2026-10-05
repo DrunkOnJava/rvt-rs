@@ -51,8 +51,8 @@ jobs:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           # PR CI uses 8; nightly walks a larger slice of the MIT tree.
           RVT_CORPUS_TIER2_LIMIT: "32"
-        run: cargo test --profile ci --test corpus_tier2_health -- --nocapture
+        run: cargo test --profile ci --test integration -- corpus_tier2_health:: --nocapture
       - name: Tier-two project corpus smoke
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: cargo test --profile ci --test project_corpus_smoke -- --nocapture
+        run: cargo test --profile ci --test integration -- project_corpus_smoke:: --nocapture

@@ -16,7 +16,7 @@ programmer plus access to the `phi-ag/rvt` corpus via `_corpus/`
   guide walks through
 - Clone the corpus: `git clone --recurse-submodules
   https://github.com/phi-ag/rvt _corpus` in the repo root
-- `cargo test --release --test field_type_coverage` passes (sanity
+- `cargo test --release --test integration -- field_type_coverage::` passes (sanity
   check that your corpus is good)
 
 ---
