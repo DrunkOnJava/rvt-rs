@@ -4801,42 +4801,86 @@ pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> Connec
     joins
 }
 
-/// Give each duct, pipe and fitting the element and connector joined at each
-/// of its connectors ([`crate::partition_connector_pairs`], RE-138, RE-141). A
-/// connector with no join read is left without the fields.
+/// The classes of the family instances whose connectors are read for joins:
+/// the MEP categories, whose families carry connectors.
+const JOINED_CLASSES: [&str; 18] = [
+    "DuctFitting",
+    "PipeFitting",
+    "DuctTerminal",
+    "DuctAccessory",
+    "PipeAccessory",
+    "PlumbingFixture",
+    "Sprinkler",
+    "MechanicalEquipment",
+    "ElectricalEquipment",
+    "ElectricalFixture",
+    "LightingFixture",
+    "LightingDevice",
+    "FireAlarmDevice",
+    "DataDevice",
+    "CableTrayFitting",
+    "ConduitFitting",
+    "SpecialtyEquipment",
+    "FoodServiceEquipment",
+];
+
+/// Give each element the element and connector joined at each of its
+/// connectors. Where the native record path reads the file, the joins are
+/// the ones its family instances' connectors list
+/// ([`crate::native_connectors::family_instance_joins`], RE-171); elsewhere,
+/// on the release the list form is measured on, the lists after a duct's or
+/// pipe's anchor and those with a fitting first
+/// ([`crate::partition_connector_pairs`], RE-138, RE-141). A connector with no
+/// join read is left without the fields.
 fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     use crate::partition_connector_pairs as pcp;
-    if !pcp::supports_revit_version(revit_version) {
+    // Only the family instances of the MEP categories are read: decoding
+    // every family instance cost a second on Core Interior's furniture.
+    let instances: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| JOINED_CLASSES.contains(&element.class.as_str()))
+        .filter_map(|element| element.id)
+        .map(u64::from)
+        .collect();
+    if instances.is_empty() {
         return;
     }
-    let is_curve = |element: &DecodedElement| matches!(element.class.as_str(), "Duct" | "Pipe");
-    let is_fitting =
-        |element: &DecodedElement| matches!(element.class.as_str(), "DuctFitting" | "PipeFitting");
-    let ids_of = |keep: &dyn Fn(&DecodedElement) -> bool| -> BTreeSet<u64> {
-        products
-            .iter()
-            .filter(|element| keep(element))
-            .filter_map(|element| element.id)
-            .map(u64::from)
-            .collect()
+    let pairs = match crate::native_connectors::family_instance_joins(rf, &instances) {
+        Ok(pairs) => pairs,
+        Err(_) if pcp::supports_revit_version(revit_version) => {
+            let ids_of = |classes: &[&str]| -> BTreeSet<u64> {
+                products
+                    .iter()
+                    .filter(|element| classes.contains(&element.class.as_str()))
+                    .filter_map(|element| element.id)
+                    .map(u64::from)
+                    .collect()
+            };
+            let everything = products
+                .iter()
+                .filter_map(|element| element.id)
+                .map(u64::from)
+                .collect();
+            let mut pairs =
+                pcp::scan_connector_pairs(rf, &ids_of(&["Duct", "Pipe"])).unwrap_or_default();
+            pairs.extend(
+                pcp::scan_fitting_pairs(rf, &ids_of(&["DuctFitting", "PipeFitting"]), &everything)
+                    .unwrap_or_default(),
+            );
+            pairs
+        }
+        Err(_) => return,
     };
-    let curves = ids_of(&is_curve);
-    let fittings = ids_of(&is_fitting);
-    if curves.is_empty() && fittings.is_empty() {
-        return;
+    let mut by_element: BTreeMap<u64, Vec<&pcp::ConnectorPair>> = BTreeMap::new();
+    for pair in &pairs {
+        by_element.entry(pair.element).or_default().push(pair);
     }
-    let everything = ids_of(&|_| true);
-    let mut pairs = pcp::scan_connector_pairs(rf, &curves).unwrap_or_default();
-    pairs.extend(pcp::scan_fitting_pairs(rf, &fittings, &everything).unwrap_or_default());
-    for element in products
-        .iter_mut()
-        .filter(|element| is_curve(element) || is_fitting(element))
-    {
-        let Some(id) = element.id else {
+    for element in products.iter_mut() {
+        let Some(own) = element.id.and_then(|id| by_element.get(&u64::from(id))) else {
             continue;
         };
         let mut joined: BTreeSet<u32> = BTreeSet::new();
-        for pair in pairs.iter().filter(|pair| pair.element == u64::from(id)) {
+        for pair in own {
             let Ok(other) = u32::try_from(pair.other) else {
                 continue;
             };

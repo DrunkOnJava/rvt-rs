@@ -52,6 +52,7 @@ real      invert_elevation
 real      is_external
 real      iter_elements_typed       skip=production_iter_elements_tier1,decode_instance_prefer_typed_fails_closed
 real      level_names
+real      mep_connections
 real      mep_systems
 real      native_current_records
 real      native_partitions_walk
