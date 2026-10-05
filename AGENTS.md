@@ -91,7 +91,7 @@ changes, then use the viewer's pnpm scripts (pnpm at the version `packageManager
 
 ```bash
 # From the repo root — build WASM into viewer/pkg/
-wasm-pack build --target web --out-dir viewer/pkg -- --features wasm --no-default-features
+wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
 
 cd viewer
 pnpm install --frozen-lockfile

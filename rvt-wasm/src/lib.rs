@@ -1,10 +1,11 @@
 //! WASM bindings (VW1-01) — JS-callable wrappers around the
 //! viewer API.
 //!
-//! Enabled by the `wasm` feature flag. Build with:
+//! Its own crate (C6), so the core library builds as a plain `rlib`.
+//! Build with, from the repository root:
 //!
 //! ```bash
-//! wasm-pack build --target web --features wasm --no-default-features
+//! wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
 //! ```
 //!
 //! Every binding is JSON round-trippable via
@@ -18,12 +19,10 @@
 //! compiled `.wasm` for those imports and fails the build if any
 //! appear.
 
-#![cfg(feature = "wasm")]
-
 use wasm_bindgen::prelude::*;
 
-use crate::RevitFile;
-use crate::ifc::{
+use rvt::RevitFile;
+use rvt::ifc::{
     ExportQualityMode, IfcModel, RvtDocExporter,
     camera::CameraState,
     clipping::{SectionBox, ViewMode},
@@ -55,18 +54,6 @@ fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
 extern "C" {
     #[wasm_bindgen(js_namespace = console, js_name = error)]
     fn console_error(s: &str);
-
-    #[wasm_bindgen(js_namespace = Date, js_name = now)]
-    fn date_now() -> f64;
-}
-
-/// Milliseconds since the Unix epoch from the JavaScript host
-/// (`Date.now()`). `std::time::SystemTime::now()` panics on
-/// `wasm32-unknown-unknown`, so wall-clock stamps in the wasm build (the
-/// IFC STEP header) come from here.
-#[cfg(target_arch = "wasm32")]
-pub(crate) fn host_now_millis() -> f64 {
-    date_now()
 }
 
 /// Route Rust panics to `console.error` so the viewer reports the
@@ -91,7 +78,7 @@ pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsValue> {
     install_panic_hook();
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let model = RvtDocExporter
-        .export_with_limits(&mut rf, crate::walker::WalkerLimits::default())
+        .export_with_limits(&mut rf, rvt::walker::WalkerLimits::default())
         .map_err(err_str)?;
     serde_wasm_bindgen::to_value(&model).map_err(err_str)
 }
@@ -116,7 +103,7 @@ pub fn open_rvt_bytes_with_diagnostics(bytes: &[u8]) -> Result<JsValue, JsValue>
     install_panic_hook();
     let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
     let result = RvtDocExporter
-        .export_with_diagnostics_and_limits(&mut rf, crate::walker::WalkerLimits::default())
+        .export_with_diagnostics_and_limits(&mut rf, rvt::walker::WalkerLimits::default())
         .map_err(err_str)?;
     serde_wasm_bindgen::to_value(&result).map_err(err_str)
 }
@@ -152,7 +139,7 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
         .export_with_diagnostics_mode_and_limits(
             &mut rf,
             quality_mode,
-            crate::walker::WalkerLimits::default(),
+            rvt::walker::WalkerLimits::default(),
         )
         .map_err(err_str)?;
     serde_wasm_bindgen::to_value(&result).map_err(err_str)
@@ -183,7 +170,7 @@ pub fn open_rvt_bytes_with_diagnostics_mode_and_limits(
 /// PartAtom + stream inventory) and returns instantly even for
 /// multi-hundred-megabyte RFAs. Used by the viewer for the
 /// progressive-loading splash before the full model parse
-/// completes. Returns a [`crate::reader::Summary`] as a JS object.
+/// completes. Returns a [`rvt::reader::Summary`] as a JS object.
 #[wasm_bindgen(js_name = quickSummary)]
 pub fn quick_summary(bytes: &[u8]) -> Result<JsValue, JsValue> {
     install_panic_hook();
@@ -195,7 +182,7 @@ pub fn quick_summary(bytes: &[u8]) -> Result<JsValue, JsValue> {
 /// Document identity — release, worksharing, central model, last saved
 /// (time and user), document GUID, save counter, and every
 /// `BasicFileInfo` `Key: value` line — as a
-/// [`crate::metadata::FileMetadata`] JS object. Reads only the two
+/// [`rvt::metadata::FileMetadata`] JS object. Reads only the two
 /// identity streams straight from `bytes` (no copy of the file), so it
 /// returns instantly on any file size. Errors when `bytes` is not a
 /// readable Revit file.
@@ -203,12 +190,12 @@ pub fn quick_summary(bytes: &[u8]) -> Result<JsValue, JsValue> {
 pub fn file_metadata(bytes: &[u8]) -> Result<JsValue, JsValue> {
     install_panic_hook();
     let metadata =
-        crate::metadata::read_metadata_from(std::io::Cursor::new(bytes)).map_err(err_str)?;
+        rvt::metadata::read_metadata_from(std::io::Cursor::new(bytes)).map_err(err_str)?;
     serde_wasm_bindgen::to_value(&metadata).map_err(err_str)
 }
 
 /// Spreadsheet schedule of an exported model as CSV
-/// ([`crate::ifc::schedule_csv`]): `kind` is `"elements"` (every building
+/// ([`rvt::ifc::schedule_csv`]): `kind` is `"elements"` (every building
 /// element) or `"rooms"`; `metric` switches lengths to metres; `excel`
 /// prefixes a UTF-8 byte-order mark so Excel on Windows reads non-ASCII
 /// names correctly.
@@ -220,7 +207,7 @@ pub fn js_schedule_csv(
     excel: bool,
 ) -> Result<String, JsValue> {
     install_panic_hook();
-    use crate::ifc::schedule_csv::{CsvOptions, LengthUnit, elements_csv, rooms_csv};
+    use rvt::ifc::schedule_csv::{CsvOptions, LengthUnit, elements_csv, rooms_csv};
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     let options = CsvOptions {
         unit: if metric {
@@ -374,13 +361,13 @@ fn serde_js_options_bridge(input: JsValue) -> Result<JsValue, JsValue> {
     Ok(input)
 }
 
-fn walker_limits_from_js(input: JsValue) -> Result<crate::walker::WalkerLimits, JsValue> {
+fn walker_limits_from_js(input: JsValue) -> Result<rvt::walker::WalkerLimits, JsValue> {
     if input.is_null() || input.is_undefined() {
-        return Ok(crate::walker::WalkerLimits::default());
+        return Ok(rvt::walker::WalkerLimits::default());
     }
     let parsed: WasmWalkerLimits = serde_wasm_bindgen::from_value(input).map_err(err_str)?;
-    let defaults = crate::walker::WalkerLimits::default();
-    Ok(crate::walker::WalkerLimits {
+    let defaults = rvt::walker::WalkerLimits::default();
+    Ok(rvt::walker::WalkerLimits {
         max_scan_bytes: parsed.max_scan_bytes.unwrap_or(defaults.max_scan_bytes),
         max_candidates: parsed.max_candidates.unwrap_or(defaults.max_candidates),
         max_trial_offsets: parsed
