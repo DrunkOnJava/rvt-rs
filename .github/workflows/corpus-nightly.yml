@@ -6,7 +6,9 @@
 #   - Writer patch + IfcOpenShell real-project gates
 #
 # This workflow widens Tier 2, re-runs export validation, and compiles
-# benches so slow/full corpus coverage is not tied to every PR push.
+# benches so slow/full corpus coverage is not tied to every PR push. It
+# builds with the `ci` profile, so the `ci-release` cache CI saves on main
+# serves it (C2); `--release` rebuilt everything with LTO every night.
 
 name: Corpus nightly
 
@@ -30,7 +32,7 @@ env:
 jobs:
   tier2-wide:
     name: Tier 2 — wider project corpus
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus (magnetar MIT)
@@ -51,20 +53,20 @@ jobs:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           # PR CI uses 8; nightly walks a larger slice of the MIT tree.
           RVT_CORPUS_TIER2_LIMIT: "32"
-        run: cargo test --release --test corpus_tier2_health -- --nocapture
+        run: cargo test --profile ci --test corpus_tier2_health -- --nocapture
       - name: Tier-two project corpus smoke
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: cargo test --release --test project_corpus_smoke -- --nocapture
+        run: cargo test --profile ci --test project_corpus_smoke -- --nocapture
       - name: Tier-two known-count manifests
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: cargo test --release --test project_count_fixtures -- --nocapture
+        run: cargo test --profile ci --test project_count_fixtures -- --nocapture
 
   tier3-export:
     name: Tier 3 — IFC export validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus (magnetar MIT)
@@ -103,10 +105,10 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
-          cargo build --release --bin rvt-ifc
+          cargo build --profile ci --bin rvt-ifc
           SAMPLE="${RVT_PROJECT_CORPUS_DIR}/Revit_IFC5_Einhoven.rvt"
           test -f "$SAMPLE"
-          ./target/release/rvt-ifc "$SAMPLE" \
+          ./target/ci/rvt-ifc "$SAMPLE" \
             -o /tmp/walker-real-project.ifc \
             --diagnostics /tmp/walker-real-project.diagnostics.json
           python tools/ci/validate-real-ifc.py \
@@ -115,7 +117,7 @@ jobs:
 
   tier4-slow:
     name: Tier 4 — family corpus + bench compile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch family corpus (phi-ag)
@@ -136,8 +138,8 @@ jobs:
           RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
           RVT_REQUIRE_CORPUS: "1"
         run: |
-          cargo test --release --test field_type_coverage -- --nocapture
-          cargo test --release --test samples -- --nocapture
-          cargo test --release --test ifc_roundtrip -- --nocapture
+          cargo test --profile ci --test field_type_coverage -- --nocapture
+          cargo test --profile ci --test samples -- --nocapture
+          cargo test --profile ci --test ifc_roundtrip -- --nocapture
       - name: Bench compile gate
-        run: cargo bench --no-run
+        run: cargo bench --no-run --profile ci
