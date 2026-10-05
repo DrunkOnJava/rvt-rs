@@ -207,20 +207,46 @@ pub fn inflate_all_chunks_for_stream(stream_name: &str, stored: &[u8]) -> Vec<Ve
 pub struct InflatedStream {
     concat: Vec<u8>,
     chunk_ends: Vec<usize>,
+    /// Each member's offset in the prepared stream and the bytes its gzip
+    /// header and DEFLATE stream take there (B82).
+    members: Vec<(usize, usize)>,
 }
 
 impl InflatedStream {
     /// Inflate every member of `stored` and concatenate them in order.
     pub fn from_stored(stream_name: &str, stored: &[u8]) -> Self {
-        let chunks = inflate_all_chunks_for_stream(stream_name, stored);
-        let total: usize = chunks.iter().map(|chunk| chunk.len()).sum();
+        let prepared = prepare_stream_for_inflate(stream_name, stored);
+        let chunks = inflate_all_members_with_limits(
+            prepared.as_ref(),
+            InflateLimits::default(),
+            1024 * 1024 * 1024,
+        );
+        let total: usize = chunks.iter().map(|(_, _, chunk)| chunk.len()).sum();
         let mut concat = Vec::with_capacity(total);
         let mut chunk_ends = Vec::with_capacity(chunks.len());
-        for chunk in &chunks {
+        let mut members = Vec::with_capacity(chunks.len());
+        for (offset, consumed, chunk) in &chunks {
             concat.extend_from_slice(chunk);
             chunk_ends.push(concat.len());
+            members.push((*offset, *consumed));
         }
-        Self { concat, chunk_ends }
+        Self {
+            concat,
+            chunk_ends,
+            members,
+        }
+    }
+
+    /// The inflated member whose gzip header starts at `offset` of the
+    /// prepared stream ([`prepare_stream_for_inflate`]), with the bytes its
+    /// header and DEFLATE stream take there (B82).
+    pub fn member_at(&self, offset: usize) -> Option<(&[u8], usize)> {
+        let i = self
+            .members
+            .binary_search_by_key(&offset, |&(start, _)| start)
+            .ok()?;
+        let start = i.checked_sub(1).map_or(0, |prev| self.chunk_ends[prev]);
+        Some((&self.concat[start..self.chunk_ends[i]], self.members[i].1))
     }
 
     /// The inflated members, concatenated in stored order.
@@ -489,6 +515,16 @@ pub fn inflate_at_with_limits(
     offset: usize,
     limits: InflateLimits,
 ) -> Result<Vec<u8>> {
+    inflate_member_at_with_limits(data, offset, limits).map(|(out, _)| out)
+}
+
+/// [`inflate_at_with_limits`], with the number of bytes of `data` the gzip
+/// header and its DEFLATE stream take from `offset` (B82).
+pub fn inflate_member_at_with_limits(
+    data: &[u8],
+    offset: usize,
+    limits: InflateLimits,
+) -> Result<(Vec<u8>, usize)> {
     let header_len =
         gzip_header_len(data, offset).ok_or_else(|| Error::Decompress("no gzip header".into()))?;
     let body_start = offset
@@ -531,7 +567,7 @@ pub fn inflate_at_with_limits(
     // Results are retained per member by the chunk collectors; trim the
     // amortised-growth slack so retained buffers cost what they hold.
     out.shrink_to_fit();
-    Ok(out)
+    Ok((out, header_len + decoder.total_in() as usize))
 }
 
 /// Inflate the DEFLATE stream that follows a gzip header starting at `offset`.
@@ -624,10 +660,23 @@ pub fn inflate_all_chunks_with_limits(
     per_chunk: InflateLimits,
     aggregate: usize,
 ) -> Vec<Vec<u8>> {
+    inflate_all_members_with_limits(data, per_chunk, aggregate)
+        .into_iter()
+        .map(|(_, _, chunk)| chunk)
+        .collect()
+}
+
+/// [`inflate_all_chunks_with_limits`], with each chunk's offset in `data`
+/// and the bytes its gzip header and DEFLATE stream take there (B82).
+fn inflate_all_members_with_limits(
+    data: &[u8],
+    per_chunk: InflateLimits,
+    aggregate: usize,
+) -> Vec<(usize, usize, Vec<u8>)> {
     let mut total: usize = 0;
     let mut results = Vec::new();
     for off in find_gzip_offsets(data) {
-        let chunk = match inflate_at_with_limits(data, off, per_chunk) {
+        let (chunk, consumed) = match inflate_member_at_with_limits(data, off, per_chunk) {
             Ok(c) => c,
             Err(_) => continue,
         };
@@ -635,7 +684,7 @@ pub fn inflate_all_chunks_with_limits(
             break;
         }
         total += chunk.len();
-        results.push(chunk);
+        results.push((off, consumed, chunk));
     }
     results
 }
