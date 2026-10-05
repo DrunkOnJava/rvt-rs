@@ -5285,6 +5285,9 @@ fn attach_room_outlines(rf: &mut RevitFile, revit_version: u32, rooms: &mut [Dec
     if !prb::ROOM_SOLID_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
+    // Each stream's room solids are found in one pass (B85): a search per
+    // room took 1.2 s on Autodesk's 2025 rme_advanced sample.
+    let mut solids = std::collections::HashMap::new();
     for room in rooms.iter_mut() {
         let (Some(id), Some(stream)) = (room.id, element_source_stream(room)) else {
             continue;
@@ -5313,7 +5316,20 @@ fn attach_room_outlines(rf: &mut RevitFile, revit_version: u32, rooms: &mut [Dec
             cy + dy / 2.0,
             z + dz,
         ];
-        if let Ok(Some(profile)) = prb::room_outline(rf, &stream, id, bbox) {
+        let (inflated, headers) = match solids.entry(stream) {
+            std::collections::hash_map::Entry::Occupied(held) => held.into_mut(),
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                let Ok(inflated) = rf.inflated_partition(slot.key()) else {
+                    continue;
+                };
+                let headers = prb::solid_headers_by_id(inflated.bytes());
+                slot.insert((inflated, headers))
+            }
+        };
+        let Some(headers) = headers.get(&u64::from(id)) else {
+            continue;
+        };
+        if let Some(profile) = prb::outline_of_solids(inflated.bytes(), headers, bbox) {
             let mut fields = profile.fields();
             for (name, value) in fields.iter_mut() {
                 if name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD {
