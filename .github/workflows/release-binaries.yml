@@ -99,6 +99,10 @@ jobs:
         with:
           tool: cargo-auditable@0.7.7
       - name: Build release binaries
+        env:
+          # [profile.release] strip = true maps to -C strip=symbols, which runs
+          # llvm-objcopy --strip-all and drops cargo-auditable's .dep-v0 section.
+          CARGO_PROFILE_RELEASE_STRIP: debuginfo
         run: cargo auditable build --release --locked --bins --target ${{ matrix.target }}
       - name: Package
         id: package
