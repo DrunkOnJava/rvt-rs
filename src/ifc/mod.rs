@@ -2060,11 +2060,12 @@ fn revit_model_global_ids(
 /// type (`IFCFamilyInstanceSubElements.InstanceAsType`).
 const INSTANCE_AS_TYPE: u16 = 2048;
 
-/// Give each family instance written as a distribution element a port for
-/// each of its symbol's connectors that Revit's export writes one for
-/// ([`crate::native_connectors::symbol_port_indices`], B54), joined or not;
-/// the writer skips a port a join has already given it. A file whose release
-/// the native record path does not read keeps the ports of its joins only.
+/// Give each family instance written as a distribution element or a proxy a
+/// port for each of its symbol's connectors that Revit's export writes one
+/// for ([`crate::native_connectors::symbol_port_indices`], B54, B83), joined
+/// or not; the writer skips a port a join has already given it. A file whose
+/// release the native record path does not read keeps the ports of its joins
+/// only.
 fn attach_family_instance_ports(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
@@ -2082,7 +2083,9 @@ fn attach_family_instance_ports(
             else {
                 return None;
             };
-            if !export_content::is_distribution_element(ifc_type) {
+            if !export_content::is_distribution_element(ifc_type)
+                && ifc_type != "IFCBUILDINGELEMENTPROXY"
+            {
                 return None;
             }
             let id = tag.parse::<u32>().ok()?;

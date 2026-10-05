@@ -7,7 +7,8 @@ writes each connector as an `IfcDistributionPort` named
 `<In or Out>Port_<ElementId>_<index>`, ties it to its element with an
 `IfcRelConnectsPortToElement`, and each join with an `IfcRelConnectsPorts`.
 rvt-rs writes the same entities, named `Port_<ElementId>_<index>` with no flow
-direction. Both are read as unordered pairs of (ElementId, connector index),
+direction, and nests a proxy's ports in it with an `IfcRelNests`, as IFC4 ties
+a port to a distribution element only (B83). Both are read as unordered pairs of (ElementId, connector index),
 and the connections that involve a duct or pipe (an `IfcFlowSegment`) are
 compared:
 
@@ -30,7 +31,7 @@ import ifcopenshell
 import ifcopenshell.validate
 
 PORT_NAME = re.compile(r"^(?:In|Out)?Port_(\d+)_(\d+)$")
-PORT_ENTITY = re.compile(r"IfcDistributionPort|IfcRelConnectsPort")
+PORT_ENTITY = re.compile(r"IfcDistributionPort|IfcRelConnectsPort|IfcRelNests")
 
 
 def port_schema_findings(path):
@@ -55,10 +56,16 @@ def read(path):
         if a and b:
             connections.add(frozenset((a, b)))
     segments = {int(e.Tag) for e in model.by_type("IfcFlowSegment") if e.Tag and str(e.Tag).isdigit()}
+    def tag(element):
+        return int(element.Tag) if getattr(element, "Tag", None) and str(element.Tag).isdigit() else None
+
     tied = {}
     for rel in model.by_type("IfcRelConnectsPortToElement"):
-        element = rel.RelatedElement
-        tied[rel.RelatingPort.id()] = int(element.Tag) if getattr(element, "Tag", None) and str(element.Tag).isdigit() else None
+        tied[rel.RelatingPort.id()] = tag(rel.RelatedElement)
+    for rel in model.by_type("IfcRelNests"):
+        for part in rel.RelatedObjects:
+            if part.is_a("IfcDistributionPort"):
+                tied[part.id()] = tag(rel.RelatingObject)
     return ports, connections, segments, tied
 
 
