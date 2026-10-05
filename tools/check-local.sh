@@ -2,10 +2,9 @@
 # Developer-friendly local quality gate for rvt-rs.
 #
 # Default (no flags): fmt check, clippy -D warnings, rustdoc -D warnings,
-# a build of every target, and the real-file, CLI and contract checks of
-# tools/ci/test-targets.txt (real-file, CLI, contract and fuzz-regression
-# hardening targets). Unit tests are banned and never run. Does not
-# require network.
+# a build of every target, and the targets tools/ci/test-targets.txt runs
+# (real-file, CLI, contract and fuzz-regression hardening). Unit tests are
+# banned and never run. Does not require network.
 #
 # Optional expensive / environment-dependent checks are opt-in via flags.
 # Prefer this script for day-to-day local verification; use tools/quality.sh
