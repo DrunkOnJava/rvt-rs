@@ -124,8 +124,11 @@ Configured on the repository, with the rulesets kept as code in
   hand when they need it. `tools/ci/witness-ifc-lite` gets no version updates,
   since its third-party witness is pinned to an exact version on purpose, but
   its lockfile is in the dependency graph and so covered by the alerts.
-- CodeQL default setup analyses the workflows, the viewer's TypeScript and
-  JavaScript, and the Python bindings.
+- CodeQL (`.github/workflows/codeql.yml`) analyses the workflows, the
+  viewer's TypeScript and JavaScript, the Python bindings and the Rust crate,
+  on every pull request, push to main and weekly. The default setup stays
+  off: it cannot scan Rust, and GitHub refuses an advanced setup's results
+  while it is on.
 - Every action is pinned to a full commit SHA and the repository requires it.
   The default workflow token is read-only.
 - Deleting or force-pushing `main` is blocked.
