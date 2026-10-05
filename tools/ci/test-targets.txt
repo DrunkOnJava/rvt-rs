@@ -55,6 +55,7 @@ real      native_phases
 real      partition_record_chain
 real      partition_scanner         skip=tier1_,fixture_path_helper_exists
 real      project_corpus_smoke
+real      proxy_connections
 real      proxy_ports
 real      railing_type
 real      re15_geometry_invariants
