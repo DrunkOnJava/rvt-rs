@@ -3,7 +3,8 @@
 #
 # Default (no flags): fmt check, clippy -D warnings, rustdoc -D warnings,
 # a build of every target, and the real-file, CLI and contract checks of
-# tools/ci/test-targets.txt. Unit tests are banned and never run. Does not
+# tools/ci/test-targets.txt (real-file, CLI, contract and fuzz-regression
+# hardening targets). Unit tests are banned and never run. Does not
 # require network.
 #
 # Optional expensive / environment-dependent checks are opt-in via flags.
