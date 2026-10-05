@@ -209,6 +209,8 @@ All notable changes will be documented here. This project follows
   - each native extraction reuses the schema, element index and increments
     the file has already read, and the partition members the export has
     already inflated (B82).
+  - a partition stream's room solids are found in one pass rather than one
+    search per room (B85).
   Measured step by step inside one export, the 2025 `rme_advanced` sample's
   ports step went from 6.1 s to 1.7 s, its MEP systems from 4.6 s to 0.06 s,
   its curve and fitting sizes from 14.7 s to 1.0 s, and its first data-object
