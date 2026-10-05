@@ -1,42 +1,20 @@
 name: Changelog
 
-# Q-11 / #348 — git-cliff changelog automation.
+# Q-11 / #348 — git-cliff changelog rendering, on demand (C7).
 #
-# rvt-rs' CHANGELOG.md is hand-curated with rich narrative per release
-# (see the [0.1.0], [0.1.1], [0.1.2] entries — each carries context the
-# bare commit subject doesn't). We intentionally do NOT overwrite it
-# from `git log` on every push. Instead:
+# rvt-rs' CHANGELOG.md is hand-curated with rich narrative per release, so
+# nothing here writes it. A manual run renders git-cliff's view for whoever
+# curates a release: from main, the unreleased commits as
+# `CHANGELOG-UNRELEASED.md`; from a `v*` tag, that release's notes as
+# `RELEASE_NOTES.md`. Both are uploaded as artifacts.
 #
-#   - main push : write `CHANGELOG-UNRELEASED.md` (unreleased commits
-#                 only) and UPLOAD AS ARTIFACT. Release managers
-#                 download the artifact and copy-paste the bullets
-#                 into CHANGELOG.md when curating a version,
-#                 annotating with prose.
-#   - tag push  : render the full history via git-cliff and upload as
-#                 `RELEASE_NOTES.md` workflow artifact. The release
-#                 workflow (Q-10) consumes that file for the GitHub
-#                 Release body + PyPI description.
-#
-# Why we don't push-commit the rendered file back to main: the repo
-# enforces branch protection (required status checks + signed
-# commits). The github-actions bot can't satisfy either, so any
-# attempted push is rejected with GH013. Keeping the artifact as
-# download-only sidesteps both. If signed-bot pushes ever get set
-# up, we can restore the commit step.
-#
-# See RELEASE.md for the end-to-end release workflow.
-#
-# Third-party actions are SHA-pinned per SEC-29 / #134. Official
-# actions/* follow the same convention as ci.yml (major-pinned where
-# pre-existing, SHA-pinned for recent additions).
+# It used to run on every push to main (111 runs in five days) and on every
+# tag, and nothing consumed either artifact: the release step writes its
+# notes with `--generate-notes`.
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
+  workflow_dispatch:
 
-# Single-flight per ref so back-to-back pushes don't race on the
-# CHANGELOG-UNRELEASED.md commit back to main.
 concurrency:
   group: changelog-${{ github.ref }}
   cancel-in-progress: false
@@ -72,12 +50,6 @@ jobs:
         env:
           OUTPUT: CHANGELOG-UNRELEASED.md
 
-      # Upload as artifact instead of committing back to main — branch
-      # protection requires (1) 5 status checks to pass and (2) signed
-      # commits, neither of which the default github-actions bot can
-      # satisfy (see the pre-2026-04-20 workflow failures for proof).
-      # The artifact is downloadable from the Actions run page for
-      # release managers to copy-paste bullets into CHANGELOG.md.
       - name: Upload CHANGELOG-UNRELEASED artifact
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -87,9 +59,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # On tag push, render the full versioned changelog as release
-      # notes. Uploaded as a workflow artifact so the release workflow
-      # (Q-10) can pull it down for the GitHub Release body.
+      # From a tag, that release's notes.
       - name: Render release notes on tag
         if: startsWith(github.ref, 'refs/tags/v')
         uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1

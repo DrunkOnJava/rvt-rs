@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run the real-file, CLI and contract targets of tools/ci/test-targets.txt.
+# Run the real-file, CLI, contract and hardening targets of
+# tools/ci/test-targets.txt.
 #
 # Usage: tools/ci/verify-real-files.sh [--check-only | cargo test options...]
 #   e.g. tools/ci/verify-real-files.sh --profile ci
@@ -32,7 +33,7 @@ fi
 status=0
 while read -r class target rest; do
   case "$class" in
-    real | cli | contract) ;;
+    real | cli | contract | hardening) ;;
     *) continue ;;
   esac
   skips=()

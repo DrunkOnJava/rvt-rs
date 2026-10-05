@@ -1,14 +1,13 @@
-# M2-03: nightly corpus tiers beyond the always-on PR CI surface.
+# M2-03: nightly corpus coverage beyond the always-on PR CI surface.
 #
-# PR CI already runs:
-#   - Tier 2 external project health with a small limit (corpus-tier2),
-#     real-file, CLI and contract targets only (tools/ci/test-targets.txt)
-#   - Writer patch + IfcOpenShell real-project gates
-#
-# This workflow widens Tier 2, re-runs export validation, and compiles
-# benches so slow/full corpus coverage is not tied to every PR push. It
-# builds with the `ci` profile, so the `ci-release` cache CI saves on main
-# serves it (C2); `--release` rebuilt everything with LTO every night.
+# PR CI already runs every real-file, CLI, contract and hardening target
+# (tools/ci/test-targets.txt) against both corpora, the writer patch and
+# IfcOpenShell real-project gates, and the bench compile. This workflow runs
+# only what goes wider: Tier 2 health over 32 projects (PR CI reads 8) and
+# the project corpus smoke. Its former tier 3 (a subset of the IfcOpenShell
+# job) and tier 4 (field-type coverage, samples, IFC roundtrip and the bench
+# compile, all in PR CI) are gone (C7). It builds with the `ci` profile, so
+# the `ci-release` cache CI saves on main serves it (C2).
 
 name: Corpus nightly
 
@@ -36,11 +35,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus (magnetar MIT)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
-          lfs: true
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
@@ -58,88 +56,3 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: cargo test --profile ci --test project_corpus_smoke -- --nocapture
-      - name: Tier-two known-count manifests
-        env:
-          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-          RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
-        run: cargo test --profile ci --test project_count_fixtures -- --nocapture
-
-  tier3-export:
-    name: Tier 3 — IFC export validation
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Fetch project corpus (magnetar MIT)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: magnetar-io/revit-test-datasets
-          path: _project_corpus
-          lfs: true
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          save-if: false
-          shared-key: ci-release
-      - name: Install IfcOpenShell (prebuilt wheel)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install 'ifcopenshell>=0.8.0,<0.9.0'
-      - name: Validate synthetic-project fixture
-        run: |
-          python - <<'PY'
-          import ifcopenshell
-          path = "tests/fixtures/synthetic-project.ifc"
-          f = ifcopenshell.open(path)
-          assert f.schema == "IFC4", f"expected IFC4, got {f.schema}"
-          assert len(f.by_type("IfcProject")) == 1
-          assert len(f.by_type("IfcBuildingStorey")) == 3
-          assert len(f.by_type("IfcWall")) == 4
-          print("synthetic-project IFC ok")
-          PY
-      - name: Build rvt-ifc + validate real-project IFC
-        env:
-          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: |
-          cargo build --profile ci --bin rvt-ifc
-          SAMPLE="${RVT_PROJECT_CORPUS_DIR}/Revit_IFC5_Einhoven.rvt"
-          test -f "$SAMPLE"
-          ./target/ci/rvt-ifc "$SAMPLE" \
-            -o /tmp/walker-real-project.ifc \
-            --diagnostics /tmp/walker-real-project.diagnostics.json
-          python tools/ci/validate-real-ifc.py \
-            /tmp/walker-real-project.ifc \
-            /tmp/walker-real-project.diagnostics.json
-
-  tier4-slow:
-    name: Tier 4 — family corpus + bench compile
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Fetch family corpus (phi-ag)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: phi-ag/rvt
-          path: _corpus
-          lfs: true
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          save-if: false
-          shared-key: ci-release
-      - name: Family samples + IFC roundtrip
-        env:
-          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
-          RVT_REQUIRE_CORPUS: "1"
-        run: |
-          cargo test --profile ci --test field_type_coverage -- --nocapture
-          cargo test --profile ci --test samples -- --nocapture
-          cargo test --profile ci --test ifc_roundtrip -- --nocapture
-      - name: Bench compile gate
-        run: cargo bench --no-run --profile ci

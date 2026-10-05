@@ -958,18 +958,17 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "hex",
+ "js-sys",
  "md-5",
  "memchr",
  "proptest",
  "quick-xml",
  "serde",
- "serde-wasm-bindgen",
  "serde_json",
  "sha2",
  "simd-adler32",
  "stream-evidence",
  "thiserror",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -982,6 +981,16 @@ dependencies = [
  "rvt",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rvt-wasm"
+version = "0.4.0"
+dependencies = [
+ "rvt",
+ "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
 ]
 
 [[package]]
