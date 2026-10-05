@@ -127,7 +127,7 @@ jobs:
       # cached across runs keyed on the corpus repository's HEAD.
       - name: Fetch phi-ag/rvt sample corpus
         if: matrix.with_corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus
@@ -185,7 +185,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus (magnetar MIT)
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
@@ -242,12 +242,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch family corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus
       - name: Fetch project corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
@@ -284,7 +284,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
@@ -580,7 +580,7 @@ jobs:
       # project file only.
       - name: Fetch phi-ag/rvt sample corpus
         if: runner.os == 'Linux'
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus

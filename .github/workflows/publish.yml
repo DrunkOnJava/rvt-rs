@@ -216,7 +216,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch sample corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
           path: _corpus
@@ -272,7 +272,7 @@ jobs:
       # projectSampleTest asserts Einhoven-specific facts (storey/material
       # counts, level names), so feeding it a family file can never pass.
       - name: Fetch project corpus (magnetar MIT)
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
@@ -340,7 +340,7 @@ jobs:
       # Build-provenance attestations for the archives and the image.
       id-token: write
       attestations: write
-    uses: ./.github/workflows/release-binaries.yml
+    uses: $/.github/workflows/release-binaries.yml
     with:
       upload: true
       tag: ${{ github.ref_name }}

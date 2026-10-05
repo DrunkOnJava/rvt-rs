@@ -63,7 +63,7 @@ jobs:
       # (sha256-pinned in docs/viewer-demos.json) and power the
       # real-project viewer regression (RVT_VIEWER_SAMPLE / projectSampleTest).
       - name: Checkout public project corpus
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus

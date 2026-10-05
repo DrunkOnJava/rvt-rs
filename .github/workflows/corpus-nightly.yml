@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch project corpus (magnetar MIT)
-        uses: ./.github/actions/fetch-corpus
+        uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
