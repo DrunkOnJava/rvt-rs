@@ -13,7 +13,7 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
-  timings:
+  standalone:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -26,65 +26,7 @@ jobs:
         with:
           save-if: false
           shared-key: ci-release
-      - name: Warm the library and binaries
-        run: cargo build --profile ci --lib --bins
-      - name: Integration tests as separate binaries
-        run: |
-          set -euo pipefail
-          n=$(ls tests/*.rs | wc -l)
-          start=$(date +%s%N)
-          cargo build --profile ci --tests --timings
-          ms=$(( ($(date +%s%N) - start) / 1000000 ))
-          echo "separate: $n binaries, $ms ms" | tee -a "$GITHUB_STEP_SUMMARY"
-          mv target/cargo-timings target/timings-separate
-          du -sh target/ci/deps | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Integration tests merged into one binary
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import pathlib, re
-          tests = sorted(p for p in pathlib.Path("tests").glob("*.rs"))
-          body = "".join(f'#[path = "{p.name}"]\nmod {p.stem};\n' for p in tests)
-          pathlib.Path("tests/merged/main.rs").parent.mkdir(exist_ok=True)
-          pathlib.Path("tests/merged/main.rs").write_text(body.replace('#[path = "', '#[path = "../'))
-          toml = pathlib.Path("Cargo.toml")
-          s = toml.read_text()
-          s = re.sub(r"(\[package\]\n)", r"\1autotests = false\n", s, count=1)
-          s += '\n[[test]]\nname = "merged"\npath = "tests/merged/main.rs"\n'
-          toml.write_text(s)
-          PY
-          start=$(date +%s%N)
-          cargo build --profile ci --tests --timings
-          ms=$(( ($(date +%s%N) - start) / 1000000 ))
-          echo "merged: 1 binary, $ms ms" | tee -a "$GITHUB_STEP_SUMMARY"
-          mv target/cargo-timings target/timings-merged
-      - name: Clippy on the merged binary
-        run: |
-          set -euo pipefail
-          rustup component add clippy
-          cargo clippy --profile ci --tests -- -D warnings 2>&1 | tee clippy.log
-          echo "clippy exit ${PIPESTATUS[0]}" | tee -a "$GITHUB_STEP_SUMMARY"
-        continue-on-error: true
-      - name: Check every target, merged
-        run: |
-          set -euo pipefail
-          start=$(date +%s%N)
-          cargo check --profile ci --all-targets
-          echo "check merged: $(( ($(date +%s%N) - start) / 1000000 )) ms" | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Merged binary runs the same tests
-        run: |
-          set -euo pipefail
-          bin=$(ls -t target/ci/deps/merged-* | grep -v '\.d$' | head -1)
-          "$bin" --list --format terse | grep -c ': test$' | sed 's/^/merged tests listed: /' | tee -a "$GITHUB_STEP_SUMMARY"
-          start=$(date +%s%N)
-          timeout 900 "$bin" -q > merged-run.log 2>&1 || true
-          echo "merged run: $(( ($(date +%s%N) - start) / 1000000 )) ms, $(grep -c 'test result' merged-run.log) result line(s)" | tee -a "$GITHUB_STEP_SUMMARY"
-          grep 'test result' merged-run.log | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cargo-timings
-          path: |
-            target/timings-separate
-            target/timings-merged
-            merged-run.log
-            clippy.log
+      # Does ifc_synthetic_project fail as its own binary too, or only as a
+      # module of the merged one?
+      - name: ifc_synthetic_project as its own binary
+        run: cargo test --profile ci --test ifc_synthetic_project -- --nocapture
