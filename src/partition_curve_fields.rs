@@ -245,22 +245,17 @@ pub fn scan_curve_fields(
                     && point[axis] <= bbox[axis + 3] + POINT_TOLERANCE_FEET
             })
         };
-        // The connector entries whose points lie in some element's box, in
-        // the order they are written.
-        let entries: Vec<(usize, [f64; 3])> = memchr::memmem::find_iter(buf, &1u32.to_le_bytes())
-            .filter_map(|at| Some((at, entry_point(buf, at)?)))
-            .filter(|(_, point)| boxes.iter().any(|(_, bbox)| inside(*point, bbox)))
-            .collect();
         // An anchor belongs to the one element whose box holds the points of
         // the first two entries after it within the window: a curve's own two
         // ends, of which a neighbour joined at one end holds only that one.
+        // Only the windows are searched for entries (B87): the whole stream
+        // has millions of `u32 1`s, each tested against every box.
         for &at in &anchors {
-            let from = entries.partition_point(|(offset, _)| *offset <= at);
-            let points: Vec<[f64; 3]> = entries[from..]
-                .iter()
-                .take_while(|(offset, _)| offset - at <= ANCHOR_WINDOW)
+            let window = &buf[at + 1..buf.len().min(at + ANCHOR_WINDOW + 4)];
+            let points: Vec<[f64; 3]> = memchr::memmem::find_iter(window, &1u32.to_le_bytes())
+                .filter_map(|offset| entry_point(buf, at + 1 + offset))
+                .filter(|point| boxes.iter().any(|(_, bbox)| inside(*point, bbox)))
                 .take(2)
-                .map(|(_, point)| *point)
                 .collect();
             if points.is_empty() {
                 continue;
