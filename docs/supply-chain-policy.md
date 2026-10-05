@@ -14,7 +14,7 @@ Required checks:
   - crates.io-only sources
   - wildcard dependency deny
   - advisory policy
-- `cargo audit` fails on RustSec advisories against the current dependency set.
+- The advisory policy fails CI on any RustSec vulnerability against the current dependency set; CI runs no separate `cargo audit` job since C6, and `tools/check-local.sh --audit` still runs it locally.
 
 `deny.toml` may ignore an advisory only when the ignore entry has:
 

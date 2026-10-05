@@ -303,7 +303,7 @@ whole point of open reverse-engineering work.
 
 Tests, benchmarks, and probes that need real Revit files resolve
 their paths from environment variables so no contributor's home
-directory leaks into the repo (the CI `PII guard` job enforces
+directory leaks into the repo (the PII guard in CI's `lint` job enforces
 this). Three variables are recognised, in decreasing specificity:
 
 - `RVT_FAMILY_2024` — full path to a single `.rfa` sample

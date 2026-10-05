@@ -154,8 +154,9 @@ tools/quality.sh            # fmt, clippy -D warnings, rustdoc -D warnings, test
 tools/quality.sh --full     # the above plus `cargo bench --no-run`
 ```
 
-Supply-chain checks (CI's `deny` and `audit` jobs) are optional locally and are
-skipped by `quality.sh` when not installed. With `check-local.sh`, pass
+Supply-chain checks (CI's `deny` job, whose advisories check covers RustSec)
+are optional locally and are skipped by `quality.sh` when not installed. With
+`check-local.sh`, pass
 `--deny` / `--audit` (those flags fail clearly if the tools are missing). To
 install the tools once and invoke directly:
 

@@ -45,8 +45,13 @@ env:
 # system dependencies and the preinstalled tools under every job without a
 # commit here. Moving to 26.04 is a deliberate edit of this label.
 jobs:
-  fmt:
-    name: cargo fmt
+  # The quick checks in one job (C6): formatting, the PII and conflict-marker
+  # scans, and the Cloud Agent environment config (shellcheck of the install
+  # script, .cursor/environment.json against the Cursor schema). Each step
+  # after the first runs even when an earlier one failed, so one failure
+  # does not hide another.
+  lint:
+    name: fmt, PII guard, env config
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,7 +61,76 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt
-      - run: cargo fmt --all -- --check
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+      - name: Scan for PII-shaped leak patterns
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          echo "Scanning repo for patterns that must never be committed..."
+          # Each regex catches a *class* of PII without spelling out
+          # any specific sensitive value. The patterns are intentionally
+          # broad — they're belt-and-suspenders on top of src/redact.rs.
+          # The backslashes in the Windows patterns are regex escapes.
+          # shellcheck disable=SC1003
+          PATTERNS=(
+            # Absolute home paths (macOS, Linux, Windows).
+            '/Users/[a-z][a-z0-9._-]+/'
+            '/home/[a-z][a-z0-9._-]+/'
+            'C:\\Users\\[a-z][a-z0-9._-]+\\'
+            # Autodesk employee-owned OneDrive authoring paths.
+            'OneDrive - Autodesk\\[^\\]*\\Revit - [0-9]{3,}'
+            # Autodesk build-server paths baked into DLLs.
+            'F:\\Ship\\[0-9]{4}_'
+          )
+          failed=0
+          for p in "${PATTERNS[@]}"; do
+            if git grep -I -n -P "$p" -- ':!.github/workflows/' ':!src/redact.rs' 2>/dev/null; then
+              echo "::error::PII-shaped pattern matched: $p"
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+          echo "PII guard: clean."
+      - name: Scan for committed merge-conflict markers
+        if: ${{ !cancelled() }}
+        run: |
+          # A resolved rebase can still leave a diff3 base marker behind;
+          # three of them sat in CHANGELOG.md for weeks. `=======` alone is
+          # also a Markdown underline, so only the three unambiguous markers
+          # are matched.
+          if git grep -I -n -E '^(<<<<<<<|\|\|\|\|\|\|\||>>>>>>>)( |$)' -- .; then
+            echo "::error::merge-conflict marker committed"
+            exit 1
+          fi
+          echo "Conflict-marker guard: clean."
+      # shellcheck is preinstalled on ubuntu-24.04 runners.
+      - name: ShellCheck .cursor/install.sh
+        if: ${{ !cancelled() }}
+        run: shellcheck .cursor/install.sh
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: ${{ !cancelled() }}
+        with:
+          python-version: "3.12"
+      # Against a copy of https://cursor.com/schemas/environment.schema.json
+      # taken 2026-10-05 (C8): downloading it on every pull request made the
+      # check depend on cursor.com. Refresh the copy by hand when Cursor
+      # changes the schema.
+      - name: Validate .cursor/environment.json against the Cursor schema
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pip install -r tools/ci/requirements-test.txt
+          python - <<'PY'
+          import json
+          import jsonschema
+
+          schema = json.load(open("tools/ci/cursor-environment.schema.json"))
+          config = json.load(open(".cursor/environment.json"))
+          jsonschema.validate(config, schema)
+          print(".cursor/environment.json validates against the Cursor environment schema")
+          PY
 
   clippy:
     name: cargo clippy
@@ -703,7 +777,10 @@ jobs:
   # Supply-chain hardening. `cargo-deny check` enforces our deny.toml:
   # permissive-license allowlist, RustSec advisory deny, crates.io-only
   # source, no wildcards. Keeps the dependency tree auditable as the
-  # project grows.
+  # project grows. Its advisories check fetches the RustSec database on
+  # every run and denies every vulnerability, yanked crates and unmaintained
+  # direct dependencies, which covers what the separate cargo audit job
+  # checked (C6).
   deny:
     name: cargo deny
     runs-on: ubuntu-24.04
@@ -723,27 +800,6 @@ jobs:
         with:
           tool: cargo-deny@0.20.2
       - run: cargo deny check
-
-  # Fails CI on any RustSec advisory published against the current
-  # dependency set. Complements cargo-deny's coverage — deny has the
-  # per-advisory `ignore` list for triage flexibility, audit catches
-  # fresh advisories the moment they land.
-  audit:
-    name: cargo audit
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
-        with:
-          toolchain: stable
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
-        with:
-          tool: cargo-audit@0.22.2
-      - name: Audit Rust dependencies
-        run: cargo audit
 
   viewer-dependencies:
     name: viewer dependency audit
@@ -807,89 +863,6 @@ jobs:
           path: ${{ steps.pnpm-store.outputs.dir }}
           key: ${{ steps.pnpm-cache.outputs.cache-primary-key }}
 
-  pii-guard:
-    name: PII guard
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Scan for PII-shaped leak patterns
-        run: |
-          set -e
-          echo "Scanning repo for patterns that must never be committed..."
-          # Each regex catches a *class* of PII without spelling out
-          # any specific sensitive value. The patterns are intentionally
-          # broad — they're belt-and-suspenders on top of src/redact.rs.
-          # The backslashes in the Windows patterns are regex escapes.
-          # shellcheck disable=SC1003
-          PATTERNS=(
-            # Absolute home paths (macOS, Linux, Windows).
-            '/Users/[a-z][a-z0-9._-]+/'
-            '/home/[a-z][a-z0-9._-]+/'
-            'C:\\Users\\[a-z][a-z0-9._-]+\\'
-            # Autodesk employee-owned OneDrive authoring paths.
-            'OneDrive - Autodesk\\[^\\]*\\Revit - [0-9]{3,}'
-            # Autodesk build-server paths baked into DLLs.
-            'F:\\Ship\\[0-9]{4}_'
-          )
-          failed=0
-          for p in "${PATTERNS[@]}"; do
-            if git grep -I -n -P "$p" -- ':!.github/workflows/' ':!src/redact.rs' 2>/dev/null; then
-              echo "::error::PII-shaped pattern matched: $p"
-              failed=1
-            fi
-          done
-          if [ "$failed" -ne 0 ]; then
-            exit 1
-          fi
-          echo "PII guard: clean."
-      - name: Scan for committed merge-conflict markers
-        run: |
-          # A resolved rebase can still leave a diff3 base marker behind;
-          # three of them sat in CHANGELOG.md for weeks. `=======` alone is
-          # also a Markdown underline, so only the three unambiguous markers
-          # are matched.
-          if git grep -I -n -E '^(<<<<<<<|\|\|\|\|\|\|\||>>>>>>>)( |$)' -- .; then
-            echo "::error::merge-conflict marker committed"
-            exit 1
-          fi
-          echo "Conflict-marker guard: clean."
-
-  # Guards the Cloud Agent development environment config itself: shellcheck
-  # the install script and validate `.cursor/environment.json` against the
-  # published Cursor environment schema. Cheap (~20s) and keeps the env setup
-  # from silently drifting into an invalid state on any PR.
-  env-config:
-    name: env config lint
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # shellcheck is preinstalled on ubuntu-24.04 runners.
-      - name: ShellCheck .cursor/install.sh
-        run: shellcheck .cursor/install.sh
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      # Against a copy of https://cursor.com/schemas/environment.schema.json
-      # taken 2026-10-05 (C8): downloading it on every pull request made the
-      # check depend on cursor.com. Refresh the copy by hand when Cursor
-      # changes the schema.
-      - name: Validate .cursor/environment.json against the Cursor schema
-        run: |
-          python -m pip install -r tools/ci/requirements-test.txt
-          python - <<'PY'
-          import json
-          import jsonschema
-
-          schema = json.load(open("tools/ci/cursor-environment.schema.json"))
-          config = json.load(open(".cursor/environment.json"))
-          jsonschema.validate(config, schema)
-          print(".cursor/environment.json validates against the Cursor environment schema")
-          PY
-
   # The one check the main-protection ruleset requires (C1). It passes only
   # when every job above passed or was skipped, so a pull request cannot
   # merge while Corpus health, the writer corpus or IfcOpenShell is still
@@ -898,7 +871,7 @@ jobs:
     name: CI passed
     if: always()
     needs:
-      - fmt
+      - lint
       - clippy
       - test
       - corpus-tier2
@@ -909,10 +882,7 @@ jobs:
       - docs-rs-preview
       - python-wheel
       - deny
-      - audit
       - viewer-dependencies
-      - pii-guard
-      - env-config
     runs-on: ubuntu-24.04
     steps:
       - name: Every job passed

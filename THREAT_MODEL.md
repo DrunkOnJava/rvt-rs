@@ -107,7 +107,7 @@ GUIDs, or other identifying info.
   servers), and project-ID folder names. Replaces with
   placeholder tokens while preserving path shape so claims
   remain verifiable.
-- **PII guard CI job.** Scans the repo's committed files for
+- **PII guard in CI** (the `lint` job). Scans the repo's committed files for
   PII-shaped patterns on every push. Blocks commits that contain
   them.
 - **No embedded user emails, no account info.** The reader
@@ -124,8 +124,10 @@ dependency that the parser pulls in automatically.
 - **`cargo-deny check` on every push.** Enforced in CI (`deny`
   job). License allowlist (no GPL/proprietary), advisory deny,
   source allowlist (crates.io only, no arbitrary git).
-- **`cargo-audit` on every push.** Enforced in CI (`audit` job).
-  Fails CI on known RustSec advisories.
+- **RustSec advisories on every push.** cargo-deny's advisories
+  check in the `deny` job fetches the RustSec database each run and
+  fails CI on any known vulnerability; a separate `cargo audit` job
+  repeated it until C6 removed it.
 - **`actions/*` SHA-pinned (partial; pending SEC-29).** Common
   GitHub Actions pinned by commit hash to prevent
   tag-retargeting attacks.
