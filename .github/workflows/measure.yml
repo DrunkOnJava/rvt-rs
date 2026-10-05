@@ -104,6 +104,9 @@ jobs:
         with:
           workspaces: measured
           shared-key: measure
+          # Runs dispatched from a feature branch saved caches no other run
+          # could restore (C2).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -242,6 +245,7 @@ jobs:
             head
             base
           shared-key: measure
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build both
         run: |
           (cd head && git log -1 --format='%H %s' > ../head-commit.txt && cargo build --profile ci --bin rvt-ifc)
