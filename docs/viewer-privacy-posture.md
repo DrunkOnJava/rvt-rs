@@ -102,9 +102,14 @@ Three checks make the posture verifiable post-facto:
 
 1. `cargo deny check` — no crate in the dep tree has a known
    telemetry history.
-2. `wasm-objdump` on the compiled viewer — grep the import
-   section for `fetch`, `XMLHttpRequest`, `WebSocket`,
-   `EventSource`, or `sendBeacon`.
+2. `viewer/scripts/audit-wasm-imports.mjs` on the compiled viewer —
+   every import of the `.wasm`, by name and by the body of its shim
+   in the wasm-bindgen glue, checked for `fetch`, `XMLHttpRequest`,
+   `WebSocket`, `EventSource`, `sendBeacon`, `WebTransport` and
+   `RTCPeerConnection`. A constructor such as `new WebSocket` imports
+   as `__wbg_new_<hash>`, so the name alone would miss it. Before
+   October 2026 this check grepped `wasm-objdump` output for quoted
+   names that wabt never prints, so it could not fail.
 3. Playwright browser test
    (`viewer/tests/no-network.spec.ts` + `viewer/tests/wasm-no-network-imports.spec.ts`) — load the built viewer,
    open the public sample RFA, allow only same-origin static

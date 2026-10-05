@@ -19,12 +19,10 @@ log() { printf '\n=== %s ===\n' "$1"; }
 
 # --- 1. System packages ----------------------------------------------------
 # python3-venv: stdlib venv is not shipped by default on Debian/Ubuntu.
-# wabt:         provides wasm-objdump for the viewer's network-import audit.
-log "System packages (python3-venv, wabt)"
+log "System packages (python3-venv)"
 if command -v apt-get >/dev/null 2>&1; then
   NEED_APT=()
   dpkg -s python3-venv >/dev/null 2>&1 || NEED_APT+=(python3-venv)
-  command -v wasm-objdump >/dev/null 2>&1 || NEED_APT+=(wabt)
   if [ "${#NEED_APT[@]}" -gt 0 ]; then
     sudo apt-get update -y
     sudo apt-get install -y "${NEED_APT[@]}"
@@ -120,13 +118,6 @@ echo "  rvt-inspect: OK"
 rm -rf "$SMOKE_DIR"
 
 # VW1-21 privacy invariant: the viewer WASM must import no network primitives.
-if command -v wasm-objdump >/dev/null 2>&1; then
-  if wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm | \
-       grep -iE '"(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon)"'; then
-    echo "ERROR: VW1-21 violation — wasm imports a network primitive" >&2
-    exit 1
-  fi
-  echo "  wasm network-import audit: PASS"
-fi
+node viewer/scripts/audit-wasm-imports.mjs
 
 log "rvt-rs environment ready"

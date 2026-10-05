@@ -269,6 +269,15 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The viewer's wasm network-import audit can fail (VW1-21).** It grepped
+  `wasm-objdump` output for `"fetch"` and the like with the quotes, which
+  wabt never prints for an import (`src/binary-reader-objdump.cc:1607`), so
+  it passed whatever the wasm imported. `viewer/scripts/audit-wasm-imports.mjs`
+  reads each import with `WebAssembly.Module.imports()`, and the body of its
+  shim in the glue, where a constructor such as `new WebSocket` shows; it
+  fails on a network primitive, on an import whose shim it cannot read, and
+  when it misses its own canary. The deployed viewer imports none of them,
+  and the deploy no longer installs wabt.
 - **An export without geometry keeps its elements' types and names (B74).**
   `--mode typed-no-geometry` read the record property set, which carries an
   element's family and type, only with its geometry, so it typed no element

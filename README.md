@@ -153,7 +153,7 @@ Drop a `.rvt` / `.rfa` / `.rte` / `.rft` at <https://drunkonjava.github.io/rvt-r
 
 The landing dropzone also includes a **demo gallery** staged from [`docs/viewer-demos.json`](docs/viewer-demos.json) (license/provenance + expected quality labels). It opens two real projects, `Revit_IFC5_Einhoven.rvt` (2023) and `2024_Core_Interior.rvt` (2024) from the MIT-licensed [magnetar-io/revit-test-datasets](https://github.com/magnetar-io/revit-test-datasets), hash-verified at staging time, alongside the tier1 synthetics. Einhoven is 913 KB and opens in about half a second; Core Interior is 33.7 MB and decodes in about 3 seconds on the deployed site since #266 (about 7 seconds including the 32 MB download), reporting 889 entities and 854 elements carrying geometry. Two Playwright tests gate both cards, and staging refuses a file whose sha256 does not match the catalog. Demo bytes are same-origin static assets only.
 
-Privacy posture is CI-enforced: the deploy workflow (`.github/workflows/deploy-viewer.yml`) runs `wasm-objdump -j Import` on every build and fails if the compiled `.wasm` imports `fetch`, `XMLHttpRequest`, or `WebSocket`. See [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md).
+Privacy posture is CI-enforced: the deploy workflow (`.github/workflows/deploy-viewer.yml`) runs `viewer/scripts/audit-wasm-imports.mjs` on every build, which reads each import of the compiled `.wasm` and its shim in the JavaScript glue and fails if any reaches `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` or `sendBeacon`. See [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md).
 
 ### Supported MVP workflow
 

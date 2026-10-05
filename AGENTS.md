@@ -26,8 +26,8 @@ done and you can skip straight to the build/run commands.
   `rustup default stable` first.
 - **Python** uses a project-local virtualenv at `.venv/` (Debian/Ubuntu images
   need the `python3-venv` apt package, which `install.sh` installs).
-- **WASM tooling**: `wasm-pack` (installed by `install.sh`) plus `wabt`
-  (`wasm-objdump`, used for the viewer's network-import audit).
+- **WASM tooling**: `wasm-pack` (installed by `install.sh`). The viewer's
+  network-import audit needs only Node.
 
 ### One-shot setup
 
@@ -109,10 +109,12 @@ Privacy invariant (VW1-21): the compiled WASM must import no network
 primitives. Verify with:
 
 ```bash
-wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm \
-  | grep -iE '"(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon)"' \
-  && echo "VIOLATION" || echo "PASS: no network imports"
+node viewer/scripts/audit-wasm-imports.mjs
 ```
+
+It checks every import of `viewer/pkg/rvt_bg.wasm` by name and by the body
+of its shim in `viewer/pkg/rvt.js`, and fails on a network primitive, on an
+import whose shim it cannot find, or when its own canary goes uncaught.
 
 ### Driving the viewer for manual testing
 
