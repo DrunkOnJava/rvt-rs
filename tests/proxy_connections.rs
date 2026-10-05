@@ -117,11 +117,11 @@ fn check(rvt: &Path, reference: &Path, failures: &mut Vec<String>) -> usize {
         .collect();
     let missing: Vec<&&Connection> = wanted
         .iter()
-        .filter(|connection| !ours.contains(connection))
+        .filter(|connection| !ours.contains(**connection))
         .collect();
     let extra: Vec<&Connection> = ours
         .iter()
-        .filter(|connection| proxy(connection) && !theirs.contains(connection))
+        .filter(|connection| proxy(connection) && !theirs.contains(*connection))
         .collect();
     let name = rvt.file_name().unwrap_or_default().to_string_lossy();
     eprintln!(
