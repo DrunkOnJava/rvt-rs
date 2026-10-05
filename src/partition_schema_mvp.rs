@@ -4801,17 +4801,27 @@ pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> Connec
     joins
 }
 
-/// Give each duct, pipe and fitting the element and connector joined at each
-/// of its connectors ([`crate::partition_connector_pairs`], RE-138, RE-141). A
-/// connector with no join read is left without the fields.
+/// Give each duct, pipe, fitting, terminal and piece of mechanical equipment
+/// the element and connector joined at each of its connectors
+/// ([`crate::partition_connector_pairs`], RE-138, RE-141, RE-170). A connector
+/// with no join read is left without the fields.
 fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     use crate::partition_connector_pairs as pcp;
     if !pcp::supports_revit_version(revit_version) {
         return;
     }
     let is_curve = |element: &DecodedElement| matches!(element.class.as_str(), "Duct" | "Pipe");
-    let is_fitting =
-        |element: &DecodedElement| matches!(element.class.as_str(), "DuctFitting" | "PipeFitting");
+    // The elements whose joins are lists with them first (RE-141, RE-170).
+    let is_listed = |element: &DecodedElement| {
+        matches!(
+            element.class.as_str(),
+            "DuctFitting"
+                | "PipeFitting"
+                | "DuctTerminal"
+                | "PlumbingFixture"
+                | "MechanicalEquipment"
+        )
+    };
     let ids_of = |keep: &dyn Fn(&DecodedElement) -> bool| -> BTreeSet<u64> {
         products
             .iter()
@@ -4821,16 +4831,16 @@ fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut
             .collect()
     };
     let curves = ids_of(&is_curve);
-    let fittings = ids_of(&is_fitting);
-    if curves.is_empty() && fittings.is_empty() {
+    let listed = ids_of(&is_listed);
+    if curves.is_empty() && listed.is_empty() {
         return;
     }
     let everything = ids_of(&|_| true);
     let mut pairs = pcp::scan_connector_pairs(rf, &curves).unwrap_or_default();
-    pairs.extend(pcp::scan_fitting_pairs(rf, &fittings, &everything).unwrap_or_default());
+    pairs.extend(pcp::scan_fitting_pairs(rf, &listed, &everything).unwrap_or_default());
     for element in products
         .iter_mut()
-        .filter(|element| is_curve(element) || is_fitting(element))
+        .filter(|element| is_curve(element) || is_listed(element))
     {
         let Some(id) = element.id else {
             continue;
