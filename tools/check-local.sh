@@ -2,9 +2,9 @@
 # Developer-friendly local quality gate for rvt-rs.
 #
 # Default (no flags): fmt check, clippy -D warnings, rustdoc -D warnings,
-# a build of every target, and the real-file, CLI and contract checks of
-# tools/ci/test-targets.txt. Unit tests are banned and never run. Does not
-# require network.
+# a build of every target, and the targets tools/ci/test-targets.txt runs
+# (real-file, CLI, contract and fuzz-regression hardening). Unit tests are
+# banned and never run. Does not require network.
 #
 # Optional expensive / environment-dependent checks are opt-in via flags.
 # Prefer this script for day-to-day local verification; use tools/quality.sh
@@ -167,12 +167,14 @@ if [[ "$run_ifcopenshell" -eq 1 ]]; then
         echo "       Install with: python3 -m pip install 'ifcopenshell>=0.8.0,<0.9.0'" >&2
         exit 1
     fi
-    # #214: same gate CI runs — every instance in the committed
-    # fixtures must write exactly the attributes its IFC4 entity type
-    # declares, and mapped PredefinedType values must survive.
-    run python3 tools/ci/ifc_schema_arity.py \
-        tests/fixtures/synthetic-project.ifc \
-        tests/fixtures/synthetic-structural.ifc
+    # #214 / C9: same gate CI runs — every instance the exporter writes
+    # for the tier-1 projects must carry exactly the attributes its IFC4
+    # entity type declares, and mapped PredefinedType values must survive.
+    run cargo build --profile ci --bin rvt-ifc
+    for f in corpus/tier1/*/*.rvt; do
+        run ./target/ci/rvt-ifc "$f" -o "/tmp/rvt-tier1-$(basename "$f" .rvt).ifc"
+    done
+    run python3 tools/ci/ifc_schema_arity.py /tmp/rvt-tier1-*.ifc
 fi
 
 if [[ "$run_deny" -eq 1 ]]; then
