@@ -5,6 +5,7 @@
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f probe=probe_re70_wall_join_lists
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f probe=probe_re133_class_ordinals -f families=true
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f families=true
+#   gh workflow run measure.yml -f ref=my-branch -f base=main -f samples=true -f timing=true
 #
 # Each side builds rvt-ifc, rvt-gltf and rvt-info at its ref and runs
 # tools/ci/measure-reference-models.sh (taken from the workflow's own ref,
@@ -59,6 +60,11 @@ on:
         default: ""
       samples:
         description: Also read Autodesk's sample projects of every release 2016 to 2027 (research/autodesk-sample-projects.tsv) with rvt-info, rvt-ifc diagnostics and the probe (Autodesk-owned, fetched for the run and never stored)
+        type: boolean
+        required: false
+        default: false
+      timing:
+        description: Also time rvt-ifc at base and head on one runner, in turn, three rounds per file (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
         type: boolean
         required: false
         default: false
@@ -142,6 +148,9 @@ jobs:
         run: |
           tools/ci/measure-reference-models.sh measured/target/ci models results
           cp measured-commit.txt results/commit.txt
+          # The runner's CPU, so the compare job can say which machines the
+          # wall times came from.
+          grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > results/runner.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: measure-${{ matrix.side }}
@@ -181,7 +190,9 @@ jobs:
                 if cmp -s "$d/info.json" "measure-base/$f/info.json" && cmp -s "$d/info.exit" "measure-base/$f/info.exit"; then echo "- $f: identical ($(cat "$d/info.exit"))"; else echo "- $f: **differs**"; fi
               done
               echo
-              echo "### rvt-ifc wall time, base → head (ms)"
+              echo "### rvt-ifc wall time, base → head (ms), on two runners"
+              echo
+              echo "Base ran on $(cat measure-base/runner.txt 2>/dev/null || echo 'an unrecorded CPU'), head on $(cat measure-head/runner.txt 2>/dev/null || echo 'an unrecorded CPU'). Runner speed alone moves these times by up to about 1.7x, so they compare machines as much as code; dispatch with \`timing\` to time both refs on one runner."
               echo
               for d in measure-head/*/; do
                 m=$(basename "$d")
@@ -193,9 +204,71 @@ jobs:
               echo "### Scorer differences (base → head)"
               echo
               echo '```diff'
-              diff -r -U0 -x commit.txt -x '*.log' -x ifc.sha256 -x diagnostics.json measure-base measure-head || true
+              diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json measure-base measure-head || true
               echo '```'
             else
               echo "No base; the scores are in the measure-head artifact."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # B81: the base and head jobs above run on different runners, so their wall
+  # times compare machines as much as code. With `timing`, one runner builds
+  # rvt-ifc at both refs and exports every model (and sample, with `samples`)
+  # with each in turn (tools/ci/measure-timing.sh).
+  timing:
+    name: Timing (one runner)
+    if: inputs.timing && inputs.base != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Head source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          path: head
+      - name: Base source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.base || 'main' }}
+          path: base
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            head
+            base
+          shared-key: measure
+      - name: Build both
+        run: |
+          (cd head && git log -1 --format='%H %s' > ../head-commit.txt && cargo build --profile ci --bin rvt-ifc)
+          (cd base && git log -1 --format='%H %s' > ../base-commit.txt && cargo build --profile ci --bin rvt-ifc)
+      - name: Fetch the reference models
+        run: tools/fetch-reference-models.sh models
+      - name: Fetch Autodesk's sample projects
+        if: inputs.samples
+        run: tools/fetch-autodesk-samples.sh _samples
+      - name: Time
+        env:
+          RVT_IFC_FLAGS: ${{ inputs.ifc_flags }}
+        run: |
+          tools/ci/measure-timing.sh base/target/ci head/target/ci timing.md models/*.rvt _samples/*.rvt
+          {
+            echo "## rvt-ifc time on one runner, base → head"
+            echo
+            echo "head: $(cat head-commit.txt)"
+            echo "base: $(cat base-commit.txt)"
+            echo "runner: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
+            echo
+            echo "Median of three exports each, in turn on the same runner."
+            echo
+            cat timing.md
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: measure-timing
+          path: timing.md
+          if-no-files-found: error
