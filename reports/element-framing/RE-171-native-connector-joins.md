@@ -40,7 +40,7 @@ On 2025, where RE-138's and RE-141's list form is also read, the two readers dis
 ## 5. Not established
 
 - What `m_mode` is. It is 1 on the RE1 Plumbing tank's piping connectors and on RE1 Electrical panel 428352's electrical connector, and 32 on that panel's conduit connectors.
-- Revit 2027's samples decode their connectors (4,898 and 4,914 type-1 references), but their export writes no joins. Why was not checked.
+- Revit 2027's samples decode their connectors (their type-1 references give 4,898 and 4,914 joins), but their export writes no joins. Why was not checked.
 
 ## 6. Reproduce
 
