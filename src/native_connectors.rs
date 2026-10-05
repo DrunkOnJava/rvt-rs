@@ -117,13 +117,19 @@ pub fn symbol_port_indices(
         .collect())
 }
 
-/// Every join the connectors of the file's family instances list (RE-171),
-/// one per connector and element joined to it, sorted. Errs where the native
-/// record path does not read the file's release.
-pub fn family_instance_joins(rf: &mut RevitFile) -> anyhow::Result<Vec<ConnectorPair>> {
+/// Every join the connectors of `instances` (family instances' ElementIds)
+/// list (RE-171), one per connector and element joined to it, sorted. Errs
+/// where the native record path does not read the file's release.
+pub fn family_instance_joins(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<Vec<ConnectorPair>> {
     let mut joins = BTreeSet::new();
+    if instances.is_empty() {
+        return Ok(Vec::new());
+    }
     let options = native_document::Options {
-        selected_classes: BTreeSet::from(["FamilyInstance".to_string()]),
+        selected_ids: instances.clone(),
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {

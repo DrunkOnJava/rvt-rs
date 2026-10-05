@@ -4801,6 +4801,29 @@ pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> Connec
     joins
 }
 
+/// The classes of the family instances whose connectors are read for joins:
+/// the MEP categories, whose families carry connectors.
+const JOINED_CLASSES: [&str; 18] = [
+    "DuctFitting",
+    "PipeFitting",
+    "DuctTerminal",
+    "DuctAccessory",
+    "PipeAccessory",
+    "PlumbingFixture",
+    "Sprinkler",
+    "MechanicalEquipment",
+    "ElectricalEquipment",
+    "ElectricalFixture",
+    "LightingFixture",
+    "LightingDevice",
+    "FireAlarmDevice",
+    "DataDevice",
+    "CableTrayFitting",
+    "ConduitFitting",
+    "SpecialtyEquipment",
+    "FoodServiceEquipment",
+];
+
 /// Give each element the element and connector joined at each of its
 /// connectors. Where the native record path reads the file, the joins are
 /// the ones its family instances' connectors list
@@ -4811,7 +4834,18 @@ pub fn connector_joins_from_fields(fields: &[(String, InstanceField)]) -> Connec
 /// join read is left without the fields.
 fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     use crate::partition_connector_pairs as pcp;
-    let pairs = match crate::native_connectors::family_instance_joins(rf) {
+    // Only the family instances of the MEP categories are read: decoding
+    // every family instance cost a second on Core Interior's furniture.
+    let instances: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| JOINED_CLASSES.contains(&element.class.as_str()))
+        .filter_map(|element| element.id)
+        .map(u64::from)
+        .collect();
+    if instances.is_empty() {
+        return;
+    }
+    let pairs = match crate::native_connectors::family_instance_joins(rf, &instances) {
         Ok(pairs) => pairs,
         Err(_) if pcp::supports_revit_version(revit_version) => {
             let ids_of = |classes: &[&str]| -> BTreeSet<u64> {
