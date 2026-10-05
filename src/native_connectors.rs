@@ -10,13 +10,27 @@
 //! domain, joined or not: on RE1 Electrical, Plumbing and Mechanical every
 //! family instance's ports are those indices (Measure run 37230166352), the
 //! one panel with five conduit connectors among them included.
+//!
+//! A `FamilyInstance` record holds a `Connector` object per connector, with
+//! its index in `m_nIndex` and, in `m_arrRefs`, the elements joined to it,
+//! each with its own connector index (`m_nIndex`) and a connection type
+//! (`m_connType`). The type-1 references are the joins: on RE1 Mechanical
+//! they are Revit's 73 port-to-port connections and on RE1 Plumbing its 126,
+//! with nothing else but the two of a tank Revit's export leaves out (RE-171,
+//! Measure run 37303312731). A duct or pipe joins a family instance at every
+//! end, so the instances' connectors hold every join.
 
+use crate::partition_connector_pairs::ConnectorPair;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The domains whose connectors Revit's export writes ports for: HVAC,
 /// electrical and piping.
 const PORT_DOMAINS: std::ops::RangeInclusive<i64> = 1..=3;
+
+/// The connection type of a connector reference that is a join (RE-171);
+/// type 4 names the connector's system.
+const JOIN: u64 = 1;
 
 /// The ElementId an `ElementId` field of a native record holds.
 fn element_id(value: &serde_json::Value) -> Option<u64> {
@@ -101,4 +115,64 @@ pub fn symbol_port_indices(
             (!ports.is_empty()).then_some((symbol, ports))
         })
         .collect())
+}
+
+/// Every join the connectors of `instances` (family instances' ElementIds)
+/// list (RE-171), one per connector and element joined to it, sorted. Errs
+/// where the native record path does not read the file's release.
+pub fn family_instance_joins(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<Vec<ConnectorPair>> {
+    let mut joins = BTreeSet::new();
+    if instances.is_empty() {
+        return Ok(Vec::new());
+    }
+    let options = native_document::Options {
+        selected_ids: instances.clone(),
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let index_of = |value: Option<&serde_json::Value>| {
+            value
+                .and_then(|index| index.as_u64())
+                .and_then(|index| u32::try_from(index).ok())
+        };
+        for connector in graph
+            .objects
+            .iter()
+            .filter(|object| object.class_name == "Connector")
+        {
+            let Some(index) = index_of(connector.fields.get("m_nIndex")) else {
+                continue;
+            };
+            for reference in connector
+                .fields
+                .get("m_arrRefs")
+                .and_then(|references| references.as_array())
+                .into_iter()
+                .flatten()
+            {
+                if reference.get("m_connType").and_then(|kind| kind.as_u64()) != Some(JOIN) {
+                    continue;
+                }
+                if let (Some(other), Some(other_index)) = (
+                    reference.get("m_id").and_then(element_id),
+                    index_of(reference.get("m_nIndex")),
+                ) {
+                    joins.insert(ConnectorPair {
+                        element: record.identity.element_id,
+                        index,
+                        other,
+                        other_index,
+                    });
+                }
+            }
+        }
+        Ok(())
+    })?;
+    Ok(joins.into_iter().collect())
 }

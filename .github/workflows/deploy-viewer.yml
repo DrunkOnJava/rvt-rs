@@ -5,6 +5,11 @@ name: Deploy viewer
 # the old `/viewer/` sub-path 404s).
 # Runs on every push to main that touches viewer/ or src/ (so the
 # WASM stays fresh), plus manual runs.
+#
+# C3: the viewer is published only from a commit whose CI passed. The deploy
+# job waits for CI's `CI passed` check on the pushed commit; a commit CI's
+# push filter skips (only docs, Markdown and the like, such as a demo-catalog
+# change) deploys without it. Only the deploy job can write to Pages.
 
 on:
   push:
@@ -27,10 +32,11 @@ on:
       - '.github/workflows/deploy-viewer.yml'
   workflow_dispatch:
 
+# Read-only by default; only the deploy job below can write to Pages (C3).
+# The build job runs pnpm dependencies and Playwright, and holds no write
+# scope.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # One build per ref. A newer push to a pull request supersedes its
 # in-flight build; pushes to main queue instead. The deploy job below
@@ -47,6 +53,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       # Tier-1 + synthetic demos stage from in-repo corpus/tier1/ and
       # gen-fixture — no Autodesk LFS needed for Playwright MVP coverage.
@@ -144,9 +152,15 @@ jobs:
           path: viewer/dist
 
   deploy:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      pages: write
+      id-token: write
+      checks: read
+      contents: read
     concurrency:
       group: pages
       cancel-in-progress: false
@@ -154,6 +168,30 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # C3: wait for CI on this commit. A commit whose every file CI's push
+      # filter ignores runs no CI, and deploys at once.
+      - name: Wait for CI on the commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          if ! gh api "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename' \
+               | grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)'; then
+            echo "CI's push filter skips this commit; deploying it"
+            exit 0
+          fi
+          for _ in $(seq 1 80); do
+            conclusion=$(gh api "repos/${GH_REPO}/commits/${SHA}/check-runs?check_name=CI%20passed" \
+              --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""')
+            case "$conclusion" in
+              success) echo "CI passed on ${SHA}"; exit 0 ;;
+              "") sleep 60 ;;
+              *) echo "::error::CI concluded ${conclusion} on ${SHA}; not publishing it"; exit 1 ;;
+            esac
+          done
+          echo "::error::CI did not finish on ${SHA} within 80 minutes"
+          exit 1
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1
