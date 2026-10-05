@@ -110,19 +110,14 @@ jobs:
         working-directory: viewer
         run: pnpm install --frozen-lockfile
 
-      - name: Restore native build cache (shared with CI)
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
-        with:
-          save-if: false
-          shared-key: ci-release
-
       - name: Stage redistributable demos
         working-directory: viewer
         run: |
           # gen-fixture generates the synthetic-mvp demo. Build it with the
-          # CI profile so the shared cache serves its dependencies; the
-          # release profile's full LTO rebuilt the crate from scratch here
-          # (39 s per run). The stager finds the binary on PATH.
+          # CI profile, which the viewer-wasm cache above keeps from the last
+          # run on main; the release profile's full LTO rebuilt the crate
+          # from scratch here (39 s per run). The stager finds the binary on
+          # PATH.
           cargo build --profile ci --bin gen-fixture
           PATH="$(pwd)/../target/ci:$PATH" pnpm run stage:demos
 

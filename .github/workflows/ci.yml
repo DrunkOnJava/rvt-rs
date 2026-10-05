@@ -81,9 +81,6 @@ jobs:
     # check name does not change when `rust-version` does.
     name: build + real files / ${{ matrix.os }} / ${{ matrix.label || matrix.rust }}
     runs-on: ${{ matrix.os }}
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: sccache
     strategy:
       fail-fast: false
       matrix:
@@ -137,10 +134,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: ${{ matrix.rust }}
-      # sccache caches compilation units (rust-cache only caches the dep
-      # tree), so unchanged code never recompiles across runs.
-      - name: Set up sccache
+      # sccache on Windows only (C2). There rust-cache saves the checkout's
+      # target directory while the dev drive builds into its own, so sccache
+      # is what keeps compiled units (95% hits). On Linux and macOS it hit 0
+      # of 303 requests, filled the Actions cache with small objects, and
+      # its RUSTC_WRAPPER changed rust-cache's key, so the jobs sharing
+      # `ci-release` never restored it. It is set through GITHUB_ENV so the
+      # variable does not exist at all off Windows.
+      - name: Set up sccache (Windows)
+        if: runner.os == 'Windows'
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - name: Use sccache (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
       # The platform test matrix owns the shared release caches. Compatible
       # fan-out jobs restore them without racing to save partial targets.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -609,16 +618,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # docs.rs builds with nightly — any `#[cfg_attr(docsrs, ...)]`
       # attributes + `#![feature(...)]` gates must be available.
+      # A dated nightly (C2): the toolchain is part of rust-cache's key, so
+      # a floating nightly saved a new cache every day and restored none.
+      # Move the date forward when docs.rs needs a newer feature.
       - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-10-01
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-docs-rs
       # Mirror the [package.metadata.docs.rs] settings from Cargo.toml
       # (`all-features = true`) — if these drift, update both.
-      - run: cargo +nightly doc --no-deps --all-features
+      - run: cargo +nightly-2026-10-01 doc --no-deps --all-features
 
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
