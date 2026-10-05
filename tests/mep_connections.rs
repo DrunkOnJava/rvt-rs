@@ -1,13 +1,16 @@
-//! B86 (B54, #528): a join between an element rvt-rs writes as a proxy and
-//! another element is written as Revit's export writes it.
+//! B86 (B54, #528): every join of Revit's export between two elements rvt-rs
+//! writes with ports is written, and every join rvt-rs writes between two
+//! elements Revit's export holds is Revit's.
 //!
-//! Revit's export of RE1 Mechanical joins its air handling unit (427568,
-//! which it and rvt-rs write as an `IfcBuildingElementProxy`) to five ducts
-//! and pipes with `IfcRelConnectsPorts`. Since B83 a proxy has its ports,
-//! nested in it, so every connection of Revit's export with a proxy at one
-//! end must be written between the ports `Port_<ElementId>_<index>` of its
-//! two ends, and rvt-rs must write no connection with a proxy at one end that
-//! Revit's export does not hold.
+//! Revit's export of the RE1 MEP models writes each join as an
+//! `IfcRelConnectsPorts` between the ports `<In or Out>Port_<ElementId>_<index>`
+//! of its two ends. rvt-rs writes ports on distribution elements and, since
+//! B83, on proxies, named `Port_<ElementId>_<index>`. Wherever rvt-rs writes
+//! both elements of one of Revit's joins as such elements, it must write that
+//! join between those two ports: RE1 Mechanical's air handling unit (a proxy)
+//! to its ducts and pipes, its air terminals to their duct fittings, and RE1
+//! Plumbing's fixtures to their pipes among them. A join rvt-rs writes between
+//! two elements Revit's export holds must be one of Revit's.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR` (`RE1-Electrical.rvt`,
 //! `RE1-Plumbing.rvt` and `RE1-Mechanical.rvt` with Revit's `RE1-*.ifc`).
@@ -17,6 +20,21 @@ use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+
+/// The entities rvt-rs ties ports to.
+const PORTED_ENTITIES: [&str; 11] = [
+    "IFCDUCTSEGMENT",
+    "IFCPIPESEGMENT",
+    "IFCDUCTFITTING",
+    "IFCPIPEFITTING",
+    "IFCAIRTERMINAL",
+    "IFCSANITARYTERMINAL",
+    "IFCLIGHTFIXTURE",
+    "IFCALARM",
+    "IFCELECTRICAPPLIANCE",
+    "IFCBUILDINGELEMENTPROXY",
+    "IFCFLOWTERMINAL",
+];
 
 /// `#id -> (entity, args)` for every line of a STEP file.
 fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
@@ -62,18 +80,18 @@ fn port_key(args: &str) -> Option<(u32, u32)> {
     Some((id.parse().ok()?, index.parse().ok()?))
 }
 
-/// A connection: the two ends' keys, in order.
-type Connection = [(u32, u32); 2];
+/// A join: its two ends' keys, in order.
+type Join = [(u32, u32); 2];
 
-/// Every port-to-port connection, and each element's entity by `Tag`.
-fn read(step: &str) -> (BTreeSet<Connection>, BTreeMap<u32, String>) {
+/// Every port-to-port join, and each element's entity by `Tag`.
+fn read(step: &str) -> (BTreeSet<Join>, BTreeMap<u32, String>) {
     let ents = entities(step);
     let key = |id: &u64| {
         ents.get(id)
             .filter(|(entity, _)| entity == "IFCDISTRIBUTIONPORT")
             .and_then(|(_, args)| port_key(args))
     };
-    let mut connections = BTreeSet::new();
+    let mut joins = BTreeSet::new();
     let mut entity_of = BTreeMap::new();
     for (entity, args) in ents.values() {
         if let Some(tag) = args.rsplit('\'').nth(1).and_then(|t| t.parse().ok()) {
@@ -86,71 +104,68 @@ fn read(step: &str) -> (BTreeSet<Connection>, BTreeMap<u32, String>) {
         if let (Some(a), Some(b)) = (all.get(1).and_then(key), all.get(2).and_then(key)) {
             let mut ends = [a, b];
             ends.sort();
-            connections.insert(ends);
+            joins.insert(ends);
         }
     }
-    (connections, entity_of)
+    (joins, entity_of)
 }
 
 fn check(rvt: &Path, reference: &Path, failures: &mut Vec<String>) -> usize {
-    let (theirs, _) = read(&std::fs::read_to_string(reference).expect("reference"));
+    let (theirs, their_entities) = read(&std::fs::read_to_string(reference).expect("reference"));
     let mut rf = RevitFile::open(rvt).expect("open");
     let result = RvtDocExporter
         .export_with_diagnostics(&mut rf)
         .expect("export");
     let (ours, our_entities) = read(&write_step(&result.model));
-    let proxy = |connection: &Connection| {
-        connection.iter().any(|(element, _)| {
+    let ported = |join: &Join| {
+        join.iter().all(|(element, _)| {
             our_entities
                 .get(element)
-                .is_some_and(|entity| entity == "IFCBUILDINGELEMENTPROXY")
+                .is_some_and(|entity| PORTED_ENTITIES.contains(&entity.as_str()))
         })
     };
-    let written = |connection: &Connection| {
-        connection
-            .iter()
-            .all(|(element, _)| our_entities.contains_key(element))
+    let held = |join: &Join| {
+        join.iter()
+            .all(|(element, _)| their_entities.contains_key(element))
     };
-    let wanted: Vec<&Connection> = theirs
+    let wanted: Vec<&Join> = theirs.iter().filter(|join| ported(join)).collect();
+    let missing: Vec<&Join> = wanted
         .iter()
-        .filter(|connection| proxy(connection) && written(connection))
+        .copied()
+        .filter(|join| !ours.contains(*join))
         .collect();
-    let missing: Vec<&&Connection> = wanted
+    let extra: Vec<&Join> = ours
         .iter()
-        .filter(|connection| !ours.contains(**connection))
-        .collect();
-    let extra: Vec<&Connection> = ours
-        .iter()
-        .filter(|connection| proxy(connection) && !theirs.contains(*connection))
+        .filter(|join| held(join) && !theirs.contains(*join))
         .collect();
     let name = rvt.file_name().unwrap_or_default().to_string_lossy();
     eprintln!(
-        "{name}: {} of Revit's {} connections with a proxy at one end written, {} not in \
-         Revit's export",
+        "{name}: {} of Revit's {} joins between elements with ports written, {} written that \
+         are not Revit's",
         wanted.len() - missing.len(),
         wanted.len(),
         extra.len()
     );
     if !missing.is_empty() {
         failures.push(format!(
-            "{name}: {} of Revit's {} connections with a proxy at one end are not written: {:?}",
+            "{name}: {} of Revit's {} joins between elements rvt-rs writes with ports are not \
+             written: {missing:?}",
             missing.len(),
-            wanted.len(),
-            missing
+            wanted.len()
         ));
     }
     if !extra.is_empty() {
         failures.push(format!(
-            "{name}: {} connections with a proxy at one end are not in Revit's export: {:?}",
-            extra.len(),
-            extra
+            "{name}: {} joins written between elements Revit's export holds are not Revit's: \
+             {extra:?}",
+            extra.len()
         ));
     }
     wanted.len()
 }
 
 #[test]
-fn joins_to_proxies_are_revits() {
+fn every_join_revit_writes_is_written() {
     let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR").map(PathBuf::from) else {
         eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
         return;
@@ -169,6 +184,6 @@ fn joins_to_proxies_are_revits() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         compared > 0 || !dir.join("RE1-Mechanical.rvt").exists(),
-        "no connection with a proxy at one end was compared"
+        "no join was compared"
     );
 }
