@@ -3,19 +3,18 @@ name: Deploy viewer
 # VW1-18 — build the WASM + the Vite site and publish to
 # https://drunkonjava.github.io/rvt-rs/ via GitHub Pages (Pages root;
 # the old `/viewer/` sub-path 404s).
-# Runs on every push to main that touches viewer/ or src/ (so the
-# WASM stays fresh), plus manual runs.
+#
+# A pull request that touches the viewer's inputs builds and tests it. On
+# main the viewer is published only from a commit whose CI passed (C3): the
+# workflow runs when CI completes on main, builds that commit when it
+# changed the viewer's inputs, and deploys it. A manual run on main deploys
+# too.
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'viewer/**'
-      - 'docs/viewer-demos.json'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/deploy-viewer.yml'
   pull_request:
     branches: [main]
     paths:
@@ -27,10 +26,11 @@ on:
       - '.github/workflows/deploy-viewer.yml'
   workflow_dispatch:
 
+# Read-only by default; only the deploy job below can write to Pages (C3).
+# The build job runs pnpm dependencies and Playwright, and holds no write
+# scope.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # One build per ref. A newer push to a pull request supersedes its
 # in-flight build; pushes to main queue instead. The deploy job below
@@ -38,15 +38,53 @@ permissions:
 # PR build and deploy made PR checks cancel each other whenever two
 # runs queued.
 concurrency:
-  group: viewer-${{ github.ref }}
+  group: viewer-${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # On main, whether CI passed on the commit and the commit changed what the
+  # viewer is built from. A squash merge is one commit, so its parent is the
+  # previous state of main.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      viewer: ${{ steps.changed.outputs.viewer }}
+    steps:
+      - name: Checkout
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Viewer inputs changed
+        id: changed
+        env:
+          EVENT: ${{ github.event_name }}
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          if [ "$EVENT" != "workflow_run" ]; then
+            echo "viewer=true" >> "$GITHUB_OUTPUT"
+          elif [ "$CI_CONCLUSION" != "success" ]; then
+            echo "CI concluded ${CI_CONCLUSION} on this commit; not publishing it"
+            echo "viewer=false" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD^ HEAD | grep -qE '^(src/|viewer/|docs/viewer-demos\.json$|Cargo\.(toml|lock)$|\.github/workflows/deploy-viewer\.yml$)'; then
+            echo "viewer=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "the commit changed none of the viewer's inputs"
+            echo "viewer=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: changes
+    if: needs.changes.outputs.viewer == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
 
       # Tier-1 + synthetic demos stage from in-repo corpus/tier1/ and
       # gen-fixture — no Autodesk LFS needed for Playwright MVP coverage.
@@ -69,7 +107,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.event_name == 'workflow_run' || github.ref == 'refs/heads/main' }}
           shared-key: viewer-wasm
 
       - name: Install wasm-pack
@@ -150,9 +188,12 @@ jobs:
           path: viewer/dist
 
   deploy:
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     concurrency:
       group: pages
       cancel-in-progress: false
