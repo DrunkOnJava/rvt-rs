@@ -177,7 +177,7 @@ jobs:
         run: |
           body="The nightly fuzz run ${RUN_URL} found a crash. Each failed target's job uploads \`crash-<target>-<run>\` with the crashing input; reproduce it with \`cargo +nightly fuzz run <target> <input>\` in \`fuzz/\`, then add the input to \`tests/fuzz_regressions.rs\`."
           gh label create fuzz-crash --color B60205 --description "A crash found by the nightly fuzz run" 2>/dev/null || true
-          existing=$(gh issue list --label fuzz-crash --state open --json number --jq '.[0].number')
+          existing=$(gh issue list --label fuzz-crash --state open --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
           else
