@@ -170,11 +170,20 @@ fn u32_at(d: &[u8], at: usize) -> Option<u32> {
     Some(u32::from_le_bytes(bytes.try_into().ok()?))
 }
 
+/// Records out of order that a table may hold, in hundredths of its stated
+/// count. A few ids sit out of order in some large tables: 3 of 50,529
+/// records on Snowdon Towers Architectural (Revit 2025), 163 of 44,157 on a
+/// Japanese Autodesk sample (RE-174). At the wrong record size the ids rise
+/// on about a third of the steps, so a share this small separates the sizes
+/// as the exact rule did. Below 100 records it allows none.
+pub const MAX_OUT_OF_ORDER_PERCENT: usize = 1;
+
 /// Detect the record layout: the record size (28 or 40 bytes) at which the
 /// stated number of records fits from `0x06` with ids rising over the whole
-/// table. When both fit equally, the one that leaves the shorter tail wins
-/// (a 40-byte table also fits at 28). Falls back to the 12-byte implicit
-/// layout from `0x30` when neither fits.
+/// table, but for at most [`MAX_OUT_OF_ORDER_PERCENT`] of its records. When
+/// both fit equally, the one that leaves the shorter tail wins (a 40-byte
+/// table also fits at 28). Falls back to the 12-byte implicit layout from
+/// `0x30` when neither fits.
 pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
     let fallback = ElemTableLayout {
         start: 0x30,
@@ -204,7 +213,7 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
     let best = [40usize, 28]
         .into_iter()
         .filter_map(|stride| rising(stride).map(|(rises, tail)| (stride, rises, tail)))
-        .filter(|&(_, rises, _)| rises + 1 == count)
+        .filter(|&(_, rises, _)| (count - 1 - rises) * 100 <= count * MAX_OUT_OF_ORDER_PERCENT)
         .min_by_key(|&(_, _, tail)| tail);
     let Some((stride, _, _)) = best else {
         return fallback;
