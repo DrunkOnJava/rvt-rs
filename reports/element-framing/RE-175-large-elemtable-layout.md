@@ -43,8 +43,6 @@ On `rvt-ifc` the effect is an empty export. Both columns are built from upstream
 | Golden Nugget Gebäudetechnik | 0 | 5,422 | 1.9 KB | 15.6 MB |
 | Golden Nugget Architektur | 0 | 2,577 | 1.9 KB | 6.6 MB |
 
-An export takes 4 to 28 s on a Raspberry Pi 5, against 2 to 15 s when it wrote nothing.
-
 Facts that were reported about these models while the layout was wrong, because their exports were empty, need re-checking: for example, that rvt-rs writes no slabs on Snowdon Architectural 2025 (it writes 6,035 elements, the six Legends slabs of #328 among them), and that the Golden Nugget models export no building elements.
 
 ## 4. What this changes
