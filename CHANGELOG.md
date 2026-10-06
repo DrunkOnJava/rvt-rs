@@ -275,6 +275,25 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Revit 2023 records read their container and Levels their Building Story.**
+  These are 32-bit forms. Measured on Autodesk's 2023 sample projects, joined on
+  ElementId with the 2024 copy of each:
+  - A 2023 element record's container reference is the `u32` 22 bytes before
+    its marker, not the `u64` at 2024's place relative to the marker.
+    - The `u32` agrees with 2024's container on all 1,201, 5,858 and 8,901
+      shared records of `rac_basic`, `rst_basic` and `rac_advanced`.
+    - The `u64` disagrees on 9, 4,183 and 95, every container member among them.
+    - The Level reader takes the same field. So `rac_basic`'s Level 800333,
+      a container member, no longer fails the storey-set check, and its six
+      Levels are read.
+  - A 2023 Level's Building Story frame is `ff ff ff ff 00 01`, an `f64`, a
+    `u32` ElementId and the setting, where 2024 writes the `u64` forms.
+    Every Level of the three projects now gives the setting the 2024 copy gives it.
+  - Storey agreement with the 2024 copy: 15.5 to 81.7 per cent (`rac_basic`),
+    91.9 to 95.2 (`rst_basic`), 90.0 to 97.8 (`rac_advanced`). `rac_basic`'s
+    one export element that 2024 does not export, a container member, is gone.
+  - Exports of 2024 files are unchanged.
+  - Probe: `examples/probe_32bit_container.rs`.
 - **An export without geometry keeps its elements' types and names (B74).**
   `--mode typed-no-geometry` read the record property set, which carries an
   element's family and type, only with its geometry, so it typed no element
