@@ -175,6 +175,12 @@ fn u32_at(d: &[u8], at: usize) -> Option<u32> {
 /// table. When both fit equally, the one that leaves the shorter tail wins
 /// (a 40-byte table also fits at 28). Falls back to the 12-byte implicit
 /// layout from `0x30` when neither fits.
+///
+/// The id that rises is the record's second one ([`ElemRecord::id_secondary`],
+/// `+4` on 28 bytes, `+20` on 40), the element's ElementId. The first id
+/// rises with it wherever the two agree, but on Autodesk's Snowdon Towers
+/// samples they differ on 27 (Structural) and 84 (Architectural) records,
+/// and there the first id falls back below its predecessor 2 and 3 times.
 pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
     let fallback = ElemTableLayout {
         start: 0x30,
@@ -190,10 +196,11 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
         if end > d.len() {
             return None;
         }
+        let (element_id_at, _, _) = record_fields(stride)?;
         let mut previous = None;
         let mut rises = 0;
         for k in 0..count {
-            let id = u32_at(d, RECORDS_ORIGIN + k * stride)?;
+            let id = u32_at(d, RECORDS_ORIGIN + k * stride + element_id_at)?;
             if previous.is_some_and(|p| id > p) {
                 rises += 1;
             }

@@ -3,16 +3,20 @@
 //! through Revit 2023 and 40 from 2024, each closing with its owner
 //! (STE1200's frame, measured by puzzbobb on 30 files from 2008 to 2027).
 //!
-//! What every file of the family corpus (2016 to 2026) and the two MIT
-//! projects (Einhoven 2023, Core Interior 2024) must give, from that
-//! description alone:
+//! What every file of the family corpus (2016 to 2026), the two MIT projects
+//! (Einhoven 2023, Core Interior 2024) and, when they are in the project
+//! corpus directory, Autodesk's Snowdon Towers samples (2024, not
+//! redistributable) must give, from that description alone:
 //!
 //! 1. `parse_records` returns the count the table states, no more and no
 //!    fewer.
-//! 2. The records' ids rise strictly: the table is in ascending id order, so
-//!    no record is read from the bytes after the last one.
-//! 3. Every owner a record names is an id of the same table, no record owns
-//!    itself and no owner chain loops.
+//! 2. The records' ElementIds rise strictly: the table is in ascending id
+//!    order, so no record is read from the bytes after the last one. The
+//!    ElementId is the record's second id (`id_secondary`); the first agrees
+//!    with it except on Autodesk's Snowdon Towers samples, where it does not
+//!    rise.
+//! 3. Every owner a record names is an ElementId of the same table, no
+//!    record owns itself and no owner chain loops.
 //! 4. On a family file the first record's owner is element 17, the value
 //!    `parse_header` reports as `header_flag`.
 //!
@@ -64,21 +68,21 @@ fn check_table(path: &Path, label: &str) -> Vec<elem_table::ElemRecord> {
     );
     if let Some(at) = records
         .windows(2)
-        .position(|w| w[1].id_primary <= w[0].id_primary)
+        .position(|w| w[1].id_secondary <= w[0].id_secondary)
     {
         panic!(
-            "{label}: ids rise strictly, but record {} has id {} after {} (of {})",
+            "{label}: ElementIds rise strictly, but record {} has id {} after {} (of {})",
             at + 1,
-            records[at + 1].id_primary,
-            records[at].id_primary,
+            records[at + 1].id_secondary,
+            records[at].id_secondary,
             records.len()
         );
     }
 
-    let ids: BTreeSet<u32> = records.iter().map(|r| r.id_primary).collect();
+    let ids: BTreeSet<u32> = records.iter().map(|r| r.id_secondary).collect();
     let owners: BTreeMap<u32, u32> = records
         .iter()
-        .filter_map(|r| r.owner_id.map(|owner| (r.id_primary, owner)))
+        .filter_map(|r| r.owner_id.map(|owner| (r.id_secondary, owner)))
         .collect();
     let undeclared: Vec<_> = owners.values().filter(|o| !ids.contains(o)).collect();
     assert!(
@@ -143,5 +147,44 @@ fn project_tables_hold_every_stated_record() {
     }
     if read == 0 {
         eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
+    }
+}
+
+/// Autodesk's Snowdon Towers samples cannot be redistributed, so they are
+/// read only when someone has put them in the project corpus directory.
+/// Their first and second ids differ on 27 (Structural) and 84
+/// (Architectural) records, and the first does not rise there: a layout
+/// test on the first id took the 12-byte fallback and the export lost every
+/// element.
+#[test]
+fn snowdon_tables_rise_by_element_id() {
+    let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR").map(PathBuf::from) else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
+        return;
+    };
+    for (name, differing) in [
+        ("Snowdon Towers Sample Structural.rvt", 27),
+        ("Snowdon Towers Sample Architectural.rvt", 84),
+    ] {
+        let path = dir.join(name);
+        if !path.exists() {
+            eprintln!("skipping {name}: not in RVT_PROJECT_CORPUS_DIR");
+            continue;
+        }
+        let records = check_table(&path, name);
+        assert!(
+            records
+                .iter()
+                .all(|r| r.raw.len() == elem_table::RECORD_LEN_40),
+            "{name}: read as the 40-byte records of a 2024 project"
+        );
+        assert_eq!(
+            records
+                .iter()
+                .filter(|r| r.id_primary != r.id_secondary)
+                .count(),
+            differing,
+            "{name}: records whose two ids differ"
+        );
     }
 }
