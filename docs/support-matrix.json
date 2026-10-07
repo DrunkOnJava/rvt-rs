@@ -144,6 +144,15 @@
       "user_impact": "Revit 2026 projects export typed elements under Revit's ElementIds and GlobalIds, on Revit's storeys, with rooms named and doors and windows in their walls; measured on one model."
     },
     {
+      "id": "element-records-revit-2027",
+      "area": "elements",
+      "name": "Revit 2027 partition element records, with storeys, rooms, doors and windows, type names, layer sets and wall joins",
+      "status": "experimental",
+      "evidence": "partition_element_records::BBOX_MARKER_2027 and assign_second_prologue_ids_with; partition_level_records::elevation_marker; partition_names::ELEMENT_DATA_HEADER_2027; partition_compound_structure::layer_layout; partition_materials (2027 tags); partition_curtain_materials; examples/probe_re177_revit_2027.rs; reports/element-framing/RE-177-revit-2027-element-records.md",
+      "notes": "Every per-release constant is the tag of a class in the file's own schema (RE-124), and the 2027 values are the same on all seven of Autodesk's 2027 sample files. Layer records, wall join lists and mullion type materials keep their 2026 layouts. Revit 2027 writes most element frames without an ElementId at +0x00 (the second prologue), type symbols among them; from 2027 a symbol frame takes its enclosing chain record's id as instances already do (RE-35), which gives 17,619 of 17,621 such frames the id of the 2026 copy's frame. There is no Revit 2027 IFC export: the oracle is the same model saved by Revit 2026. On Autodesk's five 2027 sample projects the production elements equal their 2026 copies' (20,818 of 20,818 ElementIds, every class the same) and 362,456 of 362,640 fields agree; the rest are in the 2027 bytes (79 corner mullions naming two curtain walls, one f32 rounding, a different original symbol) or in RE-82's type-material scan, which has no per-release constant. Not read on 2027, as on 2026: roof slopes, stair dimensions, beam axes, IFC export overrides, room solids, opening index.",
+      "user_impact": "Revit 2027 projects export typed elements under Revit's ElementIds, on Revit's storeys, with rooms named and doors and windows in their walls; checked against the same models saved by Revit 2026, not against a Revit 2027 export."
+    },
+    {
       "id": "element-records-product-categories",
       "area": "elements",
       "name": "Furniture, casework, fixtures, equipment, ceilings, curtain-wall parts, railings, wall sweeps, ducts and pipes from partition element records",

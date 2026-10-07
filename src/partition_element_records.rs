@@ -102,8 +102,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases where this record shape is corpus-proven: 2024 on
 /// `2024_Core_Interior.rvt` against Revit's own export, 2025 on the
-/// `Drshelden/IFC-ECS` RE1 projects (MIT) against theirs (RE-32).
-pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+/// `Drshelden/IFC-ECS` RE1 projects (MIT) against theirs (RE-32), 2026 on
+/// one house against its export (RE-124), and 2027 against the 2026 copies
+/// of Autodesk's sample projects, with no 2027 export (RE-177).
+pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Autodesk `BuiltInCategory.OST_Columns` — architectural columns.
 pub const OST_COLUMNS: i64 = -2_000_100;
@@ -409,6 +411,11 @@ pub const BBOX_MARKER_2025: [u8; 8] = [0x59, 0x01, 0xff, 0xff, 0xff, 0xff, 0xd3,
 /// single-dwelling house against Revit's own export (RE-124).
 pub const BBOX_MARKER_2026: [u8; 8] = [0x61, 0x01, 0xff, 0xff, 0xff, 0xff, 0xf1, 0x05];
 
+/// The bbox marker of Revit 2027 files: `0x0164`, `0xFF`×4, `0x0610`, the
+/// tags of `Outline` and `ElementParents` in the schema of all seven of
+/// Autodesk's 2027 sample files (RE-177).
+pub const BBOX_MARKER_2027: [u8; 8] = [0x64, 0x01, 0xff, 0xff, 0xff, 0xff, 0x10, 0x06];
+
 /// The bbox marker of `revit_version`, or `None` where the record shape
 /// is not proven (fail closed).
 pub fn bbox_marker(revit_version: u32) -> Option<[u8; 8]> {
@@ -416,6 +423,7 @@ pub fn bbox_marker(revit_version: u32) -> Option<[u8; 8]> {
         2024 => Some(BBOX_MARKER),
         2025 => Some(BBOX_MARKER_2025),
         2026 => Some(BBOX_MARKER_2026),
+        2027 => Some(BBOX_MARKER_2027),
         _ => None,
     }
 }
@@ -1000,13 +1008,37 @@ pub fn assign_second_prologue_ids(
     marker: &[u8; 8],
     declared_ids: &BTreeSet<u32>,
 ) -> BTreeMap<usize, u32> {
+    assign_second_prologue_ids_with(buf, marker, declared_ids, false)
+}
+
+/// The first release whose type-symbol frames take their enclosing record's
+/// id too ([`assign_second_prologue_ids_with`], RE-177).
+pub const SECOND_PROLOGUE_SYMBOLS_FROM: u32 = 2027;
+
+/// [`assign_second_prologue_ids`], giving type-symbol frames
+/// ([`PLACEMENT_KIND_SYMBOL`]) their enclosing record's id as well when
+/// `symbols` is set.
+///
+/// Revit 2027 writes most frames in the second prologue, type symbols among
+/// them (RE-177): 938 of the 1,265 on Autodesk's 2027 `rac_basic`, where its
+/// 2026 copy writes none. Of the 17,621 such frames on the 2027 `rac_basic`,
+/// `rac_advanced` and `rme_basic`, 17,619 get the id the 2026 copy's
+/// first-prologue frame of the same category, kind and box carries. Before
+/// 2027 symbols are left out: on Snowdon Towers Facades (2025) they would
+/// give seven columns a type section no export here checks.
+pub fn assign_second_prologue_ids_with(
+    buf: &[u8],
+    marker: &[u8; 8],
+    declared_ids: &BTreeSet<u32>,
+    symbols: bool,
+) -> BTreeMap<usize, u32> {
     let chain = partition_record_chain(buf, marker);
     let mut out = BTreeMap::new();
     for hit in memchr::memmem::find_iter(buf, marker) {
         let Some(offset) = hit.checked_sub(BBOX_MARKER_OFFSET) else {
             continue;
         };
-        if !is_second_prologue_instance(buf, offset) {
+        if !is_second_prologue_frame(buf, offset, symbols) {
             continue;
         }
         let Some(span) = enclosing_record(&chain, offset) else {
@@ -1028,15 +1060,22 @@ pub fn carries_no_element_id(raw: u64) -> bool {
     raw == 0 || raw >= u64::from(u32::MAX)
 }
 
-/// Whether the frame at `offset` is a placed instance in the
-/// `BuiltInCategory` band with no ElementId at `+0x00`
-/// ([`carries_no_element_id`]): the frames [`assign_second_prologue_ids`]
-/// resolves.
-fn is_second_prologue_instance(buf: &[u8], offset: usize) -> bool {
+/// Whether the frame at `offset` is a placed instance (or, with `symbols`,
+/// a type symbol) in the `BuiltInCategory` band with no ElementId at
+/// `+0x00` ([`carries_no_element_id`]): the frames
+/// [`assign_second_prologue_ids_with`] resolves.
+fn is_second_prologue_frame(buf: &[u8], offset: usize, symbols: bool) -> bool {
     read_u64(buf, offset + CATEGORY_OFFSET)
         .is_some_and(|v| (BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&(v as i64)))
         && read_u64(buf, offset).is_some_and(carries_no_element_id)
-        && is_instance_frame(buf, offset)
+        && (is_instance_frame(buf, offset) || (symbols && is_symbol_frame(buf, offset)))
+}
+
+/// Whether the frame at `offset` carries the type-symbol placement kind
+/// ([`PLACEMENT_KIND_SYMBOL`]).
+fn is_symbol_frame(buf: &[u8], offset: usize) -> bool {
+    read_u64(buf, offset + PLACEMENT_KIND_OFFSET)
+        .is_some_and(|v| (v & 0xffff_ffff) as u32 == PLACEMENT_KIND_SYMBOL)
 }
 
 /// Second-prologue ElementIds for a whole file, keyed by partition stream
@@ -1061,7 +1100,12 @@ pub fn compute_second_prologue_ids(rf: &mut RevitFile) -> SecondPrologueIds {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let assigned = assign_second_prologue_ids(inflated.bytes(), &marker, &declared);
+        let assigned = assign_second_prologue_ids_with(
+            inflated.bytes(),
+            &marker,
+            &declared,
+            version >= SECOND_PROLOGUE_SYMBOLS_FROM,
+        );
         if !assigned.is_empty() {
             out.insert(stream, assigned);
         }
