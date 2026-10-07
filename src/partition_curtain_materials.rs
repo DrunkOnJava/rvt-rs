@@ -6,7 +6,9 @@
 //! from the object's start: on every such object of Autodesk's 2024, 2025 and
 //! 2026 sample projects (353 of 353 on each `rac_advanced`, 66 of 66 on
 //! `rac_basic`, 1 of 1 on `rst_basic`) and of RE1 Architecture (10 of 10,
-//! Revit 2025, "Aluminum 2" as Revit's export names it). Revit 2027 moved it.
+//! Revit 2025, "Aluminum 2" as Revit's export names it). Revit 2027 keeps it
+//! there: once 2027's material names are read, each of the 353 types of the
+//! 2027 `rac_advanced` holds at +135 the material its 2026 copy does (RE-177).
 //! A panel type, `SysPanelFamSym`, holds a tag at +135 and its material's
 //! ElementId right after it, at +139: RE1's one panel type, whose material is
 //! the "Glass" of Revit's export, as a material followed a tag on Snowdon
@@ -24,7 +26,7 @@ const MATERIAL_AT: [(&str, usize); 2] = [("SysMullionFamSym", 135), ("SysPanelFa
 /// Revit releases whose mullion and panel types hold their material at +135
 /// and +139.
 pub fn supports_revit_version(revit_version: u32) -> bool {
-    (2024..=2026).contains(&revit_version)
+    (2024..=2027).contains(&revit_version)
 }
 
 /// Each mullion and panel type's material, by the type's ElementId: the

@@ -63,14 +63,14 @@ use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases these layouts are measured on.
-pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Releases a wall's location line (RE-49's bounded line) is read on. On
 /// 2025 it is measured by the same house saved in 2024 and 2025, whose 50
 /// walls read the same line, orientation and layers from both (RE-55); on
 /// 2023 by the walls of two projects, whose lines are Revit's axes before
 /// joins (RE-114).
-pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025, 2026];
+pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025, 2026, 2027];
 
 /// Each wall's location line, by ElementId, on a release in
 /// [`WALL_LINE_SUPPORTED_REVIT_VERSIONS`]; empty elsewhere.
@@ -138,7 +138,9 @@ pub fn layer_layout(revit_version: u32) -> Option<LayerLayout> {
         }),
         // Revit 2026 adds a `u32` after the function, repeating it, so a
         // record is 41 bytes; the fields read keep their offsets (RE-124).
-        2026 => Some(LayerLayout {
+        // Revit 2027 writes the same records: Autodesk's 2026 and 2027
+        // `rac_basic` hold byte-identical layer lists (RE-177).
+        2026 | 2027 => Some(LayerLayout {
             record_len: LAYER_RECORD_LEN + 4,
             function_at: 24,
             material_at: 8,
@@ -169,6 +171,7 @@ pub fn layer_frame_tag(revit_version: u32) -> Option<[u8; 2]> {
         2024 => Some([0xa6, 0x10]),
         2025 => Some([0x0e, 0x11]),
         2026 => Some([0x65, 0x11]),
+        2027 => Some([0xab, 0x11]),
         _ => None,
     }
 }
@@ -731,7 +734,7 @@ pub fn scan_wall_type_face_angles(
 pub fn wall_join_count_offset(revit_version: u32) -> Option<usize> {
     match revit_version {
         2024 => Some(12),
-        2025 | 2026 => Some(16),
+        2025..=2027 => Some(16),
         _ => None,
     }
 }

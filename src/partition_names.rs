@@ -291,6 +291,11 @@ pub const ELEMENT_DATA_HEADER_2025: [u8; 10] =
 pub const ELEMENT_DATA_HEADER_2026: [u8; 10] =
     [0xff, 0xff, 0xff, 0xff, 0xfd, 0x02, 0x01, 0x00, 0x00, 0x00];
 
+/// [`ELEMENT_DATA_HEADER`] on Revit 2027: `0x0310`, `CellList`'s tag in the
+/// 2027 schema (RE-177).
+pub const ELEMENT_DATA_HEADER_2027: [u8; 10] =
+    [0xff, 0xff, 0xff, 0xff, 0x10, 0x03, 0x01, 0x00, 0x00, 0x00];
+
 /// The element-data header of `revit_version`, or `None` where it is not
 /// measured (fail closed).
 pub fn element_data_header(revit_version: u32) -> Option<[u8; 10]> {
@@ -298,6 +303,7 @@ pub fn element_data_header(revit_version: u32) -> Option<[u8; 10]> {
         2024 => Some(ELEMENT_DATA_HEADER),
         2025 => Some(ELEMENT_DATA_HEADER_2025),
         2026 => Some(ELEMENT_DATA_HEADER_2026),
+        2027 => Some(ELEMENT_DATA_HEADER_2027),
         _ => None,
     }
 }
@@ -511,10 +517,18 @@ pub const MEP_CURVE_TYPE_ID_REPEAT: usize = 56;
 /// (RE-130); the UTF-16 name follows it.
 pub const MEP_CURVE_TYPE_NAME_OFFSET: usize = 306;
 
+/// The `u32 0` right before a pipe or duct type's name length (RE-177): on
+/// all six of RE1 Plumbing's and Mechanical's type names it is zero, and on
+/// the one place in Autodesk's 2027 `rme_basic` where an element's
+/// reference lists repeat an id 56 bytes apart and four UTF-16 units follow
+/// at [`MEP_CURVE_TYPE_NAME_OFFSET`], it is not.
+pub const MEP_CURVE_TYPE_NAME_GUARD: [u8; 4] = [0; 4];
+
 /// For each id in `wanted`, the pipe or duct type name stored after it
 /// (RE-130): the ElementId, the same ElementId again
 /// [`MEP_CURVE_TYPE_ID_REPEAT`] bytes on, and at
-/// [`MEP_CURVE_TYPE_NAME_OFFSET`] a `u32 n` and `n` UTF-16 units. These
+/// [`MEP_CURVE_TYPE_NAME_OFFSET`], after [`MEP_CURVE_TYPE_NAME_GUARD`], a
+/// `u32 n` and `n` UTF-16 units. These
 /// types have no name entry. On RE1 Mechanical and Plumbing (Revit 2025)
 /// that places all five pipe and duct type names Revit's export gives. An
 /// id whose occurrences give different names is dropped.
@@ -536,6 +550,12 @@ pub fn find_mep_curve_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap
         }
         let id = value as u32;
         if !wanted.contains(&id) {
+            continue;
+        }
+        let guard_at = at + MEP_CURVE_TYPE_NAME_OFFSET - MEP_CURVE_TYPE_NAME_GUARD.len();
+        if buf.get(guard_at..guard_at + MEP_CURVE_TYPE_NAME_GUARD.len())
+            != Some(&MEP_CURVE_TYPE_NAME_GUARD[..])
+        {
             continue;
         }
         let Some(units) = read_u32(buf, at + MEP_CURVE_TYPE_NAME_OFFSET)

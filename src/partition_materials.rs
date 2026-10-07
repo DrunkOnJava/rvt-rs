@@ -35,7 +35,7 @@ use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases these layouts are measured on.
-pub const MATERIALS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+pub const MATERIALS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Offset past a material's ElementId of its object's class tag.
 pub const MATERIAL_TAG_OFFSET: usize = 0x47;
@@ -50,6 +50,7 @@ pub fn material_object_tag(revit_version: u32) -> Option<[u8; 2]> {
         2024 => Some([0x28, 0x0a]),
         2025 => Some([0x6b, 0x0a]),
         2026 => Some([0x9c, 0x0a]),
+        2027 => Some([0xcc, 0x0a]),
         _ => None,
     }
 }
@@ -218,6 +219,7 @@ pub fn material_name_frame_tag(revit_version: u32) -> Option<[u8; 2]> {
         2024 => Some([0x49, 0x01]),
         2025 => Some([0x5c, 0x01]),
         2026 => Some([0x64, 0x01]),
+        2027 => Some([0x68, 0x01]),
         _ => None,
     }
 }
@@ -258,6 +260,7 @@ pub fn material_name_end_tag(revit_version: u32) -> Option<[u8; 2]> {
         2024 => Some([0x17, 0x0c]),
         2025 => Some([0x6b, 0x0c]),
         2026 => Some([0xac, 0x0c]),
+        2027 => Some([0xe0, 0x0c]),
         _ => None,
     }
 }
