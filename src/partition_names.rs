@@ -61,7 +61,19 @@ pub const NAME_MAX_UNITS_2023: usize = 128;
 /// Revit 2023 name entries (RE-109): `01 00 00 00 · u32 ElementId · u32 n
 /// · UTF-16 × n`, with no category after the name as 2024 writes one. Only
 /// a name of printable characters counts: the same shape also frames a
-/// lone `U+FFFF`. The ElementIds of `declared` with exactly one such name.
+/// lone `U+FFFF`. Nor does a [`lone_non_ascii`] one. The ElementIds of
+/// `declared` with exactly one such name.
+/// Whether `name` is one character outside ASCII. In 32-bit data a list of
+/// one ElementId, `u32 1 · u32 id`, reads as a one-unit name, the id's low
+/// half: on Autodesk's 2019 `rac_basic` a `U+FDCE` follows type 754016
+/// three times, so that type had two names and so none. A name entry
+/// (`name_entries_2023`) that is one such character is not taken; a
+/// one-letter ASCII name, such as a grid's, is (RE-178).
+pub fn lone_non_ascii(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!((chars.next(), chars.next()), (Some(c), None) if !c.is_ascii())
+}
+
 pub fn name_entries_2023(rf: &mut RevitFile, declared: &BTreeSet<u32>) -> BTreeMap<u32, String> {
     let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
@@ -90,7 +102,7 @@ pub fn name_entries_2023(rf: &mut RevitFile, declared: &BTreeSet<u32>) -> BTreeM
             let printable = name.chars().all(|c| {
                 !c.is_control() && !('\u{e000}'..='\u{f8ff}').contains(&c) && c < '\u{fff0}'
             });
-            if !printable {
+            if !printable || lone_non_ascii(&name) {
                 continue;
             }
             names
@@ -291,6 +303,11 @@ pub const ELEMENT_DATA_HEADER_2025: [u8; 10] =
 pub const ELEMENT_DATA_HEADER_2026: [u8; 10] =
     [0xff, 0xff, 0xff, 0xff, 0xfd, 0x02, 0x01, 0x00, 0x00, 0x00];
 
+/// [`ELEMENT_DATA_HEADER`] on Revit 2027: `0x0310`, `CellList`'s tag in the
+/// 2027 schema (RE-177).
+pub const ELEMENT_DATA_HEADER_2027: [u8; 10] =
+    [0xff, 0xff, 0xff, 0xff, 0x10, 0x03, 0x01, 0x00, 0x00, 0x00];
+
 /// The element-data header of `revit_version`, or `None` where it is not
 /// measured (fail closed).
 pub fn element_data_header(revit_version: u32) -> Option<[u8; 10]> {
@@ -298,6 +315,7 @@ pub fn element_data_header(revit_version: u32) -> Option<[u8; 10]> {
         2024 => Some(ELEMENT_DATA_HEADER),
         2025 => Some(ELEMENT_DATA_HEADER_2025),
         2026 => Some(ELEMENT_DATA_HEADER_2026),
+        2027 => Some(ELEMENT_DATA_HEADER_2027),
         _ => None,
     }
 }
@@ -355,14 +373,24 @@ impl ElementDataLayout {
     }
 }
 
+/// [`ELEMENT_DATA_HEADER_2023`] on a 32-bit release, Revit 2019 to 2023:
+/// the `u16` is the release's `CellList` tag (RE-178). `None` on any other
+/// release.
+pub fn element_data_header_32(revit_version: u32) -> Option<[u8; 10]> {
+    let tag = crate::partition_element_records_2023::schema_tags(revit_version)?.cell_list;
+    let mut header = ELEMENT_DATA_HEADER_2023;
+    header[4..6].copy_from_slice(&tag.to_le_bytes());
+    Some(header)
+}
+
 /// The [`ElementDataLayout`] of `revit_version`, where it is measured.
 pub fn element_data_layout(revit_version: u32) -> Option<ElementDataLayout> {
-    match revit_version {
-        2023 => Some(ElementDataLayout {
-            header: ELEMENT_DATA_HEADER_2023,
+    match element_data_header_32(revit_version) {
+        Some(header) => Some(ElementDataLayout {
+            header,
             wide_id: false,
         }),
-        _ => element_data_header(revit_version).map(|header| ElementDataLayout {
+        None => element_data_header(revit_version).map(|header| ElementDataLayout {
             header,
             wide_id: true,
         }),
@@ -372,7 +400,35 @@ pub fn element_data_layout(revit_version: u32) -> Option<ElementDataLayout> {
 /// [`find_element_data_names`] on Revit 2023 (RE-111): the header is
 /// [`ELEMENT_DATA_HEADER_2023`] and the ElementId a `u32`.
 pub fn find_element_data_names_2023(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap<u32, String> {
-    element_data_names(buf, &ELEMENT_DATA_HEADER_2023, wanted, read_u32)
+    find_element_data_names_32(
+        buf,
+        crate::partition_element_records_2023::REVIT_2023,
+        wanted,
+    )
+}
+
+/// [`find_element_data_names_2023`] on any 32-bit release, Revit 2019 to
+/// 2023, with the release's [`element_data_header_32`]. On 2019 to 2022 a
+/// name of one character is not taken: there it is a one-id list's id read
+/// as a name ([`lone_non_ascii`]), such as the `퉼` (id 250492) that named
+/// ceiling type 247676 of the 2019 to 2022 `rac_advanced`, and the `p` that
+/// made element 86961 ("Working Drawings") of the 2019 to 2022 `rac_basic`
+/// the type of five walls. 2023 keeps RE-111's reading: there the same rule
+/// would give five walls a type their 2024 copies do not confirm (RE-178).
+/// Empty on any other release.
+pub fn find_element_data_names_32(
+    buf: &[u8],
+    revit_version: u32,
+    wanted: &BTreeSet<u32>,
+) -> BTreeMap<u32, String> {
+    let Some(header) = element_data_header_32(revit_version) else {
+        return BTreeMap::new();
+    };
+    let mut names = element_data_names(buf, &header, wanted, read_u32);
+    if revit_version != crate::partition_element_records_2023::REVIT_2023 {
+        names.retain(|_, name| name.chars().nth(1).is_some());
+    }
+    names
 }
 
 fn element_data_names(
@@ -511,10 +567,18 @@ pub const MEP_CURVE_TYPE_ID_REPEAT: usize = 56;
 /// (RE-130); the UTF-16 name follows it.
 pub const MEP_CURVE_TYPE_NAME_OFFSET: usize = 306;
 
+/// The `u32 0` right before a pipe or duct type's name length (RE-177): on
+/// all six of RE1 Plumbing's and Mechanical's type names it is zero, and on
+/// the one place in Autodesk's 2027 `rme_basic` where an element's
+/// reference lists repeat an id 56 bytes apart and four UTF-16 units follow
+/// at [`MEP_CURVE_TYPE_NAME_OFFSET`], it is not.
+pub const MEP_CURVE_TYPE_NAME_GUARD: [u8; 4] = [0; 4];
+
 /// For each id in `wanted`, the pipe or duct type name stored after it
 /// (RE-130): the ElementId, the same ElementId again
 /// [`MEP_CURVE_TYPE_ID_REPEAT`] bytes on, and at
-/// [`MEP_CURVE_TYPE_NAME_OFFSET`] a `u32 n` and `n` UTF-16 units. These
+/// [`MEP_CURVE_TYPE_NAME_OFFSET`], after [`MEP_CURVE_TYPE_NAME_GUARD`], a
+/// `u32 n` and `n` UTF-16 units. These
 /// types have no name entry. On RE1 Mechanical and Plumbing (Revit 2025)
 /// that places all five pipe and duct type names Revit's export gives. An
 /// id whose occurrences give different names is dropped.
@@ -536,6 +600,12 @@ pub fn find_mep_curve_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap
         }
         let id = value as u32;
         if !wanted.contains(&id) {
+            continue;
+        }
+        let guard_at = at + MEP_CURVE_TYPE_NAME_OFFSET - MEP_CURVE_TYPE_NAME_GUARD.len();
+        if buf.get(guard_at..guard_at + MEP_CURVE_TYPE_NAME_GUARD.len())
+            != Some(&MEP_CURVE_TYPE_NAME_GUARD[..])
+        {
             continue;
         }
         let Some(units) = read_u32(buf, at + MEP_CURVE_TYPE_NAME_OFFSET)

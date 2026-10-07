@@ -8,6 +8,33 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2019 to 2022 projects export their elements, as experimental
+  (RE-178).** Revit 2019 to 2022 frame their element records as 2023 does,
+  so the 2023 readers read them, each constant taken as the release's own tag
+  of the same schema class: element data, materials, the category material
+  frame and layers. Revit 2019 and 2020 write a wall's flip with no word
+  before it, and in 32-bit data a one-id list reads as a one-unit name, which
+  is no longer taken. There is no Revit export of a 2019 to 2022 file to
+  measure against; on Autodesk's 2019 to 2022 `rac_basic`, `rst_basic` and
+  `rac_advanced` every ElementId shared with the 2023 copy has its class, and
+  the exports have 2023's building elements, class for class, and pass
+  IfcOpenShell's schema validation. Before, a 2019 to 2022 project exported
+  no building element. Every 2023 to 2027 export is byte-identical.
+
+- **Revit 2027 projects export their elements, as experimental (RE-177).**
+  The partition readers take their 2027 constants from the file's schema, as
+  RE-124 found every release's to be: the record marker, Level elevations,
+  element data, layers and materials. Layer records, wall join lists and
+  mullion type materials keep their 2026 layouts. Revit 2027 writes most
+  element frames without an ElementId at `+0x00`, type symbols among them, so
+  from 2027 a symbol frame takes its enclosing record's id as an instance
+  already does (RE-35). There is no Revit 2027 IFC export to measure against;
+  on Autodesk's five 2027 sample projects the elements equal those of the
+  same models saved by Revit 2026 (20,818 of 20,818 ElementIds, every class
+  the same, 362,456 of 362,640 fields), and the six 2027 exports pass
+  IfcOpenShell's schema validation. Before, a 2027 project exported no
+  building element. Every 2023 to 2026 export is byte-identical.
+
 - **Every join of an MEP model is read from its family instances' connectors
   (B86).** A family instance's native `Connector` objects list the elements
   joined to each connector (RE-171), so the export writes those joins
@@ -274,6 +301,11 @@ All notable changes will be documented here. This project follows
   change when the MSRV does.
 
 ### Fixed
+
+- **A pipe or duct type name needs the `u32 0` before its length (RE-177).**
+  RE-130's scan matched an element's reference lists on Autodesk's 2027
+  `rme_basic` and named 33 pipes `였縿괜쭃`. All six type names of RE1
+  Plumbing and Mechanical carry the zero word; the false match does not.
 
 - **An export without geometry keeps its elements' types and names (B74).**
   `--mode typed-no-geometry` read the record property set, which carries an

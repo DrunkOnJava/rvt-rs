@@ -1,4 +1,5 @@
-//! Revit 2023 partition element records (RE-81, #421).
+//! Revit 2023 partition element records (RE-81, #421), and Revit 2019 to
+//! 2022's, which take the same layout (RE-178).
 //!
 //! A 2023 record sits behind the same marker as 2024 and 2025,
 //! `[tag of Outline][0xFF x 4][tag of ElementParents]` in the file's own
@@ -30,8 +31,63 @@ use crate::partition_element_records::{
 };
 use std::collections::BTreeSet;
 
-/// The release this layout is measured on.
+/// The release this layout is first measured on.
 pub const REVIT_2023: u32 = 2023;
+
+/// The releases whose records take this layout: Revit 2019 to 2023
+/// (RE-178). On Autodesk's 2019, 2020, 2021 and 2022 sample projects every
+/// marker of the file's own schema has a declared `u32` ElementId 52 bytes
+/// before it and the tag of `ElementHeader` 8 bytes after that, as on 2023,
+/// but for 4 to 109 per file, as many as on the file's 2023 copy but on 2021
+/// `rac_advanced` (`examples/probe_re178_revit_2019_2022.rs`).
+pub const REVIT_32BIT_RELEASES: std::ops::RangeInclusive<u32> = 2019..=2023;
+
+/// Whether `revit_version` writes this module's 32-bit records and the
+/// 32-bit name, material, layer and Level frames that go with them.
+pub fn is_32bit_release(revit_version: u32) -> bool {
+    REVIT_32BIT_RELEASES.contains(&revit_version)
+}
+
+/// The schema tags the 32-bit readers match, each the tag of the named
+/// class in the release's own schema. The constants measured on 2023
+/// (RE-111 to RE-116) are 2023's tags of these classes, and 2024's
+/// counterparts are its tags of the same classes (RE-178).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SchemaTags32 {
+    /// `CellList`: opens an element's serialised data (RE-111).
+    pub cell_list: u16,
+    /// `Material`: a material object's class tag (RE-113).
+    pub material: u16,
+    /// `PhysicalParamSet`: ends a material's name (RE-116).
+    pub physical_param_set: u16,
+    /// `PatternHelper`: frames a category's object-styles entry (RE-115).
+    pub pattern_helper: u16,
+    /// `VerticalRegionsStructure`: frames a type's layer count (RE-112).
+    pub vertical_regions_structure: u16,
+}
+
+/// The [`SchemaTags32`] of `revit_version`, read from Autodesk's sample
+/// projects of each release (every file of a release has the same
+/// schema), or `None` outside [`REVIT_32BIT_RELEASES`].
+pub fn schema_tags(revit_version: u32) -> Option<SchemaTags32> {
+    let tags = |cell_list, material, physical_param_set, pattern_helper, vertical_regions| {
+        Some(SchemaTags32 {
+            cell_list,
+            material,
+            physical_param_set,
+            pattern_helper,
+            vertical_regions_structure: vertical_regions,
+        })
+    };
+    match revit_version {
+        2019 => tags(0x0264, 0x0924, 0x0aef, 0x01ca, 0x0f37),
+        2020 => tags(0x026c, 0x094d, 0x0b24, 0x01d0, 0x0f76),
+        2021 => tags(0x027d, 0x094b, 0x0b25, 0x01e1, 0x0f79),
+        2022 => tags(0x028d, 0x09af, 0x0b90, 0x01f0, 0x1003),
+        2023 => tags(0x02c0, 0x09fb, 0x0beb, 0x013f, 0x106f),
+        _ => None,
+    }
+}
 
 /// Bytes from the ElementId to the marker.
 const ID_BEFORE_MARKER: usize = 52;
@@ -65,10 +121,11 @@ pub fn record_marker(rf: &mut RevitFile) -> Option<([u8; 8], u16)> {
     Some((marker, header))
 }
 
-/// Every 2023 element record in the file whose ElementId is declared in
-/// `Global/ElemTable`. Empty for any other release (fail closed).
+/// Every 2019 to 2023 element record in the file whose ElementId is
+/// declared in `Global/ElemTable`. Empty for any other release (fail
+/// closed).
 pub fn scan_records(rf: &mut RevitFile, revit_version: u32) -> Vec<PartitionElementRecord> {
-    if revit_version != REVIT_2023 {
+    if !is_32bit_release(revit_version) {
         return Vec::new();
     }
     let Ok(table) = crate::elem_table::parse_records(rf) else {

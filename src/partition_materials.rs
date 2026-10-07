@@ -35,7 +35,7 @@ use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases these layouts are measured on.
-pub const MATERIALS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+pub const MATERIALS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Offset past a material's ElementId of its object's class tag.
 pub const MATERIAL_TAG_OFFSET: usize = 0x47;
@@ -50,6 +50,7 @@ pub fn material_object_tag(revit_version: u32) -> Option<[u8; 2]> {
         2024 => Some([0x28, 0x0a]),
         2025 => Some([0x6b, 0x0a]),
         2026 => Some([0x9c, 0x0a]),
+        2027 => Some([0xcc, 0x0a]),
         _ => None,
     }
 }
@@ -157,8 +158,8 @@ pub fn scan_material_appearances(
     revit_version: u32,
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, MaterialAppearance>> {
-    if revit_version == 2023 {
-        return Ok(scan_material_appearances_2023(rf, declared));
+    if let Some(tags) = crate::partition_element_records_2023::schema_tags(revit_version) {
+        return Ok(scan_material_appearances_2023(rf, tags.material, declared));
     }
     let Some(tag) = material_object_tag(revit_version) else {
         return Ok(BTreeMap::new());
@@ -218,6 +219,7 @@ pub fn material_name_frame_tag(revit_version: u32) -> Option<[u8; 2]> {
         2024 => Some([0x49, 0x01]),
         2025 => Some([0x5c, 0x01]),
         2026 => Some([0x64, 0x01]),
+        2027 => Some([0x68, 0x01]),
         _ => None,
     }
 }
@@ -258,6 +260,7 @@ pub fn material_name_end_tag(revit_version: u32) -> Option<[u8; 2]> {
         2024 => Some([0x17, 0x0c]),
         2025 => Some([0x6b, 0x0c]),
         2026 => Some([0xac, 0x0c]),
+        2027 => Some([0xe0, 0x0c]),
         _ => None,
     }
 }
@@ -425,15 +428,18 @@ pub fn scan_material_names(
 
 /// Releases a category's material (RE-91) is read on. Measured on Revit
 /// 2024 files and, in [`CATEGORY_MATERIAL_FRAME_2023`]'s layout, on Revit
-/// 2023 (RE-115); RE1's 2025 files hold no entry in either layout.
-pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024];
+/// 2023 (RE-115) and 2019 to 2022 (RE-178); RE1's 2025 files hold no entry
+/// in either layout.
+pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] =
+    &[2019, 2020, 2021, 2022, 2023, 2024];
 
 /// A category's object-styles entry on Revit 2023 (RE-115), after its
 /// `BuiltInCategory` (`i32`): an unset `u32`, a `u32` that is 1 or 2 (the
 /// entry is held twice), `u32 1`, `ff ff ff ff 3f 01`, eight bytes, then
 /// [`CATEGORY_MATERIAL_MARK_2023`] and the material (`u32`, `ff` × 4 when
 /// unset). This frame is the bytes from the unset `u32` to the `3f 01`,
-/// with the 1-or-2 word skipped.
+/// with the 1-or-2 word skipped. `0x013f` is 2023's tag of `PatternHelper`;
+/// 2019 to 2022 write their own (RE-178).
 pub const CATEGORY_MATERIAL_FRAME_2023: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 /// See [`CATEGORY_MATERIAL_FRAME_2023`]: `i32 -3000010`, 26 bytes past the
 /// category, right before the material.
@@ -470,8 +476,8 @@ pub fn scan_category_material(
     if !CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
         return Ok(None);
     }
-    if revit_version == 2023 {
-        return scan_category_material_2023(rf, category);
+    if let Some(tags) = crate::partition_element_records_2023::schema_tags(revit_version) {
+        return scan_category_material_2023(rf, tags.pattern_helper, category);
     }
     let mut pattern = category.to_le_bytes().to_vec();
     pattern.extend_from_slice(&CATEGORY_MATERIAL_FRAME);
@@ -525,6 +531,25 @@ pub fn scan_materials_2023(
     rf: &mut RevitFile,
     declared: &BTreeSet<u32>,
 ) -> (BTreeSet<u32>, BTreeMap<u32, String>) {
+    scan_materials_32(
+        rf,
+        crate::partition_element_records_2023::REVIT_2023,
+        declared,
+    )
+}
+
+/// [`scan_materials_2023`] on any 32-bit release, Revit 2019 to 2023, with
+/// the release's tags of `Material`, `PhysicalParamSet` and `CellList`
+/// (RE-178). Empty on any other release.
+pub fn scan_materials_32(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared: &BTreeSet<u32>,
+) -> (BTreeSet<u32>, BTreeMap<u32, String>) {
+    let Some(tags) = crate::partition_element_records_2023::schema_tags(revit_version) else {
+        return (BTreeSet::new(), BTreeMap::new());
+    };
+    let material_tag = tags.material.to_le_bytes();
     const PREFIX: [u8; 7] = [0, 0, 0, 0xff, 0xff, 0xff, 0xff];
     let mut entry = i32::try_from(NAME_PARAMETER)
         .expect("a 32-bit BuiltInParameter")
@@ -538,7 +563,7 @@ pub fn scan_materials_2023(
             continue;
         };
         let buf = inflated.bytes();
-        for tag_at in memchr::memmem::find_iter(buf, &MATERIAL_TAG_2023) {
+        for tag_at in memchr::memmem::find_iter(buf, &material_tag) {
             let Some(id_at) = tag_at.checked_sub(MATERIAL_TAG_OFFSET_2023) else {
                 continue;
             };
@@ -555,7 +580,7 @@ pub fn scan_materials_2023(
             let end = id_at.saturating_add(NAME_WINDOW).min(buf.len());
             let object = &buf[tag_at + 2..end];
             let name = own_name_field(object)
-                .or_else(|| terminated_name_2023(object))
+                .or_else(|| terminated_name_2023(object, tags.physical_param_set))
                 .or_else(|| {
                     memchr::memmem::find_iter(object, &entry).find_map(|hit| {
                         let n = u32_at(object, hit + entry.len())?;
@@ -588,9 +613,11 @@ pub fn scan_materials_2023(
         .collect();
     for stream in rf.partition_stream_names() {
         if let Ok(inflated) = rf.inflated_partition(&stream) {
-            for (id, name) in
-                crate::partition_names::find_element_data_names_2023(inflated.bytes(), &unnamed)
-            {
+            for (id, name) in crate::partition_names::find_element_data_names_32(
+                inflated.bytes(),
+                revit_version,
+                &unnamed,
+            ) {
                 names.entry(id).or_insert(name);
             }
         }
@@ -611,7 +638,13 @@ pub fn scan_materials_2023(
     (materials, names)
 }
 
-fn scan_category_material_2023(rf: &mut RevitFile, category: i64) -> Result<Option<u32>> {
+fn scan_category_material_2023(
+    rf: &mut RevitFile,
+    pattern_helper: u16,
+    category: i64,
+) -> Result<Option<u32>> {
+    let mut frame = [0xff, 0xff, 0xff, 0xff, 0, 0];
+    frame[4..].copy_from_slice(&pattern_helper.to_le_bytes());
     let Ok(category) = i32::try_from(category) else {
         return Ok(None);
     };
@@ -628,7 +661,7 @@ fn scan_category_material_2023(rf: &mut RevitFile, category: i64) -> Result<Opti
             let word = entry(8, 4).map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")));
             if !matches!(word, Some(1 | 2))
                 || entry(12, 4) != Some(&[1, 0, 0, 0][..])
-                || entry(16, 6) != Some(&[0xff, 0xff, 0xff, 0xff, 0x3f, 0x01][..])
+                || entry(16, 6) != Some(&frame[..])
                 || entry(30, 4) != Some(&CATEGORY_MATERIAL_MARK_2023[..])
             {
                 continue;
@@ -650,16 +683,18 @@ fn scan_category_material_2023(rf: &mut RevitFile, category: i64) -> Result<Opti
 /// [`frame_at_2023`] frame.
 fn scan_material_appearances_2023(
     rf: &mut RevitFile,
+    material: u16,
     declared: &BTreeSet<u32>,
 ) -> BTreeMap<u32, MaterialAppearance> {
     const PREFIX: [u8; 7] = [0, 0, 0, 0xff, 0xff, 0xff, 0xff];
+    let material_tag = material.to_le_bytes();
     let mut found: BTreeMap<u32, Option<MaterialAppearance>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        for tag_at in memchr::memmem::find_iter(buf, &MATERIAL_TAG_2023) {
+        for tag_at in memchr::memmem::find_iter(buf, &material_tag) {
             let Some(id_at) = tag_at.checked_sub(MATERIAL_TAG_OFFSET_2023) else {
                 continue;
             };
@@ -698,10 +733,13 @@ fn scan_material_appearances_2023(
 }
 
 /// The name `u32 n · UTF-16 × n` ending right before the first `ff ff ff ff
-/// eb 0b` in `object` (RE-116), where exactly one length fits.
-fn terminated_name_2023(object: &[u8]) -> Option<String> {
-    const TERMINATOR: [u8; 6] = [0xff, 0xff, 0xff, 0xff, 0xeb, 0x0b];
-    let end = memchr::memmem::find(object, &TERMINATOR)?;
+/// eb 0b` in `object` (RE-116), where exactly one length fits. `0x0beb` is
+/// 2023's tag of `PhysicalParamSet`, passed as `physical_param_set`
+/// (RE-178).
+fn terminated_name_2023(object: &[u8], physical_param_set: u16) -> Option<String> {
+    let mut terminator = [0xff, 0xff, 0xff, 0xff, 0, 0];
+    terminator[4..].copy_from_slice(&physical_param_set.to_le_bytes());
+    let end = memchr::memmem::find(object, &terminator)?;
     let mut names = (1..=256u32).filter_map(|n| {
         let at = end.checked_sub(4 + 2 * n as usize)?;
         (u32_at(object, at)? == n)

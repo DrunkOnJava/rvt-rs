@@ -3170,12 +3170,15 @@ pub fn build_export_diagnostics_with_limits(
     }
     if exported.building_elements == 0 {
         warnings.push("No building elements were exported; output is scaffold-only.".into());
-    } else if bfi.as_ref().map(|b| b.version)
-        == Some(crate::partition_element_records_2023::REVIT_2023)
+    } else if let Some(version) = bfi
+        .as_ref()
+        .map(|b| b.version)
+        .filter(|&version| crate::partition_element_records_2023::is_32bit_release(version))
     {
-        // RE-81, RE-102, RE-107, RE-109, RE-111 to RE-115: what a 2023 export carries, and what it does not.
-        warnings.push(
-            "Revit 2023: elements come from their records with their ElementId, category and \
+        // RE-81, RE-102, RE-107, RE-109, RE-111 to RE-115, RE-178: what a
+        // 2019 to 2023 export carries, and what it does not.
+        warnings.push(format!(
+            "Revit {version}: elements come from their records with their ElementId, category and \
              bounding box, doors and windows with their host wall, rooms with their outline, \
              and, where its Levels are read, each element on the storey of the Level its \
              record names; family instances, walls, floors and roofs carry their family and \
@@ -3183,10 +3186,9 @@ pub fn build_export_diagnostics_with_limits(
              material layer sets where their materials are named, a layer that takes its \
              category's material taking the object styles' one, and walls keep their record box. \
              Wall joins and profiles, design options, parameters and \
-             \"Export to IFC As\" overrides are not read for 2023, and components nested in \
-             doors and windows are left out."
-                .into(),
-        );
+             \"Export to IFC As\" overrides are not read for {version}, and components \
+             nested in doors and windows are left out."
+        ));
     }
     append_geometry_gap_warnings(&mut warnings, &exported, &geometry_gaps);
     if model.units.is_empty() {
