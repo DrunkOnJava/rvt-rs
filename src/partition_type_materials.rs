@@ -346,7 +346,7 @@ pub fn type_material_names_2023(rf: &mut RevitFile) -> BTreeMap<u32, Vec<String>
     type_material_names_32(rf, crate::partition_element_records_2023::REVIT_2023)
 }
 
-/// [`type_material_names_2023`] on any 32-bit release, Revit 2019 to 2023,
+/// [`type_material_names_2023`] on any 32-bit release, Revit 2014 to 2023,
 /// whose materials are [`crate::partition_materials::scan_materials_32`]'s
 /// (RE-178). Empty on any other release.
 pub fn type_material_names_32(

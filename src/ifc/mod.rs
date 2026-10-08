@@ -3176,7 +3176,7 @@ pub fn build_export_diagnostics_with_limits(
         .filter(|&version| crate::partition_element_records_2023::is_32bit_release(version))
     {
         // RE-81, RE-102, RE-107, RE-109, RE-111 to RE-115, RE-178: what a
-        // 2019 to 2023 export carries, and what it does not.
+        // 2014 to 2023 export carries, and what it does not (RE-179).
         warnings.push(format!(
             "Revit {version}: elements come from their records with their ElementId, category and \
              bounding box, doors and windows with their host wall, rooms with their outline, \

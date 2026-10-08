@@ -153,6 +153,15 @@
       "user_impact": "Revit 2027 projects export typed elements under Revit's ElementIds, on Revit's storeys, with rooms named and doors and windows in their walls; checked against the same models saved by Revit 2026, not against a Revit 2027 export."
     },
     {
+      "id": "element-records-revit-2014-2018",
+      "area": "elements",
+      "name": "Revit 2014 to 2018 partition element records, read in the 32-bit layout of Revit 2019 to 2023, with storeys, hosts, type names, layer sets and materials",
+      "status": "experimental",
+      "evidence": "partition_element_records_2023::REVIT_32BIT_RELEASES and schema_tags; partition_level_records::LEVEL_PLACEMENT_KIND_2014; partition_compound_structure::wall_orientation_has_word; partition_materials::pattern_slots_32; partition_names::find_element_data_names_32; examples/probe_re179_revit_2014_2018.rs; reports/element-framing/RE-179-revit-2014-2018-element-records.md",
+      "notes": "Revit 2014 to 2018 frame their element records as 2019 does (RE-178): on Autodesk's 2016 to 2018 sample projects every record marker but 4 to 109 per file (as many as on the 2019 copy, but 15 on 2016 rst_basic) has a declared u32 ElementId 52 bytes before it, and so do all but 0 to 68 per file of three 2015 templates and one 2014 project. Each release takes its own tags of the five schema classes RE-178 lists. Three layouts differ from 2019's: a Level record's placement kind is 0xffffef6f, a wall's flip follows its location line with no word between (as on 2019 and 2020), and a material's shading frame holds two pattern slots, not four. On 2014 to 2018 a type's element-data name is looked for in its own data only and a one-unit entry is passed over. There is no Revit export of a 2014 to 2018 file: the oracle is the same model saved by Revit 2019. On rac_basic, rst_basic and rac_advanced of 2016 to 2018 every ElementId shared with the 2019 copy has its class; 2018 rac_basic and rac_advanced agree on every field, and the other differences are in the files' own bytes (boxes, reference lists, 2016's shading colours, 2016 rst_basic's renamed families). No 2014 or 2015 sample project is published. Not read, as on 2019 to 2023: design options, layered joins, IFC export overrides, parameters.",
+      "user_impact": "Revit 2014 to 2018 projects export typed elements under Revit's ElementIds, on Revit's storeys, with doors and windows in their walls and named types and layer sets; checked against the same models saved by Revit 2019, not against Revit's export."
+    },
+    {
       "id": "element-records-revit-2019-2022",
       "area": "elements",
       "name": "Revit 2019 to 2022 partition element records, read in Revit 2023's 32-bit layout, with storeys, hosts, type names, layer sets and materials",

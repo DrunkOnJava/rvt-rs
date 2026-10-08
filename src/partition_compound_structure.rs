@@ -70,9 +70,12 @@ pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 20
 /// walls read the same line, orientation and layers from both (RE-55); on
 /// 2023 by the walls of two projects, whose lines are Revit's axes before
 /// joins (RE-114); on 2019 to 2022 by Autodesk's sample projects, whose
-/// walls read the line their 2023 copies do (RE-178).
-pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] =
-    &[2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027];
+/// walls read the line their 2023 copies do (RE-178), and on 2016 to 2018 by
+/// the same projects, whose walls read the line their 2019 copies do
+/// (RE-179).
+pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
+    2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
+];
 
 /// Each wall's location line, by ElementId, on a release in
 /// [`WALL_LINE_SUPPORTED_REVIT_VERSIONS`]; empty elsewhere.
@@ -124,8 +127,8 @@ pub struct LayerLayout {
 /// The layer record layout of `revit_version`, where it is measured.
 pub fn layer_layout(revit_version: u32) -> Option<LayerLayout> {
     match revit_version {
-        // Revit 2019 to 2022 write 2023's records (RE-178).
-        2019..=2023 => Some(LayerLayout {
+        // Revit 2014 to 2022 write 2023's records (RE-178, RE-179).
+        2014..=2023 => Some(LayerLayout {
             record_len: 29,
             function_at: 8,
             material_at: 16,
@@ -308,7 +311,7 @@ pub fn scan_type_layers(
     materials: &BTreeSet<u32>,
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, Vec<CompoundLayer>>> {
-    // Revit 2019 to 2023's data header frames a `u32` id (RE-111, RE-178).
+    // Revit 2014 to 2023's data header frames a `u32` id (RE-111, RE-178).
     let header =
         crate::partition_names::element_data_layout(revit_version).map(|layout| layout.header);
     let (Some(header), Some(tag), Some(layout)) = (
@@ -372,8 +375,8 @@ pub struct WallOrientation {
     /// wall's centreline whatever it is (RE-54).
     pub location_line: u32,
     /// A word of 0 to 2. Every Snowdon Towers wall whose body is centred on
-    /// its line at its type's thickness carries 1 (RE-54). Revit 2019 and
-    /// 2020 do not write it, and it reads 0 there (RE-178).
+    /// its line at its type's thickness carries 1 (RE-54). Revit 2014 to
+    /// 2020 do not write it, and it reads 0 there (RE-178, RE-179).
     pub word: u32,
     /// Set puts the wall's exterior to the right of its location line's
     /// direction; clear, to the left.
@@ -395,9 +398,11 @@ pub fn wall_orientation(data: &[u8]) -> Option<WallOrientation> {
 /// [`WallOrientation::word`]. Revit 2019 and 2020 write the flip right
 /// after the location line: Autodesk's `rst_basic` wall 627064 holds `03 00
 /// 00 00 · 00 01 ff ff` past the anchor on 2019 and 2020 and `03 00 00 00 ·
-/// 01 00 00 00 · 00 01 ff ff` on 2021 to 2023 (RE-178).
+/// 01 00 00 00 · 00 01 ff ff` on 2021 to 2023 (RE-178). Revit 2014 to 2018
+/// write it as 2019 does: `rac_basic` of 2017 holds its 2019 copy's bytes
+/// past every wall's anchor (RE-179).
 pub fn wall_orientation_has_word(revit_version: u32) -> bool {
-    !matches!(revit_version, 2019 | 2020)
+    !(2014..=2020).contains(&revit_version)
 }
 
 /// [`wall_orientation`], for data with or without the word

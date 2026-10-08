@@ -338,7 +338,7 @@ pub fn find_element_data_names(
     header: &[u8; 10],
     wanted: &BTreeSet<u32>,
 ) -> BTreeMap<u32, String> {
-    element_data_names(buf, header, wanted, |buf, at| {
+    element_data_names(buf, header, wanted, false, |buf, at| {
         read_u64(buf, at).and_then(|v| u32::try_from(v).ok())
     })
 }
@@ -373,7 +373,7 @@ impl ElementDataLayout {
     }
 }
 
-/// [`ELEMENT_DATA_HEADER_2023`] on a 32-bit release, Revit 2019 to 2023:
+/// [`ELEMENT_DATA_HEADER_2023`] on a 32-bit release, Revit 2014 to 2023:
 /// the `u16` is the release's `CellList` tag (RE-178). `None` on any other
 /// release.
 pub fn element_data_header_32(revit_version: u32) -> Option<[u8; 10]> {
@@ -407,15 +407,22 @@ pub fn find_element_data_names_2023(buf: &[u8], wanted: &BTreeSet<u32>) -> BTree
     )
 }
 
-/// [`find_element_data_names_2023`] on any 32-bit release, Revit 2019 to
-/// 2023, with the release's [`element_data_header_32`]. On 2019 to 2022 a
+/// [`find_element_data_names_2023`] on any 32-bit release, Revit 2014 to
+/// 2023, with the release's [`element_data_header_32`]. On 2014 to 2022 a
 /// name of one character is not taken: there it is a one-id list's id read
 /// as a name ([`lone_non_ascii`]), such as the `퉼` (id 250492) that named
 /// ceiling type 247676 of the 2019 to 2022 `rac_advanced`, and the `p` that
 /// made element 86961 ("Working Drawings") of the 2019 to 2022 `rac_basic`
 /// the type of five walls. 2023 keeps RE-111's reading: there the same rule
 /// would give five walls a type their 2024 copies do not confirm (RE-178).
-/// Empty on any other release.
+/// On Revit 2014 to 2018 the name is looked for in the element's own data
+/// only, up to the next element's data header, and a one-unit entry is
+/// passed over rather than taken. Level 311 of the 2018 `rac_basic` has no
+/// framed name of its own, and the first one after its header is wall type
+/// 397's, `Exterior - Brick on Mtl. Stud`, which made nine walls' type
+/// ambiguous; roof type 507024 of the 2016 `rac_basic` frames `兎` (a one-id
+/// list) before its name, `SG Metal Panels roof` (RE-179). Empty on any
+/// other release.
 pub fn find_element_data_names_32(
     buf: &[u8],
     revit_version: u32,
@@ -424,7 +431,8 @@ pub fn find_element_data_names_32(
     let Some(header) = element_data_header_32(revit_version) else {
         return BTreeMap::new();
     };
-    let mut names = element_data_names(buf, &header, wanted, read_u32);
+    let own_data_only = revit_version < 2019;
+    let mut names = element_data_names(buf, &header, wanted, own_data_only, read_u32);
     if revit_version != crate::partition_element_records_2023::REVIT_2023 {
         names.retain(|_, name| name.chars().nth(1).is_some());
     }
@@ -435,6 +443,7 @@ fn element_data_names(
     buf: &[u8],
     header: &[u8; 10],
     wanted: &BTreeSet<u32>,
+    own_data_only: bool,
     read_id: impl Fn(&[u8], usize) -> Option<u32>,
 ) -> BTreeMap<u32, String> {
     let mut found: BTreeMap<u32, Option<String>> = BTreeMap::new();
@@ -446,7 +455,7 @@ fn element_data_names(
         if !wanted.contains(&id) {
             continue;
         }
-        let Some(name) = first_framed_name(buf, id_at + 8, header) else {
+        let Some(name) = first_framed_name(buf, id_at + 8, header, own_data_only) else {
             continue;
         };
         match found.get_mut(&id) {
@@ -804,8 +813,15 @@ fn name_ending_at(buf: &[u8], end: usize) -> Option<String> {
 }
 
 /// The first `ff ff ff ff · u16 tag · u32 n · n UTF-16 units` string that
-/// starts in `buf[start..start + ELEMENT_DATA_NAME_WINDOW]`.
-fn first_framed_name(buf: &[u8], start: usize, header: &[u8; 10]) -> Option<String> {
+/// starts in `buf[start..start + ELEMENT_DATA_NAME_WINDOW]`. With
+/// `own_data_only`, it starts before the next element's data header and has
+/// more than one unit.
+fn first_framed_name(
+    buf: &[u8],
+    start: usize,
+    header: &[u8; 10],
+    own_data_only: bool,
+) -> Option<String> {
     let end = start
         .saturating_add(ELEMENT_DATA_NAME_WINDOW)
         .min(buf.len());
@@ -817,13 +833,19 @@ fn first_framed_name(buf: &[u8], start: usize, header: &[u8; 10]) -> Option<Stri
         };
         // Another element's data header frames its ElementId, not a name
         // (RE-111).
-        if tag == [0xff, 0xff] || buf.get(at..at + header.len()) == Some(&header[..]) {
+        if buf.get(at..at + header.len()) == Some(&header[..]) {
+            if own_data_only {
+                return None;
+            }
+            continue;
+        }
+        if tag == [0xff, 0xff] {
             continue;
         }
         let Some(units) = read_u32(buf, at + 6).map(|n| n as usize) else {
             continue;
         };
-        if !(1..=NAME_MAX_UNITS).contains(&units) {
+        if !(1..=NAME_MAX_UNITS).contains(&units) || (own_data_only && units == 1) {
             continue;
         }
         let Some(bytes) = buf.get(at + 10..at + 10 + units * 2) else {

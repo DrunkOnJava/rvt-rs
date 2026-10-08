@@ -145,7 +145,7 @@ pub fn recover_partition_schema_mvp(
         out.rect_openings = rect_openings_from_partitions(rf, revit_version, limits)?;
     }
 
-    // --- Revit 2019 to 2023 element records (RE-81, RE-178, #421):
+    // --- Revit 2014 to 2023 element records (RE-81, RE-178, RE-179, #421):
     // identity, category and box only; nothing else 2024 decodes on top of
     // records is read. ---
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {

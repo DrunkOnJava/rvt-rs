@@ -8,6 +8,21 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2014 to 2018 projects export their elements, as experimental
+  (RE-179).** Revit 2014 to 2018 frame their element records as 2019 does,
+  so the 32-bit readers read them with each release's own schema tags. Three
+  layouts differ: a Level record's placement kind, a wall's flip, which
+  follows its location line with no word as on 2019 and 2020, and a
+  material's shading frame, which holds two pattern slots where 2019 holds
+  four. A type's element-data name is looked for in its own data only, past
+  any one-unit entry. There is no Revit export of a 2014 to 2018 file to
+  measure against; on Autodesk's 2016 to 2018 `rac_basic`, `rst_basic` and
+  `rac_advanced` every ElementId shared with the 2019 copy has its class,
+  2018 `rac_basic` and `rac_advanced` agree with it on every field, and the
+  exports have the 2019 copies' building elements, class for class, and pass
+  IfcOpenShell's schema validation. Before, a 2014 to 2018 project exported
+  no building element. Every 2019 to 2027 export is byte-identical.
+
 - **Revit 2019 to 2022 projects export their elements, as experimental
   (RE-178).** Revit 2019 to 2022 frame their element records as 2023 does,
   so the 2023 readers read them, each constant taken as the release's own tag

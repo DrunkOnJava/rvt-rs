@@ -114,24 +114,27 @@ fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
 /// where 2024 keeps four bare COLORREFs, then the shading colour and the
 /// shininess. A material that opens its own data frames it with `ff ff ff
 /// ff 9b 0b`; a family's own material does not, so the frame is known by
-/// its 0.5 and its slots instead.
-fn frame_at_2023(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
-    let transparency = f32_at(buf, at.checked_sub(40)?)?;
-    let second = f32_at(buf, at - 36)?;
+/// its 0.5 and its slots instead. Revit 2014 to 2018 write two slots, not
+/// four ([`pattern_slots_32`]).
+fn frame_at_2023(buf: &[u8], at: usize, slots: usize) -> Option<MaterialAppearance> {
+    let slots_at = at.checked_sub(8 * slots)?;
+    let transparency = f32_at(buf, slots_at.checked_sub(8)?)?;
+    let second = f32_at(buf, slots_at - 4)?;
     let plausible = |v: f32| (0.0..=1.0).contains(&v) && (v == 0.0 || v.is_normal());
     if !plausible(transparency) || second != 0.5 {
         return None;
     }
-    for slot in [at - 32, at - 24, at - 16, at - 8] {
+    for slot in (slots_at..at).step_by(8) {
         let id = u32_at(buf, slot)?;
         if id != u32::MAX && id >= 0x0100_0000 {
             return None;
         }
-    }
-    for high in [at - 25, at - 17, at - 9, at - 1, at + 3] {
-        if *buf.get(high)? != 0 {
+        if *buf.get(slot + 7)? != 0 {
             return None;
         }
+    }
+    if *buf.get(at + 3)? != 0 {
+        return None;
     }
     let shininess = u32::from_le_bytes(buf.get(at + 4..at + 8)?.try_into().ok()?);
     Some(MaterialAppearance {
@@ -139,6 +142,15 @@ fn frame_at_2023(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
         transparency,
         shininess,
     })
+}
+
+/// The pattern slots of a 32-bit release's shading frame: four, the
+/// foreground and background of the surface and cut patterns, from Revit
+/// 2019 on, and two on Revit 2014 to 2018, which have one pattern of each.
+/// Autodesk's 2017 `rac_basic` frames each material of its 2019 copy with
+/// the same bytes, but for the two slots it lacks (RE-179).
+pub fn pattern_slots_32(revit_version: u32) -> usize {
+    if revit_version < 2019 { 2 } else { 4 }
 }
 
 /// The first shading frame after the material ElementId at `id_at`.
@@ -159,7 +171,12 @@ pub fn scan_material_appearances(
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, MaterialAppearance>> {
     if let Some(tags) = crate::partition_element_records_2023::schema_tags(revit_version) {
-        return Ok(scan_material_appearances_2023(rf, tags.material, declared));
+        return Ok(scan_material_appearances_2023(
+            rf,
+            tags.material,
+            pattern_slots_32(revit_version),
+            declared,
+        ));
     }
     let Some(tag) = material_object_tag(revit_version) else {
         return Ok(BTreeMap::new());
@@ -428,10 +445,11 @@ pub fn scan_material_names(
 
 /// Releases a category's material (RE-91) is read on. Measured on Revit
 /// 2024 files and, in [`CATEGORY_MATERIAL_FRAME_2023`]'s layout, on Revit
-/// 2023 (RE-115) and 2019 to 2022 (RE-178); RE1's 2025 files hold no entry
+/// 2023 (RE-115) and 2014 to 2022 (RE-178, RE-179); RE1's 2025 files hold no entry
 /// in either layout.
-pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] =
-    &[2019, 2020, 2021, 2022, 2023, 2024];
+pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
+    2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024,
+];
 
 /// A category's object-styles entry on Revit 2023 (RE-115), after its
 /// `BuiltInCategory` (`i32`): an unset `u32`, a `u32` that is 1 or 2 (the
@@ -439,7 +457,7 @@ pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] =
 /// [`CATEGORY_MATERIAL_MARK_2023`] and the material (`u32`, `ff` × 4 when
 /// unset). This frame is the bytes from the unset `u32` to the `3f 01`,
 /// with the 1-or-2 word skipped. `0x013f` is 2023's tag of `PatternHelper`;
-/// 2019 to 2022 write their own (RE-178).
+/// 2014 to 2022 write their own (RE-178).
 pub const CATEGORY_MATERIAL_FRAME_2023: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 /// See [`CATEGORY_MATERIAL_FRAME_2023`]: `i32 -3000010`, 26 bytes past the
 /// category, right before the material.
@@ -538,7 +556,7 @@ pub fn scan_materials_2023(
     )
 }
 
-/// [`scan_materials_2023`] on any 32-bit release, Revit 2019 to 2023, with
+/// [`scan_materials_2023`] on any 32-bit release, Revit 2014 to 2023, with
 /// the release's tags of `Material`, `PhysicalParamSet` and `CellList`
 /// (RE-178). Empty on any other release.
 pub fn scan_materials_32(
@@ -684,6 +702,7 @@ fn scan_category_material_2023(
 fn scan_material_appearances_2023(
     rf: &mut RevitFile,
     material: u16,
+    slots: usize,
     declared: &BTreeSet<u32>,
 ) -> BTreeMap<u32, MaterialAppearance> {
     const PREFIX: [u8; 7] = [0, 0, 0, 0xff, 0xff, 0xff, 0xff];
@@ -710,7 +729,8 @@ fn scan_material_appearances_2023(
             let to = id_at
                 .saturating_add(APPEARANCE_WINDOW)
                 .min(buf.len().saturating_sub(8));
-            let Some(appearance) = (tag_at + 2 + 40..to).find_map(|at| frame_at_2023(buf, at))
+            let Some(appearance) =
+                (tag_at + 2 + 40..to).find_map(|at| frame_at_2023(buf, at, slots))
             else {
                 continue;
             };
