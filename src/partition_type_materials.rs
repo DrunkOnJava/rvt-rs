@@ -343,11 +343,22 @@ pub fn unset_material_types(rf: &mut RevitFile, revit_version: u32) -> BTreeSet<
 /// owners whose block holds a map are returned: a map missed here must not
 /// read as a type that draws no geometry (RE-84).
 pub fn type_material_names_2023(rf: &mut RevitFile) -> BTreeMap<u32, Vec<String>> {
+    type_material_names_32(rf, crate::partition_element_records_2023::REVIT_2023)
+}
+
+/// [`type_material_names_2023`] on any 32-bit release, Revit 2014 to 2023,
+/// whose materials are [`crate::partition_materials::scan_materials_32`]'s
+/// (RE-178). Empty on any other release.
+pub fn type_material_names_32(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> BTreeMap<u32, Vec<String>> {
     let Ok(records) = crate::elem_table::parse_records(rf) else {
         return BTreeMap::new();
     };
     let declared = crate::elem_table::declared_ids(&records);
-    let (tagged, names) = crate::partition_materials::scan_materials_2023(rf, &declared);
+    let (tagged, names) =
+        crate::partition_materials::scan_materials_32(rf, revit_version, &declared);
     let streams = rf.partition_stream_names();
     let mut by_owner: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     for stream in &streams {

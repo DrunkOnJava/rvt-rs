@@ -145,10 +145,11 @@ pub fn recover_partition_schema_mvp(
         out.rect_openings = rect_openings_from_partitions(rf, revit_version, limits)?;
     }
 
-    // --- Revit 2023 element records (RE-81, #421): identity, category and
-    // box only; nothing else 2024 decodes on top of records is read. ---
-    if revit_version == crate::partition_element_records_2023::REVIT_2023 {
-        recover_2023_records(rf, &mut out);
+    // --- Revit 2014 to 2023 element records (RE-81, RE-178, RE-179, #421):
+    // identity, category and box only; nothing else 2024 decodes on top of
+    // records is read. ---
+    if crate::partition_element_records_2023::is_32bit_release(revit_version) {
+        recover_2023_records(rf, revit_version, &mut out);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
         // --- Storeys from the Levels the records name (RE-107), by the
         // same rules as 2024's (RE-59, RE-68) ---
@@ -193,7 +194,8 @@ pub fn recover_partition_schema_mvp(
         // system type's data holds its layers where a family type's holds
         // its map, and a layer reads as a one-entry map, so the types of
         // system-family elements are left out. ---
-        let mut type_materials = crate::partition_type_materials::type_material_names_2023(rf);
+        let mut type_materials =
+            crate::partition_type_materials::type_material_names_32(rf, revit_version);
         for element in out.walls.iter().chain(&out.slabs).chain(&out.products) {
             let system = element.fields.iter().any(|(name, value)| {
                 name == FAMILY_NAME_SOURCE_FIELD
@@ -3285,7 +3287,7 @@ fn attach_system_family_names(
             // records either: a layer's material is only held to be
             // declared (RE-112).
             let materials: BTreeSet<u32> =
-                if revit_version == crate::partition_element_records_2023::REVIT_2023 {
+                if crate::partition_element_records_2023::is_32bit_release(revit_version) {
                     declared.clone()
                 } else {
                     crate::partition_type_records::scan_type_records(
@@ -3683,7 +3685,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     // A 2023 wall keeps its record body, cut back at its joins (RE-120),
     // and takes only its layers and exterior side: its location line is not
     // read (RE-114).
-    let centreline_bodies = revit_version != crate::partition_element_records_2023::REVIT_2023;
+    let centreline_bodies = !crate::partition_element_records_2023::is_32bit_release(revit_version);
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
@@ -5790,14 +5792,11 @@ fn without_non_primary_options(
 /// the 2024 rule (RE-85) on 2023's reference lists, and every element to
 /// the one Level its list names (RE-107). No names, types, joins or design
 /// options: their 2023 layouts are not decoded.
-fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
+fn recover_2023_records(rf: &mut RevitFile, revit_version: u32, out: &mut PartitionSchemaMvp) {
     use crate::partition_element_records as per;
-    let records = crate::partition_element_records_2023::scan_records(
-        rf,
-        crate::partition_element_records_2023::REVIT_2023,
-    );
+    let records = crate::partition_element_records_2023::scan_records(rf, revit_version);
     let names = type_and_family_names_2023(rf, &records);
-    let system_types = system_type_names_2023(rf, &records);
+    let system_types = system_type_names_2023(rf, revit_version, &records);
     let selected = select_newest_instance_records(records);
     // Only a family instance can be nested; a host wall and the doors it
     // hosts name each other too (RE-76's class tag, at the same place on
@@ -5815,8 +5814,7 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
     };
     // Each record names its Level in its reference list, as on 2024
     // (RE-107).
-    let level_ids = level_element_ids(rf, crate::partition_element_records_2023::REVIT_2023)
-        .unwrap_or_default();
+    let level_ids = level_element_ids(rf, revit_version).unwrap_or_default();
     for record in selected.values() {
         if nested.contains(&record.element_id) {
             continue;
@@ -5910,12 +5908,7 @@ fn recover_2023_records(rf: &mut RevitFile, out: &mut PartitionSchemaMvp) {
     }
     // --- Rooms' numbers and names (RE-117) ---
     let room_ids: BTreeSet<u32> = out.rooms.iter().filter_map(|room| room.id).collect();
-    attach_room_parameter_entries(
-        rf,
-        crate::partition_element_records_2023::REVIT_2023,
-        &room_ids,
-        &mut out.rooms,
-    );
+    attach_room_parameter_entries(rf, revit_version, &room_ids, &mut out.rooms);
     let wall_ids: BTreeSet<u32> = out.walls.iter().filter_map(|wall| wall.id).collect();
     for element in out.doors.iter_mut().chain(out.windows.iter_mut()) {
         if let Some(record) = element.id.and_then(|id| selected.get(&id)) {
@@ -6050,6 +6043,7 @@ const SYSTEM_TYPE_CATEGORIES_2023: [i64; 4] = [
 /// records of more categories. No such one, no type.
 fn system_type_names_2023(
     rf: &mut RevitFile,
+    revit_version: u32,
     records: &[crate::partition_element_records::PartitionElementRecord],
 ) -> BTreeMap<u32, (u32, String)> {
     let Ok(table) = crate::elem_table::parse_records(rf) else {
@@ -6077,9 +6071,11 @@ fn system_type_names_2023(
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (id, name) in
-            crate::partition_names::find_element_data_names_2023(inflated.bytes(), &wanted)
-        {
+        for (id, name) in crate::partition_names::find_element_data_names_32(
+            inflated.bytes(),
+            revit_version,
+            &wanted,
+        ) {
             match names.get(&id) {
                 None => {
                     names.insert(id, Some(name));
@@ -7005,9 +7001,11 @@ fn materials_and_names(
     revit_version: u32,
     declared: &BTreeSet<u32>,
 ) -> Option<(BTreeSet<u32>, BTreeMap<u32, String>)> {
-    if revit_version == crate::partition_element_records_2023::REVIT_2023 {
-        return Some(crate::partition_materials::scan_materials_2023(
-            rf, declared,
+    if crate::partition_element_records_2023::is_32bit_release(revit_version) {
+        return Some(crate::partition_materials::scan_materials_32(
+            rf,
+            revit_version,
+            declared,
         ));
     }
     let materials = crate::partition_type_records::scan_type_records(
@@ -7980,7 +7978,7 @@ fn level_decoded(name: &str, elevation: Option<f64>, index: usize) -> DecodedEle
 /// display-name strings stand in ([`materials_from_names`]).
 fn materials_from_records(rf: &mut RevitFile, revit_version: u32) -> Option<Vec<DecodedElement>> {
     use crate::partition_materials as pm;
-    let revit_2023 = revit_version == crate::partition_element_records_2023::REVIT_2023;
+    let revit_2023 = crate::partition_element_records_2023::is_32bit_release(revit_version);
     if !pm::MATERIALS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) && !revit_2023 {
         return None;
     }
@@ -7988,7 +7986,7 @@ fn materials_from_records(rf: &mut RevitFile, revit_version: u32) -> Option<Vec<
     // Revit 2023 has no material records; its materials are the objects
     // carrying the 2023 material tag (RE-113).
     let (ids, names) = if revit_2023 {
-        pm::scan_materials_2023(rf, &declared)
+        pm::scan_materials_32(rf, revit_version, &declared)
     } else {
         let ids: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
             rf,

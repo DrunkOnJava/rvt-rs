@@ -63,14 +63,19 @@ use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases these layouts are measured on.
-pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Releases a wall's location line (RE-49's bounded line) is read on. On
 /// 2025 it is measured by the same house saved in 2024 and 2025, whose 50
 /// walls read the same line, orientation and layers from both (RE-55); on
 /// 2023 by the walls of two projects, whose lines are Revit's axes before
-/// joins (RE-114).
-pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025, 2026];
+/// joins (RE-114); on 2019 to 2022 by Autodesk's sample projects, whose
+/// walls read the line their 2023 copies do (RE-178), and on 2016 to 2018 by
+/// the same projects, whose walls read the line their 2019 copies do
+/// (RE-179).
+pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
+    2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
+];
 
 /// Each wall's location line, by ElementId, on a release in
 /// [`WALL_LINE_SUPPORTED_REVIT_VERSIONS`]; empty elsewhere.
@@ -122,7 +127,8 @@ pub struct LayerLayout {
 /// The layer record layout of `revit_version`, where it is measured.
 pub fn layer_layout(revit_version: u32) -> Option<LayerLayout> {
     match revit_version {
-        2023 => Some(LayerLayout {
+        // Revit 2014 to 2022 write 2023's records (RE-178, RE-179).
+        2014..=2023 => Some(LayerLayout {
             record_len: 29,
             function_at: 8,
             material_at: 16,
@@ -138,7 +144,9 @@ pub fn layer_layout(revit_version: u32) -> Option<LayerLayout> {
         }),
         // Revit 2026 adds a `u32` after the function, repeating it, so a
         // record is 41 bytes; the fields read keep their offsets (RE-124).
-        2026 => Some(LayerLayout {
+        // Revit 2027 writes the same records: Autodesk's 2026 and 2027
+        // `rac_basic` hold byte-identical layer lists (RE-177).
+        2026 | 2027 => Some(LayerLayout {
             record_len: LAYER_RECORD_LEN + 4,
             function_at: 24,
             material_at: 8,
@@ -162,13 +170,17 @@ pub const MAX_NAME_UNITS: usize = 256;
 /// The bytes a wall's location line, a word and its flip flag follow.
 pub const WALL_FLIP_ANCHOR: [u8; 8] = [0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00];
 
-/// The tag framing a type's layer count on `revit_version`.
+/// The tag framing a type's layer count on `revit_version`: the tag of
+/// `VerticalRegionsStructure` in the release's schema (RE-178).
 pub fn layer_frame_tag(revit_version: u32) -> Option<[u8; 2]> {
+    if let Some(tags) = crate::partition_element_records_2023::schema_tags(revit_version) {
+        return Some(tags.vertical_regions_structure.to_le_bytes());
+    }
     match revit_version {
-        2023 => Some([0x6f, 0x10]),
         2024 => Some([0xa6, 0x10]),
         2025 => Some([0x0e, 0x11]),
         2026 => Some([0x65, 0x11]),
+        2027 => Some([0xab, 0x11]),
         _ => None,
     }
 }
@@ -299,11 +311,9 @@ pub fn scan_type_layers(
     materials: &BTreeSet<u32>,
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, Vec<CompoundLayer>>> {
-    // Revit 2023's data header frames a `u32` id (RE-111).
-    let header = match revit_version {
-        2023 => Some(crate::partition_names::ELEMENT_DATA_HEADER_2023),
-        _ => crate::partition_names::element_data_header(revit_version),
-    };
+    // Revit 2014 to 2023's data header frames a `u32` id (RE-111, RE-178).
+    let header =
+        crate::partition_names::element_data_layout(revit_version).map(|layout| layout.header);
     let (Some(header), Some(tag), Some(layout)) = (
         header,
         layer_frame_tag(revit_version),
@@ -365,7 +375,8 @@ pub struct WallOrientation {
     /// wall's centreline whatever it is (RE-54).
     pub location_line: u32,
     /// A word of 0 to 2. Every Snowdon Towers wall whose body is centred on
-    /// its line at its type's thickness carries 1 (RE-54).
+    /// its line at its type's thickness carries 1 (RE-54). Revit 2014 to
+    /// 2020 do not write it, and it reads 0 there (RE-178, RE-179).
     pub word: u32,
     /// Set puts the wall's exterior to the right of its location line's
     /// direction; clear, to the left.
@@ -380,10 +391,31 @@ pub struct WallOrientation {
 /// the Revit 2026 house's 59 walls and 4 of Core Interior's 360 set it
 /// (RE-126).
 pub fn wall_orientation(data: &[u8]) -> Option<WallOrientation> {
+    wall_orientation_with(data, true)
+}
+
+/// Whether a wall's data on `revit_version` holds
+/// [`WallOrientation::word`]. Revit 2019 and 2020 write the flip right
+/// after the location line: Autodesk's `rst_basic` wall 627064 holds `03 00
+/// 00 00 · 00 01 ff ff` past the anchor on 2019 and 2020 and `03 00 00 00 ·
+/// 01 00 00 00 · 00 01 ff ff` on 2021 to 2023 (RE-178). Revit 2014 to 2018
+/// write it as 2019 does: `rac_basic` of 2017 holds its 2019 copy's bytes
+/// past every wall's anchor (RE-179).
+pub fn wall_orientation_has_word(revit_version: u32) -> bool {
+    !(2014..=2020).contains(&revit_version)
+}
+
+/// [`wall_orientation`], for data with or without the word
+/// ([`wall_orientation_has_word`]); without it, the word reads 0.
+pub fn wall_orientation_with(data: &[u8], has_word: bool) -> Option<WallOrientation> {
     let at = memchr::memmem::find(data, &WALL_FLIP_ANCHOR)? + WALL_FLIP_ANCHOR.len();
     let location_line = u32_at(data, at)?;
-    let word = u32_at(data, at + 4)?;
-    let flip = match data.get(at + 8..at + 12)? {
+    let (word, flip_at) = if has_word {
+        (u32_at(data, at + 4)?, at + 8)
+    } else {
+        (0, at + 4)
+    };
+    let flip = match data.get(flip_at..flip_at + 4)? {
         [flip @ (0 | 1), 0, 0, 0] | [flip @ (0 | 1), 1, 0xff, 0xff] => *flip == 1,
         _ => return None,
     };
@@ -405,6 +437,7 @@ pub fn scan_wall_orientations(
         return Ok(BTreeMap::new());
     };
     let header = layout.header;
+    let has_word = wall_orientation_has_word(revit_version);
     let mut found: BTreeMap<u32, Option<WallOrientation>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -423,7 +456,10 @@ pub fn scan_wall_orientations(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(LAYER_WINDOW))
                 .min(buf.len());
-            let Some(orientation) = buf.get(id_at + 8..end).and_then(wall_orientation) else {
+            let Some(orientation) = buf
+                .get(id_at + 8..end)
+                .and_then(|data| wall_orientation_with(data, has_word))
+            else {
                 continue;
             };
             match found.get_mut(&id) {
@@ -731,7 +767,7 @@ pub fn scan_wall_type_face_angles(
 pub fn wall_join_count_offset(revit_version: u32) -> Option<usize> {
     match revit_version {
         2024 => Some(12),
-        2025 | 2026 => Some(16),
+        2025..=2027 => Some(16),
         _ => None,
     }
 }
