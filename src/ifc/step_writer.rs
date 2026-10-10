@@ -1696,6 +1696,12 @@ impl StepWriter {
         // and putting them on a named storey would state a containment
         // nothing measured.
         let mut unplaced_elements: Vec<usize> = Vec::new();
+        // A space is a spatial element, not a contained one: it is an
+        // aggregated part of its storey (or of the building when no storey
+        // join reached it), never in `IfcRelContainedInSpatialStructure`
+        // (buildingSMART validation rules SPS002 and SPS007).
+        let mut per_storey_spaces: Vec<Vec<usize>> = vec![Vec::new(); storeys.len()];
+        let mut unplaced_spaces: Vec<usize> = Vec::new();
         // B63: the elements a space contains, by the space's entity index;
         // they are left out of their storey's containment.
         let space_of: HashMap<usize, usize> = model
@@ -2141,6 +2147,11 @@ impl StepWriter {
                     void_fill_triples.push((*h_idx, el_id, None, global_id.to_string()));
                 } else if let Some(&space) = space_of.get(&entity_idx) {
                     per_space_elements.entry(space).or_default().push(el_id);
+                } else if ifc_upper == "IFCSPACE" {
+                    match idx {
+                        Some(index) => per_storey_spaces[index].push(el_id),
+                        None => unplaced_spaces.push(el_id),
+                    }
                 } else if !aggregate_parts.contains(&entity_idx) {
                     match idx {
                         Some(index) => per_storey_elements[index].push(el_id),
@@ -3124,6 +3135,30 @@ impl StepWriter {
                 format!(
                     "IFCRELCONTAINEDINSPATIALSTRUCTURE('{container_gid}',#{owner_hist},$,$,({refs_list}),#{target_storey})",
                 ),
+            );
+        }
+        for (idx, space_ids) in per_storey_spaces
+            .iter()
+            .enumerate()
+            .map(|(idx, ids)| (Some(idx), ids))
+            .chain(std::iter::once((None, &unplaced_spaces)))
+        {
+            if space_ids.is_empty() {
+                continue;
+            }
+            let (parent, rel_gid) = match idx {
+                Some(index) => (storey_ids[index], gid(&["aggregates", &storey_gids[index]])),
+                None => (building_id, gid(&["aggregates", "building", "spaces"])),
+            };
+            let rel_id = self.id();
+            let refs_list = space_ids
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            self.emit_entity(
+                rel_id,
+                format!("IFCRELAGGREGATES('{rel_gid}',#{owner_hist},$,$,#{parent},({refs_list}))"),
             );
         }
         // B63: each space's furniture, fixtures and equipment.
