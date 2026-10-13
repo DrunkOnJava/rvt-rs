@@ -114,15 +114,16 @@ fn racadvanced_level_parameters_are_revits() {
 }
 
 /// Revit's storey name per element `Tag`: from
-/// `IfcRelContainedInSpatialStructure`, and for a part (a curtain wall's
-/// mullion or panel) the storey of what it is aggregated into.
+/// `IfcRelContainedInSpatialStructure`; for an element contained in a room
+/// (`IfcSpace`), the storey the room is aggregated into; and for a part (a
+/// curtain wall's mullion or panel) the storey of what it is aggregated into.
 fn revit_storeys(step: &str) -> BTreeMap<String, String> {
     let ents = entities(step);
     let unquote = |raw: &str| raw.trim().trim_matches('\'').to_string();
     let reference = |s: &str| s.trim().strip_prefix('#')?.parse::<u64>().ok();
     let mut storey_of: BTreeMap<u64, String> = BTreeMap::new();
     let mut parent_of: BTreeMap<u64, u64> = BTreeMap::new();
-    for (entity, args) in ents.values() {
+    for (id, (entity, args)) in &ents {
         let f = split_args(args);
         match entity.as_str() {
             "IFCRELCONTAINEDINSPATIALSTRUCTURE" => {
@@ -133,6 +134,15 @@ fn revit_storeys(step: &str) -> BTreeMap<String, String> {
                 else {
                     continue;
                 };
+                if storey_entity == "IFCSPACE" {
+                    // Revit contains furniture and fixtures in their room; the
+                    // room is aggregated into its storey.
+                    let space = f.get(5).and_then(|s| reference(s)).unwrap_or(0);
+                    for object in list(f.get(4).map(String::as_str).unwrap_or("")) {
+                        parent_of.insert(object, space);
+                    }
+                    continue;
+                }
                 if storey_entity != "IFCBUILDINGSTOREY" {
                     continue;
                 }
@@ -149,6 +159,11 @@ fn revit_storeys(step: &str) -> BTreeMap<String, String> {
                 };
                 for part in list(f.get(5).map(String::as_str).unwrap_or("")) {
                     parent_of.insert(part, parent);
+                }
+            }
+            "IFCBUILDINGSTOREY" => {
+                if let Some(name) = f.get(2).map(|n| unquote(n)) {
+                    storey_of.insert(*id, name);
                 }
             }
             _ => {}
@@ -181,8 +196,9 @@ fn revit_storeys(step: &str) -> BTreeMap<String, String> {
 ///
 /// Measured: rvt-rs exports 507 building elements on 4 storeys and writes a
 /// level for 467 of them (`Level_01`); all 467 are Revit's storey.
-/// (Housing_Concrete_BuildingPermit, 1257 written, 1066 agree: Revit puts
-/// some elements on a different storey than their Level.) Housing_Timber_*
+/// (Housing_Concrete_BuildingPermit: 1388 of 1401 agree once elements Revit
+/// contains in a room take the room's storey; the 13 others are openings,
+/// which Revit puts on their host's storey.) Housing_Timber_*
 /// recovers no Level ids, so it writes none.
 ///
 /// Runs against `RVT_NORDIC_LCA_DIR`, a folder holding the `.rvt` and the
