@@ -1268,11 +1268,22 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
             _ => None,
         })
     };
-    let level = text(lp::LEVEL_PARAMETER_FIELD)?;
-    let from_list = decoded.fields.iter().any(|(name, value)| {
-        name == crate::partition_schema_mvp::LEVEL_FROM_LIST_FIELD
-            && matches!(value, InstanceField::Bool(true))
-    });
+    let (level, from_list) = match text(lp::LEVEL_PARAMETER_FIELD) {
+        Some(level) => (
+            level,
+            decoded.fields.iter().any(|(name, value)| {
+                name == crate::partition_schema_mvp::LEVEL_FROM_LIST_FIELD
+                    && matches!(value, InstanceField::Bool(true))
+            }),
+        ),
+        // The highest of several listed Levels is the Reference Level of a
+        // beam or brace only (RE-175).
+        None if matches!(ifc_type, "IFCBEAM" | "IFCMEMBER") => (
+            text(crate::partition_schema_mvp::REFERENCE_LEVEL_FROM_LIST_FIELD)?,
+            true,
+        ),
+        None => return None,
+    };
     let names: &[&str] = match ifc_type {
         "IFCBEAM" => &["Reference Level"],
         "IFCMEMBER" if from_list => &["Reference Level"],

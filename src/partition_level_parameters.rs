@@ -60,24 +60,31 @@ fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
     Some(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?))
 }
 
-/// Level parameters by ElementId, and the recovered Level names by id.
+/// Recovered Level names and elevations (feet) by id.
+pub type LevelNames = (BTreeMap<u32, String>, BTreeMap<u32, f64>);
+
+/// Level parameters by ElementId, and the recovered Levels by id.
 /// Revit 2024 only: the record is proven there.
 pub fn level_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
-) -> (BTreeMap<u32, LevelParameters>, BTreeMap<u32, String>) {
+) -> (BTreeMap<u32, LevelParameters>, LevelNames) {
     let mut out = BTreeMap::new();
     if revit_version != 2024 {
-        return (out, BTreeMap::new());
+        return (out, Default::default());
     }
-    let names: BTreeMap<u32, String> =
-        crate::partition_level_records::recover_partition_levels(rf, revit_version)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|level| (level.element_id, level.name))
-            .collect();
+    let levels = crate::partition_level_records::recover_partition_levels(rf, revit_version)
+        .unwrap_or_default();
+    let elevations: BTreeMap<u32, f64> = levels
+        .iter()
+        .map(|level| (level.element_id, level.elevation_feet))
+        .collect();
+    let names: BTreeMap<u32, String> = levels
+        .into_iter()
+        .map(|level| (level.element_id, level.name))
+        .collect();
     if names.is_empty() {
-        return (out, names);
+        return (out, (names, elevations));
     }
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -134,5 +141,5 @@ pub fn level_parameters(
             });
         }
     }
-    (out, names)
+    (out, (names, elevations))
 }

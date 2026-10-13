@@ -5,8 +5,8 @@
 //! carry, each of `Level`, `Base Level`, `Base Constraint`, `Top Constraint`
 //! that rvt-rs writes must equal Revit's value, and rvt-rs must write a
 //! substantial number of them (measured: 5254 `Level`, 196 `Base Level`, 180
-//! `Base Constraint`, 177 `Top Constraint`, 35 beam `Reference Level`, 5 stair
-//! `Top Level`; RE-174).
+//! `Base Constraint`, 177 `Top Constraint`, 37 beam `Reference Level`, 5 stair
+//! `Top Level`; RE-174, RE-175).
 //!
 //! Runs against `RVT_REVIT2024_SAMPLES_DIR`, holding the `.rvt` and its
 //! `.ifc` export. Skips when it is not set or the files are absent.
@@ -23,7 +23,7 @@ const NAMES: [(&str, usize); 6] = [
     ("Base Level", 150),
     ("Base Constraint", 150),
     ("Top Constraint", 150),
-    ("Reference Level", 30),
+    ("Reference Level", 37),
     ("Top Level", 4),
 ];
 
@@ -253,5 +253,105 @@ fn nordic_housing_terrain_levels_are_revits_storeys() {
     assert!(
         agree * 100 >= written * 99,
         "{agree} of {written} agree with Revit's storey, expected 99%"
+    );
+}
+
+/// RE-175: every level property rvt-rs writes equals Revit's, over every
+/// model in `RVT_REVIT2024_SAMPLES_DIR` that has Revit's export beside it
+/// (`<name>.ifc` or `<name>_Revit.ifc`). Prints, per model and property, how
+/// many rvt-rs writes, how many equal Revit's, and how many Revit writes.
+/// Skips when the variable is not set.
+#[test]
+fn level_parameters_survey_are_revits() {
+    let Some(dir) = std::env::var_os("RVT_REVIT2024_SAMPLES_DIR").map(PathBuf::from) else {
+        eprintln!("skipping: RVT_REVIT2024_SAMPLES_DIR is not set");
+        return;
+    };
+    let mut models: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .expect("survey dir")
+        .filter_map(|e| Some(e.ok()?.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "rvt"))
+        .collect();
+    models.sort();
+    // Beams' Reference Level written at least (RE-175: 2, 2 and 31 of them
+    // name two Levels and take the higher).
+    const REFERENCE_LEVELS: [(&str, usize); 3] = [
+        ("racadvancedsampleproject", 37),
+        ("rstadvancedsampleproject", 397),
+        ("rstbasicsampleproject", 370),
+    ];
+    let mut wrong_total = Vec::new();
+    for rvt in models {
+        let stem = rvt.file_stem().unwrap().to_string_lossy().to_string();
+        let Some(reference_ifc) = [format!("{stem}.ifc"), format!("{stem}_Revit.ifc")]
+            .into_iter()
+            .map(|n| dir.join(n))
+            .find(|p| p.exists())
+        else {
+            continue;
+        };
+        let step = std::fs::read_to_string(&reference_ifc).expect("reference IFC");
+        let theirs = constraints(&step);
+        let storeys = revit_storeys(&step);
+        let mut rf = RevitFile::open(&rvt).expect("open");
+        let Ok(result) = RvtDocExporter.export_with_diagnostics(&mut rf) else {
+            eprintln!("{stem}: export failed");
+            continue;
+        };
+        let ours = constraints(&write_step(&result.model));
+        for (name, _) in NAMES {
+            let written: Vec<_> = ours.iter().filter(|((_, n), _)| n == name).collect();
+            let right = written
+                .iter()
+                .filter(|(key, value)| theirs.get(*key) == Some(*value))
+                .count();
+            let wrong: Vec<_> = written
+                .iter()
+                .filter(|(key, value)| theirs.get(*key).is_some_and(|t| t != *value))
+                .map(|((tag, _), value)| {
+                    format!(
+                        "{stem} {tag} {name}: {value} vs {}",
+                        theirs[&(tag.clone(), name.to_string())]
+                    )
+                })
+                .collect();
+            let revit = theirs.keys().filter(|(_, n)| n == name).count();
+            let missing: Vec<&String> = theirs
+                .keys()
+                .filter(|key| key.1 == name && !ours.contains_key(*key))
+                .map(|(tag, _)| tag)
+                .take(8)
+                .collect();
+            // Where Revit's export has no `Constraints` (BIM4LCA), its
+            // storey is the only reference: report how many agree.
+            let storey = written
+                .iter()
+                .filter(|((tag, _), value)| {
+                    storeys
+                        .get(tag)
+                        .is_some_and(|s| format!("IFCLABEL('{s}')") == **value)
+                })
+                .count();
+            eprintln!(
+                "{stem} {name}: written {} right {right} wrong {} revit {revit} storey {storey}; missing e.g. {missing:?}",
+                written.len(),
+                wrong.len()
+            );
+            if let Some((_, floor)) = REFERENCE_LEVELS
+                .iter()
+                .find(|(m, _)| *m == stem && name == "Reference Level")
+            {
+                assert!(
+                    written.len() >= *floor,
+                    "{stem}: {} Reference Level written, expected at least {floor}",
+                    written.len()
+                );
+            }
+            wrong_total.extend(wrong);
+        }
+    }
+    assert!(
+        wrong_total.is_empty(),
+        "differs from Revit's: {wrong_total:#?}"
     );
 }
