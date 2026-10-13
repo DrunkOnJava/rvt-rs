@@ -13,7 +13,11 @@
 //! record's to 1e-6 ft, whose top is the record's top (0.01 ft) and whose bottom
 //! is not. The column's bottom moves only if every such node gives the same one.
 //!
-//! See `reports/element-framing/RE-173-column-z-from-geometry-node.md`.
+//! The box at id-48 is also the extent after geometry joins: a slab or roof
+//! joined to the column cuts it there, and the IFC body follows it (RE-178).
+//!
+//! See `reports/element-framing/RE-173-column-z-from-geometry-node.md` and
+//! `reports/element-framing/RE-178-column-cut-body.md`.
 
 use crate::RevitFile;
 use std::collections::BTreeMap;
@@ -38,12 +42,17 @@ fn boxes(buf: &[u8], at: usize) -> Option<[f64; 6]> {
         .then_some(out)
 }
 
-/// The bottom, in feet, of each column in `targets` (ElementId -> record box)
-/// that a geometry node gives and agrees on.
-pub fn column_bottoms(rf: &mut RevitFile, targets: &BTreeMap<u32, [f64; 6]>) -> BTreeMap<u32, f64> {
-    let mut found: BTreeMap<u32, Vec<f64>> = BTreeMap::new();
+/// A geometry node's box at id-96 and box at id-48.
+type NodeBoxes = ([f64; 6], [f64; 6]);
+
+/// Every geometry node of a column in `targets`, from every partition.
+fn column_nodes(
+    rf: &mut RevitFile,
+    targets: &BTreeMap<u32, [f64; 6]>,
+) -> BTreeMap<u32, Vec<NodeBoxes>> {
+    let mut found: BTreeMap<u32, Vec<NodeBoxes>> = BTreeMap::new();
     if targets.is_empty() {
-        return BTreeMap::new();
+        return found;
     }
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -63,36 +72,78 @@ pub fn column_bottoms(rf: &mut RevitFile, targets: &BTreeMap<u32, [f64; 6]>) -> 
             else {
                 continue;
             };
-            let Some(record) = targets.get(&id) else {
+            if !targets.contains_key(&id) {
                 continue;
-            };
-            let (Some(first), Some(second)) = (boxes(buf, id_at - 96), boxes(buf, id_at - 48))
-            else {
-                continue;
-            };
-            let same_plan = [0, 1, 3, 4]
-                .iter()
-                .all(|&i| (first[i] - second[i]).abs() < 1e-9);
-            let record_plan = [0, 1, 3, 4]
-                .iter()
-                .all(|&i| (second[i] - record[i]).abs() < PLAN_TOLERANCE_FEET);
-            if same_plan
-                && record_plan
-                && (second[5] - record[5]).abs() < TOLERANCE_FEET
-                && (second[2] - record[2]).abs() > TOLERANCE_FEET
-            {
-                found.entry(id).or_default().push(second[2]);
+            }
+            if let (Some(first), Some(second)) = (boxes(buf, id_at - 96), boxes(buf, id_at - 48)) {
+                found.entry(id).or_default().push((first, second));
             }
         }
     }
     found
+}
+
+fn plan_equal(a: &[f64; 6], b: &[f64; 6], tolerance: f64) -> bool {
+    [0, 1, 3, 4]
+        .iter()
+        .all(|&i| (a[i] - b[i]).abs() < tolerance)
+}
+
+/// The bottom, in feet, of each column in `targets` (ElementId -> record box)
+/// that a geometry node gives and agrees on.
+pub fn column_bottoms(rf: &mut RevitFile, targets: &BTreeMap<u32, [f64; 6]>) -> BTreeMap<u32, f64> {
+    column_nodes(rf, targets)
         .into_iter()
-        .filter_map(|(id, bottoms)| {
+        .filter_map(|(id, nodes)| {
+            let record = targets.get(&id)?;
+            let bottoms: Vec<f64> = nodes
+                .iter()
+                .filter(|(first, second)| {
+                    plan_equal(first, second, 1e-9)
+                        && plan_equal(second, record, PLAN_TOLERANCE_FEET)
+                        && (second[5] - record[5]).abs() < TOLERANCE_FEET
+                        && (second[2] - record[2]).abs() > TOLERANCE_FEET
+                })
+                .map(|(_, second)| second[2])
+                .collect();
             let first = *bottoms.first()?;
             bottoms
                 .iter()
                 .all(|b| (b - first).abs() < TOLERANCE_FEET)
                 .then_some((id, first))
+        })
+        .collect()
+}
+
+/// The z-range, in feet, of each column's body after its geometry joins
+/// (RE-178): the box at id-48 of its geometry node, where a slab or roof
+/// joined to the column has cut it shorter than its own extent.
+///
+/// Fail closed: only where every node of the column, in every partition, has
+/// x and y extents equal to the record's (`targets`, the column's current
+/// extent) and the same z-range at id-48, and that range lies inside the
+/// current one and differs from it. A column whose copies disagree keeps
+/// its extent.
+pub fn column_cut_extents(
+    rf: &mut RevitFile,
+    targets: &BTreeMap<u32, [f64; 6]>,
+) -> BTreeMap<u32, (f64, f64)> {
+    column_nodes(rf, targets)
+        .into_iter()
+        .filter_map(|(id, nodes)| {
+            let record = targets.get(&id)?;
+            let (_, first) = nodes.first()?;
+            let (bottom, top) = (first[2], first[5]);
+            let agree = nodes.iter().all(|(own, after)| {
+                plan_equal(own, after, 1e-9)
+                    && plan_equal(after, record, PLAN_TOLERANCE_FEET)
+                    && (after[2] - bottom).abs() < TOLERANCE_FEET
+                    && (after[5] - top).abs() < TOLERANCE_FEET
+            });
+            let inside = bottom > record[2] - TOLERANCE_FEET && top < record[5] + TOLERANCE_FEET;
+            let differs = (bottom - record[2]).abs() > TOLERANCE_FEET
+                || (top - record[5]).abs() > TOLERANCE_FEET;
+            (agree && inside && differs).then_some((id, (bottom, top)))
         })
         .collect()
 }

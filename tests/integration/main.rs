@@ -17,6 +17,8 @@ mod cfb_roundtrip_delta;
 mod cli_ergonomics;
 #[path = "../cli_real_files.rs"]
 mod cli_real_files;
+#[path = "../column_cut_body.rs"]
+mod column_cut_body;
 #[path = "../column_node_z.rs"]
 mod column_node_z;
 #[path = "../common_reference.rs"]

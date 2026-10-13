@@ -493,6 +493,7 @@ pub fn recover_partition_schema_mvp(
     // --- Column bottoms from the geometry node (RE-173) ---
     if revit_version == 2024 {
         apply_column_node_bottoms(rf, [&mut out.columns, &mut out.products]);
+        apply_column_cut_bodies(rf, [&mut out.columns, &mut out.products]);
     }
 
     // --- Type text parameters (RE-77, #35) ---
@@ -7296,6 +7297,39 @@ fn apply_column_node_bottoms(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement
                 COLUMN_Z_SOURCE_FIELD.into(),
                 InstanceField::String(COLUMN_Z_GEOMETRY_NODE.into()),
             ));
+        }
+    }
+}
+
+/// Bottom, feet, of a column's body after its geometry joins (RE-178). The
+/// column's own fields (`m_locationZ`, `m_bboxHeight`) keep its extent.
+pub const COLUMN_BODY_BOTTOM_FIELD: &str = "m_column_body_bottom";
+/// Top, feet, of a column's body after its geometry joins (RE-178).
+pub const COLUMN_BODY_TOP_FIELD: &str = "m_column_body_top";
+
+/// Give each column that a joined slab or roof cuts the z-range of its cut
+/// body, from its geometry node (RE-178). Only the body follows it.
+fn apply_column_cut_bodies(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement>; 2]) {
+    let is_column = |e: &DecodedElement| matches!(e.class.as_str(), "Column" | "StructuralColumn");
+    let targets: BTreeMap<u32, [f64; 6]> = lists
+        .iter()
+        .flat_map(|list| list.iter().filter(|e| is_column(e)))
+        .filter_map(|e| Some((e.id?, element_record_bbox(e)?)))
+        .collect();
+    let extents = crate::partition_column_nodes::column_cut_extents(rf, &targets);
+    for list in lists {
+        for element in list.iter_mut().filter(|e| is_column(e)) {
+            let Some(&(bottom, top)) = element.id.and_then(|id| extents.get(&id)) else {
+                continue;
+            };
+            for (name, value) in [
+                (COLUMN_BODY_BOTTOM_FIELD, bottom),
+                (COLUMN_BODY_TOP_FIELD, top),
+            ] {
+                element
+                    .fields
+                    .push((name.into(), InstanceField::Float { value, size: 8 }));
+            }
         }
     }
 }
