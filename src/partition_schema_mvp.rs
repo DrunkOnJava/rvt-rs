@@ -505,6 +505,35 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Level parameters from the per-element association record (RE-172) ---
+    let level_parameters = crate::partition_level_parameters::level_parameters(rf, revit_version);
+    if !level_parameters.is_empty() {
+        for elements in [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ] {
+            for element in elements.iter_mut() {
+                let Some(found) = element.id.and_then(|id| level_parameters.get(&id)) else {
+                    continue;
+                };
+                element.fields.push((
+                    crate::partition_level_parameters::LEVEL_PARAMETER_FIELD.into(),
+                    InstanceField::String(found.level.clone()),
+                ));
+                if let Some(top) = &found.top {
+                    element.fields.push((
+                        crate::partition_level_parameters::TOP_LEVEL_PARAMETER_FIELD.into(),
+                        InstanceField::String(top.clone()),
+                    ));
+                }
+            }
+        }
+    }
+
     // --- The materials each family type's geometry uses (RE-82, #355) ---
     let type_materials = crate::partition_type_materials::type_material_names(rf, revit_version);
     if !type_materials.is_empty() {
