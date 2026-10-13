@@ -10,6 +10,7 @@ files (flat layout — one directory, not nested).
 |--------|---------|-------|
 | [`magnetar-io/revit-test-datasets`](https://github.com/magnetar-io/revit-test-datasets) `Revit/` | MIT | Used by CI Tier-two; known-count manifests under `tests/fixtures/project-counts/` for `2024_Core_Interior.rvt` and `Revit_IFC5_Einhoven.rvt` |
 | Permissive clones via [`tools/fetch-corpus.sh`](../../tools/fetch-corpus.sh) | varies | Candidate hunt only — inventory with `tools/corpus-health.sh` |
+| BIM4LCA / Nordic LCA (VTT, Granlund, Gravicon, Insinööritoimisto Kallinen), `ARCH.zip` (sha256 `025e33fb0c0ce3b7a869f4177a0862918cc987408f4cd34e58a0eabd8d9917c4`) listed at <https://cris.vtt.fi/en/publications/bim-files-to-download/> | CC BY-SA 4.0 | Fetch by URL, never committed. `ARK_NordicLCA_Housing_Timber_BuildingPermit.rvt` (Revit 2024, 93 MB, sha256 `3df759b8b986c1e2ca71a691cdab16bcc7063a07e273003bf02cac559573c6d4`) for `tests/level_shared_elevation.rs`; set `RVT_NORDIC_LCA_DIR` to its folder. Attribution: BIM4LCA, CC BY-SA 4.0. |
 
 **Do not** commit Autodesk-owned samples (see `SECURITY.md`).
 
