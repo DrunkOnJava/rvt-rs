@@ -256,7 +256,7 @@ fn nordic_housing_terrain_levels_are_revits_storeys() {
     );
 }
 
-/// RE-175: every level property rvt-rs writes equals Revit's, over every
+/// RE-175, RE-176: every level property rvt-rs writes equals Revit's, over every
 /// model in `RVT_REVIT2024_SAMPLES_DIR` that has Revit's export beside it
 /// (`<name>.ifc` or `<name>_Revit.ifc`). Prints, per model and property, how
 /// many rvt-rs writes, how many equal Revit's, and how many Revit writes.
@@ -279,6 +279,15 @@ fn level_parameters_survey_are_revits() {
         ("racadvancedsampleproject", 37),
         ("rstadvancedsampleproject", 397),
         ("rstbasicsampleproject", 370),
+    ];
+    // Stairs' Top Level written at least: those whose association record
+    // gives none take the two lowest Levels their record lists (RE-176).
+    const TOP_LEVELS: [(&str, usize); 5] = [
+        ("Technicalschoolcurrentm", 5),
+        ("racadvancedsampleproject", 5),
+        ("racbasicsampleproject", 3),
+        ("rmeadvancedsampleproject", 8),
+        ("rmebasicsampleproject", 8),
     ];
     let mut wrong_total = Vec::new();
     for rvt in models {
@@ -344,6 +353,16 @@ fn level_parameters_survey_are_revits() {
                 assert!(
                     written.len() >= *floor,
                     "{stem}: {} Reference Level written, expected at least {floor}",
+                    written.len()
+                );
+            }
+            if let Some((_, floor)) = TOP_LEVELS
+                .iter()
+                .find(|(m, _)| *m == stem && name == "Top Level")
+            {
+                assert!(
+                    written.len() >= *floor,
+                    "{stem}: {} Top Level written, expected at least {floor}",
                     written.len()
                 );
             }

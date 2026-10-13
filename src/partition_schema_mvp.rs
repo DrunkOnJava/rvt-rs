@@ -7277,7 +7277,7 @@ pub const LEVEL_FROM_LIST_FIELD: &str = "m_level_parameter_from_list";
 /// in its id lists: a beam's or brace's Reference Level (RE-175).
 pub const REFERENCE_LEVEL_FROM_LIST_FIELD: &str = "m_reference_level_from_list";
 
-/// Give `element` its level fields (RE-172, RE-174).
+/// Give `element` its level fields (RE-172, RE-174, RE-175, RE-176).
 fn attach_level_parameters(
     rf: &mut RevitFile,
     element: &mut DecodedElement,
@@ -7344,6 +7344,18 @@ fn attach_level_parameters(
     if named.is_empty() {
         named = crate::element_record_level_refs::named_levels(&first, &ids);
     }
+    if named.len() > 1 && element.class == "Stair" {
+        // A stair whose association record gives no Base and Top Level
+        // lists them, and at most the Level above its top (RE-176).
+        if let Some((base, top)) = stair_levels_from_list(&named, elevations) {
+            push(element, lp::LEVEL_PARAMETER_FIELD, names[&base].clone());
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, names[&top].clone());
+            element
+                .fields
+                .push((LEVEL_FROM_LIST_FIELD.into(), InstanceField::Bool(true)));
+        }
+        return;
+    }
     if named.len() > 1 {
         if let Some(level) = highest_level(&named, elevations) {
             push(
@@ -7359,6 +7371,23 @@ fn attach_level_parameters(
         element
             .fields
             .push((LEVEL_FROM_LIST_FIELD.into(), InstanceField::Bool(true)));
+    }
+}
+
+/// A stair's Base and Top Level from the Levels its record lists: the
+/// lowest and the next above it (RE-176). `None` unless every named Level
+/// has an elevation and the lowest three are at distinct elevations.
+fn stair_levels_from_list(named: &[u32], elevations: &BTreeMap<u32, f64>) -> Option<(u32, u32)> {
+    let mut by_height: Vec<(f64, u32)> = named
+        .iter()
+        .map(|id| Some((*elevations.get(id)?, *id)))
+        .collect::<Option<_>>()?;
+    by_height.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let above = |low: f64, high: f64| high - low > 1e-6;
+    match by_height[..] {
+        [(b, base), (t, top)] if above(b, t) => Some((base, top)),
+        [(b, base), (t, top), (n, _), ..] if above(b, t) && above(t, n) => Some((base, top)),
+        _ => None,
     }
 }
 
