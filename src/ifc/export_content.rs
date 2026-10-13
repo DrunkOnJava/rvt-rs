@@ -1269,7 +1269,13 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
         })
     };
     let level = text(lp::LEVEL_PARAMETER_FIELD)?;
+    let from_list = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::LEVEL_FROM_LIST_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
     let names: &[&str] = match ifc_type {
+        "IFCBEAM" => &["Reference Level"],
+        "IFCMEMBER" if from_list => &["Reference Level"],
         "IFCWALL" | "IFCCURTAINWALL" => &["Base Constraint"],
         "IFCCOLUMN" => &["Base Level", "Level"],
         "IFCRAILING" | "IFCROOF" | "IFCSTAIR" => &["Base Level"],
@@ -1283,12 +1289,17 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
             value: PropertyValue::Label(level.clone()),
         })
         .collect();
-    if matches!(ifc_type, "IFCWALL" | "IFCCURTAINWALL") {
-        if let Some(top) = text(lp::TOP_LEVEL_PARAMETER_FIELD) {
-            properties.push(Property {
+    if let Some(top) = text(lp::TOP_LEVEL_PARAMETER_FIELD) {
+        match ifc_type {
+            "IFCWALL" | "IFCCURTAINWALL" => properties.push(Property {
                 name: "Top Constraint".into(),
                 value: PropertyValue::Label(format!("Up to level: {top}")),
-            });
+            }),
+            "IFCSTAIR" => properties.push(Property {
+                name: "Top Level".into(),
+                value: PropertyValue::Label(top),
+            }),
+            _ => {}
         }
     }
     Some(PropertySet {

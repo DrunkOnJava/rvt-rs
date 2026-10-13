@@ -32,20 +32,43 @@ const TOP_WINDOW: std::ops::Range<usize> = 100..320;
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LevelParameters {
     /// Name of the Level in the record's level field.
-    pub level: String,
+    pub level: Option<String>,
     /// Name of the wall top Level, where the group was located.
     pub top: Option<String>,
+    /// A stair's Base and Top Level names (RE-174).
+    pub stair: Option<(String, String)>,
+}
+
+/// Where a stair's Base Level id sits from its ElementId, by record variant;
+/// the Top Level id is [`STAIR_TOP_AFTER`] bytes later (RE-174).
+const STAIR_BASE_OFFSETS: [usize; 4] = [115, 121, 129, 137];
+const STAIR_TOP_AFTER: usize = 32;
+
+/// The Base and Top Level of a stair record: the one variant offset at which
+/// two different recovered Levels sit [`STAIR_TOP_AFTER`] bytes apart.
+fn stair_levels(buf: &[u8], id: usize, names: &BTreeMap<u32, String>) -> Option<(String, String)> {
+    let mut hits = STAIR_BASE_OFFSETS.iter().filter_map(|&k| {
+        let base = names.get(&u32_at(buf, id + k)?)?;
+        let top = names.get(&u32_at(buf, id + k + STAIR_TOP_AFTER)?)?;
+        (base != top).then(|| (base.clone(), top.clone()))
+    });
+    let found = hits.next()?;
+    hits.next().is_none().then_some(found)
 }
 
 fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
     Some(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?))
 }
 
-/// Level parameters by ElementId. Revit 2024 only: the record is proven there.
-pub fn level_parameters(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u32, LevelParameters> {
+/// Level parameters by ElementId, and the recovered Level names by id.
+/// Revit 2024 only: the record is proven there.
+pub fn level_parameters(
+    rf: &mut RevitFile,
+    revit_version: u32,
+) -> (BTreeMap<u32, LevelParameters>, BTreeMap<u32, String>) {
     let mut out = BTreeMap::new();
     if revit_version != 2024 {
-        return out;
+        return (out, BTreeMap::new());
     }
     let names: BTreeMap<u32, String> =
         crate::partition_level_records::recover_partition_levels(rf, revit_version)
@@ -54,7 +77,7 @@ pub fn level_parameters(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u32,
             .map(|level| (level.element_id, level.name))
             .collect();
     if names.is_empty() {
-        return out;
+        return (out, names);
     }
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -64,7 +87,7 @@ pub fn level_parameters(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u32,
         let starts: Vec<usize> = memchr::memmem::find_iter(buf, &MARK).collect();
         for (i, &at) in starts.iter().enumerate() {
             let id = at + MARK.len();
-            let (Some(element), Some(0), Some(level), Some(0)) = (
+            let (Some(element), Some(0), Some(level), Some(tail)) = (
                 u32_at(buf, id),
                 u32_at(buf, id + 4),
                 u32_at(buf, id + 8),
@@ -72,7 +95,18 @@ pub fn level_parameters(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u32,
             ) else {
                 continue;
             };
-            let Some(name) = names.get(&level) else {
+            let Some(name) = names.get(&level).filter(|_| tail == 0) else {
+                // No level in the field: a stair keeps its Base and Top
+                // Level elsewhere in the record.
+                if level == u32::MAX {
+                    if let Some(stair) = stair_levels(buf, id, &names) {
+                        out.entry(element).or_insert(LevelParameters {
+                            level: Some(stair.0.clone()),
+                            top: None,
+                            stair: Some(stair),
+                        });
+                    }
+                }
                 continue;
             };
             // The group must lie inside this record, before the next one.
@@ -94,10 +128,11 @@ pub fn level_parameters(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u32,
             });
             // The first record of an id wins.
             out.entry(element).or_insert(LevelParameters {
-                level: name.clone(),
+                level: Some(name.clone()),
                 top,
+                stair: None,
             });
         }
     }
-    out
+    (out, names)
 }

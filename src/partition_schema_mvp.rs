@@ -505,31 +505,23 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
-    // --- Level parameters from the per-element association record (RE-172) ---
-    let level_parameters = crate::partition_level_parameters::level_parameters(rf, revit_version);
-    if !level_parameters.is_empty() {
-        for elements in [
+    // --- Level parameters from the per-element association record (RE-172),
+    // stairs' Base and Top Level from the same record and the Level named in
+    // the element record's id lists where the field holds none (RE-174) ---
+    let (level_parameters, level_names) =
+        crate::partition_level_parameters::level_parameters(rf, revit_version);
+    if !level_names.is_empty() {
+        let mut lists = [
             &mut out.walls,
             &mut out.columns,
             &mut out.doors,
             &mut out.windows,
             &mut out.slabs,
             &mut out.products,
-        ] {
+        ];
+        for elements in lists.iter_mut() {
             for element in elements.iter_mut() {
-                let Some(found) = element.id.and_then(|id| level_parameters.get(&id)) else {
-                    continue;
-                };
-                element.fields.push((
-                    crate::partition_level_parameters::LEVEL_PARAMETER_FIELD.into(),
-                    InstanceField::String(found.level.clone()),
-                ));
-                if let Some(top) = &found.top {
-                    element.fields.push((
-                        crate::partition_level_parameters::TOP_LEVEL_PARAMETER_FIELD.into(),
-                        InstanceField::String(top.clone()),
-                    ));
-                }
+                attach_level_parameters(rf, element, &level_parameters, &level_names);
             }
         }
     }
@@ -7269,6 +7261,82 @@ pub fn column_instances_from_records(
             decoded
         })
         .collect()
+}
+
+/// Field naming the Level of an element whose record names it in an id list
+/// (RE-174), rather than in the association record.
+pub const LEVEL_FROM_LIST_FIELD: &str = "m_level_parameter_from_list";
+
+/// Give `element` its level fields (RE-172, RE-174).
+fn attach_level_parameters(
+    rf: &mut RevitFile,
+    element: &mut DecodedElement,
+    parameters: &BTreeMap<u32, crate::partition_level_parameters::LevelParameters>,
+    names: &BTreeMap<u32, String>,
+) {
+    use crate::partition_level_parameters as lp;
+    let found = element
+        .id
+        .and_then(|id| parameters.get(&id))
+        // A stair's record is read as a stair's only for a stair.
+        .filter(|p| p.stair.is_none() || element.class == "Stair");
+    let push = |element: &mut DecodedElement, name: &str, value: String| {
+        element
+            .fields
+            .push((name.into(), InstanceField::String(value)));
+    };
+    if let Some(found) = found {
+        if let Some(level) = &found.level {
+            push(element, lp::LEVEL_PARAMETER_FIELD, level.clone());
+        }
+        if let Some(top) = &found.top {
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, top.clone());
+        }
+        if let Some((_, top)) = &found.stair {
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, top.clone());
+        }
+        return;
+    }
+    // The Level an element names in its record's id lists (RE-174): the
+    // second list's if it names any, else the first's, and only if exactly
+    // one recovered Level is named.
+    let (Some(stream), Some(offset)) = (
+        element.fields.iter().find_map(|(n, v)| match v {
+            InstanceField::String(s) if n == "m_source_stream" => Some(s.clone()),
+            _ => None,
+        }),
+        element.fields.iter().find_map(|(n, v)| match v {
+            InstanceField::Integer { value, .. } if n == "m_source_offset" => {
+                usize::try_from(*value).ok()
+            }
+            _ => None,
+        }),
+    ) else {
+        return;
+    };
+    let Ok(inflated) = rf.inflated_partition(&stream) else {
+        return;
+    };
+    let buf = inflated.bytes();
+    let at = offset + crate::partition_element_records::REFERENCE_LIST_OFFSET;
+    let Some(first) = crate::partition_element_records::decode_reference_list(buf, at) else {
+        return;
+    };
+    let second = at
+        .checked_add(4 + first.len() * 8)
+        .and_then(|at| crate::partition_element_records::decode_reference_list(buf, at))
+        .unwrap_or_default();
+    let ids: BTreeSet<u32> = names.keys().copied().collect();
+    let mut named = crate::element_record_level_refs::named_levels(&second, &ids);
+    if named.is_empty() {
+        named = crate::element_record_level_refs::named_levels(&first, &ids);
+    }
+    if let [only] = named[..] {
+        push(element, lp::LEVEL_PARAMETER_FIELD, names[&only].clone());
+        element
+            .fields
+            .push((LEVEL_FROM_LIST_FIELD.into(), InstanceField::Bool(true)));
+    }
 }
 
 /// Rewrite a column's placement and extents to the cut body, and say

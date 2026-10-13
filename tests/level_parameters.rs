@@ -4,8 +4,9 @@
 //! Revit's own IFC4 export of it. For every element `Tag` that both files
 //! carry, each of `Level`, `Base Level`, `Base Constraint`, `Top Constraint`
 //! that rvt-rs writes must equal Revit's value, and rvt-rs must write a
-//! substantial number of them (measured: 5214 `Level`, 191 `Base Level`, 180
-//! `Base Constraint`, 177 `Top Constraint`).
+//! substantial number of them (measured: 5254 `Level`, 196 `Base Level`, 180
+//! `Base Constraint`, 177 `Top Constraint`, 35 beam `Reference Level`, 5 stair
+//! `Top Level`; RE-174).
 //!
 //! Runs against `RVT_REVIT2024_SAMPLES_DIR`, holding the `.rvt` and its
 //! `.ifc` export. Skips when it is not set or the files are absent.
@@ -17,11 +18,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 /// Each checked property with the least number rvt-rs must write.
-const NAMES: [(&str, usize); 4] = [
+const NAMES: [(&str, usize); 6] = [
     ("Level", 5000),
     ("Base Level", 150),
     ("Base Constraint", 150),
     ("Top Constraint", 150),
+    ("Reference Level", 30),
+    ("Top Level", 4),
 ];
 
 /// (element `Tag`, property) -> value as written, from every `Constraints` set.
