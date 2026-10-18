@@ -15,11 +15,11 @@ name: Publish (crates.io + PyPI + release binaries)
 #      (no secret needed after one-time account setup).
 #
 # Release publication runs only after wheel install, source install,
-# CLI sample, viewer load, and docs preview checks pass. The crates-io and
-# pypi environments then hold each publish job until the maintainer approves
-# it on the run page. Real PyPI publication and the release binaries also
-# wait for crates.io publication, so no channel ships a version crates.io
-# lacks.
+# CLI sample, viewer load, and docs preview checks pass. The crates-io
+# environment then holds the crates.io job until the maintainer approves it
+# on the run page: the one approval a release takes. Real PyPI publication
+# and the release binaries wait for crates.io publication, so nothing ships
+# before that approval and no channel ships a version crates.io lacks.
 #
 # Uses PyPI's Trusted Publisher feature (OIDC): no PYPI_API_TOKEN
 # secret is stored in the repo. PyPI trusts this specific workflow
