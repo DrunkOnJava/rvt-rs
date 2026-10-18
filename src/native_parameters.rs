@@ -239,6 +239,16 @@ pub fn decode_object_fields(
     start: usize,
     class_tag: u16,
 ) -> Result<ObjectFields> {
+    decode_object_fields_with_limits(body, registry, start, class_tag, &GraphLimits::default())
+}
+/// [`decode_object_fields`] with explicit resource budgets.
+pub fn decode_object_fields_with_limits(
+    body: &[u8],
+    registry: &Registry,
+    start: usize,
+    class_tag: u16,
+    limits: &GraphLimits,
+) -> Result<ObjectFields> {
     ensure!(
         start <= body.len(),
         "native object offset outside bounded body"
@@ -256,7 +266,7 @@ pub fn decode_object_fields(
         items: 0,
         pending: Vec::new(),
         spans: Vec::new(),
-        limits: GraphLimits::default(),
+        limits: *limits,
     };
     let fields = cursor.class(class_tag, 0)?;
     Ok(ObjectFields {

@@ -29,7 +29,16 @@ pub fn storage_increments(bytes: &[u8], registry: &Registry) -> Result<Vec<Incre
             .is_some_and(|c| c.name == "DocumentIncrementTable"),
         "unsupported increment root class"
     );
-    let root = native_parameters::decode_object_fields(bytes, registry, 2, tag)?;
+    // The table grows with the document: one Revit 2024 house stores 109,543
+    // values in 458,972 bytes. Every file measured spends at least 3.9 bytes
+    // per value, so one value per byte bounds it without capping large files.
+    let defaults = native_parameters::GraphLimits::default();
+    let limits = native_parameters::GraphLimits {
+        max_values: defaults.max_values.max(bytes.len()),
+        ..defaults
+    };
+    let root =
+        native_parameters::decode_object_fields_with_limits(bytes, registry, 2, tag, &limits)?;
     ensure!(
         bytes.get(root.end..) == Some(&[0; 4]),
         "unsupported increment table terminal"
