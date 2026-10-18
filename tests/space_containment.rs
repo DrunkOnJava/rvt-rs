@@ -186,3 +186,78 @@ fn elements_are_contained_in_revits_spaces() {
         "no element was compared"
     );
 }
+
+/// Every `IfcSpace` is an aggregated part of an `IfcBuildingStorey` or the
+/// `IfcBuilding` and is never itself in `IfcRelContainedInSpatialStructure`:
+/// a space is a spatial element (buildingSMART validation rules SPS002 and
+/// SPS007). Returns the number of spaces checked.
+fn check_space_aggregation(rvt: &Path, failures: &mut Vec<String>) -> usize {
+    let mut rf = RevitFile::open(rvt).expect("open");
+    let result = RvtDocExporter
+        .export_with_diagnostics(&mut rf)
+        .expect("export");
+    let ents = entities(&write_step(&result.model));
+    let spaces: Vec<u64> = ents
+        .iter()
+        .filter(|(_, (entity, _))| entity == "IFCSPACE")
+        .map(|(id, _)| *id)
+        .collect();
+    let mut aggregated = std::collections::BTreeSet::new();
+    let mut contained = std::collections::BTreeSet::new();
+    for (entity, args) in ents.values() {
+        let f = split_args(args);
+        match entity.as_str() {
+            "IFCRELAGGREGATES" => {
+                let parent = f
+                    .get(4)
+                    .and_then(|s| references(s).first().copied())
+                    .and_then(|p| ents.get(&p))
+                    .map(|(e, _)| e.as_str());
+                if matches!(parent, Some("IFCBUILDINGSTOREY" | "IFCBUILDING")) {
+                    aggregated.extend(references(f.get(5).map(String::as_str).unwrap_or("")));
+                }
+            }
+            "IFCRELCONTAINEDINSPATIALSTRUCTURE" => {
+                contained.extend(references(f.get(4).map(String::as_str).unwrap_or("")));
+            }
+            _ => {}
+        }
+    }
+    let name = rvt.file_name().unwrap_or_default().to_string_lossy();
+    let loose = spaces.iter().filter(|s| !aggregated.contains(s)).count();
+    let wrongly_contained = spaces.iter().filter(|s| contained.contains(s)).count();
+    eprintln!(
+        "{name}: {} spaces, {loose} not aggregated into a storey or the building, {wrongly_contained} contained",
+        spaces.len()
+    );
+    if loose + wrongly_contained > 0 {
+        failures.push(format!(
+            "{name}: {loose} of {} spaces not aggregated, {wrongly_contained} in IfcRelContainedInSpatialStructure",
+            spaces.len()
+        ));
+    }
+    spaces.len()
+}
+
+#[test]
+fn spaces_are_aggregated_into_their_storey() {
+    let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR").map(PathBuf::from) else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
+        return;
+    };
+    let mut failures = Vec::new();
+    let mut checked = 0;
+    for model in ["2024_Core_Interior.rvt", "RE1-Architecture.rvt"] {
+        let rvt = dir.join(model);
+        if !rvt.exists() {
+            eprintln!("skipping {}: absent", rvt.display());
+            continue;
+        }
+        checked += check_space_aggregation(&rvt, &mut failures);
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(
+        checked > 0 || !dir.join("2024_Core_Interior.rvt").exists(),
+        "no space was checked"
+    );
+}

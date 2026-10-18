@@ -275,6 +275,31 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Snowdon Towers exports its elements again (#736).** The record
+  size `elem_table::detect_layout` picks is the one at which the stated
+  records fit from `0x06` with ids rising. It tested the first id, but on
+  Autodesk's Snowdon Towers samples that id differs from the second on 27
+  (Structural) and 84 (Architectural) records and falls back below its
+  predecessor 2 and 3 times. Neither size passed, so the table was read in
+  the 12-byte fallback layout. Every element record then lacked its
+  ElementId (RE-30), and the export wrote 0 of Structural's 1,282 elements
+  and 1 of Architectural's 6,056 (since #559). The test now reads the second
+  id, the ElementId that partition records, owners and Revit's own export
+  carry (RE-41). It rises over every table measured, and on Snowdon every
+  owner is one of the second ids, while 13 and 42 owners are none of the
+  first ids. Every other file reads the same layout as before.
+  `tests/elem_table_frame.rs` checks rising ElementIds and owners on the
+  second id, and reads the Snowdon samples when they are in
+  `RVT_PROJECT_CORPUS_DIR`.
+- **The viewer's wasm network-import audit can fail (VW1-21).** It grepped
+  `wasm-objdump` output for `"fetch"` and the like with the quotes, which
+  wabt never prints for an import (`src/binary-reader-objdump.cc:1607`), so
+  it passed whatever the wasm imported. `viewer/scripts/audit-wasm-imports.mjs`
+  reads each import with `WebAssembly.Module.imports()`, and the body of its
+  shim in the glue, where a constructor such as `new WebSocket` shows; it
+  fails on a network primitive, on an import whose shim it cannot read, and
+  when it misses its own canary. The deployed viewer imports none of them,
+  and the deploy no longer installs wabt.
 - **An export without geometry keeps its elements' types and names (B74).**
   `--mode typed-no-geometry` read the record property set, which carries an
   element's family and type, only with its geometry, so it typed no element
