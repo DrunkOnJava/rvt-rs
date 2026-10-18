@@ -367,11 +367,52 @@ fn export_parameter_value(buf: &[u8], at: usize, key: i64) -> Option<String> {
 /// [`crate::partition_names::element_data_header`]) is the last one before
 /// it, no more than [`EXPORT_PARAMETER_WINDOW`] back, and that element must
 /// be declared in `Global/ElemTable`. A key an element sets to two
-/// different values is dropped.
+/// different values is dropped. Revit 2024 and later read the owner from
+/// the data object instead ([`find_export_parameters_in_objects`]).
 pub fn find_export_parameters(
     buf: &[u8],
     header: &[u8; 10],
     declared: &BTreeSet<u32>,
+) -> BTreeMap<u32, ExportParameters> {
+    collect_export_parameters(buf, declared, |hit| {
+        let from = hit.saturating_sub(EXPORT_PARAMETER_WINDOW);
+        let start = memchr::memmem::rfind(&buf[from..hit], header)?;
+        read_u64(buf, from + start + header.len()).and_then(|id| u32::try_from(id).ok())
+    })
+}
+
+/// [`find_export_parameters`] on Revit 2024 and later (#792): an entry
+/// belongs to the data object (RE-153) whose payload holds it, whose
+/// Adler-32 verifies, and that object's ElementId must be declared. An entry
+/// in no data object is not read. `objects` is
+/// [`crate::partition_room_parameters::data_objects`] of `buf`.
+///
+/// On the BIM4LCA office's building permit file the header rule gave
+/// `IfcSpace` entries to doors (37), curtain walls (13), sketch lines (11)
+/// and plumbing fixtures (10). Five of those fixtures are drains (four
+/// floor traps and a roof drain), and their own `IfcSpace` hid their
+/// types' `IfcWasteTerminalType`, while Revit exports all 78 of the file's
+/// drains as `IfcWasteTerminal`.
+pub fn find_export_parameters_in_objects(
+    buf: &[u8],
+    objects: &[(usize, crate::partition_room_parameters::DataObject)],
+    declared: &BTreeSet<u32>,
+) -> BTreeMap<u32, ExportParameters> {
+    use crate::partition_room_parameters::DATA_OBJECT_HEADER;
+    collect_export_parameters(buf, declared, |hit| {
+        let index = objects.partition_point(|(p, _)| *p <= hit).checked_sub(1)?;
+        let (p, object) = objects[index];
+        (hit >= p + DATA_OBJECT_HEADER && hit + 8 <= object.end).then_some(object.element_id)
+    })
+}
+
+/// Every export parameter entry in `buf` whose owner `owner_of` finds and
+/// `declared` holds, by owner. A key an owner sets to two different values
+/// is dropped.
+fn collect_export_parameters(
+    buf: &[u8],
+    declared: &BTreeSet<u32>,
+    owner_of: impl Fn(usize) -> Option<u32>,
 ) -> BTreeMap<u32, ExportParameters> {
     let mut found: BTreeMap<(u32, i64), Option<String>> = BTreeMap::new();
     for key in [
@@ -384,18 +425,9 @@ pub fn find_export_parameters(
             let Some(value) = export_parameter_value(buf, hit + 8, key) else {
                 continue;
             };
-            let from = hit.saturating_sub(EXPORT_PARAMETER_WINDOW);
-            let Some(start) = memchr::memmem::rfind(&buf[from..hit], header) else {
+            let Some(owner) = owner_of(hit).filter(|owner| declared.contains(owner)) else {
                 continue;
             };
-            let Some(owner) =
-                read_u64(buf, from + start + header.len()).and_then(|id| u32::try_from(id).ok())
-            else {
-                continue;
-            };
-            if !declared.contains(&owner) {
-                continue;
-            }
             match found.get_mut(&(owner, key)) {
                 None => {
                     found.insert((owner, key), Some(value));
@@ -420,9 +452,10 @@ pub fn find_export_parameters(
     out
 }
 
-/// [`find_export_parameters`] over every `Partitions/*` stream. An element
-/// whose streams disagree about a key loses that key. Empty for a release
-/// with no measured element-data header.
+/// [`find_export_parameters`] over every `Partitions/*` stream, or on Revit
+/// 2024 and later [`find_export_parameters_in_objects`]. An element whose
+/// streams disagree about a key loses that key. Empty for a release with no
+/// measured element-data header.
 pub fn scan_export_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -437,7 +470,15 @@ pub fn scan_export_parameters(
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (owner, parameters) in find_export_parameters(inflated.bytes(), &header, declared) {
+        let found = if revit_version >= 2024 {
+            let Ok(objects) = rf.partition_data_objects(&stream) else {
+                continue;
+            };
+            find_export_parameters_in_objects(inflated.bytes(), &objects, declared)
+        } else {
+            find_export_parameters(inflated.bytes(), &header, declared)
+        };
+        for (owner, parameters) in found {
             let held = merged.entry(owner).or_default();
             for (key, value) in [
                 (IFC_EXPORT_ELEMENT_AS, parameters.export_as),

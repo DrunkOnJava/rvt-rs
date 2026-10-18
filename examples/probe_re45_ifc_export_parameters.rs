@@ -34,6 +34,11 @@
 //! `IfcShadingDevice` are curtain walls Revit exports as `IfcCurtainWall`
 //! (#792).
 //!
+//! Each entry line also names the data object (RE-153) whose payload holds
+//! the entry, the owner rule Revit 2024 and later take (#792), and the probe
+//! ends with how often the two owners agree, with the values and owner
+//! categories of the entries on which they do not.
+//!
 //! Usage:
 //!   cargo run --profile ci --example probe_re45_ifc_export_parameters -- FILE.rvt
 
@@ -43,6 +48,7 @@ use rvt::partition_ifc_export_overrides::{
     EXPORT_PARAMETER_WINDOW, IFC_EXPORT_ELEMENT_AS, IFC_EXPORT_ELEMENT_TYPE_AS,
     scan_export_parameters,
 };
+use rvt::partition_room_parameters::DATA_OBJECT_HEADER;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -115,9 +121,31 @@ fn main() -> rvt::Result<()> {
                     .map(|(_, name)| (record.element_id, *name))
             })
             .collect();
-    println!("entries: stream offset key value | owner header | next header");
+    println!("entries: stream offset key value | owner header | next header | data object");
+    let kind = |raw: u64| {
+        let id = u32::try_from(raw).ok();
+        format!(
+            "{} {}",
+            if id.is_some_and(|id| declared.contains(&id)) {
+                "declared"
+            } else {
+                "undeclared"
+            },
+            id.and_then(|id| category_of.get(&id)).unwrap_or(&"-"),
+        )
+    };
+    let describe = |id: Option<u64>| match id {
+        Some(raw) => format!("id {raw} {}", kind(raw)),
+        None => "none".into(),
+    };
+    let mut agree = 0usize;
+    let mut no_object = 0usize;
+    let mut differ: BTreeMap<String, usize> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let Ok(objects) = rf.partition_data_objects(&stream) else {
             continue;
         };
         let buf = inflated.bytes();
@@ -134,6 +162,27 @@ fn main() -> rvt::Result<()> {
                     continue;
                 };
                 let from = hit.saturating_sub(EXPORT_PARAMETER_WINDOW);
+                let header_owner = memchr::memmem::rfind(&buf[from..hit], &header)
+                    .and_then(|at| id_after(from + at));
+                let object_owner = objects
+                    .partition_point(|(p, _)| *p <= hit)
+                    .checked_sub(1)
+                    .map(|index| objects[index])
+                    .filter(|(p, object)| hit >= p + DATA_OBJECT_HEADER && hit + 8 <= object.end)
+                    .map(|(_, object)| u64::from(object.element_id));
+                match (header_owner, object_owner) {
+                    (_, None) => no_object += 1,
+                    (Some(a), Some(b)) if a == b => agree += 1,
+                    (a, Some(b)) => {
+                        *differ
+                            .entry(format!(
+                                "{label} {value:?}: header {} / object {}",
+                                a.map_or_else(|| "none".to_string(), kind),
+                                kind(b)
+                            ))
+                            .or_default() += 1;
+                    }
+                }
                 let owner = match memchr::memmem::rfind(&buf[from..hit], &header) {
                     Some(at) => {
                         let at = from + at;
@@ -164,10 +213,18 @@ fn main() -> rvt::Result<()> {
                     None => "none".into(),
                 };
                 println!(
-                    "  entry {stream} {hit:#x} {label} {value:?} | owner {owner} | next {next}"
+                    "  entry {stream} {hit:#x} {label} {value:?} | owner {owner} | next {next} | object {}",
+                    describe(object_owner)
                 );
             }
         }
+    }
+    println!(
+        "owners: header and data object agree {agree}, differ {}, no data object {no_object}",
+        differ.values().sum::<usize>()
+    );
+    for (what, count) in &differ {
+        println!("  {count:>5}  {what}");
     }
     Ok(())
 }
