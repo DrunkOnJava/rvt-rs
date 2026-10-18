@@ -3,7 +3,8 @@
 # tools/fetch-autodesk-samples.sh and never stored or committed. They are on the host the
 # family corpus comes from, which phi-ag/rvt lists under CC BY-NC-SA 3.0; the projects' own
 # terms were not checked, which is why they are only fetched for a run. Hashes and sizes
-# measured 2026-10-01.
+# measured 2026-10-01; the five Snowdon Towers 2024 models (#766), Autodesk's multi-model
+# 2024 sample published under Samples/ on the same host, on 2026-10-18.
 # year	file	url	sha256	bytes
 2016	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt	8e6d1a7668dd700d7a94c022a80cbb2a9ea31925a75fbc551c8ced0904dbb8a1	16474112
 2016	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rst_basic_sample_project.rvt	c2fe9b5eea7c9d0e345e2a8a981cb94c8ded33408e7f3466903ad125149efe13	5693440
@@ -51,3 +52,8 @@
 2026	rmeadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2026RVT_RTM/Docs/InProd/rmeadvancedsampleproject.rvt	1f34a8f14d51d4baf9d010b0db689ba924fc36fcf9e7721ea5fee3ef1305d7af	39112704
 2027	rmebasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/rmebasicsampleproject.rvt	886bb0d17b1db51c70c770248f36a7a131ec268fced70da89e126b2a141ae1a7	32944128
 2027	rmeadvancedsampleproject.rvt	https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/rmeadvancedsampleproject.rvt	899ea8a69366b0c2c00aab7db45465ce722af5c26782c50833193bc654ffca7a	39178240
+2024	snowdon_towers_sample_architectural.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/Samples/Snowdon%20Towers%20Sample%20Architectural.rvt	33271010919acb2a0d0d040851393a511d86ea7fd9a1f4c054797ae03e5e44a1	94691328
+2024	snowdon_towers_sample_structural.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/Samples/Snowdon%20Towers%20Sample%20Structural.rvt	6dc833f9fe9fa702607265f2e3d581a6d2a928ea56133db8225c9b5e0f79a44f	28057600
+2024	snowdon_towers_sample_hvac.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/Samples/Snowdon%20Towers%20Sample%20HVAC.rvt	585385991b1f8a168881c4bc36546bc90e7bfb427c263d801fe367fa2ebb0fa8	22818816
+2024	snowdon_towers_sample_plumbing.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/Samples/Snowdon%20Towers%20Sample%20Plumbing.rvt	4f80526bd7823172e236d8c88968210a56c718e69a54a18b7919b3ae5610ae0a	42119168
+2024	snowdon_towers_sample_electrical.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/Samples/Snowdon%20Towers%20Sample%20Electrical.rvt	e50e1b7121cdcc4ac57cc4777981bbe52012814c9f5f65ea407fcd91b70e1750	41304064
