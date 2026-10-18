@@ -6,12 +6,68 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-18
+
+Revit 2026 projects now export typed elements, experimentally, measured on
+one project. MEP models gain ports, port-to-port connections and systems,
+pipes are drawn as the cylinders Revit draws, and Autodesk's 2024 MEP
+sample is walked in 10 seconds instead of 17 minutes. Exports carry more of
+what Revit's own export writes: each element's levels, its category, family,
+type and phase, and more of the common property sets. Rooms sit in the
+spatial tree as IFC4 requires, and Autodesk's Snowdon Towers samples export
+their elements again. Family instances can be drawn from the meshes Revit
+saved for display, on Revit 2024 to 2026 files (`--saved-meshes`, opt-in).
+Every figure is measured against Revit's own export of the same model.
+
+This is the first release with pull requests from outside contributors:
+helenkwok, pinterbanget and Persus1337. rosejn's saved-graphics reader is
+behind `--saved-meshes`, and format research from STE1200, jakobhirn-bit
+and puzzbobb is behind several entries below. Thank you.
+
+### Upgrading from 0.4
+
+- **The minimum supported Rust version is 1.87,** up from 1.85.
+- **The WebAssembly bindings are the `rvt-wasm` crate.** `rvt` has no `wasm`
+  feature and builds as a plain `rlib`; build the browser package with
+  `wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt`.
+- **Each `IfcSpace` is aggregated into its storey** through `IfcRelAggregates`
+  (or into the building where no storey is known), and is no longer listed in
+  the storey's `IfcRelContainedInSpatialStructure` (#744). A reader that looked
+  for rooms among a storey's contained elements reads the aggregation instead.
+- **Exports carry more entities:** an `IfcSpaceType` for each room, ports
+  nested in their elements, `IfcSystem`s, and the property sets above. Counts
+  keyed on 0.4's output change.
+- **Type objects take Revit's GlobalIds** (RE-167): a door's or window's type
+  is keyed by its original symbol and its flip, and a family instance's type
+  takes its original symbol's GlobalId, so type GlobalIds differ from 0.4's.
+- **`elem_table::ElemTableHeader::record_count` is a `u32`** (#764): the count
+  the table states, which can exceed 65,535.
+
 ### Added
 
 - **Release binaries carry their dependency list (C10).** Each binary of a
   GitHub release is built with `cargo auditable`, which embeds the crates
   and versions it was built from, so `cargo audit bin` and other scanners
   can check a downloaded binary against the RustSec advisories.
+- **Revit's level parameters, in a `Constraints` property set (RE-172 to
+  RE-176, #750).** Read from each element's association record: a wall's
+  Base Constraint and Top Constraint, a column's Base Level and Level, a
+  railing's, roof's or stair's Base Level, a duct's or pipe's Reference
+  Level, and any other element's Level, with Revit's names for each class.
+  A value is written only when the id is a Level rvt-rs recovered, on Revit
+  2024. Beams and braces whose association record holds no Level take the
+  highest Level their record lists (RE-175), and stairs their Base and Top
+  Level from the record or its lists (RE-174, RE-176). helenkwok measured
+  every written value against Revit's IFC4 export of seven Autodesk 2024
+  samples and the BIM4LCA models, and none differs (#751).
+- **Category, family and type, and Phase Created in Revit's own property
+  sets (RE-177, #754).** An element's `Other` set carries its Category (its
+  `BuiltInCategory` by the English name Revit's export writes), Family,
+  Family and Type, Type and Type Id, and its `Phasing` set its Phase
+  Created; a type object carries its Category and Family Name in `Other`
+  and its Type Name in `Identity Data`. Phase names are read from the
+  file's `ProjectPhase` frames. helenkwok measured them against Revit's
+  IFC4 export of seven Autodesk 2024 samples, with no wrong value (#755).
 - **Every join of an MEP model is read from its family instances' connectors
   (B86).** A family instance's native `Connector` objects list the elements
   joined to each connector (RE-171), so the export writes those joins
@@ -206,6 +262,100 @@ All notable changes will be documented here. This project follows
   built by `connector_element_field` and `connector_index_field` where
   `CONNECTOR_ELEMENT_FIELDS` and `CONNECTOR_INDEX_FIELDS` were.
   `reports/element-framing/RE-141-fitting-joins.md`.
+- **Ports and port-to-port connections for ducts and pipes (RE-138,
+  #528).** A duct's or pipe's object lists its connectors' joins after its
+  `RbsCurveConnectorManager` anchor, in two blocks that store the curve's own
+  connector index differently (inverted in the earlier). rvt-rs reads them
+  and writes an `IfcDistributionPort` for each connector, an
+  `IfcRelConnectsPortToElement` for each port and an `IfcRelConnectsPorts` for
+  each join whose two elements it exports as distribution elements (IFC4
+  allows a port on no other, so equipment written as a building element proxy
+  has none): 53 of the 59 connections of Revit's export that involve a duct or
+  pipe on RE1 Mechanical, 112 of 118 on Plumbing, with every port tied to the
+  element its name gives, one connection written that Revit's export lacks and
+  no finding in IfcOpenShell's schema validation. The ports have no flow
+  direction (Revit's names, `InPort_` and `OutPort_`, follow the system's
+  flow, which the lists do not carry), so they are named
+  `Port_<ElementId>_<index>`; fitting-to-fitting and equipment connections are
+  not read. `examples/probe_re138_connector_pairs.rs`,
+  `tools/re/ports_vs_ifc.py`.
+- **Pipes as the cylinders Revit draws (RE-131, #96).** A pipe's two ends
+  are connector entries in its partition (an element, a connector index,
+  the `u32` 1 and a point of three `f64`), keyed by the pipe itself or by
+  the element connected at that end, and its record box gives the outside
+  radius: every axis that is not nearly the
+  pipe's own must give the same radius, and the box rebuilt from the
+  cylinder must be the record box on all six sides, or the pipe keeps its
+  box. On RE1 Mechanical and Plumbing (Revit 2025), against Revit's own
+  export: 69 of 69 pipes are circle-profile extrusions whose radius, axis
+  ends and length are Revit's to 0.00001 ft. `main` wrote every one as a
+  box, and the right axis for 23 of the 69. No other model's IFC
+  changes. The entry layout and the radius derivation are jakobhirn-bit's
+  (Discussion #112), measured by them on Snowdon Towers' plumbing sample.
+  Revit 2025 only. Every RE1 pipe runs along a principal axis, so sloped
+  pipes rest on the rebuild proof, not on an oracle; ducts and fittings keep
+  their boxes.
+- **Family instances in their real shape, opt-in (RE-78, #255, #227).**
+  `rvt-ifc --saved-meshes` and `rvt-gltf --saved-meshes` replace each
+  bounding-box body with the mesh Revit saved for the element's display,
+  read by rosejn's native saved-graphics reader from #255 (extracted with
+  their authorship). Measured against Revit's own export, per element world
+  box: on Core Interior every door, window and shading device (158 of 158)
+  is within 0.01 ft, where the box made every door 2.92 ft too deep; on
+  Snowdon Towers 3,332 of the 3,736 replaced bodies are, up from 1,138
+  for their boxes, including 131 of 132 doors, 289 of 388 light fixtures and
+  all 110 columns. Saved meshes are written as `IfcTriangulatedFaceSet`
+  (Snowdon's IFC is 111 MB with them, 12 MB without) and take 37 s on
+  Snowdon, so they stay opt-in. Windows are the exception (2 of 68 on
+  Snowdon): Revit's export draws parts the saved Fine-detail mesh does not.
+  Stairs and curtain walls keep the bodies of their parts. Revit 2024 only:
+  the reader declines 2025 files, which then export with their boxes.
+- **Pipes named as Revit names them (RE-130, #96).** A pipe's type is in
+  its record's reference list, but pipe and duct types have no name entry,
+  so no type was found. Their name follows the type's ElementId at a fixed
+  place. Pipes now export as `Pipe Types:<type>:<ElementId>` with their
+  type object: RE1 Mechanical 6 of 6 and Plumbing 62 of 63 (none before),
+  and Plumbing's elements are typed as Revit types them on 122 of 123 (60
+  before). Ducts are not named yet: their family follows their type's
+  shape.
+- **Joined-wall lists decide the L corners the join lists leave open
+  (RE-127, #238).** Beside RE-70's join lists, a wall's data lists every
+  wall it is joined to, with a run of values per wall. Where the join
+  lists do not say which of two walls runs through, the one whose entry
+  for the other is a run of consecutive values stops at the other's face,
+  and the other ends at the corner. On Core Interior that settles the last
+  9 ends RE-26 cut the wrong way: wall bodies are 360 of 360 exact against
+  Revit's export (351 before). No other score and no other reference
+  model's IFC changes.
+- **Revit 2026 wall join lists (RE-126, #421).** They are laid out as on
+  2025, so 2026 walls are now joined by them. Against the house's
+  CoordinationView export, which draws each wall as one box, 85 of 118
+  wall ends are where Revit puts them (27 of 48 before, on the 24 walls
+  that had a centreline).
+- **Material names kept after parameter entries (RE-125, #355).** A
+  material whose name field holds shared parameters (a manufacturer's
+  product, supplier, URL, classification) keeps its name after them,
+  closed by eight zero bytes, an ElementId and `0xff`×8. Read as a last
+  resort, it names every material on the Revit 2026 house (148 of 148,
+  from 116), Core Interior (86 of 86, from 78) and Snowdon Towers (220 of
+  220). On the house, layer names are Revit's on 183 layers (13 before)
+  and 65 of 67 elements have Revit's material set (5 of 19). Element
+  material sets on Core Interior and Snowdon are unchanged; their
+  material lists gain the names.
+- **Revit 2026 projects export typed elements (RE-124, #421).** Every
+  per-release constant rvt-rs reads is the tag of a class in the file's own
+  schema, and on a Revit 2026 project those tags give the 2026 values:
+  the record marker (`Outline`, `ElementParents`), Level elevations
+  (`Plane`), element data (`CellList`), layers (`VerticalRegionsStructure`,
+  whose 2026 records are 41 bytes) and materials (`Material`,
+  `PatternHelper`, `PhysicalParamSet`). On the flowbim.ee house against
+  Revit 26.4's own IFC4X3 export: 113 of its 115 elements, none outside
+  it, with Revit's GlobalIds; its 4 storeys with Revit's names and
+  elevations; 13 of 13 rooms with Revit's number and name; 13 of 13 doors
+  and 15 of 16 windows in their host walls; walls named `Family:Type` as
+  Revit names them, and 26 layer sets as thick as Revit's. Experimental:
+  one model. Wall joins, roof slopes, stairs and IFC export overrides are
+  not read on 2026.
 
 ### Changed
 
@@ -276,6 +426,57 @@ All notable changes will be documented here. This project follows
   The check is named `build + real files / ubuntu-latest / msrv`, without the
   version, so the ruleset in `.github/rulesets/main-protection.json` does not
   change when the MSRV does.
+- **Element records are scanned with the marker the file's own schema
+  gives (#421).** The marker is `Outline`'s tag, `0xFF`×4 and
+  `ElementParents`' tag in the file's own `Formats/Latest` (RE-80), and
+  the record header carries `ElementHeader`'s tag. On every 2024 and 2025
+  file measured (11, with STE1200's rows for 2014 to 2026 in Discussion
+  #112) the schema's marker is the release's measured constant, so the
+  constant is now confirmed from the file: a file whose schema gives
+  another marker is not scanned, rather than scanned with the wrong one.
+  Which releases are read is unchanged, and every 2024 and 2025 export
+  is byte-identical.
+- **`ROADMAP.md` and the contribution map match the milestones, the
+  support matrix and the tracker.** The roadmap's position table and
+  milestones were the RE-19 era's: they now carry the matrix's status for
+  each area, the three releases so far (0.2.0, 0.3.0, 0.4.0) and what the
+  open milestones are for. The contribution map's open remainders, dated
+  2026-09-19, are the tracker's 24 open issues by milestone, with their own
+  titles. Documentation only.
+- **The repository is run as `docs/maintaining.md` describes.** `main`
+  requires a pull request and resolved conversations (ADR-005, now applied),
+  release tags `v*` are protected by a second ruleset, and both rulesets are
+  kept as code in `.github/rulesets/`. CodeQL default setup is on (workflows,
+  the viewer's TypeScript and JavaScript, the Python bindings), the repository
+  requires full-SHA pins for actions, and there is a `SUPPORT.md`. Dependabot
+  groups minor and patch updates, the bug and feature forms apply the project's
+  own `type:bug` and `type:feature` labels, and CI keeps its smoke wheels for
+  seven days and a pull request's evidence bundle for fourteen. The 0.4.0
+  milestone is closed with its release, and the geometry slices still open moved
+  to 0.4.x. Nothing in the crate, the CLIs or the viewer changes.
+- **`tools/maintainer/audit.py` checks the repository against
+  `docs/maintaining.md`.** It is read-only and prints one line per check: every
+  open issue's labels, milestones against releases, stray branches, the Actions
+  cache, the state of `main`'s workflows, open security alerts, the live
+  rulesets against `.github/rulesets/`, the repository settings, the labels the
+  forms and Dependabot apply, that Dependabot watches every lockfile,
+  Dockerfile and composite action (the witness crate's lockfile is pinned on
+  purpose), and replies owed to pull requests and discussions. The state of
+  `main` is read per workflow, from its push and scheduled runs, out of the
+  check suites of its last 100 commits through GraphQL: GitHub's REST runs list
+  is sometimes served from a stale index (one URL returned three different
+  snapshots minutes apart on 2026-09-30, the freshest six days old, and later
+  two differently shaped queries agreed on one stale answer), which made the
+  check report a Fuzz failure that a green scheduled run had long superseded.
+  The PyPI environments now accept only release refs.
+- **`tools/maintainer/clean_caches.py` deletes the Actions caches nobody can
+  use again.** The caches of pull requests that are no longer open, of deleted
+  branches, and the superseded generations of `main`'s rust-cache families (a
+  new lockfile saves a cache under a new key and the old ones are never read
+  again; the newest two are kept). It is a dry run unless given `--delete`. On
+  2026-09-30 the cache stood at 9.1 GB of a 10 GB limit, and 4.9 GB of it was
+  that: 0.45 GB from closed pull requests, 4.49 GB from `main`'s old
+  generations.
 
 ### Fixed
 
@@ -285,6 +486,37 @@ All notable changes will be documented here. This project follows
   `rvt-elem-table` then reported 7,262 declared records, and the implicit
   fallback layout parsed only that many. The field is now a `u32`, and both
   layouts take their record limit from the same count.
+- **Each room is aggregated into its storey (#743).** Every `IfcSpace` was
+  listed in its storey's `IfcRelContainedInSpatialStructure`, which in IFC4
+  holds elements, not spatial elements, so no space had a parent in the
+  spatial tree (buildingSMART rules SPS002 and SPS007) and a reader walking
+  the tree found no storey for a room or anything in it. Spaces are now
+  parts of their storey, or of the building where no storey is known,
+  through `IfcRelAggregates` (#744, helenkwok).
+- **A Level that is not a building storey may share a storey's elevation
+  (#746).** The storey check dropped every Level when two shared an
+  elevation, so the BIM4LCA timber houses, whose reference level sits at
+  `Level_01`'s elevation, exported one storey at 0 ft. Only storeys are now
+  held to distinct elevations; those files get Revit's eight storeys (#752,
+  helenkwok).
+- **A column whose record box starts at z = 0 takes its bottom from its
+  geometry node (RE-173, #746).** Some columns' records hold a box that
+  starts at exactly 0 while the column starts higher. The instance's
+  geometry node holds the true z-range; where every copy of it agrees, the
+  column takes that bottom (131 of 135 columns of Autodesk's 2024 MEP
+  sample and all 54 of a BIM4LCA house, measured by helenkwok, #753).
+- **A column that a joined slab or roof cuts is exported as its cut body
+  (RE-178, #756).** The column's geometry node also holds its extent after
+  geometry joins; where every copy agrees, the IFC body is the cut one while
+  the placement and the column's own extent stay. 272 of 276 cut columns on
+  the Autodesk 2024 samples and BIM4LCA files then equal Revit's body,
+  none regressing (#757, helenkwok).
+- **`--saved-meshes` reads the saved graphics of documents with a large
+  increment table (RE-78).** `Global/DocumentIncrementTable` decoded under a
+  100,000-value budget, which two BIM4LCA houses exceed (109,543 and
+  106,289 values), so no family instance took its saved mesh there. The
+  table's budget is now the larger of that and its byte length (#758,
+  Persus1337; reproduced by helenkwok).
 - **Snowdon Towers exports its elements again (#736).** The record
   size `elem_table::detect_layout` picks is the one at which the stated
   records fit from `0x06` with ids rising. It tested the first id, but on
@@ -300,7 +532,7 @@ All notable changes will be documented here. This project follows
   first ids. Every other file reads the same layout as before.
   `tests/elem_table_frame.rs` checks rising ElementIds and owners on the
   second id, and reads the Snowdon samples when they are in
-  `RVT_PROJECT_CORPUS_DIR`.
+  `RVT_PROJECT_CORPUS_DIR` (#737, pinterbanget).
 - **The viewer's wasm network-import audit can fail (VW1-21).** It grepped
   `wasm-objdump` output for `"fetch"` and the like with the quotes, which
   wabt never prints for an import (`src/binary-reader-objdump.cc:1607`), so
@@ -328,7 +560,7 @@ All notable changes will be documented here. This project follows
     91.9 to 95.2 (`rst_basic`), 90.0 to 97.8 (`rac_advanced`). `rac_basic`'s
     one export element that 2024 does not export, a container member, is gone.
   - Exports of 2024 files are unchanged.
-  - Probe: `examples/probe_32bit_container.rs`.
+  - Probe: `examples/probe_32bit_container.rs` (#738, pinterbanget).
 - **An export without geometry keeps its elements' types and names (B74).**
   `--mode typed-no-geometry` read the record property set, which carries an
   element's family and type, only with its geometry, so it typed no element
@@ -411,6 +643,34 @@ All notable changes will be documented here. This project follows
   word. Checked by the new real-file target `tests/native_partitions_walk.rs`:
   every partition of every family of 2016 to 2026 walks to its end. The
   native record path still admits only 2023, 2024 and 2027.
+- **Walls whose data sets a second flag after the flip (RE-126).** A
+  wall's flip is one byte, and the byte after it is a second flag that is
+  0 or 1. It was read as one `u32` 0 or 1, so a wall setting the flag lost
+  its exterior side, its layers and its centreline body: 35 of the Revit
+  2026 house's 59 walls and 4 of Core Interior's 360. On the house, layer
+  sets go from 26 to 61, all as thick as Revit's with its names, and layer
+  names are Revit's on 320 layers (183 before). Core Interior writes 407
+  layer sets (403), all as thick as Revit's. Its wall bodies, and every
+  RE1, Einhoven and Snowdon Towers output, are unchanged.
+- **A type whose material map cannot be read no longer drops its doors
+  and windows (RE-124, RE-84).** RE-84 exports a door or window whose type
+  has no geometry-material map as its opening alone. Two cases made every
+  type look map-less: a file whose material names are not read, and a map
+  with unset entries (a part with no material of its own), which the 2026
+  house's manufacturer doors and windows have. Neither now counts as "no
+  map": without material names nothing is decided, and a map with unset
+  entries shows the type draws geometry, though its materials are not
+  taken as the element's (taken as its set, they gave 46 more wrong sets
+  than right on Snowdon Towers). Every 2023 to 2025 file is byte-identical.
+- **No invented storeys (RE-124).** A file whose Levels are not read got
+  storeys anyway: Level-like strings from its partitions at elevation 0, or
+  a placeholder `Level 1`. On a Revit 2026 house they were `Ground floor`,
+  `Level 1` and `Roof`, none of its four Levels, and every family file had
+  `Level 1` and `Roof` though a family has no Levels. Such a file now has no
+  `IfcBuildingStorey` (IFC4 needs none), and its elements are contained in
+  the `IfcBuilding`. Every project whose Levels are read, 2023 to 2025, is
+  unchanged: Core Interior, Snowdon Towers, the RE1 models, Einhoven and
+  the 255ribeiro projects keep the same storeys.
 
 ### Research
 
@@ -610,136 +870,6 @@ All notable changes will be documented here. This project follows
   `u32` at `+0x46` that RE-128 reads. The other two, Einhoven's walls 2921
   and 3637, are not declared in `Global/ElemTable`, and rvt-rs does not read
   them. `examples/probe_re132_slik_vectors.rs`.
-
-### Added
-
-- **Ports and port-to-port connections for ducts and pipes (RE-138,
-  #528).** A duct's or pipe's object lists its connectors' joins after its
-  `RbsCurveConnectorManager` anchor, in two blocks that store the curve's own
-  connector index differently (inverted in the earlier). rvt-rs reads them
-  and writes an `IfcDistributionPort` for each connector, an
-  `IfcRelConnectsPortToElement` for each port and an `IfcRelConnectsPorts` for
-  each join whose two elements it exports as distribution elements (IFC4
-  allows a port on no other, so equipment written as a building element proxy
-  has none): 53 of the 59 connections of Revit's export that involve a duct or
-  pipe on RE1 Mechanical, 112 of 118 on Plumbing, with every port tied to the
-  element its name gives, one connection written that Revit's export lacks and
-  no finding in IfcOpenShell's schema validation. The ports have no flow
-  direction (Revit's names, `InPort_` and `OutPort_`, follow the system's
-  flow, which the lists do not carry), so they are named
-  `Port_<ElementId>_<index>`; fitting-to-fitting and equipment connections are
-  not read. `examples/probe_re138_connector_pairs.rs`,
-  `tools/re/ports_vs_ifc.py`.
-- **Pipes as the cylinders Revit draws (RE-131, #96).** A pipe's two ends
-  are connector entries in its partition (an element, a connector index,
-  the `u32` 1 and a point of three `f64`), keyed by the pipe itself or by
-  the element connected at that end, and its record box gives the outside
-  radius: every axis that is not nearly the
-  pipe's own must give the same radius, and the box rebuilt from the
-  cylinder must be the record box on all six sides, or the pipe keeps its
-  box. On RE1 Mechanical and Plumbing (Revit 2025), against Revit's own
-  export: 69 of 69 pipes are circle-profile extrusions whose radius, axis
-  ends and length are Revit's to 0.00001 ft. `main` wrote every one as a
-  box, and the right axis for 23 of the 69. No other model's IFC
-  changes. The entry layout and the radius derivation are jakobhirn-bit's
-  (Discussion #112), measured by them on Snowdon Towers' plumbing sample.
-  Revit 2025 only. Every RE1 pipe runs along a principal axis, so sloped
-  pipes rest on the rebuild proof, not on an oracle; ducts and fittings keep
-  their boxes.
-
-### Added
-
-- **Family instances in their real shape, opt-in (RE-78, #255, #227).**
-  `rvt-ifc --saved-meshes` and `rvt-gltf --saved-meshes` replace each
-  bounding-box body with the mesh Revit saved for the element's display,
-  read by rosejn's native saved-graphics reader from #255 (extracted with
-  their authorship). Measured against Revit's own export, per element world
-  box: on Core Interior every door, window and shading device (158 of 158)
-  is within 0.01 ft, where the box made every door 2.92 ft too deep; on
-  Snowdon Towers 3,332 of the 3,736 replaced bodies are, up from 1,138
-  for their boxes, including 131 of 132 doors, 289 of 388 light fixtures and
-  all 110 columns. Saved meshes are written as `IfcTriangulatedFaceSet`
-  (Snowdon's IFC is 111 MB with them, 12 MB without) and take 37 s on
-  Snowdon, so they stay opt-in. Windows are the exception (2 of 68 on
-  Snowdon): Revit's export draws parts the saved Fine-detail mesh does not.
-  Stairs and curtain walls keep the bodies of their parts. Revit 2024 only:
-  the reader declines 2025 files, which then export with their boxes.
-
-### Added
-
-- **Pipes named as Revit names them (RE-130, #96).** A pipe's type is in
-  its record's reference list, but pipe and duct types have no name entry,
-  so no type was found. Their name follows the type's ElementId at a fixed
-  place. Pipes now export as `Pipe Types:<type>:<ElementId>` with their
-  type object: RE1 Mechanical 6 of 6 and Plumbing 62 of 63 (none before),
-  and Plumbing's elements are typed as Revit types them on 122 of 123 (60
-  before). Ducts are not named yet: their family follows their type's
-  shape.
-
-### Added
-
-- **Joined-wall lists decide the L corners the join lists leave open
-  (RE-127, #238).** Beside RE-70's join lists, a wall's data lists every
-  wall it is joined to, with a run of values per wall. Where the join
-  lists do not say which of two walls runs through, the one whose entry
-  for the other is a run of consecutive values stops at the other's face,
-  and the other ends at the corner. On Core Interior that settles the last
-  9 ends RE-26 cut the wrong way: wall bodies are 360 of 360 exact against
-  Revit's export (351 before). No other score and no other reference
-  model's IFC changes.
-
-### Fixed
-
-- **Walls whose data sets a second flag after the flip (RE-126).** A
-  wall's flip is one byte, and the byte after it is a second flag that is
-  0 or 1. It was read as one `u32` 0 or 1, so a wall setting the flag lost
-  its exterior side, its layers and its centreline body: 35 of the Revit
-  2026 house's 59 walls and 4 of Core Interior's 360. On the house, layer
-  sets go from 26 to 61, all as thick as Revit's with its names, and layer
-  names are Revit's on 320 layers (183 before). Core Interior writes 407
-  layer sets (403), all as thick as Revit's. Its wall bodies, and every
-  RE1, Einhoven and Snowdon Towers output, are unchanged.
-
-### Added
-
-- **Revit 2026 wall join lists (RE-126, #421).** They are laid out as on
-  2025, so 2026 walls are now joined by them. Against the house's
-  CoordinationView export, which draws each wall as one box, 85 of 118
-  wall ends are where Revit puts them (27 of 48 before, on the 24 walls
-  that had a centreline).
-
-### Added
-
-- **Material names kept after parameter entries (RE-125, #355).** A
-  material whose name field holds shared parameters (a manufacturer's
-  product, supplier, URL, classification) keeps its name after them,
-  closed by eight zero bytes, an ElementId and `0xff`×8. Read as a last
-  resort, it names every material on the Revit 2026 house (148 of 148,
-  from 116), Core Interior (86 of 86, from 78) and Snowdon Towers (220 of
-  220). On the house, layer names are Revit's on 183 layers (13 before)
-  and 65 of 67 elements have Revit's material set (5 of 19). Element
-  material sets on Core Interior and Snowdon are unchanged; their
-  material lists gain the names.
-
-### Added
-
-- **Revit 2026 projects export typed elements (RE-124, #421).** Every
-  per-release constant rvt-rs reads is the tag of a class in the file's own
-  schema, and on a Revit 2026 project those tags give the 2026 values:
-  the record marker (`Outline`, `ElementParents`), Level elevations
-  (`Plane`), element data (`CellList`), layers (`VerticalRegionsStructure`,
-  whose 2026 records are 41 bytes) and materials (`Material`,
-  `PatternHelper`, `PhysicalParamSet`). On the flowbim.ee house against
-  Revit 26.4's own IFC4X3 export: 113 of its 115 elements, none outside
-  it, with Revit's GlobalIds; its 4 storeys with Revit's names and
-  elevations; 13 of 13 rooms with Revit's number and name; 13 of 13 doors
-  and 15 of 16 windows in their host walls; walls named `Family:Type` as
-  Revit names them, and 26 layer sets as thick as Revit's. Experimental:
-  one model. Wall joins, roof slopes, stairs and IFC export overrides are
-  not read on 2026.
-
-### Research
-
 - **Revit 2026 element records (RE-124, #421).** On the public flowbim.ee
   house (Revit 2026, with Revit's own IFC4X3 export), the records carry the
   marker RE-32 predicted (`61 01 ff ff ff ff f1 05`, from the file's own
@@ -749,83 +879,6 @@ All notable changes will be documented here. This project follows
   bare openings, storeys were not the model's, and rooms were unnamed.
   `examples/probe_re124_revit_2026_records.rs` and
   `tools/re/instances_vs_ifc_tags.py` measure it.
-
-### Fixed
-
-- **A type whose material map cannot be read no longer drops its doors
-  and windows (RE-124, RE-84).** RE-84 exports a door or window whose type
-  has no geometry-material map as its opening alone. Two cases made every
-  type look map-less: a file whose material names are not read, and a map
-  with unset entries (a part with no material of its own), which the 2026
-  house's manufacturer doors and windows have. Neither now counts as "no
-  map": without material names nothing is decided, and a map with unset
-  entries shows the type draws geometry, though its materials are not
-  taken as the element's (taken as its set, they gave 46 more wrong sets
-  than right on Snowdon Towers). Every 2023 to 2025 file is byte-identical.
-
-- **No invented storeys (RE-124).** A file whose Levels are not read got
-  storeys anyway: Level-like strings from its partitions at elevation 0, or
-  a placeholder `Level 1`. On a Revit 2026 house they were `Ground floor`,
-  `Level 1` and `Roof`, none of its four Levels, and every family file had
-  `Level 1` and `Roof` though a family has no Levels. Such a file now has no
-  `IfcBuildingStorey` (IFC4 needs none), and its elements are contained in
-  the `IfcBuilding`. Every project whose Levels are read, 2023 to 2025, is
-  unchanged: Core Interior, Snowdon Towers, the RE1 models, Einhoven and
-  the 255ribeiro projects keep the same storeys.
-
-### Changed
-
-- **Element records are scanned with the marker the file's own schema
-  gives (#421).** The marker is `Outline`'s tag, `0xFF`×4 and
-  `ElementParents`' tag in the file's own `Formats/Latest` (RE-80), and
-  the record header carries `ElementHeader`'s tag. On every 2024 and 2025
-  file measured (11, with STE1200's rows for 2014 to 2026 in Discussion
-  #112) the schema's marker is the release's measured constant, so the
-  constant is now confirmed from the file: a file whose schema gives
-  another marker is not scanned, rather than scanned with the wrong one.
-  Which releases are read is unchanged, and every 2024 and 2025 export
-  is byte-identical.
-- **`ROADMAP.md` and the contribution map match the milestones, the
-  support matrix and the tracker.** The roadmap's position table and
-  milestones were the RE-19 era's: they now carry the matrix's status for
-  each area, the three releases so far (0.2.0, 0.3.0, 0.4.0) and what the
-  open milestones are for. The contribution map's open remainders, dated
-  2026-09-19, are the tracker's 24 open issues by milestone, with their own
-  titles. Documentation only.
-- **The repository is run as `docs/maintaining.md` describes.** `main`
-  requires a pull request and resolved conversations (ADR-005, now applied),
-  release tags `v*` are protected by a second ruleset, and both rulesets are
-  kept as code in `.github/rulesets/`. CodeQL default setup is on (workflows,
-  the viewer's TypeScript and JavaScript, the Python bindings), the repository
-  requires full-SHA pins for actions, and there is a `SUPPORT.md`. Dependabot
-  groups minor and patch updates, the bug and feature forms apply the project's
-  own `type:bug` and `type:feature` labels, and CI keeps its smoke wheels for
-  seven days and a pull request's evidence bundle for fourteen. The 0.4.0
-  milestone is closed with its release, and the geometry slices still open moved
-  to 0.4.x. Nothing in the crate, the CLIs or the viewer changes.
-- **`tools/maintainer/audit.py` checks the repository against
-  `docs/maintaining.md`.** It is read-only and prints one line per check: every
-  open issue's labels, milestones against releases, stray branches, the Actions
-  cache, the state of `main`'s workflows, open security alerts, the live
-  rulesets against `.github/rulesets/`, the repository settings, the labels the
-  forms and Dependabot apply, that Dependabot watches every lockfile,
-  Dockerfile and composite action (the witness crate's lockfile is pinned on
-  purpose), and replies owed to pull requests and discussions. The state of
-  `main` is read per workflow, from its push and scheduled runs, out of the
-  check suites of its last 100 commits through GraphQL: GitHub's REST runs list
-  is sometimes served from a stale index (one URL returned three different
-  snapshots minutes apart on 2026-09-30, the freshest six days old, and later
-  two differently shaped queries agreed on one stale answer), which made the
-  check report a Fuzz failure that a green scheduled run had long superseded.
-  The PyPI environments now accept only release refs.
-- **`tools/maintainer/clean_caches.py` deletes the Actions caches nobody can
-  use again.** The caches of pull requests that are no longer open, of deleted
-  branches, and the superseded generations of `main`'s rust-cache families (a
-  new lockfile saves a cache under a new key and the old ones are never read
-  again; the newest two are kept). It is a dry run unless given `--delete`. On
-  2026-09-30 the cache stood at 9.1 GB of a 10 GB limit, and 4.9 GB of it was
-  that: 0.45 GB from closed pull requests, 4.49 GB from `main`'s old
-  generations.
 
 ## [0.4.0] — 2026-09-28
 
