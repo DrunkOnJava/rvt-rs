@@ -47,7 +47,8 @@ pub struct NameEntry {
 /// Names by ElementId, with the partition record of each named element.
 #[derive(Debug, Clone, Default)]
 pub struct ElementNames {
-    /// Every declared ElementId with exactly one name entry.
+    /// Every declared ElementId with one name entry in the latest partition
+    /// holding one (#807).
     pub entries: BTreeMap<u32, NameEntry>,
     /// Named ids that are family candidates of each named type: the named
     /// ids of the type's category found in the type's own partition record.
@@ -191,24 +192,17 @@ pub fn find_name_entries(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<NameEn
 }
 
 /// Keep one entry per ElementId, dropping any id whose entries disagree.
-fn unique_entries(entries: impl IntoIterator<Item = NameEntry>) -> BTreeMap<u32, NameEntry> {
-    let mut by_id: BTreeMap<u32, Option<NameEntry>> = BTreeMap::new();
-    for entry in entries {
-        match by_id.get_mut(&entry.element_id) {
-            None => {
-                by_id.insert(entry.element_id, Some(entry));
-            }
-            Some(slot) => {
-                if slot.as_ref() != Some(&entry) {
-                    *slot = None;
-                }
-            }
-        }
+/// One name entry per ElementId from entries found in numbered partitions:
+/// the latest partition's (#807, RE-145), none where that partition's
+/// entries for the id disagree. On the BIM4LCA office's permit file every
+/// family and type has an older copy with its Finnish name and a newer one
+/// with its English name.
+fn unique_entries(entries: impl IntoIterator<Item = (u32, NameEntry)>) -> BTreeMap<u32, NameEntry> {
+    let mut latest = crate::partition_room_parameters::LatestCopy::default();
+    for (partition, entry) in entries {
+        latest.offer(entry.element_id, partition, entry);
     }
-    by_id
-        .into_iter()
-        .filter_map(|(id, entry)| entry.map(|e| (id, e)))
-        .collect()
+    latest.into_values()
 }
 
 /// Named ids of `category` other than `own` that appear as a `u64` at any
@@ -255,7 +249,12 @@ pub fn compute_element_names(rf: &mut RevitFile) -> Result<ElementNames> {
             continue;
         };
         let buf = inflated.bytes();
-        found.extend(find_name_entries(buf, &declared));
+        let partition = crate::partition_room_parameters::partition_number(&stream);
+        found.extend(
+            find_name_entries(buf, &declared)
+                .into_iter()
+                .map(|entry| (partition, entry)),
+        );
         spans.extend(
             partition_record_chain(buf, &marker)
                 .into_iter()
