@@ -237,6 +237,46 @@ fn identity_property_set(mut set: PropertySet, decoded: &DecodedElement) -> Prop
     set
 }
 
+/// An Area's ElementId, number and name (#763), in the set a room's are
+/// written in, so the writer names its `IfcSpace` as it names a room's:
+/// `Name` the number and `LongName` the name, as Revit's export does.
+fn area_property_set(decoded: &DecodedElement) -> PropertySet {
+    let text = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::String(text) if field == wanted && !text.is_empty() => {
+                    Some(text.clone())
+                }
+                _ => None,
+            })
+    };
+    let mut properties = Vec::new();
+    if let Some(id) = decoded.id {
+        properties.push(Property {
+            name: ROOM_ELEMENT_ID_PROPERTY.into(),
+            value: PropertyValue::Integer(i64::from(id)),
+        });
+    }
+    if let Some(number) = text(crate::partition_schema_mvp::ROOM_NUMBER_FIELD) {
+        properties.push(Property {
+            name: ROOM_NUMBER_PROPERTY.into(),
+            value: PropertyValue::Text(number),
+        });
+    }
+    if let Some(name) = text("m_name") {
+        properties.push(Property {
+            name: ROOM_NAME_PROPERTY.into(),
+            value: PropertyValue::Text(name),
+        });
+    }
+    PropertySet {
+        name: ELEMENT_RECORD_PROPERTY_SET.into(),
+        properties,
+    }
+}
+
 /// Strip placement / body / host claims so an export cannot over-claim geometry.
 pub fn strip_building_element_geometry(entities: &mut [entities::IfcEntity]) {
     for entity in entities.iter_mut() {
@@ -566,6 +606,9 @@ pub fn append_typed_production_elements(
                             property_set = Some(geom);
                         }
                     }
+                    // #763: an Area's record holds no box, so its space has
+                    // no body, but it is named as a room's is.
+                    "Area" => property_set = Some(area_property_set(&decoded)),
                     _ => {}
                 }
             }

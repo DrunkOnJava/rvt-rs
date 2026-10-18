@@ -53,6 +53,9 @@ pub struct PartitionSchemaMvp {
     pub levels: Vec<DecodedElement>,
     pub materials: Vec<DecodedElement>,
     pub rooms: Vec<DecodedElement>,
+    /// Placed Areas from their partition chain records, written as
+    /// `IfcSpace` (#763, [`crate::partition_area_records`]).
+    pub areas: Vec<DecodedElement>,
     /// 2024 ArcWallRectOpening index rows — not typed Door/Window.
     pub rect_openings: Vec<DecodedElement>,
     /// 2024 `OST_Columns` partition element records (M4-09 / #204).
@@ -80,6 +83,7 @@ impl PartitionSchemaMvp {
             self.levels.len()
                 + self.materials.len()
                 + self.rooms.len()
+                + self.areas.len()
                 + self.rect_openings.len()
                 + self.columns.len()
                 + self.walls.len()
@@ -91,6 +95,7 @@ impl PartitionSchemaMvp {
         out.extend(self.levels);
         out.extend(self.materials);
         out.extend(self.rooms);
+        out.extend(self.areas);
         out.extend(self.rect_openings);
         out.extend(self.columns);
         out.extend(self.walls);
@@ -275,6 +280,12 @@ pub fn recover_partition_schema_mvp(
     out.rooms = rooms_from_partition_category_records(rf, revit_version, &level_ids)?;
     // Their outlines from the faces of their stored solids (RE-101).
     attach_room_outlines(rf, revit_version, &mut out.rooms);
+    // --- Areas, which carry no record box (#763) ---
+    out.areas = crate::partition_area_records::areas_from_partition_chain_records(
+        rf,
+        revit_version,
+        &level_ids,
+    );
 
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;

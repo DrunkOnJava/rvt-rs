@@ -241,10 +241,10 @@ pub const MAPPINGS: &[Mapping] = &[
     //
     // `.SPACE.` rather than `.INTERNAL.` (#220): Revit writes
     // `.SPACE.` on all 116 `IFCSPACE` rows of
-    // `2024_Core_Interior_slim.ifc`. `Area` and `Space` keep `None` —
-    // no recorded edge shows what the witness does with those two
-    // Revit classes, and inventing a value is the thing this table
-    // exists to avoid.
+    // `2024_Core_Interior_slim.ifc`, and on the 30 Areas of the BIM4LCA
+    // office (#763). `Space` keeps `None`: no recorded edge shows what
+    // the witness does with that Revit class, and inventing a value is
+    // the thing this table exists to avoid.
     Mapping {
         revit_class: "Room",
         ifc_type: "IFCSPACE",
@@ -253,7 +253,7 @@ pub const MAPPINGS: &[Mapping] = &[
     Mapping {
         revit_class: "Area",
         ifc_type: "IFCSPACE",
-        predefined_type: None,
+        predefined_type: Some("SPACE"),
     },
     Mapping {
         revit_class: "Space",
