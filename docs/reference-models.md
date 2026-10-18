@@ -72,6 +72,22 @@ and what a release's reader gives on the same model, not recovery against
 Revit: `reports/element-framing/RE-140-sample-projects-2016-2027.md` compares
 each release's records with 2024's by ElementId. They do not admit a release.
 
+## BIM4LCA example buildings, fetched for CI
+
+VTT's BIM4LCA project published Revit 2024 models of a housing and an office
+building, each in a timber and a concrete version, with Revit's own IFC
+export of each, under CC BY-SA 4.0
+([BIM files to download](https://cris.vtt.fi/en/publications/bim-files-to-download/)).
+They hold what the reference models lack, and several fixes rest on them:
+a table of more than 65,535 records (#745), a reference Level at a storey's
+elevation (#746), columns cut by the slabs they join (#756). The archive,
+`ARCH.zip`, is 1.58 GB, so CI's tier-two job reads only the five files its
+targets need, by byte range (`tools/ci/fetch-bim4lca.py`), and checks each
+against [`research/bim4lca-models.tsv`](../research/bim4lca-models.tsv):
+four `.rvt` models and Revit's IFC export of one. Locally, point
+`RVT_NORDIC_LCA_DIR` at a folder holding them
+([`corpus/tier2/README.md`](../corpus/tier2/README.md)).
+
 ## Compare like with like
 
 The reference exports were made with different settings, and several

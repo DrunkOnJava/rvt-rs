@@ -1,0 +1,13 @@
+# The BIM4LCA / Nordic LCA example buildings CI reads (#766), by VTT, Arkkitehtitoimisto Huvila,
+# Gravicon and Granlund, published at https://cris.vtt.fi/en/publications/bim-files-to-download/
+# under CC BY-SA 4.0. tools/ci/fetch-bim4lca.py reads each entry from ARCH.zip by byte range
+# and checks it against its row; nothing is stored in this repository. The archive's sha256 was
+# measured on a full download; the entries' on 2026-10-18 through the range reader, the four
+# .rvt ones equal to the full download's (corpus/tier2/README.md).
+# kind	path	sha256	bytes
+archive	https://www.nordicsustainableconstruction.com/Media/638593249820446520/ARCH.zip	025e33fb0c0ce3b7a869f4177a0862918cc987408f4cd34e58a0eabd8d9917c4	1579459850
+entry	ARCH/REVIT/ARK_NordicLCA_Housing_Timber_BuildingPermit.rvt	3df759b8b986c1e2ca71a691cdab16bcc7063a07e273003bf02cac559573c6d4	93044736
+entry	ARCH/REVIT/ARK_NordicLCA_Housing_Concrete_BuildingPermit.rvt	c6b53726a2d064654bfd9ebaa769bea5b85d8258ca980294a7f528bb239564e8	99766272
+entry	ARCH/REVIT/ARK_NordicLCA_Office_Concrete_As-Built.rvt	747120005b4b35c7cb66ec61158aab50ded95e052e172cb387b86cd15b31d906	64622592
+entry	ARCH/REVIT/ARK_NordicLCA_Housing_Terrain-Concrete_BuildingPermit.rvt	23675d6cb61dc917798ad346841fe897f7c66a8154c0397625aef86e8d48fe05	17612800
+entry	ARCH/IFC/ARK_NordicLCA_Housing_Terrain-Concrete_BuildingPermit_Revit.ifc	c3946ee408ae0d598c44581f2b3e3c9d963d9611fb10dd141a411c1138073be6	10929484
