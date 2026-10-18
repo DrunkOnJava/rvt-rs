@@ -439,10 +439,11 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// [`crate::partition_ifc_export_overrides`] returns whatever value
 /// string the parameter block holds — but acting on a value is a
 /// claim, so only values proven against a reference export are
-/// listed. An unlisted value leaves the element on its class mapping
-/// and is reported as an unhonoured override rather than guessed at.
+/// listed. An unlisted value leaves the element on its class mapping,
+/// and the export diagnostics count it in their warnings, by value and
+/// class, rather than guessing (#792).
 ///
-/// `IfcShadingDevice` is the one proven value: on
+/// `IfcShadingDevice` is proven on floors, not on every element: on
 /// `2024_Core_Interior.rvt` the twenty `OST_Floors` instances that
 /// carry it are exactly the twenty `IFCSHADINGDEVICE` rows in
 /// Revit's own export, and the remaining seventy-nine plus the one
@@ -452,7 +453,9 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// `IFC Exports/2024_Core_Interior_slim.ifc`, the same recorded choice
 /// that moved `IFCWALL` off `.STANDARD.`. Before #235 this slot was `$`
 /// on the grounds that rvt-rs decodes no value for it; the witness is
-/// the value.
+/// the value. On curtain walls it is disproven for Revit 2024: the 124
+/// BIM4LCA office curtain walls that carry it are `IfcCurtainWall` in
+/// Revit's export ([`export_override_applies`], RE-188).
 ///
 /// RE-45 adds two targets, each proven against a reference export:
 /// `IfcSlab`, which the two Core Interior floors carrying `ifcSlab` (with
@@ -550,6 +553,24 @@ pub fn predefined_type_for(ifc_type: &str, value: &str) -> Option<&'static str> 
         .iter()
         .copied()
         .find(|enumerator| enumerator.eq_ignore_ascii_case(value))
+}
+
+/// Whether Revit's exporter acts on an "Export to IFC As" value on an
+/// element of `revit_class`, in a file Revit `revit_version` saved (RE-188).
+///
+/// Revit 2024's exporter never reads a curtain wall's value: revit-ifc's
+/// `CurtainSystemExporter.ExportBase`, from `IFC_v24.1.0` to `IFC_v24.3.40`,
+/// creates every curtain wall as `IfcCurtainWall`. The 124 curtain walls
+/// of the two BIM4LCA office files set to `IfcShadingDevice` are
+/// `IfcCurtainWall` in Revit's export of each. From `IFC_v25.2.0` on,
+/// `ExportBase` takes the entity from the same lookup as other elements,
+/// so a 2025 or 2026 curtain wall keeps its value here. That is read from
+/// the exporter's source: no Revit 2025 or 2026 export of a curtain wall
+/// carrying a value has been measured. The file's release stands for the
+/// exporter's, since exporting from a later Revit upgrades the file first.
+/// An unknown release keeps the value.
+pub fn export_override_applies(revit_class: &str, revit_version: Option<u32>) -> bool {
+    !(revit_class == crate::partition_schema_mvp::CURTAIN_WALL_CLASS && revit_version == Some(2024))
 }
 
 /// Look up the IFC entity type a "IFC Export As" override value names.

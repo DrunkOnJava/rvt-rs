@@ -38,6 +38,17 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A curtain wall in a Revit 2024 file is `IfcCurtainWall`, whatever its
+  "Export to IFC As" says (#792, RE-188).** Revit 2024's exporter never reads
+  the value on a curtain wall: revit-ifc 24.1.0 to 24.3.40 create every
+  curtain wall as one. rvt-rs followed the value, and wrote the 124 BIM4LCA
+  office curtain walls set to `IfcShadingDevice` as shading devices, where
+  Revit's export of both files has curtain walls. In 2025 and 2026 files,
+  whose exporters read the value from 25.2.0 on, a curtain wall keeps
+  following it. That half is read from the exporter's source and not
+  measured on a Revit export. The export diagnostics also warn with every
+  "Export to IFC As" value the export does not apply, counted by value and
+  class, which `category_map`'s documentation had already promised.
 - **Export diagnostics report the file name the model was saved under, not
   its folders (#782).** Their `input.original_path` kept the whole path with
   only the Windows account folder redacted, so client and project folder

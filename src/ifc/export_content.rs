@@ -1829,9 +1829,22 @@ fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
 }
 
 /// The IFC entity mapping a per-element "IFC Export As" override
-/// names, when the decoded element carries one and
-/// [`category_map::lookup_export_override`] recognises the value.
+/// names, when the decoded element carries one,
+/// [`category_map::lookup_export_override`] recognises the value, and
+/// Revit's exporter of the file's release acts on it for this element
+/// ([`category_map::export_override_applies`], RE-188).
 fn ifc_export_override(decoded: &DecodedElement) -> Option<&'static category_map::Mapping> {
+    let release = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Integer { value, .. }
+            if name == crate::partition_schema_mvp::IFC_EXPORT_RELEASE_FIELD =>
+        {
+            u32::try_from(*value).ok()
+        }
+        _ => None,
+    });
+    if !category_map::export_override_applies(&decoded.class, release) {
+        return None;
+    }
     decoded
         .fields
         .iter()
@@ -1841,6 +1854,36 @@ fn ifc_export_override(decoded: &DecodedElement) -> Option<&'static category_map
             }
             _ => None,
         })
+}
+
+/// The "Export to IFC As" value of an element the export writes as another
+/// entity than the value names (#792): a value no target lists, or one
+/// Revit's exporter does not act on for this element (RE-188). `None` for
+/// an element the export does not write, or writes as its value says.
+pub(crate) fn unapplied_export_value(decoded: &DecodedElement) -> Option<&str> {
+    if is_misleading_proxy_class(&decoded.class)
+        || matches!(
+            decoded.class.as_str(),
+            "Material" | "ArcWall" | "ArcWallRectOpening"
+        )
+    {
+        return None;
+    }
+    let mapping = category_map::lookup(&decoded.class)?;
+    let value = decoded
+        .fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::String(text)
+                if name == crate::partition_schema_mvp::IFC_EXPORT_AS_FIELD =>
+            {
+                Some(text.as_str())
+            }
+            _ => None,
+        })?;
+    let written = ifc_export_override(decoded).unwrap_or(mapping).ifc_type;
+    let entity = value.split('.').next().unwrap_or(value);
+    (!written.eq_ignore_ascii_case(entity)).then_some(value)
 }
 
 /// True when this element came from a partition element record.
