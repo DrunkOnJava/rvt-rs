@@ -114,9 +114,8 @@ project treats a silent skipped step the same as an untested change.
    each need one for repository DrunkOnJava/rvt-rs, workflow
    `publish.yml`, environment `crates-io` or `pypi` (see
    [`docs/maintaining.md`](docs/maintaining.md#releases)). Without
-   crates.io's, the crate's publish fails and PyPI's, which waits for
-   it, never runs, while the release binaries and the container image,
-   which do not wait for crates.io, still publish.
+   crates.io's, the crate's publish fails, and PyPI, the release
+   binaries and the container image, which wait for it, never run.
 10. **Tag the merged commit.** `git fetch origin`, check that
     `origin/main` is the release pull request's squash commit, then
     `git tag -s vX.Y.Z -m "rvt-rs X.Y.Z" origin/main`. The `-s` signs
@@ -127,10 +126,14 @@ project treats a silent skipped step the same as an untested change.
     builds the wheels and the sdist and checks them: each wheel installed
     and opening a model, `cargo install` of the source with the CLI
     sample smoke, the docs.rs build preview and the viewer load smoke.
-    Then it publishes the crate to crates.io, the wheels and sdist to
-    PyPI after the crate, and through `release-binaries.yml` the CLI
-    archives and the container image with their attestations. If a job
-    fails, fix its cause and re-run the failed jobs.
+    The crates.io job then waits in the `crates-io` environment for the
+    maintainer to approve it on the run page ("Review deployments"), and
+    the PyPI job in `pypi` likewise once the crate is out; the approval is
+    the maintainer's own click, never automation's. After approval it
+    publishes the crate to crates.io, the wheels and sdist to PyPI, and
+    through `release-binaries.yml` the CLI archives and the container
+    image with their attestations. If a job fails, fix its cause and
+    re-run the failed jobs.
 12. **Write the release page.** `release-binaries.yml` creates the
     release from the tag with GitHub's generated notes. Replace them with
     this version's `CHANGELOG.md` section, verbatim, followed by
@@ -224,7 +227,8 @@ aspirational state. Update this section when you wire up more of it.
   `workflow_dispatch`: the checks and publish order of step 11. Its
   crates.io and PyPI jobs authenticate by Trusted Publishing in the
   `crates-io` and `pypi` environments, which only `v*` tags may deploy
-  to; the one-time registry setup is described at the top of the file.
+  to and which hold each job for the maintainer's approval; the one-time
+  registry setup is described at the top of the file.
   `workflow_dispatch` with `test-pypi: true` runs the checks and
   publishes to TestPyPI only, as a dry run.
 - **Release binaries** (`.github/workflows/release-binaries.yml`): the
