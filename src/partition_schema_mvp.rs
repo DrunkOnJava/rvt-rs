@@ -490,6 +490,12 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Column bottoms from the geometry node (RE-173) ---
+    if revit_version == 2024 {
+        apply_column_node_bottoms(rf, [&mut out.columns, &mut out.products]);
+        apply_column_cut_bodies(rf, [&mut out.columns, &mut out.products]);
+    }
+
     // --- Type text parameters (RE-77, #35) ---
     let type_parameters = crate::partition_type_parameters::type_text_parameters(rf, revit_version);
     if !type_parameters.is_empty() {
@@ -7402,6 +7408,89 @@ fn highest_level(named: &[u32], elevations: &BTreeMap<u32, f64>) -> Option<u32> 
     match by_height[..] {
         [(top, id), (next, _), ..] if top - next > 1e-6 => Some(id),
         _ => None,
+/// Field recording where a column's bottom came from, when not its record.
+pub const COLUMN_Z_SOURCE_FIELD: &str = "m_column_z_source";
+/// Value of [`COLUMN_Z_SOURCE_FIELD`] for a bottom read from the geometry node.
+pub const COLUMN_Z_GEOMETRY_NODE: &str = "partition_geometry_node";
+
+/// Give each column whose record box starts at z = 0.0 the bottom its
+/// geometry node holds (RE-173).
+fn apply_column_node_bottoms(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement>; 2]) {
+    let is_column = |e: &DecodedElement| matches!(e.class.as_str(), "Column" | "StructuralColumn");
+    let mut targets = BTreeMap::new();
+    for list in lists.iter() {
+        for element in list.iter().filter(|e| is_column(e)) {
+            if let (Some(id), Some(bbox)) = (element.id, element_record_bbox(element)) {
+                if bbox[2] == 0.0 {
+                    targets.insert(id, bbox);
+                }
+            }
+        }
+    }
+    let bottoms = crate::partition_column_nodes::column_bottoms(rf, &targets);
+    for list in lists {
+        for element in list.iter_mut().filter(|e| is_column(e)) {
+            let Some(&bottom) = element.id.and_then(|id| bottoms.get(&id)) else {
+                continue;
+            };
+            let Some(bbox) = targets.get(&element.id.unwrap_or_default()) else {
+                continue;
+            };
+            for (name, value) in element.fields.iter_mut() {
+                match name.as_str() {
+                    "m_locationZ" => {
+                        *value = InstanceField::Float {
+                            value: bottom,
+                            size: 8,
+                        }
+                    }
+                    "m_bboxHeight" => {
+                        *value = InstanceField::Float {
+                            value: bbox[5] - bottom,
+                            size: 8,
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            element.fields.push((
+                COLUMN_Z_SOURCE_FIELD.into(),
+                InstanceField::String(COLUMN_Z_GEOMETRY_NODE.into()),
+            ));
+        }
+    }
+}
+
+/// Bottom, feet, of a column's body after its geometry joins (RE-178). The
+/// column's own fields (`m_locationZ`, `m_bboxHeight`) keep its extent.
+pub const COLUMN_BODY_BOTTOM_FIELD: &str = "m_column_body_bottom";
+/// Top, feet, of a column's body after its geometry joins (RE-178).
+pub const COLUMN_BODY_TOP_FIELD: &str = "m_column_body_top";
+
+/// Give each column that a joined slab or roof cuts the z-range of its cut
+/// body, from its geometry node (RE-178). Only the body follows it.
+fn apply_column_cut_bodies(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement>; 2]) {
+    let is_column = |e: &DecodedElement| matches!(e.class.as_str(), "Column" | "StructuralColumn");
+    let targets: BTreeMap<u32, [f64; 6]> = lists
+        .iter()
+        .flat_map(|list| list.iter().filter(|e| is_column(e)))
+        .filter_map(|e| Some((e.id?, element_record_bbox(e)?)))
+        .collect();
+    let extents = crate::partition_column_nodes::column_cut_extents(rf, &targets);
+    for list in lists {
+        for element in list.iter_mut().filter(|e| is_column(e)) {
+            let Some(&(bottom, top)) = element.id.and_then(|id| extents.get(&id)) else {
+                continue;
+            };
+            for (name, value) in [
+                (COLUMN_BODY_BOTTOM_FIELD, bottom),
+                (COLUMN_BODY_TOP_FIELD, top),
+            ] {
+                element
+                    .fields
+                    .push((name.into(), InstanceField::Float { value, size: 8 }));
+            }
+        }
     }
 }
 

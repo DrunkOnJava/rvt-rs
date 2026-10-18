@@ -17,6 +17,10 @@ mod cfb_roundtrip_delta;
 mod cli_ergonomics;
 #[path = "../cli_real_files.rs"]
 mod cli_real_files;
+#[path = "../column_cut_body.rs"]
+mod column_cut_body;
+#[path = "../column_node_z.rs"]
+mod column_node_z;
 #[path = "../common_reference.rs"]
 mod common_reference;
 #[path = "../control_cancellation.rs"]
@@ -85,6 +89,8 @@ mod json_schema_contracts;
 mod level_names;
 #[path = "../level_parameters.rs"]
 mod level_parameters;
+#[path = "../level_shared_elevation.rs"]
+mod level_shared_elevation;
 #[path = "../mep_connections.rs"]
 mod mep_connections;
 #[path = "../mep_systems.rs"]

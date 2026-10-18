@@ -190,6 +190,7 @@ pub mod parse_mode;
 pub mod part_atom;
 pub mod partition_arc_walls;
 pub mod partition_beam_axes;
+pub mod partition_column_nodes;
 pub mod partition_compound_structure;
 pub mod partition_connector_pairs;
 pub mod partition_curtain_materials;
