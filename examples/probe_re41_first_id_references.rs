@@ -14,8 +14,12 @@
 //! and the hit's offset in that record; a hit past the chain is in a loaded
 //! family's own document (RE-135). It prints how many first and second ids
 //! are named anywhere and outside their own element's record (the record of
-//! the second id), then each record's hits, up to eight per id, with the
-//! sixteen bytes before and after each.
+//! the second id). It then sorts the first ids: those that are another
+//! element's current id (such a hit names that element), and of the rest,
+//! those a project record names, with each record and offset, those only a
+//! loaded family's document names, and those nothing names. Last come each
+//! record's hits, up to eight per id, with the sixteen bytes before and
+//! after each.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re41_first_id_references -- FILE.rvt [--records]
@@ -126,6 +130,46 @@ fn main() -> rvt::Result<()> {
             "{label} ids: {named} of {} named anywhere ({wide} u64 hits, {narrow} u32 hits); {elsewhere} named outside their element's record",
             ids.len()
         );
+    }
+    // An element's current id is its second where the two differ (RE-41).
+    // A first id that is another element's current id names that element.
+    let current: HashSet<u32> = records
+        .iter()
+        .map(|r| {
+            if r.raw.len() == rvt::elem_table::RECORD_LEN_40 && r.id_secondary != 0 {
+                r.id_secondary
+            } else {
+                r.id_primary
+            }
+        })
+        .collect();
+    let (taken, stray): (Vec<_>, Vec<_>) =
+        pairs.iter().partition(|(first, _)| current.contains(first));
+    let (mut in_chain, mut past_only, mut nowhere) = (Vec::new(), 0, 0);
+    for (first, second) in &stray {
+        let list = hits.get(first).map(Vec::as_slice).unwrap_or(&[]);
+        let records: Vec<String> = list
+            .iter()
+            .filter_map(|hit| hit.record)
+            .filter(|(record, _)| *record != u64::from(*second))
+            .map(|(record, at)| format!("{record}+{at:#x}"))
+            .collect();
+        if !records.is_empty() {
+            in_chain.push((*first, records));
+        } else if list.is_empty() {
+            nowhere += 1;
+        } else {
+            past_only += 1;
+        }
+    }
+    println!(
+        "first ids that are another element's current id: {}; no element's id: {} (named in a project record {}, only past the chain {past_only}, nowhere {nowhere})",
+        taken.len(),
+        stray.len(),
+        in_chain.len()
+    );
+    for (first, records) in &in_chain {
+        println!("  {first} named in {}", records.join(", "));
     }
     for (first, second) in &pairs {
         for (label, id) in [("first", *first), ("second", *second)] {
