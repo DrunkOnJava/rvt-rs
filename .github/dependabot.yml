@@ -20,7 +20,14 @@ updates:
     open-pull-requests-limit: 5
     # Minor and patch updates arrive as one pull request a week; a major
     # update stays its own pull request, since it needs its own migration.
+    # pyo3 and pyo3-build-config (rvt-py's build script) move together: a
+    # pull request that moves one alone leaves two pyo3-build-config versions
+    # in the lockfile (#777). A dependency joins the first group it matches.
     groups:
+      pyo3:
+        patterns:
+          - pyo3
+          - pyo3-*
       cargo-minor-and-patch:
         update-types:
           - minor
