@@ -335,9 +335,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # ifcopenshell ships prebuilt wheels on PyPI for Linux, macOS
-          # and Windows x64. The 0.7 API differs in entity-by-type
-          # iteration; tools/ci/requirements-ifc.txt pins 0.8 until a
-          # 0.9 update is checked.
+          # and Windows x64. tools/ci/requirements-ifc.txt pins an exact
+          # version, since IfcOpenShell is one of the witnesses below; 0.9
+          # is held until Measure's scorers work under it (#773).
           python -m pip install -r tools/ci/requirements-ifc.txt
       # C9: what the exporter writes now for the three tier-1 projects
       # (architectural 2024, MEP 2024, structural 2023; synthetic files
