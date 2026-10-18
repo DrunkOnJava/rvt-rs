@@ -1,0 +1,154 @@
+//! RE-41 follow-up (#760): what in a file names an ElemTable record's first
+//! id where it differs from its second.
+//!
+//! Where a 40-byte `Global/ElemTable` record's two ids differ, the second is
+//! the element's ElementId (RE-41) and the first is the id it was created
+//! with, which its UniqueId keeps (RE-48). `declared_ids` declares both. This
+//! probe asks whether anything else in the file names the first id, which
+//! decides whether it should stay declared.
+//!
+//! For every such record it searches every inflated `Partitions/*` stream in
+//! one pass for both ids, as `u64` (the id followed by four zero bytes) and
+//! as bare `u32`, little-endian. For each hit it names the record of the
+//! partition's leading chain (RE-35) whose body holds it, by its ElementId,
+//! and the hit's offset in that record; a hit past the chain is in a loaded
+//! family's own document (RE-135). It prints how many first and second ids
+//! are named anywhere and outside their own element's record (the record of
+//! the second id), then each record's hits, up to eight per id, with the
+//! sixteen bytes before and after each.
+//!
+//! Usage:
+//!   cargo run --profile ci --example probe_re41_first_id_references -- FILE.rvt [--records]
+
+use rvt::RevitFile;
+use rvt::partition_element_records::{enclosing_record, file_bbox_marker, partition_record_chain};
+use std::collections::{BTreeMap, HashSet};
+use std::path::PathBuf;
+
+/// Hits printed per id.
+const SHOWN: usize = 8;
+
+struct Hit {
+    stream: String,
+    offset: usize,
+    wide: bool,
+    record: Option<(u64, usize)>,
+    context: String,
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn main() -> rvt::Result<()> {
+    let path = PathBuf::from(std::env::args().nth(1).expect("usage: FILE.rvt"));
+    let mut rf = RevitFile::open(&path)?;
+    let version = rf.basic_file_info()?.version;
+    let records = rvt::elem_table::parse_records(&mut rf)?;
+    let pairs: Vec<(u32, u32)> = records
+        .iter()
+        .filter(|r| r.raw.len() == rvt::elem_table::RECORD_LEN_40)
+        .filter(|r| r.id_secondary != 0 && r.id_primary != r.id_secondary)
+        .map(|r| (r.id_primary, r.id_secondary))
+        .collect();
+    println!(
+        "release {version}: {} ElemTable records, {} with differing ids",
+        records.len(),
+        pairs.len()
+    );
+    if pairs.is_empty() {
+        return Ok(());
+    }
+    let Some(marker) = file_bbox_marker(&mut rf, version) else {
+        println!("no record marker for release {version}");
+        return Ok(());
+    };
+    let targets: HashSet<u32> = pairs.iter().flat_map(|(a, b)| [*a, *b]).collect();
+    let mut hits: BTreeMap<u32, Vec<Hit>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let chain = partition_record_chain(buf, &marker);
+        for (offset, window) in buf.windows(4).enumerate() {
+            let value = u32::from_le_bytes(window.try_into().expect("4 bytes"));
+            if !targets.contains(&value) {
+                continue;
+            }
+            let wide = buf.get(offset + 4..offset + 8) == Some(&[0, 0, 0, 0][..]);
+            let record =
+                enclosing_record(&chain, offset).map(|span| (span.element_id, offset - span.start));
+            let context = format!(
+                "{} [{}] {}",
+                hex(&buf[offset.saturating_sub(16)..offset]),
+                hex(&buf[offset..(offset + if wide { 8 } else { 4 }).min(buf.len())]),
+                hex(&buf[(offset + if wide { 8 } else { 4 }).min(buf.len())
+                    ..(offset + if wide { 24 } else { 20 }).min(buf.len())]),
+            );
+            hits.entry(value).or_default().push(Hit {
+                stream: stream.clone(),
+                offset,
+                wide,
+                record,
+                context,
+            });
+        }
+    }
+    let outside = |id: u32, own: u32| {
+        hits.get(&id).map_or(0, |list| {
+            list.iter()
+                .filter(|hit| hit.record.map(|(record, _)| record) != Some(u64::from(own)))
+                .count()
+        })
+    };
+    for (label, pick) in [("first", 0usize), ("second", 1usize)] {
+        let ids: Vec<(u32, u32)> = pairs
+            .iter()
+            .map(|&(first, second)| (if pick == 0 { first } else { second }, second))
+            .collect();
+        let named = ids.iter().filter(|(id, _)| hits.contains_key(id)).count();
+        let elsewhere = ids
+            .iter()
+            .filter(|(id, own)| outside(*id, *own) > 0)
+            .count();
+        let (mut wide, mut narrow) = (0, 0);
+        for (id, _) in &ids {
+            for hit in hits.get(id).into_iter().flatten() {
+                if hit.wide {
+                    wide += 1;
+                } else {
+                    narrow += 1;
+                }
+            }
+        }
+        println!(
+            "{label} ids: {named} of {} named anywhere ({wide} u64 hits, {narrow} u32 hits); {elsewhere} named outside their element's record",
+            ids.len()
+        );
+    }
+    for (first, second) in &pairs {
+        for (label, id) in [("first", *first), ("second", *second)] {
+            let list = hits.get(&id).map(Vec::as_slice).unwrap_or(&[]);
+            println!(
+                "  {label} {id} (record pair {first} -> {second}): {} hits, {} outside {second}'s record",
+                list.len(),
+                outside(id, *second)
+            );
+            for hit in list.iter().take(SHOWN) {
+                let place = match hit.record {
+                    Some((record, at)) => format!("in record {record} at +{at:#x}"),
+                    None => "past the chain".into(),
+                };
+                println!(
+                    "      {} {:#x} {} {place}  {}",
+                    hit.stream,
+                    hit.offset,
+                    if hit.wide { "u64" } else { "u32" },
+                    hit.context
+                );
+            }
+        }
+    }
+    Ok(())
+}
