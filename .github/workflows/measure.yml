@@ -21,7 +21,12 @@
 # workflow, so rvt-info reads each family's PartAtom too and the probe runs on
 # it. The corpus is scored against nothing and never stored. Autodesk's sample
 # projects (2016 to 2027, pinned in research/autodesk-sample-projects.tsv) are
-# fetched the same way when `samples` is set.
+# fetched the same way when `samples` is set, and the two versions of the
+# BIM4LCA office with Revit's exports of them (research/bim4lca-measure.tsv,
+# CC BY-SA 4.0) when `nordic` is set; those two are scored like the reference
+# models (#763).
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=main -f nordic=true
 
 name: Measure
 
@@ -65,6 +70,11 @@ on:
         default: false
       timing:
         description: Also time rvt-ifc at base and head on one runner, in turn, three rounds per file (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
+        type: boolean
+        required: false
+        default: false
+      nordic:
+        description: Also score the BIM4LCA office as built and at building permit against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range for the run and never stored)
         type: boolean
         required: false
         default: false
@@ -128,6 +138,21 @@ jobs:
           PROBE: ${{ inputs.probe }}
       - name: Fetch the reference models
         run: tools/fetch-reference-models.sh models
+      # The office models' host being down is NOT MEASURED; a file that no
+      # longer matches its pin fails the run.
+      - name: Fetch the BIM4LCA office models
+        if: inputs.nordic
+        shell: bash
+        run: |
+          set +e
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ;;
+            *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
+          esac
       - name: Fetch the family corpus
         if: inputs.families || github.event_name == 'pull_request'
         uses: $/.github/actions/fetch-corpus

@@ -29,6 +29,15 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **Measure scores the BIM4LCA office against Revit's exports (#763).** With
+  `-f nordic=true` it reads the concrete office as built and at building
+  permit, with Revit's IFC export of each, by byte range
+  (`research/bim4lca-measure.tsv`), and scores them like the reference
+  models. A new scorer, `tools/re/class_sets_vs_ifc.py`, runs on every model:
+  per IFC class of Revit's export, how many of its elements rvt-rs writes as
+  the same class, as another class or not at all, paired by Tag (spaces by
+  GlobalId), with the missing and the extra ones listed by name, type and
+  storey.
 - **The BIM4LCA models are read in CI (#766).** The tier-two job fetches the
   four Revit 2024 models and the Revit IFC export its targets read from VTT's
   1.58 GB `ARCH.zip` by byte range (`tools/ci/fetch-bim4lca.py`), each
