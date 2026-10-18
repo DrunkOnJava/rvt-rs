@@ -490,6 +490,11 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Column bottoms from the geometry node (RE-173) ---
+    if revit_version == 2024 {
+        apply_column_node_bottoms(rf, [&mut out.columns, &mut out.products]);
+    }
+
     // --- Type text parameters (RE-77, #35) ---
     let type_parameters = crate::partition_type_parameters::type_text_parameters(rf, revit_version);
     if !type_parameters.is_empty() {
@@ -7240,6 +7245,59 @@ pub fn column_instances_from_records(
             decoded
         })
         .collect()
+}
+
+/// Field recording where a column's bottom came from, when not its record.
+pub const COLUMN_Z_SOURCE_FIELD: &str = "m_column_z_source";
+/// Value of [`COLUMN_Z_SOURCE_FIELD`] for a bottom read from the geometry node.
+pub const COLUMN_Z_GEOMETRY_NODE: &str = "partition_geometry_node";
+
+/// Give each column whose record box starts at z = 0.0 the bottom its
+/// geometry node holds (RE-173).
+fn apply_column_node_bottoms(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement>; 2]) {
+    let is_column = |e: &DecodedElement| matches!(e.class.as_str(), "Column" | "StructuralColumn");
+    let mut targets = BTreeMap::new();
+    for list in lists.iter() {
+        for element in list.iter().filter(|e| is_column(e)) {
+            if let (Some(id), Some(bbox)) = (element.id, element_record_bbox(element)) {
+                if bbox[2] == 0.0 {
+                    targets.insert(id, bbox);
+                }
+            }
+        }
+    }
+    let bottoms = crate::partition_column_nodes::column_bottoms(rf, &targets);
+    for list in lists {
+        for element in list.iter_mut().filter(|e| is_column(e)) {
+            let Some(&bottom) = element.id.and_then(|id| bottoms.get(&id)) else {
+                continue;
+            };
+            let Some(bbox) = targets.get(&element.id.unwrap_or_default()) else {
+                continue;
+            };
+            for (name, value) in element.fields.iter_mut() {
+                match name.as_str() {
+                    "m_locationZ" => {
+                        *value = InstanceField::Float {
+                            value: bottom,
+                            size: 8,
+                        }
+                    }
+                    "m_bboxHeight" => {
+                        *value = InstanceField::Float {
+                            value: bbox[5] - bottom,
+                            size: 8,
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            element.fields.push((
+                COLUMN_Z_SOURCE_FIELD.into(),
+                InstanceField::String(COLUMN_Z_GEOMETRY_NODE.into()),
+            ));
+        }
+    }
 }
 
 /// Rewrite a column's placement and extents to the cut body, and say
