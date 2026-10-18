@@ -75,6 +75,14 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **Measure compares each sample with the same project saved by another
+  release (#740, #742).** With `-f probe_pair_release=<year>`, a two-file
+  probe also runs on every sample of another release and the same project
+  saved by that year, the sample first, into the sample's `probe-pair.txt`;
+  `-f sample_years="<first> <last>"` reads only the samples of those
+  releases. The comparisons of Autodesk's 2027 samples with their 2026
+  copies, and of earlier releases with their 2023 and 2019 copies, then run
+  on the runners instead of on one machine.
 - **Measure scores the BIM4LCA office against Revit's exports (#763).** With
   `-f nordic=true` it reads the concrete office as built and at building
   permit, with Revit's IFC export of each, by byte range

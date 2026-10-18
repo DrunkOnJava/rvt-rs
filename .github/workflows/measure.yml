@@ -27,6 +27,13 @@
 # models (#763).
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f nordic=true
+#
+# `sample_years` narrows the samples to a range of releases, and
+# `probe_pair_release` also runs a two-file probe on each sample and the same
+# project saved by that release, the sample first, for the cross-release
+# comparisons of #740 and #742:
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f samples=true -f sample_years="2026 2027" -f probe=probe_re179_revit_2027 -f probe_pair_release=2026
 
 name: Measure
 
@@ -54,6 +61,10 @@ on:
         description: tools/re scorer (no .py) to run on the probe's output and Revit's export, from the measured ref, empty for none
         required: false
         default: ""
+      probe_pair_release:
+        description: With samples, also run the probe on each sample of another release and the same project saved by this one (e.g. 2026), the sample first; empty for none
+        required: false
+        default: ""
       families:
         description: Also read every file of the phi-ag/rvt family corpus and the makers' public families (research/public-families.tsv) with rvt-info, and run the probe on them (fetched for the run and never stored)
         type: boolean
@@ -68,6 +79,10 @@ on:
         type: boolean
         required: false
         default: false
+      sample_years:
+        description: With samples, only the releases from the first year to the last (e.g. "2026 2027"; one year reads from it on), empty for every release
+        required: false
+        default: ""
       timing:
         description: Also time rvt-ifc at base and head on one runner, in turn, three rounds per file (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
         type: boolean
@@ -171,12 +186,17 @@ jobs:
         run: tools/fetch-public-families.sh _corpus/examples/Autodesk
       - name: Fetch Autodesk's sample projects
         if: inputs.samples
-        run: tools/fetch-autodesk-samples.sh _samples
+        env:
+          SAMPLE_YEARS: ${{ inputs.sample_years }}
+        run: |
+          # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
+          tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
       - name: Measure
         env:
           PROBE: ${{ inputs.probe }}
           RVT_IFC_FLAGS: ${{ inputs.ifc_flags }}
           PROBE_SCORER: ${{ inputs.probe_scorer }}
+          PROBE_PAIR_RELEASE: ${{ inputs.probe_pair_release }}
           PROBE_SCORER_DIR: measured/tools/re
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           FAMILY_DIR: ${{ (inputs.families || github.event_name == 'pull_request') && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
@@ -296,7 +316,11 @@ jobs:
         run: tools/fetch-reference-models.sh models
       - name: Fetch Autodesk's sample projects
         if: inputs.samples
-        run: tools/fetch-autodesk-samples.sh _samples
+        env:
+          SAMPLE_YEARS: ${{ inputs.sample_years }}
+        run: |
+          # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
+          tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
       - name: Time
         env:
           RVT_IFC_FLAGS: ${{ inputs.ifc_flags }}
