@@ -2,12 +2,14 @@
 """Compare the element sets of an rvt-rs export with Revit's own, per IFC class (#763).
 
 Pairs elements by `Tag` (the Revit ElementId) and spaces by `GlobalId`, leaving
-out openings and virtual elements. For every class of Revit's export it counts
+out openings and virtual elements and their subtypes (an opening repeats its
+door's or window's Tag). For every class of Revit's export it counts
 how many of its elements rvt-rs writes as the same class, writes as another
 class (named), or does not write at all; then the elements rvt-rs writes that
 Revit's export lacks, per class. It lists the missing and the extra ones, up to
 200 per class, each with its Name, ObjectType and storey from the export that
-has it. Elements without a Tag cannot be paired and are only counted.
+has it. Elements without a Tag cannot be paired and are only counted, and so
+are elements that repeat a Tag already seen (the first one is kept).
 
 Usage:
 
@@ -38,18 +40,22 @@ def storey(product):
 
 
 def members(model):
-    """key -> (class, Name, ObjectType, storey), and the count of untagged elements."""
-    out, untagged = {}, 0
+    """key -> (class, Name, ObjectType, storey), and the counts of untagged and repeated elements."""
+    out, untagged, repeated = {}, 0, 0
     for element in model.by_type("IfcElement"):
-        if element.is_a() in LEFT_OUT:
+        if any(element.is_a(left_out) for left_out in LEFT_OUT):
             continue
         if not element.Tag:
             untagged += 1
             continue
-        out[("Tag", str(element.Tag))] = (element.is_a(), element.Name or "-", element.ObjectType or "-", storey(element))
+        key = ("Tag", str(element.Tag))
+        if key in out:
+            repeated += 1
+            continue
+        out[key] = (element.is_a(), element.Name or "-", element.ObjectType or "-", storey(element))
     for space in model.by_type("IfcSpace"):
         out[("GlobalId", space.GlobalId)] = ("IfcSpace", space.Name or "-", space.LongName or "-", storey(space))
-    return out, untagged
+    return out, untagged, repeated
 
 
 def sort_key(key):
@@ -72,10 +78,10 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     ours_file, revit_file = ifcopenshell.open(argv[0]), ifcopenshell.open(argv[1])
-    ours, ours_untagged = members(ours_file)
-    revit, revit_untagged = members(revit_file)
-    print(f"Revit's export: {len(revit)} paired elements and spaces, {revit_untagged} untagged left out")
-    print(f"rvt-rs's export: {len(ours)} paired elements and spaces, {ours_untagged} untagged left out")
+    ours, ours_untagged, ours_repeated = members(ours_file)
+    revit, revit_untagged, revit_repeated = members(revit_file)
+    print(f"Revit's export: {len(revit)} paired elements and spaces, {revit_untagged} untagged and {revit_repeated} repeated Tags left out")
+    print(f"rvt-rs's export: {len(ours)} paired elements and spaces, {ours_untagged} untagged and {ours_repeated} repeated Tags left out")
     print(f"{'class':32} {'revit':>6} {'same':>6} {'other':>6} {'absent':>6}  other classes")
     missing = collections.defaultdict(set)
     for cls in sorted({r[0] for r in revit.values()}):
