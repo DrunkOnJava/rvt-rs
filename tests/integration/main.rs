@@ -39,6 +39,8 @@ mod curtain_wall_doors;
 mod curtain_walls;
 #[path = "../design_options.rs"]
 mod design_options;
+#[path = "../door_overall_sizes.rs"]
+mod door_overall_sizes;
 #[path = "../door_type_global_ids.rs"]
 mod door_type_global_ids;
 #[path = "../duct_and_pipe_ports.rs"]

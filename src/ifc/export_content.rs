@@ -1975,6 +1975,10 @@ pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
     "OpeningHeight",
 ];
 
+/// Properties holding a door's Width and Height from its type (RE-187,
+/// [`crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`]), feet.
+pub const DOOR_TYPE_SIZE_PROPERTIES: [&str; 2] = ["TypeWidth", "TypeHeight"];
+
 /// Classes whose body another rule draws, which a family instance's turn
 /// leaves alone: columns (their type's section), beams (their line), and
 /// curtain-wall panels and mullions (their grid).
@@ -3165,6 +3169,18 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             properties.push(Property {
                 name: (*name).into(),
                 value,
+            });
+        }
+    }
+    // RE-187: a door reports its type's Width and Height.
+    if let Some(size) = crate::partition_schema_mvp::door_type_size_from_fields(&decoded.fields) {
+        for (name, feet) in DOOR_TYPE_SIZE_PROPERTIES
+            .iter()
+            .zip([size.width_feet, size.height_feet])
+        {
+            properties.push(Property {
+                name: (*name).into(),
+                value: PropertyValue::PositiveLengthFeet(feet),
             });
         }
     }

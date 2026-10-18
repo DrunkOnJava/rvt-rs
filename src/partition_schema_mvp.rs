@@ -582,6 +582,8 @@ pub fn recover_partition_schema_mvp(
     // --- Each door's rough opening from its type (RE-94, #227), after RE-84
     // marks the doors that are openings alone ---
     attach_door_openings(rf, revit_version, &mut out.doors);
+    // --- Each door's Width and Height from its type (RE-187, #759) ---
+    attach_door_sizes(rf, revit_version, &mut out.doors);
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     Ok(out)
@@ -1906,6 +1908,60 @@ fn attach_door_openings(rf: &mut RevitFile, revit_version: u32, doors: &mut [Dec
             opening.rough_width_feet,
             opening.rough_height_feet,
         );
+    }
+}
+
+/// Fields carrying a door's Width and Height from its type (RE-187), feet.
+pub const DOOR_TYPE_SIZE_FIELDS: [&str; 2] = ["m_door_type_width", "m_door_type_height"];
+
+/// The size [`DOOR_TYPE_SIZE_FIELDS`] record.
+pub fn door_type_size_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<crate::partition_type_parameters::DoorTypeSize> {
+    let [width, height] = DOOR_TYPE_SIZE_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some(crate::partition_type_parameters::DoorTypeSize {
+        width_feet: width?,
+        height_feet: height?,
+    })
+}
+
+/// Give each door whose type's Width and Height are read
+/// ([`crate::partition_type_parameters::type_door_sizes`]) that size (RE-187),
+/// whether or not its opening is read. A door that is an opening alone
+/// (RE-84) is written as that opening, and gets none.
+fn attach_door_sizes(rf: &mut RevitFile, revit_version: u32, doors: &mut [DecodedElement]) {
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let types: BTreeSet<u32> = doors.iter().filter_map(type_of).collect();
+    let sizes = crate::partition_type_parameters::type_door_sizes(rf, revit_version, &types);
+    for element in doors.iter_mut() {
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_WITHOUT_GEOMETRY_FIELD)
+        {
+            continue;
+        }
+        let Some(size) = type_of(element).and_then(|id| sizes.get(&id)).copied() else {
+            continue;
+        };
+        for (name, value) in DOOR_TYPE_SIZE_FIELDS
+            .iter()
+            .zip([size.width_feet, size.height_feet])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
     }
 }
 

@@ -6,14 +6,17 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
-### Research
+### Added
 
-- **The BIM4LCA models are read in CI (#766).** The tier-two job fetches the
-  four Revit 2024 models and the Revit IFC export its targets read from VTT's
-  1.58 GB `ARCH.zip` by byte range (`tools/ci/fetch-bim4lca.py`), each
-  checked against `research/bim4lca-models.tsv`, so the targets that measure
-  #751's level parameters, #752's shared elevations, #753's column bottoms
-  and #757's cut columns on them run on every pull request; they skipped.
+- **A door's `OverallWidth` / `OverallHeight` from its type (#759, RE-187).**
+  A door type's Width and Height are Revit's `OverallWidth` and
+  `OverallHeight` on every door where they are read, so a door with no
+  opening read now writes them instead of `$`: all 132 of Core Interior's
+  doors and 4 of RE1 Architecture's 5, each equal to Revit's (none before).
+  A door cut at its rough size keeps that size (RE-94). Windows keep failing
+  closed: Core Interior's type size is not Revit's. Checked by
+  `tests/door_overall_sizes.rs` and scored by
+  `tools/re/door_window_sizes_vs_ifc.py`.
 
 ### Fixed
 
@@ -23,6 +26,15 @@ All notable changes will be documented here. This project follows
   names reached a file people attach to bug reports. It is now the file name,
   as the export's name has been since 0.5.1: RE1 Architecture's reads
   `RE1.rvt`.
+
+### Research
+
+- **The BIM4LCA models are read in CI (#766).** The tier-two job fetches the
+  four Revit 2024 models and the Revit IFC export its targets read from VTT's
+  1.58 GB `ARCH.zip` by byte range (`tools/ci/fetch-bim4lca.py`), each
+  checked against `research/bim4lca-models.tsv`, so the targets that measure
+  #751's level parameters, #752's shared elevations, #753's column bottoms
+  and #757's cut columns on them run on every pull request; they skipped.
 
 ## [0.5.1] — 2026-10-18
 
