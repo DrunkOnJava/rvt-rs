@@ -85,6 +85,18 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A room's name and its other parameters come from its latest copy
+  (#800).** Where several partitions hold copies of a room's data that
+  differ, the number and name readers (RE-117) and the text and integer
+  parameter readers (RE-153, RE-158) gave the room nothing. They now take the
+  copy in the latest partition, the one RE-145 found current wherever an
+  element's records differ, and give nothing only when copies within that
+  partition disagree. The BIM4LCA office's building-permit file holds an
+  older copy of every room and area with Finnish names and a newer one with
+  English names, and Revit's export uses the English ones. There, rooms
+  named as in Revit's export go from 1 to 191 of 234, as on the as-built
+  file, and each named room gets its `IfcSpaceType`. The as-built file, the
+  six reference models and the samples export as before.
 - **A pipe or duct type name needs the `u32 0` before its length (RE-179).**
   RE-130's scan matched an element's reference lists on Autodesk's 2027
   `rme_basic` and named 33 pipes `였縿괜쭃`. All six type names of RE1
