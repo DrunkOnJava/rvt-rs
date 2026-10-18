@@ -17,9 +17,11 @@
 //! the second id). It then sorts the first ids: those that are another
 //! element's current id (such a hit names that element), and of the rest,
 //! those a project record names, with each record and offset, those only a
-//! loaded family's document names, and those nothing names. Last come each
-//! record's hits, up to eight per id, with the sixteen bytes before and
-//! after each.
+//! loaded family's document names, and those nothing names. Every other
+//! stream but `Global/ElemTable` itself (`Global/Latest` among them) is
+//! searched the same way, inflated where it is compressed, and the first ids
+//! any of them names are listed with the streams. Last come each record's
+//! hits, up to eight per id, with the sixteen bytes before and after each.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re41_first_id_references -- FILE.rvt [--records]
@@ -99,6 +101,30 @@ fn main() -> rvt::Result<()> {
             });
         }
     }
+    let partitions: HashSet<String> = rf.partition_stream_names().into_iter().collect();
+    let mut elsewhere: BTreeMap<u32, BTreeMap<String, usize>> = BTreeMap::new();
+    for stream in rf.stream_names() {
+        if partitions.contains(&stream) || stream == rvt::streams::GLOBAL_ELEM_TABLE {
+            continue;
+        }
+        let Ok(stored) = rf.read_stream(&stream) else {
+            continue;
+        };
+        let bytes = match rvt::compression::inflate_stream_auto(&stream, &stored) {
+            Ok((_, inflated)) => inflated,
+            Err(_) => stored,
+        };
+        for window in bytes.windows(4) {
+            let value = u32::from_le_bytes(window.try_into().expect("4 bytes"));
+            if targets.contains(&value) {
+                *elsewhere
+                    .entry(value)
+                    .or_default()
+                    .entry(stream.clone())
+                    .or_insert(0) += 1;
+            }
+        }
+    }
     let outside = |id: u32, own: u32| {
         hits.get(&id).map_or(0, |list| {
             list.iter()
@@ -170,6 +196,24 @@ fn main() -> rvt::Result<()> {
     );
     for (first, records) in &in_chain {
         println!("  {first} named in {}", records.join(", "));
+    }
+    let named_elsewhere: Vec<String> = pairs
+        .iter()
+        .filter_map(|(first, _)| {
+            let streams = elsewhere.get(first)?;
+            let listed: Vec<String> = streams
+                .iter()
+                .map(|(stream, n)| format!("{stream} {n}"))
+                .collect();
+            Some(format!("{first} ({})", listed.join(", ")))
+        })
+        .collect();
+    println!(
+        "first ids named in a stream other than Partitions/* and Global/ElemTable: {}",
+        named_elsewhere.len()
+    );
+    for line in &named_elsewhere {
+        println!("  {line}");
     }
     for (first, second) in &pairs {
         for (label, id) in [("first", *first), ("second", *second)] {
