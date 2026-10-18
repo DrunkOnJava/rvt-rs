@@ -70,7 +70,9 @@ family instances' family and type names, with their IFC type objects
 (RE-109, RE-110), walls', floors' and roofs' types and layers
 (RE-111, RE-112), family instances' materials (RE-113), and walls' and
 floors' material layer sets (RE-114, RE-115), with each material's shading
-colour (RE-116). Every recovery claim is measured against Revit's own IFC export of the
+colour (RE-116). On Revit 2026 projects, experimentally on `main`, it reads
+typed elements, storeys, rooms, doors and windows, type names and layer sets,
+measured on one project against Revit's own export (RE-124). Every recovery claim is measured against Revit's own IFC export of the
 same file; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)
@@ -78,8 +80,8 @@ are in the [supported profile](supported-profile.md).
 
 It is not a converter for arbitrary models: element records of other releases,
 most parameters, family geometry (except the experimental `--saved-meshes`
-option, which draws a Revit 2024 family instance from the mesh Revit saved for
-its display, RE-78), hip and gable roofs, the boundaries of
+option, which draws a Revit 2024, 2025 or 2026 family instance from the mesh
+Revit saved for its display, RE-78, B77), hip and gable roofs, the boundaries of
 rooms whose stored solid does not close, opening profiles and phase
 filtering are not decoded, and rvt-rs does not edit
 Revit model data.
