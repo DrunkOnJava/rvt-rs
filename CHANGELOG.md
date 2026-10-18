@@ -75,6 +75,12 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **Autodesk's Revit 2015 sample projects are pinned for Measure (#742).**
+  Autodesk keeps all six on its download host under `Docs/`, where the 2016
+  to 2027 samples are under `Docs/InProd/`, so a 2015 reading no longer rests
+  on files only a contributor holds. The 2019 MEP and `rst_advanced` projects
+  are pinned with them, so each 2015 project has a 2019 copy to compare
+  with (`-f probe_pair_release=2019`): nine more files, 58 in all.
 - **Measure compares each sample with the same project saved by another
   release (#740, #742).** With `-f probe_pair_release=<year>`, a two-file
   probe also runs on every sample of another release and the same project
