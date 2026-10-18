@@ -124,7 +124,10 @@ Tags `v*` are protected by the `release-tags` ruleset: only a maintainer can
 create one, and none can be moved or deleted. Pushing a tag runs the publish
 workflow, which builds and verifies the wheels and, through the
 release-binaries workflow, the CLI archives and the container image, and
-publishes them with build-provenance attestations. Each release is described in
+publishes them with build-provenance attestations. Nothing is published until
+the maintainer approves the crates.io job, and then the PyPI job, on the run
+page: the `crates-io` and `pypi` environments require the maintainer's review,
+with no administrator bypass, and the release binaries wait for crates.io. Each release is described in
 the release notes and the CHANGELOG, its milestone is closed, and the issues
 still open move on.
 
@@ -160,9 +163,11 @@ Configured on the repository, with the rulesets kept as code in
   The default workflow token is read-only.
 - Deleting or force-pushing `main` is blocked.
 - PyPI publishing uses OIDC trusted publishing, so no PyPI token is stored. The
-  `pypi` environment accepts only `v*` tags, and `testpypi` only `v*` tags and
-  `main`; a dry run from another branch is refused until its name is added to
-  the environment's deployment policy.
+  `crates-io` and `pypi` environments accept only `v*` tags and require the
+  maintainer's review before their job runs, with no administrator bypass;
+  `testpypi` accepts `v*` tags and `main` with no review; a dry run from
+  another branch is refused until its name is added to the environment's
+  deployment policy. The repository stores no Actions secrets.
 
 To re-apply a ruleset from its file:
 
