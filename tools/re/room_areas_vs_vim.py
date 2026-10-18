@@ -61,7 +61,10 @@ def main(argv):
     import ifcopenshell.util.element
 
     element_ids = {}
-    for space in ifcopenshell.open(args[0]).by_type("IfcSpace"):
+    # The file stays bound while its instances are in use: IfcOpenShell 0.9
+    # frees a file its instances outlive (#773).
+    model = ifcopenshell.open(args[0])
+    for space in model.by_type("IfcSpace"):
         for properties in ifcopenshell.util.element.get_psets(space).values():
             if isinstance(properties.get("ElementId"), int):
                 element_ids[space.GlobalId] = properties["ElementId"]

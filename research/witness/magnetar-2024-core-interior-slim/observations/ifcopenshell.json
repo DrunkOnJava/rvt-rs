@@ -653,5 +653,5 @@
   "unsupported_entities": [],
   "warnings": [],
   "witness_id": "ifcopenshell",
-  "witness_version": "0.8.5"
+  "witness_version": "0.9.0.post1"
 }

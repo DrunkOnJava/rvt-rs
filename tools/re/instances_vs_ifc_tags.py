@@ -29,7 +29,10 @@ def main(argv):
             for element in filter(None, ids.split(",")):
                 ours[int(element)] = name
     tags = {}
-    for element in ifcopenshell.open(argv[2]).by_type("IfcElement"):
+    # The file stays bound while its instances are in use: IfcOpenShell 0.9
+    # frees a file its instances outlive (#773).
+    model = ifcopenshell.open(argv[2])
+    for element in model.by_type("IfcElement"):
         if element.is_a("IfcOpeningElement") or element.is_a("IfcVirtualElement"):
             continue
         tag = getattr(element, "Tag", None)

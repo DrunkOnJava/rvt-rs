@@ -64,12 +64,15 @@ def main():
         raise SystemExit(__doc__)
     theirs = {}
     copies = collections.defaultdict(list)
-    for e in ifcopenshell.open(args[1]).by_type("IfcElement"):
+    # Both files stay bound while their instances are in use: IfcOpenShell
+    # 0.9 frees a file its instances outlive (#773).
+    revit_file, ours_file = ifcopenshell.open(args[1]), ifcopenshell.open(args[0])
+    for e in revit_file.by_type("IfcElement"):
         if tag(e) and not e.is_a("IfcOpeningElement"):
             theirs[tag(e)] = e
             copies[tag(e)].append(e)
     counts = collections.Counter()
-    for element in ifcopenshell.open(args[0]).by_type("IfcElement"):
+    for element in ours_file.by_type("IfcElement"):
         if element.is_a("IfcOpeningElement"):
             continue
         revit = theirs.get(tag(element))

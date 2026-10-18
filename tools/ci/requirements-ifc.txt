@@ -2,7 +2,7 @@
 # Dependabot proposes updates (.github/dependabot.yml). IfcOpenShell is a
 # witness: an update lands with its observations and verdicts under
 # research/witness/ refreshed from the CI run's octetproof-core-interior
-# artifact, and with Measure's scores unchanged on the same commit. 0.9.0
-# was measured on 2026-10-18 and held: Measure's scorers break under it
-# (#773), so Dependabot proposes only 0.8 patch releases.
-ifcopenshell==0.8.5
+# artifact, and with Measure's scores unchanged on the same commit. 0.9.0.post1
+# was measured on 2026-10-18 (#773): once the scorers keep each file bound,
+# every scorer output on main's commit is the one 0.8.5 gives.
+ifcopenshell==0.9.0.post1

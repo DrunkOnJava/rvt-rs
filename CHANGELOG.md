@@ -18,6 +18,18 @@ All notable changes will be documented here. This project follows
   `tests/door_overall_sizes.rs` and scored by
   `tools/re/door_window_sizes_vs_ifc.py`.
 
+### Changed
+
+- **CI and Measure run IfcOpenShell 0.9.0.post1 (#773).** Five of Measure's
+  scorers let go of an IFC file while they still used its elements, which
+  IfcOpenShell 0.9 does not allow (`room_names_vs_ifc` crashed under 0.9.0);
+  they now keep it open. The geometry scorers also print why IfcOpenShell
+  cannot mesh an element, which they used to count without a reason. On
+  main's commit Measure's scores are byte-identical under 0.8.5 and
+  0.9.0.post1 (runs 39153682389 and 39153684706; only the export timings
+  differ), walls included, which 0.9.0 could not mesh. So the pin moves, and
+  Dependabot proposes IfcOpenShell's minor releases again.
+
 ### Fixed
 
 - **Export diagnostics report the file name the model was saved under, not

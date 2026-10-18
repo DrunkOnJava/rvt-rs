@@ -48,6 +48,18 @@ COMPONENT = {5121: "B", 5123: "H", 5125: "I", 5126: "f"}
 WIDTH = {"SCALAR": 1, "VEC3": 3}
 
 
+MESH_ERRORS = set()
+
+
+def report_mesh_error(error):
+    """Print each distinct reason IfcOpenShell gives for not meshing an element, once (#773)."""
+    text = (str(error).strip().splitlines() or [""])[0]
+    message = f"{type(error).__name__}: {re.sub(r'#[0-9]+', '#N', text)[:200]}"
+    if message not in MESH_ERRORS:
+        MESH_ERRORS.add(message)
+        print(f"IfcOpenShell cannot mesh: {message}")
+
+
 def read_glb(path):
     data = open(path, "rb").read()
     magic, _, _ = struct.unpack_from("<4sII", data, 0)
@@ -208,8 +220,9 @@ def main():
         n = axis
         try:
             shape = ifcopenshell.geom.create_shape(settings, wall)
-        except Exception:
+        except Exception as error:
             stats["IfcOpenShell cannot mesh the IFC wall"] += 1
+            report_mesh_error(error)
             continue
         g = shape.geometry
         verts, faces, ids = g.verts, g.faces, g.material_ids
