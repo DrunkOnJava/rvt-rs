@@ -42,10 +42,10 @@ pub struct ElemTableHeader {
     /// 2016, 1411 on 2024, 1481 on 2026). For the declared ElementIds use
     /// [`declared_element_ids`].
     pub element_count: u16,
-    /// The number of records, the low 16 bits of the `u32` count at `0x02`
-    /// (every file measured has fewer than 65,536 records; [`parse_records`]
-    /// reads the whole `u32`).
-    pub record_count: u16,
+    /// The number of records the table states, the `u32` at `0x02` (#152).
+    /// A table can hold more than a `u16` counts: a Nordic LCA office
+    /// project's states 72,798 (#745).
+    pub record_count: u32,
     /// The `0x0011` found at `0x1E` / `0x22` on family files, 0 elsewhere.
     /// It is the owner field of the table's first record (ElementId 17 on
     /// family files), not a header field (#152).
@@ -131,7 +131,7 @@ fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
         ));
     }
     let element_count = u16::from_le_bytes([d[0], d[1]]);
-    let record_count = u16::from_le_bytes([d[2], d[3]]);
+    let record_count = u32::from_le_bytes([d[2], d[3], d[4], d[5]]);
     let header_flag = [0x1eusize, 0x22]
         .iter()
         .find_map(|&off| {
@@ -315,17 +315,17 @@ fn inflate(rf: &mut RevitFile) -> Result<Vec<u8>> {
 }
 
 /// Parse all records from Global/ElemTable: the `u32` count at `0x02`
-/// records from `0x06`, at the record size [`detect_layout`] finds. On the
-/// implicit fallback layout the count is the header's `record_count`.
+/// records from `0x06`, at the record size [`detect_layout`] finds, or from
+/// `0x30` on the implicit fallback layout, which reads the same count.
 pub fn parse_records(rf: &mut RevitFile) -> Result<Vec<ElemRecord>> {
     let d = inflate(rf)?;
-    let header = parse_header_bytes(&d)?;
+    parse_header_bytes(&d)?;
     let layout = detect_layout(&d);
-    let limit = match layout.framing {
-        RecordFraming::Explicit { .. } => stated_count(&d).unwrap_or(0),
-        RecordFraming::Implicit => usize::from(header.record_count),
-    };
-    Ok(parse_records_from_bytes(&d, layout, limit))
+    Ok(parse_records_from_bytes(
+        &d,
+        layout,
+        stated_count(&d).unwrap_or(0),
+    ))
 }
 
 /// Index ElemTable records by `id_primary` for ElementId lookups.
