@@ -64,6 +64,8 @@ With 2027 admitted, 33 pipes of 2027 `rme_basic` took the type name `였縿괜�
 | `rme_basic` | 6,921 / 6,921 | 6,921 | 120,706 | 10 |
 | `rme_advanced` | 6,877 / 6,877 | 6,877 | 119,808 | 0 |
 
+Measure's paired probe (#799) gives this table exactly on GitHub's runners, at the commit it was measured on (4038188, run 39166281214). On `main` at 70984ce, after later changes that read more fields, it gives 9,646, 104,420, 8,064, 120,920 and 120,022 agreeing fields: 363,072 of 363,256 in all, 616 more agreeing and the same 184 differing (run 39164968387).
+
 Every difference is in the bytes of the 2027 file or in a reader no 2027 constant reaches:
 - **79 corner mullions** (`L Mullion 1`, `rac_advanced`) take no curtain wall. Their reference lists name both walls of the corner on 2027 and one on 2026, so RE-46's rule (exactly one) leaves them standalone.
 - **Type materials of 12 elements** (`rac_basic`: 6 walls, 3 doors, 2 plants, 1 entourage) **and 22 railings** (`rac_advanced`). These come from RE-82's map scan, which has no per-release constant. It reads a type's value block up to the next declared block, and 2027 stores the partition's objects in another order. Some windows now end inside another object's one-entry map, and some no longer do. For example, `rac_basic` type 600634 gains `Water` from a map 29,648 bytes after its block; the 2026 file has no such map within 200 kB. 2026's values include matches of the same kind. The 2026 file gives 34 types `Vapour Retarder` (material 421) where 2027 does not, and the first of them, 416, is itself a `Material` object. The railings' 2026 material is `Misc. Air Layers - Air Film - Outside Surface`.
@@ -90,4 +92,8 @@ tools/fetch-autodesk-samples.sh samples 2026 2027
 cargo run --release --example probe_re179_revit_2027 -- samples/2026-racbasicsampleproject.rvt samples/2027-racbasicsampleproject.rvt
 ```
 
-The Measure workflow runs it on every sample with `-f samples=true -f probe=probe_re179_revit_2027`.
+On GitHub's runners, every 2027 sample against its 2026 copy (each sample's `probe-pair.txt`):
+
+```bash
+gh workflow run measure.yml -f ref=main -f base=none -f samples=true -f sample_years="2026 2027" -f probe=probe_re179_revit_2027 -f probe_pair_release=2026
+```

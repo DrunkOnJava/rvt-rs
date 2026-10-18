@@ -52,7 +52,8 @@ All notable changes will be documented here. This project follows
   already does (RE-35). There is no Revit 2027 IFC export to measure against;
   on Autodesk's five 2027 sample projects the elements equal those of the
   same models saved by Revit 2026 (20,818 of 20,818 ElementIds, every class
-  the same, 362,456 of 362,640 fields), and the six 2027 exports pass
+  the same, 363,072 of 363,256 fields, measured by Measure's paired probe,
+  #799), and the six 2027 exports pass
   IfcOpenShell's schema validation. Before, a 2027 project exported no
   building element. Every 2023 to 2026 export is byte-identical.
 - **A door's `OverallWidth` / `OverallHeight` from its type (#759, RE-187).**
