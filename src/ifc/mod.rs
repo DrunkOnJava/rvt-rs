@@ -482,6 +482,8 @@ fn elem_table_declared_element_count(rf: &mut crate::RevitFile) -> Option<usize>
 pub struct ExportInputDiagnostics {
     pub revit_version: Option<u32>,
     pub build: Option<String>,
+    /// The file name of the path Revit last saved the file at, without its
+    /// folders.
     pub original_path: Option<String>,
     pub project_name: Option<String>,
     pub stream_count: usize,
@@ -942,12 +944,19 @@ enum RvtDocExportMode {
     DiagnosticProxies,
 }
 
-/// The file name in a Revit file's original path, without its extension: an
-/// export's name when the file has no PartAtom title. The path's folders,
-/// which can hold the author's account and client names, stay out of the
-/// export. The path is Windows-style on every host, so both separators split.
-fn original_file_stem(path: &str) -> Option<String> {
+/// The file name in a Revit file's original path: all an export reports of
+/// the path. Its folders, which can hold the author's account and client
+/// names, stay out. The path is Windows-style on every host, so both
+/// separators split.
+fn original_file_name(path: &str) -> Option<&str> {
     let name = path.rsplit(['\\', '/']).next()?;
+    (!name.is_empty()).then_some(name)
+}
+
+/// [`original_file_name`] without its Revit extension: an export's name when
+/// the file has no PartAtom title.
+fn original_file_stem(path: &str) -> Option<String> {
+    let name = original_file_name(path)?;
     let lower = name.to_ascii_lowercase();
     let stem = [".rvt", ".rfa", ".rte", ".rft"]
         .iter()
@@ -3361,8 +3370,9 @@ pub fn build_export_diagnostics_with_limits(
             build: bfi.as_ref().and_then(|b| b.build.clone()),
             original_path: bfi
                 .as_ref()
-                .and_then(|b| b.original_path.as_ref())
-                .map(|path| crate::redact::redact_sensitive(path)),
+                .and_then(|b| b.original_path.as_deref())
+                .and_then(original_file_name)
+                .map(str::to_string),
             project_name: model
                 .project_name
                 .clone()

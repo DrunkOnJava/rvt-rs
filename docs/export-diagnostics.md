@@ -54,7 +54,7 @@ minor release; incompatible changes must increment this number.
 |---|---:|---|
 | `schema_version` | integer | Diagnostics schema version. |
 | `mode` | string | `placeholder`, `default`, or `diagnostic_proxies`. |
-| `input` | object | Revit version/build/redacted path metadata and required stream presence. |
+| `input` | object | Revit version and build, the file name of the path Revit last saved the file at (`original_path`, without its folders), the export's project name, and which required streams are present. |
 | `decoded` | object | Counts recovered by reader-side scanners before IFC emission. |
 | `exported` | object | IFC model entity counts, geometry count, materials, units, storeys. |
 | `skipped` | array | Suppressed items, grouped by reason and class. |
@@ -240,7 +240,7 @@ export.
   "input": {
     "revit_version": 2024,
     "build": "20230308_1635(x64)",
-    "original_path": "C:\\path\\model.rvt",
+    "original_path": "model.rvt",
     "project_name": "Sample",
     "stream_count": 24,
     "has_basic_file_info": true,
