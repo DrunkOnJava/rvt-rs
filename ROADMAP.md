@@ -38,9 +38,9 @@ the four levels a file can reach are in the
 | Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2026. | Maintain compatibility and bounds checks against hostile input. |
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
-| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial, 2026 is experimental (one local model). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | Element records of other releases (#421), parameters (0.5.0), held-out models (#408). |
-| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.4.x milestone (below). |
-| Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.5.0). |
+| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial, 2026 is experimental (one local model). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | Element records of other releases (#421), parameters (0.6.0), held-out models (#408). |
+| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.5.x milestone (below). |
+| Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.6.0). |
 | Python and CLI | Partial | The `rvt` wheel on PyPI and prebuilt CLI archives on GitHub Releases, sharing the core's honesty bounds. | Stabilize JSON schemas and the one-shot inspect workflow. |
 | Write path | Partial | Stream-level patching only. Field-level semantic writes are unsupported and gated by [ADR-002](docs/decisions/ADR-002-semantic-write-api-gate.md). | Stay gated until openability can be proven. |
 
@@ -61,11 +61,21 @@ the four levels a file can reach are in the
   cut the opening their type specifies; turned family instances are drawn
   turned; steel members carry their I section; every typed element is related
   to an IFC type object of its Revit type.
+- **0.5.0, 2026-10-18.** Revit 2026 projects export typed elements,
+  experimentally; MEP models gain ports, port-to-port connections and systems,
+  and pipes are drawn as the cylinders Revit draws; exports carry each
+  element's levels, its category, family, type and phase, and more of the
+  common property sets; rooms are aggregated into their storeys; Autodesk's
+  Snowdon Towers samples export their elements again. The first release with
+  outside contributors' pull requests.
+- **0.5.1, 2026-10-18.** An export is named by the model's file name rather
+  than the path it was saved at, which could carry the author's account and
+  folder names (#782), and the README names the release it ships in.
 
-### 0.4.x: IFC geometry beta, remaining slices
+### 0.5.x: IFC geometry, remaining slices
 
 v0.4.0 shipped part of the geometry beta. The milestone of that name is closed,
-and the slices still open moved to this one. Each slice records a baseline, an
+and the slices still open moved to this one, named 0.5.x since 0.5.0 shipped. Each slice records a baseline, an
 improvement and a residual against Revit's own exports on the reference pack
 (#407), approximations stay labelled (#409), and a slice ships in the next
 release that contains it. Open now: wall bodies thicker or thinner
@@ -76,13 +86,17 @@ solid does not close (#90), beams (#94), MEP equipment and routes (#96), the
 sketch-to-solid pipeline (#156), and the Snowdon slabs that are not in Revit's
 export: six in the Legends phase (#328) and one more (#309).
 
-### 0.5.0: element data (parameters) and viewer journey
+### 0.6.0: element data (parameters) and viewer journey
 
 Make rvt-rs a data source, not only a viewer: instance and type parameters with
 units and precedence (#35, #155), the element-record fields that carry them
-(#223, #228), shown consistently in Rust, Python, CLI schedules, IFC property
-sets and the viewer, with the viewer journey (open, inspect, schedule, export,
-diagnostics) verified end to end on the reference pack.
+(#223), shown consistently in Rust, Python, CLI schedules, IFC property sets
+and the viewer, with the viewer journey (open, inspect, schedule, export,
+diagnostics) verified end to end on the reference pack. 0.5.0 shipped the
+first of it: the levels, category, family, type and phase that Revit's export
+writes (RE-172, RE-177), more of the common property sets, and the record's
+reference slots (#228). The parameter store itself is open, and so are door
+and window sizes (#759).
 
 ### 1.0.0: first-class utility
 

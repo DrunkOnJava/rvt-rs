@@ -4,7 +4,7 @@ What rvt-rs can be trusted with today, in the terms a BIM user would check.
 The evidence behind every line is in [`support-matrix.json`](support-matrix.json)
 (`rvt-capabilities --matrix -f text` prints it) and in the measured tables of the
 [README](../README.md#what-rvt-rs-reads-from-real-projects). This page
-describes `main`; the latest release is v0.4.0, and what has landed since
+describes `main`; the latest release is v0.5.1, and what has landed since
 is under `[Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Four levels of "it works"
@@ -29,7 +29,7 @@ apart:
 | Input | Opened | Elements identified | Geometry | Properties |
 |---|---|---|---|---|
 | Revit 2024 and 2025 project (`.rvt`) | yes | yes, measured on Core Interior, the four RE1 models, Snowdon Towers, Projeto1 and `teste_export_2025` | see below | see below |
-| Revit 2026 project | yes | experimental, on `main`: measured on one 2026 project against Revit's own IFC4X3 export, 113 of its 115 elements and none outside it (RE-124) | the element's bounding box, walls cut back at their joins | Revit's GlobalIds, storeys, rooms with Revit's numbers and names, doors and windows in their hosts, family and type names, layer sets |
+| Revit 2026 project | yes | experimental (since 0.5.0): measured on one 2026 project against Revit's own IFC4X3 export, 113 of its 115 elements and none outside it (RE-124) | the element's bounding box, walls cut back at their joins | Revit's GlobalIds, storeys, rooms with Revit's numbers and names, doors and windows in their hosts, family and type names, layer sets |
 | Revit 2023 project | yes | yes, measured on two 2023 projects against Revit's IFC4 exports (RE-81); components nested in doors and windows are left out | the element's bounding box; rooms their outline (RE-102) | ElementId, category, door and window host walls (RE-85), Levels as storeys with each element on the one its record names (RE-107), and family instances' family and type names (RE-109) |
 | Revit 2022 and earlier project | yes | no | none | metadata |
 | Family (`.rfa`) or template (`.rte`, `.rft`) | yes | family metadata and OmniClass only | none | none |
@@ -82,7 +82,7 @@ Revit leaves them out.
 ## Not supported
 
 - Converting an arbitrary Revit model to IFC with Revit-grade fidelity.
-- Element records of releases other than 2023 to 2026 (2026 is experimental, on `main`, measured on one project, RE-124). On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
+- Element records of releases other than 2023 to 2026 (2026 is experimental, measured on one project, RE-124). On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
 - Door/Window typing from the opening-index rows (RE-19) and Level ElementIds

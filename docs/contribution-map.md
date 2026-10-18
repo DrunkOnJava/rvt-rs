@@ -13,7 +13,7 @@ AEC users without overstating current capability.
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
-## Open Remainders (as of 2026-09-30)
+## Open Remainders (as of 2026-10-18)
 
 The issue tracker is the source of truth; this is its state today, by
 milestone, with each issue's own title. Pick one rather than re-opening a
@@ -21,7 +21,7 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.4.x: IFC geometry beta, remaining slices
+### 0.5.x: IFC geometry, remaining slices
 
 | Issue | Remainder |
 |---|---|
@@ -38,11 +38,11 @@ milestone is for.
 | [#94](https://github.com/DrunkOnJava/rvt-rs/issues/94) | CLASS-14: structural framing sections still not drawn: 6 channels, 25 angles, one HSS column, 17 I beams |
 | [#90](https://github.com/DrunkOnJava/rvt-rs/issues/90) | Room outlines: 7 Snowdon Towers rooms still drawn as their box (room solid edge topology) |
 
-### 0.5.0: element data (parameters) and viewer journey
+### 0.6.0: element data (parameters) and viewer journey
 
 | Issue | Remainder |
 |---|---|
-| [#228](https://github.com/DrunkOnJava/rvt-rs/issues/228) | Element record reference list at +0x88: attribute the remaining slots (leading 3, family/type/level ids) |
+| [#759](https://github.com/DrunkOnJava/rvt-rs/issues/759) | IFC export: doors and windows of Core Interior and RE1 Architecture have no OverallHeight/OverallWidth |
 | [#223](https://github.com/DrunkOnJava/rvt-rs/issues/223) | Element record +0x46: the flag word is unread (+0x4a is the schema class, RE-76) |
 | [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
 | [#35](https://github.com/DrunkOnJava/rvt-rs/issues/35) | M4-07: Recover common parameters |

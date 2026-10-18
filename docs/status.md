@@ -70,7 +70,7 @@ family instances' family and type names, with their IFC type objects
 (RE-109, RE-110), walls', floors' and roofs' types and layers
 (RE-111, RE-112), family instances' materials (RE-113), and walls' and
 floors' material layer sets (RE-114, RE-115), with each material's shading
-colour (RE-116). On Revit 2026 projects, experimentally on `main`, it reads
+colour (RE-116). On Revit 2026 projects, experimentally since 0.5.0, it reads
 typed elements, storeys, rooms, doors and windows, type names and layer sets,
 measured on one project against Revit's own export (RE-124). Every recovery claim is measured against Revit's own IFC export of the
 same file; the measured tables are in the
@@ -737,17 +737,22 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.4.0** (2026-09-28) is the latest release: crates.io and docs.rs,
+- **v0.5.1** (2026-10-18) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
-  Windows, the container image, and the deployed viewer, each verified from
-  its published artifacts. It carries everything under `[0.4.0]` in
-  [`CHANGELOG.md`](../CHANGELOG.md): Revit 2023 projects' typed elements,
-  room outlines and Revit's room numbers and names, door and window
-  openings from their types, turned family instances, steel sections, IFC
-  type objects and system family names in the file's locale. Its
-  "Upgrading from 0.3" section lists the changes a 0.3 user will notice.
-- **v0.3.0** (2026-09-27) is the previous release.
-- `main` is ahead of v0.4.0 by what is under `[Unreleased]`.
+  Windows, the container image, and the deployed viewer, each checked from
+  its published artifacts ([`install.md`](install.md)). It is 0.5.0 with
+  exports named by the model's file name rather than the path it was saved
+  at (#782) and a README that names the release it ships in.
+- **v0.5.0** (2026-10-18) carries everything under `[0.5.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md): Revit 2026 projects' typed elements
+  (experimental), MEP ports, connections and systems, pipes drawn as Revit
+  draws them, each element's levels, category, family, type and phase,
+  rooms aggregated into their storeys, and Autodesk's Snowdon Towers samples
+  exporting again. Its "Upgrading from 0.4" section lists the changes a 0.4
+  user will notice. It is the first release with outside contributors'
+  pull requests.
+- **v0.4.0** (2026-09-28) is the release before.
+- `main` is ahead of v0.5.1 by what is under `[Unreleased]`.
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
 task backlog.
