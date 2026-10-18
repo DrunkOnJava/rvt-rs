@@ -26,6 +26,7 @@ Needs IfcOpenShell (tested with 0.8.5).
 import collections
 import importlib.util
 import os
+import re
 import sys
 
 import ifcopenshell
@@ -42,6 +43,18 @@ _spec.loader.exec_module(walls)
 
 FEET = 0.3048
 STACKED = {"IFCSLAB", "IFCROOF", "IFCCOVERING"}
+
+
+MESH_ERRORS = set()
+
+
+def report_mesh_error(error):
+    """Print each distinct reason IfcOpenShell gives for not meshing an element, once (#773)."""
+    text = (str(error).strip().splitlines() or [""])[0]
+    message = f"{type(error).__name__}: {re.sub(r'#[0-9]+', '#N', text)[:200]}"
+    if message not in MESH_ERRORS:
+        MESH_ERRORS.add(message)
+        print(f"IfcOpenShell cannot mesh: {message}")
 
 
 def stacked_layers(doc, blob):
@@ -123,8 +136,9 @@ def main():
         materials = element_materials(element)
         try:
             shape = ifcopenshell.geom.create_shape(settings, element)
-        except Exception:
+        except Exception as error:
             stats["IfcOpenShell cannot mesh the IFC element"] += 1
+            report_mesh_error(error)
             continue
         g = shape.geometry
         verts, faces, ids = g.verts, g.faces, g.material_ids

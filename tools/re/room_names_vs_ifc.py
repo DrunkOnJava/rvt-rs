@@ -20,9 +20,9 @@ import ifcopenshell
 import ifcopenshell.util.element
 
 
-def ours(path):
+def ours(model):
     out = {}
-    for space in ifcopenshell.open(path).by_type("IfcSpace"):
+    for space in model.by_type("IfcSpace"):
         element_id = None
         for properties in ifcopenshell.util.element.get_psets(space).values():
             element_id = properties.get("ElementId", element_id)
@@ -62,7 +62,10 @@ def vim_rooms(path):
 
 
 def main():
-    rooms = ours(sys.argv[1])
+    # Each file stays bound while its instances are in use: IfcOpenShell 0.9
+    # frees a file its instances outlive (#773).
+    model = ifcopenshell.open(sys.argv[1])
+    rooms = ours(model)
     same = differ = absent = 0
     if sys.argv[2].endswith(".vim"):
         reference = vim_rooms(sys.argv[2])
@@ -76,7 +79,8 @@ def main():
                 differ += 1
                 print(f"  {space.Name}: ours {(number, name)} VIM {sorted(candidates)}")
     else:
-        reference = {s.GlobalId: (s.Name, s.LongName) for s in ifcopenshell.open(sys.argv[2]).by_type("IfcSpace")}
+        revit = ifcopenshell.open(sys.argv[2])
+        reference = {s.GlobalId: (s.Name, s.LongName) for s in revit.by_type("IfcSpace")}
         for space, (number, name, _) in rooms.items():
             pair = (number, name)
             theirs = reference.get(space.GlobalId)
