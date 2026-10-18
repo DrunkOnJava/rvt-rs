@@ -275,6 +275,22 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Snowdon Towers exports its elements again (#736).** The record
+  size `elem_table::detect_layout` picks is the one at which the stated
+  records fit from `0x06` with ids rising. It tested the first id, but on
+  Autodesk's Snowdon Towers samples that id differs from the second on 27
+  (Structural) and 84 (Architectural) records and falls back below its
+  predecessor 2 and 3 times. Neither size passed, so the table was read in
+  the 12-byte fallback layout. Every element record then lacked its
+  ElementId (RE-30), and the export wrote 0 of Structural's 1,282 elements
+  and 1 of Architectural's 6,056 (since #559). The test now reads the second
+  id, the ElementId that partition records, owners and Revit's own export
+  carry (RE-41). It rises over every table measured, and on Snowdon every
+  owner is one of the second ids, while 13 and 42 owners are none of the
+  first ids. Every other file reads the same layout as before.
+  `tests/elem_table_frame.rs` checks rising ElementIds and owners on the
+  second id, and reads the Snowdon samples when they are in
+  `RVT_PROJECT_CORPUS_DIR`.
 - **An export without geometry keeps its elements' types and names (B74).**
   `--mode typed-no-geometry` read the record property set, which carries an
   element's family and type, only with its geometry, so it typed no element
