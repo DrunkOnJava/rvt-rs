@@ -105,6 +105,83 @@ use std::collections::{BTreeMap, BTreeSet};
 /// `Drshelden/IFC-ECS` RE1 projects (MIT) against theirs (RE-32).
 pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 
+/// The name Revit's `Category` parameter gives an element of each
+/// `BuiltInCategory` (spike 257), a sub-category as `Parent: Name`.
+///
+/// The ids are Autodesk's published API constants; each name is the one
+/// Revit 2024's own IFC export writes as `Other.Category` for elements whose
+/// record carries the id, measured on the seven Autodesk Revit 2024 samples
+/// whose records this module reads (26,656 elements, 57 categories, no id
+/// with two names). Revit writes the name in its UI language: these are the
+/// English names. An id not listed has no name here.
+pub const BUILTIN_CATEGORY_NAMES: &[(i64, &str)] = &[
+    (-2_000_011, "Walls"),
+    (-2_000_014, "Windows"),
+    (-2_000_023, "Doors"),
+    (-2_000_032, "Floors"),
+    (-2_000_035, "Roofs"),
+    (-2_000_038, "Ceilings"),
+    (-2_000_045, "Lines: <Sketch>"),
+    (-2_000_051, "Lines"),
+    (-2_000_080, "Furniture"),
+    (-2_000_100, "Columns"),
+    (-2_000_120, "Stairs"),
+    (-2_000_123, "Stairs: Supports"),
+    (-2_000_126, "Railings"),
+    (-2_000_151, "Generic Models"),
+    (-2_000_170, "Curtain Panels"),
+    (-2_000_171, "Curtain Wall Mullions"),
+    (-2_000_181, "Walls: Wall Sweeps"),
+    (-2_000_182, "Walls: Reveals"),
+    (-2_000_267, "Assemblies"),
+    (-2_000_919, "Stairs: Runs"),
+    (-2_000_920, "Stairs: Landings"),
+    (-2_000_996, "Shaft Openings"),
+    (-2_000_997, "Walls: Rectangular Straight Wall Opening"),
+    (-2_001_000, "Casework"),
+    (-2_001_040, "Electrical Equipment"),
+    (-2_001_060, "Electrical Fixtures"),
+    (-2_001_100, "Furniture Systems"),
+    (-2_001_120, "Lighting Fixtures"),
+    (-2_001_140, "Mechanical Equipment"),
+    (-2_001_160, "Plumbing Fixtures"),
+    (-2_001_180, "Parking"),
+    (-2_001_263, "Site: Pads"),
+    (-2_001_300, "Structural Foundations"),
+    (-2_001_320, "Structural Framing"),
+    (-2_001_327, "Structural Beam Systems"),
+    (-2_001_330, "Structural Columns"),
+    (-2_001_336, "Structural Trusses"),
+    (-2_001_350, "Specialty Equipment"),
+    (-2_001_354, "Structural Stiffeners"),
+    (-2_001_360, "Planting"),
+    (-2_001_370, "Entourage"),
+    (-2_001_392, "Floors: Slab Edges"),
+    (-2_003_400, "Mass"),
+    (-2_008_000, "Ducts"),
+    (-2_008_010, "Duct Fittings"),
+    (-2_008_013, "Air Terminals"),
+    (-2_008_020, "Flex Ducts"),
+    (-2_008_044, "Pipes"),
+    (-2_008_049, "Pipe Fittings"),
+    (-2_008_087, "Lighting Devices"),
+    (-2_008_099, "Sprinklers"),
+    (-2_008_126, "Cable Tray Fittings"),
+    (-2_008_128, "Conduit Fittings"),
+    (-2_008_130, "Cable Trays"),
+    (-2_008_132, "Conduits"),
+    (-2_009_000, "Structural Rebar"),
+    (-2_009_030, "Structural Connections"),
+];
+
+/// [`BUILTIN_CATEGORY_NAMES`]' name for `id`.
+pub fn builtin_category_name(id: i64) -> Option<&'static str> {
+    BUILTIN_CATEGORY_NAMES
+        .iter()
+        .find(|(known, _)| *known == id)
+        .map(|(_, name)| *name)
+}
+
 /// Autodesk `BuiltInCategory.OST_Columns` — architectural columns.
 pub const OST_COLUMNS: i64 = -2_000_100;
 /// Autodesk `BuiltInCategory.OST_Walls`.
