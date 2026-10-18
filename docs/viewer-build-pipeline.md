@@ -121,11 +121,9 @@ wasm-build:
     - run: cargo install wasm-pack
     - run: wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
     - name: Verify no network imports
-      run: |
-        # VW1-21 invariant check — no fetch / XMLHttpRequest / WebSocket
-        # imports in the compiled .wasm
-        wasm-objdump -x pkg/rvt_bg.wasm | \
-          grep -E '"(fetch|XMLHttpRequest|WebSocket)"' && exit 1 || true
+      # VW1-21 invariant check: each import of the compiled .wasm, by name
+      # and by its shim in the glue (viewer/scripts/audit-wasm-imports.mjs)
+      run: node viewer/scripts/audit-wasm-imports.mjs
 ```
 
 ## VW1-02 — JS bindings via wasm-bindgen
