@@ -101,11 +101,17 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+      - name: Install Rust stable
         if: runner.os != 'Linux'
-        with:
-          toolchain: stable
-          targets: ${{ runner.os == 'macOS' && matrix.target || '' }}
+        shell: bash
+        env:
+          TARGETS: ${{ runner.os == 'macOS' && matrix.target || '' }}
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update ${TARGETS:+--target "$TARGETS"}
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
 
       # abi3-py38 means one wheel per OS/arch covers every Python
       # >= 3.8. No per-Python-minor-version matrix needed.
@@ -238,9 +244,14 @@ jobs:
           repository: phi-ag/rvt
           path: _corpus
           cache: "false"
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - name: Install crate from release source
         run: cargo install --path . --locked --root /tmp/rvt-release-install
       - name: Run CLIs on sample file
@@ -268,9 +279,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: nightly
+      - name: Install Rust nightly
+        shell: bash
+        run: |
+          rustup toolchain install nightly --profile minimal --no-self-update
+          rustup default nightly
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - name: Build docs with warnings denied
         run: cargo +nightly doc --no-deps --all-features -p rvt
 
@@ -290,10 +306,14 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
           cache: "false"
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-unknown
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update --target wasm32-unknown-unknown
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - name: Install wasm-pack
         uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
@@ -388,9 +408,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       # Verify the Cargo.toml version matches the git tag — prevents
       # mismatched publishes where the tag says v0.1.3 but the crate
       # goes out as 0.1.2 (or vice versa). Compare `pkgid` output to
