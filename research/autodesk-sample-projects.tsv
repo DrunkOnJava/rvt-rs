@@ -4,8 +4,12 @@
 # family corpus comes from, which phi-ag/rvt lists under CC BY-NC-SA 3.0; the projects' own
 # terms were not checked, which is why they are only fetched for a run. Hashes and sizes
 # measured 2026-10-01; the five Snowdon Towers 2024 models (#766), Autodesk's multi-model
-# 2024 sample published under Samples/ on the same host, on 2026-10-18.
+# 2024 sample published under Samples/ on the same host, every Revit 2015 row and the 2019
+# MEP and rst_advanced rows, on 2026-10-18.
 # year	file	url	sha256	bytes
+2015	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2015RVT_RTM/Docs/rac_basic_sample_project.rvt	8ff35b3c86f235f7eb2fa212d1fe62acf321779ea74852ef451374cf78da19ed	16633856
+2015	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2015RVT_RTM/Docs/rst_basic_sample_project.rvt	e7063b58d5a4cc9c07ae0617f07e8e8043d7f77a3ee4fc11f7edd35dabe8cc30	6758400
+2015	rac_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2015RVT_RTM/Docs/rac_advanced_sample_project.rvt	0d1d77ebf28163e63486e6d22bc881dbd513ba13eeb14c19d5e438c3631d3be7	14135296
 2016	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt	8e6d1a7668dd700d7a94c022a80cbb2a9ea31925a75fbc551c8ced0904dbb8a1	16474112
 2016	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rst_basic_sample_project.rvt	c2fe9b5eea7c9d0e345e2a8a981cb94c8ded33408e7f3466903ad125149efe13	5693440
 2016	rac_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2016RVT_RTM/Docs/InProd/rac_advanced_sample_project.rvt	187608afda28470d115da72bbc67a0dfc0201f36526e7a77a18915ff3d06ed21	14077952
@@ -57,3 +61,12 @@
 2024	snowdon_towers_sample_hvac.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/Samples/Snowdon%20Towers%20Sample%20HVAC.rvt	585385991b1f8a168881c4bc36546bc90e7bfb427c263d801fe367fa2ebb0fa8	22818816
 2024	snowdon_towers_sample_plumbing.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/Samples/Snowdon%20Towers%20Sample%20Plumbing.rvt	4f80526bd7823172e236d8c88968210a56c718e69a54a18b7919b3ae5610ae0a	42119168
 2024	snowdon_towers_sample_electrical.rvt	https://revit.downloads.autodesk.com/download/2024RVT_RTM/Docs/InProd/Samples/Snowdon%20Towers%20Sample%20Electrical.rvt	e50e1b7121cdcc4ac57cc4777981bbe52012814c9f5f65ea407fcd91b70e1750	41304064
+# Revit 2015 (#742): Autodesk keeps that release's samples under Docs/, not Docs/InProd/ as
+# for 2016 to 2027. Its MEP and rst_advanced projects, with their 2019 copies, check the
+# 2015 to 2018 readers against a later release (RE-181) and RE-180's 2019 reads of them.
+2015	rme_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2015RVT_RTM/Docs/rme_basic_sample_project.rvt	e146321f315f9744c12e9727e1f16c79a7febc55762f98266ca14eac159f8907	26513408
+2015	rme_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2015RVT_RTM/Docs/rme_advanced_sample_project.rvt	825cb89f569aef41d2df99a734a988a9242de87c32b257b8c1be112b3ee24c6b	31731712
+2015	rst_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2015RVT_RTM/Docs/rst_advanced_sample_project.rvt	59d110915877be4257bc5d7a178935ea353ee90323d845ef779fba511b92b347	11550720
+2019	rme_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rme_basic_sample_project.rvt	7285e7527148c5cdef2b79533c0015f8cab1bcc70591edb686dec08ed990d241	28516352
+2019	rme_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rme_advanced_sample_project.rvt	976d3e356224fb9ea625a06f3c1c6739d3e9ff38d056bbdb3b9e2245c2485839	33984512
+2019	rst_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rst_advanced_sample_project.rvt	af89f67f83c005535a092e750c6011fddcde637b96ade50a4766851bb9218ccd	13492224

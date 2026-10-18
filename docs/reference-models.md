@@ -55,11 +55,14 @@ values read) are the cross-check for any reader of them.
 ## Autodesk's sample projects, fetched for a run
 
 Autodesk publishes `rac_basic`, `rst_basic` and `rac_advanced` sample projects
-for every Revit release from 2016 to 2027 on its own download host, 36 files,
-and the MEP projects `rme_basic` and `rme_advanced`, of which 2024 to 2027 are
-pinned (8 files: ducts of every shape, fittings, connectors and systems the
-reference models lack). Its multi-model 2024 sample, Snowdon Towers, is pinned
-as well (5 files: Architectural, Structural, HVAC, Plumbing and Electrical),
+for every Revit release from 2015 to 2027 on its own download host, 39 files,
+and the MEP projects `rme_basic` and `rme_advanced` and the `rst_advanced`
+project. Of those, the MEP projects of 2024 to 2027 are pinned (8 files: ducts
+of every shape, fittings, connectors and systems the reference models lack),
+and the MEP and `rst_advanced` projects of 2015 and 2019 (6 files), which check
+the readers of 2015 to 2022 files (RE-180, RE-181). Revit 2015's are under
+`Docs/` on the host, not `Docs/InProd/` as for later releases. Its multi-model
+2024 sample, Snowdon Towers, is pinned as well (5 files: Architectural, Structural, HVAC, Plumbing and Electrical),
 so that a regression on the models #736 found is seen in a run. It is the host the sample families of the phi-ag/rvt
 corpus (CC BY-NC-SA 3.0) come from; the projects' own terms were not checked. They are pinned by hash in
 [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv)
