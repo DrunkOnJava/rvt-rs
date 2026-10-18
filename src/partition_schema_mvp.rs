@@ -7408,6 +7408,9 @@ fn highest_level(named: &[u32], elevations: &BTreeMap<u32, f64>) -> Option<u32> 
     match by_height[..] {
         [(top, id), (next, _), ..] if top - next > 1e-6 => Some(id),
         _ => None,
+    }
+}
+
 /// Field recording where a column's bottom came from, when not its record.
 pub const COLUMN_Z_SOURCE_FIELD: &str = "m_column_z_source";
 /// Value of [`COLUMN_Z_SOURCE_FIELD`] for a bottom read from the geometry node.
