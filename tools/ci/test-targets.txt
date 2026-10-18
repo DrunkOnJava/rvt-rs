@@ -30,6 +30,7 @@ real      arc_wall_corpus
 real      cfb_roundtrip_delta
 real      common_reference
 real      corpus_tier2_health
+real      column_cut_body
 real      column_node_z
 real      covering_finish
 real      curtain_part_materials
