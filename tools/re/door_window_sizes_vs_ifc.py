@@ -9,9 +9,14 @@ scorer joins those rows to Revit's own export by `Tag` (the ElementId) and
 counts, per class, how many of Revit's `OverallWidth` and `OverallHeight`
 each candidate pair equals, within 0.001 ft.
 
+Given an rvt-rs export instead of the probe's output, it scores the
+`OverallWidth` and `OverallHeight` rvt-rs writes against Revit's, joined the
+same way: per class, how many are equal, differ, or are `$`.
+
 Usage:
 
     python3 tools/re/door_window_sizes_vs_ifc.py <probe output> <revit-export.ifc> [--list]
+    python3 tools/re/door_window_sizes_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--list]
 
 Needs IfcOpenShell (tested with 0.8.5).
 """
@@ -50,10 +55,39 @@ def revit_sizes(path):
     return out
 
 
+def score_export(ours_path, revit_path, listing):
+    """Count the OverallWidth / OverallHeight an rvt-rs export writes against Revit's."""
+    ours, revit = revit_sizes(ours_path), revit_sizes(revit_path)
+    tally = collections.Counter()
+    seen = collections.Counter()
+    worst = []
+    for tag, (entity, width, height) in revit.items():
+        if width is None or height is None or tag not in ours:
+            continue
+        seen[entity] += 1
+        _, w, h = ours[tag]
+        if w is None or h is None:
+            tally[(entity, "$")] += 1
+        elif abs(w - width) <= TOLERANCE_FEET and abs(h - height) <= TOLERANCE_FEET:
+            tally[(entity, "equal")] += 1
+        else:
+            tally[(entity, "differs")] += 1
+            worst.append((tag, entity, width, height, w, h))
+    for entity in sorted(seen):
+        print(f"{entity}: {seen[entity]} matched by Tag, OverallWidth and OverallHeight "
+              f"equal {tally[(entity, 'equal')]}  differ {tally[(entity, 'differs')]}  $ {tally[(entity, '$')]}")
+    if listing:
+        for tag, entity, width, height, w, h in worst[:60]:
+            print(f"  {entity} {tag}: Revit {width:.4f} x {height:.4f} ft, rvt-rs {w:.4f} x {h:.4f} ft")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     listing = "--list" in sys.argv
     probe_path, ifc_path = args[0], args[1]
+    if probe_path.lower().endswith(".ifc"):
+        score_export(probe_path, ifc_path, listing)
+        return
     rows = []
     for line in open(probe_path):
         line = line.strip()

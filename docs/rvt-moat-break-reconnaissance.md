@@ -2135,3 +2135,7 @@ A sketch line's first curve record can hold RE-75's arc layout (angles, unit X a
 ## Addendum — RE-97 a Sketch element lists its curves (2026-09-28)
 
 A Sketch element's data names the element it sketches 77 bytes from its element-data header and lists its sketch lines as `u32 n · n × (u64 ElementId · u32 index)`. Its keys rise, with gaps where curves were deleted. On 55 of Snowdon Towers' 447 such sketches the list differs from the lines whose owner reference names the element: an edited sketch's lines keep naming the element they were drawn for. Taking the list as the membership gives 176 of 199 slabs and all 20 roofs an outline. Report: `reports/element-framing/RE-97-sketch-curve-lists.md`; probe: `examples/probe_re97_sketch_curve_lists.rs`.
+
+## Addendum — RE-187 a door type's Width and Height are its overall size (2026-10-18)
+
+A door type's value block holds its Width (−1001301) and Height (−1001300), the BuiltInParameters RE-93 reads for windows, and Revit's IFC export writes them as the door's `OverallWidth` / `OverallHeight` wherever they are read: 136 of 136 doors on Core Interior and RE1 Architecture. A window's type size is not its overall size on Core Interior (1010 mm against Revit's 1500 × 2700 mm). Report: `reports/element-framing/RE-187-door-overall-sizes.md`; probe: `examples/probe_re187_door_window_sizes.rs`.

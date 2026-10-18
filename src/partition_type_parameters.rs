@@ -319,6 +319,45 @@ pub fn type_door_openings(
         .collect()
 }
 
+/// A door type's Width and Height (RE-187), feet: the BuiltInParameters a
+/// window type holds them in too ([`WINDOW_WIDTH_PARAMETER`],
+/// [`WINDOW_HEIGHT_PARAMETER`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DoorTypeSize {
+    /// The type's Width.
+    pub width_feet: f64,
+    /// The type's Height.
+    pub height_feet: f64,
+}
+
+/// The size of each type in `types` whose Width and Height are read, and
+/// agree across every partition (RE-187). Empty for a release whose element
+/// records are not decoded.
+pub fn type_door_sizes(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+) -> BTreeMap<u32, DoorTypeSize> {
+    if bbox_marker(revit_version).is_none() || types.is_empty() {
+        return BTreeMap::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let parameters = BTreeSet::from([WINDOW_WIDTH_PARAMETER, WINDOW_HEIGHT_PARAMETER]);
+    type_lengths(rf, &declared, types, &parameters)
+        .into_iter()
+        .filter_map(|(owner, held)| {
+            let size = DoorTypeSize {
+                width_feet: *held.get(&WINDOW_WIDTH_PARAMETER)?,
+                height_feet: *held.get(&WINDOW_HEIGHT_PARAMETER)?,
+            };
+            (size.width_feet > 0.0 && size.height_feet > 0.0).then_some((owner, size))
+        })
+        .collect()
+}
+
 /// A structural section type's Width, by BuiltInParameter (RE-103).
 pub const SECTION_WIDTH_PARAMETER: i64 = -1_005_502;
 /// A structural section type's Height (RE-103).
