@@ -152,6 +152,13 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **Measure scores puzzbobb's Revit 2025 models (#766, #356).** With
+  `-f r2025=true` it fetches `R2025_Models.zip` by its pinned hash
+  (`research/r2025-models.tsv`): 23 projects that each isolate one feature
+  (roofs, slope arrows, rooms, stairs, wall joins). Measure scores the 22 that
+  come with Revit's IFC4 export against it, as it scores the reference
+  models. Their author released them under Apache-2.0 on #356; they are
+  fetched for the run and never stored.
 - **The class-set scorer says why an element is in another class (#792).**
   `tools/re/class_sets_vs_ifc.py` prints, for each group in another class
   than Revit's, Revit's category, PredefinedType and type object and the

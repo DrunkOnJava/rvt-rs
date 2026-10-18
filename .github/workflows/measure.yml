@@ -28,6 +28,12 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f nordic=true
 #
+# puzzbobb's 23 purpose-made Revit 2025 models with Revit's exports of all but
+# one (research/r2025-models.tsv, Apache-2.0, #356) are scored the same way
+# when `r2025` is set.
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=main -f r2025=true
+#
 # `sample_years` narrows the samples to a range of releases, and
 # `probe_pair_release` also runs a two-file probe on each sample and the same
 # project saved by that release, the sample first, for the cross-release
@@ -90,6 +96,11 @@ on:
         default: false
       nordic:
         description: Also score the BIM4LCA office as built and at building permit against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range for the run and never stored)
+        type: boolean
+        required: false
+        default: false
+      r2025:
+        description: Also score puzzbobb's 23 purpose-made Revit 2025 models against Revit's exports of them (research/r2025-models.tsv, Apache-2.0, fetched for the run and never stored)
         type: boolean
         required: false
         default: false
@@ -172,6 +183,21 @@ jobs:
             0) ;;
             2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ;;
             *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
+          esac
+      # The archive being unreachable is NOT MEASURED; an archive that no
+      # longer matches its pin fails the run.
+      - name: Fetch the R2025 models
+        if: inputs.r2025
+        shell: bash
+        run: |
+          set +e
+          tools/ci/fetch-r2025-models.sh research/r2025-models.tsv models
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded" ;;
+            *) echo "::error::R2025_Models.zip no longer matches research/r2025-models.tsv"; exit 1 ;;
           esac
       - name: Fetch the family corpus
         if: inputs.families || github.event_name == 'pull_request'
