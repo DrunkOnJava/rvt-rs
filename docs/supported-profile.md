@@ -32,7 +32,9 @@ apart:
 | Revit 2026 project | yes | experimental (since 0.5.0): measured on one 2026 project against Revit's own IFC4X3 export, 113 of its 115 elements and none outside it (RE-124) | the element's bounding box, walls cut back at their joins | Revit's GlobalIds, storeys, rooms with Revit's numbers and names, doors and windows in their hosts, family and type names, layer sets |
 | Revit 2023 project | yes | yes, measured on two 2023 projects against Revit's IFC4 exports (RE-81); components nested in doors and windows are left out | the element's bounding box; rooms their outline (RE-102) | ElementId, category, door and window host walls (RE-85), Levels as storeys with each element on the one its record names (RE-107), and family instances' family and type names (RE-109) |
 | Revit 2027 project | yes | experimental, on `main`: the same elements as the 2026 copies of Autodesk's five sample projects (RE-179); no Revit 2027 export is measured | as on 2026 | as on 2026 |
-| Revit 2022 and earlier project | yes | no | none | metadata |
+| Revit 2019 to 2022 project | yes | experimental, on `main`: 2023's records and readers with each release's schema tags; the same elements as the 2023 copies of Autodesk's sample projects (RE-180); no Revit export of a 2019 to 2022 file is measured | as on 2023 | as on 2023 |
+| Revit 2015 to 2018 project | yes | experimental, on `main`: 2019's records and readers with each release's schema tags; the same elements as the 2019 copies of Autodesk's 2016 to 2018 sample projects, and the same ElementIds and classes on five of its six 2015 ones (RE-181); no Revit export of a 2015 to 2018 file is measured | as on 2019 | as on 2019 |
+| Revit 2014 and earlier project | yes | no | none | metadata |
 | Family (`.rfa`) or template (`.rte`, `.rft`) | yes | family metadata and OmniClass only | none | none |
 
 A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an
@@ -85,7 +87,7 @@ Revit leaves them out.
 ## Not supported
 
 - Converting an arbitrary Revit model to IFC with Revit-grade fidelity.
-- Element records of releases other than 2023 to 2027 (2026 and 2027 are experimental: 2026 measured on one project, RE-124, and, on `main`, 2027 against the 2026 copies of Autodesk's sample projects, with no Revit 2027 export, RE-179). On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
+- Element records of releases other than 2015 to 2027 (2015 to 2022, 2026 and 2027 are experimental: 2026 measured on one project, RE-124, and, on `main`, 2027 against the 2026 copies of Autodesk's sample projects, with no Revit 2027 export, RE-181, 2019 to 2022 against their 2023 copies, with no Revit export of those releases, RE-180, and 2016 to 2018 against their 2019 copies, RE-181, with 2015 read on three of Autodesk's Revit 2015 templates). On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
 - Door/Window typing from the opening-index rows (RE-19) and Level ElementIds

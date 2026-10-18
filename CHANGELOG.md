@@ -8,6 +8,40 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2015 to 2018 projects export their elements, as experimental
+  (RE-181).** Revit 2015 to 2018 frame their element records as 2019 does,
+  so the 32-bit readers read them with each release's own schema tags. Three
+  layouts differ: a Level record's placement kind, a wall's flip, which
+  follows its location line with no word as on 2019 and 2020, and a
+  material's shading frame, which holds two pattern slots where 2019 holds
+  four. A type's element-data name is looked for in its own data only, past
+  any one-unit entry. There is no Revit export of a 2015 to 2018 file to
+  measure against; on Autodesk's 2016 to 2018 `rac_basic`, `rst_basic` and
+  `rac_advanced` every ElementId shared with the 2019 copy has its class,
+  2018 `rac_basic` and `rac_advanced` agree with it on every field, and the
+  exports have the 2019 copies' building elements, class for class, and pass
+  IfcOpenShell's schema validation. Autodesk's six 2015 sample projects
+  (#801) frame their records the same way and carry the 2015 tags; on five
+  of them every ElementId shared with the 2019 copy has its class, and the
+  sixth, `rst_basic`, is another model. Before, a 2015 to 2018 project exported
+  no building element. Beyond RE-180's, it changes no 2019 to 2027 export.
+  Revit 2014 is not read: no documented 2014 file backs it.
+- **Revit 2019 to 2022 projects export their elements, as experimental
+  (RE-180).** Revit 2019 to 2022 frame their element records as 2023 does,
+  so the 2023 readers read them, each constant taken as the release's own tag
+  of the same schema class: element data, materials, the category material
+  frame and layers. Revit 2019 and 2020 write a wall's flip with no word
+  before it, and in 32-bit data a one-id list reads as a one-unit name, which
+  is no longer taken. There is no Revit export of a 2019 to 2022 file to
+  measure against; on Autodesk's 2019 to 2022 `rac_basic`, `rst_basic` and
+  `rac_advanced` every ElementId shared with the 2023 copy has its class. The
+  `rac_basic` and `rst_basic` exports, and the 2021 and 2022 `rac_advanced`
+  ones, have 2023's building elements, class for class (the 2019 and 2020
+  `rac_advanced` are an earlier edit of the model), and every export passes
+  IfcOpenShell's schema validation. Before, a 2019 to 2022 project exported
+  no building element. Every 2024 to 2027 export is byte-identical. Of the
+  2023 samples only `rac_advanced` changes: the one-unit name rule gives its
+  export 2 more entities and 2 more property values.
 - **Revit 2027 projects export their elements, as experimental (RE-179).**
   The partition readers take their 2027 constants from the file's schema, as
   RE-124 found every release's to be: the record marker, Level elevations,

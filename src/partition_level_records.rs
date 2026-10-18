@@ -151,8 +151,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases where this framing is corpus-proven: 2024 on Core Interior
 /// (RE-24) and Snowdon Towers, 2025 on RE1 Architecture (RE-51), and 2023
-/// on two projects in its 32-bit form (RE-107).
-pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023, 2024, 2025, 2026, 2027];
+/// on two projects in its 32-bit form (RE-107), as 2015 to 2022 write it
+/// (RE-180, RE-181).
+pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
+    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
+];
 
 /// The release whose Level records and name blocks carry 32-bit
 /// ElementIds (RE-107).
@@ -853,14 +856,22 @@ pub fn find_level_records_2023(
         .collect()
 }
 
+/// The placement kind Revit 2015 to 2018 write on a Level element, where
+/// 2019 and later write [`crate::partition_element_records::PLACEMENT_KIND_INSTANCE`]
+/// (RE-181). Their other records carry the later releases' kinds: the 7
+/// Levels of Autodesk's 2017 `rac_basic` hold it, and their 2019 copies
+/// hold the instance kind, under the same ElementIds and bytes otherwise.
+pub const LEVEL_PLACEMENT_KIND_2015: u32 = 0xffff_ef6f;
+
 /// Every `OST_Levels` record of every partition, first- and
-/// second-prologue.
+/// second-prologue. On Revit 2015 to 2018 a Level's own placement kind,
+/// [`LEVEL_PLACEMENT_KIND_2015`], reads as the instance kind.
 fn level_records(
     rf: &mut RevitFile,
     revit_version: u32,
     declared_ids: &BTreeSet<u32>,
 ) -> Vec<PartitionLevelRecord> {
-    if revit_version == REVIT_2023 {
+    if crate::partition_element_records_2023::is_32bit_release(revit_version) {
         let Some((full, header_tag)) = crate::partition_element_records_2023::record_marker(rf)
         else {
             return Vec::new();
@@ -879,6 +890,14 @@ fn level_records(
                 header_tag,
                 &marker,
             ));
+        }
+        if revit_version < 2019 {
+            for record in &mut records {
+                if record.placement_kind == LEVEL_PLACEMENT_KIND_2015 {
+                    record.placement_kind =
+                        crate::partition_element_records::PLACEMENT_KIND_INSTANCE;
+                }
+            }
         }
         return records;
     }
@@ -947,8 +966,8 @@ pub fn scan_partition_levels(
             .unwrap_or(0);
         let mut blocks = Vec::new();
         let buf = inflated.bytes();
-        if revit_version == REVIT_2023 {
-            // No Level inside another element is measured on 2023.
+        if crate::partition_element_records_2023::is_32bit_release(revit_version) {
+            // No Level inside another element is measured on 2015 to 2023.
             blocks.extend(find_name_blocks_sized(
                 buf,
                 declared_ids,
