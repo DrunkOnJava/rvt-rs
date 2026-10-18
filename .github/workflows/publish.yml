@@ -15,9 +15,11 @@ name: Publish (crates.io + PyPI + release binaries)
 #      (no secret needed after one-time account setup).
 #
 # Release publication runs only after wheel install, source install,
-# CLI sample, viewer load, and docs preview checks pass. Real PyPI
-# publication also waits for crates.io publication so the two package
-# channels cannot split-brain on a rejected Rust crate.
+# CLI sample, viewer load, and docs preview checks pass. The crates-io and
+# pypi environments then hold each publish job until the maintainer approves
+# it on the run page. Real PyPI publication and the release binaries also
+# wait for crates.io publication, so no channel ships a version crates.io
+# lacks.
 #
 # Uses PyPI's Trusted Publisher feature (OIDC): no PYPI_API_TOKEN
 # secret is stored in the repo. PyPI trusts this specific workflow
@@ -338,8 +340,11 @@ jobs:
   release-binaries:
     name: Release binaries
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    # After crates.io, so the GitHub release and the container image wait for
+    # the maintainer's approval too.
     needs:
       - release-source-smoke
+      - publish-crate
     permissions:
       contents: write
       # The image job pushes the container to ghcr.io.
