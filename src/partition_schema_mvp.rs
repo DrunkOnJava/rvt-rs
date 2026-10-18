@@ -600,6 +600,12 @@ pub const IFC_EXPORT_AS_FIELD: &str = "m_ifc_export_as";
 /// enumerator of the entity the element exports as.
 pub const IFC_PREDEFINED_TYPE_FIELD: &str = "m_ifc_predefined_type";
 
+/// Field carrying the Revit release that saved the file, beside
+/// [`IFC_EXPORT_AS_FIELD`]: whether Revit's exporter acts on the value can
+/// depend on it ([`crate::ifc::category_map::export_override_applies`],
+/// RE-188).
+pub const IFC_EXPORT_RELEASE_FIELD: &str = "m_ifc_export_release";
+
 /// Attach each element's IFC export overrides (RE-45): the element's own
 /// "Export to IFC As" and predefined type, else those its type sets
 /// ([`TYPE_ID_FIELD`], from RE-38 or #322). A type's `IfcCoveringType`
@@ -637,6 +643,14 @@ fn attach_ifc_export_overrides(
                 element
                     .fields
                     .push((IFC_EXPORT_AS_FIELD.into(), InstanceField::String(entity)));
+                element.fields.push((
+                    IFC_EXPORT_RELEASE_FIELD.into(),
+                    InstanceField::Integer {
+                        value: i64::from(revit_version),
+                        signed: false,
+                        size: 4,
+                    },
+                ));
             }
             if let Some(predefined) = own.effective_predefined_type(of_type) {
                 element.fields.push((

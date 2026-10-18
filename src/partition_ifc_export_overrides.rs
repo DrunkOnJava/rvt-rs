@@ -46,8 +46,10 @@
 //!   an override *means* — [`crate::ifc::category_map`] decides which
 //!   values it is willing to act on, and an unrecognised value leaves
 //!   the element on its category's default mapping.
-//! - `IfcShadingDevice` is the only value corpus-proven today. The
-//!   scan is general because the framing is; the claim is not.
+//! - `IfcShadingDevice` was the first value proven, on floors. The scan
+//!   is general because the framing is; which values the writer acts on,
+//!   and where Revit's exporter ignores one (curtain walls in 2024 files,
+//!   RE-188), is decided in [`crate::ifc::category_map`].
 //!
 //! Measured on `2024_Core_Interior.rvt`: 31 accepted entries naming
 //! 21 distinct ElementIds, every one of them `IfcShadingDevice`. The

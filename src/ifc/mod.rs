@@ -3334,6 +3334,19 @@ pub fn build_export_diagnostics_with_limits(
     }
     if mode == ExportDiagnosticsMode::Placeholder {
         warnings.push("Placeholder export mode omits decoded elements by design.".into());
+    } else if !walker_stats.unapplied_export_values.is_empty() {
+        let total: usize = walker_stats.unapplied_export_values.values().sum();
+        let mut counts: Vec<(&String, &usize)> =
+            walker_stats.unapplied_export_values.iter().collect();
+        counts.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        let listed: Vec<String> = counts
+            .iter()
+            .map(|(value, n)| format!("{value} {n}"))
+            .collect();
+        warnings.push(format!(
+            "{total} element(s) carry an \"Export to IFC As\" value the export does not apply, so each keeps its category's entity (#792): {}.",
+            listed.join(", ")
+        ));
     }
 
     let formats_latest_integrity = match rf.read_stream(crate::streams::FORMATS_LATEST) {
@@ -3813,6 +3826,9 @@ struct ProductionWalkerStats {
     class_counts: std::collections::BTreeMap<String, usize>,
     mean_element_confidence: Option<f32>,
     elements_below_min_confidence: usize,
+    /// Exported elements whose "Export to IFC As" value the export does not
+    /// apply, by `"<value> on <class>"` (#792).
+    unapplied_export_values: std::collections::BTreeMap<String, usize>,
 }
 
 fn production_walker_stats(
@@ -3836,6 +3852,11 @@ fn production_walker_stats(
         n += 1;
         if !el.meets_confidence(min_c) {
             stats.elements_below_min_confidence += 1;
+        } else if let Some(value) = export_content::unapplied_export_value(&el) {
+            *stats
+                .unapplied_export_values
+                .entry(format!("{value} on {}", el.class))
+                .or_insert(0) += 1;
         }
     }
     if n > 0 {
