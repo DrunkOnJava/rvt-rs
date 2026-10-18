@@ -9,7 +9,8 @@ class (named), or does not write at all; then the elements rvt-rs writes that
 Revit's export lacks, per class. The ones written as another class are counted
 by the category each export gives them (`Other.Category`) and any "Export to
 IFC As" value they carry, which is what decides an element's class in Revit's
-exporter (#792). It lists the missing and the extra ones, up to 200 per class,
+exporter (#792), and by the PredefinedType Revit writes on the element and on its
+type object. It lists the missing and the extra ones, up to 200 per class,
 each with its Name, ObjectType (LongName for a space), storey, category and
 export value from the export that has it. Elements without a Tag cannot be
 paired and are only counted, and so are elements that repeat a Tag already
@@ -57,6 +58,15 @@ def category_and_export_as(product):
             elif prop.replace(" ", "").lower() in EXPORT_AS_NAMES and value:
                 export_as.append(f"{prop}={value}")
     return category, ";".join(sorted(set(export_as))) or "-"
+
+
+def predefined_and_type(product):
+    """A product's PredefinedType, and its type object's entity and PredefinedType ("-" where absent)."""
+    own = getattr(product, "PredefinedType", None) or "-"
+    type_object = ifcopenshell.util.element.get_type(product)
+    if type_object is None:
+        return own, "-", "-"
+    return own, type_object.is_a(), getattr(type_object, "PredefinedType", None) or "-"
 
 
 def members(model):
@@ -120,13 +130,20 @@ def main(argv):
         for key, record in revit.items():
             if record[0] != cls or key not in ours or ours[key][0] == cls:
                 continue
-            group = (ours[key][0], *category_and_export_as(record[4]), *category_and_export_as(ours[key][4]))
+            group = (
+                ours[key][0],
+                *category_and_export_as(record[4]),
+                *predefined_and_type(record[4]),
+                *category_and_export_as(ours[key][4]),
+            )
             groups[group] += 1
             sample.setdefault(group, key[1])
-        for (written, category, export_as, our_category, our_export_as), n in sorted(groups.items(), key=lambda kv: -kv[1]):
+        for group, n in sorted(groups.items(), key=lambda kv: -kv[1]):
+            written, category, export_as, predefined, type_entity, type_predefined, our_category, our_export_as = group
             print(
-                f"  {n:6}  {cls} -> {written}  Revit {category!r} {export_as!r}  rvt-rs {our_category!r} {our_export_as!r}"
-                f"  e.g. {sample[(written, category, export_as, our_category, our_export_as)]}"
+                f"  {n:6}  {cls} -> {written}  Revit {category!r} {export_as!r}"
+                f" PredefinedType {predefined} type {type_entity} {type_predefined}"
+                f"  rvt-rs {our_category!r} {our_export_as!r}  e.g. {sample[group]}"
             )
     extra = collections.defaultdict(set)
     for key, record in ours.items():
