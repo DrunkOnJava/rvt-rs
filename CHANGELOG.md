@@ -6,6 +6,15 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Research
+
+- **Autodesk's Snowdon Towers 2024 models are pinned for Measure (#766).**
+  `-f samples=true` now also reads the sample's Architectural, Structural,
+  HVAC, Plumbing and Electrical models from Autodesk's download host, each
+  pinned by sha256 and size and never stored, so a regression like #736
+  shows in the run's head-against-base diff. On `main` they export 6,056,
+  1,282, 2,596, 6,253 and 1,576 elements (run 39119698158).
+
 ## [0.5.0] — 2026-10-18
 
 Revit 2026 projects now export typed elements, experimentally, measured on
