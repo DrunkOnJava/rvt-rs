@@ -186,7 +186,7 @@ jobs:
       # cargo-nextest runs the manifest's test binaries in parallel (C6).
       - name: Install cargo-nextest
         if: matrix.label != 'msrv'
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-nextest@0.9.146
       - name: Real-file, CLI and contract verification
@@ -250,7 +250,7 @@ jobs:
       # corpus-reading target is gated the moment it exists.
       # cargo-nextest runs the manifest's test binaries in parallel (C6).
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-nextest@0.9.146
       - name: Tier-two gates (real-file, CLI and contract targets against the project corpus)
@@ -335,9 +335,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # ifcopenshell ships prebuilt wheels on PyPI for Linux, macOS
-          # and Windows x64. The 0.7 API differs in entity-by-type
-          # iteration; tools/ci/requirements-ifc.txt pins 0.8 until a
-          # 0.9 update is checked.
+          # and Windows x64. tools/ci/requirements-ifc.txt pins an exact
+          # version, since IfcOpenShell is one of the witnesses below; 0.9
+          # is held until Measure's scorers work under it (#773).
           python -m pip install -r tools/ci/requirements-ifc.txt
       # C9: what the exporter writes now for the three tier-1 projects
       # (architectural 2024, MEP 2024, structural 2023; synthetic files
@@ -495,7 +495,7 @@ jobs:
       # disagreement without re-running the gate.
       - name: Publish witness observations and verdict
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: octetproof-core-interior
           path: |
@@ -692,7 +692,7 @@ jobs:
           fi
           python3 -m pytest tests/python -q -rs
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rvt-wheel-${{ matrix.os }}
           path: dist/*.whl
@@ -719,7 +719,7 @@ jobs:
       # `curl --silent -L` and failed the check when GitHub returned an
       # error page ("gzip: invalid magic").
       - name: Install cargo-deny
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-deny@0.20.2
       - run: cargo deny check
@@ -739,7 +739,7 @@ jobs:
         with:
           toolchain: stable
       - name: Install cargo-audit
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-audit@0.22.2
       - name: Audit Rust dependencies
@@ -756,7 +756,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: viewer/package.json
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           package-manager-cache: false
