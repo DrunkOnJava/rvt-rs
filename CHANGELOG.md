@@ -359,6 +359,14 @@ and puzzbobb is behind several entries below. Thank you.
 
 ### Changed
 
+- **revit-ifc is an accepted clean-room source for what Revit's own export
+  writes (#778).** `CLEANROOM.md` accepts Autodesk's open-source IFC exporter
+  (LGPL v2) for how the export forms an identifier and which entity,
+  relationship or value it writes, never for the file format. Contributors
+  cite the file and class, write code from a description of the behaviour
+  rather than copying or translating it, and check every finding against
+  Revit's own export. The type GlobalIds of RE-167 rest on it, and #778
+  audits each current citation against the rule.
 - **The integration tests are one test binary, `integration` (C6).** Every
   `tests/*.rs` file is a module of `tests/integration/main.rs`, and its tests
   are named `<file>::<test>`: run one file with `cargo test --test
