@@ -21,9 +21,12 @@ the **minor** version, not the major. That is:
   performance work, and internal refactors that don't change public
   behaviour.
 
-The current version lives in `Cargo.toml` under `[package].version` and
-is mirrored in `CITATION.cff` and `.release-please-manifest.json`. All
-three must agree at tag time.
+The current version lives in `Cargo.toml` under `[package].version`. It
+is repeated in `rvt-py/Cargo.toml` (the wheel's version, and its `=X.Y.Z`
+dependency on `rvt`), `rvt-wasm/Cargo.toml`, the `rvt` dependency of
+`tools/stream_evidence/Cargo.toml`, `viewer/package.json`, `CITATION.cff`,
+`.release-please-manifest.json`, and the workspace crates' entries in
+`Cargo.lock` and `fuzz/Cargo.lock`. All of them must agree at tag time.
 
 ## Release cadence
 
@@ -42,14 +45,16 @@ below applies.
 Every `vX.Y.Z` release:
 
 - Has a signed git tag `vX.Y.Z` on `main`.
-- Has a GitHub release page generated from the tag, with changelog
-  excerpt, a link to the [user guide](docs/user-guide.md), and pre-built
-  artefacts from the `publish.yml` workflow.
-- Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt)
-  via `cargo publish`.
-- Publishes Python wheels (one per OS: Linux, macOS, Windows) and an
-  sdist to [PyPI](https://pypi.org/project/rvt/) via the Trusted
-  Publisher OIDC flow in `.github/workflows/publish.yml`.
+- Has a GitHub release page for the tag, whose body is the version's
+  `CHANGELOG.md` section and a link to the [user guide](docs/user-guide.md),
+  carrying the CLI archives for Linux, macOS and Windows, `SHA256SUMS` and
+  their build-provenance attestations.
+- Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt),
+  Python wheels for Linux (glibc and musl), macOS and Windows and an sdist
+  to [PyPI](https://pypi.org/project/rvt/), and the container image
+  `ghcr.io/drunkonjava/rvt-rs:X.Y.Z`, all from
+  `.github/workflows/publish.yml`. crates.io and PyPI accept it by Trusted
+  Publishing (OIDC), so no registry token is stored.
 - Updates `CHANGELOG.md` with human-readable entries grouped by
   `Added` / `Changed` / `Fixed` / `Security` (Keep a Changelog format).
 - Updates `CITATION.cff` (`version:` + `date-released:`) so academic
@@ -73,38 +78,60 @@ project treats a silent skipped step the same as an untested change.
    samples:: ifc_roundtrip:: field_type_coverage::`. CI runs these on
    every push, but running once locally against the checked-out corpus
    before tagging catches anything a stale cache might mask.
-4. **Bump version.** Edit `Cargo.toml` `[package].version`. If the
-   Python wheel is part of this release, `pyproject.toml` derives its
-   version from `Cargo.toml`, so no manual bump is needed there —
-   confirm with `grep -n version pyproject.toml`.
+4. **Bump the version** in every file listed under
+   [Versioning](#versioning). The wheel takes its version from
+   `rvt-py/Cargo.toml` (`pyproject.toml` declares it dynamic), so
+   `pyproject.toml` needs no edit.
 5. **Update `CHANGELOG.md`.** Move items from `[Unreleased]` into a new
-   `[X.Y.Z] — YYYY-MM-DD` section. Group by `Added` / `Changed` /
-   `Fixed` / `Security`. Write entries so a user reading just this
-   section can decide whether to upgrade.
+   `[X.Y.Z] — YYYY-MM-DD` section, leaving an empty `[Unreleased]` above
+   it. Open the section with a short introduction and an **Upgrading from
+   X.Y** list of what a user of the previous release has to change. Then
+   group by `Added` / `Changed` / `Fixed` / `Security` (and `Research`),
+   one heading each: merges append headings of their own, so fold them,
+   keeping every entry. Credit outside contributors by name. Write
+   entries so a user reading just this section can decide whether to
+   upgrade.
 6. **Update `CITATION.cff`.** Set `version:` to `X.Y.Z` and
    `date-released:` to the ISO date. These two fields must agree with
    the git tag and the `Cargo.toml` version.
 7. **Update `.release-please-manifest.json`.** Set `"."` to the new
    version. This keeps release-please in sync even though the workflow
    isn't yet wired up (see [Release automation](#release-automation)).
-8. **Commit on `main`.** Commit message: `release: vX.Y.Z`. Include the
-   four touched files: `Cargo.toml`, `CHANGELOG.md`, `CITATION.cff`,
-   `.release-please-manifest.json`.
-9. **Tag.** `git tag -s vX.Y.Z -m "rvt-rs X.Y.Z"`. The `-s` signs the
-   tag with the maintainer's GPG key — required for release
-   authenticity.
-10. **Push.** `git push origin main --tags`. The tag push triggers
-    `publish.yml` which builds wheels + sdist on all three OSes and
-    uploads to PyPI via OIDC.
-11. **Publish the crate.** `cargo publish`. `cargo publish` re-runs
-    tests and a clean package build before upload, so a broken tag
-    still can't ship to crates.io.
-12. **Draft the GitHub release.** On the repo's Releases page, draft a
-    new release from the `vX.Y.Z` tag. Title `rvt-rs vX.Y.Z`. Body =
-    the `CHANGELOG.md` excerpt for this version, verbatim, followed by
+8. **Open the release pull request,** `chore(release): prepare vX.Y.Z`,
+   with steps 4 to 7. `main` takes changes only through pull requests,
+   so the release metadata lands like any other change. The IFC header
+   carries the version (#417), so both Core Interior `rvt-rs.json`
+   witness observations and their verdicts change: take them from the
+   pull request's CI run (its `octetproof-core-interior` artifact) and
+   push them. Only `witness_version` and the verdict hashes should
+   differ. Merging this pull request is not the release.
+9. **Confirm the registries' trusted publishers.** crates.io and PyPI
+   each need one for repository DrunkOnJava/rvt-rs, workflow
+   `publish.yml`, environment `crates-io` or `pypi` (see
+   [`docs/maintaining.md`](docs/maintaining.md#releases)). Without
+   crates.io's, the crate's publish fails and PyPI's, which waits for
+   it, never runs, while the release binaries and the container image,
+   which do not wait for crates.io, still publish.
+10. **Tag the merged commit.** `git fetch origin`, check that
+    `origin/main` is the release pull request's squash commit, then
+    `git tag -s vX.Y.Z -m "rvt-rs X.Y.Z" origin/main`. The `-s` signs
+    the tag with the maintainer's key, which release authenticity
+    requires. The `release-tags` ruleset lets only a maintainer create
+    a `v*` tag, and nobody can move or delete one.
+11. **Push the tag.** `git push origin vX.Y.Z` runs `publish.yml`. It
+    builds the wheels and the sdist and checks them: each wheel installed
+    and opening a model, `cargo install` of the source with the CLI
+    sample smoke, the docs.rs build preview and the viewer load smoke.
+    Then it publishes the crate to crates.io, the wheels and sdist to
+    PyPI after the crate, and through `release-binaries.yml` the CLI
+    archives and the container image with their attestations. If a job
+    fails, fix its cause and re-run the failed jobs.
+12. **Write the release page.** `release-binaries.yml` creates the
+    release from the tag with GitHub's generated notes. Replace them with
+    this version's `CHANGELOG.md` section, verbatim, followed by
     `User guide: https://github.com/DrunkOnJava/rvt-rs/blob/vX.Y.Z/docs/user-guide.md`
-    with the real tag substituted. Publish once the `publish.yml` run has
-    finished and artefacts are attached.
+    with the real tag substituted
+    (`gh release edit vX.Y.Z --notes-file <file>`).
 13. **Announce (optional).** If the release is worth calling out,
     drafts live under `docs/launch/` — currently `hn-show-hn.md` and
     `reddit-r-rust.md`, with further channels (buildingSMART forum,
@@ -143,17 +170,23 @@ docs on docs.rs blocking adoption) surfaces between releases:
 2. **Apply the minimal fix.** No refactoring, no adjacent cleanup, no
    new features. Smallest possible diff that closes the issue, plus a
    regression test that fails without the fix.
-3. **Bump PATCH.** `Cargo.toml` + `CITATION.cff` +
-   `.release-please-manifest.json` to `X.Y.(Z+1)`.
+3. **Bump PATCH** to `X.Y.(Z+1)` in every file listed under
+   [Versioning](#versioning).
 4. **Abbreviated checklist.** Steps 1–3 above (CI + synthetic-project
    test + corpus if available). Skip nothing else.
-5. **Tag, push, publish.** Same as the full release flow — `git tag -s`,
-   `git push origin --tags`, `cargo publish`, draft GitHub release.
-6. **Backport to `main`** if the fix applies there too. `git checkout
-   main && git cherry-pick <hotfix-commit>`, resolve any drift, push.
+5. **Tag and push the tag.** Same as the full release flow: a signed
+   tag, pushed on its own, runs the publish workflow; then write the
+   release page.
+6. **Backport to `main`** through a pull request if the fix applies
+   there too.
 
 ## Post-release
 
+- **Update the docs.** Once every channel has been checked from what was
+  published ([Post-Publish Install Verification](#post-publish-install-verification)),
+  a pull request moves the latest-release statements to the new version:
+  `docs/install.md`, `docs/python.md`, `docs/status.md`,
+  `docs/supported-profile.md` and the README's release section.
 - **Monitor `docs.rs`.** The docs build is async and often trails the
   `cargo publish` by several minutes. If it fails, the package page
   shows a red banner; triage the build log and cut a `PATCH` with the
@@ -175,37 +208,30 @@ The following is the actual state of release infrastructure, not the
 aspirational state. Update this section when you wire up more of it.
 
 - **CI on every push to `main` and on every PR** (`.github/workflows/ci.yml`):
-  - `cargo fmt --check`
-  - `cargo clippy --all-targets --all-features -- -D warnings`
-  - `cargo test` across `ubuntu-latest`, `macos-latest`,
-    `windows-latest` × stable + MSRV 1.87 on ubuntu
-  - `cargo doc --no-deps --lib` with `RUSTDOCFLAGS=-D warnings`
-  - `cargo deny check` (license allowlist, RustSec advisory deny,
-    crates.io-only source, wildcard deny — see `deny.toml`)
-  - [`rustsec/audit-check`](https://github.com/rustsec/audit-check)
-  - Python wheel build + pytest integration tests on all three OSes
-  - PII-shape guard (belt-and-suspenders on top of `src/redact.rs`)
-- **Publish workflow** (`.github/workflows/publish.yml`):
-  - Triggered on tag pushes matching `v*` and on
-    `workflow_dispatch`
-  - Builds `abi3-py38` wheels on Linux / macOS / Windows via
-    `PyO3/maturin-action@v1` + an sdist
-  - Uploads to PyPI via OIDC **Trusted Publisher** — no PyPI API token
-    stored in the repo. One-time PyPI setup instructions are inlined
-    at the top of `publish.yml`.
-  - `workflow_dispatch` with `test-pypi: true` publishes to TestPyPI
-    instead — use this for dry runs of a new release path before the
-    first real tag.
-- **Dependabot** (`.github/dependabot.yml`):
-  - Weekly `cargo` PRs, limit 5 open, label `dependencies` + `rust`
-  - Weekly `github-actions` PRs, label `dependencies` + `github-actions`
+  fmt, clippy, the test matrix (Linux, macOS and Windows, stable, and the
+  MSRV), rustdoc, `cargo deny`, `cargo audit`, the docs.rs build preview,
+  the Python wheel and its integration tests, IfcOpenShell validation and
+  the witness verdicts, the PII guard and the rest. `CI passed`, the one
+  required check, passes only when every one of them did (see
+  [`docs/maintaining.md`](docs/maintaining.md#pull-requests)).
+- **Publish workflow** (`.github/workflows/publish.yml`), on `v*` tags and
+  `workflow_dispatch`: the checks and publish order of step 11. Its
+  crates.io and PyPI jobs authenticate by Trusted Publishing in the
+  `crates-io` and `pypi` environments, which only `v*` tags may deploy
+  to; the one-time registry setup is described at the top of the file.
+  `workflow_dispatch` with `test-pypi: true` runs the checks and
+  publishes to TestPyPI only, as a dry run.
+- **Release binaries** (`.github/workflows/release-binaries.yml`): the
+  CLI archives, built with `cargo auditable`, and the multi-arch
+  container image. It also runs weekly and on changes to itself, without
+  uploading anything, and uploads only when the publish workflow calls
+  it for a tag.
+- **Dependabot** (`.github/dependabot.yml`): see
+  [`docs/maintaining.md`](docs/maintaining.md#security-and-automation-settings).
 - **release-please**: configuration is in place
   (`release-please-config.json` + `.release-please-manifest.json`
   targeting `rust` release-type for this crate) but is **not yet
   wired** to a GitHub Actions workflow. Until that lands, the
   release checklist above is run manually.
-- **TestPyPI trial run** (task `Q-13` in the backlog) and **`docs.rs`
-  preview build validation** (task `Q-12`) are planned but have not
-  yet been exercised for any real release. The first maintainer to cut
-  a release after those tasks land should update this section and
-  `CHANGELOG.md` accordingly.
+- **TestPyPI:** no dry run has published to TestPyPI yet (task `Q-13`
+  in the backlog); the 0.2.0 dry runs ran the checks only.

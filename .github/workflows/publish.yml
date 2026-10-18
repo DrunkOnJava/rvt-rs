@@ -40,8 +40,8 @@ name: Publish (crates.io + PyPI + release binaries)
 # add a trusted publisher: GitHub, owner DrunkOnJava, repository rvt-rs,
 # workflow publish.yml, environment crates-io.
 #
-# Once that's done: `git tag v0.1.2 && git push origin v0.1.2`
-# triggers the full wheel build matrix and uploads to PyPI.
+# Once both are in place, pushing a signed `v*` tag on main publishes the
+# release (RELEASE.md, steps 9 to 12).
 
 on:
   push:
@@ -410,12 +410,11 @@ jobs:
       - name: Cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
-        # Default features only. `--all-features` would enable
-        # `wasm`, which requires wasm-bindgen / serde-wasm-bindgen
-        # in a way that shouldn't be forced on `cargo add rvt`
-        # users. The pyo3 bindings are in the separate `rvt-py`
-        # member crate (SEC-12/13), which has `publish = false`
-        # and ships via maturin to PyPI instead.
+        # Default features only (`dhat-heap` is a profiling switch for
+        # the examples). The pyo3 bindings are the separate `rvt-py`
+        # member crate (SEC-12/13), which ships to PyPI through maturin,
+        # and the wasm bindings are `rvt-wasm` (C6); both have
+        # `publish = false`.
         run: cargo publish -p rvt
 
   publish-testpypi:
