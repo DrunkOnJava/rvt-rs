@@ -775,11 +775,11 @@ pub struct PlaceholderExporter;
 
 impl Exporter for PlaceholderExporter {
     fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel> {
-        let project_name = rf
-            .part_atom()
-            .ok()
-            .and_then(|pa| pa.title)
-            .or_else(|| rf.basic_file_info().ok().and_then(|bfi| bfi.original_path));
+        let project_name = rf.part_atom().ok().and_then(|pa| pa.title).or_else(|| {
+            rf.basic_file_info()
+                .ok()
+                .and_then(|bfi| bfi.original_path.as_deref().and_then(original_file_stem))
+        });
         Ok(IfcModel {
             project_name,
             description: Some(
@@ -942,6 +942,20 @@ enum RvtDocExportMode {
     DiagnosticProxies,
 }
 
+/// The file name in a Revit file's original path, without its extension: an
+/// export's name when the file has no PartAtom title. The path's folders,
+/// which can hold the author's account and client names, stay out of the
+/// export. The path is Windows-style on every host, so both separators split.
+fn original_file_stem(path: &str) -> Option<String> {
+    let name = path.rsplit(['\\', '/']).next()?;
+    let lower = name.to_ascii_lowercase();
+    let stem = [".rvt", ".rfa", ".rte", ".rft"]
+        .iter()
+        .find(|ext| lower.ends_with(*ext))
+        .map_or(name, |ext| &name[..name.len() - ext.len()]);
+    (!stem.is_empty()).then(|| stem.to_string())
+}
+
 fn export_rvt_doc(
     rf: &mut crate::RevitFile,
     mode: RvtDocExportMode,
@@ -949,14 +963,15 @@ fn export_rvt_doc(
     walker_limits: crate::walker::WalkerLimits,
 ) -> Result<IfcModel> {
     let policy = export_content::ExportContentPolicy::for_quality_mode(quality_mode);
-    // Identity from PartAtom if present; fall back to
+    // Identity from PartAtom if present; fall back to the file name in
     // BasicFileInfo's original path.
     let part = rf.part_atom().ok();
     let bfi = rf.basic_file_info().ok();
-    let project_name = part
-        .as_ref()
-        .and_then(|pa| pa.title.clone())
-        .or_else(|| bfi.as_ref().and_then(|b| b.original_path.clone()));
+    let project_name = part.as_ref().and_then(|pa| pa.title.clone()).or_else(|| {
+        bfi.as_ref()
+            .and_then(|b| b.original_path.as_deref())
+            .and_then(original_file_stem)
+    });
 
     let description = {
         let mut d = Vec::new();

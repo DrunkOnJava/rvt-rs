@@ -6,6 +6,17 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **An export names the model by its file name, not the path it was saved
+  at (#782).** A file without a PartAtom title, as most projects are, was
+  named after its full original path, which can hold the author's Windows
+  account and client folder names. That name went into the IFC header's
+  `FILE_NAME`, the `IfcProject`'s Name, the glTF scene root and the viewer's
+  project node, and the export diagnostics' `project_name`, which skipped the
+  redaction their `original_path` gets. It is now the file name without its
+  extension: RE1 Architecture's export is named `RE1`.
+
 ### Research
 
 - **Autodesk's Snowdon Towers 2024 models are pinned for Measure (#766).**
