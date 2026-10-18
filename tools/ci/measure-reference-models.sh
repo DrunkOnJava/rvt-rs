@@ -31,7 +31,11 @@
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
 # same probe.txt. A family has no Revit export, so nothing else is measured on it.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
-# export's diagnostics.json and rvt-ifc.log under OUT_DIR/sample-<file>/.
+# export's diagnostics.json and rvt-ifc.log under OUT_DIR/sample-<file>/. When
+# PROBE_PAIR_RELEASE names a release, the probe also runs on each sample of
+# another release and the same project saved by that one, the sample first,
+# into probe-pair.txt, ending with its exit status: the cross-release
+# comparisons of #740 and #742.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
@@ -134,6 +138,16 @@ fi
 # exit status, schema.txt (the IFC4 schema's findings on the export), and the
 # probe's output (called with --records, which a probe may take to list what it
 # read). There is no Revit export of them, so nothing else is scored.
+# A sample's project, the same across releases: its file name without the
+# year, the underscores and "sampleproject" (2016's rac_basic_sample_project
+# is 2020's racbasicsampleproject).
+pair_key() {
+  local name
+  name=$(basename "$1" .rvt)
+  name=${name#????-}
+  name=${name//_/}
+  echo "${name%sampleproject}"
+}
 if [ -d "${SAMPLE_DIR:-}" ]; then
   for sample in "$SAMPLE_DIR"/*.rvt; do
     [ -f "$sample" ] || continue
@@ -167,6 +181,13 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
       timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
       echo "exit $?" >> "$dir/probe.txt"
+      if [ -n "${PROBE_PAIR_RELEASE:-}" ] && [ "$(basename "$sample" | cut -c1-4)" != "$PROBE_PAIR_RELEASE" ]; then
+        for copy in "$SAMPLE_DIR/$PROBE_PAIR_RELEASE"-*.rvt; do
+          [ -f "$copy" ] && [ "$(pair_key "$copy")" = "$(pair_key "$sample")" ] || continue
+          timeout 1200 "$BIN/examples/$PROBE" "$sample" "$copy" > "$dir/probe-pair.txt" 2>&1
+          echo "exit $?" >> "$dir/probe-pair.txt"
+        done
+      fi
     fi
     echo "::endgroup::"
   done
