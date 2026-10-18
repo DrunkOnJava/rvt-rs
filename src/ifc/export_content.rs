@@ -735,6 +735,7 @@ pub fn append_typed_production_elements(
                 _ => format!("Opening for {name}"),
             }
         });
+        let level_set = level_parameter_property_set(&decoded, &ifc_type);
         entities.push(entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -797,6 +798,14 @@ pub fn append_typed_production_elements(
                     thickness_feet,
                 });
             }
+        }
+        // RE-172: the Level parameters, in the `Constraints` set Revit's
+        // export writes them in.
+        if let Some(set) = level_set {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set,
+            });
         }
         // RE-47: a stair's or flight's riser and tread dimensions, in the
         // standard set Revit's export writes them in.
@@ -1246,6 +1255,67 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
             name: "RvtWallGeometry".into(),
             properties,
         }),
+    })
+}
+
+/// Revit's `Constraints` properties for the Level an element's association
+/// record names (RE-172), under the names Revit's export uses for its class.
+fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Option<PropertySet> {
+    use crate::partition_level_parameters as lp;
+    let text = |wanted: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(v) if name == wanted => Some(v.clone()),
+            _ => None,
+        })
+    };
+    let (level, from_list) = match text(lp::LEVEL_PARAMETER_FIELD) {
+        Some(level) => (
+            level,
+            decoded.fields.iter().any(|(name, value)| {
+                name == crate::partition_schema_mvp::LEVEL_FROM_LIST_FIELD
+                    && matches!(value, InstanceField::Bool(true))
+            }),
+        ),
+        // The highest of several listed Levels is the Reference Level of a
+        // beam or brace only (RE-175).
+        None if matches!(ifc_type, "IFCBEAM" | "IFCMEMBER") => (
+            text(crate::partition_schema_mvp::REFERENCE_LEVEL_FROM_LIST_FIELD)?,
+            true,
+        ),
+        None => return None,
+    };
+    let names: &[&str] = match ifc_type {
+        "IFCBEAM" => &["Reference Level"],
+        "IFCMEMBER" if from_list => &["Reference Level"],
+        "IFCWALL" | "IFCCURTAINWALL" => &["Base Constraint"],
+        "IFCCOLUMN" => &["Base Level", "Level"],
+        "IFCRAILING" | "IFCROOF" | "IFCSTAIR" => &["Base Level"],
+        "IFCDUCTSEGMENT" | "IFCPIPESEGMENT" => &["Reference Level"],
+        _ => &["Level"],
+    };
+    let mut properties: Vec<Property> = names
+        .iter()
+        .map(|name| Property {
+            name: (*name).into(),
+            value: PropertyValue::Label(level.clone()),
+        })
+        .collect();
+    if let Some(top) = text(lp::TOP_LEVEL_PARAMETER_FIELD) {
+        match ifc_type {
+            "IFCWALL" | "IFCCURTAINWALL" => properties.push(Property {
+                name: "Top Constraint".into(),
+                value: PropertyValue::Label(format!("Up to level: {top}")),
+            }),
+            "IFCSTAIR" => properties.push(Property {
+                name: "Top Level".into(),
+                value: PropertyValue::Label(top),
+            }),
+            _ => {}
+        }
+    }
+    Some(PropertySet {
+        name: "Constraints".into(),
+        properties,
     })
 }
 
