@@ -275,6 +275,12 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **`ElemTableHeader::record_count` is the `u32` the table states (#745).** It
+  kept the low 16 bits of the count at `0x02`, on the claim that no table
+  holds 65,536 records, but a Nordic LCA office project's states 72,798.
+  `rvt-elem-table` then reported 7,262 declared records, and the implicit
+  fallback layout parsed only that many. The field is now a `u32`, and both
+  layouts take their record limit from the same count.
 - **Snowdon Towers exports its elements again (#736).** The record
   size `elem_table::detect_layout` picks is the one at which the stated
   records fit from `0x06` with ids rising. It tested the first id, but on
