@@ -6,6 +6,15 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Export diagnostics report the file name the model was saved under, not
+  its folders (#782).** Their `input.original_path` kept the whole path with
+  only the Windows account folder redacted, so client and project folder
+  names reached a file people attach to bug reports. It is now the file name,
+  as the export's name has been since 0.5.1: RE1 Architecture's reads
+  `RE1.rvt`.
+
 ## [0.5.1] — 2026-10-18
 
 A patch release of 0.5.0. An export is named by the model's file name
