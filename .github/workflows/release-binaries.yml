@@ -100,6 +100,25 @@ jobs:
           tool: cargo-auditable@0.7.7
       - name: Build release binaries
         run: cargo auditable build --release --locked --bins --target ${{ matrix.target }}
+      # The dependency list cargo-auditable embeds lives in a `.dep-v0`
+      # section, and [profile.release] strips the binaries. Fail the build if
+      # a shipped Linux binary has lost the section, so the claim that
+      # `cargo audit bin` can read them stays measured.
+      - name: Check the binaries carry their dependency list
+        if: contains(matrix.target, 'linux')
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          for bin in rvt-info rvt-ifc rvt-analyze; do
+            path="target/$TARGET/release/$bin"
+            if readelf --section-headers --wide "$path" | grep -q '\.dep-v0'; then
+              echo "$path: .dep-v0 present"
+            else
+              echo "::error::$path has no .dep-v0 section: strip removed cargo-auditable's dependency list"
+              exit 1
+            fi
+          done
       - name: Package
         id: package
         shell: bash
