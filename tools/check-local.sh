@@ -121,17 +121,7 @@ if [[ "$run_viewer" -eq 1 ]]; then
     fi
     run pnpm --dir viewer run typecheck
     run pnpm --dir viewer run build
-    if command -v wasm-objdump >/dev/null 2>&1 && [[ -f viewer/pkg/rvt_bg.wasm ]]; then
-        printf '\n==> wasm network-import audit\n'
-        if wasm-objdump -j Import -x viewer/pkg/rvt_bg.wasm \
-            | grep -iE '"(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon)"' >/dev/null; then
-            echo "VIOLATION: compiled WASM imports a network primitive" >&2
-            exit 1
-        fi
-        echo "PASS: no network imports"
-    else
-        echo "==> wasm network-import audit skipped (wasm-objdump or viewer/pkg missing)"
-    fi
+    run node viewer/scripts/audit-wasm-imports.mjs
 fi
 
 if [[ "$run_corpus" -eq 1 ]]; then
