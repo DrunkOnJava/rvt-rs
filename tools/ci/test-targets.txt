@@ -31,6 +31,8 @@ real      category_type_phase
 real      cfb_roundtrip_delta
 real      common_reference
 real      corpus_tier2_health
+real      column_cut_body
+real      column_node_z
 real      covering_finish
 real      curtain_part_materials
 real      curtain_wall_doors
@@ -55,6 +57,8 @@ real      invert_elevation
 real      is_external
 real      iter_elements_typed       skip=production_iter_elements_tier1,decode_instance_prefer_typed_fails_closed
 real      level_names
+real      level_parameters
+real      level_shared_elevation
 real      mep_connections
 real      mep_systems
 real      native_current_records

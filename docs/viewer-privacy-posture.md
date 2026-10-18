@@ -1,12 +1,14 @@
 # Viewer privacy posture (VW1-21)
 
-The planned `rvt-view` browser viewer is a **client-side-only**
-application. This document pins that posture so the Rust-side
-primitives stay compatible with it as the frontend lands.
+The browser viewer (`viewer/`, deployed at
+<https://drunkonjava.github.io/rvt-rs/>) is a **client-side-only**
+application. This document pins that posture, so the Rust-side
+primitives and the viewer stay compatible with it, and says what each
+check below covers.
 
 ## The invariant
 
-> An RVT file a user opens in `rvt-view` **never leaves the user's
+> An RVT file a user opens in the viewer **never leaves the user's
 > browser**. No upload, no cloud processing, no telemetry that
 > exfiltrates file content.
 
@@ -52,7 +54,7 @@ If a future viewer wants any of these, it does them in a
 
 ## What this means for the WASM build (VW1-01)
 
-When the WASM build lands, the compiled `.wasm` artifact:
+The compiled `.wasm` artifact, built from the `rvt-wasm` crate:
 
 - Has no `wasm-bindgen` imports that map to `fetch`, `XMLHttpRequest`,
   or the network-shaped Web APIs.
@@ -60,12 +62,14 @@ When the WASM build lands, the compiled `.wasm` artifact:
 - Writes output through `Blob` download anchors so the user sees
   a browser download dialog — nothing is POSTed.
 
-A CI check can assert the import list: any `wasm-bindgen` import
-pointing at the network namespace should fail the build.
+CI asserts the import list on every deploy (check 2 under
+[Auditability](#auditability)): an import that reaches the network fails
+the build.
 
 ## What this means for the static site (VW1-18)
 
-When the viewer deploys to GitHub Pages or a similar static host:
+The viewer is deployed to GitHub Pages, a static host, and keeps to these
+rules:
 
 - No cookies, no localStorage tokens, no identifiers that survive
   page reloads beyond the explicit `#v=...` URL fragment.
@@ -102,16 +106,29 @@ Three checks make the posture verifiable post-facto:
 
 1. `cargo deny check` — no crate in the dep tree has a known
    telemetry history.
-2. `wasm-objdump` on the compiled viewer — grep the import
-   section for `fetch`, `XMLHttpRequest`, `WebSocket`,
-   `EventSource`, or `sendBeacon`.
+2. `viewer/scripts/audit-wasm-imports.mjs` on the compiled viewer —
+   every import of the `.wasm`, by name and by the body of its shim
+   in the wasm-bindgen glue, checked for `fetch`, `XMLHttpRequest`,
+   `WebSocket`, `EventSource`, `sendBeacon`, `WebTransport` and
+   `RTCPeerConnection`. A constructor such as `new WebSocket` imports
+   as `__wbg_new_<hash>`, so the name alone would miss it. Before
+   October 2026 this check grepped `wasm-objdump` output for quoted
+   names that wabt never prints, so it could not fail.
 3. Playwright browser test
    (`viewer/tests/no-network.spec.ts` + `viewer/tests/wasm-no-network-imports.spec.ts`) — load the built viewer,
-   open the public sample RFA, allow only same-origin static
-   boot assets, then assert zero HTTP/WebSocket requests after the
-   model is loaded.
+   open a sample (`RVT_VIEWER_SAMPLE`; in the deploy job, the
+   MIT-licensed `Revit_IFC5_Einhoven.rvt` project), allow only
+   same-origin static boot assets, then assert zero HTTP/WebSocket
+   requests after the model is loaded.
 
 The CI viewer deploy job runs checks #2 and #3. Browser-network
 failures print the request URL, method, phase, resource type, and
 Chrome DevTools Protocol initiator so regressions point directly
 at the offending code path.
+
+What the checks cover: the WebAssembly module's imports (check 2), and
+the requests the page makes while booting, opening that sample and
+afterwards (check 3), with the page's Content-Security-Policy limiting
+`connect-src` to `'self'` and `blob:`. They are checks of those paths, not
+a proof that no other code path, browser extension or modified copy of
+the page could make a request.

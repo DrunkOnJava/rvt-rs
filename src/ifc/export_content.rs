@@ -736,6 +736,7 @@ pub fn append_typed_production_elements(
                 _ => format!("Opening for {name}"),
             }
         });
+        let level_set = level_parameter_property_set(&decoded, &ifc_type);
         entities.push(entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -798,6 +799,14 @@ pub fn append_typed_production_elements(
                     thickness_feet,
                 });
             }
+        }
+        // RE-172: the Level parameters, in the `Constraints` set Revit's
+        // export writes them in.
+        if let Some(set) = level_set {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set,
+            });
         }
         // RE-47: a stair's or flight's riser and tread dimensions, in the
         // standard set Revit's export writes them in.
@@ -1247,6 +1256,67 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
             name: "RvtWallGeometry".into(),
             properties,
         }),
+    })
+}
+
+/// Revit's `Constraints` properties for the Level an element's association
+/// record names (RE-172), under the names Revit's export uses for its class.
+fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Option<PropertySet> {
+    use crate::partition_level_parameters as lp;
+    let text = |wanted: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(v) if name == wanted => Some(v.clone()),
+            _ => None,
+        })
+    };
+    let (level, from_list) = match text(lp::LEVEL_PARAMETER_FIELD) {
+        Some(level) => (
+            level,
+            decoded.fields.iter().any(|(name, value)| {
+                name == crate::partition_schema_mvp::LEVEL_FROM_LIST_FIELD
+                    && matches!(value, InstanceField::Bool(true))
+            }),
+        ),
+        // The highest of several listed Levels is the Reference Level of a
+        // beam or brace only (RE-175).
+        None if matches!(ifc_type, "IFCBEAM" | "IFCMEMBER") => (
+            text(crate::partition_schema_mvp::REFERENCE_LEVEL_FROM_LIST_FIELD)?,
+            true,
+        ),
+        None => return None,
+    };
+    let names: &[&str] = match ifc_type {
+        "IFCBEAM" => &["Reference Level"],
+        "IFCMEMBER" if from_list => &["Reference Level"],
+        "IFCWALL" | "IFCCURTAINWALL" => &["Base Constraint"],
+        "IFCCOLUMN" => &["Base Level", "Level"],
+        "IFCRAILING" | "IFCROOF" | "IFCSTAIR" => &["Base Level"],
+        "IFCDUCTSEGMENT" | "IFCPIPESEGMENT" => &["Reference Level"],
+        _ => &["Level"],
+    };
+    let mut properties: Vec<Property> = names
+        .iter()
+        .map(|name| Property {
+            name: (*name).into(),
+            value: PropertyValue::Label(level.clone()),
+        })
+        .collect();
+    if let Some(top) = text(lp::TOP_LEVEL_PARAMETER_FIELD) {
+        match ifc_type {
+            "IFCWALL" | "IFCCURTAINWALL" => properties.push(Property {
+                name: "Top Constraint".into(),
+                value: PropertyValue::Label(format!("Up to level: {top}")),
+            }),
+            "IFCSTAIR" => properties.push(Property {
+                name: "Top Level".into(),
+                value: PropertyValue::Label(top),
+            }),
+            _ => {}
+        }
+    }
+    Some(PropertySet {
+        name: "Constraints".into(),
+        properties,
     })
 }
 
@@ -1816,6 +1886,10 @@ type VoidBody = (usize, u32, Vec<(f64, f64)>, f64);
 /// up the wall, the wall's axis turn in its placement, the sketch plane's
 /// offset to the axis's left, and the wall's thickness.
 type ProfileOpening = (u32, Vec<(f64, f64)>, f64, f64, f64);
+
+/// `BodyHeightSource` of a column drawn as its body after geometry joins: the
+/// box at id-48 of its geometry node (RE-178).
+pub const COLUMN_CUT_BODY_HEIGHT_SOURCE: &str = "partition_geometry_node_after_joins";
 
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
@@ -2574,6 +2648,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let mut column_body_source = None;
     let mut beam_body_source = None;
     let mut column_cut_walls = None;
+    let mut column_body_z = (None, None);
     let mut type_symbol_id = None;
     let mut type_profile = (None, None);
     let mut level_id = None;
@@ -2660,6 +2735,14 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             ("m_bboxWidth", InstanceField::Float { value, .. }) => width = Some(*value),
             ("m_bboxDepth", InstanceField::Float { value, .. }) => depth = Some(*value),
             ("m_bboxHeight", InstanceField::Float { value, .. }) => height = Some(*value),
+            (
+                crate::partition_schema_mvp::COLUMN_BODY_BOTTOM_FIELD,
+                InstanceField::Float { value, .. },
+            ) => column_body_z.0 = Some(*value),
+            (
+                crate::partition_schema_mvp::COLUMN_BODY_TOP_FIELD,
+                InstanceField::Float { value, .. },
+            ) => column_body_z.1 = Some(*value),
             ("m_locationX", InstanceField::Float { value, .. }) => x = Some(*value),
             ("m_locationY", InstanceField::Float { value, .. }) => y = Some(*value),
             ("m_locationZ", InstanceField::Float { value, .. }) => z = Some(*value),
@@ -2690,6 +2773,17 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     if width <= 0.0 || depth <= 0.0 || height <= 0.0 {
         return None;
     }
+    // RE-178: a column that a joined slab or roof cuts is drawn as its cut
+    // body. Its placement stays at its own base, so storeys do not move, and
+    // `BoundingBoxHeight` keeps its own extent; a body that starts higher is
+    // placed `body_offset` above the base.
+    let record_height = height;
+    let (body_offset, height) = match column_body_z {
+        (Some(bottom), Some(top)) if bottom.is_finite() && top > bottom => {
+            (bottom - z, top - bottom)
+        }
+        _ => (0.0, height),
+    };
     // RE-49: a beam whose location line the record box supports runs along
     // that line instead of filling its box.
     let beam = if class == "StructuralFraming" {
@@ -2957,9 +3051,15 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         },
         Property {
             name: "BoundingBoxHeight".into(),
-            value: PropertyValue::LengthFeet(height),
+            value: PropertyValue::LengthFeet(record_height),
         },
     ];
+    if column_body_z.0.is_some() && (height - record_height).abs() > 1e-9 {
+        properties.push(Property {
+            name: "BodyHeightSource".into(),
+            value: PropertyValue::Text(COLUMN_CUT_BODY_HEIGHT_SOURCE.into()),
+        });
+    }
     // #219 / RE-27: the host Level the record's counted reference list
     // names. `ifc::apply_record_level_reference_storeys` reads it back
     // off the emitted element, so the two sides share one carrier.
@@ -3362,6 +3462,22 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             };
             ([x, y, z], rotation, body, solid)
         }
+    };
+    let solid = match solid {
+        None if body_offset.abs() > 1e-9 => Some(entities::SolidShape::PlacedExtrusion {
+            profile: body
+                .profile_override
+                .clone()
+                .unwrap_or(entities::ProfileDef::Rectangle {
+                    width_feet: body.width_feet,
+                    depth_feet: body.depth_feet,
+                }),
+            origin_feet: [0.0, 0.0, body_offset],
+            axis: [0.0, 0.0, 1.0],
+            ref_direction: [1.0, 0.0, 0.0],
+            depth_feet: body.height_feet,
+        }),
+        solid => solid,
     };
     Some(RecordGeometry {
         location,

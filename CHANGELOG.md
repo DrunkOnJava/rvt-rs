@@ -275,6 +275,50 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Snowdon Towers exports its elements again (#736).** The record
+  size `elem_table::detect_layout` picks is the one at which the stated
+  records fit from `0x06` with ids rising. It tested the first id, but on
+  Autodesk's Snowdon Towers samples that id differs from the second on 27
+  (Structural) and 84 (Architectural) records and falls back below its
+  predecessor 2 and 3 times. Neither size passed, so the table was read in
+  the 12-byte fallback layout. Every element record then lacked its
+  ElementId (RE-30), and the export wrote 0 of Structural's 1,282 elements
+  and 1 of Architectural's 6,056 (since #559). The test now reads the second
+  id, the ElementId that partition records, owners and Revit's own export
+  carry (RE-41). It rises over every table measured, and on Snowdon every
+  owner is one of the second ids, while 13 and 42 owners are none of the
+  first ids. Every other file reads the same layout as before.
+  `tests/elem_table_frame.rs` checks rising ElementIds and owners on the
+  second id, and reads the Snowdon samples when they are in
+  `RVT_PROJECT_CORPUS_DIR`.
+- **The viewer's wasm network-import audit can fail (VW1-21).** It grepped
+  `wasm-objdump` output for `"fetch"` and the like with the quotes, which
+  wabt never prints for an import (`src/binary-reader-objdump.cc:1607`), so
+  it passed whatever the wasm imported. `viewer/scripts/audit-wasm-imports.mjs`
+  reads each import with `WebAssembly.Module.imports()`, and the body of its
+  shim in the glue, where a constructor such as `new WebSocket` shows; it
+  fails on a network primitive, on an import whose shim it cannot read, and
+  when it misses its own canary. The deployed viewer imports none of them,
+  and the deploy no longer installs wabt.
+- **Revit 2023 records read their container and Levels their Building Story.**
+  These are 32-bit forms. Measured on Autodesk's 2023 sample projects, joined on
+  ElementId with the 2024 copy of each:
+  - A 2023 element record's container reference is the `u32` 22 bytes before
+    its marker, not the `u64` at 2024's place relative to the marker.
+    - The `u32` agrees with 2024's container on all 1,201, 5,858 and 8,901
+      shared records of `rac_basic`, `rst_basic` and `rac_advanced`.
+    - The `u64` disagrees on 9, 4,183 and 95, every container member among them.
+    - The Level reader takes the same field. So `rac_basic`'s Level 800333,
+      a container member, no longer fails the storey-set check, and its six
+      Levels are read.
+  - A 2023 Level's Building Story frame is `ff ff ff ff 00 01`, an `f64`, a
+    `u32` ElementId and the setting, where 2024 writes the `u64` forms.
+    Every Level of the three projects now gives the setting the 2024 copy gives it.
+  - Storey agreement with the 2024 copy: 15.5 to 81.7 per cent (`rac_basic`),
+    91.9 to 95.2 (`rst_basic`), 90.0 to 97.8 (`rac_advanced`). `rac_basic`'s
+    one export element that 2024 does not export, a container member, is gone.
+  - Exports of 2024 files are unchanged.
+  - Probe: `examples/probe_32bit_container.rs`.
 - **An export without geometry keeps its elements' types and names (B74).**
   `--mode typed-no-geometry` read the record property set, which carries an
   element's family and type, only with its geometry, so it typed no element

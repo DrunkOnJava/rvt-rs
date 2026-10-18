@@ -502,6 +502,12 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Column bottoms from the geometry node (RE-173) ---
+    if revit_version == 2024 {
+        apply_column_node_bottoms(rf, [&mut out.columns, &mut out.products]);
+        apply_column_cut_bodies(rf, [&mut out.columns, &mut out.products]);
+    }
+
     // --- Type text parameters (RE-77, #35) ---
     let type_parameters = crate::partition_type_parameters::type_text_parameters(rf, revit_version);
     if !type_parameters.is_empty() {
@@ -514,6 +520,33 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ] {
             attach_type_text_parameters(&type_parameters, elements);
+        }
+    }
+
+    // --- Level parameters from the per-element association record (RE-172),
+    // stairs' Base and Top Level from the same record and the Level named in
+    // the element record's id lists where the field holds none (RE-174) ---
+    let (level_parameters, (level_names, level_elevations)) =
+        crate::partition_level_parameters::level_parameters(rf, revit_version);
+    if !level_names.is_empty() {
+        let mut lists = [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ];
+        for elements in lists.iter_mut() {
+            for element in elements.iter_mut() {
+                attach_level_parameters(
+                    rf,
+                    element,
+                    &level_parameters,
+                    &level_names,
+                    &level_elevations,
+                );
+            }
         }
     }
 
@@ -7276,6 +7309,228 @@ pub fn column_instances_from_records(
             decoded
         })
         .collect()
+}
+
+/// Field naming the Level of an element whose record names it in an id list
+/// (RE-174), rather than in the association record.
+pub const LEVEL_FROM_LIST_FIELD: &str = "m_level_parameter_from_list";
+
+/// Field naming the highest of the several Levels an element's record names
+/// in its id lists: a beam's or brace's Reference Level (RE-175).
+pub const REFERENCE_LEVEL_FROM_LIST_FIELD: &str = "m_reference_level_from_list";
+
+/// Give `element` its level fields (RE-172, RE-174, RE-175, RE-176).
+fn attach_level_parameters(
+    rf: &mut RevitFile,
+    element: &mut DecodedElement,
+    parameters: &BTreeMap<u32, crate::partition_level_parameters::LevelParameters>,
+    names: &BTreeMap<u32, String>,
+    elevations: &BTreeMap<u32, f64>,
+) {
+    use crate::partition_level_parameters as lp;
+    let found = element
+        .id
+        .and_then(|id| parameters.get(&id))
+        // A stair's record is read as a stair's only for a stair.
+        .filter(|p| p.stair.is_none() || element.class == "Stair");
+    let push = |element: &mut DecodedElement, name: &str, value: String| {
+        element
+            .fields
+            .push((name.into(), InstanceField::String(value)));
+    };
+    if let Some(found) = found {
+        if let Some(level) = &found.level {
+            push(element, lp::LEVEL_PARAMETER_FIELD, level.clone());
+        }
+        if let Some(top) = &found.top {
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, top.clone());
+        }
+        if let Some((_, top)) = &found.stair {
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, top.clone());
+        }
+        return;
+    }
+    // The Level an element names in its record's id lists (RE-174): the
+    // second list's if it names any, else the first's, if exactly one
+    // recovered Level is named. A beam or brace naming more than one also
+    // lists the Level(s) below its own: its Reference Level is the highest
+    // (RE-175), kept apart as it is proven for those classes only.
+    let (Some(stream), Some(offset)) = (
+        element.fields.iter().find_map(|(n, v)| match v {
+            InstanceField::String(s) if n == "m_source_stream" => Some(s.clone()),
+            _ => None,
+        }),
+        element.fields.iter().find_map(|(n, v)| match v {
+            InstanceField::Integer { value, .. } if n == "m_source_offset" => {
+                usize::try_from(*value).ok()
+            }
+            _ => None,
+        }),
+    ) else {
+        return;
+    };
+    let Ok(inflated) = rf.inflated_partition(&stream) else {
+        return;
+    };
+    let buf = inflated.bytes();
+    let at = offset + crate::partition_element_records::REFERENCE_LIST_OFFSET;
+    let Some(first) = crate::partition_element_records::decode_reference_list(buf, at) else {
+        return;
+    };
+    let second = at
+        .checked_add(4 + first.len() * 8)
+        .and_then(|at| crate::partition_element_records::decode_reference_list(buf, at))
+        .unwrap_or_default();
+    let ids: BTreeSet<u32> = names.keys().copied().collect();
+    let mut named = crate::element_record_level_refs::named_levels(&second, &ids);
+    if named.is_empty() {
+        named = crate::element_record_level_refs::named_levels(&first, &ids);
+    }
+    if named.len() > 1 && element.class == "Stair" {
+        // A stair whose association record gives no Base and Top Level
+        // lists them, and at most the Level above its top (RE-176).
+        if let Some((base, top)) = stair_levels_from_list(&named, elevations) {
+            push(element, lp::LEVEL_PARAMETER_FIELD, names[&base].clone());
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, names[&top].clone());
+            element
+                .fields
+                .push((LEVEL_FROM_LIST_FIELD.into(), InstanceField::Bool(true)));
+        }
+        return;
+    }
+    if named.len() > 1 {
+        if let Some(level) = highest_level(&named, elevations) {
+            push(
+                element,
+                REFERENCE_LEVEL_FROM_LIST_FIELD,
+                names[&level].clone(),
+            );
+        }
+        return;
+    }
+    if let [only] = named[..] {
+        push(element, lp::LEVEL_PARAMETER_FIELD, names[&only].clone());
+        element
+            .fields
+            .push((LEVEL_FROM_LIST_FIELD.into(), InstanceField::Bool(true)));
+    }
+}
+
+/// A stair's Base and Top Level from the Levels its record lists: the
+/// lowest and the next above it (RE-176). `None` unless every named Level
+/// has an elevation and the lowest three are at distinct elevations.
+fn stair_levels_from_list(named: &[u32], elevations: &BTreeMap<u32, f64>) -> Option<(u32, u32)> {
+    let mut by_height: Vec<(f64, u32)> = named
+        .iter()
+        .map(|id| Some((*elevations.get(id)?, *id)))
+        .collect::<Option<_>>()?;
+    by_height.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let above = |low: f64, high: f64| high - low > 1e-6;
+    match by_height[..] {
+        [(b, base), (t, top)] if above(b, t) => Some((base, top)),
+        [(b, base), (t, top), (n, _), ..] if above(b, t) && above(t, n) => Some((base, top)),
+        _ => None,
+    }
+}
+
+/// The Level of `named` with the highest elevation; `None` unless every
+/// named Level has an elevation and the highest is unique (RE-175).
+fn highest_level(named: &[u32], elevations: &BTreeMap<u32, f64>) -> Option<u32> {
+    let mut by_height: Vec<(f64, u32)> = named
+        .iter()
+        .map(|id| Some((*elevations.get(id)?, *id)))
+        .collect::<Option<_>>()?;
+    by_height.sort_by(|a, b| b.0.total_cmp(&a.0));
+    match by_height[..] {
+        [(top, id), (next, _), ..] if top - next > 1e-6 => Some(id),
+        _ => None,
+    }
+}
+
+/// Field recording where a column's bottom came from, when not its record.
+pub const COLUMN_Z_SOURCE_FIELD: &str = "m_column_z_source";
+/// Value of [`COLUMN_Z_SOURCE_FIELD`] for a bottom read from the geometry node.
+pub const COLUMN_Z_GEOMETRY_NODE: &str = "partition_geometry_node";
+
+/// Give each column whose record box starts at z = 0.0 the bottom its
+/// geometry node holds (RE-173).
+fn apply_column_node_bottoms(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement>; 2]) {
+    let is_column = |e: &DecodedElement| matches!(e.class.as_str(), "Column" | "StructuralColumn");
+    let mut targets = BTreeMap::new();
+    for list in lists.iter() {
+        for element in list.iter().filter(|e| is_column(e)) {
+            if let (Some(id), Some(bbox)) = (element.id, element_record_bbox(element)) {
+                if bbox[2] == 0.0 {
+                    targets.insert(id, bbox);
+                }
+            }
+        }
+    }
+    let bottoms = crate::partition_column_nodes::column_bottoms(rf, &targets);
+    for list in lists {
+        for element in list.iter_mut().filter(|e| is_column(e)) {
+            let Some(&bottom) = element.id.and_then(|id| bottoms.get(&id)) else {
+                continue;
+            };
+            let Some(bbox) = targets.get(&element.id.unwrap_or_default()) else {
+                continue;
+            };
+            for (name, value) in element.fields.iter_mut() {
+                match name.as_str() {
+                    "m_locationZ" => {
+                        *value = InstanceField::Float {
+                            value: bottom,
+                            size: 8,
+                        }
+                    }
+                    "m_bboxHeight" => {
+                        *value = InstanceField::Float {
+                            value: bbox[5] - bottom,
+                            size: 8,
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            element.fields.push((
+                COLUMN_Z_SOURCE_FIELD.into(),
+                InstanceField::String(COLUMN_Z_GEOMETRY_NODE.into()),
+            ));
+        }
+    }
+}
+
+/// Bottom, feet, of a column's body after its geometry joins (RE-178). The
+/// column's own fields (`m_locationZ`, `m_bboxHeight`) keep its extent.
+pub const COLUMN_BODY_BOTTOM_FIELD: &str = "m_column_body_bottom";
+/// Top, feet, of a column's body after its geometry joins (RE-178).
+pub const COLUMN_BODY_TOP_FIELD: &str = "m_column_body_top";
+
+/// Give each column that a joined slab or roof cuts the z-range of its cut
+/// body, from its geometry node (RE-178). Only the body follows it.
+fn apply_column_cut_bodies(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement>; 2]) {
+    let is_column = |e: &DecodedElement| matches!(e.class.as_str(), "Column" | "StructuralColumn");
+    let targets: BTreeMap<u32, [f64; 6]> = lists
+        .iter()
+        .flat_map(|list| list.iter().filter(|e| is_column(e)))
+        .filter_map(|e| Some((e.id?, element_record_bbox(e)?)))
+        .collect();
+    let extents = crate::partition_column_nodes::column_cut_extents(rf, &targets);
+    for list in lists {
+        for element in list.iter_mut().filter(|e| is_column(e)) {
+            let Some(&(bottom, top)) = element.id.and_then(|id| extents.get(&id)) else {
+                continue;
+            };
+            for (name, value) in [
+                (COLUMN_BODY_BOTTOM_FIELD, bottom),
+                (COLUMN_BODY_TOP_FIELD, top),
+            ] {
+                element
+                    .fields
+                    .push((name.into(), InstanceField::Float { value, size: 8 }));
+            }
+        }
+    }
 }
 
 /// Rewrite a column's placement and extents to the cut body, and say

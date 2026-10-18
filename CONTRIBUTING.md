@@ -51,11 +51,14 @@ You need stable Rust 1.87 or newer (`rustup` installs it) and git.
    request against `main`. The pull-request template asks what changed and
    what you ran — fill in what applies and write "N/A" for the rest.
 
-7. A maintainer reviews and squash-merges. GitHub does not run CI on a
-   first-time contributor's pull request until a maintainer clicks
-   "Approve and run", so a PR that looks idle for a while is waiting on that,
-   not on you. Leave "Allow edits by maintainers" on and we can push small
-   fix-ups to your branch instead of bouncing it back.
+7. A maintainer reviews and squash-merges. GitHub holds the checks of a
+   first-time contributor's pull request until a maintainer has looked at the
+   proposed change and approved the workflow run, so a pull request whose
+   checks say they are awaiting approval is waiting on us, not on you. Approval to run
+   checks is separate from approval to merge. Leave "Allow edits by
+   maintainers" on and we can push small fix-ups to your branch (a rebase,
+   a signed commit, a refreshed fixture) instead of bouncing it back; the
+   squash commit keeps you as its author.
    [`docs/maintaining.md`](docs/maintaining.md) says how issues are triaged
    and labelled, what a pull request has to pass, and how releases are cut.
 
@@ -148,8 +151,8 @@ per-area starting points are in
   the building.
 - **Decoder research.** A byte probe under `examples/` plus a dated evidence
   table for one class or partition pattern (decoder issue form; the reports
-  under `reports/element-framing/` show the shape). Typed extraction works on Revit 2023 to 2025 projects and not yet
-  on other releases; [`ROADMAP.md`](ROADMAP.md) says what is partial and the
+  under `reports/element-framing/` show the shape). Typed extraction works on Revit 2023 to 2025 projects, and
+  experimentally on 2026 projects on `main`, and not yet on 2022 and earlier; [`ROADMAP.md`](ROADMAP.md) says what is partial and the
   reports under `reports/element-framing/` record the known negatives (RE-19,
   RE-20, RE-121 and others), so check before spending days on one.
 - **Tests that prevent false-positive decode claims**, viewer accessibility,
@@ -174,10 +177,11 @@ Open an issue (or a draft PR) before starting work on any of:
 - **The modifying writer** (`src/writer::write_with_patches`). Any
   change to Revit's truncated-gzip framing must be verified
   against a round-trip test.
-- **Layer 4c field-type decoder changes.** Coverage is at 100%
-  and CI-gated. If you think a pattern is misclassified, file an
-  issue with byte evidence from the corpus — do not silently
-  change the decoder.
+- **Layer 4c field-type decoder changes.** All but 9 to 12 fields
+  per release are classified, and the rest are listed in the CI
+  gate (`tests/field_type_coverage.rs`, #410). If you think a
+  pattern is misclassified, file an issue with byte evidence from
+  the corpus — do not silently change the decoder.
 
 ## Coding conventions
 
