@@ -1,0 +1,4 @@
+# The Python API tests (tests/python) and the JSON schema checks in CI.
+# Dependabot proposes updates (.github/dependabot.yml).
+jsonschema==4.26.0
+pytest==8.4.2
