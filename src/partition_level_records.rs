@@ -728,8 +728,13 @@ pub fn levels_from_records_and_blocks(
 /// Whether a recovered level list is usable as a storey set.
 ///
 /// Fail closed: at least two levels, one block per Level, and no two
-/// levels sharing an elevation. A partial recovery is not
+/// building-storey levels sharing an elevation. A partial recovery is not
 /// silently emitted as a smaller building.
+///
+/// A Level that is not a building storey may share a storey's elevation
+/// (#746: BIM4LCA `Housing_Timber_*` has the reference level
+/// `Bet 1-lattia` at `Level_01`'s 170.6037 ft), so only storeys are
+/// held to distinct elevations.
 pub fn recovered_levels_are_a_storey_set(
     records: &[PartitionLevelRecord],
     levels: &[PartitionLevel],
@@ -748,6 +753,8 @@ pub fn recovered_levels_are_a_storey_set(
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     levels
         .iter()
+        // A non-storey Level may sit at a storey's elevation (#746).
+        .filter(|level| level.building_story != Some(false))
         .all(|level| seen.insert(level.elevation_feet.to_bits()))
 }
 
