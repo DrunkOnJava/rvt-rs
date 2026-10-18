@@ -46,9 +46,11 @@ re1-architecture|RE1-Architecture.rvt|RE1-Architecture.ifc
 re1-electrical|RE1-Electrical.rvt|RE1-Electrical.ifc
 re1-mechanical|RE1-Mechanical.rvt|RE1-Mechanical.ifc
 re1-plumbing|RE1-Plumbing.rvt|RE1-Plumbing.ifc
+nordic-office-as-built|ARK_NordicLCA_Office_Concrete_As-Built.rvt|ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc
+nordic-office-permit|ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt|ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
 "
 # Scorers taking <rvt-rs.ifc> <revit-export.ifc>, and <model.glb> <revit-export.ifc>.
-IFC_SCORERS="aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc storeys_vs_ifc
+IFC_SCORERS="class_sets_vs_ifc aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc storeys_vs_ifc
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc
 material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_ifc
 door_bodies_vs_ifc door_window_sizes_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc
@@ -75,6 +77,11 @@ info() { # file dir
 
 while IFS='|' read -r name rvt ref; do
   [ -n "$name" ] || continue
+  # The BIM4LCA office models are fetched only with `-f nordic=true`.
+  if [ ! -f "$MODELS/$rvt" ]; then
+    echo "skipping $name: $rvt absent"
+    continue
+  fi
   dir="$OUT/$name"; mkdir -p "$dir"
   echo "::group::$name"
   # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.

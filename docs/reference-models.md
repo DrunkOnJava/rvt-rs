@@ -86,7 +86,10 @@ targets need, by byte range (`tools/ci/fetch-bim4lca.py`), and checks each
 against [`research/bim4lca-models.tsv`](../research/bim4lca-models.tsv):
 four `.rvt` models and Revit's IFC export of one. Locally, point
 `RVT_NORDIC_LCA_DIR` at a folder holding them
-([`corpus/tier2/README.md`](../corpus/tier2/README.md)).
+([`corpus/tier2/README.md`](../corpus/tier2/README.md)). Measure scores the
+concrete office, as built and at building permit, against Revit's exports of
+both with `-f nordic=true`
+([`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv), #763).
 
 ## Compare like with like
 
