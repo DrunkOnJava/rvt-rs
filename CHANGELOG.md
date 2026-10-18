@@ -100,6 +100,16 @@ All notable changes will be documented here. This project follows
   measured on a Revit export. The export diagnostics also warn with every
   "Export to IFC As" value the export does not apply, counted by value and
   class, which `category_map`'s documentation had already promised.
+- **An ElemTable record's first id is no longer declared where it differs
+  from its second (#760, RE-189).** On Autodesk's Snowdon Towers 2024
+  samples, 84 records (Architectural) and 27 (Structural) carry two ids: the
+  element's ElementId and the id it was created with. Nothing in either
+  project names a first id that is not also some element's current id, so
+  `elem_table::declared_ids` now declares each record's current id only,
+  dropping 84 and 20 ids that named no element. Measured on the 49 Autodesk
+  samples Measure reads and CI's 6 reference models, exports and `rvt-info`
+  are unchanged; only the two Snowdon models' `decoded_element_fraction`
+  rises, as its denominator shrinks.
 - **Export diagnostics report the file name the model was saved under, not
   its folders (#782).** Their `input.original_path` kept the whole path with
   only the Windows account folder redacted, so client and project folder
