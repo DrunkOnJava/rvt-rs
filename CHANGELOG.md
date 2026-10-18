@@ -152,6 +152,15 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **RE-185: where a wall's `IsExternal` and `ExtendToStructure` come from
+  (#35).** A wall's `IsExternal` is its type's native `WallType.m_function`
+  (0 interior, 1 exterior), and its `ExtendToStructure` is true exactly where
+  its record holds a `JoinToRoofGStep`. These agree with Revit's IFC4 export
+  on 8 walls of RE1 Architecture and 117 of puzzbobb's Revit 2025 models,
+  and Measure reproduces them with `-f r2025=true`. A window's `FireRating`
+  is a family-type text entry that RE-77's scan does not read. Probe
+  `examples/probe_re185_wall_function.rs`; nothing is exported from these
+  yet. By puzzbobb.
 - **Measure scores puzzbobb's Revit 2025 models (#766, #356).** With
   `-f r2025=true` it fetches `R2025_Models.zip` by its pinned hash
   (`research/r2025-models.tsv`): 23 projects that each isolate one feature
