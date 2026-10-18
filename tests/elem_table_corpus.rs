@@ -215,8 +215,8 @@ fn project_2024_file_parses_all_declared_records() {
     // shift that lost the last record, and #152 the 24-byte frame offset
     // that missed the first.
     assert_eq!(
-        records.len() as u16,
-        header.record_count,
+        records.len(),
+        header.record_count as usize,
         "parse_records should return exactly header.record_count on 2024 project files"
     );
     let last = records.last().expect("at least one record");
