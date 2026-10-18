@@ -12,9 +12,12 @@ models and not the 1.58 GB archive. Each file lands in target_dir under its
 own name and is checked against its pins; one already there with the right
 hash is kept. `--pin` prints the pin rows of the named entries instead.
 
-Exit 0 when every pinned file is in place and verified; 1 when the archive or
-an entry no longer matches its pins (the host replaced it: re-pin); 2 when the
-host could not be reached after retries, which says nothing about the models.
+Files already in target_dir with their pinned hash are checked first and the
+host is asked only for the others, so a run whose cache holds every file never
+contacts it. Exit 0 when every pinned file is in place and verified; 1 when the
+archive or an entry no longer matches its pins (the host replaced it: re-pin);
+2 when the host could not be reached after retries, which says nothing about
+the models.
 """
 
 from __future__ import annotations
@@ -157,8 +160,8 @@ def main(argv: list[str]) -> int:
     pins = Path(argv[1] if pin_mode else argv[0])
     url, total, pinned = read_pins(pins)
     try:
-        directory = central_directory(url, total)
         if pin_mode:
+            directory = central_directory(url, total)
             for name in argv[2:]:
                 if name not in directory:
                     raise Stale(f"{name} is not in the archive")
@@ -167,13 +170,21 @@ def main(argv: list[str]) -> int:
                 out.unlink()
                 print(f"entry\t{name}\t{sha}\t{size}")
             return 0
+        # Files already in place with their pinned hash need no host: a cache
+        # restore leaves the run independent of the archive's server.
         target = Path(argv[1])
         target.mkdir(parents=True, exist_ok=True)
+        missing = []
         for name, sha, size in pinned:
             out = target / Path(name).name
             if out.is_file() and out.stat().st_size == size and sha256(out) == sha:
                 print(f"  [ok]        {out.name}")
-                continue
+            else:
+                missing.append((name, sha, size, out))
+        if not missing:
+            return 0
+        directory = central_directory(url, total)
+        for name, sha, size, out in missing:
             if name not in directory:
                 raise Stale(f"{name} is not in the archive")
             print(f"  [fetch]     {out.name}", flush=True)
@@ -184,7 +195,7 @@ def main(argv: list[str]) -> int:
             print(f"  [verified]  {out.name} ({got_size} bytes)", flush=True)
         return 0
     except Stale as error:
-        print(f"error: {error}; re-pin research/bim4lca-models.tsv", file=sys.stderr)
+        print(f"error: {error}; re-pin {pins}", file=sys.stderr)
         return 1
     except Unreachable as error:
         print(f"unreachable: {error}", file=sys.stderr)
