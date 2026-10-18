@@ -403,25 +403,31 @@ pub fn declared_element_ids(rf: &mut RevitFile) -> Result<Vec<u32>> {
 /// Length of a record on the 40-byte layout (Revit 2024 and later).
 pub const RECORD_LEN_40: usize = 40;
 
-/// The ElementIds `records` declare (RE-41): every record's `id_primary`,
-/// and on the 40-byte layout also its `id_secondary` when that is not `0`.
+/// The ElementIds `records` declare (RE-41, RE-189): each record's current
+/// id, its `id_secondary` on the 40-byte layout when that is not `0`, and
+/// its `id_primary` otherwise.
 ///
 /// The two agree on every record of the 2016-2023 projects, the family
-/// files and the 2024 and 2025 projects measured, except Autodesk's Snowdon
+/// files and the 2024 to 2027 projects measured, except Autodesk's Snowdon
 /// Towers samples. There they differ on 84 records (Architectural) and 27
-/// (Structural), and `id_secondary` is the id the element's partition
-/// record carries (RE-35) and the `Tag` Revit's own IFC export writes;
-/// `id_primary` is neither. Both are kept, so no id declared before is
-/// dropped. A `0` in `id_secondary` is not added.
+/// (Structural). `id_secondary` is the id the element's partition record
+/// carries (RE-35) and the `Tag` Revit's own IFC export writes, and
+/// `id_primary` is the id the element was created with, which only its
+/// GlobalId still uses ([`crate::revit_global_ids`], RE-48). No element
+/// record of either file names a first id that is not also some element's
+/// current id (RE-189), so a first id is no longer declared on its own: 84
+/// ids on Architectural and 20 on Structural that named no element.
 pub fn declared_ids(records: &[ElemRecord]) -> std::collections::BTreeSet<u32> {
-    let mut ids = std::collections::BTreeSet::new();
-    for record in records {
-        ids.insert(record.id_primary);
-        if record.raw.len() == RECORD_LEN_40 && record.id_secondary != 0 {
-            ids.insert(record.id_secondary);
-        }
-    }
-    ids
+    records
+        .iter()
+        .map(|record| {
+            if record.raw.len() == RECORD_LEN_40 && record.id_secondary != 0 {
+                record.id_secondary
+            } else {
+                record.id_primary
+            }
+        })
+        .collect()
 }
 
 /// Attempt to enumerate records after the header. Conservative: stops at
