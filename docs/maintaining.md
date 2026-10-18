@@ -63,11 +63,26 @@ when a release ships.
   body is the pull request's description, so the description is permanent
   history: fix it before merging.
 - A first-time contributor's workflow runs wait for a maintainer to approve them
-  (the "Approve and run" button, or
+  (the repository's fork pull request policy is "require approval for
+  first-time contributors"; the "Approve and run" button, or
   `gh api -X POST repos/DrunkOnJava/rvt-rs/actions/runs/<run-id>/approve`).
-- A contributor's work is credited: keep their commit where the squash allows
-  it, and end the squash message with a `Co-authored-by:` line where it does
-  not. A very large pull request is reviewed against measurements, labelled
+  Read the diff first, `.github/`, build scripts and anything that runs at build
+  or test time above all. Approving a run lets the pull request's checks run with
+  a read-only token and no secrets; it grants no write or merge access. Held
+  runs and contributions left without a reply for more than two days are
+  flagged to the maintainer, because a run nobody approves gives the
+  contributor no feedback at all.
+- A contributor's work is credited. The squash commit's author is the pull
+  request's author. A contributor's unsigned commits cannot land, since `main`
+  requires signed commits, so the maintainer replaces them on the contributor's
+  branch with the same change, signed as committer, keeping the contributor as
+  author, checks that the change set is identical, and says so on the pull
+  request. Where the squash keeps no commit of a contributor's, end its message
+  with a `Co-authored-by:` line.
+- RE numbers (`reports/element-framing/RE-NN-*.md`, `probe_reNN_*`) are given out
+  as findings land. When two open pull requests claim the same number, the
+  later one is renumbered, and the maintainer names the new number on the pull
+  request. A very large pull request is reviewed against measurements, labelled
   `needs-split`, and the parts that hold up are merged as their own pull
   requests.
 - Every measured claim in a pull request links the run or command that
@@ -112,6 +127,13 @@ release-binaries workflow, the CLI archives and the container image, and
 publishes them with build-provenance attestations. Each release is described in
 the release notes and the CHANGELOG, its milestone is closed, and the issues
 still open move on.
+
+crates.io and PyPI accept the publish workflow through trusted publishing, so no
+token is stored, and a tag release fails when crates.io refuses it (C3). Each
+registry needs its trusted publisher configured on its side once (repository
+DrunkOnJava/rvt-rs, workflow `publish.yml`, environments `crates-io` and
+`pypi`). Confirm it before pushing a tag; `.github/workflows/publish.yml` lists
+the settings.
 
 ## Security and automation settings
 
