@@ -94,6 +94,14 @@ updates:
   - package-ecosystem: pip
     # The Python packages CI installs, pinned in tools/ci/requirements-*.txt.
     directory: /tools/ci
+    # IfcOpenShell is a witness and Measure's scorers run on it. 0.9.0 breaks
+    # the scorers (#773), so only its patch releases are proposed until they
+    # are migrated.
+    ignore:
+      - dependency-name: ifcopenshell
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
     schedule:
       interval: weekly
     groups:
