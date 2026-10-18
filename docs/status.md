@@ -154,7 +154,12 @@ rows, and the three `teste_export_2025` walls whose type carries
 rows (`reports/element-framing/RE-45-ifc-export-parameters.md`). A curtain wall
 in a Revit 2024 file stays `IfcCurtainWall` whatever its value names, as
 Revit 2024's exporter writes it: the 124 BIM4LCA office curtain walls set to
-`IfcShadingDevice` are `IfcCurtainWall` in Revit's export (RE-188). Values the
+`IfcShadingDevice` are `IfcCurtainWall` in Revit's export (RE-188). The office's
+fixtures and appliances follow their types' values: 78 waste terminals, 51
+electric appliances, 40 fire suppression terminals, 15 wash-hand basins and
+an air terminal on the as-built file, each Revit's class and predefined type
+(RE-190). From Revit 2024 an entry belongs to the data object that holds it
+(RE-153), not to the last element-data header before it. Values the
 export does not apply are counted in the diagnostics' warnings. Composed, the two rules
 give **80 of 80 `IfcSlab` and 20 of 20 `IfcShadingDevice`, exact
 ElementId sets at tolerance 0**, verified with IfcOpenShell 0.8.5 and

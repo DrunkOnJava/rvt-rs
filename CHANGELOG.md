@@ -98,6 +98,26 @@ All notable changes will be documented here. This project follows
   named as in Revit's export go from 1 to 191 of 234, as on the as-built
   file, and each named room gets its `IfcSpaceType`. The as-built file, the
   six reference models and the samples export as before.
+- **Fixtures and appliances follow their "Export to IFC As" (#792,
+  RE-190).** Revit's export writes an element as the entity its type's
+  "Export Type to IFC As" names: waste, fire suppression, sanitary and air
+  terminals and electric appliances on the BIM4LCA office. rvt-rs now does
+  too, with the type's predefined type where it is an IFC4 enumerator of the
+  entity. Waste and fire suppression terminals get their type entities and
+  ports, and a room's space contains them as Revit's export does. On the
+  as-built file 185 elements now have Revit's class (78 waste terminals, 51
+  electric appliances, 40 fire suppression terminals, 15 wash-hand basins
+  and an air terminal), and the type entity is Revit's on 12,355 of 12,358
+  elements (was 12,170). On the permit file the count is 165, because rvt-rs
+  types none of 20 appliances there.
+- **An export value belongs to the data object that holds it, on Revit
+  2024 and later (#792, RE-190).** RE-45 gave an entry to the last
+  element-data header within 0x800 bytes. On the office's permit file that
+  gave `IfcSpace` to doors, curtain walls, sketch lines and five drains,
+  whose types' `IfcWasteTerminalType` it hid, and the drains' type was
+  written twice under one GlobalId (four schema-validation findings, now
+  none). Revit 2023 and earlier keep the header rule. The six reference
+  models export as before.
 - **A pipe or duct type name needs the `u32 0` before its length (RE-179).**
   RE-130's scan matched an element's reference lists on Autodesk's 2027
   `rme_basic` and named 33 pipes `였縿괜쭃`. All six type names of RE1
@@ -132,6 +152,14 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **The class-set scorer says why an element is in another class (#792).**
+  `tools/re/class_sets_vs_ifc.py` prints, for each group in another class
+  than Revit's, Revit's category, PredefinedType and type object and the
+  RE-45 value rvt-rs read. A new probe scorer,
+  `tools/re/export_parameters_vs_ifc.py`, compares every "Export to IFC As"
+  value the RE-45 probe reads with Revit's export. The RE-45 probe prints
+  each entry's owner under both rules. `ports_vs_ifc` prints its first ten
+  schema-validation findings.
 - **Autodesk's Revit 2015 sample projects are pinned for Measure (#742).**
   Autodesk keeps all six on its download host under `Docs/`, where the 2016
   to 2027 samples are under `Docs/InProd/`, so a 2015 reading no longer rests
