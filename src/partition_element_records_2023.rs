@@ -26,7 +26,7 @@
 use crate::RevitFile;
 use crate::partition_element_records::{
     BBOX_MARKER_OFFSET, BBOX_OFFSET, BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, CLASS_TAG_OFFSET,
-    CONTAINER_OFFSET, PLACEMENT_KIND_OFFSET, PartitionElementRecord,
+    PLACEMENT_KIND_OFFSET, PartitionElementRecord,
 };
 use std::collections::BTreeSet;
 
@@ -37,6 +37,15 @@ pub const REVIT_2023: u32 = 2023;
 const ID_BEFORE_MARKER: usize = 52;
 /// Bytes from the `BuiltInCategory` to the marker.
 const CATEGORY_BEFORE_MARKER: usize = 38;
+/// Bytes from the container reference to the marker. The reference is a
+/// `u32` 16 bytes after the category, followed by `ff ff ff ff`. Joined on
+/// ElementId with the 2024 copy of Autodesk's same sample project, it gives
+/// 2024's container on every shared record of the three 2023 samples
+/// (1,201, 5,858 and 8,901 records), where the `u64` at 2024's place
+/// relative to the marker (8 bytes after the category) disagrees on 9,
+/// 4,183 and 95, every container member among them
+/// (`examples/probe_32bit_container.rs`).
+const CONTAINER_BEFORE_MARKER: usize = 22;
 /// Offset of the `ElementHeader` tag after the ElementId (after the `u32`
 /// id and the `u32` size).
 const HEADER_TAG_AFTER_ID: usize = 8;
@@ -123,12 +132,12 @@ fn decode_at_marker(
         let from = usize::try_from(base + offset as isize).ok()?;
         buf.get(from..from + len)
     };
-    let u64_at = |offset: usize| {
-        field(offset, 8)
-            .and_then(|b| b.try_into().ok())
-            .map(u64::from_le_bytes)
-    };
-    let container = u64_at(CONTAINER_OFFSET)?;
+    let container_at = at.checked_sub(CONTAINER_BEFORE_MARKER)?;
+    let container =
+        match u32::from_le_bytes(buf.get(container_at..container_at + 4)?.try_into().ok()?) {
+            u32::MAX => u64::MAX,
+            id => u64::from(id),
+        };
     let placement_kind = u32::from_le_bytes(field(PLACEMENT_KIND_OFFSET, 4)?.try_into().ok()?);
     let class_tag = u16::from_le_bytes(field(CLASS_TAG_OFFSET, 2)?.try_into().ok()?);
     let mut bbox_feet = [0.0f64; 6];
