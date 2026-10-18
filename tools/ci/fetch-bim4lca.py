@@ -23,6 +23,7 @@ the models.
 from __future__ import annotations
 
 import hashlib
+import http.client
 import struct
 import sys
 import time
@@ -81,9 +82,13 @@ def fetch(url: str, start: int, end: int, total: int) -> bytes:
         except urllib.error.HTTPError as error:
             if error.code in (404, 410):
                 raise Stale(f"the host answered {error.code}: the archive is gone")
+            if error.code == 416:
+                raise Stale(f"the host has no bytes {start}-{end}: the archive is shorter than the pinned {total}")
             last = error
             time.sleep(10 * (attempt + 1))
-        except (urllib.error.URLError, OSError) as error:
+        # A connection dropped mid-body raises http.client.IncompleteRead,
+        # which is not an OSError.
+        except (urllib.error.URLError, OSError, http.client.HTTPException) as error:
             last = error
             time.sleep(10 * (attempt + 1))
     raise Unreachable(f"{url}: {last}")
