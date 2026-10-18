@@ -61,14 +61,18 @@ def numbered(names):
 def main(argv):
     if len(argv) < 3:
         raise SystemExit(__doc__)
+    # Each file stays bound while its instances are in use: IfcOpenShell 0.9
+    # frees a file its instances outlive (#773).
+    revit_file = ifcopenshell.open(argv[1])
     revit = {
         wall.Tag: association(ifcopenshell.util.element.get_material(wall))
-        for wall in ifcopenshell.open(argv[1]).by_type("IfcWall")
+        for wall in revit_file.by_type("IfcWall")
     }
     for path in argv[2:]:
         classes = collections.Counter()
         rule = collections.Counter()
-        for wall in ifcopenshell.open(path).by_type("IfcWall"):
+        model = ifcopenshell.open(path)
+        for wall in model.by_type("IfcWall"):
             want = revit.get(wall.Tag)
             if want is None:
                 continue

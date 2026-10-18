@@ -23,6 +23,7 @@ Needs IfcOpenShell (tested with 0.8.5).
 """
 
 import collections
+import re
 import sys
 
 import ifcopenshell
@@ -32,6 +33,18 @@ import ifcopenshell.util.placement
 import wall_layers_vs_ifc as layers
 
 TOLERANCES = (0.001, 0.01, 0.1)
+
+
+MESH_ERRORS = set()
+
+
+def report_mesh_error(error):
+    """Print each distinct reason IfcOpenShell gives for not meshing an element, once (#773)."""
+    text = (str(error).strip().splitlines() or [""])[0]
+    message = f"{type(error).__name__}: {re.sub(r'#[0-9]+', '#N', text)[:200]}"
+    if message not in MESH_ERRORS:
+        MESH_ERRORS.add(message)
+        print(f"IfcOpenShell cannot mesh: {message}")
 
 
 def layer_ends(doc, blob):
@@ -80,8 +93,9 @@ def main():
             continue
         try:
             shape = ifcopenshell.geom.create_shape(settings, wall)
-        except Exception:
+        except Exception as error:
             counts["IfcOpenShell cannot mesh the IFC wall"] += 1
+            report_mesh_error(error)
             continue
         verts = shape.geometry.verts
         theirs = [to_internal(verts[i], verts[i + 1]) for i in range(0, len(verts), 3)]

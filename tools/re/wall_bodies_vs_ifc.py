@@ -33,6 +33,7 @@ import collections
 import importlib.util
 import math
 import os
+import re
 import sys
 
 import ifcopenshell
@@ -46,6 +47,18 @@ _spec = importlib.util.spec_from_file_location(
 )
 layers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(layers)
+
+
+MESH_ERRORS = set()
+
+
+def report_mesh_error(error):
+    """Print each distinct reason IfcOpenShell gives for not meshing an element, once (#773)."""
+    text = (str(error).strip().splitlines() or [""])[0]
+    message = f"{type(error).__name__}: {re.sub(r'#[0-9]+', '#N', text)[:200]}"
+    if message not in MESH_ERRORS:
+        MESH_ERRORS.add(message)
+        print(f"IfcOpenShell cannot mesh: {message}")
 
 
 def wall_points(doc, blob):
@@ -146,8 +159,9 @@ def main():
             continue
         try:
             shape = ifcopenshell.geom.create_shape(settings, wall)
-        except Exception:
+        except Exception as error:
             stats["IfcOpenShell cannot mesh the IFC wall"] += 1
+            report_mesh_error(error)
             continue
         verts = shape.geometry.verts
         theirs = [to_internal(verts[i], verts[i + 1]) for i in range(0, len(verts), 3)]
