@@ -52,10 +52,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
-          components: rustfmt
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update --component rustfmt
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -65,10 +69,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
-          components: clippy
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update --component clippy
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -139,9 +147,16 @@ jobs:
         with:
           repository: phi-ag/rvt
           path: _corpus
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: ${{ matrix.rust }}
+      - name: Install Rust
+        shell: bash
+        env:
+          TOOLCHAIN: ${{ matrix.rust }}
+        run: |
+          rustup toolchain install "$TOOLCHAIN" --profile minimal --no-self-update
+          rustup default "$TOOLCHAIN"
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       # sccache on Windows only (C2). There rust-cache saves the checkout's
       # target directory while the dev drive builds into its own, so sccache
       # is what keeps compiled units (95% hits). On Linux and macOS it hit 0
@@ -268,9 +283,14 @@ jobs:
         with:
           path: _bim4lca
           key: ${{ steps.bim4lca-cache.outputs.cache-primary-key }}
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
@@ -315,9 +335,14 @@ jobs:
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
@@ -357,9 +382,14 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
@@ -548,9 +578,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -577,9 +612,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
@@ -617,9 +657,14 @@ jobs:
       # A dated nightly (C2): the toolchain is part of rust-cache's key, so
       # a floating nightly saved a new cache every day and restored none.
       # Move the date forward when docs.rs needs a newer feature.
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: nightly-2026-10-01
+      - name: Install Rust nightly-2026-10-01
+        shell: bash
+        run: |
+          rustup toolchain install nightly-2026-10-01 --profile minimal --no-self-update
+          rustup default nightly-2026-10-01
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -661,9 +706,14 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
@@ -744,9 +794,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       # install-action retries the download and verifies its checksum;
       # cargo-deny-action's image fetched the release with a bare
       # `curl --silent -L` and failed the check when GitHub returned an
@@ -768,9 +823,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
       - name: Install cargo-audit
         uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:

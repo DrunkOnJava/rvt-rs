@@ -29,6 +29,12 @@ All notable changes will be documented here. This project follows
   0.9.0.post1 (runs 39153682389 and 39153684706; only the export timings
   differ), walls included, which 0.9.0 could not mesh. So the pin moves, and
   Dependabot proposes IfcOpenShell's minor releases again.
+- **CI installs Rust with rustup (#765).** Every workflow's toolchain step
+  now runs `rustup toolchain install` itself, with the components and targets
+  its job needs, instead of the third-party `dtolnay/rust-toolchain` action.
+  That action's `stable` and `nightly` branches are force-pushed, so its pins
+  went stale and zizmor flagged them, and GitHub's runners already ship
+  rustup.
 
 ### Fixed
 
