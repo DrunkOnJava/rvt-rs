@@ -87,6 +87,8 @@ mod iter_elements_typed;
 mod json_schema_contracts;
 #[path = "../level_names.rs"]
 mod level_names;
+#[path = "../level_parameters.rs"]
+mod level_parameters;
 #[path = "../level_shared_elevation.rs"]
 mod level_shared_elevation;
 #[path = "../mep_connections.rs"]

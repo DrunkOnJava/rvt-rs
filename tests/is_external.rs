@@ -22,7 +22,7 @@ const SETS: [&str; 2] = ["Pset_DoorCommon", "Pset_SlabCommon"];
 type Values = BTreeMap<(String, String), String>;
 
 /// `#id -> (entity, args)` for every line of a STEP file.
-fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
+pub(crate) fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
     let mut out = BTreeMap::new();
     for line in step.lines() {
         let Some(rest) = line.strip_prefix('#') else {
@@ -44,7 +44,7 @@ fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
 }
 
 /// Split a STEP argument list on top-level commas.
-fn split_args(args: &str) -> Vec<String> {
+pub(crate) fn split_args(args: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current = String::new();
     let (mut quoted, mut depth) = (false, 0usize);
@@ -74,7 +74,7 @@ fn reference(field: &str) -> Option<u64> {
     field.trim().strip_prefix('#')?.parse().ok()
 }
 
-fn list(field: &str) -> Vec<u64> {
+pub(crate) fn list(field: &str) -> Vec<u64> {
     split_args(field.trim().trim_start_matches('(').trim_end_matches(')'))
         .iter()
         .filter_map(|f| reference(f))
