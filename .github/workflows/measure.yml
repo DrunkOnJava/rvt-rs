@@ -256,12 +256,13 @@ jobs:
             [ -d measure-base ] && echo "base: $(cat measure-base/commit.txt)"
             echo
             if [ -d measure-base ]; then
-              echo "### Models whose IFC differs (export time ignored)"
+              echo "### Models and samples whose IFC differs (export time ignored)"
               echo
               for d in measure-head/*/; do
                 m=$(basename "$d")
                 [ -f "$d/ifc.sha256" ] || continue
-                if cmp -s "$d/ifc.sha256" "measure-base/$m/ifc.sha256"; then echo "- $m: identical"; else echo "- $m: **differs**"; fi
+                if [ ! -f "measure-base/$m/ifc.sha256" ]; then echo "- $m: no base hash"
+                elif cmp -s "$d/ifc.sha256" "measure-base/$m/ifc.sha256"; then echo "- $m: identical"; else echo "- $m: **differs**"; fi
               done
               echo
               echo "### Files whose rvt-info output differs (models and families)"
