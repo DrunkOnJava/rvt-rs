@@ -376,6 +376,18 @@ pub fn recover_partition_schema_mvp(
     ] {
         attach_family_and_type_names(rf, elements);
     }
+    // --- The phase each element was created in (spike 257) ---
+    attach_phases_created(
+        rf,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ],
+    );
     // --- Pipes' types, which have no name entry (RE-130) ---
     attach_pipe_type_names(rf, &mut out.products);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
@@ -4408,6 +4420,30 @@ fn attach_type_functions(
                     signed: false,
                     size: 4,
                 },
+            ));
+        }
+    }
+}
+
+/// Field carrying the name of the phase an element was created in
+/// ([`crate::partition_phases`], spike 257).
+pub const PHASE_CREATED_FIELD: &str = "m_phase_created";
+
+/// Give each element the one phase its record's reference list names
+/// ([`crate::partition_phases::phase_created`]).
+fn attach_phases_created(rf: &mut RevitFile, groups: [&mut Vec<DecodedElement>; 6]) {
+    let phases = crate::partition_phases::phase_names(rf).unwrap_or_default();
+    if phases.is_empty() {
+        return;
+    }
+    for element in groups.into_iter().flat_map(|group| group.iter_mut()) {
+        let Some((references, _)) = record_references(rf, element) else {
+            continue;
+        };
+        if let Some((_, name)) = crate::partition_phases::phase_created(&references, &phases) {
+            element.fields.push((
+                PHASE_CREATED_FIELD.into(),
+                InstanceField::String(name.into()),
             ));
         }
     }

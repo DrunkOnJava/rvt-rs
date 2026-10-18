@@ -208,6 +208,7 @@ pub mod partition_materials;
 pub mod partition_mep_systems;
 pub mod partition_name_candidates;
 pub mod partition_names;
+pub mod partition_phases;
 pub mod partition_pipe_axes;
 pub mod partition_roof_slopes;
 pub mod partition_room_boundaries;

@@ -1,0 +1,3 @@
+# IfcOpenShell for the schema checks: CI's IfcOpenShell job and Measure.
+# Dependabot proposes updates (.github/dependabot.yml).
+ifcopenshell==0.8.5

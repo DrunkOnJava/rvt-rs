@@ -8,6 +8,10 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Release binaries carry their dependency list (C10).** Each binary of a
+  GitHub release is built with `cargo auditable`, which embeds the crates
+  and versions it was built from, so `cargo audit bin` and other scanners
+  can check a downloaded binary against the RustSec advisories.
 - **Every join of an MEP model is read from its family instances' connectors
   (B86).** A family instance's native `Connector` objects list the elements
   joined to each connector (RE-171), so the export writes those joins
@@ -275,6 +279,12 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **`ElemTableHeader::record_count` is the `u32` the table states (#745).** It
+  kept the low 16 bits of the count at `0x02`, on the claim that no table
+  holds 65,536 records, but a Nordic LCA office project's states 72,798.
+  `rvt-elem-table` then reported 7,262 declared records, and the implicit
+  fallback layout parsed only that many. The field is now a `u32`, and both
+  layouts take their record limit from the same count.
 - **Snowdon Towers exports its elements again (#736).** The record
   size `elem_table::detect_layout` picks is the one at which the stated
   records fit from `0x06` with ids rising. It tested the first id, but on
