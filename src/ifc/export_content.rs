@@ -158,6 +158,8 @@ pub(crate) fn is_distribution_element(ifc_type: &str) -> bool {
                 | "IFCPIPEFITTING"
                 | "IFCAIRTERMINAL"
                 | "IFCSANITARYTERMINAL"
+                | "IFCWASTETERMINAL"
+                | "IFCFIRESUPPRESSIONTERMINAL"
                 | "IFCLIGHTFIXTURE"
                 | "IFCELECTRICAPPLIANCE"
                 | "IFCALARM"
@@ -1390,6 +1392,8 @@ fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> 
         | "IFCPIPEFITTING"
         | "IFCAIRTERMINAL"
         | "IFCSANITARYTERMINAL"
+        | "IFCWASTETERMINAL"
+        | "IFCFIRESUPPRESSIONTERMINAL"
         | "IFCLIGHTFIXTURE"
         | "IFCELECTRICAPPLIANCE" => &[("Pset_DistributionFlowElementCommon", true)],
         // IfcFurnishingElement and IfcDistributionControlElement in Revit's.

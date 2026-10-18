@@ -464,6 +464,16 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// (with `CLADDING`) are. The override's own predefined type replaces the
 /// target's default when it is an enumerator of that entity
 /// ([`predefined_type_for`]).
+///
+/// #792 adds five targets, proven on the two BIM4LCA office files (Revit
+/// 2024) against Revit's export of each: `IfcWasteTerminal` on 78 plumbing
+/// fixtures whose types carry `IfcWasteTerminalType` (Revit writes
+/// `FLOORTRAP` on 62 and `ROOFDRAIN` on 16), `IfcElectricAppliance` on 51
+/// items of electrical equipment, `IfcFireSuppressionTerminal` on 40 items of
+/// specialty equipment (`HOSEREEL`), `IfcSanitaryTerminal` on 15 casework
+/// elements (`WASHHANDBASIN`) and `IfcAirTerminal` on one item of electrical
+/// equipment. Each value's elements are exactly the ones Revit's export
+/// writes as its entity, and their predefined types are the ones it writes.
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
     Mapping {
         revit_class: "IfcShadingDevice",
@@ -480,11 +490,39 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCCOVERING",
         predefined_type: Some("NOTDEFINED"),
     },
+    Mapping {
+        revit_class: "IfcWasteTerminal",
+        ifc_type: "IFCWASTETERMINAL",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcElectricAppliance",
+        ifc_type: "IFCELECTRICAPPLIANCE",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcFireSuppressionTerminal",
+        ifc_type: "IFCFIRESUPPRESSIONTERMINAL",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcSanitaryTerminal",
+        ifc_type: "IFCSANITARYTERMINAL",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcAirTerminal",
+        ifc_type: "IFCAIRTERMINAL",
+        predefined_type: Some("NOTDEFINED"),
+    },
 ];
 
 /// IFC4 `PredefinedType` enumerators of the entities an export override
 /// can name, as the IFC4 schema lists them (`IfcSlabTypeEnum`,
-/// `IfcCoveringTypeEnum`, `IfcShadingDeviceTypeEnum`, `IfcRoofTypeEnum`).
+/// `IfcCoveringTypeEnum`, `IfcShadingDeviceTypeEnum`, `IfcRoofTypeEnum`,
+/// `IfcWasteTerminalTypeEnum`, `IfcElectricApplianceTypeEnum`,
+/// `IfcFireSuppressionTerminalTypeEnum`, `IfcSanitaryTerminalTypeEnum`,
+/// `IfcAirTerminalTypeEnum`).
 const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
     (
         "IFCSLAB",
@@ -534,6 +572,83 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
             "PAVILION_ROOF",
             "DOME_ROOF",
             "FREEFORM",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCWASTETERMINAL",
+        &[
+            "FLOORTRAP",
+            "FLOORWASTE",
+            "GULLYSUMP",
+            "GULLYTRAP",
+            "ROOFDRAIN",
+            "WASTEDISPOSALUNIT",
+            "WASTETRAP",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCELECTRICAPPLIANCE",
+        &[
+            "DISHWASHER",
+            "ELECTRICCOOKER",
+            "FREESTANDINGELECTRICHEATER",
+            "FREESTANDINGFAN",
+            "FREESTANDINGWATERHEATER",
+            "FREESTANDINGWATERCOOLER",
+            "FREEZER",
+            "FRIDGE_FREEZER",
+            "HANDDRYER",
+            "KITCHENMACHINE",
+            "MICROWAVE",
+            "PHOTOCOPIER",
+            "REFRIGERATOR",
+            "TUMBLEDRYER",
+            "VENDINGMACHINE",
+            "WASHINGMACHINE",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCFIRESUPPRESSIONTERMINAL",
+        &[
+            "BREECHINGINLET",
+            "FIREHYDRANT",
+            "HOSEREEL",
+            "SPRINKLER",
+            "SPRINKLERDEFLECTOR",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCSANITARYTERMINAL",
+        &[
+            "BATH",
+            "BIDET",
+            "CISTERN",
+            "SHOWER",
+            "SINK",
+            "SANITARYFOUNTAIN",
+            "TOILETPAN",
+            "URINAL",
+            "WASHHANDBASIN",
+            "WCSEAT",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCAIRTERMINAL",
+        &[
+            "DIFFUSER",
+            "GRILLE",
+            "LOUVRE",
+            "REGISTER",
             "USERDEFINED",
             "NOTDEFINED",
         ],
