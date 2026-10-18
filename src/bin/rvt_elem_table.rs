@@ -76,7 +76,7 @@ fn run() -> anyhow::Result<()> {
         #[derive(serde::Serialize)]
         struct Out<'a> {
             element_count: u16,
-            record_count: u16,
+            record_count: u32,
             header_flag: u16,
             decompressed_bytes: usize,
             layout: elem_table::ElemTableLayout,
