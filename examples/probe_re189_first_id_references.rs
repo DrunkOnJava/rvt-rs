@@ -19,6 +19,7 @@
 //!   Interior and the four RE1 models) have no record whose ids differ. The
 //!   probe skips the 28-byte records of Revit 2023 and earlier, whose two ids
 //!   RE-41 found equal on every record.
+//!
 //! So `elem_table::declared_ids` declares a record's current id only.
 //!
 //! For every such record it searches every inflated `Partitions/*` stream in
