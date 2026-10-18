@@ -37,4 +37,4 @@ anyhow = "1"
 [build-dependencies]
 # Adds `-undefined dynamic_lookup` to the cdylib's link on macOS, as maturin
 # does, so a plain `cargo build --workspace` (tools/check-local.sh) links it.
-pyo3-build-config = "0.29"
+pyo3-build-config = "0.30"
