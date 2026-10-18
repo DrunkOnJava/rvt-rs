@@ -6,6 +6,21 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-10-18
+
+A patch release of 0.5.0. An export is named by the model's file name
+instead of the path the model was saved at, which could carry the author's
+account and folder names (#782). crates.io and PyPI show the README packed
+into each version, and 0.5.0's still called 0.4.0 the latest release;
+0.5.1's names the release it ships in.
+
+### Upgrading from 0.5.0
+
+- **A file without a PartAtom title, as most projects are, exports under its
+  file name** (#782): the `IfcProject`'s Name, the IFC header's `FILE_NAME`,
+  the glTF scene root and the diagnostics' `project_name` were its original
+  path, folders included.
+
 ### Fixed
 
 - **An export names the model by its file name, not the path it was saved
@@ -16,6 +31,15 @@ All notable changes will be documented here. This project follows
   project node, and the export diagnostics' `project_name`, which skipped the
   redaction their `original_path` gets. It is now the file name without its
   extension: RE1 Architecture's export is named `RE1`.
+- **The README names the release it ships in.** The release pull request now
+  moves the README's release section before the tag (`RELEASE.md`, step 8),
+  since a published version's README can never be edited; the channel checks
+  still follow in the post-release pull request.
+
+### Changed
+
+- **serde_json 1.0.154** (#776), a patch update in the lockfile the CLI
+  archives, the wheels and the container image are built from.
 
 ### Research
 

@@ -98,8 +98,13 @@ project treats a silent skipped step the same as an untested change.
    version. This keeps release-please in sync even though the workflow
    isn't yet wired up (see [Release automation](#release-automation)).
 8. **Open the release pull request,** `chore(release): prepare vX.Y.Z`,
-   with steps 4 to 7. `main` takes changes only through pull requests,
-   so the release metadata lands like any other change. The IFC header
+   with steps 4 to 7 and the README's release section
+   (`## Release X.Y.Z and main`) moved to the new version. crates.io and
+   PyPI show the README packed into each version, which can never be
+   edited once it is published, so it names the release it ships in; it
+   states no channel checks, which come after (Post-release). `main`
+   takes changes only through pull requests, so the release metadata
+   lands like any other change. The IFC header
    carries the version (#417), so both Core Interior `rvt-rs.json`
    witness observations and their verdicts change: take them from the
    pull request's CI run (its `octetproof-core-interior` artifact) and
@@ -184,9 +189,10 @@ docs on docs.rs blocking adoption) surfaces between releases:
 
 - **Update the docs.** Once every channel has been checked from what was
   published ([Post-Publish Install Verification](#post-publish-install-verification)),
-  a pull request moves the latest-release statements to the new version:
-  `docs/install.md`, `docs/python.md`, `docs/status.md`,
-  `docs/supported-profile.md` and the README's release section.
+  a pull request moves the other latest-release statements to the new
+  version and records the checks: `docs/install.md`, `docs/python.md`,
+  `docs/status.md`, `docs/supported-profile.md` and `ROADMAP.md`. The
+  README's release section moved in the release pull request (step 8).
 - **Monitor `docs.rs`.** The docs build is async and often trails the
   `cargo publish` by several minutes. If it fails, the package page
   shows a red banner; triage the build log and cut a `PATCH` with the
