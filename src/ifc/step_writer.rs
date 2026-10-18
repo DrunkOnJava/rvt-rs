@@ -325,14 +325,14 @@ impl StepWriter {
     /// `IfcPropertySet` holding them (GlobalId `set_gid`) and the
     /// `IfcRelDefinesByProperties` (GlobalId `rel_gid`) relating it to
     /// `object`.
-    fn emit_property_set(
+    /// Emit a property set and its properties, with no relationship: the
+    /// set id, for a type object's `HasPropertySets`.
+    fn emit_bare_property_set(
         &mut self,
         owner_hist: usize,
-        object: usize,
         pset: &PropertySet,
         set_gid: &str,
-        rel_gid: &str,
-    ) {
+    ) -> usize {
         let mut prop_ids: Vec<usize> = Vec::with_capacity(pset.properties.len());
         for prop in &pset.properties {
             let p_id = self.id();
@@ -357,6 +357,18 @@ impl StepWriter {
             set_id,
             format!("IFCPROPERTYSET('{set_gid}',#{owner_hist},'{set_name}',$,({refs}))"),
         );
+        set_id
+    }
+
+    fn emit_property_set(
+        &mut self,
+        owner_hist: usize,
+        object: usize,
+        pset: &PropertySet,
+        set_gid: &str,
+        rel_gid: &str,
+    ) {
+        let set_id = self.emit_bare_property_set(owner_hist, pset, set_gid);
         let rel_id = self.id();
         self.emit_entity(
             rel_id,
@@ -2894,6 +2906,28 @@ impl StepWriter {
             global_id: Option<String>,
             first_element: u32,
             elements: Vec<usize>,
+            family: String,
+            type_name: String,
+            category: Option<String>,
+        }
+        // Spike 257: the Category an element's `Other` set names, which its
+        // type object's own `Other` set repeats, as Revit writes it.
+        let mut categories: HashMap<usize, String> = HashMap::new();
+        for entity in &model.entities {
+            let super::entities::IfcEntity::ElementPropertySet { element, set } = entity else {
+                continue;
+            };
+            if set.name != super::export_content::REVIT_OTHER_SET {
+                continue;
+            }
+            if let Some(super::entities::PropertyValue::Label(category)) = set
+                .properties
+                .iter()
+                .find(|p| p.name == "Category")
+                .map(|p| &p.value)
+            {
+                categories.insert(*element, category.clone());
+            }
         }
         let mut type_groups: Vec<TypeGroup> = Vec::new();
         for (entity_idx, entity) in model.entities.iter().enumerate() {
@@ -2963,6 +2997,9 @@ impl StepWriter {
                     type_id: *type_id,
                     entity: entity_name,
                     name: format!("{family}:{type_name}"),
+                    category: categories.get(&entity_idx).cloned(),
+                    family,
+                    type_name,
                     tail,
                     predefined: predefined_type
                         .as_deref()
@@ -3000,6 +3037,9 @@ impl StepWriter {
                 predefined,
                 global_id,
                 elements,
+                family,
+                type_name,
+                category,
                 ..
             },
         ) in type_groups.iter().enumerate()
@@ -3026,12 +3066,47 @@ impl StepWriter {
                 Some(global_id) if used_gids.insert(global_id.clone()) => global_id,
                 _ => gid(&["type", entity_name, &tag]),
             };
+            // Spike 257: Revit's type parameters Category, Family Name and
+            // Type Name, in the sets Revit's export gives a type object.
+            let text = |name: &str, value: String| super::entities::Property {
+                name: name.into(),
+                value: super::entities::PropertyValue::Text(value),
+            };
+            let mut other = Vec::new();
+            if let Some(category) = category {
+                other.push(super::entities::Property {
+                    name: "Category".into(),
+                    value: super::entities::PropertyValue::Label(category.clone()),
+                });
+            }
+            other.push(text("Family Name", family.clone()));
+            let type_sets = [
+                PropertySet {
+                    name: super::export_content::REVIT_OTHER_SET.into(),
+                    properties: other,
+                },
+                PropertySet {
+                    name: "Identity Data".into(),
+                    properties: vec![text("Type Name", type_name.clone())],
+                },
+            ];
+            let set_ids: Vec<String> = type_sets
+                .iter()
+                .map(|set| {
+                    let set_gid = gid(&["type-pset", &type_gid, &set.name]);
+                    format!(
+                        "#{}",
+                        self.emit_bare_property_set(owner_hist, set, &set_gid)
+                    )
+                })
+                .collect();
             let type_el_id = self.id();
             self.emit_entity(
                 type_el_id,
                 format!(
-                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,$,$,'{tag}',$,{tail})",
+                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,({}),$,'{tag}',$,{tail})",
                     quoted_or_dollar(&escape(name)),
+                    set_ids.join(","),
                 ),
             );
             let rel_id = self.id();

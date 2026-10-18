@@ -376,6 +376,18 @@ pub fn recover_partition_schema_mvp(
     ] {
         attach_family_and_type_names(rf, elements);
     }
+    // --- The phase each element was created in (spike 257) ---
+    attach_phases_created(
+        rf,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ],
+    );
     // --- Pipes' types, which have no name entry (RE-130) ---
     attach_pipe_type_names(rf, &mut out.products);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
@@ -508,6 +520,33 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ] {
             attach_type_text_parameters(&type_parameters, elements);
+        }
+    }
+
+    // --- Level parameters from the per-element association record (RE-172),
+    // stairs' Base and Top Level from the same record and the Level named in
+    // the element record's id lists where the field holds none (RE-174) ---
+    let (level_parameters, (level_names, level_elevations)) =
+        crate::partition_level_parameters::level_parameters(rf, revit_version);
+    if !level_names.is_empty() {
+        let mut lists = [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ];
+        for elements in lists.iter_mut() {
+            for element in elements.iter_mut() {
+                attach_level_parameters(
+                    rf,
+                    element,
+                    &level_parameters,
+                    &level_names,
+                    &level_elevations,
+                );
+            }
         }
     }
 
@@ -4386,6 +4425,30 @@ fn attach_type_functions(
     }
 }
 
+/// Field carrying the name of the phase an element was created in
+/// ([`crate::partition_phases`], spike 257).
+pub const PHASE_CREATED_FIELD: &str = "m_phase_created";
+
+/// Give each element the one phase its record's reference list names
+/// ([`crate::partition_phases::phase_created`]).
+fn attach_phases_created(rf: &mut RevitFile, groups: [&mut Vec<DecodedElement>; 6]) {
+    let phases = crate::partition_phases::phase_names(rf).unwrap_or_default();
+    if phases.is_empty() {
+        return;
+    }
+    for element in groups.into_iter().flat_map(|group| group.iter_mut()) {
+        let Some((references, _)) = record_references(rf, element) else {
+            continue;
+        };
+        if let Some((_, name)) = crate::partition_phases::phase_created(&references, &phases) {
+            element.fields.push((
+                PHASE_CREATED_FIELD.into(),
+                InstanceField::String(name.into()),
+            ));
+        }
+    }
+}
+
 /// Field carrying an element's value of the shared parameter `Serial Number`
 /// (RE-156).
 pub const SERIAL_NUMBER_FIELD: &str = "m_serial_number";
@@ -7246,6 +7309,142 @@ pub fn column_instances_from_records(
             decoded
         })
         .collect()
+}
+
+/// Field naming the Level of an element whose record names it in an id list
+/// (RE-174), rather than in the association record.
+pub const LEVEL_FROM_LIST_FIELD: &str = "m_level_parameter_from_list";
+
+/// Field naming the highest of the several Levels an element's record names
+/// in its id lists: a beam's or brace's Reference Level (RE-175).
+pub const REFERENCE_LEVEL_FROM_LIST_FIELD: &str = "m_reference_level_from_list";
+
+/// Give `element` its level fields (RE-172, RE-174, RE-175, RE-176).
+fn attach_level_parameters(
+    rf: &mut RevitFile,
+    element: &mut DecodedElement,
+    parameters: &BTreeMap<u32, crate::partition_level_parameters::LevelParameters>,
+    names: &BTreeMap<u32, String>,
+    elevations: &BTreeMap<u32, f64>,
+) {
+    use crate::partition_level_parameters as lp;
+    let found = element
+        .id
+        .and_then(|id| parameters.get(&id))
+        // A stair's record is read as a stair's only for a stair.
+        .filter(|p| p.stair.is_none() || element.class == "Stair");
+    let push = |element: &mut DecodedElement, name: &str, value: String| {
+        element
+            .fields
+            .push((name.into(), InstanceField::String(value)));
+    };
+    if let Some(found) = found {
+        if let Some(level) = &found.level {
+            push(element, lp::LEVEL_PARAMETER_FIELD, level.clone());
+        }
+        if let Some(top) = &found.top {
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, top.clone());
+        }
+        if let Some((_, top)) = &found.stair {
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, top.clone());
+        }
+        return;
+    }
+    // The Level an element names in its record's id lists (RE-174): the
+    // second list's if it names any, else the first's, if exactly one
+    // recovered Level is named. A beam or brace naming more than one also
+    // lists the Level(s) below its own: its Reference Level is the highest
+    // (RE-175), kept apart as it is proven for those classes only.
+    let (Some(stream), Some(offset)) = (
+        element.fields.iter().find_map(|(n, v)| match v {
+            InstanceField::String(s) if n == "m_source_stream" => Some(s.clone()),
+            _ => None,
+        }),
+        element.fields.iter().find_map(|(n, v)| match v {
+            InstanceField::Integer { value, .. } if n == "m_source_offset" => {
+                usize::try_from(*value).ok()
+            }
+            _ => None,
+        }),
+    ) else {
+        return;
+    };
+    let Ok(inflated) = rf.inflated_partition(&stream) else {
+        return;
+    };
+    let buf = inflated.bytes();
+    let at = offset + crate::partition_element_records::REFERENCE_LIST_OFFSET;
+    let Some(first) = crate::partition_element_records::decode_reference_list(buf, at) else {
+        return;
+    };
+    let second = at
+        .checked_add(4 + first.len() * 8)
+        .and_then(|at| crate::partition_element_records::decode_reference_list(buf, at))
+        .unwrap_or_default();
+    let ids: BTreeSet<u32> = names.keys().copied().collect();
+    let mut named = crate::element_record_level_refs::named_levels(&second, &ids);
+    if named.is_empty() {
+        named = crate::element_record_level_refs::named_levels(&first, &ids);
+    }
+    if named.len() > 1 && element.class == "Stair" {
+        // A stair whose association record gives no Base and Top Level
+        // lists them, and at most the Level above its top (RE-176).
+        if let Some((base, top)) = stair_levels_from_list(&named, elevations) {
+            push(element, lp::LEVEL_PARAMETER_FIELD, names[&base].clone());
+            push(element, lp::TOP_LEVEL_PARAMETER_FIELD, names[&top].clone());
+            element
+                .fields
+                .push((LEVEL_FROM_LIST_FIELD.into(), InstanceField::Bool(true)));
+        }
+        return;
+    }
+    if named.len() > 1 {
+        if let Some(level) = highest_level(&named, elevations) {
+            push(
+                element,
+                REFERENCE_LEVEL_FROM_LIST_FIELD,
+                names[&level].clone(),
+            );
+        }
+        return;
+    }
+    if let [only] = named[..] {
+        push(element, lp::LEVEL_PARAMETER_FIELD, names[&only].clone());
+        element
+            .fields
+            .push((LEVEL_FROM_LIST_FIELD.into(), InstanceField::Bool(true)));
+    }
+}
+
+/// A stair's Base and Top Level from the Levels its record lists: the
+/// lowest and the next above it (RE-176). `None` unless every named Level
+/// has an elevation and the lowest three are at distinct elevations.
+fn stair_levels_from_list(named: &[u32], elevations: &BTreeMap<u32, f64>) -> Option<(u32, u32)> {
+    let mut by_height: Vec<(f64, u32)> = named
+        .iter()
+        .map(|id| Some((*elevations.get(id)?, *id)))
+        .collect::<Option<_>>()?;
+    by_height.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let above = |low: f64, high: f64| high - low > 1e-6;
+    match by_height[..] {
+        [(b, base), (t, top)] if above(b, t) => Some((base, top)),
+        [(b, base), (t, top), (n, _), ..] if above(b, t) && above(t, n) => Some((base, top)),
+        _ => None,
+    }
+}
+
+/// The Level of `named` with the highest elevation; `None` unless every
+/// named Level has an elevation and the highest is unique (RE-175).
+fn highest_level(named: &[u32], elevations: &BTreeMap<u32, f64>) -> Option<u32> {
+    let mut by_height: Vec<(f64, u32)> = named
+        .iter()
+        .map(|id| Some((*elevations.get(id)?, *id)))
+        .collect::<Option<_>>()?;
+    by_height.sort_by(|a, b| b.0.total_cmp(&a.0));
+    match by_height[..] {
+        [(top, id), (next, _), ..] if top - next > 1e-6 => Some(id),
+        _ => None,
+    }
 }
 
 /// Field recording where a column's bottom came from, when not its record.

@@ -676,7 +676,8 @@ pub fn append_typed_production_elements(
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
-        let serial_sets = serial_number_property_sets(&decoded, &ifc_type);
+        let mut serial_sets = serial_number_property_sets(&decoded, &ifc_type);
+        serial_sets.extend(revit_parameter_property_sets(&decoded));
         // RE-151: the name of the openings of a floor's tagged voids.
         // B55: the openings a wall's edited elevation profile cuts, in the
         // wall's plane relative to its placement.
@@ -735,6 +736,7 @@ pub fn append_typed_production_elements(
                 _ => format!("Opening for {name}"),
             }
         });
+        let level_set = level_parameter_property_set(&decoded, &ifc_type);
         entities.push(entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -797,6 +799,14 @@ pub fn append_typed_production_elements(
                     thickness_feet,
                 });
             }
+        }
+        // RE-172: the Level parameters, in the `Constraints` set Revit's
+        // export writes them in.
+        if let Some(set) = level_set {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set,
+            });
         }
         // RE-47: a stair's or flight's riser and tread dimensions, in the
         // standard set Revit's export writes them in.
@@ -1249,6 +1259,67 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
     })
 }
 
+/// Revit's `Constraints` properties for the Level an element's association
+/// record names (RE-172), under the names Revit's export uses for its class.
+fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Option<PropertySet> {
+    use crate::partition_level_parameters as lp;
+    let text = |wanted: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(v) if name == wanted => Some(v.clone()),
+            _ => None,
+        })
+    };
+    let (level, from_list) = match text(lp::LEVEL_PARAMETER_FIELD) {
+        Some(level) => (
+            level,
+            decoded.fields.iter().any(|(name, value)| {
+                name == crate::partition_schema_mvp::LEVEL_FROM_LIST_FIELD
+                    && matches!(value, InstanceField::Bool(true))
+            }),
+        ),
+        // The highest of several listed Levels is the Reference Level of a
+        // beam or brace only (RE-175).
+        None if matches!(ifc_type, "IFCBEAM" | "IFCMEMBER") => (
+            text(crate::partition_schema_mvp::REFERENCE_LEVEL_FROM_LIST_FIELD)?,
+            true,
+        ),
+        None => return None,
+    };
+    let names: &[&str] = match ifc_type {
+        "IFCBEAM" => &["Reference Level"],
+        "IFCMEMBER" if from_list => &["Reference Level"],
+        "IFCWALL" | "IFCCURTAINWALL" => &["Base Constraint"],
+        "IFCCOLUMN" => &["Base Level", "Level"],
+        "IFCRAILING" | "IFCROOF" | "IFCSTAIR" => &["Base Level"],
+        "IFCDUCTSEGMENT" | "IFCPIPESEGMENT" => &["Reference Level"],
+        _ => &["Level"],
+    };
+    let mut properties: Vec<Property> = names
+        .iter()
+        .map(|name| Property {
+            name: (*name).into(),
+            value: PropertyValue::Label(level.clone()),
+        })
+        .collect();
+    if let Some(top) = text(lp::TOP_LEVEL_PARAMETER_FIELD) {
+        match ifc_type {
+            "IFCWALL" | "IFCCURTAINWALL" => properties.push(Property {
+                name: "Top Constraint".into(),
+                value: PropertyValue::Label(format!("Up to level: {top}")),
+            }),
+            "IFCSTAIR" => properties.push(Property {
+                name: "Top Level".into(),
+                value: PropertyValue::Label(top),
+            }),
+            _ => {}
+        }
+    }
+    Some(PropertySet {
+        name: "Constraints".into(),
+        properties,
+    })
+}
+
 /// `Pset_StairCommon` for a stair and `Pset_StairFlightCommon` for a
 /// flight, holding the number of risers, riser height and tread length
 /// their data records (RE-47), with the measure types those standard sets
@@ -1347,6 +1418,67 @@ fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> 
 /// Number` in (RE-156): `Pset_ManufacturerOccurrence`, and on a
 /// building-element proxy also `Pset_PrecastConcreteElementGeneral`, each
 /// with `SerialNumber` (`IfcIdentifier`). Empty when the element has none.
+/// The set Revit's own IFC export writes an element's Category, family and
+/// type in, and its type object's Category and Family Name (spike 257).
+pub const REVIT_OTHER_SET: &str = "Other";
+
+/// The parameters Revit's own IFC export writes on an element for its
+/// category, family, type and phase, under its set and property names
+/// (spike 257): `Other` (Category, Family, Family and Type, Type, Type Id)
+/// and `Phasing` (Phase Created). Each is written only from a value the
+/// element carries. The type's own parameters (Family Name, Type Name) go on
+/// its type object, as Revit writes them.
+fn revit_parameter_property_sets(decoded: &DecodedElement) -> Vec<PropertySet> {
+    use crate::partition_schema_mvp as mvp;
+    let text = |key: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(v) if name == key => Some(v.clone()),
+            _ => None,
+        })
+    };
+    let label = |name: &str, value: String| Property {
+        name: name.into(),
+        value: PropertyValue::Label(value),
+    };
+    let mut other = Vec::new();
+    if let Some(category) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Integer { value, .. } if name == "m_builtinCategory" => {
+            crate::partition_element_records::builtin_category_name(*value)
+        }
+        _ => None,
+    }) {
+        other.push(label("Category", category.into()));
+    }
+    let type_name = text(mvp::TYPE_NAME_FIELD);
+    if let (Some(family), Some(type_name)) = (text(mvp::FAMILY_NAME_FIELD), &type_name) {
+        other.push(label("Family", family.clone()));
+        other.push(label("Family and Type", format!("{family}: {type_name}")));
+    }
+    if let Some(type_name) = &type_name {
+        other.push(label("Type", type_name.clone()));
+    }
+    if let Some(type_id) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::ElementId { id, .. } if name == mvp::TYPE_ID_FIELD => Some(*id),
+        _ => None,
+    }) {
+        other.push(label("Type Id", type_id.to_string()));
+    }
+    let mut sets = Vec::new();
+    if !other.is_empty() {
+        sets.push(PropertySet {
+            name: REVIT_OTHER_SET.into(),
+            properties: other,
+        });
+    }
+    if let Some(phase) = text(mvp::PHASE_CREATED_FIELD) {
+        sets.push(PropertySet {
+            name: "Phasing".into(),
+            properties: vec![label("Phase Created", phase)],
+        });
+    }
+    sets
+}
+
 fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<PropertySet> {
     use crate::partition_schema_mvp as mvp;
     let serial = decoded

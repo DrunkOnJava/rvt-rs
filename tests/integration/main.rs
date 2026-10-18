@@ -11,6 +11,8 @@
 mod arc_wall_corpus;
 #[path = "../binary_inventory.rs"]
 mod binary_inventory;
+#[path = "../category_type_phase.rs"]
+mod category_type_phase;
 #[path = "../cfb_roundtrip_delta.rs"]
 mod cfb_roundtrip_delta;
 #[path = "../cli_ergonomics.rs"]
@@ -87,6 +89,8 @@ mod iter_elements_typed;
 mod json_schema_contracts;
 #[path = "../level_names.rs"]
 mod level_names;
+#[path = "../level_parameters.rs"]
+mod level_parameters;
 #[path = "../level_shared_elevation.rs"]
 mod level_shared_elevation;
 #[path = "../mep_connections.rs"]
