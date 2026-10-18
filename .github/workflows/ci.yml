@@ -235,6 +235,39 @@ jobs:
           RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
           RE1-Electrical.ifc c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16
           LIST
+      # #766: four Revit 2024 models of VTT's BIM4LCA example buildings and
+      # Revit's IFC export of one (CC BY-SA 4.0), read by byte range from the
+      # 1.58 GB ARCH.zip by tools/ci/fetch-bim4lca.py and checked against
+      # research/bim4lca-models.tsv, so the targets that read
+      # RVT_NORDIC_LCA_DIR run here instead of skipping. Saved on main and
+      # restored by pull requests. RVT_NORDIC_LCA_DIR is set only once every
+      # file verified: an unreachable host leaves it unset, the targets skip
+      # and the step says NOT MEASURED, while a file that no longer matches
+      # its pin fails the job.
+      - name: Restore the BIM4LCA models
+        id: bim4lca-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _bim4lca
+          key: bim4lca-${{ hashFiles('research/bim4lca-models.tsv') }}
+      - name: Fetch the BIM4LCA models (VTT, CC BY-SA 4.0)
+        shell: bash
+        run: |
+          set +e
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-models.tsv _bim4lca
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "RVT_NORDIC_LCA_DIR=${GITHUB_WORKSPACE}/_bim4lca" >> "$GITHUB_ENV" ;;
+            2) echo "::warning::BIM4LCA models NOT MEASURED: the host was unreachable, so the targets that read them skip" ;;
+            *) echo "::error::the BIM4LCA models no longer match research/bim4lca-models.tsv"; exit 1 ;;
+          esac
+      - name: Save the BIM4LCA models
+        if: github.ref == 'refs/heads/main' && steps.bim4lca-cache.outputs.cache-hit != 'true' && env.RVT_NORDIC_LCA_DIR != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _bim4lca
+          key: ${{ steps.bim4lca-cache.outputs.cache-primary-key }}
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable

@@ -6,6 +6,15 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Research
+
+- **The BIM4LCA models are read in CI (#766).** The tier-two job fetches the
+  four Revit 2024 models and the Revit IFC export its targets read from VTT's
+  1.58 GB `ARCH.zip` by byte range (`tools/ci/fetch-bim4lca.py`), each
+  checked against `research/bim4lca-models.tsv`, so the targets that measure
+  #751's level parameters, #752's shared elevations, #753's column bottoms
+  and #757's cut columns on them run on every pull request; they skipped.
+
 ### Fixed
 
 - **Export diagnostics report the file name the model was saved under, not
