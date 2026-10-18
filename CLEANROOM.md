@@ -32,6 +32,20 @@ findings or decoders:
 4. **IFC / buildingSMART specifications.** Freely published by
    buildingSMART International. Fair to use for IFC export
    mapping decisions.
+5. **Autodesk's open-source IFC exporter,
+   [`revit-ifc`](https://github.com/Autodesk/revit-ifc)** (LGPL v2, as
+   its README states), for **what Revit's own IFC export writes**: how
+   it forms an identifier, which entity or relationship it writes for
+   an element, which value it takes. It is an add-in on Revit's public
+   API and documents the export, not the file format, so findings about
+   the bytes of a Revit file still come from sources 1 to 3. Read it,
+   never copy it: cite the file and class, describe the behaviour in
+   your own words, and write the code from that description. Copying or
+   translating its code would bring its licence into this Apache-2.0
+   tree. Constants and short strings the exporter feeds an identifier
+   (a sub-element index, a hash key's wording) may be reproduced where
+   the same identifier needs them. Every such finding is checked
+   against Revit's own export of a real model before it lands.
 
 ## Forbidden sources
 
@@ -72,7 +86,8 @@ contributor confirms the following in the PR description:
 > §Accepted sources]. I have not used Autodesk SDK source, ODA SDK
 > source, leaked internal documentation, NDA material, or
 > decompiled internal Revit implementation code beyond public
-> symbol exports."
+> symbol exports, and I have not copied or translated code from
+> revit-ifc."
 
 A one-sentence equivalent is fine. The point is that the finding's
 provenance is on record.
@@ -106,7 +121,8 @@ forbidden source, the reviewer:
   credible and less likely to invite litigation threats.
 - Downstream users can ship rvt-rs in commercial products
   (Apache-2 license + clean-room provenance = no viral-license
-  risk + no IP-contamination risk).
+  risk + no IP-contamination risk). Reading revit-ifc for what the
+  export writes, and never copying its code, keeps it that way.
 - Contributors who want to work on the project without signing an
   NDA get a clear path.
 
