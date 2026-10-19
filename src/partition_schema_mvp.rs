@@ -445,8 +445,7 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
-    // --- Each element's type Function (RE-158), and a wall's from its native
-    // type record (RE-185) ---
+    // --- Each element's type Function (RE-158) ---
     attach_type_functions(
         rf,
         revit_version,
@@ -459,7 +458,6 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
-    attach_wall_type_functions(rf, revit_version, &mut out.walls);
     // --- Curtain panels that are walls (RE-64) ---
     let mut unnamed_panels: Vec<&mut DecodedElement> = out
         .products
@@ -612,6 +610,17 @@ pub fn recover_partition_schema_mvp(
     attach_door_sizes(rf, revit_version, &mut out.doors);
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
+    // --- A wall's and a curtain panel wall's type Function, from its native
+    // type record (RE-185), after RE-72 has relabelled the panels ---
+    attach_wall_type_functions(
+        rf,
+        revit_version,
+        out.walls.iter_mut().chain(
+            out.products
+                .iter_mut()
+                .filter(|product| product.class == CURTAIN_PANEL_WALL_CLASS),
+        ),
+    );
     // --- IsExternal: the parameters named for it, and Revit's calculation (RE-193) ---
     attach_is_external(
         rf,
@@ -4536,13 +4545,14 @@ fn attach_type_functions(
 /// Releases whose walls' native type Function is measured (RE-185, RE-193).
 pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
-/// Give each wall with no [`TYPE_FUNCTION_FIELD`] its type's Function from
-/// the type's native record ([`crate::native_wall_types`], RE-185). Nothing
-/// on a release not measured, or where the native records are not read.
+/// Give each of `walls` with no [`TYPE_FUNCTION_FIELD`] its type's Function
+/// from the type's native record ([`crate::native_wall_types`], RE-185).
+/// Nothing on a release not measured, or where the native records are not
+/// read.
 fn attach_wall_type_functions(
     rf: &mut RevitFile,
     revit_version: u32,
-    walls: &mut [DecodedElement],
+    walls: impl IntoIterator<Item = &mut DecodedElement>,
 ) {
     if !WALL_TYPE_FUNCTION_REVIT_VERSIONS.contains(&revit_version) {
         return;
@@ -4553,9 +4563,12 @@ fn attach_wall_type_functions(
             .iter()
             .any(|(name, _)| name == TYPE_FUNCTION_FIELD)
     };
+    let mut walls: Vec<&mut DecodedElement> = walls
+        .into_iter()
+        .filter(|element| !has_function(element))
+        .collect();
     let ids: BTreeSet<u64> = walls
         .iter()
-        .filter(|element| !has_function(element))
         .filter_map(|element| element.id.map(u64::from))
         .collect();
     if ids.is_empty() {
@@ -4565,9 +4578,6 @@ fn attach_wall_type_functions(
         return;
     };
     for element in walls.iter_mut() {
-        if has_function(element) {
-            continue;
-        }
         if let Some(&function) = element.id.and_then(|id| functions.get(&u64::from(id))) {
             element.fields.push((
                 TYPE_FUNCTION_FIELD.into(),
@@ -4603,6 +4613,7 @@ pub const IS_EXTERNAL_FIELD: &str = "m_is_external";
 const IS_EXTERNAL_FUNCTION_CLASSES: &[&str] = &[
     "Wall",
     CURTAIN_WALL_CLASS,
+    CURTAIN_PANEL_WALL_CLASS,
     "Door",
     "Window",
     "Floor",
