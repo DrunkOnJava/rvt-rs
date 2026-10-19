@@ -12,8 +12,12 @@
 //! (`Family:Type:ElementId`) as Revit's, each of Revit's `Reference` values
 //! must be in rvt-rs's export too, in that IFC4 set, with Revit's value type,
 //! and rvt-rs must write no `Reference` Revit does not on an element both
-//! exports hold. An element Revit's export does not hold at all is the
-//! element scorers' concern, not this one's.
+//! exports hold: in a set Revit's export has, its value; in an IFC4 set that
+//! has no IFC2X3 counterpart on the element (an alarm's `Pset_AlarmTypeCommon`,
+//! where Revit's IFC2X3 export writes an `IfcDistributionControlElement`), one
+//! of the `Reference` values Revit's export gives the element. An element
+//! Revit's export does not hold at all is the element scorers' concern, not
+//! this one's.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: the four `RE1-*.rvt` models with
 //! their `RE1-*.ifc` exports. Skips what is absent.
@@ -236,7 +240,14 @@ fn re1_common_references_are_revits() {
                 .filter_map(|(set, value)| Some((ifc4_set(set, &element.written)?, value)))
                 .collect();
             for (set, value) in &element.references {
-                if revit_references.get(set.as_str()) != Some(&value) {
+                let held = match revit_references.get(set.as_str()) {
+                    Some(revit_value) => *revit_value == value,
+                    None => revit
+                        .references
+                        .values()
+                        .any(|revit_value| revit_value == value),
+                };
+                if !held {
                     wrong.push((
                         tag.clone(),
                         set.clone(),
