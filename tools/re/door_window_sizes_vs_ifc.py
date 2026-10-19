@@ -12,7 +12,11 @@ element's record box along its own axes (RE-192, #810), which gives two more
 candidates: the box along X and Z, and along X and Y. Each candidate's width
 and height are also counted apart, and the types whose instances Revit gives
 more than one size are counted, since Revit's exporter takes both from the
-type's symbol.
+type's symbol. A last candidate comes from Revit's own export, not from
+rvt-rs: the opening each door or window fills (`IfcRelFillsElement`), the
+corners of its extruded body taken into the filler's own placement, along X
+and Z, since revit-ifc takes both sizes from the symbol
+(`GetDoorWindowDimensionFromSymbol`, CLEANROOM.md source 5).
 
 Given an rvt-rs export instead of the probe's output, it scores the
 `OverallWidth` and `OverallHeight` rvt-rs writes against Revit's, joined the
@@ -31,7 +35,9 @@ import json
 import sys
 
 import ifcopenshell
+import ifcopenshell.util.placement
 import ifcopenshell.util.unit
+import numpy as np
 
 FEET = 0.3048
 TOLERANCE_FEET = 1e-3
@@ -41,11 +47,77 @@ CANDIDATES = [
     ("family Width/Height", "family_width", "family_height"),
     ("record box along its X and Z", "box_x", "box_z"),
     ("record box along its X and Y", "box_x", "box_y"),
+    ("Revit's own opening, along its X and Z", "cut_width", "cut_height"),
 ]
 
 
-def revit_sizes(path):
-    """Tag -> (class, OverallWidth ft, OverallHeight ft) for every door and window."""
+def profile_points(profile):
+    """A profile's outline points in its own plane, or None for a kind not read."""
+    if profile.is_a("IfcRectangleProfileDef"):
+        x, y = profile.XDim / 2, profile.YDim / 2
+        points = [(-x, -y), (x, -y), (x, y), (-x, y)]
+    elif profile.is_a("IfcArbitraryClosedProfileDef") and profile.OuterCurve.is_a("IfcPolyline"):
+        points = [tuple(point.Coordinates[:2]) for point in profile.OuterCurve.Points]
+    elif profile.is_a("IfcArbitraryClosedProfileDef") and profile.OuterCurve.is_a("IfcIndexedPolyCurve"):
+        points = [tuple(point[:2]) for point in profile.OuterCurve.Points.CoordList]
+    else:
+        return None
+    position = getattr(profile, "Position", None)
+    if position is None:
+        return points
+    ox, oy = position.Location.Coordinates[:2]
+    rx, ry = position.RefDirection.DirectionRatios[:2] if position.RefDirection else (1.0, 0.0)
+    norm = (rx * rx + ry * ry) ** 0.5
+    rx, ry = rx / norm, ry / norm
+    return [(ox + rx * px - ry * py, oy + ry * px + rx * py) for px, py in points]
+
+
+def opening_points(opening):
+    """The corners of an opening's extruded body, in model coordinates, or None."""
+    if opening.Representation is None:
+        return None
+    corners = []
+    for representation in opening.Representation.Representations:
+        if representation.RepresentationIdentifier not in (None, "Body"):
+            continue
+        for item in representation.Items:
+            if not item.is_a("IfcExtrudedAreaSolid"):
+                return None
+            outline = profile_points(item.SweptArea)
+            if outline is None:
+                return None
+            direction = np.array(item.ExtrudedDirection.DirectionRatios, dtype=float)
+            direction = direction / np.linalg.norm(direction) * item.Depth
+            base = [np.array([x, y, 0.0]) for x, y in outline]
+            solid = ifcopenshell.util.placement.get_axis2placement(item.Position) if item.Position else np.eye(4)
+            corners.extend(solid @ np.append(point, 1.0) for point in base + [point + direction for point in base])
+    if not corners:
+        return None
+    placement = ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)
+    return [(placement @ corner)[:3] for corner in corners]
+
+
+def cut_sizes(f, metres):
+    """Tag -> (width ft, height ft): the opening a door or window fills, along its X and Z."""
+    out = {}
+    for relation in f.by_type("IfcRelFillsElement"):
+        element = relation.RelatedBuildingElement
+        if not (element.is_a("IfcDoor") or element.is_a("IfcWindow")) or not element.Tag:
+            continue
+        corners = opening_points(relation.RelatingOpeningElement)
+        if corners is None:
+            continue
+        to_element = np.linalg.inv(ifcopenshell.util.placement.get_local_placement(element.ObjectPlacement))
+        local = np.array([(to_element @ np.append(corner, 1.0))[:3] for corner in corners])
+        extent = local.max(axis=0) - local.min(axis=0)
+        out[str(element.Tag)] = (extent[0] * metres / FEET, extent[2] * metres / FEET)
+    return out
+
+
+def revit_sizes(path, cuts=None):
+    """Tag -> (class, OverallWidth ft, OverallHeight ft) for every door and window.
+
+    With a dict for `cuts`, it also fills in `cut_sizes`."""
     f = ifcopenshell.open(path)
     metres = ifcopenshell.util.unit.calculate_unit_scale(f)
     out = {}
@@ -59,6 +131,8 @@ def revit_sizes(path):
                 None if width is None else width * metres / FEET,
                 None if height is None else height * metres / FEET,
             )
+    if cuts is not None:
+        cuts.update(cut_sizes(f, metres))
     return out
 
 
@@ -104,7 +178,10 @@ def main():
                 oriented = row.get("oriented") or [None, None, None]
                 row["box_x"], row["box_y"], row["box_z"] = oriented
                 rows.append(row)
-    revit = revit_sizes(ifc_path)
+    cuts = {}
+    revit = revit_sizes(ifc_path, cuts)
+    for row in rows:
+        row["cut_width"], row["cut_height"] = cuts.get(str(row["id"]), (None, None))
     with_size = {tag: v for tag, v in revit.items() if v[1] is not None and v[2] is not None}
     print(f"Revit's export: {len(revit)} doors and windows, {len(with_size)} with OverallWidth and OverallHeight")
     print(f"probe: {len(rows)} doors and windows from element records")
