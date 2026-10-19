@@ -544,8 +544,9 @@ pub fn scan_integer_parameters(
 pub enum EntryKind {
     /// `parameter (i64) · u32 value`: a Yes/No or integer parameter (RE-158).
     Word,
-    /// `parameter (i64) · u32 n · UTF-16 × n`: a text parameter of 1 to 256
-    /// characters (RE-156).
+    /// `parameter (i64) · u32 n · UTF-16 × n`: a text parameter of up to 256
+    /// characters (RE-156). An empty one, `n` 0, is read as an empty text,
+    /// so that it hides the value an older copy of the element holds.
     Text,
     /// `f64 value · parameter (i64)`: a number, a length in feet or another
     /// quantity in its SI unit, immediately before its key (RE-194).
@@ -566,7 +567,10 @@ pub enum EntryValue {
 fn read_entry(buf: &[u8], hit: usize, kind: EntryKind) -> Option<EntryValue> {
     match kind {
         EntryKind::Word => read_u32(buf, hit + 8).map(EntryValue::Word),
-        EntryKind::Text => utf16_entry(buf, hit + 8, 256).map(EntryValue::Text),
+        EntryKind::Text => match read_u32(buf, hit + 8)? {
+            0 => Some(EntryValue::Text(String::new())),
+            _ => utf16_entry(buf, hit + 8, 256).map(EntryValue::Text),
+        },
         EntryKind::Real => {
             let bits = read_u64(buf, hit.checked_sub(8)?)?;
             Some(f64::from_bits(bits))

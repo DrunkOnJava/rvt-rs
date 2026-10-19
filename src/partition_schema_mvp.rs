@@ -4767,8 +4767,11 @@ fn attach_is_external(
 /// (RE-194), each as a field [`NAMED_PARAMETER_FIELD_PREFIX`]`<name>`: a
 /// Yes/No's 0 or 1 as a boolean, an integer, a text of one or more
 /// characters, a positive length in feet, or a length or thermal
-/// transmittance as stored. `IsExternal` is [`attach_is_external`]'s. Of the
-/// models measured, only the BIM4LCA office defines such parameters.
+/// transmittance as stored. The latest partition's copy decides, so a text
+/// emptied there gets nothing, though an older copy holds one: on the
+/// BIM4LCA office at building permit 74 columns' `FireRating`. `IsExternal`
+/// is [`attach_is_external`]'s. Of the models measured, only the BIM4LCA
+/// office defines such parameters.
 fn attach_named_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -4820,7 +4823,9 @@ fn attach_named_parameters(
                     signed: false,
                     size: 4,
                 },
-                (_, EntryValue::Text(text)) => InstanceField::String(text.clone()),
+                (_, EntryValue::Text(text)) if !text.is_empty() => {
+                    InstanceField::String(text.clone())
+                }
                 (Kind::PositiveLength, EntryValue::Real(length)) if *length <= 0.0 => continue,
                 (_, EntryValue::Real(value)) if *value == 0.0 || value.is_normal() => {
                     InstanceField::Float {
