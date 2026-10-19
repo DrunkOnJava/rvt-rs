@@ -42,7 +42,7 @@ Measure A/B against `main` (e20a079):
 | At building permit: the same | 18,373 | 18,501 |
 
 - The 43 rooms' spaces now pair with Revit's by name in `psets_vs_ifc`, so their `Pset_SpaceCommon.IsExternal` (43), `Reference` (43) and `HandicapAccessible` (42) count as equal instead of as values Revit does not write.
-- They also carry the two sets rvt-rs gives every named room (`Pset_AirSideSystemInformation` and `Pset_ProductRequirements`, as Revit's export of RE1 does), which the office's export does not have.
+- They also carry the two sets rvt-rs gave every named room (`Pset_AirSideSystemInformation` and `Pset_ProductRequirements`, as Revit's IFC2X3 export of RE1 does), which the office's IFC4 export does not have. rvt-rs writes neither since #822.
 - The reference models' exports are byte-identical, and so are all 64 samples' and 23 R2025 models' (run 39232199081), the Revit 2023 files among them.
 - On one runner the exports take 0.97 to 1.04 times as long, the office files 1.02 and 1.03 (run 39232195456's timing job).
 

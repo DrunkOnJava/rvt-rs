@@ -1,15 +1,18 @@
-//! #35: the property sets Revit's export gives storeys, the building and
-//! spaces, from their names and the storey count.
+//! #35, #822: the property sets Revit's export gives storeys, the building
+//! and spaces, from their names and the storey count.
 //!
-//! Revit's IFC4 exports of the four RE1 models give each storey
+//! Revit's IFC2X3 exports (Coordination View 2.0) of the four RE1 models give
+//! each storey `Pset_BuildingStoreyCommon` with `AboveGround` unknown
+//! (`IfcLogical`), and the building `Pset_BuildingCommon` with
+//! `NumberOfStoreys` (`IfcInteger`) and `IsLandmarked` unknown. Each of these
+//! sets must be rvt-rs's on the same object, property for property and value
+//! type for value type. They also give each storey and space
 //! `Pset_AirSideSystemInformation` and `Pset_ProductRequirements`, each with
-//! `Name` (`IfcLabel`) the storey's name, and `Pset_BuildingStoreyCommon`
-//! with `AboveGround` unknown (`IfcLogical`); the building
-//! `Pset_BuildingCommon` with `NumberOfStoreys` (`IfcInteger`) and
-//! `IsLandmarked` unknown; and each space the two `Name` sets, holding the
-//! room's name. Every one of these sets rvt-rs writes on the same object
-//! must be Revit's, property for property and value type for value type. A
-//! storey or space is matched by its `Name`.
+//! `Name` the object's name ([`IFC2X3_NAME_SETS`]): rvt-rs writes IFC4, which
+//! has no `Pset_ProductRequirements` and applies
+//! `Pset_AirSideSystemInformation` to spaces and zones only, and Revit's IFC4
+//! export of the BIM4LCA office gives neither, so rvt-rs must write neither.
+//! A storey or space is matched by its `Name`.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-<discipline>.rvt` with
 //! `RE1-<discipline>.ifc`. Skips what is absent.
@@ -25,6 +28,10 @@ const SETS: &[&str] = &[
     "Pset_BuildingStoreyCommon",
     "Pset_BuildingCommon",
 ];
+
+/// The sets of [`SETS`] holding a storey's or space's name in Revit's IFC2X3
+/// export, which rvt-rs's IFC4 export does not write.
+const IFC2X3_NAME_SETS: [&str; 2] = ["Pset_AirSideSystemInformation", "Pset_ProductRequirements"];
 
 /// A property set's properties: name -> value as written.
 type Props = BTreeMap<String, String>;
@@ -164,6 +171,7 @@ fn re1_spatial_property_sets_are_revits() {
         let ours = spatial_sets(&write_step(&result.model));
         let differing: Vec<(&(String, String), &Props, Option<&Props>)> = theirs
             .iter()
+            .filter(|((_, set), _)| !IFC2X3_NAME_SETS.contains(&set.as_str()))
             .filter(|(key, props)| ours.get(*key) != Some(*props))
             .map(|(key, props)| (key, props, ours.get(key)))
             .collect();
@@ -173,6 +181,16 @@ fn re1_spatial_property_sets_are_revits() {
              ((object, set), Revit's, rvt-rs's): {differing:?}",
             differing.len(),
             theirs.len()
+        );
+        let name_sets: Vec<&(String, String)> = ours
+            .keys()
+            .filter(|(_, set)| IFC2X3_NAME_SETS.contains(&set.as_str()))
+            .collect();
+        assert!(
+            name_sets.is_empty(),
+            "RE1 {discipline}: rvt-rs writes IFC2X3's name sets on {} storeys and spaces: {:?}",
+            name_sets.len(),
+            name_sets.iter().take(5).collect::<Vec<_>>()
         );
     }
     eprintln!("checked {models} RE1 models");

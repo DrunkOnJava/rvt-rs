@@ -3904,7 +3904,7 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
     let storeys: usize = model
         .building_storeys
         .iter()
-        .flat_map(|storey| entities::PropertySet::storey_sets(&storey.name))
+        .flat_map(|_| entities::PropertySet::storey_sets())
         .map(|set| values(&set))
         .sum();
     let building = if model.building_storeys.is_empty() {
