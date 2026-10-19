@@ -92,12 +92,14 @@ impl ElementDecoder for MyClassDecoder {
         let decoded = crate::walker::decode_instance(bytes, 0, schema);
         // decode_instance never fails: a short or unsupported read leaves a
         // field as Bytes. Reject an instance without the fields MyClass needs.
-        let has_name = decoded
-            .fields
-            .iter()
-            .any(|(n, v)| n == "m_name" && matches!(v, InstanceField::String(_)));
+        // Normalised as from_decoded normalises it, so each release's
+        // spelling of the field (m_name, m_Name, ...) counts.
+        let has_name = decoded.fields.iter().any(|(n, v)| {
+            crate::elements::level::normalise_field_name(n) == "name"
+                && matches!(v, InstanceField::String(_))
+        });
         if !has_name {
-            return Err(Error::BasicFileInfo("MyClass without its m_name string".into()));
+            return Err(Error::BasicFileInfo("MyClass without its name string".into()));
         }
         Ok(decoded)
     }
