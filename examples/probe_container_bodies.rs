@@ -30,13 +30,13 @@ fn main() {
             }
         }
     }
-    if let Ok(proj) = std::env::var("RVT_PROJECT_CORPUS_DIR") {
-        if let Ok(entries) = std::fs::read_dir(&proj) {
-            for e in entries.flatten() {
-                let p = e.path();
-                if p.extension().is_some_and(|x| x == "rvt") {
-                    paths.push(p.to_string_lossy().into_owned());
-                }
+    let proj = std::env::var("RVT_PROJECT_CORPUS_DIR")
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
+    if let Ok(entries) = std::fs::read_dir(&proj) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().is_some_and(|x| x == "rvt") {
+                paths.push(p.to_string_lossy().into_owned());
             }
         }
     }
