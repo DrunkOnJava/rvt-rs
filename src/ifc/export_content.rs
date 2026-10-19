@@ -1696,10 +1696,19 @@ fn add_covering_finish(sets: &mut [PropertySet], ifc_type: &str, decoded: &Decod
     }
 }
 
+/// The property Revit's exporter fills from a type's Fire Rating (RE-77).
+const FIRE_RATING_PROPERTY: &str = "FireRating";
+
 /// The values of the parameters named `<property set>.<property>` an element
 /// carries (RE-194), by set: the properties [`super::standard_property_sets`]
 /// lists, each as the IFC4 type it declares. `IsExternal` is
-/// [`add_is_external`]'s.
+/// [`add_is_external`]'s. Then its type's Fire Rating (RE-77) as the
+/// `FireRating` of each standard set declaring one that the element's own
+/// parameters leave without it: Revit's exporter reads the parameter named
+/// for the property first and the type's Fire Rating after it, as its
+/// export of the BIM4LCA office shows (26 walls with no such parameter carry
+/// their type's, and 4 whose parameter differs from their type's carry the
+/// parameter's).
 fn named_parameter_properties(decoded: &DecodedElement) -> Vec<(String, Property)> {
     use super::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
     use crate::partition_schema_mvp as mvp;
@@ -1745,6 +1754,35 @@ fn named_parameter_properties(decoded: &DecodedElement) -> Vec<(String, Property
                 value,
             },
         ));
+    }
+    let type_fire_rating = decoded
+        .fields
+        .iter()
+        .find_map(|(field, value)| match value {
+            InstanceField::String(text)
+                if field.strip_prefix(mvp::TYPE_PARAMETER_FIELD_PREFIX) == Some("Fire Rating")
+                    && !text.is_empty() =>
+            {
+                Some(text.clone())
+            }
+            _ => None,
+        });
+    if let Some(rating) = type_fire_rating {
+        for set in sps::STANDARD_PROPERTY_SETS {
+            let named = properties
+                .iter()
+                .any(|(held, property)| held == set.name && property.name == FIRE_RATING_PROPERTY);
+            if named || sps::property_kind(set.name, FIRE_RATING_PROPERTY) != Some(Kind::Label) {
+                continue;
+            }
+            properties.push((
+                set.name.to_string(),
+                Property {
+                    name: FIRE_RATING_PROPERTY.into(),
+                    value: PropertyValue::Label(rating.clone()),
+                },
+            ));
+        }
     }
     properties
 }
