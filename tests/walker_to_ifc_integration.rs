@@ -9,13 +9,13 @@
 //! Two tiers of coverage:
 //!
 //! - **Family corpus** (always available via `RVT_SAMPLES_DIR` or the
-//!   default `../../samples/` path): for every release 2016–2026,
+//!   default `_corpus/examples/Autodesk`): for every release 2016–2026,
 //!   the export must succeed and the STEP envelope must be valid.
 //!   Zero walker elements is acceptable — families carry little
 //!   instance data, so walker coverage varies by release.
 //!
 //! - **Project corpus** (gated on `RVT_PROJECT_CORPUS_DIR`, typically
-//!   `/private/tmp/rvt-corpus-probe/magnetar/Revit`): the 2023
+//!   `_project_corpus/Revit`): the 2023
 //!   Einhoven sample must produce non-empty element output through
 //!   the version-gated ArcWall partition decoder, while production
 //!   walker iteration must suppress low-confidence `HostObjAttr`

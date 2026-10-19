@@ -6,7 +6,10 @@ use std::path::PathBuf;
 fn main() -> anyhow::Result<()> {
     let sample_dir = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "samples/_phiag/examples/Autodesk".to_string());
+        .or_else(|| std::env::var("RVT_SAMPLES_DIR").ok())
+        .unwrap_or_else(|| {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").to_string()
+        });
 
     println!("Release | bytes[0..2] hex | interpreted u16 LE");
     for v in 2016..=2026 {

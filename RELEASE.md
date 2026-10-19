@@ -44,7 +44,8 @@ below applies.
 
 Every `vX.Y.Z` release:
 
-- Has a signed git tag `vX.Y.Z` on `main`.
+- Has a signed git tag `vX.Y.Z` on `main`, or for a patch that `main`
+  cannot release, on its hotfix branch ([Hotfix process](#hotfix-process)).
 - Has a GitHub release page for the tag, whose body is the version's
   `CHANGELOG.md` section and a link to the [user guide](docs/user-guide.md),
   carrying the CLI archives for Linux, macOS and Windows, `SHA256SUMS` and
@@ -168,23 +169,65 @@ failure mode.
 
 ## Hotfix process
 
-When a critical issue (security advisory, data-loss regression, broken
-docs on docs.rs blocking adoption) surfaces between releases:
+When a fix has to ship before the next release from `main`, and `main`
+cannot ship it as a patch because it already holds a breaking change: a
+critical issue (security advisory, data-loss regression, broken docs on
+docs.rs blocking adoption), or a published README that claims more than
+was measured, which crates.io and PyPI keep showing until the next
+version replaces it.
+
+An embargoed security fix is the exception to working in public: a
+pushed branch and its pull request publish the fix before the release.
+Prepare and review it in its GitHub security advisory's temporary
+private fork ([`SECURITY.md`](SECURITY.md)), and push the branch here,
+where CI and Measure run, only when it is ready to release.
 
 1. **Branch from the latest release tag.** `git checkout -b
-   hotfix/vX.Y.(Z+1) vX.Y.Z`.
+   hotfix/vX.Y.(Z+1) vX.Y.Z`. GitHub runs a push's workflows from the
+   pushed branch, and a tag before v0.6.1 has a `ci.yml` without the
+   `hotfix/**` trigger step 4 needs: commit that trigger to the branch
+   first, as `hotfix/v0.6.1` did.
 2. **Apply the minimal fix.** No refactoring, no adjacent cleanup, no
-   new features. Smallest possible diff that closes the issue, plus a
-   regression test that fails without the fix.
-3. **Bump PATCH** to `X.Y.(Z+1)` in every file listed under
-   [Versioning](#versioning).
-4. **Abbreviated checklist.** Steps 1–3 above (CI + synthetic-project
-   test + corpus if available). Skip nothing else.
-5. **Tag and push the tag.** Same as the full release flow: a signed
-   tag, pushed on its own, runs the publish workflow; then write the
-   release page.
-6. **Backport to `main`** through a pull request if the fix applies
-   there too.
+   new features. Smallest possible diff that closes the issue; when it
+   landed on `main` first, `git cherry-pick -x` it. Where no existing
+   real-file, CLI or contract check fails without the fix, add one that
+   does (unit tests are banned, see `CONTRIBUTING.md`).
+3. **Prepare the release on the branch.** Steps 4 to 7 above (the
+   version files, `CHANGELOG.md`, `CITATION.cff` and the manifest) and
+   the README's release section, committed to the branch: no pull
+   request into `main` can test a branch cut from a tag.
+4. **Check it.** Pushing the branch runs CI on it with the full matrix
+   `main` gets (`ci.yml` runs on `hotfix/**` pushes). The new version
+   changes both Core Interior witness observations and their verdicts
+   (step 8): take them from that run's `octetproof-core-interior`
+   artifact and check that every difference is `witness_version`, a
+   verdict hash, or one the fix explains and the changelog states, then
+   commit them and push again; that run must pass too. Measure the
+   branch against the release it patches, with the corpora the fix
+   touches:
+   `gh workflow run measure.yml --ref hotfix/vX.Y.(Z+1) -f base=vX.Y.Z`.
+   Skip nothing else in steps 1 to 3 above.
+5. **Review it.** The branch has no pull request, so nothing has
+   reviewed its text, which crates.io and PyPI then show for good: push
+   a branch at `vX.Y.Z` (`review/vX.Y.Z-base`) and open a review-only
+   pull request of the hotfix branch into it. A commit that answers the
+   review needs step 4 again on the new head: CI runs on any push that
+   changes more than the paths `ci.yml` ignores (Markdown, `docs/`,
+   `CITATION.cff` and a few others), a push of only those runs none, and
+   a change to code needs Measure again. Then close the pull request
+   unmerged.
+6. **Tag the reviewed head and push the tag.** Steps 9 to 12 above,
+   with that head in place of `origin/main`, once its code and witness
+   files are the ones CI and Measure passed:
+   `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" <its SHA>`. Then delete
+   `review/vX.Y.Z-base`.
+7. **Bring `main` up to it** through a pull request, as merging the
+   branch back would: the fix if `main` lacks it, the new `CHANGELOG.md`
+   section (its entries moved out of `[Unreleased]`), the version files
+   and the README's release section. `main` exports differently from the
+   branch, so take its Core Interior witness observations and verdicts
+   from that pull request's own CI run, as in step 8, not from the
+   branch. Then delete the branch; the tag keeps its commits.
 
 ## Post-release
 
