@@ -145,9 +145,13 @@ in that list is also advertised as typed, so the same change:
 
 - adds its arm to `typed_json::mvp_typed_view`, or the CLI and Python
   give it `typed: null`;
-- adds it to the list `tests/python/test_decoded_api.py` pins and to
-  the typed projection's class list in
-  `docs/schemas/decoded-elements.schema.json`.
+- adds it wherever the typed classes are listed: the module doc of
+  `src/elements/mod.rs`, the doc comment in `rvt-py/src/lib.rs`, the
+  stub `python/rvt/__init__.pyi`, `docs/python.md`, the description in
+  `docs/schemas/decoded-elements.schema.json`, the list
+  `tests/python/test_decoded_api.py` pins, and the README's count of
+  them. `git grep -n -E 'Level.{1,6}Wall.{1,6}Floor' -- . ':!CHANGELOG.md' ':!reports'`
+  finds them, and any later copy.
 
 ### Step 4 — Write down how it can fail
 
@@ -178,8 +182,11 @@ steps:
    an instance only where the oracle has one. Check that the instances
    decoded from the schema (`record_kind` `schema_instance`) came from
    your decoder, not the generic one: `iter_elements` also returns
-   partition records of some classes, which other decoders read. And check that the fields it reads equal
-   the oracle's for the same element.
+   partition records of some classes, which other decoders read. Then
+   check the typed view the CLI and Python expose,
+   `typed_json::mvp_typed_view`, field by field against the oracle's
+   value for the same element: the wire fields alone do not show a wrong
+   mapping in `MyClass::from_decoded`.
 
    The example covers a class every family release holds:
 
@@ -210,8 +217,11 @@ steps:
            assert!(!from_schema.is_empty(), "{year}: no MyClass decoded");
            for e in &from_schema {
                assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
-               // Each field the decoder reads, against the oracle's value
-               // for this element (by its ElementId, `e.id`).
+               let typed = rvt::elements::typed_json::mvp_typed_view(e)
+                   .unwrap_or_else(|| panic!("{year}: MyClass has no typed view"));
+               // Each field of `typed`, against the oracle's value for this
+               // element (by its ElementId, `e.id`).
+               let _ = typed;
            }
        }
        assert!(
