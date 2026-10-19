@@ -339,6 +339,8 @@ pub fn append_typed_production_elements(
     // RE-194: each element's parameters named for a standard set's property,
     // written once the entity it is written as is final.
     let mut pending_named: Vec<(usize, Vec<(String, Property)>)> = Vec::new();
+    // #331, #816: each element written in pieces, and its further pieces.
+    let mut pieces_of: Vec<(usize, std::ops::Range<usize>)> = Vec::new();
     // RE-138: the joins of ducts and pipes, by entity index and ElementId.
     let mut pending_joins: Vec<(usize, u32, crate::partition_schema_mvp::ConnectorJoins)> =
         Vec::new();
@@ -833,6 +835,7 @@ pub fn append_typed_production_elements(
         if !piece_bodies.is_empty() {
             if let Some(entities::IfcEntity::BuildingElement { .. }) = entities.last() {
                 let first = entities.last().cloned().expect("just pushed");
+                let start = entities.len();
                 for (index, body) in piece_bodies.into_iter().enumerate() {
                     let mut piece = first.clone();
                     if let entities::IfcEntity::BuildingElement {
@@ -844,6 +847,7 @@ pub fn append_typed_production_elements(
                     }
                     entities.push(piece);
                 }
+                pieces_of.push((entity_index, start..entities.len()));
             }
         }
         // RE-151: each tagged void of a floor's sketch is an opening voiding
@@ -1164,6 +1168,7 @@ pub fn append_typed_production_elements(
         }
     }
     add_named_parameter_sets(entities, pending_named);
+    add_piece_sets(entities, pieces_of);
 
     out
 }
@@ -1823,6 +1828,37 @@ fn add_named_parameter_sets(
                         },
                     });
                 }
+            }
+        }
+    }
+}
+
+/// Give each further piece of an element written in pieces (#331) every
+/// further property set of the element, once they are final (#816): Revit's
+/// export gives each piece all of them (Snowdon Towers' architectural model:
+/// 19 elements in pieces, each `:2` piece with `Pset_SlabCommon` and the
+/// rest).
+fn add_piece_sets(
+    entities: &mut Vec<entities::IfcEntity>,
+    pieces_of: Vec<(usize, std::ops::Range<usize>)>,
+) {
+    for (element, pieces) in pieces_of {
+        let sets: Vec<PropertySet> = entities
+            .iter()
+            .filter_map(|entity| match entity {
+                entities::IfcEntity::ElementPropertySet {
+                    element: owner,
+                    set,
+                } if *owner == element => Some(set.clone()),
+                _ => None,
+            })
+            .collect();
+        for piece in pieces {
+            for set in &sets {
+                entities.push(entities::IfcEntity::ElementPropertySet {
+                    element: piece,
+                    set: set.clone(),
+                });
             }
         }
     }
