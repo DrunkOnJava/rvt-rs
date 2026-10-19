@@ -89,7 +89,17 @@ impl ElementDecoder for MyClassDecoder {
                 "MyClassDecoder received wrong schema: {}", schema.name
             )));
         }
-        Ok(crate::walker::decode_instance(bytes, 0, schema))
+        let decoded = crate::walker::decode_instance(bytes, 0, schema);
+        // decode_instance never fails: a short or unsupported read leaves a
+        // field as Bytes. Reject an instance without the fields MyClass needs.
+        let has_name = decoded
+            .fields
+            .iter()
+            .any(|(n, v)| n == "m_name" && matches!(v, InstanceField::String(_)));
+        if !has_name {
+            return Err(Error::BasicFileInfo("MyClass without its m_name string".into()));
+        }
+        Ok(decoded)
     }
 }
 
@@ -115,6 +125,14 @@ impl MyClass {
     }
 }
 ```
+
+`decode` is where failing closed happens: production skips an instance
+the decoder rejects, and `decode_instance` itself rejects nothing, so a
+decoder that only checks the schema name marks every same-class candidate
+typed, a truncated one or a false hit included. Before registering it,
+make `decode` return an `Error` for an instance missing a field `MyClass`
+needs, or holding one as `Bytes` or in a type the schema does not give it,
+and for any other check Step 4 lists.
 
 ### Step 3 — Register in the dispatch table
 
@@ -192,7 +210,8 @@ steps:
    decoder rejects or never scores. `iter_elements` also returns
    partition records of some classes, which other decoders read, so
    check only the instances decoded from the schema (`record_kind`
-   `schema_instance`) for your decoder, not the generic one. Then
+   `schema_instance`) for your decoder, not the generic one, and that
+   there are some: partition rows alone can make up the id set. Then
    check the typed view the CLI and Python expose,
    `typed_json::mvp_typed_view`, field by field against the oracle's
    value for the same element: the wire fields alone do not show a wrong
@@ -229,9 +248,13 @@ steps:
            let ids: std::collections::BTreeSet<u32> =
                elements.iter().filter_map(|e| e.id).collect();
            assert_eq!(ids, oracle_myclass_ids(year), "{year}: MyClass ElementIds");
-           let from_schema = elements
+           let from_schema: Vec<_> = elements
                .iter()
-               .filter(|e| e.provenance.record_kind.as_deref() == Some("schema_instance"));
+               .filter(|e| e.provenance.record_kind.as_deref() == Some("schema_instance"))
+               .collect();
+           // Partition rows can make up the id set alone: require the decoder
+           // to have read some, or the checks below pass on nothing.
+           assert!(!from_schema.is_empty(), "{year}: no MyClass instance from the schema");
            for e in from_schema {
                assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
                let typed = rvt::elements::typed_json::mvp_typed_view(e)
