@@ -38,7 +38,7 @@ The office defines 12 project parameters named for a set's `IsExternal`, from `P
 | `IfcColumn`, `IfcBeam`, `IfcRamp`, `IfcStair` | 279, 8, 5 and 16, all equal | 345, 8, 5 and 16 | — |
 | `IfcCovering`, `IfcRailing` | 111 and 41, all equal | 75 and 41 | 11 railings |
 | `IfcSpace`, `IfcBuildingElementProxy` | 276 and 12, all not external, by default | the same | 12 and 54 |
-| `IfcMember` | 1,423 of 10,003 by the curtain wall | 1,453 of 10,031 | 16 of 16 |
+| `IfcMember` | 1,423 of 10,003 by the curtain wall | 1,453 of 10,031 | 16 of 16: RE1's 10 mullions of an interior curtain wall, and 6 stair stringers |
 | `IfcPlate` | 227 of 260 by the curtain wall | 237 of 269 | 2 of 2 |
 
 Apart from curtain mullions and panels, no step differs from Revit's on any element; the one member decided by the last step differs too.
@@ -46,7 +46,7 @@ Apart from curtain mullions and panels, no step differs from Revit's on any elem
 ## 5. What changes
 
 - `attach_type_functions` reads every element's type Function, and `attach_wall_type_functions` a wall's from its native type record (2024 and 2025).
-- `attach_is_external` attaches each parameter named `IsExternal` or `<set>.IsExternal` an element carries, and the value Revit's calculator gives (`m_is_external`). A class whose value comes from its type's Function (walls, curtain walls, doors, windows, floors, building pads) gets none where neither a parameter nor the Function is read. A window does not take its host's value, which is Revit's on 6 of 18 windows of the R2025 models. Curtain mullions and panels get none (§6). Every other class is not external, as the calculator's last step is: on each office file 12 proxies, 276 spaces, 23 railings and 2 stairs take it (as built also 78 coverings and a column), and on the R2025 and reference models 54 proxies, 12 spaces, 11 railings and 5 stairs, none differing.
+- `attach_is_external` attaches each parameter named `IsExternal` or `<set>.IsExternal` an element carries, and the value Revit's calculator gives (`m_is_external`). A class whose value comes from its type's Function (walls, curtain walls, doors, windows, floors, building pads) gets none where neither a parameter nor the Function is read. A window does not take its host's value, which is Revit's on 6 of 18 windows of the R2025 models. Curtain mullions and panels get none (§6). Every other class is not external, as the calculator's last step is: on each office file 12 proxies, 276 spaces, 23 railings and 2 stairs take it, with 78 coverings and a column as built and 75 coverings at permit, and on the R2025 and reference models 54 proxies, 12 spaces, 11 railings, 5 stairs and 6 stair stringers written as `IfcMember`, none differing.
 - The export writes `IsExternal` in the common set of the entity the element is written as: the parameter named for that set, else the calculated value. A space's goes in the `Pset_SpaceCommon` it already writes.
 - The parameters and a type's Function are read on every release from 2024, as RE-158's door and floor Function was. A wall's native Function, and the last step's not external, apply on 2024 and 2025 only, the releases measured; on a 2026 or 2027 file a wall, or an element no parameter or Function decides, gets no value.
 
@@ -71,7 +71,7 @@ Measure A/B against `main` (f612f97): office files, reference and R2025 models i
 | Reference and R2025 models: Revit's 310 values equal | 13 | 245 |
 | Reference and R2025 models: different | 0 | 0 |
 
-On the office every set's values are Revit's where written: walls 607 of 607 (permit 589), curtain walls 220, doors 268 of 269, windows 269 (265), columns 279 (345), beams 8, coverings 111 (75), railings 41, ramps 5, slabs 63, spaces 211, stairs 16 and proxies 12 of 13. The missing ones are the curtain-panel door and a proxy. Members and plates stay missing (§6). On the reference and R2025 models: walls 124 of 124, roofs 19 of 19, doors 11, railings 11, spaces 12, stairs 5, a curtain wall, 54 of 76 proxies and 6 of 16 members; windows and plates get none (§6).
+On the office every set's values are Revit's where written: walls 607 of 607 (permit 589), curtain walls 220, doors 268 of 269, windows 269 (265), columns 279 (345), beams 8, coverings 111 (75), railings 41, ramps 5, slabs 63, spaces 211, stairs 16 and proxies 12 of 13. The missing ones are the curtain-panel door and a proxy. Members and plates stay missing (§6). On the reference and R2025 models: walls 124 of 124, roofs 19 of 19, doors 11, railings 11, spaces 12, stairs 5, a curtain wall, 54 of 76 proxies, and 6 of the 16 members, which are stair stringers; RE1's 10 curtain mullions, the windows and the plates get none (§6).
 
 - **All property values.** As built, values equal to Revit's go from 12,687 to 14,531 and different ones from 36 to 7; at permit from 12,651 to 14,501 and from 34 to 7. The 29 and 27 `IsExternal` values that differed on `main` came from RE-158's type Function on doors and floors, which the office's parameters override.
 - **Values Revit does not write** rise by 85 on the as-built file and 86 at permit: `IsExternal` on objects Revit's export holds under another set or name, such as the 42 Turning Free Space instances rvt-rs writes as proxies where Revit writes spaces (#763). On the reference and R2025 models they rise by 789, 732 of them on Core Interior (§6).
