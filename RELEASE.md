@@ -206,8 +206,10 @@ version replaces it.
 6. **Bring `main` up to it** through a pull request, as merging the
    branch back would: the fix if `main` lacks it, the new `CHANGELOG.md`
    section (its entries moved out of `[Unreleased]`), the version files
-   and the README's release section. Then delete the branch; the tag
-   keeps its commits.
+   and the README's release section. `main` exports differently from the
+   branch, so take its Core Interior witness observations and verdicts
+   from that pull request's own CI run, as in step 8, not from the
+   branch. Then delete the branch; the tag keeps its commits.
 
 ## Post-release
 
