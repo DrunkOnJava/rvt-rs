@@ -24,7 +24,11 @@
 //! The Level is the one recovered Level id the record names, as
 //! [`crate::element_record_level_refs::unique_level_reference`] takes it from
 //! an element record's list. Where an Area's record has copies in several
-//! partitions, the latest partition's is read (RE-145).
+//! partitions, the latest partition's is read (RE-145). An Area in a
+//! non-primary design option is left out, as an element record is (RE-40):
+//! Revit's exporter collects spatial elements through the same design-option
+//! filter as the rest (`ElementFilteringUtil.GetExportFilter` in revit-ifc,
+//! CLEANROOM.md source 5), and skips an Area with no location.
 //!
 //! # Honesty
 //!
@@ -37,7 +41,7 @@
 use crate::RevitFile;
 use crate::partition_element_records::{
     CATEGORY_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, PLACEMENT_KIND_INSTANCE,
-    PLACEMENT_KIND_OFFSET, file_bbox_marker, partition_record_chain,
+    PLACEMENT_KIND_OFFSET, file_bbox_marker, frame_design_option, partition_record_chain,
 };
 use crate::walker::{DecodedElement, ElementProvenance, InstanceField};
 use std::collections::{BTreeMap, BTreeSet};
@@ -161,11 +165,14 @@ pub fn areas_from_partition_chain_records(
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Vec::new(),
     };
+    let options = rf.design_options();
     let placed: BTreeMap<u32, AreaRecord> = area_records(rf, &marker, &declared)
         .into_iter()
         .filter(|(_, record)| {
             read_u64(&record.bytes, CONTAINER_OFFSET) == Some(CONTAINER_NONE)
                 && read_u32(&record.bytes, PLACEMENT_KIND_OFFSET) == Some(PLACEMENT_KIND_INSTANCE)
+                && !frame_design_option(&record.bytes, 0)
+                    .is_some_and(|option| options.is_non_primary(option))
         })
         .collect();
     let ids: BTreeSet<u32> = placed.keys().copied().collect();
