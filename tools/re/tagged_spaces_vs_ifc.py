@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """What Revit writes on the `IfcSpace` that stand for family instances (#763).
 
-Revit's exporter writes a room or an area as an `IfcSpace` with no `Tag`. A
+Revit's exporter names a room's or an area's `IfcSpace` by its number. A
 family instance whose "Export to IFC As" names `IfcSpace` (RE-45) is written
-as an `IfcSpace` that carries its ElementId as `Tag`. This lists, over those
+as an `IfcSpace` named `Family:Type:ElementId`, as Revit names other family
+instances (an `IfcSpace` has no `Tag` in IFC4). This lists, over those
 spaces in Revit's export, how often each value occurs: `Name`, `LongName`,
 `ObjectType`, `PredefinedType`, `CompositionType`, the object it is
 aggregated in or contained in, its body, its type object, and its property
-sets. It then counts what rvt-rs writes for the same Tag, by class.
+sets. It then counts what rvt-rs writes for the same ElementId (its `Tag`,
+or the id its space's `Name` ends with), by class.
 
 Usage:
     python3 tools/re/tagged_spaces_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
@@ -57,8 +59,8 @@ def main():
     ours_path, revit_path = [a for a in sys.argv[1:] if not a.startswith("--")]
     revit = ifcopenshell.open(revit_path)
     ours = ifcopenshell.open(ours_path)
-    spaces = [space for space in revit.by_type("IfcSpace") if space.Tag]
-    print(f"Revit's export: {len(revit.by_type('IfcSpace'))} IfcSpace, {len(spaces)} with a Tag")
+    spaces = [space for space in revit.by_type("IfcSpace") if shape(space.Name) == "Family:Type:ElementId"]
+    print(f"Revit's export: {len(revit.by_type('IfcSpace'))} IfcSpace, {len(spaces)} named Family:Type:ElementId")
     census = collections.defaultdict(collections.Counter)
     for space in spaces:
         census["Name"][shape(space.Name)] += 1
@@ -86,12 +88,14 @@ def main():
             print(f"  {field}: " + ", ".join(f"{v} {n}" for v, n in census[field].most_common(6)))
     by_tag = {}
     for product in ours.by_type("IfcProduct"):
-        tag = getattr(product, "Tag", None)
+        tag = getattr(product, "Tag", None) if product.is_a("IfcElement") else None
+        if product.is_a("IfcSpace") and shape(product.Name) == "Family:Type:ElementId":
+            tag = product.Name.split(":")[2]
         if tag:
             by_tag.setdefault(str(tag), product)
     written = collections.Counter()
     for space in spaces:
-        product = by_tag.get(str(space.Tag))
+        product = by_tag.get(space.Name.split(":")[2])
         written["not written" if product is None else f"{product.is_a()} {relation(product)}"] += 1
     print("rvt-rs writes the same Tags as: " + ", ".join(f"{v} {n}" for v, n in written.most_common()))
 
