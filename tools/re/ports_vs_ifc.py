@@ -39,11 +39,17 @@ PORT_NAME = re.compile(r"^(?:In|Out)?Port_(\d+)_(\d+)$")
 PORT_ENTITY = re.compile(r"IfcDistributionPort|IfcRelConnectsPort|IfcRelNests")
 
 
-def port_schema_findings(path):
-    """IfcOpenShell's schema validation of a file: every finding, and those about the port entities."""
-    logger = ifcopenshell.validate.json_logger()
-    ifcopenshell.validate.validate(ifcopenshell.open(path), logger)
-    findings = list(logger.statements)
+def port_schema_findings(path, statements=None):
+    """IfcOpenShell's schema validation of a file: every finding, and those about the port entities.
+    With `statements`, the findings `tools/ci/ifc_validate_summary.py` wrote for the same file are
+    read instead of validating it again."""
+    if statements:
+        with open(statements, encoding="utf-8") as handle:
+            findings = [json.loads(line) for line in handle if line.strip()]
+    else:
+        logger = ifcopenshell.validate.json_logger()
+        ifcopenshell.validate.validate(ifcopenshell.open(path), logger)
+        findings = list(logger.statements)
     return findings, [f for f in findings if PORT_ENTITY.search(json.dumps(f, default=str))]
 
 
@@ -92,6 +98,7 @@ def main():
     parser.add_argument("rvt_rs_ifc")
     parser.add_argument("revit_ifc")
     parser.add_argument("--list", action="store_true", help="list the connections not matched")
+    parser.add_argument("--validation", help="the findings ifc_validate_summary.py wrote for <rvt-rs.ifc>")
     args = parser.parse_args()
 
     ports, connections, segments, tied, attributes, _ = read(args.rvt_rs_ifc)
@@ -119,7 +126,7 @@ def main():
     print(f"{len(extra)} connections written are not in Revit's export")
     print(f"{wrongly_tied} of rvt-rs's {len(ports)} ports are not tied to the element their name gives")
     try:
-        findings, about_ports = port_schema_findings(args.rvt_rs_ifc)
+        findings, about_ports = port_schema_findings(args.rvt_rs_ifc, args.validation)
         print(f"schema validation of rvt-rs's file: {len(findings)} findings, {len(about_ports)} about the port entities")
         for finding in findings[:10]:
             print(f"  {json.dumps(finding, default=str)[:300]}")
