@@ -42,8 +42,9 @@ name: Publish (crates.io + PyPI + release binaries)
 # add a trusted publisher: GitHub, owner DrunkOnJava, repository rvt-rs,
 # workflow publish.yml, environment crates-io.
 #
-# Once both are in place, pushing a signed `v*` tag on main publishes the
-# release (RELEASE.md, steps 9 to 12).
+# Once both are in place, pushing a signed `v*` tag on main, or on a hotfix
+# branch, publishes the release (RELEASE.md, steps 9 to 12, and its hotfix
+# process).
 
 on:
   push:
