@@ -6,6 +6,48 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-19
+
+rvt-rs writes IFC4, and 0.6.0 makes its property sets IFC4's. 0.5 took some
+of them from Revit's exports of the RE1 models, which are IFC2X3; every
+standard property set rvt-rs now writes passes buildingSMART's IFC4
+definitions on all 89 exports Measure checks (#822, #826). More of what
+Revit's exporter writes is written: parameters named for any IFC4 property
+set's property (RE-194, #817), every element's `IsExternal` (RE-193), a
+type's Fire Rating, a door's overall size, Revit 2024 Areas as spaces
+(RE-191), and each port's type and, where Revit's exporter gives it one, its
+flow direction (RE-197). Projects saved by Revit 2015 to 2022 and by Revit
+2027 export their elements, as experimental (RE-179 to RE-181).
+
+puzzbobb's pull requests read Revit 2015 to 2022 and 2027 projects (#740,
+#742) and found where a wall's function and roof attachment come from
+(RE-185); Erry91's gives each door its overall size (#788); MadsHolten's
+fixes a panic in the browser viewer (#835). Thank you.
+
+### Upgrading from 0.5
+
+- **Property sets moved to where IFC4 has them (#822).** An element's
+  `Reference` is in `Pset_EnvironmentalImpactIndicators` and each IFC4 set
+  that applies to it and declares `Reference`, no longer in
+  `Pset_QuantityTakeOff` or `Pset_DistributionFlowElementCommon`. Storeys and
+  spaces lose `Pset_AirSideSystemInformation` and `Pset_ProductRequirements`.
+  A pipe's or duct's `Length` is in `Qto_PipeSegmentBaseQuantities` or
+  `Qto_DuctSegmentBaseQuantities`, an `IfcElementQuantity`, and a pipe's
+  `InvertElevation` in `Pset_PipeSegmentOccurrence`. A room's Floor Finish is
+  in `Pset_SpaceCoveringRequirements`, a proxy's Serial Number in
+  `Pset_ManufacturerOccurrence` only, and a pipe fitting's nominal diameter
+  in `RvtElementRecordGeometry.NominalDiameter`, one length.
+- **Public API.** `ifc::entities::PropertySet::name_sets` is removed and
+  `storey_sets` takes no name; a `PropertySet` named `Qto_` is written as an
+  `IfcElementQuantity`; `ifc::export_content::TypedProductionAppend` gains
+  `computed_inverts`; `ifc::entities::IfcEntity::Port` gains
+  `predefined_type` and `flow_direction`; and
+  `native_connectors::symbol_port_indices` returns `(index, domain)` pairs.
+- **Older and newer releases export elements.** A Revit 2015 to 2022 or 2027
+  project, which exported no building element, now exports them, as
+  experimental: measured against the same models saved by a neighbouring
+  release, not against a Revit export of them.
+
 ### Added
 
 - **A port is typed by its connector's domain, and an electrical port is
@@ -103,7 +145,8 @@ All notable changes will be documented here. This project follows
   of them every ElementId shared with the 2019 copy has its class, and the
   sixth, `rst_basic`, is another model. Before, a 2015 to 2018 project exported
   no building element. Beyond RE-180's, it changes no 2019 to 2027 export.
-  Revit 2014 is not read: no documented 2014 file backs it.
+  Revit 2014 is not read: no documented 2014 file backs it. By puzzbobb
+  (#742).
 - **Revit 2019 to 2022 projects export their elements, as experimental
   (RE-180).** Revit 2019 to 2022 frame their element records as 2023 does,
   so the 2023 readers read them, each constant taken as the release's own tag
@@ -119,7 +162,7 @@ All notable changes will be documented here. This project follows
   IfcOpenShell's schema validation. Before, a 2019 to 2022 project exported
   no building element. Every 2024 to 2027 export is byte-identical. Of the
   2023 samples only `rac_advanced` changes: the one-unit name rule gives its
-  export 2 more entities and 2 more property values.
+  export 2 more entities and 2 more property values. By puzzbobb (#742).
 - **Revit 2027 projects export their elements, as experimental (RE-179).**
   The partition readers take their 2027 constants from the file's schema, as
   RE-124 found every release's to be: the record marker, Level elevations,
@@ -133,7 +176,8 @@ All notable changes will be documented here. This project follows
   the same, 363,072 of 363,256 fields, measured by Measure's paired probe,
   #799), and the six 2027 exports pass
   IfcOpenShell's schema validation. Before, a 2027 project exported no
-  building element. Every 2023 to 2026 export is byte-identical.
+  building element. Every 2023 to 2026 export is byte-identical. By puzzbobb
+  (#740).
 - **A door's `OverallWidth` / `OverallHeight` from its type (#759, RE-187).**
   A door type's Width and Height are Revit's `OverallWidth` and
   `OverallHeight` on every door where they are read, so a door with no
@@ -142,7 +186,7 @@ All notable changes will be documented here. This project follows
   A door cut at its rough size keeps that size (RE-94). Windows keep failing
   closed: Core Interior's type size is not Revit's. Checked by
   `tests/door_overall_sizes.rs` and scored by
-  `tools/re/door_window_sizes_vs_ifc.py`.
+  `tools/re/door_window_sizes_vs_ifc.py`. By Erry91 (#788).
 
 ### Changed
 
@@ -180,6 +224,13 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The browser viewer no longer panics on a string field whose length is
+  corrupt (#835).** On wasm32, where `usize` is 32 bits, a UTF-16 string
+  field's end, `4 + 2 × length`, could wrap past its bounds check when the
+  length was corrupt, and slicing then panicked, ending the whole export; a
+  64-bit build cannot wrap there. The end is computed with checked
+  arithmetic, and such a field is read as raw bytes, as one too short already
+  is. Found and fixed by MadsHolten, on a private Revit 2024 project.
 - **A pipe's or duct's length and a pipe's invert are where IFC4 puts them
   (#822).** RE-131, RE-134 and RE-157 wrote them in IFC2X3's
   `Pset_FlowSegmentPipeSegment` and `Pset_FlowSegmentDuctSegment` (and a
