@@ -152,6 +152,12 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **Measure hashes each sample's IFC export.** A sample's export was checked
+  for schema findings and then dropped, so a change that moved only its
+  names or properties showed nowhere in a run. Each sample now gets the
+  `ifc.sha256` a model gets, with the export time ignored. The compare job
+  lists the samples with the models as identical or differing, or as having
+  no base hash when the base ran before this change.
 - **RE-185: where a wall's `IsExternal` and `ExtendToStructure` come from
   (#35).** A wall's `IsExternal` is its type's native `WallType.m_function`
   (0 interior, 1 exterior), and its `ExtendToStructure` is true exactly where

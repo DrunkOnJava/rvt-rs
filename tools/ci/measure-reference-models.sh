@@ -32,7 +32,8 @@
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
 # same probe.txt. A family has no Revit export, so nothing else is measured on it.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
-# export's diagnostics.json and rvt-ifc.log under OUT_DIR/sample-<file>/. When
+# export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
+# is) under OUT_DIR/sample-<file>/. When
 # PROBE_PAIR_RELEASE names a release, the probe also runs on each sample of
 # another release and the same project saved by that one, the sample first,
 # into probe-pair.txt, ending with its exit status: the cross-release
@@ -190,6 +191,7 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
           echo "validate: skipped, over 30 MB"
         fi
       } > "$dir/schema.txt"
+      grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
     fi
     [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
     if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
