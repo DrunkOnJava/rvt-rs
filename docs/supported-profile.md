@@ -18,8 +18,10 @@ apart:
 2. **Elements identified.** Each element is found with its Revit ElementId and
    category, and the set equals the one Revit's own IFC export holds. Revit
    2024 and 2025 project files, and Revit 2023 ones with their bounding boxes
-   only (RE-81); experimentally, Revit 2015 to 2022, 2026 and 2027 ones (the
-   table below).
+   only (RE-81). Experimentally, Revit 2026 ones, measured so on one project
+   (RE-124), and Revit 2015 to 2022 and 2027 ones, which have no Revit export
+   to compare: their sets equal those of the same projects saved by the next
+   or the previous release (the table below).
 3. **Geometry.** An element's body. Exact where the element's data is decoded
    (the table below), otherwise its bounding box, and the export diagnostics
    say which.

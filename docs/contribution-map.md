@@ -42,6 +42,7 @@ milestone is for.
 
 | Issue | Remainder |
 |---|---|
+| [#844](https://github.com/DrunkOnJava/rvt-rs/issues/844) | Core Interior's six windows and one RE1 door write no OverallWidth/OverallHeight: their size is not where RE-187 reads it |
 | [#223](https://github.com/DrunkOnJava/rvt-rs/issues/223) | Element record +0x46: the flag word is unread (+0x4a is the schema class, RE-76) |
 | [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
 | [#35](https://github.com/DrunkOnJava/rvt-rs/issues/35) | M4-07: Recover common parameters |
