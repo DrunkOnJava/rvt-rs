@@ -4792,7 +4792,7 @@ fn attach_named_parameters(
         return;
     }
     let entry_kind = |kind: Kind| match kind {
-        Kind::Boolean | Kind::Count => EntryKind::Word,
+        Kind::Boolean | Kind::Count | Kind::Integer => EntryKind::Word,
         Kind::Identifier | Kind::Label | Kind::Text => EntryKind::Text,
         Kind::Length | Kind::PositiveLength | Kind::ThermalTransmittance => EntryKind::Real,
     };
@@ -4818,11 +4818,16 @@ fn attach_named_parameters(
                 (Kind::Boolean, EntryValue::Word(word @ (0 | 1))) => {
                     InstanceField::Bool(*word == 1)
                 }
-                (Kind::Count, EntryValue::Word(count)) => InstanceField::Integer {
-                    value: i64::from(*count),
-                    signed: false,
-                    size: 4,
-                },
+                // How a negative integer is stored is not measured.
+                (Kind::Count | Kind::Integer, EntryValue::Word(count))
+                    if i32::try_from(*count).is_ok() =>
+                {
+                    InstanceField::Integer {
+                        value: i64::from(*count),
+                        signed: false,
+                        size: 4,
+                    }
+                }
                 (_, EntryValue::Text(text)) if !text.is_empty() => {
                     InstanceField::String(text.clone())
                 }
