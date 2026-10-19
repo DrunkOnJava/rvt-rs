@@ -2044,7 +2044,8 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
 }
 
 /// A room's or an Area's `Pset_SpaceCommon` (RE-153, #763), as Revit's
-/// export writes it: `Reference` (`IfcIdentifier`) its name and number, a
+/// export writes it: `Reference` (`IfcIdentifier`) its name and number, or
+/// its name alone where it has no number (RE-196), a
 /// room's `FloorCovering` (`IfcLabel`) its Floor Finish, and `IsExternal`
 /// (RE-193). `None` when none was read.
 fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
@@ -2064,10 +2065,15 @@ fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
             })
     };
     let mut properties = Vec::new();
-    if let (Some(name), Some(number)) = (text("m_name"), text(mvp::ROOM_NUMBER_FIELD)) {
+    if let Some(name) = text("m_name") {
+        // A room with no number is referred to by its name alone (RE-196).
+        let reference = match text(mvp::ROOM_NUMBER_FIELD) {
+            Some(number) => format!("{name} {number}"),
+            None => name,
+        };
         properties.push(Property {
             name: "Reference".into(),
-            value: PropertyValue::Identifier(format!("{name} {number}")),
+            value: PropertyValue::Identifier(reference),
         });
     }
     if let Some(finish) = text(mvp::ROOM_FLOOR_FINISH_FIELD) {

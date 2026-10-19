@@ -125,6 +125,18 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A room with no number is named, typed and referred to as Revit's export
+  does it (RE-196).** A room's number and name were read only as two
+  non-empty texts, so a room with no number got neither: its space was
+  `Room-<ElementId>` with no `LongName`, no `IfcSpaceType` and no
+  `Reference`. It is now `<name>:<ElementId>` with its name as `LongName`,
+  typed and referred to by the same name, as Revit's exporter falls back
+  to. An empty number or name also counts as the latest copy's value (#800):
+  at building permit the BIM4LCA office's rooms had kept older copies'
+  numbers and Finnish names where the current copy has none. The office's
+  rooms all have Revit's number and name now, as built and at permit, 264
+  of 264 (221 before), and the text parameters read the same way, so an
+  emptied Floor Finish or Serial Number writes nothing.
 - **A stair's `IsExternal` joins its `Pset_StairCommon` (RE-194).** RE-193
   wrote it in a second set of that name, beside the riser and tread
   dimensions RE-47 writes, where Revit's export writes one set. On Autodesk's

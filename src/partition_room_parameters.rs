@@ -424,7 +424,9 @@ pub fn scan_room_text_parameter(
 /// ElementId, on Revit 2024 and later: an entry `parameter (i64) · u32 n ·
 /// UTF-16 × n` in the element's own data object ([`enclosing_data_object`],
 /// RE-153, RE-156), from the latest partition that holds one; an element
-/// whose entries there disagree gets nothing (#800).
+/// whose entries there disagree gets nothing (#800). An entry of `n` 0 is an
+/// empty value: it is the latest copy's too, so an element whose value was
+/// emptied gets nothing, though an older copy holds one (RE-196).
 pub fn scan_text_parameter(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -443,8 +445,12 @@ pub fn scan_text_parameter(
         let partition = partition_number(&stream);
         let buf = inflated.bytes();
         for hit in memchr::memmem::find_iter(buf, &tag) {
-            let Some(value) = utf16_entry(buf, hit + tag.len(), 256) else {
-                continue;
+            let value = match read_u32(buf, hit + tag.len()) {
+                Some(0) => String::new(),
+                _ => match utf16_entry(buf, hit + tag.len(), 256) {
+                    Some(value) => value,
+                    None => continue,
+                },
             };
             let Some(element) = enclosing_data_object(buf, hit).filter(|id| elements.contains(id))
             else {
@@ -453,7 +459,11 @@ pub fn scan_text_parameter(
             found.offer(element, partition, value);
         }
     }
-    found.into_values()
+    found
+        .into_values()
+        .into_iter()
+        .filter(|(_, value)| !value.is_empty())
+        .collect()
 }
 
 /// BuiltInParameter `FUNCTION_PARAM`, a type's Function: 0 interior, 1
@@ -739,8 +749,10 @@ pub const ROOM_PARAMETER_ENTRY_SOURCE: &str = "partition_room_parameter_entries"
 /// [`ROOM_PARAMETER_ENTRY_WINDOW`] past it, immediately followed by
 /// `ROOM_NAME · u32 m · UTF-16 × m`, the parameter ids as wide as the
 /// release's ElementIds: 377 or 389 bytes past the id on Exemplo_data
-/// (2023), 483 to 503 on RE1 Architecture (2025). A room whose copies
-/// disagree gets nothing.
+/// (2023), 483 to 503 on RE1 Architecture (2025). An empty number or name is
+/// an entry of `n` 0, read as an empty text (RE-196): the latest partition's
+/// copy decides even where it is empty, and a room whose entries there
+/// disagree gets nothing (#800).
 pub fn scan_room_parameter_entries(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -765,7 +777,7 @@ pub fn scan_room_parameter_entries(
     };
     let string_at = |buf: &[u8], at: usize, limit: usize| -> Option<(String, usize)> {
         let n = usize::try_from(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?)).ok()?;
-        if !(1..=limit).contains(&n) {
+        if n > limit {
             return None;
         }
         let units: Vec<u16> = buf
