@@ -1,10 +1,14 @@
-//! RE-134 (#35): a duct's length and type in its property sets are Revit's.
+//! RE-134 (#35, #822): a duct's length and type in its property sets are
+//! Revit's.
 //!
-//! Revit's IFC4 export of RE1 Mechanical gives each of its 25 rectangular
-//! ducts `Pset_FlowSegmentDuctSegment.Length` and
+//! Revit's IFC2X3 export (Coordination View 2.0) of RE1 Mechanical gives each
+//! of its 25 rectangular ducts `Pset_FlowSegmentDuctSegment.Length` and
 //! `Pset_FlowSegmentPipeSegment.Length` (its length along its axis), and
 //! `Pset_DistributionFlowElementCommon.Reference` and
-//! `Pset_QuantityTakeOff.Reference` (its type's name). For every duct rvt-rs
+//! `Pset_QuantityTakeOff.Reference` (its type's name). rvt-rs writes IFC4,
+//! which has neither `Reference` set: the type's name is in
+//! `Pset_DuctSegmentTypeCommon` and `Pset_EnvironmentalImpactIndicators`, as
+//! Revit's IFC4 export writes it ([`REFERENCE_SETS`]). For every duct rvt-rs
 //! writes with Revit's `Tag`, each of those must be in rvt-rs's export: the
 //! lengths within 0.1 mm of Revit's (each file read in its own length unit),
 //! the references as Revit writes them.
@@ -18,7 +22,15 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 const LENGTH_SETS: [&str; 2] = ["Pset_FlowSegmentDuctSegment", "Pset_FlowSegmentPipeSegment"];
-const REFERENCE_SETS: [&str; 2] = ["Pset_DistributionFlowElementCommon", "Pset_QuantityTakeOff"];
+/// Each IFC2X3 set holding a duct's `Reference` in Revit's export, with the
+/// IFC4 set holding it in rvt-rs's.
+const REFERENCE_SETS: [(&str, &str); 2] = [
+    (
+        "Pset_DistributionFlowElementCommon",
+        "Pset_DuctSegmentTypeCommon",
+    ),
+    ("Pset_QuantityTakeOff", "Pset_EnvironmentalImpactIndicators"),
+];
 const TOLERANCE_METRES: f64 = 1e-4;
 
 /// `#id -> (entity, args)` for every line of a STEP file.
@@ -162,8 +174,13 @@ fn ducts(step: &str, entity: &str) -> BTreeMap<String, Duct> {
                         duct.lengths.insert(set.clone(), number * scale);
                     }
                 }
-                if name == "Reference" && REFERENCE_SETS.contains(&set.as_str()) {
-                    duct.references.insert(set.clone(), value.clone());
+                // Keyed by the IFC4 set, whichever file it is read from.
+                let ifc4 = REFERENCE_SETS
+                    .iter()
+                    .find(|(ifc2x3, ifc4)| name == "Reference" && (set == *ifc2x3 || set == *ifc4))
+                    .map(|(_, ifc4)| *ifc4);
+                if let Some(ifc4) = ifc4 {
+                    duct.references.insert(ifc4.to_string(), value.clone());
                 }
             }
         }

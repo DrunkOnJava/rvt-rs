@@ -1,13 +1,16 @@
-//! B29 (#35): every `Reference` Revit's export writes on the RE1 MEP
+//! B29 (#35, #822): every `Reference` Revit's export writes on the RE1 MEP
 //! models' elements is rvt-rs's.
 //!
-//! Revit's IFC4 exports of RE1 Mechanical, Plumbing and Electrical give
-//! each element with a type `Pset_QuantityTakeOff.Reference` and its common
-//! set's `Reference` (`IfcIdentifier`), the type's name (RE-154). That
-//! includes electrical equipment Revit names by its panel name
-//! (`262416-PANEL:RE-1:428352`) and pipes whose type the reference list does
-//! not give (RE-130). For every element rvt-rs writes with Revit's `Tag`,
-//! each of those values must be rvt-rs's, set for set.
+//! Revit's IFC2X3 exports (Coordination View 2.0) of RE1 Mechanical,
+//! Plumbing and Electrical give each element with a type
+//! `Pset_QuantityTakeOff.Reference` and its common set's `Reference`
+//! (`IfcIdentifier`), the type's name (RE-154). That includes electrical
+//! equipment Revit names by its panel name (`262416-PANEL:RE-1:428352`) and
+//! pipes whose type the reference list does not give (RE-130). rvt-rs writes
+//! IFC4, where those values are in `Pset_EnvironmentalImpactIndicators` and
+//! a distribution element's own type set ([`ifc4_set`]). For every element
+//! rvt-rs writes with Revit's `Tag`, each of those values must be rvt-rs's,
+//! in that IFC4 set.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-<discipline>.rvt` with
 //! `RE1-<discipline>.ifc`. Skips what is absent.
@@ -129,15 +132,40 @@ fn references(step: &str) -> Values {
     out
 }
 
-/// Every element `Tag` in a STEP file.
-fn tags(step: &str) -> Vec<String> {
+/// Every element `Tag` in a STEP file, with the entity it is written as.
+fn tags(step: &str) -> BTreeMap<String, String> {
     entities(step)
-        .values()
-        .filter_map(|(_, a)| {
-            let tag = split_args(a).get(7)?.trim().trim_matches('\'').to_string();
-            tag.parse::<u64>().is_ok().then_some(tag)
+        .into_values()
+        .filter_map(|(entity, a)| {
+            let tag = split_args(&a).get(7)?.trim().trim_matches('\'').to_string();
+            tag.parse::<u64>().is_ok().then_some((tag, entity))
         })
         .collect()
+}
+
+/// The IFC4 set holding a `Reference` that Revit's IFC2X3 export writes in
+/// `set`, on an element rvt-rs writes as `entity`: `set` itself, except for
+/// IFC2X3's `Pset_QuantityTakeOff` (IFC4's `Pset_EnvironmentalImpactIndicators`)
+/// and `Pset_DistributionFlowElementCommon` (the entity's IFC4 type set, none
+/// for an entity IFC4 gives none), as Revit's IFC4 export of the BIM4LCA
+/// office writes them.
+fn ifc4_set(set: &str, entity: &str) -> Option<String> {
+    let set = match set {
+        "Pset_QuantityTakeOff" => "Pset_EnvironmentalImpactIndicators",
+        "Pset_DistributionFlowElementCommon" => match entity {
+            "IFCDUCTSEGMENT" => "Pset_DuctSegmentTypeCommon",
+            "IFCPIPESEGMENT" => "Pset_PipeSegmentTypeCommon",
+            "IFCDUCTFITTING" => "Pset_DuctFittingTypeCommon",
+            "IFCPIPEFITTING" => "Pset_PipeFittingTypeCommon",
+            "IFCAIRTERMINAL" => "Pset_AirTerminalTypeCommon",
+            "IFCSANITARYTERMINAL" => "Pset_SanitaryTerminalTypeCommon",
+            "IFCLIGHTFIXTURE" => "Pset_LightFixtureTypeCommon",
+            "IFCELECTRICAPPLIANCE" => "Pset_ElectricApplianceTypeCommon",
+            _ => return None,
+        },
+        other => other,
+    };
+    Some(set.to_string())
 }
 
 #[test]
@@ -162,7 +190,10 @@ fn re1_mep_references_are_revits() {
         let written = tags(&step);
         let shared: Values = theirs
             .into_iter()
-            .filter(|((tag, _), _)| written.contains(tag))
+            .filter_map(|((tag, set), value)| {
+                let set = ifc4_set(&set, written.get(&tag)?)?;
+                Some(((tag, set), value))
+            })
             .collect();
         assert!(
             !shared.is_empty(),

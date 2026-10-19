@@ -1297,14 +1297,14 @@ impl StepWriter {
             );
         }
 
-        // #35: the sets Revit's export gives every storey and the building
-        // on the RE1 models. A model with no decoded Level has neither.
-        for (index, storey) in storeys.iter().enumerate() {
-            for set in &PropertySet::storey_sets(&storey.name) {
-                let key = [storey_gids[index].as_str(), set.name.as_str()].join("\u{1f}");
+        // #35: the sets Revit's export gives every storey and the building.
+        // A model with no decoded Level has neither.
+        for (storey_gid, &storey_id) in storey_gids.iter().zip(&storey_ids) {
+            for set in &PropertySet::storey_sets() {
+                let key = [storey_gid.as_str(), set.name.as_str()].join("\u{1f}");
                 self.emit_property_set(
                     owner_hist,
-                    storey_ids[index],
+                    storey_id,
                     set,
                     &gid(&["property-set", &key]),
                     &gid(&["defines-by-properties", &key]),

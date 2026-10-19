@@ -1372,35 +1372,21 @@ pub struct PropertySet {
 }
 
 impl PropertySet {
-    /// `Pset_AirSideSystemInformation` and `Pset_ProductRequirements`, each
-    /// with `Name` (`IfcLabel`) `name`: the sets Revit's export gives every
-    /// storey and space on the RE1 models, holding its name (#35).
-    pub fn name_sets(name: &str) -> Vec<PropertySet> {
-        ["Pset_AirSideSystemInformation", "Pset_ProductRequirements"]
-            .into_iter()
-            .map(|set| PropertySet {
-                name: set.into(),
-                properties: vec![Property {
-                    name: "Name".into(),
-                    value: PropertyValue::Label(name.to_string()),
-                }],
-            })
-            .collect()
-    }
-
-    /// The sets Revit's export gives a storey on the RE1 models (#35): its
-    /// [`Self::name_sets`] and `Pset_BuildingStoreyCommon` with `AboveGround`
-    /// unknown.
-    pub fn storey_sets(name: &str) -> Vec<PropertySet> {
-        let mut sets = Self::name_sets(name);
-        sets.push(PropertySet {
+    /// The set Revit's export gives a storey (#35): `Pset_BuildingStoreyCommon`
+    /// with `AboveGround` unknown. Its IFC2X3 export of the RE1 models also
+    /// gives each storey and space `Pset_AirSideSystemInformation` and
+    /// `Pset_ProductRequirements` holding its name; its IFC4 export of the
+    /// BIM4LCA office gives neither, IFC4 has no `Pset_ProductRequirements`,
+    /// and it applies `Pset_AirSideSystemInformation` to spaces and zones
+    /// only, its `Name` that of the air-side system (#822).
+    pub fn storey_sets() -> Vec<PropertySet> {
+        vec![PropertySet {
             name: "Pset_BuildingStoreyCommon".into(),
             properties: vec![Property {
                 name: "AboveGround".into(),
                 value: PropertyValue::Logical(None),
             }],
-        });
-        sets
+        }]
     }
 
     /// `Pset_BuildingCommon` as Revit's export gives the building on the RE1

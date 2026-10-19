@@ -56,6 +56,34 @@ pub struct StandardPropertySet {
     pub properties: &'static [(&'static str, StandardPropertyKind)],
 }
 
+impl StandardPropertySet {
+    /// Whether the set applies to an element written as `ifc_type`, with the
+    /// predefined type `predefined_type`: the entity or one of its supertypes
+    /// is one the set applies to, with the predefined type the set is scoped
+    /// to, if it is.
+    pub fn applies_to(&self, ifc_type: &str, predefined_type: Option<&str>) -> bool {
+        let mut entity = Some(ifc_type);
+        while let Some(current) = entity {
+            if self.applies.iter().any(|(applicable, scoped)| {
+                *applicable == current
+                    && scoped.is_none_or(|scoped| predefined_type == Some(scoped))
+            }) {
+                return true;
+            }
+            entity = supertype(current);
+        }
+        false
+    }
+
+    /// The kind of the set's property `property`, `None` for one not listed.
+    pub fn property_kind(&self, property: &str) -> Option<StandardPropertyKind> {
+        self.properties
+            .iter()
+            .find(|(name, _)| *name == property)
+            .map(|(_, kind)| *kind)
+    }
+}
+
 /// IFC4's property sets that apply to an entity, by name.
 pub const STANDARD_PROPERTY_SETS: &[StandardPropertySet] = table::SETS;
 
@@ -78,29 +106,12 @@ fn supertype(ifc_type: &str) -> Option<&'static str> {
 /// The kind of `property` in the standard set named `set`, `None` for a set
 /// or property not listed.
 pub fn property_kind(set: &str, property: &str) -> Option<StandardPropertyKind> {
-    standard_set(set)?
-        .properties
-        .iter()
-        .find(|(name, _)| *name == property)
-        .map(|(_, kind)| *kind)
+    standard_set(set)?.property_kind(property)
 }
 
 /// Whether the standard set named `set` applies to an element written as
-/// `ifc_type`, with the predefined type `predefined_type`: the entity or one
-/// of its supertypes is one the set applies to, with the predefined type the
-/// set is scoped to, if it is.
+/// `ifc_type`, with the predefined type `predefined_type`
+/// ([`StandardPropertySet::applies_to`]).
 pub fn applies_to(set: &str, ifc_type: &str, predefined_type: Option<&str>) -> bool {
-    let Some(set) = standard_set(set) else {
-        return false;
-    };
-    let mut entity = Some(ifc_type);
-    while let Some(current) = entity {
-        if set.applies.iter().any(|(applicable, scoped)| {
-            *applicable == current && scoped.is_none_or(|scoped| predefined_type == Some(scoped))
-        }) {
-            return true;
-        }
-        entity = supertype(current);
-    }
-    false
+    standard_set(set).is_some_and(|set| set.applies_to(ifc_type, predefined_type))
 }

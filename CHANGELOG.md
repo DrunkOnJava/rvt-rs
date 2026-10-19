@@ -116,6 +116,9 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **`ifc::entities::PropertySet::name_sets` is removed, and `storey_sets`
+  takes no name (#822).** The two sets `name_sets` built are IFC2X3's, and a
+  storey's sets no longer include them.
 - **CI and Measure run IfcOpenShell 0.9.0.post1 (#773).** Five of Measure's
   scorers let go of an IFC file while they still used its elements, which
   IfcOpenShell 0.9 does not allow (`room_names_vs_ifc` crashed under 0.9.0);
@@ -134,6 +137,30 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **An element's `Reference` is in IFC4's property sets, not IFC2X3's
+  (#822).** RE-154 wrote the type's name in `Pset_QuantityTakeOff` on every
+  element with a type and in `Pset_DistributionFlowElementCommon` on MEP
+  elements, as Revit's exports of the RE1 models do. Those exports are
+  IFC2X3, and IFC4 has neither set. The name now goes in every IFC4 set,
+  from #817's table, that applies to the element's entity and declares
+  `Reference`: `Pset_EnvironmentalImpactIndicators` on every element, the
+  entity's common set, the reinforcement sets of walls, slabs, columns and
+  beams, and a distribution element's own type set
+  (`Pset_SanitaryTerminalTypeCommon` and so on), as Revit's IFC4 export of
+  the BIM4LCA office writes them. Columns, windows, beams and shading
+  devices had no `Reference` before, and MEP elements had it only in the
+  IFC2X3 set. On the office as built, values equal to Revit's go from 18,502
+  to 32,053 (from 18,501 to 32,225 at building permit) and values Revit does
+  not write from 13,257 to 621; every new value Revit's export holds is
+  equal. Against Revit's IFC2X3 exports of the RE1 models every `Reference`
+  value is still Revit's, each in the IFC4 set that holds it.
+- **Storeys and spaces carry no IFC2X3 name sets (#822).**
+  `Pset_AirSideSystemInformation` and `Pset_ProductRequirements` holding a
+  storey's or space's name, as Revit's IFC2X3 export of the RE1 models writes
+  them, are no longer written: IFC4 has no `Pset_ProductRequirements` and
+  applies `Pset_AirSideSystemInformation`, the information of the air-side
+  system serving a space, to spaces and zones only, and Revit's IFC4 export
+  of the office writes neither.
 - **Each piece of an element written in pieces carries the element's
   property sets (#816).** An element whose sketch has separate loops is one
   entity per piece (#331), and every set it gets after its body went on the

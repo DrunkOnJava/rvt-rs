@@ -80,19 +80,44 @@ IFC2X3_SPACE_COVERINGS = {
     "ConcealedCeiling",
 }
 
+# An IFC2X3 export's Reference sets that IFC4 does not have (#822). Revit's
+# IFC2X3 export writes an element's type name in Pset_QuantityTakeOff and, on
+# a distribution element, Pset_DistributionFlowElementCommon; its IFC4 export
+# writes it in Pset_EnvironmentalImpactIndicators and in the element's own
+# type set, which IFC4 applies to the entity (BIM4LCA office).
+IFC2X3_QUANTITY_TAKE_OFF = "Pset_QuantityTakeOff"
+IFC2X3_FLOW_ELEMENT_COMMON = "Pset_DistributionFlowElementCommon"
+IFC4_TYPE_SETS = {
+    "IfcDuctSegment": "Pset_DuctSegmentTypeCommon",
+    "IfcPipeSegment": "Pset_PipeSegmentTypeCommon",
+    "IfcDuctFitting": "Pset_DuctFittingTypeCommon",
+    "IfcPipeFitting": "Pset_PipeFittingTypeCommon",
+    "IfcAirTerminal": "Pset_AirTerminalTypeCommon",
+    "IfcSanitaryTerminal": "Pset_SanitaryTerminalTypeCommon",
+    "IfcWasteTerminal": "Pset_WasteTerminalTypeCommon",
+    "IfcFireSuppressionTerminal": "Pset_FireSuppressionTerminalTypeCommon",
+    "IfcLightFixture": "Pset_LightFixtureTypeCommon",
+    "IfcElectricAppliance": "Pset_ElectricApplianceTypeCommon",
+    "IfcAlarm": "Pset_AlarmTypeCommon",
+}
+
 
 def properties(path):
-    """(object key, set, property) -> value, and the keys of every object. An
-    IFC2X3 file's space coverings are keyed under their IFC4 set."""
+    """(object key, set, property) -> value, the keys of every object, each
+    object's entity by key, and whether the file is IFC2X3. An IFC2X3 file's
+    space coverings, and its Pset_QuantityTakeOff.Reference, are keyed under
+    their IFC4 set."""
     f = ifcopenshell.open(path)
     ifc2x3 = f.schema == "IFC2X3"
     metres_per_unit = ifcopenshell.util.unit.calculate_unit_scale(f)
     out = {}
     objects = set()
+    entities = {}
     for product in f.by_type("IfcObject"):
         key = key_of(product)
         if key:
             objects.add(key)
+            entities[key] = product.is_a()
     for rel in f.by_type("IfcRelDefinesByProperties"):
         pset = rel.RelatingPropertyDefinition
         if not pset.is_a("IfcPropertySet") or not (pset.Name or "").startswith("Pset_"):
@@ -105,6 +130,8 @@ def properties(path):
                 name = pset.Name
                 if ifc2x3 and name == "Pset_SpaceCommon" and prop.Name in IFC2X3_SPACE_COVERINGS:
                     name = "Pset_SpaceCoveringRequirements"
+                if ifc2x3 and name == IFC2X3_QUANTITY_TAKE_OFF and prop.Name == "Reference":
+                    name = "Pset_EnvironmentalImpactIndicators"
                 if prop.is_a("IfcPropertySingleValue"):
                     out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
                 elif prop.is_a("IfcPropertyEnumeratedValue"):
@@ -115,7 +142,7 @@ def properties(path):
                 elif prop.is_a("IfcPropertyListValue"):
                     values = tuple(value_of(v, metres_per_unit) for v in prop.ListValues or ())
                     out[(key, name, prop.Name)] = ("list", values)
-    return out, objects
+    return out, objects, entities, ifc2x3
 
 
 def main(argv):
@@ -128,7 +155,23 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    (ours, our_objects), (theirs, their_objects) = properties(args[0]), properties(args[1])
+    (ours, our_objects, our_entities, _), (theirs, their_objects, _, their_ifc2x3) = (
+        properties(args[0]),
+        properties(args[1]),
+    )
+    if their_ifc2x3:
+        # A distribution element's IFC2X3 Reference is compared with the one
+        # in the IFC4 type set of the entity rvt-rs writes it as.
+        theirs = {
+            (
+                (key, IFC4_TYPE_SETS[our_entities[key]], prop)
+                if pset == IFC2X3_FLOW_ELEMENT_COMMON
+                and prop == "Reference"
+                and our_entities.get(key) in IFC4_TYPE_SETS
+                else (key, pset, prop)
+            ): value
+            for (key, pset, prop), value in theirs.items()
+        }
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     worst = []
     for (key, pset, prop), value in sorted(theirs.items()):

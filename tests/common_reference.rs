@@ -1,15 +1,23 @@
-//! RE-154 (#35): the `Reference` of Revit's common property sets.
+//! RE-154 (#35, #822): the `Reference` of Revit's common property sets.
 //!
-//! Revit's IFC4 export gives every element of the RE1 models
-//! `Pset_QuantityTakeOff.Reference` and, where its entity has one, its
-//! `Pset_<Entity>Common.Reference` (and on walls and slabs
+//! Revit's IFC2X3 export (Coordination View 2.0) gives every element of the
+//! RE1 models `Pset_QuantityTakeOff.Reference` and, where its entity has one,
+//! its `Pset_<Entity>Common.Reference` (and on walls and slabs
 //! `Pset_ReinforcementBarPitchOf{Wall,Slab}.Reference`), each its type's name.
-//! For every element rvt-rs writes as the same entity, with the same `Tag` and
-//! `Name` (`Family:Type:ElementId`) as Revit's, each of those `Reference`
-//! values must be in rvt-rs's export too, with Revit's value type, and rvt-rs
-//! must write no `Reference` Revit does not on an element both exports hold.
-//! An element Revit's export does not hold at all is the element scorers'
-//! concern, not this one's.
+//! rvt-rs writes IFC4, which has no `Pset_QuantityTakeOff` or
+//! `Pset_DistributionFlowElementCommon`: Revit's IFC4 export writes those
+//! values in `Pset_EnvironmentalImpactIndicators` and in a distribution
+//! element's own type set ([`ifc4_set`]), and so does rvt-rs. For every
+//! element rvt-rs writes as the same entity, with the same `Tag` and `Name`
+//! (`Family:Type:ElementId`) as Revit's, each of Revit's `Reference` values
+//! must be in rvt-rs's export too, in that IFC4 set, with Revit's value type,
+//! and rvt-rs must write no `Reference` Revit does not on an element both
+//! exports hold: in a set Revit's export has, its value; in an IFC4 set that
+//! has no IFC2X3 counterpart on the element (an alarm's `Pset_AlarmTypeCommon`,
+//! where Revit's IFC2X3 export writes an `IfcDistributionControlElement`), one
+//! of the `Reference` values Revit's export gives the element. An element
+//! Revit's export does not hold at all is the element scorers' concern, not
+//! this one's.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: the four `RE1-*.rvt` models with
 //! their `RE1-*.ifc` exports. Skips what is absent.
@@ -96,11 +104,37 @@ fn supertype(entity: &str) -> &str {
     }
 }
 
-/// One element: its entity ([`supertype`]), `Name` as written, and each
-/// property set's `Reference` as written (`IFCIDENTIFIER('-')`).
+/// The IFC4 set holding a `Reference` that Revit's IFC2X3 export writes in
+/// `set`, on an element rvt-rs writes as `entity`: `set` itself, except for
+/// IFC2X3's `Pset_QuantityTakeOff` (IFC4's `Pset_EnvironmentalImpactIndicators`)
+/// and `Pset_DistributionFlowElementCommon` (the entity's IFC4 type set, none
+/// for an entity IFC4 gives none), as Revit's IFC4 export of the BIM4LCA
+/// office writes them.
+fn ifc4_set<'a>(set: &'a str, entity: &str) -> Option<&'a str> {
+    match set {
+        "Pset_QuantityTakeOff" => Some("Pset_EnvironmentalImpactIndicators"),
+        "Pset_DistributionFlowElementCommon" => match entity {
+            "IFCDUCTSEGMENT" => Some("Pset_DuctSegmentTypeCommon"),
+            "IFCPIPESEGMENT" => Some("Pset_PipeSegmentTypeCommon"),
+            "IFCDUCTFITTING" => Some("Pset_DuctFittingTypeCommon"),
+            "IFCPIPEFITTING" => Some("Pset_PipeFittingTypeCommon"),
+            "IFCAIRTERMINAL" => Some("Pset_AirTerminalTypeCommon"),
+            "IFCSANITARYTERMINAL" => Some("Pset_SanitaryTerminalTypeCommon"),
+            "IFCLIGHTFIXTURE" => Some("Pset_LightFixtureTypeCommon"),
+            "IFCELECTRICAPPLIANCE" => Some("Pset_ElectricApplianceTypeCommon"),
+            _ => None,
+        },
+        other => Some(other),
+    }
+}
+
+/// One element: its entity ([`supertype`]) and the entity as written, its
+/// `Name` as written, and each property set's `Reference` as written
+/// (`IFCIDENTIFIER('-')`).
 #[derive(Debug, Default)]
 struct Element {
     entity: String,
+    written: String,
     name: String,
     references: BTreeMap<String, String>,
 }
@@ -121,12 +155,14 @@ fn elements(step: &str) -> BTreeMap<String, Element> {
         if tag.is_empty() || !tag.chars().all(|c| c.is_ascii_digit()) {
             continue;
         }
+        let written = entity.clone();
         let entity = supertype(entity).to_string();
         by_id.insert(*id, tag.clone());
         out.insert(
             tag,
             Element {
                 entity,
+                written,
                 name: f.get(2).cloned().unwrap_or_default(),
                 references: BTreeMap::new(),
             },
@@ -198,13 +234,25 @@ fn re1_common_references_are_revits() {
             let Some(revit) = theirs.get(tag) else {
                 continue;
             };
+            let revit_references: BTreeMap<&str, &String> = revit
+                .references
+                .iter()
+                .filter_map(|(set, value)| Some((ifc4_set(set, &element.written)?, value)))
+                .collect();
             for (set, value) in &element.references {
-                if revit.references.get(set) != Some(value) {
+                let held = match revit_references.get(set.as_str()) {
+                    Some(revit_value) => *revit_value == value,
+                    None => revit
+                        .references
+                        .values()
+                        .any(|revit_value| revit_value == value),
+                };
+                if !held {
                     wrong.push((
                         tag.clone(),
                         set.clone(),
                         value.clone(),
-                        revit.references.get(set).cloned(),
+                        revit_references.get(set.as_str()).map(|v| v.to_string()),
                     ));
                 }
             }
@@ -212,12 +260,12 @@ fn re1_common_references_are_revits() {
                 continue;
             }
             compared += 1;
-            for (set, value) in &revit.references {
-                if set == "Pset_SpaceCommon" {
+            for (set, value) in &revit_references {
+                if *set == "Pset_SpaceCommon" {
                     continue;
                 }
-                if element.references.get(set) != Some(value) {
-                    missing.push((tag.clone(), set.clone(), value.clone()));
+                if element.references.get(*set) != Some(*value) {
+                    missing.push((tag.clone(), set.to_string(), value.to_string()));
                 }
             }
         }
