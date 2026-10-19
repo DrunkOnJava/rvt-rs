@@ -3,7 +3,7 @@
 **Date:** 2026-10-18
 **Issues:** #763; follows RE-21 (the instance words), RE-35 (the partition record chain), RE-40 (design options), RE-117 (room number and name entries) and RE-145 / #800 (the latest copy).
 **Artefacts:** the BIM4LCA office, concrete structure, as built and at building permit, with Revit's own IFC export of each (`research/bim4lca-measure.tsv`, CC BY-SA 4.0, read by byte range for a Measure run and never stored); the six reference models; Autodesk's sample projects.
-**Probe and scorers:** `examples/probe_area_records.rs` and `tools/re/area_spaces_vs_ifc.py` (branch `re/763-area-records`); `tools/re/room_names_vs_ifc.py`, which now also compares each space's storey.
+**Probe and scorers:** `examples/probe_re191_area_records.rs` with its scorer `tools/re/area_spaces_vs_ifc.py`, measured in runs 39175563031 and 39177901496 as `probe_area_records`, its name on the research branch; `tools/re/room_names_vs_ifc.py`, which now also compares each space's storey.
 **Status:** positive on both office files. All of Revit's 30 area spaces are written with Revit's GlobalId, number, name, storey and space type, and without a body (run 39182294745).
 
 ## 1. Before
@@ -26,7 +26,7 @@ The Level is therefore the one recovered Level id the record names, not a fixed 
 
 The number and name are RE-117's `ROOM_NUMBER` and `ROOM_NAME` entries in the Area's data object (class `0x0e1c`), as for a room. Its data object also holds its own "Export to IFC As" `IfcSpace` on 29 of the 30.
 
-`probe_area_records` against Revit's export, matched by Revit's GlobalId (run 39175563031):
+The probe against Revit's export, matched by Revit's GlobalId (run 39175563031):
 
 | file | Areas | placed | in Revit's export | number and name | storey |
 |---|---:|---:|---:|---:|---:|
@@ -88,5 +88,5 @@ Measure A/B against `main` (086b05b), run 39182294745. Both office files give th
 
 ```bash
 gh workflow run measure.yml -f ref=main -f base=none -f nordic=true
-gh workflow run measure.yml -f ref=re/763-area-records -f base=none -f nordic=true -f probe=probe_area_records -f probe_scorer=area_spaces_vs_ifc
+gh workflow run measure.yml -f ref=main -f base=none -f nordic=true -f probe=probe_re191_area_records -f probe_scorer=area_spaces_vs_ifc
 ```
