@@ -17,7 +17,7 @@ Usage:
 
     python3 tools/re/wall_angled_joins_vs_ifc.py walls.jsonl revit-export.ifc
 
-Needs IfcOpenShell (tested with 0.8.5) and shapely.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins) and shapely.
 """
 
 import collections

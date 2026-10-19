@@ -17,7 +17,7 @@ Usage:
 
     python3 tools/re/reference_slots_vs_ifc.py refs.jsonl revit-export.ifc [--list]
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

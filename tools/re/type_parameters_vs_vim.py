@@ -6,7 +6,7 @@ in a VIM export of the model.
 Usage: python3 tools/re/type_parameters_vs_vim.py <rvt-rs.ifc> <model.vim>
 
 A VIM is a BFAST container; the reader below is the minimum needed. Needs
-IfcOpenShell (tested with 0.8.5)."""
+IfcOpenShell (the version tools/ci/requirements-ifc.txt pins)."""
 import collections, struct, sys
 
 

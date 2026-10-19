@@ -16,7 +16,7 @@ Usage:
 
     python3 tools/re/openings_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--shared DEG,DX,DY,DZ] [--list N]
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

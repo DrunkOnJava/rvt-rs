@@ -19,7 +19,7 @@ Usage:
 
     python3 tools/re/wall_ends_cv_vs_ifc.py <model.glb> <revit-export.ifc> [--list N]
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

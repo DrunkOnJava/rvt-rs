@@ -31,7 +31,7 @@ Usage:
 
 `-v` prints each layer set whose names or spans differ.
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

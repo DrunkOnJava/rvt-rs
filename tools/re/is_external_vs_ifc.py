@@ -30,7 +30,7 @@ value, the element is counted as undecided rather than defaulted. With
 Usage:
     python3 tools/re/is_external_vs_ifc.py PROBE.txt REVIT.ifc [--list]
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

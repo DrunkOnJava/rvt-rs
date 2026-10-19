@@ -18,7 +18,7 @@ Usage:
     python3 tools/re/door_window_sizes_vs_ifc.py <probe output> <revit-export.ifc> [--list]
     python3 tools/re/door_window_sizes_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--list]
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

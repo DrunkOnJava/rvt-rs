@@ -15,7 +15,7 @@ Usage:
 
     python3 tools/re/instance_transforms_vs_ifc.py <transforms.jsonl> <revit-export.ifc>
 
-Needs IfcOpenShell (tested with 0.8.5) and NumPy.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins) and NumPy.
 """
 
 import collections

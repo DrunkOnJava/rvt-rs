@@ -21,7 +21,7 @@ Usage:
 
     python3 tools/re/beam_sections_in_ifc.py <rvt-rs.ifc>
 
-Needs IfcOpenShell (tested with 0.8.5) and NumPy.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins) and NumPy.
 """
 
 import sys, ifcopenshell, ifcopenshell.geom, ifcopenshell.util.element as ue, numpy as np, collections

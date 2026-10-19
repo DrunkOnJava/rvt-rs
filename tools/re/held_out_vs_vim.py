@@ -14,7 +14,7 @@ BuiltInCategory, Level and UniqueId per source document):
   from its UniqueId (the episode GUID with its last four bytes XORed with
   the element suffix, compressed to 22 characters).
 
-Needs IfcOpenShell 0.8.5.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 
 Usage:
 

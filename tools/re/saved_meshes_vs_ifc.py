@@ -14,7 +14,7 @@ shared coordinates, pass the internal-to-shared transform (`--rotate-deg`,
 removes the residual as one translation for the whole file, and without it
 the residual is taken as the median difference over the scored elements.
 
-Needs IfcOpenShell 0.8.5 (`pip install ifcopenshell==0.8.5`).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 
 Usage:
 

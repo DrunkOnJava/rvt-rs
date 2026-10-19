@@ -29,7 +29,7 @@ Usage:
 
     python3 tools/re/tapered_walls_vs_ifc.py <probe.jsonl> <rvt-rs.ifc> <revit-export.ifc> [--list N]
 
-Needs IfcOpenShell (tested with 0.8.5) and NumPy.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins) and NumPy.
 """
 
 import json

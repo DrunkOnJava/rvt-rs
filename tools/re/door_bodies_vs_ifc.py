@@ -22,7 +22,7 @@ Usage:
 
 `--class` scores another filler class (default `IfcDoor`).
 
-Needs IfcOpenShell (tested with 0.8.5) and NumPy.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins) and NumPy.
 """
 
 import collections

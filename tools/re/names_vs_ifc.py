@@ -19,7 +19,7 @@ Usage:
 multistory stair once per storey with one `Tag`, naming the later copies
 with a `:2` suffix; `--any-copy` counts a name equal when it equals any of
 the elements sharing its `Tag`, where the default compares with the last.
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections
