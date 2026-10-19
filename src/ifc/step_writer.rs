@@ -114,6 +114,19 @@ fn element_tail_for(ifc_upper: &str) -> ElementTail {
     }
 }
 
+/// IFC4's `IfcFlowDirectionEnum`, the values a port's `FlowDirection` is
+/// written with (#828).
+const PORT_FLOW_DIRECTIONS: [&str; 4] = ["SOURCE", "SINK", "SOURCEANDSINK", "NOTDEFINED"];
+/// IFC4's `IfcDistributionPortTypeEnum` but `USERDEFINED`, which needs an
+/// `ObjectType` a port is written without: the values a port's
+/// `PredefinedType` is written with (#828).
+const PORT_TYPES: [&str; 5] = ["CABLE", "CABLECARRIER", "DUCT", "PIPE", "NOTDEFINED"];
+
+/// `raw` as a token of `allowed`, an IFC4 enumeration, or `None`.
+fn step_enum_of(raw: &str, allowed: &[&str]) -> Option<String> {
+    step_enum_token(raw).filter(|token| allowed.contains(&token.as_str()))
+}
+
 /// Accept a `PredefinedType` token only when it is a well-formed STEP
 /// enumeration name: uppercase ASCII letters, digits and underscores,
 /// starting with a letter.
@@ -2753,8 +2766,10 @@ impl StepWriter {
         }
 
         // RE-138 (#528): the joins of ducts and pipes. A connector is an
-        // `IfcDistributionPort` named after its element and index, with no
-        // flow direction (the file's lists carry none), nested in its element
+        // `IfcDistributionPort` named after its element and index, with
+        // `SOURCEANDSINK` where its connector's domain gives it no direction
+        // and `NOTDEFINED` where the direction is the connector's, which is
+        // not read (RE-197), nested in its element
         // by one `IfcRelNests` per element, as Revit's IFC4 export nests them
         // (B83, B84): IFC4 keeps `IfcRelConnectsPortToElement` for a dynamic
         // connection and restricts it to distribution elements. A join is an
@@ -2762,6 +2777,41 @@ impl StepWriter {
         // join it is in.
         let mut ports: HashMap<(u32, u32), usize> = HashMap::new();
         let mut nested: BTreeMap<u32, (usize, Vec<usize>)> = BTreeMap::new();
+        // #828: each connector's flow direction, `.NOTDEFINED.` where none
+        // is read (RE-197), and port type, `$` where none is read.
+        let port_attributes: HashMap<(u32, u32), String> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::Port {
+                    id,
+                    index,
+                    predefined_type,
+                    flow_direction,
+                    ..
+                } => Some((
+                    (*id, *index),
+                    format!(
+                        ".{}.,{}",
+                        flow_direction
+                            .as_deref()
+                            .and_then(|flow| step_enum_of(flow, &PORT_FLOW_DIRECTIONS))
+                            .unwrap_or_else(|| "NOTDEFINED".into()),
+                        predefined_type
+                            .as_deref()
+                            .and_then(|kind| step_enum_of(kind, &PORT_TYPES))
+                            .map_or("$".to_string(), |kind| format!(".{kind}."))
+                    ),
+                )),
+                _ => None,
+            })
+            .collect();
+        let port_attribute = |id: u32, index: u32| {
+            port_attributes
+                .get(&(id, index))
+                .map_or(".NOTDEFINED.,$", String::as_str)
+                .to_string()
+        };
         for entity in &model.entities {
             let super::entities::IfcEntity::PortConnection {
                 a,
@@ -2792,8 +2842,9 @@ impl StepWriter {
                 self.emit_entity(
                     port,
                     format!(
-                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,$,$)",
+                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,{},$)",
                         gid(&["port", &id_text, &index_text]),
+                        port_attribute(id, index),
                     ),
                 );
                 nested
@@ -2824,7 +2875,10 @@ impl StepWriter {
 
         // B54: a duct's or pipe's connector no join has given a port.
         for entity in &model.entities {
-            let super::entities::IfcEntity::Port { element, id, index } = entity else {
+            let super::entities::IfcEntity::Port {
+                element, id, index, ..
+            } = entity
+            else {
                 continue;
             };
             if ports.contains_key(&(*id, *index)) {
@@ -2839,8 +2893,9 @@ impl StepWriter {
             self.emit_entity(
                 port,
                 format!(
-                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,$,$)",
+                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,{},$)",
                     gid(&["port", &id_text, &index_text]),
+                    port_attribute(*id, *index),
                 ),
             );
             nested

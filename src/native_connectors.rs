@@ -41,13 +41,46 @@ fn element_id(value: &serde_json::Value) -> Option<u64> {
         .and_then(|id| u64::try_from(id).ok())
 }
 
+/// The IFC4 `PredefinedType` of a port on a connector of Revit's `domain`
+/// (#828): HVAC `DUCT`, electrical `CABLE`, piping `PIPE`, as Revit's IFC4
+/// export types the ports of the BIM4LCA office, and `NOTDEFINED` for an
+/// undefined domain, as Revit's exporter types it (revit-ifc
+/// `ConnectorExporter`; a cable tray or conduit connector, which it types
+/// `CABLECARRIER`, has no port, RE-169).
+pub fn port_type_of_domain(domain: i64) -> &'static str {
+    match domain {
+        1 => "DUCT",
+        2 => "CABLE",
+        3 => "PIPE",
+        _ => "NOTDEFINED",
+    }
+}
+
+/// The IFC4 `FlowDirection` of a port on a connector of Revit's `domain`
+/// (RE-197): `SOURCEANDSINK` for every domain but HVAC and piping, which
+/// alone give a connector a direction in Revit's exporter (revit-ifc
+/// `ConnectorExporter`); measured on electrical connectors, every port of
+/// which is `SOURCEANDSINK` in Revit's exports of the RE1 models and the
+/// BIM4LCA office. `None` for HVAC and piping: their connector's direction
+/// is the family's, which rvt-rs does not read. An electrical connector whose
+/// description sets `Flow=Source` or `Flow=Sink` is exported with that
+/// direction by Revit; rvt-rs does not read the description (#834), so such
+/// a port is written `SOURCEANDSINK`.
+pub fn port_flow_direction_of_domain(domain: i64) -> Option<&'static str> {
+    match domain {
+        1 | 3 => None,
+        _ => Some("SOURCEANDSINK"),
+    }
+}
+
 /// For each of `symbols` that is a `FamilySymbol` with connectors, the
-/// connector indices Revit's export writes ports for, in the symbol's order.
-/// Errs where the native record path does not read the file's release.
+/// connector indices Revit's export writes ports for, in the symbol's order,
+/// each with its connector's domain. Errs where the native record path does
+/// not read the file's release.
 pub fn symbol_port_indices(
     rf: &mut RevitFile,
     symbols: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, Vec<u32>>> {
+) -> anyhow::Result<BTreeMap<u64, Vec<(u32, i64)>>> {
     let mut connectors: BTreeMap<u64, (u64, Vec<i64>)> = BTreeMap::new();
     let mut domains: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
     // One pass reads the symbols and every family (B79): which families the
@@ -103,14 +136,13 @@ pub fn symbol_port_indices(
         .into_iter()
         .filter_map(|(symbol, (family, indices))| {
             let cells = domains.get(&family)?;
-            let ports: Vec<u32> = indices
+            let ports: Vec<(u32, i64)> = indices
                 .into_iter()
-                .filter(|index| {
-                    cells
-                        .get(index)
-                        .is_some_and(|domain| PORT_DOMAINS.contains(domain))
+                .filter_map(|index| {
+                    let domain = *cells.get(&index)?;
+                    PORT_DOMAINS.contains(&domain).then_some(())?;
+                    Some((u32::try_from(index).ok()?, domain))
                 })
-                .filter_map(|index| u32::try_from(index).ok())
                 .collect();
             (!ports.is_empty()).then_some((symbol, ports))
         })

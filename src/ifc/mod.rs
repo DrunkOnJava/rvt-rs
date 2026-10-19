@@ -2129,8 +2129,17 @@ fn attach_family_instance_ports(
         return;
     };
     for (element, id, symbol) in instances {
-        for &index in ports.get(&u64::from(symbol)).into_iter().flatten() {
-            entities.push(entities::IfcEntity::Port { element, id, index });
+        for &(index, domain) in ports.get(&u64::from(symbol)).into_iter().flatten() {
+            entities.push(entities::IfcEntity::Port {
+                element,
+                id,
+                index,
+                predefined_type: Some(
+                    crate::native_connectors::port_type_of_domain(domain).to_string(),
+                ),
+                flow_direction: crate::native_connectors::port_flow_direction_of_domain(domain)
+                    .map(str::to_string),
+            });
         }
     }
 }
