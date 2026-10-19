@@ -43,6 +43,7 @@ use crate::partition_element_records::{
     CATEGORY_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, PLACEMENT_KIND_INSTANCE,
     PLACEMENT_KIND_OFFSET, file_bbox_marker, frame_design_option, partition_record_chain,
 };
+use crate::partition_room_parameters::{LatestCopy, partition_number};
 use crate::walker::{DecodedElement, ElementProvenance, InstanceField};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -72,13 +73,11 @@ struct AreaRecord {
     bytes: Vec<u8>,
 }
 
-/// The number of partition stream `stream` (`Partitions/398` is 398).
-fn partition_number(stream: &str) -> u32 {
-    stream
-        .rsplit('/')
-        .next()
-        .and_then(|number| number.parse().ok())
-        .unwrap_or(0)
+/// Two copies of a record agree when their bytes do, wherever they sit.
+impl PartialEq for AreaRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.bytes == other.bytes
+    }
 }
 
 /// Every declared Area's chain record, its latest partition's copy; an Area
@@ -88,7 +87,7 @@ fn area_records(
     marker: &[u8; 8],
     declared: &BTreeSet<u32>,
 ) -> BTreeMap<u32, AreaRecord> {
-    let mut found: BTreeMap<u32, (u32, Option<AreaRecord>)> = BTreeMap::new();
+    let mut found = LatestCopy::default();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -104,28 +103,18 @@ fn area_records(
             {
                 continue;
             }
-            let record = AreaRecord {
-                stream: stream.clone(),
-                offset: span.start,
-                bytes: buf[span.start..span.end].to_vec(),
-            };
-            match found.get_mut(&id) {
-                Some((held, slot)) if *held == partition => {
-                    if slot.as_ref().map(|r| &r.bytes) != Some(&record.bytes) {
-                        *slot = None;
-                    }
-                }
-                Some((held, _)) if *held > partition => {}
-                _ => {
-                    found.insert(id, (partition, Some(record)));
-                }
-            }
+            found.offer(
+                id,
+                partition,
+                AreaRecord {
+                    stream: stream.clone(),
+                    offset: span.start,
+                    bytes: buf[span.start..span.end].to_vec(),
+                },
+            );
         }
     }
-    found
-        .into_iter()
-        .filter_map(|(id, (_, record))| Some((id, record?)))
-        .collect()
+    found.into_values()
 }
 
 /// The one id of `level_ids` that `bytes` holds as a `u64` past the frame's
