@@ -269,6 +269,7 @@ fn main() -> rvt::Result<()> {
         if let Some((number, name)) = entries.get(id) {
             println!("  RE-117 entries: number '{number}' name '{name}'");
         }
+        let level_ids = &levels;
         let named: BTreeSet<u32> = copies
             .iter()
             .flat_map(|copy| {
@@ -276,7 +277,7 @@ fn main() -> rvt::Result<()> {
                 (0..bytes.len().saturating_sub(7)).filter_map(move |at| {
                     i64_at(bytes, at)
                         .and_then(|v| u32::try_from(v).ok())
-                        .filter(|v| levels.contains_key(v))
+                        .filter(|v| level_ids.contains_key(v))
                 })
             })
             .collect();
