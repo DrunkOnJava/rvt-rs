@@ -185,6 +185,7 @@ pub mod native_saved_materials;
 pub mod native_saved_mesh;
 pub mod native_saved_scene;
 pub mod native_segments;
+pub mod native_wall_types;
 pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;

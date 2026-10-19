@@ -65,7 +65,10 @@ Read: ElementId, category, `Family:Type:ElementId` name, type name, storey,
 material names and layer thicknesses, family instances' materials (RE-82), the IFC type
 object of each element's type (RE-110), Revit's GlobalId (other entities get one
 derived from the document and their own identity, stable between exports,
-#400), stair riser and tread dimensions, and Revit's "Export to IFC As"
+#400), stair riser and tread dimensions, each element's `IsExternal` as Revit's
+exporter sets it (a parameter named for its property set, its type's
+Function, else its class's rule; none on curtain mullions and panels, RE-193),
+and Revit's "Export to IFC As"
 override, applied where it names `IfcShadingDevice`, `IfcSlab`, `IfcCovering`,
 `IfcWasteTerminal`, `IfcFireSuppressionTerminal`, `IfcSanitaryTerminal`,
 `IfcAirTerminal`, `IfcElectricAppliance` (RE-190), `IfcStair` or `IfcDoor` (#792)

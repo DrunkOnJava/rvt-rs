@@ -445,8 +445,19 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
-    // --- A door's and a floor's type Function (RE-158) ---
-    attach_type_functions(rf, revit_version, [&mut out.doors, &mut out.slabs]);
+    // --- Each element's type Function (RE-158) ---
+    attach_type_functions(
+        rf,
+        revit_version,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ],
+    );
     // --- Curtain panels that are walls (RE-64) ---
     let mut unnamed_panels: Vec<&mut DecodedElement> = out
         .products
@@ -599,6 +610,32 @@ pub fn recover_partition_schema_mvp(
     attach_door_sizes(rf, revit_version, &mut out.doors);
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
+    // --- A wall's and a curtain panel wall's type Function, from its native
+    // type record (RE-185), after RE-72 has relabelled the panels ---
+    attach_wall_type_functions(
+        rf,
+        revit_version,
+        out.walls.iter_mut().chain(
+            out.products
+                .iter_mut()
+                .filter(|product| product.class == CURTAIN_PANEL_WALL_CLASS),
+        ),
+    );
+    // --- IsExternal: the parameters named for it, and Revit's calculation (RE-193) ---
+    attach_is_external(
+        rf,
+        revit_version,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.rooms,
+            &mut out.areas,
+            &mut out.products,
+        ],
+    );
     Ok(out)
 }
 
@@ -4465,8 +4502,10 @@ pub fn curve_size_from_fields(fields: &[(String, InstanceField)]) -> Option<(f64
     Some((field(CURVE_SIZE_FIELDS[0])?, field(CURVE_SIZE_FIELDS[1])?))
 }
 
-/// Field carrying the Function of an element's type (`FUNCTION_PARAM`: 0
-/// interior, 1 exterior), RE-158.
+/// Field carrying the Function of an element's type: `FUNCTION_PARAM` (0
+/// interior, 1 exterior), RE-158, or a wall type's native `m_function`, the
+/// same values followed by foundation, retaining, soffit and core shaft
+/// (RE-185).
 pub const TYPE_FUNCTION_FIELD: &str = "m_type_function";
 
 /// Give each element of `groups` whose type is known its type's Function,
@@ -4475,7 +4514,7 @@ pub const TYPE_FUNCTION_FIELD: &str = "m_type_function";
 fn attach_type_functions(
     rf: &mut RevitFile,
     revit_version: u32,
-    groups: [&mut Vec<DecodedElement>; 2],
+    groups: [&mut Vec<DecodedElement>; 6],
 ) {
     use crate::partition_room_parameters as prp;
     let type_of = |element: &DecodedElement| {
@@ -4499,6 +4538,210 @@ fn attach_type_functions(
                     size: 4,
                 },
             ));
+        }
+    }
+}
+
+/// Releases whose walls' native type Function is measured (RE-185, RE-193).
+pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// Give each of `walls` with no [`TYPE_FUNCTION_FIELD`] its type's Function
+/// from the type's native record ([`crate::native_wall_types`], RE-185).
+/// Nothing on a release not measured, or where the native records are not
+/// read.
+fn attach_wall_type_functions<'a>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: impl IntoIterator<Item = &'a mut DecodedElement>,
+) {
+    if !WALL_TYPE_FUNCTION_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let has_function = |element: &DecodedElement| {
+        element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_FUNCTION_FIELD)
+    };
+    let mut walls: Vec<&mut DecodedElement> = walls
+        .into_iter()
+        .filter(|element| !has_function(element))
+        .collect();
+    let ids: BTreeSet<u64> = walls
+        .iter()
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let Ok(functions) = crate::native_wall_types::wall_type_functions(rf, &ids) else {
+        return;
+    };
+    for element in walls.iter_mut() {
+        if let Some(&function) = element.id.and_then(|id| functions.get(&u64::from(id))) {
+            element.fields.push((
+                TYPE_FUNCTION_FIELD.into(),
+                InstanceField::Integer {
+                    value: function,
+                    signed: true,
+                    size: 8,
+                },
+            ));
+        }
+    }
+}
+
+/// Prefix of a field carrying the Yes/No value of a project or shared
+/// parameter on an element, named by the parameter's name (RE-193).
+pub const NAMED_PARAMETER_FIELD_PREFIX: &str = "m_named_parameter:";
+
+/// Prefix of a field carrying the same value on the element's type.
+pub const TYPE_NAMED_PARAMETER_FIELD_PREFIX: &str = "m_type_named_parameter:";
+
+/// The name of the parameter Revit's exporter reads `IsExternal` from (RE-193).
+pub const IS_EXTERNAL_PARAMETER_NAME: &str = "IsExternal";
+
+/// Field carrying the `IsExternal` Revit's exporter calculates for an element
+/// (RE-193), which a parameter named for the property set it is written in
+/// takes precedence over ([`crate::ifc::export_content`]).
+pub const IS_EXTERNAL_FIELD: &str = "m_is_external";
+
+/// Classes whose `IsExternal` Revit's exporter takes from their type's
+/// Function, so one whose Function is not read gets none: a value calculated
+/// without it would be a guess (fail closed). A window's host does not give
+/// it: on the R2025 models the host wall's value is Revit's on 6 of 18.
+const IS_EXTERNAL_FUNCTION_CLASSES: &[&str] = &[
+    "Wall",
+    CURTAIN_WALL_CLASS,
+    CURTAIN_PANEL_WALL_CLASS,
+    "Door",
+    "Window",
+    "Floor",
+    "BuildingPad",
+];
+
+/// Classes whose `IsExternal` is not established: on the BIM4LCA office
+/// Revit's export writes most curtain mullions and panels as not external
+/// where their curtain wall is, and some as external (RE-193).
+const IS_EXTERNAL_UNKNOWN_CLASSES: &[&str] = &["CurtainWallMullion", "CurtainWallPanel"];
+
+/// The `IsExternal` Revit's exporter calculates for `element` (RE-193),
+/// following revit-ifc's `CategoryUtil.IsElementExternal` (CLEANROOM.md
+/// source 5): a parameter named [`IS_EXTERNAL_PARAMETER_NAME`] on the
+/// element, then on its type; its type's Function, external unless interior
+/// (0); a roof is external; otherwise not external, where `last_step`
+/// allows it. `None` for the classes whose value cannot be calculated from
+/// what is read, and where the last step is not allowed.
+fn calculated_is_external(element: &DecodedElement, last_step: bool) -> Option<bool> {
+    let flag = |wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Bool(flag) if name == wanted => Some(*flag),
+            _ => None,
+        })
+    };
+    if let Some(value) = flag(&format!(
+        "{NAMED_PARAMETER_FIELD_PREFIX}{IS_EXTERNAL_PARAMETER_NAME}"
+    ))
+    .or_else(|| {
+        flag(&format!(
+            "{TYPE_NAMED_PARAMETER_FIELD_PREFIX}{IS_EXTERNAL_PARAMETER_NAME}"
+        ))
+    }) {
+        return Some(value);
+    }
+    let function = element.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Integer { value, .. } if name == TYPE_FUNCTION_FIELD => Some(*value),
+        _ => None,
+    });
+    if let Some(function) = function {
+        return Some(function != 0);
+    }
+    if element.class == "Roof" {
+        return Some(true);
+    }
+    let class = element.class.as_str();
+    if !last_step
+        || IS_EXTERNAL_FUNCTION_CLASSES.contains(&class)
+        || IS_EXTERNAL_UNKNOWN_CLASSES.contains(&class)
+    {
+        return None;
+    }
+    Some(false)
+}
+
+/// Releases where the calculation's last step, not external, is measured
+/// (RE-193). The parameters and a type's Function are read on every release
+/// from 2024, as RE-158 read a door's and a floor's.
+pub const IS_EXTERNAL_LAST_STEP_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// Give each element of `groups` the Yes/No parameters named `IsExternal` or
+/// `<property set>.IsExternal` that it carries ([`NAMED_PARAMETER_FIELD_PREFIX`];
+/// for the plain name also its type's, [`TYPE_NAMED_PARAMETER_FIELD_PREFIX`]),
+/// then the value Revit's exporter calculates ([`IS_EXTERNAL_FIELD`]). Revit's
+/// exporter reads `Pset_WallCommon.IsExternal` on a wall before anything else,
+/// and the BIM4LCA office defines one such parameter for each of twelve
+/// property sets (RE-193).
+fn attach_is_external(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    mut groups: [&mut Vec<DecodedElement>; 8],
+) {
+    use crate::partition_room_parameters as prp;
+    let last_step = IS_EXTERNAL_LAST_STEP_REVIT_VERSIONS.contains(&revit_version);
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let parameters: Vec<(String, u32)> = prp::find_parameter_definitions(rf, revit_version)
+        .into_iter()
+        .filter(|(name, _)| {
+            name == IS_EXTERNAL_PARAMETER_NAME
+                || name.ends_with(&format!(".{IS_EXTERNAL_PARAMETER_NAME}"))
+        })
+        .collect();
+    if !parameters.is_empty() {
+        let owners: BTreeSet<u32> = groups
+            .iter()
+            .flat_map(|elements| elements.iter())
+            .flat_map(|element| element.id.into_iter().chain(type_of(element)))
+            .collect();
+        let ids: Vec<i64> = parameters.iter().map(|(_, id)| i64::from(*id)).collect();
+        let mut found = prp::scan_integer_parameters(rf, revit_version, &owners, &ids);
+        let values: Vec<(String, BTreeMap<u32, u32>)> = parameters
+            .into_iter()
+            .map(|(name, id)| {
+                let values = found.remove(&i64::from(id)).unwrap_or_default();
+                (name, values)
+            })
+            .collect();
+        for element in groups.iter_mut().flat_map(|elements| elements.iter_mut()) {
+            let type_id = type_of(element);
+            for (name, found) in &values {
+                if let Some(&value) = element.id.and_then(|id| found.get(&id)) {
+                    element.fields.push((
+                        format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}"),
+                        InstanceField::Bool(value != 0),
+                    ));
+                }
+                if let (true, Some(&value)) = (
+                    name == IS_EXTERNAL_PARAMETER_NAME,
+                    type_id.and_then(|id| found.get(&id)),
+                ) {
+                    element.fields.push((
+                        format!("{TYPE_NAMED_PARAMETER_FIELD_PREFIX}{name}"),
+                        InstanceField::Bool(value != 0),
+                    ));
+                }
+            }
+        }
+    }
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        if let Some(external) = calculated_is_external(element, last_step) {
+            element
+                .fields
+                .push((IS_EXTERNAL_FIELD.into(), InstanceField::Bool(external)));
         }
     }
 }

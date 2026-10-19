@@ -4,7 +4,10 @@
 //! `Pset_SpaceCommon` with `Reference` (`IfcIdentifier`, the room's name and
 //! number) and `FloorCovering` (`IfcLabel`, its Floor Finish). Every space
 //! rvt-rs writes must carry the same set, property for property and value
-//! type for value type, matched by the space's `Name` (its number).
+//! type for value type, matched by the space's `Name` (its number). That
+//! export is IFC2X3 (Coordination View 2.0), whose `Pset_SpaceCommon` has no
+//! `IsExternal`; rvt-rs writes IFC4's, which has (RE-193), so `IsExternal` is
+//! left out of the comparison.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Architecture.rvt` with
 //! `RE1-Architecture.ifc`. Skips what is absent.
@@ -136,7 +139,13 @@ fn re1_architecture_space_common_is_revits() {
     let result = RvtDocExporter
         .export_with_diagnostics(&mut rf)
         .expect("export");
-    let ours = space_common(&write_step(&result.model));
+    let ours: BTreeMap<String, Props> = space_common(&write_step(&result.model))
+        .into_iter()
+        .map(|(space, mut props)| {
+            props.remove("IsExternal");
+            (space, props)
+        })
+        .collect();
     let differing: Vec<(&String, &Props, Option<&Props>)> = theirs
         .iter()
         .filter(|(space, props)| ours.get(*space) != Some(*props))
