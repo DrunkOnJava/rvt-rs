@@ -17,9 +17,9 @@ need to inspect, validate, and exchange Revit files without installing Revit or
 uploading private models to a third-party service.
 
 It is not a production Revit-to-IFC converter yet, and the matrix says so
-(`converter-grade-rvt-ifc` is unsupported). It opens every Revit file from 2015
-to 2027 and reads its metadata and embedded schema, and its previews on 2016 to
-2026, the releases the family corpus measures them on. On Revit 2024 and
+(`converter-grade-rvt-ifc` is unsupported). It opens every Revit file from 2016
+to 2026 and reads its metadata, previews and embedded schema, and Revit 2015
+and 2027 files too, measured on Autodesk's sample projects. On Revit 2024 and
 2025 project files it reads the building: each element's ElementId, category,
 name, type, storey, materials, layers and GlobalId, and a body that is exact
 where the element's data is decoded and its bounding box where it is not. It
