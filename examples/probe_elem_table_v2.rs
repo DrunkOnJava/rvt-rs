@@ -3,31 +3,24 @@
 use rvt::{RevitFile, elem_table};
 
 fn main() {
+    let families = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").into()
+    });
+    let projects = std::env::var("RVT_PROJECT_CORPUS_DIR")
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     let files = [
         (
             "family-2024",
-            concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"
-            ),
+            format!("{families}/racbasicsamplefamily-2024.rfa"),
         ),
         (
             "project-2023",
-            concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/_project_corpus/Revit/Revit_IFC5_Einhoven.rvt"
-            ),
+            format!("{projects}/Revit_IFC5_Einhoven.rvt"),
         ),
-        (
-            "project-2024",
-            concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/_project_corpus/Revit/2024_Core_Interior.rvt"
-            ),
-        ),
+        ("project-2024", format!("{projects}/2024_Core_Interior.rvt")),
     ];
 
-    for (label, path) in files {
+    for (label, path) in &files {
         let mut rf = match RevitFile::open(path) {
             Ok(rf) => rf,
             Err(e) => {
