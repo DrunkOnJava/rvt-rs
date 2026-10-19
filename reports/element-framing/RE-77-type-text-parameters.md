@@ -26,6 +26,10 @@
 
 No value rvt-rs writes disagrees with a value either oracle holds.
 
+## Written as `FireRating` (2026-10-19)
+
+Revit's exporter fills an element's `Pset_<Entity>Common.FireRating` from a parameter named `Pset_<Entity>Common.FireRating` first (RE-194) and from the type's Fire Rating after it. rvt-rs now writes the type's Fire Rating there, in each IFC4 standard set declaring `FireRating` that applies to the element, wherever no such parameter supplies one. Measured with Measure run 39249252264 against `main`: on the BIM4LCA office (both files) `Pset_WallCommon.FireRating` goes from 71 to 97 of Revit's 97 equal values, and on RE1 Architecture from 0 to 7 of 7; no value differs. Core Interior's 227 rated walls carry it too; its reference exports write no property sets.
+
 ## Not claimed
 
 - Instance parameters (Mark, Comments, dimensions) are not stored in this shape and are not read.
