@@ -746,7 +746,7 @@ pub fn append_typed_production_elements(
         }
 
         let mut reference_sets = reference_type
-            .map(|type_name| reference_property_sets(&ifc_type, &type_name))
+            .map(|type_name| reference_property_sets(&ifc_type, predefined_type, &type_name))
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
@@ -1438,62 +1438,40 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     })
 }
 
-/// The property sets whose `Reference` Revit's export gives an element of
-/// `ifc_type` (RE-154), each holding the type's name: `Pset_QuantityTakeOff`,
-/// the entity's common set, and on walls and slabs its reinforcement-pitch
-/// set, which declares `Reference` an `IfcLabel`. Only the entities measured
-/// on the RE1 models' exports are listed, with the IFC4 subtypes rvt-rs writes
-/// for Revit's flow, furnishing and control elements; any other gets none.
-fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> {
-    let common: &[(&str, bool)] = match ifc_type {
-        "IFCWALL" => &[
-            ("Pset_WallCommon", true),
-            ("Pset_ReinforcementBarPitchOfWall", false),
-        ],
-        "IFCSLAB" => &[
-            ("Pset_SlabCommon", true),
-            ("Pset_ReinforcementBarPitchOfSlab", false),
-        ],
-        "IFCDOOR" => &[("Pset_DoorCommon", true)],
-        "IFCCOVERING" => &[("Pset_CoveringCommon", true)],
-        "IFCCURTAINWALL" => &[("Pset_CurtainWallCommon", true)],
-        "IFCMEMBER" => &[("Pset_MemberCommon", true)],
-        "IFCPLATE" => &[("Pset_PlateCommon", true)],
-        "IFCRAILING" => &[("Pset_RailingCommon", true)],
-        "IFCBUILDINGELEMENTPROXY" => &[("Pset_BuildingElementProxyCommon", true)],
-        // Revit's export writes these as IfcFlowTerminal, IfcFlowFitting and
-        // IfcFlowSegment; rvt-rs writes the IFC4 subtypes.
-        "IFCFLOWTERMINAL"
-        | "IFCFLOWFITTING"
-        | "IFCFLOWSEGMENT"
-        | "IFCDUCTSEGMENT"
-        | "IFCPIPESEGMENT"
-        | "IFCDUCTFITTING"
-        | "IFCPIPEFITTING"
-        | "IFCAIRTERMINAL"
-        | "IFCSANITARYTERMINAL"
-        | "IFCWASTETERMINAL"
-        | "IFCFIRESUPPRESSIONTERMINAL"
-        | "IFCLIGHTFIXTURE"
-        | "IFCELECTRICAPPLIANCE" => &[("Pset_DistributionFlowElementCommon", true)],
-        // IfcFurnishingElement and IfcDistributionControlElement in Revit's.
-        "IFCFURNISHINGELEMENT" | "IFCFURNITURE" | "IFCDISTRIBUTIONCONTROLELEMENT" | "IFCALARM" => {
-            &[]
-        }
-        _ => return Vec::new(),
-    };
-    std::iter::once(("Pset_QuantityTakeOff", true))
-        .chain(common.iter().copied())
-        .map(|(name, identifier)| PropertySet {
-            name: name.into(),
-            properties: vec![Property {
-                name: "Reference".into(),
-                value: if identifier {
-                    PropertyValue::Identifier(type_name.to_string())
-                } else {
-                    PropertyValue::Label(type_name.to_string())
-                },
-            }],
+/// The property sets whose `Reference` an element written as `ifc_type`, with
+/// the predefined type `predefined_type`, gets (RE-154, #822), each holding
+/// its type's name: every IFC4 standard set that applies to the entity and
+/// declares `Reference`, as the type it declares (`IfcLabel` in the
+/// reinforcement sets). Revit's IFC4 export gives the BIM4LCA office's
+/// elements exactly these sets, but for those revit-ifc matches by a prefix
+/// of the entity's name, such as `Pset_StairFlightCommon` on a stair. None
+/// for a space, whose `Reference` is [`space_common_property_set`]'s.
+fn reference_property_sets(
+    ifc_type: &str,
+    predefined_type: Option<&str>,
+    type_name: &str,
+) -> Vec<PropertySet> {
+    use super::standard_property_sets::{STANDARD_PROPERTY_SETS, StandardPropertyKind as Kind};
+    if ifc_type == "IFCSPACE" {
+        return Vec::new();
+    }
+    STANDARD_PROPERTY_SETS
+        .iter()
+        .filter(|set| set.applies_to(ifc_type, predefined_type))
+        .filter_map(|set| {
+            let value = match set.property_kind("Reference")? {
+                Kind::Identifier => PropertyValue::Identifier(type_name.to_string()),
+                Kind::Label => PropertyValue::Label(type_name.to_string()),
+                Kind::Text => PropertyValue::Text(type_name.to_string()),
+                _ => return None,
+            };
+            Some(PropertySet {
+                name: set.name.into(),
+                properties: vec![Property {
+                    name: "Reference".into(),
+                    value,
+                }],
+            })
         })
         .collect()
 }
