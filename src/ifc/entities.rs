@@ -1449,7 +1449,7 @@ pub enum PropertyValue {
     /// Free-form text — `IfcText`.
     Text(String),
     /// A name — `IfcLabel`, as standard property sets declare for values
-    /// such as `Pset_SpaceCommon.FloorCovering` (RE-153).
+    /// such as `Pset_SpaceCoveringRequirements.FloorCovering` (RE-153).
     Label(String),
     /// An identifier — `IfcIdentifier`, as standard property sets declare
     /// for `Reference` (RE-153).

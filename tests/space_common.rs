@@ -1,13 +1,15 @@
 //! RE-153 (#35): a room's `Pset_SpaceCommon` is Revit's.
 //!
-//! Revit's IFC4 export of RE1 Architecture gives each of its 11 rooms a
-//! `Pset_SpaceCommon` with `Reference` (`IfcIdentifier`, the room's name and
-//! number) and `FloorCovering` (`IfcLabel`, its Floor Finish). Every space
-//! rvt-rs writes must carry the same set, property for property and value
-//! type for value type, matched by the space's `Name` (its number). That
-//! export is IFC2X3 (Coordination View 2.0), whose `Pset_SpaceCommon` has no
-//! `IsExternal`; rvt-rs writes IFC4's, which has (RE-193), so `IsExternal` is
-//! left out of the comparison.
+//! Revit's IFC2X3 export (Coordination View 2.0) of RE1 Architecture gives
+//! each of its 11 rooms a `Pset_SpaceCommon` with `Reference`
+//! (`IfcIdentifier`, the room's name and number) and `FloorCovering`
+//! (`IfcLabel`, its Floor Finish). rvt-rs writes IFC4, whose
+//! `Pset_SpaceCommon` has no covering properties: it writes `FloorCovering`
+//! in `Pset_SpaceCoveringRequirements`, where IFC4 puts it, and its
+//! `Pset_SpaceCommon` has the `IsExternal` IFC2X3's lacks (RE-193). Every
+//! space rvt-rs writes must carry, across those two sets and without
+//! `IsExternal`, the properties of Revit's set, property for property and
+//! value type for value type, matched by the space's `Name` (its number).
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Architecture.rvt` with
 //! `RE1-Architecture.ifc`. Skips what is absent.
@@ -74,8 +76,8 @@ fn reference(field: &str) -> Option<u64> {
 }
 
 /// Space `Name` -> property -> its value as written (`IFCLABEL('Wood')`), for
-/// each space's `Pset_SpaceCommon`.
-fn space_common(step: &str) -> BTreeMap<String, BTreeMap<String, String>> {
+/// each space, across its sets named in `sets`.
+fn space_sets(step: &str, sets: &[&str]) -> BTreeMap<String, BTreeMap<String, String>> {
     let ents = entities(step);
     let unquote = |raw: &str| raw.trim().trim_matches('\'').to_string();
     let mut out: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
@@ -93,7 +95,9 @@ fn space_common(step: &str) -> BTreeMap<String, BTreeMap<String, String>> {
         };
         let set_fields = split_args(set_args);
         if set_entity != "IFCPROPERTYSET"
-            || set_fields.get(2).map(|f| unquote(f)).as_deref() != Some("Pset_SpaceCommon")
+            || !set_fields
+                .get(2)
+                .is_some_and(|f| sets.contains(&unquote(f).as_str()))
         {
             continue;
         }
@@ -113,7 +117,7 @@ fn space_common(step: &str) -> BTreeMap<String, BTreeMap<String, String>> {
             };
             if e == "IFCSPACE" {
                 if let Some(name) = split_args(a).get(2) {
-                    out.insert(unquote(name), props.clone());
+                    out.entry(unquote(name)).or_default().extend(props.clone());
                 }
             }
         }
@@ -133,19 +137,25 @@ fn re1_architecture_space_common_is_revits() {
         eprintln!("skipping: no RE1 Architecture model and reference export");
         return;
     }
-    let theirs = space_common(&std::fs::read_to_string(&reference_ifc).expect("reference IFC"));
+    let theirs = space_sets(
+        &std::fs::read_to_string(&reference_ifc).expect("reference IFC"),
+        &["Pset_SpaceCommon"],
+    );
     assert_eq!(theirs.len(), 11, "Revit's spaces with Pset_SpaceCommon");
     let mut rf = RevitFile::open(&rvt).expect("open");
     let result = RvtDocExporter
         .export_with_diagnostics(&mut rf)
         .expect("export");
-    let ours: BTreeMap<String, Props> = space_common(&write_step(&result.model))
-        .into_iter()
-        .map(|(space, mut props)| {
-            props.remove("IsExternal");
-            (space, props)
-        })
-        .collect();
+    let ours: BTreeMap<String, Props> = space_sets(
+        &write_step(&result.model),
+        &["Pset_SpaceCommon", "Pset_SpaceCoveringRequirements"],
+    )
+    .into_iter()
+    .map(|(space, mut props)| {
+        props.remove("IsExternal");
+        (space, props)
+    })
+    .collect();
     let differing: Vec<(&String, &Props, Option<&Props>)> = theirs
         .iter()
         .filter(|(space, props)| ours.get(*space) != Some(*props))

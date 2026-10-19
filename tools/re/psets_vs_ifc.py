@@ -68,9 +68,16 @@ def same(a, b):
     return raw_a == raw_b
 
 
+# IFC2X3's Pset_SpaceCommon holds a space's coverings; IFC4 moved them to
+# Pset_SpaceCoveringRequirements, where an IFC4 export writes them.
+IFC2X3_SPACE_COVERINGS = {"FloorCovering", "WallCovering", "CeilingCovering", "SkirtingBoard"}
+
+
 def properties(path):
-    """(object key, set, property) -> value, and the keys of every object."""
+    """(object key, set, property) -> value, and the keys of every object. An
+    IFC2X3 file's space coverings are keyed under their IFC4 set."""
     f = ifcopenshell.open(path)
+    ifc2x3 = f.schema == "IFC2X3"
     metres_per_unit = ifcopenshell.util.unit.calculate_unit_scale(f)
     out = {}
     objects = set()
@@ -87,16 +94,19 @@ def properties(path):
             if not key:
                 continue
             for prop in pset.HasProperties or ():
+                name = pset.Name
+                if ifc2x3 and name == "Pset_SpaceCommon" and prop.Name in IFC2X3_SPACE_COVERINGS:
+                    name = "Pset_SpaceCoveringRequirements"
                 if prop.is_a("IfcPropertySingleValue"):
-                    out[(key, pset.Name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
+                    out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
                 elif prop.is_a("IfcPropertyEnumeratedValue"):
                     values = tuple(
                         value_of(v, metres_per_unit) for v in prop.EnumerationValues or ()
                     )
-                    out[(key, pset.Name, prop.Name)] = ("enumerated", values)
+                    out[(key, name, prop.Name)] = ("enumerated", values)
                 elif prop.is_a("IfcPropertyListValue"):
                     values = tuple(value_of(v, metres_per_unit) for v in prop.ListValues or ())
-                    out[(key, pset.Name, prop.Name)] = ("list", values)
+                    out[(key, name, prop.Name)] = ("list", values)
     return out, objects
 
 
