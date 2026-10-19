@@ -59,7 +59,7 @@ The office's export is IFC4 Reference View 1.2, by Revit 2024's own exporter (IF
 - `Pset_SpaceOccupancyRequirements.OccupancyNumber` as `IfcInteger`, which IFC4 declares an `IfcCountMeasure`;
 - `Pset_DoorWindowGlazingType` with `IsLaminated` and `IsTempered` alone. It is on every element carrying those parameters (605 walls, 220 curtain walls, 21 coverings, 266 doors and 269 windows), and on 115 openings.
 
-The Reference View certifies neither the glazing set nor the occupancy set (§2). Both therefore come from that file, and so does the glazing set's absence of `IsWired`: every one of the 1,337 elements carrying `Pset_DoorWindowGlazingType.IsWired` holds No, and Revit's export writes it on none.
+The Reference View certifies neither the glazing set nor the occupancy set (§2). Both therefore come from that file, and so does the glazing set's absence of `IsWired`: every one of the 1,337 elements carrying `Pset_DoorWindowGlazingType.IsWired` holds 0, the value `IsLaminated` holds where Revit's export writes No, and the export writes `IsWired` on none. So the export cannot say whether Revit takes that 0 as No or as no value.
 
 ## 5. What changes
 
@@ -72,7 +72,7 @@ The Reference View certifies neither the glazing set nor the occupancy set (§2)
 
 ## 6. What is not written
 
-- **What the office's user-defined file adds** (§4): the glazing set on walls, curtain walls and coverings, and the covering properties in `Pset_SpaceCommon`. `OccupancyNumber` is written as the `IfcCountMeasure` IFC4 declares, which the scorer counts as different from the export's `IfcInteger`. `IsWired`, No on every door and window, is written there; the export writes none.
+- **What the office's user-defined file adds** (§4): the glazing set on walls, curtain walls and coverings, and the covering properties in `Pset_SpaceCommon`. `OccupancyNumber` is written as the `IfcCountMeasure` IFC4 declares, which the scorer counts as different from the export's `IfcInteger`. `IsWired`, a stored 0 on every door and window, is written there as No; the export writes none (§4).
 - **Values Revit takes from elsewhere when the parameter is empty or absent.** On the as-built file Revit's export writes `FireRating` on 26 walls and 2 doors whose parameter is empty. It writes `LoadBearing` on 2 walls and a column, and `NumberOfTreads` on a stair, that carry none. Those come from the exporter's next sources: a built-in parameter, the type, or a calculator. None is written here.
 - **Other kinds of values:** plane angles, areas, ratios and enumerations (`Status`) are not read.
 - **A parameter on a type** named for a set never occurs in these files and is not read.
