@@ -1003,9 +1003,9 @@ impl StepWriter {
     /// pounds on the way out and writes angles in radians, so these are
     /// the units a reader must apply. `model.units`, Revit's display units
     /// (IFC-40), describe the source model and stay out of it; the export
-    /// diagnostics report them. A model with a thermal transmittance also
-    /// gets kelvin and W/(m²·K), the derived unit its values are in (RE-194),
-    /// as Revit's export declares it.
+    /// diagnostics report them. A model with a thermal transmittance in any
+    /// element's property set also gets kelvin and W/(m²·K), the derived unit
+    /// its values are in (RE-194), as Revit's export declares it.
     fn emit_unit_assignment(&mut self, model: &IfcModel) -> Vec<usize> {
         let mut units: Vec<usize> = [
             ("LENGTHUNIT", "$", "METRE"),
@@ -1022,15 +1022,26 @@ impl StepWriter {
             id
         })
         .collect();
+        fn thermal_value(value: &super::entities::PropertyValue) -> bool {
+            match value {
+                super::entities::PropertyValue::ThermalTransmittance(_) => true,
+                super::entities::PropertyValue::List(items) => items.iter().any(thermal_value),
+                _ => false,
+            }
+        }
         let thermal = model.entities.iter().any(|entity| {
-            matches!(
-                entity,
-                super::entities::IfcEntity::ElementPropertySet { set, .. }
-                    if set.properties.iter().any(|property| matches!(
-                        property.value,
-                        super::entities::PropertyValue::ThermalTransmittance(_)
-                    ))
-            )
+            let set = match entity {
+                super::entities::IfcEntity::ElementPropertySet { set, .. } => Some(set),
+                super::entities::IfcEntity::BuildingElement { property_set, .. } => {
+                    property_set.as_ref()
+                }
+                _ => None,
+            };
+            set.is_some_and(|set| {
+                set.properties
+                    .iter()
+                    .any(|property| thermal_value(&property.value))
+            })
         });
         if thermal {
             let (kilogram, second) = (units[4], units[5]);
