@@ -111,6 +111,11 @@ IFC2X3_LENGTHS = {
     ("Pset_FlowSegmentDuctSegment", "Length"),
     ("Pset_DuctSegmentTypeCommon", "Length"),
 }
+# IFC2X3's Pset_PrecastConcreteElementGeneral.SerialNumber (#822): IFC4's set
+# has none. Revit's IFC2X3 export writes the same value in
+# Pset_ManufacturerOccurrence, which IFC4 keeps and which is scored; counted
+# apart.
+IFC2X3_TWICE = {("Pset_PrecastConcreteElementGeneral", "SerialNumber")}
 
 
 def properties(path):
@@ -147,6 +152,8 @@ def properties(path):
                     name = "Pset_PipeSegmentOccurrence"
                 if ifc2x3 and (name, prop.Name) in IFC2X3_LENGTHS:
                     name = "quantities:" + name
+                if ifc2x3 and (name, prop.Name) in IFC2X3_TWICE:
+                    name = "twice:" + name
                 if prop.is_a("IfcPropertySingleValue"):
                     out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
                 elif prop.is_a("IfcPropertyEnumeratedValue"):
@@ -190,11 +197,15 @@ def main(argv):
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     worst = []
     as_quantities = 0
+    twice = 0
     for (key, pset, prop), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
         if pset.startswith("quantities:"):
             as_quantities += 1
+            continue
+        if pset.startswith("twice:"):
+            twice += 1
             continue
         row = rows[(pset, prop)]
         row[0] += 1
@@ -217,6 +228,8 @@ def main(argv):
         print(f"  {pset}.{prop}: {n}, equal {equal}, different {different}, missing {missing}")
     if as_quantities:
         print(f"IFC2X3 lengths IFC4 holds as quantities, not scored here: {as_quantities}")
+    if twice:
+        print(f"IFC2X3 values also in an IFC4 set and scored there, not scored here: {twice}")
     only = collections.defaultdict(lambda: [0, 0])
     for key, pset, prop in ours:
         if (key, pset, prop) not in theirs:
