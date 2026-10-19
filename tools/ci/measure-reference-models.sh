@@ -100,8 +100,9 @@ timed() { # dir step command...
 }
 
 score() { # name args...
-  local out="$1"; shift
-  timed "$(dirname "$out")" "$(basename "$out" .txt)" timeout 1200 python "$@" > "$out" 2>&1
+  local out="$1" dir step; shift
+  dir=$(dirname "$out"); step=$(basename "$out" .txt)
+  timed "$dir" "$step" timeout 1200 python "$@" > "$out" 2>&1
   echo "exit $?" >> "$out"
 }
 
