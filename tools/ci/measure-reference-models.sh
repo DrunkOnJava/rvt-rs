@@ -45,7 +45,7 @@
 # comparisons of #740 and #742.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 # Every export runs first, alone, one at a time; then MEASURE_JOBS items run
-# at once, by default one per CPU.
+# at once, by default one per CPU; then every probe, alone, one at a time.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
 SCORERS="$(dirname "$0")/../re"
@@ -176,14 +176,7 @@ measure_model() { # name rvt ref
     timed "$dir" "witness-$artifact" "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/witness.ifc" --observation "$dir/witness-$artifact.json" --artifact-id "$artifact" > /dev/null 2>&1
     rm -f "$dir/witness.ifc"
   done
-  if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
-    timeout 1200 "$BIN/examples/$PROBE" "$MODELS/$rvt" > "$dir/probe.txt" 2>&1
-    echo "exit $?" >> "$dir/probe.txt"
-  fi
   if [ "$ref" != "-" ]; then
-    if [ -f "$dir/probe.txt" ] && [ -n "${PROBE_SCORER:-}" ] && [ -f "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" ]; then
-      score "$dir/probe_score.txt" "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" "$dir/probe.txt" "$MODELS/$ref" --list
-    fi
     for s in $IFC_SCORERS; do
       # ports_vs_ifc reads the findings the schema step's validation wrote,
       # rather than validating the export again.
@@ -199,14 +192,11 @@ measure_model() { # name rvt ref
   finished "$dir" "$name" "$item_started"
 }
 
+family_dir() { echo "$OUT/family-$(basename "$1" .rfa)"; }
 measure_family() { # family
-  local family="$1" dir
-  dir="$OUT/family-$(basename "$family" .rfa)"; mkdir -p "$dir"
-  info "$family" "$dir"
-  if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
-    timeout 1200 "$BIN/examples/$PROBE" "$family" > "$dir/probe.txt" 2>&1
-    echo "exit $?" >> "$dir/probe.txt"
-  fi
+  local dir
+  dir=$(family_dir "$1"); mkdir -p "$dir"
+  info "$1" "$dir"
 }
 
 # Autodesk's sample projects (research/autodesk-sample-projects.tsv), one per
@@ -241,23 +231,45 @@ measure_sample() { # sample
   fi
   [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
   rm -f "$dir/validation.jsonl"
-  if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
-    timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
-    echo "exit $?" >> "$dir/probe.txt"
-    if [ -n "${PROBE_PAIR_RELEASE:-}" ] && [ "$(basename "$sample" | cut -c1-4)" != "$PROBE_PAIR_RELEASE" ]; then
-      for copy in "$SAMPLE_DIR/$PROBE_PAIR_RELEASE"-*.rvt; do
-        [ -f "$copy" ] && [ "$(pair_key "$copy")" = "$(pair_key "$sample")" ] || continue
-        timeout 1200 "$BIN/examples/$PROBE" "$sample" "$copy" > "$dir/probe-pair.txt" 2>&1
-        echo "exit $?" >> "$dir/probe-pair.txt"
-      done
-    fi
-  fi
   finished "$dir" "$(basename "$sample")" "$item_started"
+}
+
+# Every probe runs after the items, alone, one at a time: a probe is cut off
+# after 20 minutes, and items running beside it would slow it by up to about
+# 2x, so a probe would stop sooner than it always has.
+probe() { # dir out args...
+  local dir="$1" out="$2" step; shift 2
+  step=$(basename "$out" .txt)
+  timed "$dir" "$step" timeout 1200 "$BIN/examples/$PROBE" "$@" > "$out" 2>&1
+  echo "exit $?" >> "$out"
+}
+probe_model() { # name rvt ref
+  local dir
+  dir=$(model_dir "$1")
+  probe "$dir" "$dir/probe.txt" "$MODELS/$2"
+  if [ "$3" != "-" ] && [ -n "${PROBE_SCORER:-}" ] && [ -f "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" ]; then
+    score "$dir/probe_score.txt" "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" "$dir/probe.txt" "$MODELS/$3" --list
+  fi
+}
+probe_family() { # family
+  probe "$(family_dir "$1")" "$(family_dir "$1")/probe.txt" "$1"
+}
+probe_sample() { # sample
+  local sample="$1" dir copy
+  dir=$(sample_dir "$sample")
+  probe "$dir" "$dir/probe.txt" "$sample" --records
+  if [ -n "${PROBE_PAIR_RELEASE:-}" ] && [ "$(basename "$sample" | cut -c1-4)" != "$PROBE_PAIR_RELEASE" ]; then
+    for copy in "$SAMPLE_DIR/$PROBE_PAIR_RELEASE"-*.rvt; do
+      [ -f "$copy" ] && [ "$(pair_key "$copy")" = "$(pair_key "$sample")" ] || continue
+      probe "$dir" "$dir/probe-pair.txt" "$sample" "$copy"
+    done
+  fi
 }
 
 # Every export runs first, alone; then every item runs in its own folder,
 # MEASURE_JOBS at once (by default one per CPU), the longest first: the
-# models scored against Revit's export, then the rest, each by file size.
+# models scored against Revit's export, then the rest, each by file size;
+# then every probe, alone.
 JOBS="${MEASURE_JOBS:-$(nproc)}"
 spawn() { # command...: run it once fewer than JOBS items are running
   while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
@@ -310,3 +322,12 @@ while IFS='|' read -r _ run first second third; do
   spawn "$run" "$first" "$second" "$third"
 done <<< "$items"
 wait
+if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
+  while IFS='|' read -r _ run first second third; do
+    case "$run" in
+      measure_model) probe_model "$first" "$second" "$third" ;;
+      measure_family) probe_family "$first" ;;
+      measure_sample) probe_sample "$first" ;;
+    esac
+  done <<< "$items"
+fi
