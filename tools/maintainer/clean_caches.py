@@ -4,7 +4,10 @@
 - those of pull requests that are no longer open, and those of deleted branches;
 - on `main`, the superseded generations of each rust-cache family: a new lockfile
   or toolchain saves a new cache under a new key and the old ones are never read
-  again, apart from the newest few that a build may still restore from.
+  again, apart from the newest few that a build may still restore from;
+- on `main`, the superseded overlay base databases of each CodeQL language: every
+  analysis of `main` saves one under its commit, and the next analysis reads
+  only the newest.
 
 The caches of live branches, of open pull requests, of tags, and `main`'s newest
 generations are kept. The repository's cache limit is 10 GB and GitHub evicts the
@@ -30,6 +33,11 @@ import time
 
 # Swatinem/rust-cache keys: v0-rust-<job>-<os>-<arch>-<toolchain hash>-<lockfile hash>.
 RUST_CACHE_KEY = re.compile(r"(v0-rust-.+)-[0-9a-f]{8}")
+# CodeQL's overlay base databases:
+# codeql-overlay-base-database-<n>-<hash>-<language>-<CodeQL version>-<commit>-<run id>-<attempt>.
+# The family leaves the CodeQL version out, so a database of an older CodeQL is
+# superseded too.
+CODEQL_OVERLAY_KEY = re.compile(r"(codeql-overlay-base-database-\d+-[0-9a-f]+-[a-z]+)-[0-9.]+-[0-9a-f]{40}-\d+-\d+")
 
 
 def gh(*args):
@@ -67,7 +75,7 @@ def unusable(caches, open_prs, live_branches, keep):
             if name != "main" and name not in live_branches:
                 doomed.append((c, f"branch {name} was deleted"))
             elif name == "main":
-                k = RUST_CACHE_KEY.fullmatch(c["key"])
+                k = RUST_CACHE_KEY.fullmatch(c["key"]) or CODEQL_OVERLAY_KEY.fullmatch(c["key"])
                 if k:
                     generations.setdefault(k.group(1), []).append(c)
     for family, lst in generations.items():
@@ -80,7 +88,7 @@ def unusable(caches, open_prs, live_branches, keep):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--repo", default="DrunkOnJava/rvt-rs")
-    ap.add_argument("--keep", type=int, default=2, help="newest generations of each rust-cache family kept on main")
+    ap.add_argument("--keep", type=int, default=2, help="newest generations of each rust-cache or CodeQL family kept on main")
     ap.add_argument("--delete", action="store_true", help="delete them; without it, only print")
     args = ap.parse_args()
     repo = args.repo
@@ -95,7 +103,7 @@ def main():
     print(f"{len(caches)} caches, {total / 1024**3:.1f} GB; {len(doomed)} unusable ({freed / 1024**3:.1f} GB), {(total - freed) / 1024**3:.1f} GB kept")
     reasons = {}
     for c, why in doomed:
-        kind = "superseded rust-cache generations on main" if why.startswith("superseded") else "closed pull requests and deleted branches"
+        kind = "superseded generations on main" if why.startswith("superseded") else "closed pull requests and deleted branches"
         n, size = reasons.get(kind, (0, 0))
         reasons[kind] = (n + 1, size + c["size_in_bytes"])
     for kind, (n, size) in reasons.items():
