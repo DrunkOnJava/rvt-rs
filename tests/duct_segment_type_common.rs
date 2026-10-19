@@ -7,7 +7,8 @@
 //! writes it in the duct's base quantities ([`QUANTITIES`], an
 //! `IfcElementQuantity`). For every duct rvt-rs writes with Revit's `Tag`, it
 //! must be there, within 0.1 mm of Revit's, each file's values read in its
-//! own length unit.
+//! own length unit, Revit's from [`SETS`] only and rvt-rs's from
+//! [`QUANTITIES`] only; rvt-rs writes no `Length` in [`SETS`].
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Mechanical.rvt` with
 //! `RE1-Mechanical.ifc`. Skips what is absent.
@@ -17,6 +18,7 @@ use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// The IFC2X3 set holding a duct's `Length` in Revit's export.
 const SETS: [&str; 1] = ["Pset_DuctSegmentTypeCommon"];
 /// The IFC4 quantity set holding a duct's `Length`, under whose name both
 /// files' lengths are compared.
@@ -98,8 +100,9 @@ fn metres_per_unit(ents: &BTreeMap<u64, (String, String)>) -> f64 {
         .unwrap_or(1.0)
 }
 
-/// `Tag` -> set -> `Length` in metres, for each element of `entity`.
-fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> {
+/// `Tag` -> set -> `Length` in metres, for each element of `entity`: in
+/// [`SETS`] in an IFC2X3 file (`ifc2x3`), in [`QUANTITIES`] in an IFC4 one.
+fn lengths(step: &str, entity: &str, ifc2x3: bool) -> BTreeMap<String, BTreeMap<String, f64>> {
     let ents = entities(step);
     let scale = metres_per_unit(&ents);
     let mut tags: BTreeMap<u64, String> = BTreeMap::new();
@@ -126,7 +129,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
         let sf = split_args(set_args);
         let set = sf.get(2).map(|n| n.trim().trim_matches('\'')).unwrap_or("");
         let length = match set_entity.as_str() {
-            "IFCPROPERTYSET" if SETS.contains(&set) => {
+            "IFCPROPERTYSET" if ifc2x3 && SETS.contains(&set) => {
                 list(sf.get(4).map(String::as_str).unwrap_or(""))
                     .iter()
                     .filter_map(|p| ents.get(p))
@@ -139,7 +142,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
                     })
             }
             // `IfcQuantityLength(Name, Description, Unit, LengthValue, ..)`.
-            "IFCELEMENTQUANTITY" if set == QUANTITIES => {
+            "IFCELEMENTQUANTITY" if !ifc2x3 && set == QUANTITIES => {
                 list(sf.get(5).map(String::as_str).unwrap_or(""))
                     .iter()
                     .filter_map(|q| ents.get(q))
@@ -181,6 +184,7 @@ fn re1_duct_segment_type_common_length_is_revits() {
     let theirs = lengths(
         &std::fs::read_to_string(&reference_ifc).expect("reference IFC"),
         "IFCFLOWSEGMENT",
+        true,
     );
     let mut rf = RevitFile::open(&rvt).expect("open");
     let result = RvtDocExporter
@@ -195,7 +199,7 @@ fn re1_duct_segment_type_common_length_is_revits() {
         .filter(|tag| theirs.contains_key(tag))
         .collect();
     assert_eq!(ducts.len(), 25, "ducts in both exports");
-    let ours = lengths(&step, "IFCDUCTSEGMENT");
+    let ours = lengths(&step, "IFCDUCTSEGMENT", false);
     let mut off: Vec<(String, f64, Option<f64>)> = Vec::new();
     for tag in &ducts {
         let revit = theirs[tag][QUANTITIES];
@@ -210,5 +214,10 @@ fn re1_duct_segment_type_common_length_is_revits() {
         off.len(),
         ducts.len(),
         off.iter().take(5).collect::<Vec<_>>()
+    );
+    let legacy = lengths(&step, "IFCDUCTSEGMENT", true).len();
+    assert_eq!(
+        legacy, 0,
+        "rvt-rs writes {legacy} ducts' Length in Pset_DuctSegmentTypeCommon, which IFC4 gives none"
     );
 }

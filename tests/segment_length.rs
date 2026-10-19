@@ -7,8 +7,9 @@
 //! sets: the length is in the pipe's base quantities ([`QUANTITIES`], an
 //! `IfcElementQuantity`), as Revit's IFC4 export of the BIM4LCA office writes
 //! it. For every pipe rvt-rs writes with Revit's `Tag`, each of Revit's
-//! lengths must be rvt-rs's, within 0.1 mm, each file's values read in its own
-//! length unit.
+//! lengths, read from its IFC2X3 sets only, must be rvt-rs's, read from its
+//! IFC4 quantities only, within 0.1 mm, each file's values read in its own
+//! length unit; rvt-rs writes no length in IFC2X3's sets.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Mechanical.rvt` and
 //! `RE1-Plumbing.rvt` with their `RE1-*.ifc` exports. Skips what is absent.
@@ -18,9 +19,9 @@ use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// The IFC2X3 sets holding a pipe's `Length` in Revit's export.
 const SETS: [&str; 2] = ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"];
-/// The IFC4 quantity set holding a pipe's `Length`, under whose name every
-/// length is compared.
+/// The IFC4 quantity set holding it in rvt-rs's.
 const QUANTITIES: &str = "Qto_PipeSegmentBaseQuantities";
 const TOLERANCE_METRES: f64 = 1e-4;
 
@@ -99,9 +100,10 @@ fn metres_per_unit(ents: &BTreeMap<u64, (String, String)>) -> f64 {
         .unwrap_or(1.0)
 }
 
-/// Pipe `Tag` -> each `Length` in metres in a set of [`SETS`] or in
-/// [`QUANTITIES`], for each element of `entity`.
-fn lengths(step: &str, entity: &str) -> BTreeMap<String, Vec<f64>> {
+/// Pipe `Tag` -> each `Length` in metres, for each element of `entity`: in a
+/// set of [`SETS`] in an IFC2X3 file (`ifc2x3`), in [`QUANTITIES`] in an IFC4
+/// one.
+fn lengths(step: &str, entity: &str, ifc2x3: bool) -> BTreeMap<String, Vec<f64>> {
     let ents = entities(step);
     let scale = metres_per_unit(&ents);
     let mut tags: BTreeMap<u64, String> = BTreeMap::new();
@@ -128,7 +130,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, Vec<f64>> {
         let sf = split_args(set_args);
         let set = sf.get(2).map(|n| n.trim().trim_matches('\'')).unwrap_or("");
         let length = match set_entity.as_str() {
-            "IFCPROPERTYSET" if SETS.contains(&set) => {
+            "IFCPROPERTYSET" if ifc2x3 && SETS.contains(&set) => {
                 list(sf.get(4).map(String::as_str).unwrap_or(""))
                     .iter()
                     .filter_map(|p| ents.get(p))
@@ -141,7 +143,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, Vec<f64>> {
                     })
             }
             // `IfcQuantityLength(Name, Description, Unit, LengthValue, ..)`.
-            "IFCELEMENTQUANTITY" if set == QUANTITIES => {
+            "IFCELEMENTQUANTITY" if !ifc2x3 && set == QUANTITIES => {
                 list(sf.get(5).map(String::as_str).unwrap_or(""))
                     .iter()
                     .filter_map(|q| ents.get(q))
@@ -182,6 +184,7 @@ fn re1_pipe_lengths_are_revits() {
         let theirs = lengths(
             &std::fs::read_to_string(&reference_ifc).expect("reference IFC"),
             "IFCFLOWSEGMENT",
+            true,
         );
         let mut rf = RevitFile::open(&rvt).expect("open");
         let result = RvtDocExporter
@@ -199,7 +202,7 @@ fn re1_pipe_lengths_are_revits() {
             !pipes.is_empty(),
             "RE1 {model}: no pipe rvt-rs writes is in Revit's export"
         );
-        let ours = lengths(&step, "IFCPIPESEGMENT");
+        let ours = lengths(&step, "IFCPIPESEGMENT", false);
         let mut off: Vec<(String, f64, Option<f64>)> = Vec::new();
         for tag in &pipes {
             let mine = ours.get(tag).and_then(|lengths| lengths.first()).copied();
@@ -215,6 +218,11 @@ fn re1_pipe_lengths_are_revits() {
             off.len(),
             pipes.len(),
             off.iter().take(5).collect::<Vec<_>>()
+        );
+        let legacy = lengths(&step, "IFCPIPESEGMENT", true).len();
+        assert_eq!(
+            legacy, 0,
+            "RE1 {model}: rvt-rs writes {legacy} pipes' Length in IFC2X3's flow-segment sets"
         );
     }
 }

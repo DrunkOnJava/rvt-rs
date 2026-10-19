@@ -5,10 +5,11 @@
 //! `Pset_FlowSegmentPipeSegment.InvertElevation` (`IfcLengthMeasure`): the
 //! height above its storey of a horizontal pipe's inside bottom, or of a
 //! vertical pipe's lower end (69 pipes). rvt-rs writes IFC4, which has no
-//! flow-segment sets: the invert is in `Pset_PipeSegmentOccurrence`, as
-//! Revit's IFC4 export of the BIM4LCA office writes it ([`SETS`]). For every
-//! pipe rvt-rs writes with Revit's `Tag`, it must be in rvt-rs's export,
-//! within 0.1 mm of Revit's, each file's values read in its own length unit.
+//! flow-segment sets: the invert is in `Pset_PipeSegmentOccurrence` ([`SET`]),
+//! as Revit's IFC4 export of the BIM4LCA office writes it. For every pipe
+//! rvt-rs writes with Revit's `Tag`, Revit's invert, read from [`REVIT_SET`]
+//! only, must be rvt-rs's, read from [`SET`] only, within 0.1 mm, each file's
+//! values read in its own length unit; rvt-rs writes no [`REVIT_SET`].
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Mechanical.rvt` and
 //! `RE1-Plumbing.rvt` with their `RE1-*.ifc` exports. Skips what is absent.
@@ -18,9 +19,10 @@ use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-/// The IFC2X3 set holding a pipe's invert in Revit's export, and the IFC4
-/// set holding it in rvt-rs's, under whose name both are compared.
-const SETS: [&str; 2] = ["Pset_FlowSegmentPipeSegment", "Pset_PipeSegmentOccurrence"];
+/// The IFC2X3 set holding a pipe's invert in Revit's export.
+const REVIT_SET: &str = "Pset_FlowSegmentPipeSegment";
+/// The IFC4 set holding it in rvt-rs's.
+const SET: &str = "Pset_PipeSegmentOccurrence";
 const PROPERTY: &str = "'InvertElevation'";
 const TOLERANCE_METRES: f64 = 1e-4;
 
@@ -99,8 +101,9 @@ fn metres_per_unit(ents: &BTreeMap<u64, (String, String)>) -> f64 {
         .unwrap_or(1.0)
 }
 
-/// Pipe `Tag` -> set -> [`PROPERTY`] in metres, for each element of `entity`.
-fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> {
+/// Pipe `Tag` -> [`PROPERTY`] in metres in the set `set_name`, for each
+/// element of `entity`.
+fn inverts(step: &str, entity: &str, set_name: &str) -> BTreeMap<String, f64> {
     let ents = entities(step);
     let scale = metres_per_unit(&ents);
     let mut tags: BTreeMap<u64, String> = BTreeMap::new();
@@ -111,7 +114,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
             }
         }
     }
-    let mut out: BTreeMap<String, BTreeMap<String, f64>> = BTreeMap::new();
+    let mut out: BTreeMap<String, f64> = BTreeMap::new();
     for (e, args) in ents.values() {
         if e != "IFCRELDEFINESBYPROPERTIES" {
             continue;
@@ -126,7 +129,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
         };
         let sf = split_args(set_args);
         let set = sf.get(2).map(|n| n.trim().trim_matches('\'')).unwrap_or("");
-        if set_entity != "IFCPROPERTYSET" || !SETS.contains(&set) {
+        if set_entity != "IFCPROPERTYSET" || set != set_name {
             continue;
         }
         let length = list(sf.get(4).map(String::as_str).unwrap_or(""))
@@ -144,9 +147,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
         };
         for object in list(f.get(4).map(String::as_str).unwrap_or("")) {
             if let Some(tag) = tags.get(&object) {
-                out.entry(tag.clone())
-                    .or_default()
-                    .insert(SETS[1].to_string(), length * scale);
+                out.insert(tag.clone(), length * scale);
             }
         }
     }
@@ -166,9 +167,10 @@ fn re1_pipe_invert_elevations_are_revits() {
             eprintln!("skipping RE1 {model}: model or reference export absent");
             continue;
         }
-        let theirs = lengths(
+        let theirs = inverts(
             &std::fs::read_to_string(&reference_ifc).expect("reference IFC"),
             "IFCFLOWSEGMENT",
+            REVIT_SET,
         );
         let mut rf = RevitFile::open(&rvt).expect("open");
         let result = RvtDocExporter
@@ -186,22 +188,26 @@ fn re1_pipe_invert_elevations_are_revits() {
             !pipes.is_empty(),
             "RE1 {model}: no pipe rvt-rs writes is in Revit's export"
         );
-        let ours = lengths(&step, "IFCPIPESEGMENT");
-        let mut off: Vec<(String, String, f64, Option<f64>)> = Vec::new();
+        let ours = inverts(&step, "IFCPIPESEGMENT", SET);
+        let mut off: Vec<(String, f64, Option<f64>)> = Vec::new();
         for tag in &pipes {
-            for (set, revit) in &theirs[tag] {
-                let mine = ours.get(tag).and_then(|sets| sets.get(set)).copied();
-                if mine.is_none_or(|m| (m - revit).abs() > TOLERANCE_METRES) {
-                    off.push((tag.clone(), set.clone(), *revit, mine));
-                }
+            let revit = theirs[tag];
+            let mine = ours.get(tag).copied();
+            if mine.is_none_or(|m| (m - revit).abs() > TOLERANCE_METRES) {
+                off.push((tag.clone(), revit, mine));
             }
         }
         assert!(
             off.is_empty(),
-            "RE1 {model}: {} of the InvertElevations of the {} pipes both exports hold are not Revit's (tag, set, Revit's m, rvt-rs's m); first: {:?}",
+            "RE1 {model}: {} of the InvertElevations of the {} pipes both exports hold are not Revit's (tag, Revit's m, rvt-rs's m in {SET}); first: {:?}",
             off.len(),
             pipes.len(),
             off.iter().take(5).collect::<Vec<_>>()
+        );
+        let legacy = inverts(&step, "IFCPIPESEGMENT", REVIT_SET).len();
+        assert_eq!(
+            legacy, 0,
+            "RE1 {model}: rvt-rs writes {legacy} pipes' InvertElevation in {REVIT_SET}"
         );
     }
 }
