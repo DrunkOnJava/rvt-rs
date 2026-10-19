@@ -137,7 +137,7 @@ wired into CI, the evidence trail is:
 tools/ci/verify-real-files.sh --release
 
 # Layer 2: IfcOpenShell validation (requires Python + pip)
-pip install 'ifcopenshell>=0.8.0,<0.9.0'
+pip install --require-hashes -r tools/ci/requirements-ifc.txt  # the witness CI pins
 python - <<'PY'
 import ifcopenshell
 f = ifcopenshell.open("tests/fixtures/synthetic-project.ifc")
