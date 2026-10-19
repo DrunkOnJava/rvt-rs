@@ -52,8 +52,9 @@ Coordination mirror: [Discussion #112 notes](disc-112-coordination.md).
 
 ## User-Facing Summary
 
-rvt-rs opens every Revit file from 2015 to 2027 and reads its metadata,
-previews and embedded schema. On Revit 2024 and 2025 project files it reads
+rvt-rs opens every Revit file from 2015 to 2027 and reads its metadata and
+embedded schema, and its previews on 2016 to 2026, the releases the family
+corpus measures them on. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
 GlobalId, `IsExternal` (RE-193) and the parameters named for a standard

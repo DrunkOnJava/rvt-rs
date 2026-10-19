@@ -18,7 +18,8 @@ uploading private models to a third-party service.
 
 It is not a production Revit-to-IFC converter yet, and the matrix says so
 (`converter-grade-rvt-ifc` is unsupported). It opens every Revit file from 2015
-to 2027 and reads its metadata, previews and embedded schema. On Revit 2024 and
+to 2027 and reads its metadata and embedded schema, and its previews on 2016 to
+2026, the releases the family corpus measures them on. On Revit 2024 and
 2025 project files it reads the building: each element's ElementId, category,
 name, type, storey, materials, layers and GlobalId, and a body that is exact
 where the element's data is decoded and its bounding box where it is not. It
@@ -37,7 +38,7 @@ the four levels a file can reach are in the
 
 | Area | Status | Current state | Next decision point |
 |---|---|---|---|
-| Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2015 to 2027. | Maintain compatibility and bounds checks against hostile input. |
+| Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2026; 2015 and 2027 project files open on Autodesk's sample projects, where PartAtom and previews are not measured. | Maintain compatibility and bounds checks against hostile input. |
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
 | Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same projects saved by the next or the previous release (RE-179 to RE-181). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2015 to 2022 or 2027 project to measure against (#421), parameters (0.7.0), held-out models (#408). |
@@ -78,8 +79,9 @@ the four levels a file can reach are in the
   export put them, checked against buildingSMART's published IFC4 property
   set definitions on every measured export. Exports carry parameters named
   for a standard set's property, each element's `IsExternal`, type Fire
-  Ratings, door sizes, Revit 2024 Areas as spaces, and port types and
-  directions; Revit 2015 to 2022 and 2027 projects export their elements,
+  Ratings, door sizes, Revit 2024 Areas as spaces, and port types, with
+  electrical ports' direction (HVAC and piping directions are not read yet,
+  #834); Revit 2015 to 2022 and 2027 projects export their elements,
   experimentally.
 
 ### 0.6.x: IFC geometry, remaining slices
