@@ -116,7 +116,7 @@ fn main() -> anyhow::Result<()> {
                     let Some(index) = object.fields.get("m_index").and_then(|v| v.as_i64()) else {
                         continue;
                     };
-                    let fields = object
+                    let mut fields: BTreeMap<String, String> = object
                         .fields
                         .as_object()
                         .into_iter()
@@ -127,6 +127,26 @@ fn main() -> anyhow::Result<()> {
                             (name.clone(), text.chars().take(80).collect())
                         })
                         .collect();
+                    // The object `m_oRelevantParams` points to, by its offset in
+                    // the record, each of its fields tallied as `rel.<field>`.
+                    let target = object
+                        .fields
+                        .get("m_oRelevantParams")
+                        .and_then(|pointer| pointer.get("offset"))
+                        .and_then(|offset| offset.as_u64())
+                        .and_then(|offset| {
+                            graph
+                                .objects
+                                .iter()
+                                .find(|candidate| candidate.start as u64 == offset)
+                        });
+                    if let Some(target) = target {
+                        fields.insert("rel.class".into(), target.class_name.clone());
+                        for (name, value) in target.fields.as_object().into_iter().flatten() {
+                            let text = value.to_string();
+                            fields.insert(format!("rel.{name}"), text.chars().take(160).collect());
+                        }
+                    }
                     family.insert(index, fields);
                 }
             }
