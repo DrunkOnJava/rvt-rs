@@ -5,9 +5,9 @@
 - on `main`, the superseded generations of each rust-cache family: a new lockfile
   or toolchain saves a new cache under a new key and the old ones are never read
   again, apart from the newest few that a build may still restore from;
-- on `main`, the superseded overlay base databases of each CodeQL language: every
-  analysis of `main` saves one under its commit, and the next analysis reads
-  only the newest.
+- on `main`, the superseded overlay base databases of each CodeQL language and
+  version: every analysis of `main` saves one under its commit, and the next
+  analysis on that version reads only the newest.
 
 The caches of live branches, of open pull requests, of tags, and `main`'s newest
 generations are kept. The repository's cache limit is 10 GB and GitHub evicts the
@@ -35,9 +35,10 @@ import time
 RUST_CACHE_KEY = re.compile(r"(v0-rust-.+)-[0-9a-f]{8}")
 # CodeQL's overlay base databases:
 # codeql-overlay-base-database-<n>-<hash>-<language>-<CodeQL version>-<commit>-<run id>-<attempt>.
-# The family leaves the CodeQL version out, so a database of an older CodeQL is
-# superseded too.
-CODEQL_OVERLAY_KEY = re.compile(r"(codeql-overlay-base-database-\d+-[0-9a-f]+-[a-z]+)-[0-9.]+-[0-9a-f]{40}-\d+-\d+")
+# The family keeps the CodeQL version: a pull request's analysis takes the
+# highest enabled CLI version among the cached bases, so each version keeps its
+# newest ones.
+CODEQL_OVERLAY_KEY = re.compile(r"(codeql-overlay-base-database-\d+-[0-9a-f]+-[a-z]+-[0-9.]+)-[0-9a-f]{40}-\d+-\d+")
 
 
 def gh(*args):

@@ -194,7 +194,7 @@ line names what to fix (its rulesets check needs an admin token). The list:
 3. The Actions cache is under its 10 GB limit. `python3
    tools/maintainer/clean_caches.py` (a dry run; `--delete` acts) removes the
    caches of closed pull requests and deleted branches, and `main`'s superseded
-   rust-cache generations and CodeQL overlay base databases: a new lockfile
+   rust-cache generations and CodeQL overlay base databases (per CodeQL version): a new lockfile
    saves a new cache under a new key, and each CodeQL analysis of `main` saves
    a new base database, and the old ones are never read again. `main`'s newest
    two generations of each family, live branches' and open pull requests'
