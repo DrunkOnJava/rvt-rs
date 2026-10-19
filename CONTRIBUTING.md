@@ -318,12 +318,14 @@ this). Three variables are recognised, in decreasing specificity:
   (family-file probes).
 - `RVT_SAMPLES_DIR` — directory holding the 11-release
   [`phi-ag/rvt`](https://github.com/phi-ag/rvt) corpus. Defaults
-  to `../../samples` relative to the crate root.
+  to `_corpus/examples/Autodesk` under the crate root, where
+  `git clone https://github.com/phi-ag/rvt _corpus` puts it.
 - `RVT_PROJECT_CORPUS_DIR` — directory holding `.rvt` project
-  files. Defaults to `/private/tmp/rvt-corpus-probe/magnetar/Revit`
-  (the path the main contributor uses locally for the
+  files, such as the MIT-licensed
   [`magnetar-io/revit-test-datasets`](https://github.com/magnetar-io/revit-test-datasets)
-  MIT-licensed corpus).
+  corpus. Defaults to `_project_corpus/Revit` under the crate root.
+  `tools/check-local.sh` and CI use the same two locations, and both
+  folders are git-ignored.
 
 Tests and benches that need these files skip gracefully if the
 path doesn't exist, so a fresh clone runs all non-corpus-dependent

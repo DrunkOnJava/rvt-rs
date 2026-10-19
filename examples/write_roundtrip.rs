@@ -7,7 +7,8 @@ use rvt::{RevitFile, compression, streams};
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
-    let src = PathBuf::from("../../samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa");
+    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa");
     let dst = std::env::temp_dir().join("rvt-rs-writepatch.rfa");
 
     // Read the Formats/Latest stream from source, decompress, modify, re-embed.

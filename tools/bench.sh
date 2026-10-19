@@ -13,7 +13,7 @@ if [ ! -f "Cargo.toml" ] || ! grep -q '^name = "rvt"' Cargo.toml 2>/dev/null; th
   exit 1
 fi
 
-SAMPLES_DIR="${RVT_SAMPLES_DIR:-../../samples/_phiag/examples/Autodesk}"
+SAMPLES_DIR="${RVT_SAMPLES_DIR:-_corpus/examples/Autodesk}"
 SAMPLE_2024="${SAMPLES_DIR}/racbasicsamplefamily-2024.rfa"
 SAMPLES_GLOB="${SAMPLES_DIR}/rac*.rfa"
 

@@ -9,8 +9,14 @@ use rvt::{RevitFile, compression, formats, streams, walker};
 
 fn main() {
     let paths = [
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/Revit_IFC5_Einhoven.rvt",
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt",
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/_project_corpus/Revit/Revit_IFC5_Einhoven.rvt"
+        ),
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/_project_corpus/Revit/2024_Core_Interior.rvt"
+        ),
     ];
     for path in paths {
         let Ok(mut rf) = RevitFile::open(path) else {

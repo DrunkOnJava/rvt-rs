@@ -12,7 +12,8 @@ use rvt::writer;
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
-    let src = PathBuf::from("../../samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa");
+    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa");
     let dst = std::env::temp_dir().join("rvt-rs-roundtrip.rfa");
     writer::copy_file(&src, &dst)?;
 

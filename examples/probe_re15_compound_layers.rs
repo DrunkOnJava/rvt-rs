@@ -92,7 +92,7 @@ fn sweep_layer_runs(buf: &[u8], offsets: &[usize], window: usize, label: &str) {
 
 fn main() {
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     println!("RE-15-08 compound-layer probe — corpus dir: {project_dir}");
     let mut rf = RevitFile::open(format!("{project_dir}/Revit_IFC5_Einhoven.rvt")).expect("open");
     let concat: Vec<u8> = compression::inflate_all_chunks(&rf.read_stream("Partitions/5").unwrap())

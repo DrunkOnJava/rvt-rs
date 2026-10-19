@@ -37,12 +37,16 @@ fn main() {
     // local home directory into the repo (PII guard in CI flags those).
     let family_path = std::env::var("RVT_FAMILY_2024").unwrap_or_else(|_| {
         format!(
-            "{}/samples/racbasicsamplefamily-2024.rfa",
-            std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| "../../samples".into())
+            "{}/racbasicsamplefamily-2024.rfa",
+            std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/_corpus/examples/Autodesk"
+            )
+            .into())
         )
     });
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     let project_2023 = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
     let project_2024 = format!("{project_dir}/2024_Core_Interior.rvt");
     let files = [

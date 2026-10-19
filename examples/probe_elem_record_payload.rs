@@ -16,11 +16,17 @@ fn main() {
     let files = [
         (
             "project-2023",
-            "/private/tmp/rvt-corpus-probe/magnetar/Revit/Revit_IFC5_Einhoven.rvt",
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/_project_corpus/Revit/Revit_IFC5_Einhoven.rvt"
+            ),
         ),
         (
             "project-2024",
-            "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt",
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/_project_corpus/Revit/2024_Core_Interior.rvt"
+            ),
         ),
     ];
 

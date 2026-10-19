@@ -19,7 +19,9 @@ use std::collections::BTreeMap;
 fn main() {
     let mut paths: Vec<String> = Vec::new();
 
-    let family_dir = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| "../../samples".into());
+    let family_dir = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").into()
+    });
     if let Ok(entries) = std::fs::read_dir(&family_dir) {
         for e in entries.flatten() {
             let p = e.path();

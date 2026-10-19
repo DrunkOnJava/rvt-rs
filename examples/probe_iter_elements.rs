@@ -3,7 +3,7 @@
 //! grouped by class name.
 //!
 //! Path resolves via `RVT_PROJECT_CORPUS_DIR` (default
-//! `/private/tmp/rvt-corpus-probe/magnetar/Revit`).
+//! `_project_corpus/Revit`).
 //!
 //! This is a coverage probe, not a correctness check — the reported
 //! "elements" use the explicit diagnostic threshold, so they include
@@ -14,7 +14,7 @@ use rvt::{RevitFile, walker};
 
 fn main() {
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     let files = [
         format!("{project_dir}/Revit_IFC5_Einhoven.rvt"),
         format!("{project_dir}/2024_Core_Interior.rvt"),

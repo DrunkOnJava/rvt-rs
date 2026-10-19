@@ -37,14 +37,18 @@ fn find_field_offset_from(source: &[u8], field_name: &str, start: usize) -> Opti
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let targets: Vec<PathBuf> = if args.is_empty() {
-        let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-            .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR").unwrap_or_else(|_| {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into()
+        });
         vec![
             PathBuf::from(format!("{project_dir}/Revit_IFC5_Einhoven.rvt")),
             PathBuf::from(format!("{project_dir}/2024_Core_Interior.rvt")),
-            PathBuf::from("../../samples/rac_basic_sample_family-2016.rfa"),
-            PathBuf::from("../../samples/racbasicsamplefamily-2024.rfa"),
-            PathBuf::from("../../samples/racbasicsamplefamily-2026.rfa"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("_corpus/examples/Autodesk/rac_basic_sample_family-2016.rfa"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("_corpus/examples/Autodesk/racbasicsamplefamily-2026.rfa"),
         ]
     } else {
         args.into_iter().map(PathBuf::from).collect()
