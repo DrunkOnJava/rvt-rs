@@ -179,7 +179,9 @@ steps:
    project files from `RVT_PROJECT_CORPUS_DIR` with Revit's export of
    each beside them, never a hard-coded path. Skip a missing file, but
    fail on one when `RVT_REQUIRE_CORPUS` is set, as CI sets it. Require
-   an instance only where the oracle has one. Check that the instances
+   an instance only where the oracle has one, and every instance it has:
+   compare the set of decoded ElementIds with the oracle's, since
+   production skips an instance the decoder rejects. Check that the instances
    decoded from the schema (`record_kind` `schema_instance`) came from
    your decoder, not the generic one: `iter_elements` also returns
    partition records of some classes, which other decoders read. Then
@@ -214,13 +216,18 @@ steps:
                .filter(|e| e.class == "MyClass")
                .filter(|e| e.provenance.record_kind.as_deref() == Some("schema_instance"))
                .collect();
-           assert!(!from_schema.is_empty(), "{year}: no MyClass decoded");
+           // Every instance the oracle holds, not only some: production skips
+           // an instance the decoder rejects, so a missing id is a dropped row.
+           let decoded: std::collections::BTreeSet<u32> =
+               from_schema.iter().filter_map(|e| e.id).collect();
+           assert_eq!(decoded, oracle_myclass_ids(year), "{year}: MyClass ElementIds");
            for e in &from_schema {
                assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
                let typed = rvt::elements::typed_json::mvp_typed_view(e)
                    .unwrap_or_else(|| panic!("{year}: MyClass has no typed view"));
                // Each field of `typed`, against the oracle's value for this
-               // element (by its ElementId, `e.id`).
+               // element (by its ElementId, `e.id`). `oracle_myclass_ids` and the
+               // field values come from Revit's export of the same file.
                let _ = typed;
            }
        }
