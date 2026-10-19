@@ -254,7 +254,7 @@ pub fn resolve_unique(found: BTreeMap<u32, Vec<RoomParameters>>) -> BTreeMap<u32
 
 /// The number of partition stream `stream` (`Partitions/398` is 398), 0 for
 /// a name without one.
-fn partition_number(stream: &str) -> u32 {
+pub(crate) fn partition_number(stream: &str) -> u32 {
     stream
         .rsplit('/')
         .next()
@@ -268,7 +268,7 @@ fn partition_number(stream: &str) -> u32 {
 /// partition's own entries disagree. On the BIM4LCA office's building-permit
 /// file every room and area has an older copy with Finnish names and a newer
 /// one with the English names Revit's export carries.
-struct LatestCopy<V> {
+pub(crate) struct LatestCopy<V> {
     found: BTreeMap<u32, (u32, Option<V>)>,
 }
 
@@ -282,7 +282,7 @@ impl<V> Default for LatestCopy<V> {
 
 impl<V: PartialEq> LatestCopy<V> {
     /// `element`'s `value` as `partition` holds it.
-    fn offer(&mut self, element: u32, partition: u32, value: V) {
+    pub(crate) fn offer(&mut self, element: u32, partition: u32, value: V) {
         match self.found.get_mut(&element) {
             Some((held_partition, held)) if *held_partition == partition => {
                 if held.as_ref() != Some(&value) {
@@ -296,10 +296,19 @@ impl<V: PartialEq> LatestCopy<V> {
         }
     }
 
-    fn into_values(self) -> BTreeMap<u32, V> {
+    pub(crate) fn into_values(self) -> BTreeMap<u32, V> {
         self.found
             .into_iter()
             .filter_map(|(element, (_, value))| Some((element, value?)))
+            .collect()
+    }
+
+    /// Each element's value, `None` where its latest partition's copies
+    /// disagree.
+    pub(crate) fn into_options(self) -> BTreeMap<u32, Option<V>> {
+        self.found
+            .into_iter()
+            .map(|(element, (_, value))| (element, value))
             .collect()
     }
 }

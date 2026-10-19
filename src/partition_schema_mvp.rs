@@ -857,34 +857,29 @@ fn railing_type_picks(
 }
 
 /// Each wanted type's name, read from its serialised data
-/// ([`crate::partition_names::find_element_data_names`]); `None` when two
-/// copies of the type disagree.
+/// ([`crate::partition_names::find_element_data_names`]), from the latest
+/// partition that holds one (#807, RE-145); `None` when two copies there
+/// disagree. On the BIM4LCA office's permit file every type has an older copy
+/// with its Finnish name and a newer one with its English name.
 fn type_data_names(
     rf: &mut RevitFile,
     header: &[u8; 10],
     wanted: &BTreeSet<u32>,
 ) -> std::collections::BTreeMap<u32, Option<String>> {
-    let mut names: std::collections::BTreeMap<u32, Option<String>> =
-        std::collections::BTreeMap::new();
+    use crate::partition_room_parameters::{LatestCopy, partition_number};
+    let mut names = LatestCopy::default();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
+        let partition = partition_number(&stream);
         for (id, name) in
             crate::partition_names::find_element_data_names(inflated.bytes(), header, wanted)
         {
-            match names.get(&id) {
-                None => {
-                    names.insert(id, Some(name));
-                }
-                Some(held) if held.as_deref() != Some(name.as_str()) => {
-                    names.insert(id, None);
-                }
-                _ => {}
-            }
+            names.offer(id, partition, name);
         }
     }
-    names
+    names.into_options()
 }
 
 /// Set [`TYPE_ID_FIELD`] and [`TYPE_NAME_FIELD`] on each picked element

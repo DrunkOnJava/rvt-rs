@@ -86,6 +86,18 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A family's or type's name comes from its latest copy, so its elements
+  keep their type (#807).** The family and type name index and the system
+  family type names dropped a name whose copies in different partitions
+  differed, and the elements joined through it got no type. That follows
+  #800's rule (RE-145). On the BIM4LCA office's building-permit file, where
+  every family and type has a Finnish-named older copy and an English-named
+  newer one, rvt-rs typed none of 345 columns, 52 doors, 43 light fixtures and
+  20 appliances, and no 4 walls and 8 slabs. It now types the same elements
+  as on the as-built file. Revit's names now match on all of those
+  columns, doors and light fixtures, and the permit file gets materials on
+  403 more elements and 67 ports, Revit's count. The other files export as
+  before.
 - **A room's name and its other parameters come from its latest copy
   (#800).** Where several partitions hold copies of a room's data that
   differ, the number and name readers (RE-117) and the text and integer
