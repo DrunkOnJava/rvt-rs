@@ -321,7 +321,10 @@ record-backed rooms that each name their Level outright. The rooms are
 the one part of this measured against the reference: each of the ten
 Levels they name maps to exactly one `IfcBuildingStorey` of Revit's own
 export, and the storey it maps to is the one that export aggregates the
-room into, 116 of 116. The other 853 bindings stay **NOT MEASURED**
+room into, 116 of 116. On the BIM4LCA office, the 30 Areas carry no record
+box. They are read from their partition chain records and aggregated into
+their Levels' storeys as Revit's export aggregates them, 30 of 30 on each
+file (RE-191). The other 853 bindings stay **NOT MEASURED**
 against Revit's own `IfcRelContainedInSpatialStructure`.
 The #213 column-derived path (`STOREY_ELEVATION_SOURCE_TYPES` =
 `IFCCOLUMN`) survives as the fallback for files with no recoverable Level

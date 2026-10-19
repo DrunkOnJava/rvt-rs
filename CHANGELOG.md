@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Revit 2024 Areas export as `IfcSpace` (#763, RE-191).** An Area's
+  partition record carries no bounding-box marker, so the element-record
+  scan never read one. A placed Area now exports as `IfcSpace .SPACE.` under
+  Revit's GlobalId: its number as `Name`, its name as `LongName`, in its
+  Level's storey, typed by an `IfcSpaceType` of its own and with
+  `Pset_SpaceCommon.Reference`, as Revit's export writes it. It has no body:
+  the Area's boundary is not decoded. On the BIM4LCA office, as built and at
+  building permit, rvt-rs now writes all 30 of the area spaces in Revit's
+  export, with number, name and GlobalId as Revit's. The permit file's two
+  Areas that are not placed are left out, as Revit leaves them out. Revit
+  2024 only.
 - **Revit 2015 to 2018 projects export their elements, as experimental
   (RE-181).** Revit 2015 to 2018 frame their element records as 2019 does,
   so the 32-bit readers read them with each release's own schema tags. Three
