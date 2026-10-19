@@ -46,16 +46,24 @@ WALL_SETTINGS.set("use-world-coords", True)
 WALL_SETTINGS.set("disable-opening-subtractions", True)
 
 
-def box(frame, element, settings=SETTINGS):
-    try:
-        shape = ifcopenshell.geom.create_shape(settings, element)
-    except Exception:
-        return None
-    verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
-    if not len(verts):
-        return None
-    v = frame(verts)
-    return np.concatenate([v.min(axis=0), v.max(axis=0)])
+def boxes(f, frame, elements, settings=SETTINGS):
+    """Element id -> its box, for those of `elements` that mesh. IfcOpenShell's
+    iterator meshes a representation several elements map (a door type's) once,
+    where `create_shape` meshes it again for each; the boxes are the same."""
+    out = {}
+    if not elements:
+        return out
+    iterator = ifcopenshell.geom.iterator(settings, f, num_threads=1, include=elements)
+    if not iterator.initialize():
+        return out
+    while True:
+        shape = iterator.get()
+        verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
+        if len(verts):
+            v = frame(verts)
+            out[shape.id] = np.concatenate([v.min(axis=0), v.max(axis=0)])
+        if not iterator.next():
+            return out
 
 
 def doors(path, with_hosts, cls):
@@ -69,19 +77,18 @@ def doors(path, with_hosts, cls):
             wall = voids.get(rel.RelatingOpeningElement.id())
             if wall is not None:
                 host[rel.RelatedBuildingElement.id()] = wall
+    tagged = [door for door in f.by_type(cls) if door.Tag]
+    door_boxes = boxes(f, frame, tagged)
+    # Each host wall is meshed once, however many doors it hosts.
+    walls = {host[door.id()].id(): host[door.id()] for door in tagged if door.id() in host}
+    wall_boxes = boxes(f, frame, list(walls.values()), WALL_SETTINGS)
     out = {}
-    # A wall hosting several doors is meshed once, openings and all.
-    walls = {}
-    for door in f.by_type(cls):
-        if not door.Tag:
-            continue
-        b = box(frame, door)
+    for door in tagged:
+        b = door_boxes.get(door.id())
         if b is None:
             continue
         wall = host.get(door.id())
-        if wall is not None and wall.id() not in walls:
-            walls[wall.id()] = box(frame, wall, WALL_SETTINGS)
-        out[door.Tag] = (b, walls[wall.id()] if wall is not None else None)
+        out[door.Tag] = (b, wall_boxes.get(wall.id()) if wall is not None else None)
     return out
 
 
