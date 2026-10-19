@@ -8,19 +8,22 @@ All notable changes will be documented here. This project follows
 
 ## [0.6.1] — 2026-10-19
 
-A patch release of 0.6.0. An export could panic on a 32-bit target, such
-as the WebAssembly the browser viewer runs, where a length read from a
-partition wrapped around (#836). crates.io and PyPI show the README packed
-into each version, and 0.6.0's support table said more than was measured:
-it called Revit 2027, 2015 and 2014-and-earlier projects read, and named
-every element's `IsExternal`. 0.6.1's says what is measured. 0.6.1 is
-built from 0.6.0, not from `main`, which has changes for the next minor
-release.
+A patch release of 0.6.0. On a 32-bit target, such as the WebAssembly the
+browser viewer runs, an export could panic when a size read from a
+partition wrapped around (#836); the viewer, built from `main`, has had the
+fix since it landed there. crates.io and PyPI show the README packed into
+each version, and 0.6.0's support table said more than was measured: it
+marked opening Revit 2027, 2015 and 2014-and-earlier projects, with their
+previews and schema, as supported, and said every element's `IsExternal` is
+written. 0.6.1's says what is measured. 0.6.1 is built from 0.6.0, not from
+`main`, which has changes for the next minor release.
 
 ### Upgrading from 0.6.0
 
-Nothing to change. On a 64-bit target 0.6.1 exports what 0.6.0 does, but
-for the version the IFC header names.
+Nothing to change. An export names 0.6.1 in its IFC header's `FILE_NAME`
+and in its `IfcApplication`. Otherwise, on a 64-bit target, Measure's scores
+and diagnostics of the reference models, Autodesk's sample projects and the
+family corpus are the same as 0.6.0's.
 
 ### Fixed
 
@@ -35,15 +38,17 @@ for the version the IFC header names.
   count read from arbitrary bytes by 12 before checking it against its
   64-entry limit; the count is now checked first.
 - **The README's support table says what is measured.** 0.6.0's marked
-  opening Revit 2027 and 2015 projects, and their previews and schema, as
-  read: they open on Autodesk's sample projects, and previews and PartAtom
-  are not measured on them. It marked Revit 2014 and earlier projects as
-  read too: no documented 2014 project is measured, and a public 2014
-  family opens and its schema reads (RE-147). And it named each element's
-  `IsExternal` (RE-193), which is written on every class but curtain
-  mullions and panels, as the 0.6.0 notes below now say. The 2015 to 2022
-  and 2027 rows name the releases their elements are measured against:
-  Revit 2019, 2023 and 2026 copies of the same sample projects.
+  opening Revit 2027 and 2015 projects, with their previews and schema, as
+  supported: they open on Autodesk's sample projects, where previews and
+  PartAtom are not measured. It marked Revit 2014 and earlier projects as
+  supported too: no documented 2014 project is measured, and a public 2014
+  family opens and its schema reads (RE-147). It said every element's
+  `IsExternal` is written (RE-193): curtain mullions and panels get none,
+  as the 0.6.0 notes below now say too. The rows for 2015 to 2022 and 2027
+  say that no Revit export of those files was measured, rather than that
+  there is none to measure against, and the summary of what rvt-rs reads
+  names the releases their elements are measured against: Revit 2019, 2023
+  and 2026 copies of the same sample projects.
 
 ### Changed
 
