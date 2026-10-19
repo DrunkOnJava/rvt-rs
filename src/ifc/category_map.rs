@@ -684,8 +684,21 @@ pub fn predefined_type_for(ifc_type: &str, value: &str) -> Option<&'static str> 
 /// carrying a value has been measured. The file's release stands for the
 /// exporter's, since exporting from a later Revit upgrades the file first.
 /// An unknown release keeps the value.
+///
+/// Nor does Revit 2024's export act on a wall sweep's value (RE-192). On
+/// both BIM4LCA office files 9 wall sweeps each carry their own
+/// `IfcCovering` (predefined type `ROOFING`) in their own data object, and
+/// Revit's export of each file writes all 9 as `IfcBuildingElementProxy`.
+/// This is measured, not read from the exporter's source: revit-ifc's
+/// `WallSweepExporter` exports a sweep through `GenericElementExporter`,
+/// which takes the entity from the same lookup as other elements, so the
+/// value seems not to reach that lookup. No other release's wall sweep
+/// carrying a value has been measured.
 pub fn export_override_applies(revit_class: &str, revit_version: Option<u32>) -> bool {
-    !(revit_class == crate::partition_schema_mvp::CURTAIN_WALL_CLASS && revit_version == Some(2024))
+    !(matches!(
+        revit_class,
+        crate::partition_schema_mvp::CURTAIN_WALL_CLASS | "WallSweep"
+    ) && revit_version == Some(2024))
 }
 
 /// Look up the IFC entity type a "IFC Export As" override value names.
