@@ -6,7 +6,9 @@ rvt-rs writes a room's number as `IfcSpace.Name` and its name as
 `ElementId` property. The reference is either Revit's own IFC export,
 matched by GlobalId, or a VIM export (`.vim`), matched by that ElementId,
 whose `Vim.Room.Number` is the number and whose element Name is Revit's
-display name, `<name> <number>`.
+display name, `<name> <number>`. Against an IFC export it also compares the
+storey each space is aggregated in (#763): no other scorer reaches a space,
+which has no `Tag`.
 
 Usage:
     python3 tools/re/room_names_vs_ifc.py OURS.ifc REVIT.ifc
@@ -28,6 +30,13 @@ def ours(model):
             element_id = properties.get("ElementId", element_id)
         out[space] = (space.Name, space.LongName, element_id)
     return out
+
+
+def storey_of(space):
+    parent = ifcopenshell.util.element.get_aggregate(space)
+    while parent is not None and not parent.is_a("IfcBuildingStorey"):
+        parent = ifcopenshell.util.element.get_aggregate(parent)
+    return parent.Name if parent is not None else None
 
 
 def bfast(buf, base=0):
@@ -80,17 +89,26 @@ def main():
                 print(f"  {space.Name}: ours {(number, name)} VIM {sorted(candidates)}")
     else:
         revit = ifcopenshell.open(sys.argv[2])
-        reference = {s.GlobalId: (s.Name, s.LongName) for s in revit.by_type("IfcSpace")}
+        reference = {s.GlobalId: s for s in revit.by_type("IfcSpace")}
+        storeys = {"equal": 0, "different": 0}
         for space, (number, name, _) in rooms.items():
             pair = (number, name)
             theirs = reference.get(space.GlobalId)
             if theirs is None:
                 absent += 1
-            elif theirs == pair:
+                continue
+            if (theirs.Name, theirs.LongName) == pair:
                 same += 1
             else:
                 differ += 1
-                print(f"  {space.Name}: ours {pair} Revit {theirs}")
+                print(f"  {space.Name}: ours {pair} Revit {(theirs.Name, theirs.LongName)}")
+            ours_storey, revit_storey = storey_of(space), storey_of(theirs)
+            if ours_storey == revit_storey:
+                storeys["equal"] += 1
+            else:
+                storeys["different"] += 1
+                print(f"  {space.Name}: storey ours {ours_storey} Revit {revit_storey}")
+        print(f"spaces in both: storey equal {storeys['equal']}, different {storeys['different']}")
     print(f"rooms: {len(rooms)}; Revit's number and name {same}, different {differ}, not in the reference {absent}")
 
 

@@ -237,6 +237,70 @@ fn identity_property_set(mut set: PropertySet, decoded: &DecodedElement) -> Prop
     set
 }
 
+/// An Area's ElementId, number, name and Level (#763), in the set a room's
+/// are written in, so the writer names its `IfcSpace` as it names a room's
+/// (`Name` the number and `LongName` the name, as Revit's export does) and
+/// `ifc::apply_record_level_reference_storeys` puts it in its Level's storey.
+fn area_property_set(decoded: &DecodedElement) -> PropertySet {
+    let text = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::String(text) if field == wanted && !text.is_empty() => {
+                    Some(text.clone())
+                }
+                _ => None,
+            })
+    };
+    let mut properties = Vec::new();
+    if let Some(id) = decoded.id {
+        properties.push(Property {
+            name: ROOM_ELEMENT_ID_PROPERTY.into(),
+            value: PropertyValue::Integer(i64::from(id)),
+        });
+    }
+    if let Some(number) = text(crate::partition_schema_mvp::ROOM_NUMBER_FIELD) {
+        properties.push(Property {
+            name: ROOM_NUMBER_PROPERTY.into(),
+            value: PropertyValue::Text(number),
+        });
+    }
+    if let Some(name) = text("m_name") {
+        properties.push(Property {
+            name: ROOM_NAME_PROPERTY.into(),
+            value: PropertyValue::Text(name),
+        });
+    }
+    let level = decoded
+        .fields
+        .iter()
+        .find_map(|(field, value)| match value {
+            InstanceField::ElementId { id, .. }
+                if field == crate::element_record_level_refs::LEVEL_REFERENCE_FIELD =>
+            {
+                Some(*id)
+            }
+            _ => None,
+        });
+    if let Some(id) = level {
+        properties.push(Property {
+            name: crate::element_record_level_refs::LEVEL_ELEMENT_ID_PROPERTY.into(),
+            value: PropertyValue::Integer(i64::from(id)),
+        });
+        properties.push(Property {
+            name: "LevelBindSource".into(),
+            value: PropertyValue::Text(
+                crate::element_record_level_refs::LEVEL_REFERENCE_SOURCE.into(),
+            ),
+        });
+    }
+    PropertySet {
+        name: ELEMENT_RECORD_PROPERTY_SET.into(),
+        properties,
+    }
+}
+
 /// Strip placement / body / host claims so an export cannot over-claim geometry.
 pub fn strip_building_element_geometry(entities: &mut [entities::IfcEntity]) {
     for entity in entities.iter_mut() {
@@ -566,6 +630,9 @@ pub fn append_typed_production_elements(
                             property_set = Some(geom);
                         }
                     }
+                    // #763: an Area's record holds no box, so its space has
+                    // no body, but it is named as a room's is.
+                    "Area" => property_set = Some(area_property_set(&decoded)),
                     _ => {}
                 }
             }
@@ -1801,12 +1868,13 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
     }
 }
 
-/// A room's `Pset_SpaceCommon` (RE-153), as Revit's export writes it:
-/// `Reference` (`IfcIdentifier`) its name and number, and `FloorCovering`
-/// (`IfcLabel`) its Floor Finish. `None` when neither was read.
+/// A room's or an Area's `Pset_SpaceCommon` (RE-153, #763), as Revit's
+/// export writes it: `Reference` (`IfcIdentifier`) its name and number, and
+/// a room's `FloorCovering` (`IfcLabel`) its Floor Finish. `None` when
+/// neither was read.
 fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     use crate::partition_schema_mvp as mvp;
-    if decoded.class != "Room" {
+    if decoded.class != "Room" && decoded.class != "Area" {
         return None;
     }
     let text = |wanted: &str| {
