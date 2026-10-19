@@ -39,7 +39,7 @@ the four levels a file can reach are in the
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
 | Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial, 2026 is experimental (one local model). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | Element records of other releases (#421), parameters (0.6.0), held-out models (#408). |
-| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.5.x milestone (below). |
+| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.6.x milestone (below). |
 | Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.6.0). |
 | Python and CLI | Partial | The `rvt` wheel on PyPI and prebuilt CLI archives on GitHub Releases, sharing the core's honesty bounds. | Stabilize JSON schemas and the one-shot inspect workflow. |
 | Write path | Partial | Stream-level patching only. Field-level semantic writes are unsupported and gated by [ADR-002](docs/decisions/ADR-002-semantic-write-api-gate.md). | Stay gated until openability can be proven. |
@@ -80,10 +80,10 @@ the four levels a file can reach are in the
   directions; Revit 2015 to 2022 and 2027 projects export their elements,
   experimentally.
 
-### 0.5.x: IFC geometry, remaining slices
+### 0.6.x: IFC geometry, remaining slices
 
 v0.4.0 shipped part of the geometry beta. The milestone of that name is closed,
-and the slices still open moved to this one, named 0.5.x since 0.5.0 shipped. Each slice records a baseline, an
+and the slices still open moved to this one, named 0.6.x since 0.6.0 shipped. Each slice records a baseline, an
 improvement and a residual against Revit's own exports on the reference pack
 (#407), approximations stay labelled (#409), and a slice ships in the next
 release that contains it. Open now: wall bodies thicker or thinner
@@ -94,7 +94,7 @@ solid does not close (#90), beams (#94), MEP equipment and routes (#96), the
 sketch-to-solid pipeline (#156), and the Snowdon slabs that are not in Revit's
 export: six in the Legends phase (#328) and one more (#309).
 
-### 0.6.0: element data (parameters) and viewer journey
+### 0.7.0: element data (parameters) and viewer journey
 
 Make rvt-rs a data source, not only a viewer: instance and type parameters with
 units and precedence (#35, #155), the element-record fields that carry them
@@ -103,8 +103,10 @@ and the viewer, with the viewer journey (open, inspect, schedule, export,
 diagnostics) verified end to end on the reference pack. 0.5.0 shipped the
 first of it: the levels, category, family, type and phase that Revit's export
 writes (RE-172, RE-177), more of the common property sets, and the record's
-reference slots (#228). The parameter store itself is open, and so are door
-and window sizes (#759).
+reference slots (#228). 0.6.0 shipped more: parameters named for a standard
+set's property (RE-194), each element's `IsExternal` (RE-193), type Fire
+Ratings, door sizes (#759) and port types (RE-197). The parameter store
+itself is open.
 
 ### 1.0.0: first-class utility
 
