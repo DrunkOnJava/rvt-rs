@@ -189,9 +189,11 @@ line names what to fix (its rulesets check needs an admin token). The list:
    branch of a closed pull request is deleted with a note where its commits
    stay reachable from the pull request's head). A research or Measure branch
    with no pull request is kept while its issue is open; once its finding has
-   landed or been superseded, it goes into a git bundle the maintainer keeps,
-   with a list of its commits, and is then deleted. The audit lists such a
-   branch once its last commit is more than 14 days old.
+   landed or been superseded, its tip is pushed to `refs/archive/<date>/` on
+   GitHub, which keeps it off the branch list, and into a git bundle the
+   maintainer keeps, with a list of its commits, and the branch is then
+   deleted. The audit lists such a branch once its last commit is more than
+   14 days old.
 3. The Actions cache is under its 10 GB limit. `python3
    tools/maintainer/clean_caches.py` (a dry run; `--delete` acts) removes the
    caches of closed pull requests and deleted branches, and `main`'s superseded
