@@ -479,12 +479,12 @@ The Python bindings have the Rust core's version support:
 
 | Revit release | Open + metadata + schema | Walker (ADocument) | IFC4 document export |
 |---|---|---|---|
-| 2015 | yes | not measured | typed elements from element records, experimental |
+| 2015 | partial: the sample projects open and their schema and `BasicFileInfo` read; `PartAtom` and the preview are not measured | not measured | typed elements from element records, experimental |
 | 2016 – 2022 | yes | `None` (entry-point detector: partial) | typed elements from element records, experimental |
 | 2023 | yes | `None` (entry-point detector: partial) | typed elements from element records |
 | 2024 – 2025 | yes | full | typed elements with measured geometry |
 | 2026 | yes | full | typed elements from element records, experimental |
-| 2027 | yes | not measured | typed elements from element records, experimental |
+| 2027 | partial: the sample projects open and their schema and `BasicFileInfo` read; `PartAtom` and the preview are not measured | not measured | typed elements from element records, experimental |
 
 Full matrix and per-column definitions are in
 [`docs/compatibility.md`](./compatibility.md). Expanding the generic
