@@ -21,7 +21,7 @@ Usage:
     cargo run --profile ci --example probe_re84_void_only_families -- model.rvt > probe.tsv
     python3 tools/re/void_only_vs_ifc.py probe.tsv <revit-export.ifc> [--list]
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

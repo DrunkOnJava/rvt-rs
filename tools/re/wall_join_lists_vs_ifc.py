@@ -28,7 +28,7 @@ Usage:
 
     python3 tools/re/wall_join_lists_vs_ifc.py walls.jsonl [revit-export.ifc]
 
-Needs IfcOpenShell (tested with 0.8.5) for the IFC check only.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins) for the IFC check only.
 """
 
 import collections

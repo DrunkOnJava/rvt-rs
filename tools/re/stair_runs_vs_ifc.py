@@ -20,7 +20,7 @@ Usage:
 
     python3 tools/re/stair_runs_vs_ifc.py <runs.json> <revit-export.ifc> [--ids ID,ID] [--dump]
 
-Needs IfcOpenShell (tested with 0.8.5) and NumPy.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins) and NumPy.
 """
 
 import json

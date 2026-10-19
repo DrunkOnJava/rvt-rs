@@ -43,9 +43,9 @@ rustc --version
 
 # --- 3. wasm-pack ----------------------------------------------------------
 # Pin to the same version CI uses (deploy-viewer.yml) so the WASM output
-# is byte-for-byte comparable and doesn't drift between local and CI. Fall
-# back to the upstream installer (latest) only if the pinned download fails,
-# so a GitHub hiccup never blocks setup entirely.
+# is byte-for-byte comparable and doesn't drift between local and CI. The
+# download is checked against the SHA-256 GitHub publishes for the release
+# asset; setup stops rather than run an installer it cannot check.
 WASM_PACK_VERSION="v0.14.0"
 log "wasm-pack ${WASM_PACK_VERSION}"
 if command -v wasm-pack >/dev/null 2>&1 && \
@@ -53,10 +53,17 @@ if command -v wasm-pack >/dev/null 2>&1 && \
   echo "already installed"
 else
   arch="$(uname -m)"
+  case "$arch" in
+    x86_64) sha256="278a8d668085821f4d1a637bd864f1713f872b0ae3a118c77562a308c0abfe8d" ;;
+    aarch64) sha256="5941c7b05060440ff37ee50fe9009a408e63fa5ba607a3b0736f5a887ec5f2ca" ;;
+    *) echo "no pinned wasm-pack ${WASM_PACK_VERSION} for ${arch}" >&2; exit 1 ;;
+  esac
   pkg="wasm-pack-${WASM_PACK_VERSION}-${arch}-unknown-linux-musl"
   url="https://github.com/rustwasm/wasm-pack/releases/download/${WASM_PACK_VERSION}/${pkg}.tar.gz"
   tmp="$(mktemp -d)"
-  if curl -fsSL "$url" -o "$tmp/wasm-pack.tar.gz" && tar -xzf "$tmp/wasm-pack.tar.gz" -C "$tmp"; then
+  if curl -fsSL "$url" -o "$tmp/wasm-pack.tar.gz" \
+     && echo "${sha256}  $tmp/wasm-pack.tar.gz" | sha256sum -c - \
+     && tar -xzf "$tmp/wasm-pack.tar.gz" -C "$tmp"; then
     dest_dir="$(dirname "$(command -v cargo)")"
     if [ -w "$dest_dir" ]; then
       install -m 0755 "$tmp/$pkg/wasm-pack" "$dest_dir/wasm-pack"
@@ -65,8 +72,8 @@ else
     fi
     rm -rf "$tmp"
   else
-    echo "pinned download failed — falling back to upstream installer"
-    curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+    echo "wasm-pack ${WASM_PACK_VERSION}: the download failed or its SHA-256 differs" >&2
+    exit 1
   fi
 fi
 wasm-pack --version
@@ -82,7 +89,7 @@ if [ ! -d .venv ]; then
 fi
 # shellcheck disable=SC1091
 . .venv/bin/activate
-python -m pip install --upgrade pip maturin pytest
+python -m pip install --require-hashes -r tools/ci/requirements-dev.txt
 maturin develop --manifest-path rvt-py/Cargo.toml
 python -c "import rvt; print('rvt (python):', rvt.__version__)"
 deactivate
@@ -94,10 +101,13 @@ wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
 log "Viewer pnpm dependencies + type check + build"
 (
   cd viewer
-  # pnpm at the version viewer/package.json pins in `packageManager`.
+  # pnpm at the version viewer/package.json pins in `packageManager`, through
+  # Node's corepack, which checks the package it downloads.
   if ! command -v pnpm >/dev/null 2>&1; then
-    corepack enable pnpm 2>/dev/null \
-      || npm install -g "$(node -p 'require("./package.json").packageManager')"
+    corepack enable pnpm || {
+      echo "corepack could not enable $(node -p 'require("./package.json").packageManager'); install it and rerun" >&2
+      exit 1
+    }
   fi
   pnpm install --frozen-lockfile
   pnpm run typecheck

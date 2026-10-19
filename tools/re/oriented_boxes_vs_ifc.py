@@ -15,7 +15,7 @@ Usage:
 
     python3 tools/re/oriented_boxes_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--list N]
 
-Needs IfcOpenShell (tested with 0.8.5) and NumPy.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins) and NumPy.
 """
 
 import collections

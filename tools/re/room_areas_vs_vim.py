@@ -11,7 +11,7 @@ Usage:
     python3 tools/re/room_areas_vs_vim.py <rvt-rs.ifc> <model.vim> [--list N]
 
 A VIM is a BFAST container; the reader below is the minimum needed. Needs
-IfcOpenShell (tested with 0.8.5), NumPy and Shapely.
+IfcOpenShell (the version tools/ci/requirements-ifc.txt pins), NumPy and Shapely.
 """
 
 import importlib.util

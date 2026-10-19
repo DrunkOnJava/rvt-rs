@@ -99,10 +99,11 @@ updates:
     cooldown:
       default-days: 3
   - package-ecosystem: pip
-    # The Python packages CI installs, pinned in tools/ci/requirements-*.txt.
+    # The Python packages CI installs: tools/ci/requirements-*.in name them,
+    # and requirements-*.txt pin them and their dependencies with hashes.
     directory: /tools/ci
     # IfcOpenShell is a witness and Measure's scorers run on it: an update
-    # lands as tools/ci/requirements-ifc.txt says (#773).
+    # lands as tools/ci/requirements-ifc.in says (#773).
     schedule:
       interval: weekly
     groups:

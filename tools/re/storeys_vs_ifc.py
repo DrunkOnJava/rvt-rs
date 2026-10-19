@@ -21,7 +21,7 @@ Usage:
 stair and its railings once per storey under one `Tag`; `--any-copy`
 counts a storey equal when it is the storey of any element sharing its
 `Tag`, where the default compares with one of them. Needs IfcOpenShell
-(tested with 0.8.5).
+(the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

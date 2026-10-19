@@ -154,7 +154,7 @@ if [[ "$run_ifcopenshell" -eq 1 ]]; then
     printf '\n==> python3 -c "import ifcopenshell"\n'
     if ! python3 -c "import ifcopenshell; print(ifcopenshell.version)" 2>/dev/null; then
         echo "error: Python module 'ifcopenshell' is not importable." >&2
-        echo "       Install with: python3 -m pip install 'ifcopenshell>=0.8.0,<0.9.0'" >&2
+        echo "       Install with: python3 -m pip install --require-hashes -r tools/ci/requirements-ifc.txt" >&2
         exit 1
     fi
     # #214 / C9: same gate CI runs — every instance the exporter writes

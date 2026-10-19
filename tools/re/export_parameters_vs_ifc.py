@@ -16,7 +16,7 @@ Usage:
 
     python3 tools/re/export_parameters_vs_ifc.py <probe output> <revit-export.ifc> [--list]
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

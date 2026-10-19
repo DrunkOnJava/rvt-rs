@@ -20,7 +20,7 @@ Usage:
 
     python3 tools/re/class_sets_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
 
-Needs IfcOpenShell (tested with 0.8.5).
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections

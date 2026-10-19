@@ -26,7 +26,7 @@ Usage:
 surface's centroid is nearest, for a file whose rooms do not carry Revit's
 GlobalId (Revit 2023).
 
-Needs IfcOpenShell (tested with 0.8.5), NumPy and Shapely.
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins), NumPy and Shapely.
 """
 
 import collections

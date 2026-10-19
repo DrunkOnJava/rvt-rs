@@ -39,8 +39,9 @@ or silently truncate STEP output.
 
 **Job**: `ifcopenshell-validate` (IFC-41).
 
-Installs [IfcOpenShell](https://github.com/IfcOpenShell/IfcOpenShell) 0.8.x
-from PyPI and loads the committed
+Installs [IfcOpenShell](https://github.com/IfcOpenShell/IfcOpenShell) from
+PyPI, the version and dependencies `tools/ci/requirements-ifc.txt` pins with
+their hashes, and loads the committed
 [`tests/fixtures/synthetic-project.ifc`](../tests/fixtures/synthetic-project.ifc)
 through its full IFC4 schema parser. Fails the CI run if any of:
 
@@ -136,7 +137,7 @@ wired into CI, the evidence trail is:
 tools/ci/verify-real-files.sh --release
 
 # Layer 2: IfcOpenShell validation (requires Python + pip)
-pip install 'ifcopenshell>=0.8.0,<0.9.0'
+pip install --require-hashes -r tools/ci/requirements-ifc.txt  # the witness CI pins
 python - <<'PY'
 import ifcopenshell
 f = ifcopenshell.open("tests/fixtures/synthetic-project.ifc")

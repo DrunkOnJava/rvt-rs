@@ -4,7 +4,7 @@ own IFC export writes in its Pset_*Common property sets.
 
 Usage: python3 tools/re/type_parameters_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
 
-Needs IfcOpenShell (tested with 0.8.5)."""
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins)."""
 import sys, re, collections
 import ifcopenshell, ifcopenshell.util.element as ue
 ours_path, theirs_path = sys.argv[1], sys.argv[2]
