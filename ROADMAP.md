@@ -27,8 +27,9 @@ writes that as IFC4, glTF, plan SVG and CSV from the CLIs, Python and the
 zero-upload browser viewer. Revit 2023 projects get a narrower version of the
 same, and Revit 2015 to 2022, 2026 and 2027 projects are experimental. Every
 recovery claim is measured against the oracle its report names: Revit's own
-IFC export of the same model wherever one exists, and for 2015 to 2018, 2019
-to 2022 and 2027, which have none, the same sample projects saved by Revit
+IFC export of the same model wherever one is measured, and for 2015 to 2018,
+2019 to 2022 and 2027, which have no measured same-release export, the same
+sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
 (most parameters, family geometry, hip and gable roofs, opening profiles,

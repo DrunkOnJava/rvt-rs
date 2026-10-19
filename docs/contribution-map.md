@@ -66,7 +66,6 @@ milestone is for.
 | [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office doors: Revit's OverallWidth is the door's own extent, 10 mm over its type's Width; 0 of 268 written as Revit's |
 | [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | Nordic LCA office: 323 elements exported as a different IFC class than Revit's export |
 | [#763](https://github.com/DrunkOnJava/rvt-rs/issues/763) | Nordic LCA office: Revit's export has 44 family instances as IfcSpace (their own Export to IFC As) that rvt-rs writes as proxies |
-| [#85](https://github.com/DrunkOnJava/rvt-rs/issues/85) | RE-15-05: Symmetric-tuple probe sweep — find Sheet/View/Phase/DesignOption/Workset/ParameterElement resource tuples |
 
 ### Good first issues
 
