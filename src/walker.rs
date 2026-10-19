@@ -681,11 +681,16 @@ pub fn read_field_by_type(
                 return InstanceField::Bytes(slice.to_vec());
             }
             let char_count = u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]) as usize;
-            let byte_count = char_count.saturating_mul(2);
-            if slice.len() < 4 + byte_count {
+            // Checked, not saturating: on wasm32 `usize` is 32 bits, so a garbage `char_count`
+            // saturates to `usize::MAX` and `4 + byte_count` wraps, slipping past the bound below.
+            let Some(end) = char_count.checked_mul(2).and_then(|b| b.checked_add(4)) else {
+                return InstanceField::Bytes(slice.to_vec());
+            };
+            if slice.len() < end {
                 return InstanceField::Bytes(slice.to_vec());
             }
-            let utf16_bytes = &slice[4..4 + byte_count];
+            let byte_count = end - 4;
+            let utf16_bytes = &slice[4..end];
             // Decode as UTF-16LE. encoding_rs is already in deps.
             let (text, _, had_errors) = encoding_rs::UTF_16LE.decode(utf16_bytes);
             *cursor += 4 + byte_count;
