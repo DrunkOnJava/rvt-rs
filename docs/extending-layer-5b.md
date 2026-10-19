@@ -23,12 +23,14 @@ programmer plus access to the `phi-ag/rvt` corpus via `_corpus/`
 
 ## The three-file change
 
-Adding a decoder for `MyClass` touches exactly three files:
+Adding a decoder for `MyClass` touches these files:
 
 ```
-src/elements/mod.rs         # register the decoder
-src/elements/my_class.rs    # decoder impl + typed view + tests
-tests/elements.rs           # integration test against corpus
+src/elements/mod.rs          # register the decoder, and route production through it
+src/elements/my_class.rs     # decoder impl + typed view
+tests/myclass_corpus.rs      # the corpus check (Step 5), with its line in
+tests/integration/main.rs    #   the one test binary
+tools/ci/test-targets.txt    #   and its class in the CI manifest
 ```
 
 ### Step 1 — Check the schema
@@ -126,9 +128,16 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
 }
 ```
 
-The `decoder_class_names_are_unique` test in `src/elements/mod.rs`
-will fail at build time if you accidentally register two decoders
-for the same class — a useful tripwire.
+`decoder_for_class` takes the first decoder registered for a class
+name, so check that `MyClass` has none yet
+(`grep -rn '"MyClass"' src/elements/`).
+
+Production decoding (`walker::iter_elements`) uses a typed decoder only
+for a class listed in `elements::MVP_TYPED_CLASSES`. There an instance
+the decoder rejects is skipped rather than decoded generically (fail
+closed), and a decoded one carries `provenance.decoder ==
+"MyClassDecoder"`. Add `MyClass` to that list once Step 5's check passes
+on real files; until then the generic decoder reads it.
 
 ### Step 4 — Write down how it can fail
 
@@ -153,30 +162,46 @@ steps:
 
 1. Write `tests/myclass_corpus.rs`. Resolve the corpus through
    `tests/common` (`RVT_SAMPLES_DIR` for the family corpus), never a
-   hard-coded path, and skip a missing file:
+   hard-coded path. Skip a missing release, but fail on one when
+   `RVT_REQUIRE_CORPUS` is set, as CI sets it. Check that the typed
+   decoder, not the generic one, decoded each instance, and that the
+   fields it reads equal what an oracle gives for the same file:
+   Revit's own IFC export of it, or a value its report measured.
 
    ```rust
    mod common;
 
    use common::{ALL_YEARS, sample_for_year};
 
+   fn require_family_corpus() -> bool {
+       std::env::var("RVT_REQUIRE_CORPUS").is_ok_and(|v| v == "1" || v == "true")
+   }
+
    #[test]
-   fn myclass_is_in_every_releases_schema() {
+   fn myclass_decodes_on_every_release() {
+       let mut missing = Vec::new();
        for year in ALL_YEARS {
            let path = sample_for_year(year);
            if !path.exists() {
-               eprintln!("skipping {year}: sample not present (set RVT_SAMPLES_DIR)");
+               missing.push(year);
                continue;
            }
            let mut rf = rvt::RevitFile::open(&path).unwrap();
-           let schema = rf.schema().unwrap();
-           let myclass = schema
-               .classes
-               .iter()
-               .find(|c| c.name == "MyClass")
-               .unwrap_or_else(|| panic!("{year}: MyClass not in the schema"));
-           assert!(!myclass.fields.is_empty(), "{year}");
+           let decoded: Vec<_> = rvt::walker::iter_elements(&mut rf)
+               .unwrap()
+               .filter(|e| e.class == "MyClass")
+               .collect();
+           assert!(!decoded.is_empty(), "{year}: no MyClass decoded");
+           for e in &decoded {
+               assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
+               // Each field the decoder reads, against the oracle's value
+               // for this element (by its ElementId, `e.id`).
+           }
        }
+       assert!(
+           missing.is_empty() || !require_family_corpus(),
+           "RVT_REQUIRE_CORPUS is set and releases {missing:?} are missing"
+       );
    }
    ```
 
@@ -191,8 +216,8 @@ steps:
    does not class fails `tools/ci/verify-real-files.sh`, so a new check
    cannot go unrun.
 
-CI fetches the family corpus and sets `RVT_REQUIRE_CORPUS=1`, which
-turns a missing release into a failure there. Locally,
+CI fetches the family corpus and sets `RVT_REQUIRE_CORPUS=1`, so the
+check above fails there on a missing release. Locally,
 `RVT_SAMPLES_DIR=<corpus>/examples/Autodesk cargo test --profile ci --test integration myclass_corpus`
 runs it.
 
@@ -205,10 +230,8 @@ Add to the `[Unreleased]` section:
 - **`elements::my_class::MyClassDecoder`** — Layer 5b decoder for
   Revit's `MyClass` (description). Produces
   `elements::my_class::MyClass { name, foo, ... }` as the typed
-  view; generic `DecodedElement` via `decode_instance` is the
-  underlying primitive. Covers N fields. Unit-tested with
-  synthesized bytes; corpus integration test pending live walker
-  integration (tracked in L5B-01..02).
+  view. Covers N fields, measured on <files> against <oracle>
+  (<counts>, RE-NN); `tests/myclass_corpus.rs` checks it.
 ```
 
 ### Step 7 — Commit + PR
@@ -216,7 +239,7 @@ Add to the `[Unreleased]` section:
 - `cargo fmt --all`
 - `cargo clippy --all-targets -- -D warnings`
 - `tools/check-local.sh` (fmt, clippy, rustdoc, build, real-file checks)
-- Commit message: `feat(walker): Layer 5b MyClass decoder (#NNN)`
+- Commit message: `feat(elements): a MyClass decoder (#NNN) (RE-NN)`
   — reference the GitHub issue (CLASS-xx / M3-xx in `TODO.md`)
 - Open PR referencing the issue
 
