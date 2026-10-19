@@ -97,6 +97,11 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **An element's "Export to IFC As" of `IfcStair` or `IfcDoor` is honoured
+  (#792).** On both BIM4LCA office files two generic models carry their own
+  `IfcStair` and a curtain panel its own `IfcDoor` with `DOOR`, and Revit's
+  export writes them as `IfcStair .NOTDEFINED.` and `IfcDoor .DOOR.`. rvt-rs
+  did not act on either value and wrote a proxy and a plate.
 - **A wall sweep in a Revit 2024 file stays an `IfcBuildingElementProxy`,
   whatever its "Export to IFC As" says (#792, RE-192).** On both BIM4LCA
   office files 9 wall sweeps carry their own `IfcCovering` (predefined type

@@ -160,7 +160,9 @@ proxies in Revit's export, measured on that project only (RE-192). The office's
 fixtures and appliances follow their types' values: 78 waste terminals, 51
 electric appliances, 40 fire suppression terminals, 15 wash-hand basins and
 an air terminal on the as-built file, each Revit's class and predefined type
-(RE-190). From Revit 2024 an entry belongs to the data object that holds it
+(RE-190), and two generic models and a curtain panel follow their own
+`IfcStair` and `IfcDoor` (#792). From Revit 2024 an entry belongs to the
+data object that holds it
 (RE-153), not to the last element-data header before it. Values the
 export does not apply are counted in the diagnostics' warnings. Composed, the two rules
 give **80 of 80 `IfcSlab` and 20 of 20 `IfcShadingDevice`, exact
