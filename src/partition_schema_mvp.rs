@@ -4618,9 +4618,10 @@ const IS_EXTERNAL_UNKNOWN_CLASSES: &[&str] = &["CurtainWallMullion", "CurtainWal
 /// following revit-ifc's `CategoryUtil.IsElementExternal` (CLEANROOM.md
 /// source 5): a parameter named [`IS_EXTERNAL_PARAMETER_NAME`] on the
 /// element, then on its type; its type's Function, external unless interior
-/// (0); a roof is external; otherwise not external. `None` for the classes
-/// whose value cannot be calculated from what is read.
-fn calculated_is_external(element: &DecodedElement) -> Option<bool> {
+/// (0); a roof is external; otherwise not external, where `last_step`
+/// allows it. `None` for the classes whose value cannot be calculated from
+/// what is read, and where the last step is not allowed.
+fn calculated_is_external(element: &DecodedElement, last_step: bool) -> Option<bool> {
     let flag = |wanted: &str| {
         element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::Bool(flag) if name == wanted => Some(*flag),
@@ -4648,15 +4649,19 @@ fn calculated_is_external(element: &DecodedElement) -> Option<bool> {
         return Some(true);
     }
     let class = element.class.as_str();
-    if IS_EXTERNAL_FUNCTION_CLASSES.contains(&class) || IS_EXTERNAL_UNKNOWN_CLASSES.contains(&class)
+    if !last_step
+        || IS_EXTERNAL_FUNCTION_CLASSES.contains(&class)
+        || IS_EXTERNAL_UNKNOWN_CLASSES.contains(&class)
     {
         return None;
     }
     Some(false)
 }
 
-/// Releases where `IsExternal` is measured (RE-193).
-pub const IS_EXTERNAL_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Releases where the calculation's last step, not external, is measured
+/// (RE-193). The parameters and a type's Function are read on every release
+/// from 2024, as RE-158 read a door's and a floor's.
+pub const IS_EXTERNAL_LAST_STEP_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Give each element of `groups` the Yes/No parameters named `IsExternal` or
 /// `<property set>.IsExternal` that it carries ([`NAMED_PARAMETER_FIELD_PREFIX`];
@@ -4664,16 +4669,14 @@ pub const IS_EXTERNAL_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 /// then the value Revit's exporter calculates ([`IS_EXTERNAL_FIELD`]). Revit's
 /// exporter reads `Pset_WallCommon.IsExternal` on a wall before anything else,
 /// and the BIM4LCA office defines one such parameter for each of twelve
-/// property sets (RE-193). Nothing on a release not measured.
+/// property sets (RE-193).
 fn attach_is_external(
     rf: &mut RevitFile,
     revit_version: u32,
     mut groups: [&mut Vec<DecodedElement>; 8],
 ) {
     use crate::partition_room_parameters as prp;
-    if !IS_EXTERNAL_REVIT_VERSIONS.contains(&revit_version) {
-        return;
-    }
+    let last_step = IS_EXTERNAL_LAST_STEP_REVIT_VERSIONS.contains(&revit_version);
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
@@ -4722,7 +4725,7 @@ fn attach_is_external(
         }
     }
     for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
-        if let Some(external) = calculated_is_external(element) {
+        if let Some(external) = calculated_is_external(element, last_step) {
             element
                 .fields
                 .push((IS_EXTERNAL_FIELD.into(), InstanceField::Bool(external)));
