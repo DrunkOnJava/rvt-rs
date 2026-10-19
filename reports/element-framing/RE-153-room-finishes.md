@@ -3,7 +3,7 @@
 **Date:** 2026-10-03
 **Issues:** #35; backlog item B21
 **Artefacts:**
-- RE1 Architecture (Revit 2025) with Revit's own IFC4 export;
+- RE1 Architecture (Revit 2025) with Revit's own IFC2X3 export (Coordination View 2.0; first recorded here as IFC4);
 - Core Interior (2024), Einhoven (2023), and RE1 Electrical, Mechanical and Plumbing (2025).
 
 Measured on GitHub's hosted runners with the Measure workflow, run 37131189456.
@@ -12,7 +12,7 @@ Measured on GitHub's hosted runners with the Measure workflow, run 37131189456.
 
 ## 1. The question
 
-Revit's IFC4 export of RE1 Architecture gives each of its 11 rooms a `Pset_SpaceCommon` with two properties:
+Revit's IFC2X3 export of RE1 Architecture gives each of its 11 rooms a `Pset_SpaceCommon` with two properties (IFC2X3 holds a space's coverings in that set; IFC4 holds them in `Pset_SpaceCoveringRequirements`, where rvt-rs's IFC4 export writes `FloorCovering` since 2026-10-19):
 - `Reference`, an `IfcIdentifier`: the room's name and number (`Storage Narrow RE-9`);
 - `FloorCovering`, an `IfcLabel`: the room's Floor Finish (`Wood`, `Concrete`, `Linoleum`, `Ceramic Tile`, `Tatami`).
 

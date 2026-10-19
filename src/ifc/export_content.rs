@@ -893,8 +893,11 @@ pub fn append_typed_production_elements(
                 set,
             });
         }
-        // RE-153: a room's Pset_SpaceCommon.
-        if let Some(set) = space_common_property_set(&decoded) {
+        // RE-153: a room's Pset_SpaceCommon and its Floor Finish.
+        for set in space_common_property_set(&decoded)
+            .into_iter()
+            .chain(space_covering_property_set(&decoded))
+        {
             entities.push(entities::IfcEntity::ElementPropertySet {
                 element: entity_index,
                 set,
@@ -2081,9 +2084,9 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
 
 /// A room's or an Area's `Pset_SpaceCommon` (RE-153, #763), as Revit's
 /// export writes it: `Reference` (`IfcIdentifier`) its name and number, or
-/// its name alone where it has no number (RE-196), a
-/// room's `FloorCovering` (`IfcLabel`) its Floor Finish, and `IsExternal`
-/// (RE-193). `None` when none was read.
+/// its name alone where it has no number (RE-196), and `IsExternal`
+/// (RE-193). `None` when none was read. A room's Floor Finish is in
+/// [`space_covering_property_set`].
 fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     use crate::partition_schema_mvp as mvp;
     if decoded.class != "Room" && decoded.class != "Area" {
@@ -2112,12 +2115,6 @@ fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
             value: PropertyValue::Identifier(reference),
         });
     }
-    if let Some(finish) = text(mvp::ROOM_FLOOR_FINISH_FIELD) {
-        properties.push(Property {
-            name: "FloorCovering".into(),
-            value: PropertyValue::Label(finish),
-        });
-    }
     if let Some(external) = is_external_value(decoded, "Pset_SpaceCommon") {
         properties.push(Property {
             name: "IsExternal".into(),
@@ -2127,6 +2124,36 @@ fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     (!properties.is_empty()).then(|| PropertySet {
         name: "Pset_SpaceCommon".into(),
         properties,
+    })
+}
+
+/// A room's `Pset_SpaceCoveringRequirements`: `FloorCovering` (`IfcLabel`)
+/// its Floor Finish (RE-153). IFC4 puts a space's coverings in this set;
+/// IFC2X3's `Pset_SpaceCommon`, where Revit's IFC2X3 export of RE1
+/// Architecture writes the same value, has them (#35). `None` when no
+/// finish was read.
+fn space_covering_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
+    use crate::partition_schema_mvp as mvp;
+    if decoded.class != "Room" {
+        return None;
+    }
+    let finish = decoded
+        .fields
+        .iter()
+        .find_map(|(field, value)| match value {
+            InstanceField::String(text)
+                if field == mvp::ROOM_FLOOR_FINISH_FIELD && !text.is_empty() =>
+            {
+                Some(text.clone())
+            }
+            _ => None,
+        })?;
+    Some(PropertySet {
+        name: "Pset_SpaceCoveringRequirements".into(),
+        properties: vec![Property {
+            name: "FloorCovering".into(),
+            value: PropertyValue::Label(finish),
+        }],
     })
 }
 

@@ -132,6 +132,13 @@ All notable changes will be documented here. This project follows
   the level and stair sets and the parameters named for a standard set.
   Revit's export gives each piece all of them, as its export of Snowdon
   Towers' architectural model shows on its 19 elements in pieces.
+- **A room's Floor Finish is in `Pset_SpaceCoveringRequirements`, where IFC4
+  puts a space's coverings.** RE-153 wrote it as `Pset_SpaceCommon.FloorCovering`,
+  following Revit's export of RE1 Architecture, which is IFC2X3 (where that
+  set holds the coverings), not IFC4 as RE-153 recorded. IFC4's
+  `Pset_SpaceCommon` has no covering properties, so the IFC4 file rvt-rs
+  writes carried one its standard set does not define. `psets_vs_ifc`
+  reads an IFC2X3 reference's space coverings under their IFC4 set.
 - **A room with no number is named, typed and referred to as Revit's export
   does it (RE-196).** A room's number and name were read only as two
   non-empty texts, so a room with no number got neither: its space was
