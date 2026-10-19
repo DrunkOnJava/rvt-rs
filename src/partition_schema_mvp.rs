@@ -4668,7 +4668,7 @@ pub const IS_EXTERNAL_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 fn attach_is_external(
     rf: &mut RevitFile,
     revit_version: u32,
-    groups: [&mut Vec<DecodedElement>; 8],
+    mut groups: [&mut Vec<DecodedElement>; 8],
 ) {
     use crate::partition_room_parameters as prp;
     if !IS_EXTERNAL_REVIT_VERSIONS.contains(&revit_version) {
