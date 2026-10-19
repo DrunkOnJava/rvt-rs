@@ -108,10 +108,11 @@ fn main() -> anyhow::Result<()> {
             }
             Some("Family") => {
                 let family = cells.entry(id).or_default();
-                for object in graph
+                for (cell_index, object) in graph
                     .objects
                     .iter()
-                    .filter(|object| object.class_name == "ConnectorDataCell")
+                    .enumerate()
+                    .filter(|(_, object)| object.class_name == "ConnectorDataCell")
                 {
                     let Some(index) = object.fields.get("m_index").and_then(|v| v.as_i64()) else {
                         continue;
@@ -127,19 +128,18 @@ fn main() -> anyhow::Result<()> {
                             (name.clone(), text.chars().take(80).collect())
                         })
                         .collect();
-                    // The object `m_oRelevantParams` points to, by its offset in
-                    // the record, each of its fields tallied as `rel.<field>`.
+                    // The object `m_oRelevantParams` points to, through the
+                    // graph's pointer edges, each of its fields tallied as
+                    // `rel.<field>`.
                     let target = object
                         .fields
                         .get("m_oRelevantParams")
-                        .and_then(|pointer| pointer.get("offset"))
-                        .and_then(|offset| offset.as_u64())
-                        .and_then(|offset| {
-                            graph
-                                .objects
-                                .iter()
-                                .find(|candidate| candidate.start as u64 == offset)
-                        });
+                        .and_then(|pointer| {
+                            rvt::native_saved_mesh::pointer(graph, cell_index, pointer)
+                                .ok()
+                                .flatten()
+                        })
+                        .and_then(|index| graph.objects.get(index));
                     if let Some(target) = target {
                         fields.insert("rel.class".into(), target.class_name.clone());
                         for (name, value) in target.fields.as_object().into_iter().flatten() {
