@@ -212,6 +212,55 @@ jobs:
           RVT_REQUIRE_CORPUS: ${{ matrix.with_corpus && '1' || '' }}
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
 
+  # #836: a sum or product of file-derived lengths in `usize` that a 64-bit
+  # build cannot overflow can still wrap on a 32-bit target, and pass a
+  # bounds check it should fail (#835 found one that panicked the browser
+  # viewer, which runs on wasm32). Every other job builds for 64 bits, so
+  # this one runs the same real-file, CLI, contract and hardening targets,
+  # the fuzz regressions among them, on i686 with overflow checks on: a
+  # wrap panics there instead of passing.
+  i686-overflow:
+    name: 32-bit overflow checks (i686)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_PROFILE_CI_OVERFLOW_CHECKS: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch phi-ag/rvt sample corpus
+        uses: $/.github/actions/fetch-corpus
+        with:
+          repository: phi-ag/rvt
+          path: _corpus
+      - name: Install Rust and the i686 target
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update --target i686-unknown-linux-gnu
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          rustc --version
+      # The 32-bit C runtime and libgcc the i686 test binaries link against.
+      - name: Install gcc-multilib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-multilib
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: ci-i686
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-nextest@0.9.146
+      - name: Real-file, CLI, contract and hardening checks on i686
+        shell: bash
+        env:
+          RVT_SAMPLES_DIR: ${{ github.workspace }}/_corpus/examples/Autodesk
+          RVT_REQUIRE_CORPUS: "1"
+        run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast --target i686-unknown-linux-gnu
+
   corpus-tier2:
     # M2-03 Tier 2: optional external project corpus. Clones the MIT
     # magnetar-io/revit-test-datasets tree (not Autodesk-owned samples)
@@ -1003,6 +1052,7 @@ jobs:
       - fmt
       - clippy
       - test
+      - i686-overflow
       - corpus-tier2
       - writer-patch-corpus
       - ifcopenshell-validate

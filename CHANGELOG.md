@@ -6,6 +6,26 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **CI runs the real-file, CLI, contract and hardening checks on 32-bit
+  i686 with overflow checks on (#836).** A sum or product of lengths read
+  from a file that cannot overflow a 64-bit `usize` can still wrap on a
+  32-bit target and pass a bounds check it should fail: #835 found one on
+  wasm32, where the browser viewer runs, and every other CI job builds for
+  64 bits. In the new job, which `CI passed` requires, such a wrap panics in
+  the fuzz regressions and the family-corpus checks instead.
+- **The one-pass data-object scan checks the end it computes (#836).**
+  `partition_room_parameters::data_objects` tries a header at every offset
+  of a partition and added the size it reads there to the offset unchecked.
+  On a 32-bit target a size near 4 GiB from arbitrary bytes wrapped the end
+  around, and a wrapped end below 4 made its next read panic, which in the
+  browser viewer aborts the export. The i686 job found it on every family
+  release. A 64-bit build cannot overflow there, so its output is unchanged.
+  The job then found `partition_type_materials`' map reader multiplying a
+  count read from arbitrary bytes by 12 before checking it against its
+  64-entry limit; the count is now checked first.
+
 ## [0.6.0] — 2026-10-19
 
 rvt-rs writes IFC4, and 0.6.0 makes its property sets IFC4's. 0.5 took some
