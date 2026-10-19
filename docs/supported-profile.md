@@ -20,8 +20,11 @@ apart:
    2024 and 2025 project files, and Revit 2023 ones with their bounding boxes
    only (RE-81). Experimentally, Revit 2026 ones, measured so on one project
    (RE-124), and Revit 2015 to 2022 and 2027 ones, which have no Revit export
-   to compare: their sets equal those of the same projects saved by the next
-   or the previous release (the table below).
+   to compare and are measured against the same sample projects saved by a
+   neighbouring release instead: a 2027 project's ElementIds and classes are
+   its 2026 copy's, and on 2015 to 2022 every ElementId shared with the copy
+   keeps its class, with the copy's building elements class for class where
+   Autodesk did not edit the model between releases (the table below).
 3. **Geometry.** An element's body. Exact where the element's data is decoded
    (the table below), otherwise its bounding box, and the export diagnostics
    say which.
