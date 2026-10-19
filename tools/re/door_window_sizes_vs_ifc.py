@@ -136,9 +136,38 @@ def revit_sizes(path, cuts=None):
     return out
 
 
+def within(a, b):
+    return abs(a[0] - b[0]) <= TOLERANCE_FEET and abs(a[1] - b[1]) <= TOLERANCE_FEET
+
+
 def score_export(ours_path, revit_path, listing):
-    """Count the OverallWidth / OverallHeight an rvt-rs export writes against Revit's."""
-    ours, revit = revit_sizes(ours_path), revit_sizes(revit_path)
+    """Count the OverallWidth / OverallHeight an rvt-rs export writes against Revit's.
+
+    It also compares each export's own opening for the door or window (the
+    opening it fills, along its X and Z), since Revit's sizes are its
+    opening's (RE-194)."""
+    our_cuts, revit_cuts = {}, {}
+    ours, revit = revit_sizes(ours_path, our_cuts), revit_sizes(revit_path, revit_cuts)
+    cut_tally = collections.Counter()
+    cut_worst = []
+    for tag, (entity, width, height) in revit.items():
+        if tag not in ours:
+            continue
+        revit_cut, our_cut = revit_cuts.get(tag), our_cuts.get(tag)
+        if revit_cut is None:
+            cut_tally[(entity, "Revit's opening not read")] += 1
+        elif our_cut is None:
+            cut_tally[(entity, "rvt-rs's opening not read")] += 1
+        elif within(our_cut, revit_cut):
+            cut_tally[(entity, "equal")] += 1
+        else:
+            label = ("width equal" if abs(our_cut[0] - revit_cut[0]) <= TOLERANCE_FEET
+                     else "height equal" if abs(our_cut[1] - revit_cut[1]) <= TOLERANCE_FEET else "differ")
+            cut_tally[(entity, label)] += 1
+            cut_worst.append((tag, entity, revit_cut, our_cut))
+        _, w, h = ours[tag]
+        if our_cut is not None and w is not None and h is not None:
+            cut_tally[(entity, "rvt-rs's sizes are its opening's" if within((w, h), our_cut) else "rvt-rs's sizes are not its opening's")] += 1
     tally = collections.Counter()
     seen = collections.Counter()
     worst = []
@@ -157,9 +186,15 @@ def score_export(ours_path, revit_path, listing):
     for entity in sorted(seen):
         print(f"{entity}: {seen[entity]} matched by Tag, OverallWidth and OverallHeight "
               f"equal {tally[(entity, 'equal')]}  differ {tally[(entity, 'differs')]}  $ {tally[(entity, '$')]}")
+    for entity in sorted(seen):
+        labels = sorted({label for (e, label) in cut_tally if e == entity})
+        print(f"{entity} openings along their filler's X and Z, rvt-rs's against Revit's: "
+              + ", ".join(f"{label} {cut_tally[(entity, label)]}" for label in labels))
     if listing:
         for tag, entity, width, height, w, h in worst[:60]:
             print(f"  {entity} {tag}: Revit {width:.4f} x {height:.4f} ft, rvt-rs {w:.4f} x {h:.4f} ft")
+        for tag, entity, revit_cut, our_cut in cut_worst[:40]:
+            print(f"  {entity} {tag} opening: Revit {revit_cut[0]:.4f} x {revit_cut[1]:.4f} ft, rvt-rs {our_cut[0]:.4f} x {our_cut[1]:.4f} ft")
 
 
 def main():
