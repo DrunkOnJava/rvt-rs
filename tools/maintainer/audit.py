@@ -19,7 +19,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -115,9 +115,10 @@ def branches(repo):
         if b["name"] == "main" or b["name"] in open_heads:
             continue
         commit = gh(f"repos/{repo}/commits/{b['commit']['sha']}")
-        age = age_days(commit["commit"]["committer"]["date"])
-        if age > BRANCH_STALE_DAYS:
-            problems.append(f"{b['name']} ({age} days old)")
+        stamp = commit["commit"]["committer"]["date"]
+        when = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) - when > timedelta(days=BRANCH_STALE_DAYS):
+            problems.append(f"{b['name']} ({age_days(stamp)} days old)")
     return problems
 
 
