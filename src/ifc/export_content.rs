@@ -59,6 +59,10 @@ pub struct TypedProductionAppend {
     /// flipped, by ElementId (B72): read in every quality mode, as the flip
     /// is part of the type's GlobalId (B74).
     pub element_flips: BTreeMap<u32, bool>,
+    /// The `Pset_PipeSegmentOccurrence` sets whose `InvertElevation` is a
+    /// pipe's invert worked out in model height, by index in the entities,
+    /// for `pipe_inverts_above_storeys` (RE-157).
+    pub computed_inverts: Vec<usize>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -967,16 +971,22 @@ pub fn append_typed_production_elements(
         });
         // RE-157: a pipe's invert, here in model height; the storey's
         // elevation comes off once storeys are bound
-        // (`pipe_inverts_above_storeys`).
+        // (`pipe_inverts_above_storeys`). A pipe whose parameter named for
+        // the property gives it (RE-194) has that, as it is.
+        let explicit_invert = named.iter().any(|(set, property)| {
+            set == "Pset_PipeSegmentOccurrence" && property.name == INVERT_ELEVATION_PROPERTY
+        });
         let invert = match decoded.class.as_str() {
-            "Pipe" => pipe_invert_height(&decoded.fields),
+            "Pipe" if !explicit_invert => pipe_invert_height(&decoded.fields),
             _ => None,
         };
         // #822: the length in IFC4's base quantities of the segment, where
         // Revit's IFC4 export writes it (IFC2X3's flow-segment sets held it
-        // as a property), and a pipe's invert in Pset_PipeSegmentOccurrence.
-        let segment_sets = match decoded.class.as_str() {
-            "Pipe" => Some((
+        // as a property), and a pipe's invert in Pset_PipeSegmentOccurrence,
+        // on an element written as a pipe or duct segment only, not one its
+        // Export to IFC As writes as another entity.
+        let segment_sets = match effective.ifc_type {
+            "IFCPIPESEGMENT" => Some((
                 "Qto_PipeSegmentBaseQuantities",
                 invert.map(|height| PropertySet {
                     name: "Pset_PipeSegmentOccurrence".into(),
@@ -986,7 +996,7 @@ pub fn append_typed_production_elements(
                     }],
                 }),
             )),
-            "Duct" => Some(("Qto_DuctSegmentBaseQuantities", None)),
+            "IFCDUCTSEGMENT" => Some(("Qto_DuctSegmentBaseQuantities", None)),
             _ => None,
         };
         if let Some((quantities, occurrence)) = segment_sets {
@@ -997,7 +1007,14 @@ pub fn append_typed_production_elements(
                     value: PropertyValue::PositiveLengthFeet(length),
                 }],
             });
-            for set in quantities.into_iter().chain(occurrence) {
+            if let Some(set) = quantities {
+                entities.push(entities::IfcEntity::ElementPropertySet {
+                    element: entity_index,
+                    set,
+                });
+            }
+            if let Some(set) = occurrence {
+                out.computed_inverts.push(entities.len());
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: entity_index,
                     set,
@@ -1005,8 +1022,8 @@ pub fn append_typed_production_elements(
             }
         }
         // A duct's Pset_DuctSegmentTypeCommon: its type's shape (B43), where
-        // it is known.
-        if let Some(shape) = duct_shape.filter(|_| decoded.class == "Duct") {
+        // it is known and the duct is written as a duct segment.
+        if let Some(shape) = duct_shape.filter(|_| effective.ifc_type == "IFCDUCTSEGMENT") {
             entities.push(entities::IfcEntity::ElementPropertySet {
                 element: entity_index,
                 set: PropertySet {
@@ -1933,10 +1950,15 @@ fn pipe_invert_height(fields: &[(String, InstanceField)]) -> Option<f64> {
     Some(start[2] - inner / 2.0)
 }
 
-/// Take each pipe's storey elevation off its `InvertElevation`, which
-/// Revit's export gives above the pipe's storey (RE-157). A pipe on no storey
-/// keeps its height above the model's zero.
-pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], storeys: &[Storey]) {
+/// Take each pipe's storey elevation off the `InvertElevation` worked out in
+/// model height, in the sets `computed` lists, which Revit's export gives
+/// above the pipe's storey (RE-157). A pipe on no storey keeps its height
+/// above the model's zero.
+pub(super) fn pipe_inverts_above_storeys(
+    entities: &mut [entities::IfcEntity],
+    storeys: &[Storey],
+    computed: &[usize],
+) {
     let elevations: Vec<f64> = entities
         .iter()
         .map(|entity| match entity {
@@ -1949,13 +1971,12 @@ pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], s
             _ => 0.0,
         })
         .collect();
-    for entity in entities.iter_mut() {
-        let entities::IfcEntity::ElementPropertySet { element, set } = entity else {
+    for &index in computed {
+        let Some(entities::IfcEntity::ElementPropertySet { element, set }) =
+            entities.get_mut(index)
+        else {
             continue;
         };
-        if set.name != "Pset_PipeSegmentOccurrence" {
-            continue;
-        }
         let elevation = elevations.get(*element).copied().unwrap_or(0.0);
         for property in &mut set.properties {
             if let (INVERT_ELEVATION_PROPERTY, PropertyValue::LengthFeet(height)) =

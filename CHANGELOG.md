@@ -169,9 +169,12 @@ All notable changes will be documented here. This project follows
   segment's base quantities, `Qto_PipeSegmentBaseQuantities` or
   `Qto_DuctSegmentBaseQuantities`, as an `IfcElementQuantity`, and a pipe's
   invert in `Pset_PipeSegmentOccurrence`, where Revit's IFC4 export of the
-  BIM4LCA office writes them. A `PropertySet` named `Qto_` is now written as
-  an `IfcElementQuantity` of IFC4 simple quantities. A building-element
-  proxy's Serial Number is no longer also written in
+  BIM4LCA office writes them, on an element written as a pipe or duct segment
+  only, not one its Export to IFC As writes as another entity. A pipe's own
+  parameter named `Pset_PipeSegmentOccurrence.InvertElevation` is written as
+  it is, with no storey elevation taken off. A `PropertySet` named `Qto_` is
+  now written as an `IfcElementQuantity` of IFC4 simple quantities. A
+  building-element proxy's Serial Number is no longer also written in
   `Pset_PrecastConcreteElementGeneral`, which in IFC4 has no `SerialNumber`;
   `Pset_ManufacturerOccurrence` holds it.
 - **An element's `Reference` is in IFC4's property sets, not IFC2X3's
