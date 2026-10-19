@@ -85,9 +85,21 @@ witness_artifacts() {
   esac
 }
 
+# Each step's wall time in milliseconds, one `<step> <ms>` line per step in
+# the item's timings.log, which the compare job's diff leaves out (*.log).
+timed() { # dir step command...
+  local dir="$1" step="$2" started status
+  shift 2
+  started=$(date +%s%N)
+  "$@"
+  status=$?
+  echo "$step $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/timings.log"
+  return "$status"
+}
+
 score() { # name args...
   local out="$1"; shift
-  timeout 1200 python "$@" > "$out" 2>&1
+  timed "$(dirname "$out")" "$(basename "$out" .txt)" timeout 1200 python "$@" > "$out" 2>&1
   echo "exit $?" >> "$out"
 }
 
@@ -104,16 +116,16 @@ PSET_DEFINITIONS="${RUNNER_TEMP:-/tmp}/ifc4-pset-definitions.csv"
 schema() { # dir max_bytes
   {
     echo "arity:"
-    timeout 600 python "$(dirname "$0")/ifc_schema_arity.py" "$1/model.ifc" 2>&1 \
+    timed "$1" schema-arity timeout 600 python "$(dirname "$0")/ifc_schema_arity.py" "$1/model.ifc" 2>&1 \
       | grep -v '^IFC schema conformance passed\|^  instances checked' || true
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
       echo "validate:"
-      timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" 2>&1
+      timed "$1" schema-validate timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" 2>&1
     else
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
     echo "property sets:"
-    timeout 1200 python "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
+    timed "$1" schema-psets timeout 1200 python "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
       --definitions "$PSET_DEFINITIONS" 2>&1
   } > "$1/schema.txt"
 }
@@ -133,9 +145,9 @@ while IFS='|' read -r name rvt ref; do
   "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
   echo "exit $?" >> "$dir/rvt-ifc.log"
   echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/rvt-ifc.log"
-  "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
+  timed "$dir" rvt-gltf "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
-  info "$MODELS/$rvt" "$dir"
+  timed "$dir" rvt-info info "$MODELS/$rvt" "$dir"
   grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
   # A writer path only these models reach, such as the office files'
   # thermal transmittance unit (RE-194), is checked here.
@@ -143,7 +155,7 @@ while IFS='|' read -r name rvt ref; do
   # The witness observations committed for this model (research/witness/),
   # regenerated so a change to its IFC can commit them from the results.
   for artifact in $(witness_artifacts "$name"); do
-    "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/witness.ifc" --observation "$dir/witness-$artifact.json" --artifact-id "$artifact" > /dev/null 2>&1
+    timed "$dir" "witness-$artifact" "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/witness.ifc" --observation "$dir/witness-$artifact.json" --artifact-id "$artifact" > /dev/null 2>&1
     rm -f "$dir/witness.ifc"
   done
   if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
@@ -196,7 +208,7 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     [ -f "$sample" ] || continue
     dir="$OUT/sample-$(basename "$sample" .rvt)"; mkdir -p "$dir"
     echo "::group::$(basename "$sample")"
-    info "$sample" "$dir"
+    timed "$dir" rvt-info info "$sample" "$dir"
     # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
     started=$(date +%s%N)
     "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
