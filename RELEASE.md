@@ -177,19 +177,27 @@ was measured, which crates.io and PyPI keep showing until the next
 version replaces it.
 
 1. **Branch from the latest release tag.** `git checkout -b
-   hotfix/vX.Y.(Z+1) vX.Y.Z`.
+   hotfix/vX.Y.(Z+1) vX.Y.Z`. GitHub runs a push's workflows from the
+   pushed branch, and a tag before v0.6.1 has a `ci.yml` without the
+   `hotfix/**` trigger step 4 needs: commit that trigger to the branch
+   first, as `hotfix/v0.6.1` did.
 2. **Apply the minimal fix.** No refactoring, no adjacent cleanup, no
    new features. Smallest possible diff that closes the issue; when it
    landed on `main` first, `git cherry-pick -x` it. Where no existing
    real-file, CLI or contract check fails without the fix, add one that
    does (unit tests are banned, see `CONTRIBUTING.md`).
-3. **Prepare the release on the branch.** Steps 4 to 8 above (the
-   version files, `CHANGELOG.md`, `CITATION.cff`, the manifest, the
-   README's release section and the witness refresh), committed to the
-   branch: no pull request into `main` can test a branch cut from a tag.
+3. **Prepare the release on the branch.** Steps 4 to 7 above (the
+   version files, `CHANGELOG.md`, `CITATION.cff` and the manifest) and
+   the README's release section, committed to the branch: no pull
+   request into `main` can test a branch cut from a tag.
 4. **Check it.** Pushing the branch runs CI on it with the full matrix
-   `main` gets (`ci.yml` runs on `hotfix/**` pushes). Measure it against
-   the release it patches, with the corpora the fix touches:
+   `main` gets (`ci.yml` runs on `hotfix/**` pushes). The new version
+   changes both Core Interior witness observations and their verdicts
+   (step 8): take them from that run's `octetproof-core-interior`
+   artifact, check that only `witness_version` and the verdict hashes
+   differ, commit them and push again, and that run must pass too.
+   Measure the branch against the release it patches, with the corpora
+   the fix touches:
    `gh workflow run measure.yml --ref hotfix/vX.Y.(Z+1) -f base=vX.Y.Z`.
    Skip nothing else in steps 1 to 3 above.
 5. **Tag the branch and push the tag.** Steps 9 to 12 above, with the
