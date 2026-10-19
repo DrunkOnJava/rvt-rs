@@ -6,15 +6,24 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
-### Changed
+## [0.6.1] — 2026-10-19
 
-- **CI runs the real-file, CLI, contract and hardening checks on 32-bit
-  i686 with overflow checks on (#836).** A sum or product of lengths read
-  from a file that cannot overflow a 64-bit `usize` can still wrap on a
-  32-bit target and pass a bounds check it should fail: #835 found one on
-  wasm32, where the browser viewer runs, and every other CI job builds for
-  64 bits. In the new job, which `CI passed` requires, such a wrap panics in
-  the fuzz regressions and the family-corpus checks instead.
+A patch release of 0.6.0. An export could panic on a 32-bit target, such
+as the WebAssembly the browser viewer runs, where a length read from a
+partition wrapped around (#836). crates.io and PyPI show the README packed
+into each version, and 0.6.0's support table said more than was measured:
+it called Revit 2027, 2015 and 2014-and-earlier projects read, and named
+every element's `IsExternal`. 0.6.1's says what is measured. 0.6.1 is
+built from 0.6.0, not from `main`, which has changes for the next minor
+release.
+
+### Upgrading from 0.6.0
+
+Nothing to change. On a 64-bit target 0.6.1 exports what 0.6.0 does, but
+for the version the IFC header names.
+
+### Fixed
+
 - **The one-pass data-object scan checks the end it computes (#836).**
   `partition_room_parameters::data_objects` tries a header at every offset
   of a partition and added the size it reads there to the offset unchecked.
@@ -25,6 +34,26 @@ All notable changes will be documented here. This project follows
   The job then found `partition_type_materials`' map reader multiplying a
   count read from arbitrary bytes by 12 before checking it against its
   64-entry limit; the count is now checked first.
+- **The README's support table says what is measured.** 0.6.0's marked
+  opening Revit 2027 and 2015 projects, and their previews and schema, as
+  read: they open on Autodesk's sample projects, and previews and PartAtom
+  are not measured on them. It marked Revit 2014 and earlier projects as
+  read too: no documented 2014 project is measured, and a public 2014
+  family opens and its schema reads (RE-147). And it named each element's
+  `IsExternal` (RE-193), which is written on every class but curtain
+  mullions and panels, as the 0.6.0 notes below now say. The 2015 to 2022
+  and 2027 rows name the releases their elements are measured against:
+  Revit 2019, 2023 and 2026 copies of the same sample projects.
+
+### Changed
+
+- **CI runs the real-file, CLI, contract and hardening checks on 32-bit
+  i686 with overflow checks on (#836).** A sum or product of lengths read
+  from a file that cannot overflow a 64-bit `usize` can still wrap on a
+  32-bit target and pass a bounds check it should fail: #835 found one on
+  wasm32, where the browser viewer runs, and every other CI job builds for
+  64 bits. In the new job, which `CI passed` requires, such a wrap panics in
+  the fuzz regressions and the family-corpus checks instead.
 
 ## [0.6.0] — 2026-10-19
 
@@ -35,11 +64,12 @@ IFC4 property set definitions on all 89 exports Measure checks, by rvt-rs's
 own check of them (#822, #826). buildingSMART's Validation Service has not
 been run on them, and quantity sets are not checked. More of what
 Revit's exporter writes is written: parameters named for any IFC4 property
-set's property (RE-194, #817), every element's `IsExternal` (RE-193), a
-type's Fire Rating, a door's overall size, Revit 2024 Areas as spaces
-(RE-191), and each port's type and, where Revit's exporter gives it one, its
-flow direction (RE-197). Projects saved by Revit 2015 to 2022 and by Revit
-2027 export their elements, as experimental (RE-179 to RE-181).
+set's property (RE-194, #817), `IsExternal` on every class but curtain
+mullions and panels (RE-193), a type's Fire Rating, a door's overall size,
+Revit 2024 Areas as spaces (RE-191), and each port's type and, where
+Revit's exporter gives it one, its flow direction (RE-197). Projects saved
+by Revit 2015 to 2022 and by Revit 2027 export their elements, as
+experimental (RE-179 to RE-181).
 
 puzzbobb's pull requests read Revit 2015 to 2022 and 2027 projects (#740,
 #742) and found where a wall's function and roof attachment come from
@@ -126,7 +156,8 @@ fixes a panic in the browser viewer (#835). Thank you.
   in type: IFC4's `IfcCountMeasure` against the export's `IfcInteger`. What
   that export takes from its user-defined property set file, such as a
   glazing set on walls, is not written.
-- **Each element's `IsExternal`, as Revit's exporter sets it (RE-193).**
+- **`IsExternal` as Revit's exporter sets it, on every class but curtain
+  mullions and panels (RE-193).**
   Revit's export reads a Yes/No parameter named for the property set first
   (`Pset_WallCommon.IsExternal` on a wall), then calculates the value from a
   parameter named `IsExternal`, the type's Function, a roof's category, and
