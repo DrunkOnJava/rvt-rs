@@ -20,9 +20,13 @@ The definitions are buildingSMART's list of IFC4's property set definitions,
 the one its validation service checks rule PSE001 against, pinned by commit
 and sha256 in tools/ci/gen_standard_property_sets.py. A set scoped to a
 predefined type (`IfcCovering/CEILING`) applies to an object with that
-predefined type, or a user-defined one of that name. Quantity sets are not
-checked. Measure (tools/ci/measure-reference-models.sh) runs this on every
-export.
+predefined type, its own or, where it gives none, its type's, or a
+user-defined one of that name (the object's ObjectType or its type's
+ElementType); on an entity with no PredefinedType (IfcAnnotation) the scope is
+its ObjectType. A single, list or bounded value's type is checked against the
+type IFC4 declares; an enumeration's values against its values (the list
+gives no type for them). Quantity sets are not checked. Measure
+(tools/ci/measure-reference-models.sh) runs this on every export.
 
 Usage: ifc4_property_sets.py MODEL.ifc [--definitions PSET_DEFINITIONS.csv] [--fail]
 
@@ -85,9 +89,24 @@ def applies_to(applies, schema, entity, predefined, object_type):
     for applicable, scope in applies:
         if applicable.upper() not in names:
             continue
-        if scope is None or predefined == scope or (predefined == "USERDEFINED" and object_type == scope):
+        if scope is None or predefined == scope:
+            return True
+        if predefined in (None, "USERDEFINED") and object_type == scope:
             return True
     return False
+
+
+def scope_of(obj):
+    """The predefined type and user-defined type an occurrence is checked
+    with: its own, else those of the type it is typed by, which IFC4 says an
+    occurrence omits when its type gives them."""
+    predefined = getattr(obj, "PredefinedType", None)
+    object_type = getattr(obj, "ObjectType", None)
+    if predefined is None:
+        for rel in getattr(obj, "IsTypedBy", None) or ():
+            predefined = getattr(rel.RelatingType, "PredefinedType", None)
+            object_type = object_type or getattr(rel.RelatingType, "ElementType", None)
+    return predefined, object_type
 
 
 def occurrence_of(schema, type_entity):
@@ -116,11 +135,14 @@ def main(argv):
 
     held = []  # (property set, entity it is checked against, predefined type, object type)
     for rel in f.by_type("IfcRelDefinesByProperties"):
-        pset = rel.RelatingPropertyDefinition
-        if not pset.is_a("IfcPropertySet") or not (pset.Name or "").startswith("Pset_"):
-            continue
-        for obj in rel.RelatedObjects or ():
-            held.append((pset, obj, obj.is_a(), getattr(obj, "PredefinedType", None), getattr(obj, "ObjectType", None)))
+        # IFC4's IfcPropertySetDefinitionSet relates several sets at once.
+        definition = rel.RelatingPropertyDefinition
+        members = definition if isinstance(definition, (tuple, list)) else (definition,)
+        for pset in members:
+            if not pset.is_a("IfcPropertySet") or not (pset.Name or "").startswith("Pset_"):
+                continue
+            for obj in rel.RelatedObjects or ():
+                held.append((pset, obj, obj.is_a(), *scope_of(obj)))
     for type_object in f.by_type("IfcTypeObject"):
         occurrence = occurrence_of(schema, type_object.is_a())
         for pset in type_object.HasPropertySets or ():
@@ -162,9 +184,18 @@ def main(argv):
             if not isinstance(data_type, dict):
                 continue
             instance = data_type.get("instance") or ""
-            if prop.is_a("IfcPropertySingleValue") and prop.NominalValue is not None and instance.startswith("Ifc"):
-                if prop.NominalValue.is_a() != instance:
-                    wrong_type[(name, prop.Name, prop.NominalValue.is_a(), instance)] += 1
+            if instance.startswith("Ifc"):
+                if prop.is_a("IfcPropertySingleValue"):
+                    values = (prop.NominalValue,)
+                elif prop.is_a("IfcPropertyListValue"):
+                    values = tuple(prop.ListValues or ())
+                elif prop.is_a("IfcPropertyBoundedValue"):
+                    values = (prop.UpperBoundValue, prop.LowerBoundValue, getattr(prop, "SetPointValue", None))
+                else:
+                    values = ()
+                for value in values:
+                    if value is not None and value.is_a() != instance:
+                        wrong_type[(name, prop.Name, value.is_a(), instance)] += 1
             if prop.is_a("IfcPropertyEnumeratedValue") and data_type.get("values"):
                 allowed = set(data_type["values"])
                 for value in prop.EnumerationValues or ():
