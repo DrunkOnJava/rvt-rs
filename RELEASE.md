@@ -199,7 +199,12 @@ version replaces it.
    Measure the branch against the release it patches, with the corpora
    the fix touches:
    `gh workflow run measure.yml --ref hotfix/vX.Y.(Z+1) -f base=vX.Y.Z`.
-   Skip nothing else in steps 1 to 3 above.
+   The branch has no pull request, so nothing reviews its text, which
+   crates.io and PyPI then show for good: push a branch at `vX.Y.Z`
+   (`review/vX.Y.Z-base`) and open a review-only pull request of the
+   hotfix branch into it, answer the review, then close it unmerged and
+   delete that base after the tag. Skip nothing else in steps 1 to 3
+   above.
 5. **Tag the branch and push the tag.** Steps 9 to 12 above, with the
    branch's head in place of `origin/main`:
    `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" origin/hotfix/vX.Y.(Z+1)`.
