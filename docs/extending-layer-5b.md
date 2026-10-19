@@ -213,11 +213,11 @@ steps:
    partition records of some classes, which other decoders read, so
    check only the instances decoded from the schema (`record_kind`
    `schema_instance`) for your decoder, not the generic one, and that
-   there are some: partition rows alone can make up the id set. Then
-   check the typed view the CLI and Python expose,
-   `typed_json::mvp_typed_view`, field by field against the oracle's
-   value for the same element: the wire fields alone do not show a wrong
-   mapping in `MyClass::from_decoded`.
+   the corpus holds some: partition rows alone can make up a release's
+   id set. Then check the typed view the CLI and Python expose,
+   `typed_json::mvp_typed_view`, for every row of either carrier, field
+   by field against the oracle's value for the same element: the wire
+   fields alone do not show a wrong mapping in `MyClass::from_decoded`.
 
    The example covers a class every family release holds:
 
@@ -233,6 +233,7 @@ steps:
    #[test]
    fn myclass_decodes_on_every_release() {
        let mut missing = Vec::new();
+       let mut schema_rows = 0;
        for year in ALL_YEARS {
            let path = sample_for_year(year);
            if !path.exists() {
@@ -250,15 +251,12 @@ steps:
            let ids: std::collections::BTreeSet<u32> =
                elements.iter().filter_map(|e| e.id).collect();
            assert_eq!(ids, oracle_myclass_ids(year), "{year}: MyClass ElementIds");
-           let from_schema: Vec<_> = elements
-               .iter()
-               .filter(|e| e.provenance.record_kind.as_deref() == Some("schema_instance"))
-               .collect();
-           // Partition rows can make up the id set alone: require the decoder
-           // to have read some, or the checks below pass on nothing.
-           assert!(!from_schema.is_empty(), "{year}: no MyClass instance from the schema");
-           for e in from_schema {
-               assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
+           for e in &elements {
+               if e.provenance.record_kind.as_deref() == Some("schema_instance") {
+                   assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
+                   schema_rows += 1;
+               }
+               // Every carrier's row: the CLI and Python show this view of each.
                let typed = rvt::elements::typed_json::mvp_typed_view(e)
                    .unwrap_or_else(|| panic!("{year}: MyClass has no typed view"));
                // Each field of `typed`, against the oracle's value for this
@@ -270,6 +268,12 @@ steps:
        assert!(
            missing.is_empty() || !require_family_corpus(),
            "RVT_REQUIRE_CORPUS is set and releases {missing:?} are missing"
+       );
+       // Partition rows alone can make up a release's id set: across the
+       // corpus the decoder must have read some, or its checks passed on none.
+       assert!(
+           schema_rows > 0 || missing.len() == ALL_YEARS.len(),
+           "no MyClass instance came from the schema"
        );
    }
    ```
