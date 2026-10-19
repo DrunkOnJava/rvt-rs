@@ -58,6 +58,7 @@ milestone is for.
 
 | Issue | Remainder |
 |---|---|
+| [#847](https://github.com/DrunkOnJava/rvt-rs/issues/847) | IfcDistributionPort has no placement: Revit's export places each port at its connector |
 | [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's description, system classification and HVAC or piping direction are not read (#828 follow-up) |
 | [#827](https://github.com/DrunkOnJava/rvt-rs/issues/827) | from_decoded's property set builders put Revit fields in IFC4 standard sets (Pset_WallCommon.BaseOffset, Pset_WindowCommon.SillHeight, ...) |
 | [#824](https://github.com/DrunkOnJava/rvt-rs/issues/824) | BIM4LCA office: 31 of 63 slabs' top surfaces differ from Revit's (8 at twice the area, 20 at +0.35%, holes missing) |
@@ -65,7 +66,6 @@ milestone is for.
 | [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office doors: Revit's OverallWidth is the door's own extent, 10 mm over its type's Width; 0 of 268 written as Revit's |
 | [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | Nordic LCA office: 323 elements exported as a different IFC class than Revit's export |
 | [#763](https://github.com/DrunkOnJava/rvt-rs/issues/763) | Nordic LCA office: Revit's export has 44 family instances as IfcSpace (their own Export to IFC As) that rvt-rs writes as proxies |
-| [#528](https://github.com/DrunkOnJava/rvt-rs/issues/528) | MEP connectivity: ports and port-to-port connections (IfcDistributionPort, IfcRelNests, IfcRelConnectsPorts) |
 | [#154](https://github.com/DrunkOnJava/rvt-rs/issues/154) | RE: Reproduce complete Formats/Latest parsing and serialization-tag assignment |
 | [#153](https://github.com/DrunkOnJava/rvt-rs/issues/153) | RE: Validate ElementHeader framing for ElementId and class-tag recovery |
 | [#152](https://github.com/DrunkOnJava/rvt-rs/issues/152) | RE: Validate Global/ElemTable body as a versioned ownership tree |
