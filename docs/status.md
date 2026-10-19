@@ -154,7 +154,9 @@ rows, and the three `teste_export_2025` walls whose type carries
 rows (`reports/element-framing/RE-45-ifc-export-parameters.md`). A curtain wall
 in a Revit 2024 file stays `IfcCurtainWall` whatever its value names, as
 Revit 2024's exporter writes it: the 124 BIM4LCA office curtain walls set to
-`IfcShadingDevice` are `IfcCurtainWall` in Revit's export (RE-188). The office's
+`IfcShadingDevice` are `IfcCurtainWall` in Revit's export (RE-188). Nor does a
+wall sweep in a 2024 file: the office's 9 sweeps set to `IfcCovering` are
+proxies in Revit's export, measured on that project only (RE-192). The office's
 fixtures and appliances follow their types' values: 78 waste terminals, 51
 electric appliances, 40 fire suppression terminals, 15 wash-hand basins and
 an air terminal on the as-built file, each Revit's class and predefined type
