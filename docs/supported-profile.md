@@ -69,7 +69,7 @@ derived from the document and their own identity, stable between exports,
 override, applied where it names `IfcShadingDevice`, `IfcSlab`, `IfcCovering`,
 `IfcWasteTerminal`, `IfcFireSuppressionTerminal`, `IfcSanitaryTerminal`,
 `IfcAirTerminal` or `IfcElectricAppliance` (RE-190)
-and Revit's exporter acts on it (not on a 2024 file's curtain walls, RE-188),
+and Revit's exporter acts on it (not on a 2024 file's curtain walls, RE-188, or its wall sweeps, RE-192),
 with the values not applied listed in the diagnostics. Not read: most instance and type parameters (#35, #155) and phases
 (#328), so an element Revit's export leaves out because of its phase can still
 appear. Elements in a design-option set's non-primary options are left out, as

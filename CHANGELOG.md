@@ -97,6 +97,13 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A wall sweep in a Revit 2024 file stays an `IfcBuildingElementProxy`,
+  whatever its "Export to IFC As" says (#792, RE-192).** On both BIM4LCA
+  office files 9 wall sweeps carry their own `IfcCovering` (predefined type
+  `ROOFING`), and Revit's export writes all 9 as proxies. rvt-rs followed the
+  value and wrote coverings. This is measured on that one project, not read
+  from the exporter's source, whose wall sweep path takes the entity from the
+  same lookup as other elements; other releases keep following the value.
 - **A family's or type's name comes from its latest copy, so its elements
   keep their type (#807).** The family and type name index and the system
   family type names dropped a name whose copies in different partitions
