@@ -474,6 +474,13 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// elements (`WASHHANDBASIN`) and `IfcAirTerminal` on one item of electrical
 /// equipment. Each value's elements are exactly the ones Revit's export
 /// writes as its entity, and their predefined types are the ones it writes.
+///
+/// #792 adds two more: `IfcStair`, which 2 generic models of each office
+/// file carry and Revit writes as `IfcStair .NOTDEFINED.`, and `IfcDoor`,
+/// which a curtain panel carries with `DOOR` and Revit writes as
+/// `IfcDoor .DOOR.`. Every element of Revit's export of either file that
+/// carries one of the two values as its own is that entity there (16 and
+/// 268), as the other elements carrying `IfcStair` or `IfcDoor` already were.
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
     Mapping {
         revit_class: "IfcShadingDevice",
@@ -515,6 +522,16 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCAIRTERMINAL",
         predefined_type: Some("NOTDEFINED"),
     },
+    Mapping {
+        revit_class: "IfcStair",
+        ifc_type: "IFCSTAIR",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcDoor",
+        ifc_type: "IFCDOOR",
+        predefined_type: Some("DOOR"),
+    },
 ];
 
 /// IFC4 `PredefinedType` enumerators of the entities an export override
@@ -522,7 +539,11 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
 /// `IfcCoveringTypeEnum`, `IfcShadingDeviceTypeEnum`, `IfcRoofTypeEnum`,
 /// `IfcWasteTerminalTypeEnum`, `IfcElectricApplianceTypeEnum`,
 /// `IfcFireSuppressionTerminalTypeEnum`, `IfcSanitaryTerminalTypeEnum`,
-/// `IfcAirTerminalTypeEnum`).
+/// `IfcAirTerminalTypeEnum`). `IfcStair` and `IfcDoor`, honoured as targets
+/// since #792, are not listed, because listing them would apply every door's
+/// and stair's own predefined type as well, which is not measured. An
+/// element exported as either through its value takes the target's
+/// default, the one Revit writes on the elements measured.
 const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
     (
         "IFCSLAB",

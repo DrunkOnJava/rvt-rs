@@ -68,7 +68,7 @@ derived from the document and their own identity, stable between exports,
 #400), stair riser and tread dimensions, and Revit's "Export to IFC As"
 override, applied where it names `IfcShadingDevice`, `IfcSlab`, `IfcCovering`,
 `IfcWasteTerminal`, `IfcFireSuppressionTerminal`, `IfcSanitaryTerminal`,
-`IfcAirTerminal` or `IfcElectricAppliance` (RE-190)
+`IfcAirTerminal`, `IfcElectricAppliance` (RE-190), `IfcStair` or `IfcDoor` (#792)
 and Revit's exporter acts on it (not on a 2024 file's curtain walls, RE-188, or its wall sweeps, RE-192),
 with the values not applied listed in the diagnostics. Not read: most instance and type parameters (#35, #155) and phases
 (#328), so an element Revit's export leaves out because of its phase can still
