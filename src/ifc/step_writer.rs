@@ -369,7 +369,8 @@ impl StepWriter {
 
     /// A `Qto_` set as IFC4's `IfcElementQuantity` (#822): each value that is
     /// a quantity ([`super::entities::PropertyValue::quantity`]) as its simple
-    /// quantity, any other left out.
+    /// quantity, any other left out. [`Self::emit_property_set`] writes no set
+    /// that has none.
     fn emit_element_quantity(
         &mut self,
         owner_hist: usize,
@@ -408,6 +409,15 @@ impl StepWriter {
         set_gid: &str,
         rel_gid: &str,
     ) {
+        // An IfcElementQuantity holds a quantity at least (#822).
+        if pset.name.starts_with("Qto_")
+            && pset
+                .properties
+                .iter()
+                .all(|prop| prop.value.quantity().is_none())
+        {
+            return;
+        }
         let set_id = self.emit_bare_property_set(owner_hist, pset, set_gid);
         let rel_id = self.id();
         self.emit_entity(

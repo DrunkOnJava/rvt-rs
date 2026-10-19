@@ -1,12 +1,13 @@
-//! RE-156 (#35): an element's `SerialNumber` is Revit's.
+//! RE-156 (#35, #822): an element's `SerialNumber` is Revit's.
 //!
-//! Revit's IFC4 exports of RE1 Electrical and Plumbing give every element
-//! with a value of the shared parameter `Serial Number`
-//! `Pset_ManufacturerOccurrence.SerialNumber` (`IfcIdentifier`), and a
-//! building-element proxy the same value in
-//! `Pset_PrecastConcreteElementGeneral.SerialNumber`: 31 elements on
-//! Electrical, 1 on Plumbing. For every one of them rvt-rs writes with
-//! Revit's `Tag`, rvt-rs's value must be Revit's, set for set.
+//! Revit's IFC2X3 exports (Coordination View 2.0) of RE1 Electrical and
+//! Plumbing give every element with a value of the shared parameter `Serial
+//! Number` `Pset_ManufacturerOccurrence.SerialNumber` (`IfcIdentifier`): 31
+//! elements on Electrical, 1 on Plumbing. For every one of them rvt-rs writes
+//! with Revit's `Tag`, rvt-rs's value must be Revit's. Those exports also give
+//! a building-element proxy the same value in
+//! `Pset_PrecastConcreteElementGeneral.SerialNumber` ([`IFC2X3_ONLY`]), which
+//! IFC4's set does not have: rvt-rs writes IFC4, so it must not.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Electrical.rvt` and
 //! `RE1-Plumbing.rvt` with their `RE1-*.ifc` exports. Skips what is absent.
@@ -18,6 +19,9 @@ use std::path::PathBuf;
 
 /// (element `Tag`, set) -> `SerialNumber` as written.
 type Serials = BTreeMap<(String, String), String>;
+
+/// The set holding `SerialNumber` in IFC2X3 and not in IFC4.
+const IFC2X3_ONLY: &str = "Pset_PrecastConcreteElementGeneral";
 
 /// `#id -> (entity, args)` for every line of a STEP file.
 fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
@@ -161,7 +165,7 @@ fn re1_serial_numbers_are_revits() {
         let written = tags(&step);
         let shared: Serials = theirs
             .into_iter()
-            .filter(|((tag, _), _)| written.contains(tag))
+            .filter(|((tag, set), _)| written.contains(tag) && set != IFC2X3_ONLY)
             .collect();
         let elements: BTreeSet<&String> = shared.keys().map(|(tag, _)| tag).collect();
         assert_eq!(
@@ -181,6 +185,13 @@ fn re1_serial_numbers_are_revits() {
             off.len(),
             shared.len(),
             off.iter().take(5).collect::<Vec<_>>()
+        );
+        let ifc2x3: Vec<&(String, String)> =
+            ours.keys().filter(|(_, set)| set == IFC2X3_ONLY).collect();
+        assert!(
+            ifc2x3.is_empty(),
+            "RE1 {model}: rvt-rs writes IFC2X3's {IFC2X3_ONLY}.SerialNumber on {} elements",
+            ifc2x3.len()
         );
     }
 }

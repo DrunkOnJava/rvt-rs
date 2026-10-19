@@ -758,7 +758,7 @@ pub fn append_typed_production_elements(
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
-        let mut serial_sets = serial_number_property_sets(&decoded, &ifc_type);
+        let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
         let named = named_parameter_properties(&decoded);
         // RE-151: the name of the openings of a floor's tagged voids.
@@ -1494,10 +1494,6 @@ fn reference_property_sets(
         .collect()
 }
 
-/// The sets Revit's export gives an element's shared parameter `Serial
-/// Number` in (RE-156): `Pset_ManufacturerOccurrence`, and on a
-/// building-element proxy also `Pset_PrecastConcreteElementGeneral`, each
-/// with `SerialNumber` (`IfcIdentifier`). Empty when the element has none.
 /// The set Revit's own IFC export writes an element's Category, family and
 /// type in, and its type object's Category and Family Name (spike 257).
 pub const REVIT_OTHER_SET: &str = "Other";
@@ -1559,7 +1555,13 @@ fn revit_parameter_property_sets(decoded: &DecodedElement) -> Vec<PropertySet> {
     sets
 }
 
-fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<PropertySet> {
+/// The set Revit's export gives an element's shared parameter `Serial
+/// Number` in (RE-156): `Pset_ManufacturerOccurrence.SerialNumber`
+/// (`IfcIdentifier`), where IFC4 declares it. Revit's IFC2X3 export of the
+/// RE1 models also gives a building-element proxy
+/// `Pset_PrecastConcreteElementGeneral.SerialNumber`, which IFC4's set does
+/// not have (#822). Empty when the element has none.
+fn serial_number_property_sets(decoded: &DecodedElement) -> Vec<PropertySet> {
     use crate::partition_schema_mvp as mvp;
     let serial = decoded
         .fields
@@ -1571,21 +1573,13 @@ fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<
     let Some(serial) = serial.filter(|text| !text.is_empty()) else {
         return Vec::new();
     };
-    let proxy = ifc_type == "IFCBUILDINGELEMENTPROXY";
-    [
-        "Pset_ManufacturerOccurrence",
-        "Pset_PrecastConcreteElementGeneral",
-    ]
-    .into_iter()
-    .filter(|set| proxy || *set == "Pset_ManufacturerOccurrence")
-    .map(|set| PropertySet {
-        name: set.into(),
+    vec![PropertySet {
+        name: "Pset_ManufacturerOccurrence".into(),
         properties: vec![Property {
             name: "SerialNumber".into(),
             value: PropertyValue::Identifier(serial.clone()),
         }],
-    })
-    .collect()
+    }]
 }
 
 /// The common property set Revit's export writes `IsExternal` in on an
