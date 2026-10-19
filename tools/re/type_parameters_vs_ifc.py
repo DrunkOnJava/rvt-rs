@@ -29,3 +29,11 @@ bad = [(k, o[k], t[k]) for k in both if o[k] != t[k]][:8]
 print("differ sample:", bad)
 only_t = collections.Counter(t[k] for k in set(t) - set(o)); print("Revit's only (values):", only_t.most_common(5))
 only_o = collections.Counter(o[k] for k in set(o) - set(t)); print("ours only (values):", only_o.most_common(5))
+# Research (#822 follow-up): Revit's FireRating where rvt-rs's own Pset_*Common
+# has none, against rvt-rs's RE-77 type Fire Rating on the same element.
+ours_common = by_tag(ours_path, theirs_fire)
+fallback = sorted(k for k in t if k not in ours_common)
+same_type = [k for k in fallback if o.get(k) == t[k]]
+print(f"Revit's FireRating without rvt-rs's Pset_*Common one: {len(fallback)}; RE-77 type value equal: {len(same_type)}; absent: {sum(1 for k in fallback if k not in o)}")
+for k in fallback:
+    print(f"  {k}: Revit {t[k]!r}, RE-77 {o.get(k)!r}")
