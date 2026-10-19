@@ -7,7 +7,12 @@ Width and Height (-1001301, -1001300), Rough Width and Rough Height
 (-1001305, -1001304), and family parameters named Width and Height. This
 scorer joins those rows to Revit's own export by `Tag` (the ElementId) and
 counts, per class, how many of Revit's `OverallWidth` and `OverallHeight`
-each candidate pair equals, within 0.001 ft.
+each candidate pair equals, within 0.001 ft. The probe also prints the
+element's record box along its own axes (RE-192, #810), which gives two more
+candidates: the box along X and Z, and along X and Y. Each candidate's width
+and height are also counted apart, and the types whose instances Revit gives
+more than one size are counted, since Revit's exporter takes both from the
+type's symbol.
 
 Given an rvt-rs export instead of the probe's output, it scores the
 `OverallWidth` and `OverallHeight` rvt-rs writes against Revit's, joined the
@@ -34,6 +39,8 @@ CANDIDATES = [
     ("width/height (-1001301/-1001300)", "width", "height"),
     ("rough width/height (-1001305/-1001304)", "rough_width", "rough_height"),
     ("family Width/Height", "family_width", "family_height"),
+    ("record box along its X and Z", "box_x", "box_z"),
+    ("record box along its X and Y", "box_x", "box_y"),
 ]
 
 
@@ -94,6 +101,8 @@ def main():
         if line.startswith("{"):
             row = json.loads(line)
             if row.get("id") is not None:
+                oriented = row.get("oriented") or [None, None, None]
+                row["box_x"], row["box_y"], row["box_z"] = oriented
                 rows.append(row)
     revit = revit_sizes(ifc_path)
     with_size = {tag: v for tag, v in revit.items() if v[1] is not None and v[2] is not None}
@@ -102,6 +111,7 @@ def main():
 
     tally = collections.Counter()
     seen = collections.Counter()
+    sizes_by_type = collections.defaultdict(set)
     worst = []
     for row in rows:
         tag = str(row["id"])
@@ -109,9 +119,14 @@ def main():
             continue
         entity, width, height = with_size[tag]
         seen[entity] += 1
+        sizes_by_type[(entity, row.get("type"))].add((round(width, 3), round(height, 3)))
         matched = []
         for label, wkey, hkey in CANDIDATES:
             w, h = row.get(wkey), row.get(hkey)
+            if w is not None and abs(w - width) <= TOLERANCE_FEET:
+                tally[(entity, label, "width equal")] += 1
+            if h is not None and abs(h - height) <= TOLERANCE_FEET:
+                tally[(entity, label, "height equal")] += 1
             if w is None or h is None:
                 tally[(entity, label, "not read")] += 1
                 continue
@@ -129,14 +144,20 @@ def main():
             equal = tally[(entity, label, "equal")]
             differs = tally[(entity, label, "differs")]
             missing = tally[(entity, label, "not read")]
-            print(f"  {label:42} equal {equal:4}  differs {differs:4}  not read {missing:4}")
+            print(f"  {label:42} equal {equal:4}  differs {differs:4}  not read {missing:4}"
+                  f"  (width equal {tally[(entity, label, 'width equal')]:4},"
+                  f" height equal {tally[(entity, label, 'height equal')]:4})")
+        types = [sizes for (e, _), sizes in sizes_by_type.items() if e == entity]
+        varying = sum(1 for sizes in types if len(sizes) > 1)
+        print(f"  types: {len(types)}, of which Revit gives more than one size: {varying}")
     if listing:
         print(f"\n{len(worst)} with no candidate equal to Revit's size:")
         for tag, entity, width, height, row in worst[:60]:
             cands = ", ".join(
                 f"{label.split(' (')[0]}={row.get(w)}x{row.get(h)}" for label, w, h in CANDIDATES
             )
-            print(f"  {entity} {tag} type {row.get('type')}: Revit {width:.4f} x {height:.4f} ft; {cands}; box {row.get('box')}")
+            print(f"  {entity} {tag} type {row.get('type')}: Revit {width:.4f} x {height:.4f} ft; {cands}; box {row.get('box')};"
+                  f" upright {row.get('upright')}")
 
 
 main()

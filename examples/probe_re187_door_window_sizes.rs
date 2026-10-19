@@ -15,13 +15,21 @@
 //! - `family_width` and `family_height`: family parameters named `Width` and
 //!   `Height`, matched by name as RE-93 matches Default Sill Height;
 //!
-//! with the element's record box. `tools/re/door_window_sizes_vs_ifc.py`
-//! scores each candidate against Revit's own export by `Tag`.
+//! with the element's record box, and that box's extents along the
+//! element's own axes where its transform (RE-87) is found: the solution of
+//! `sum_i |axis_i[row]| e_i = box[row]`, as RE-106 draws a turned box.
+//! Revit's exporter writes a door's or window's `OverallWidth` as its
+//! symbol's width along X and its `OverallHeight` as its height along Z,
+//! along Y where the host is not a wall (`GetDoorWindowDimensionFromSymbol`
+//! in revit-ifc's `FamilyInstanceExporter`, CLEANROOM.md source 5).
+//! `tools/re/door_window_sizes_vs_ifc.py` scores each candidate against
+//! Revit's own export by `Tag`.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re187_door_window_sizes -- MODEL.rvt
 
 use rvt::RevitFile;
+use rvt::partition_instance_transforms::scan_instance_transforms;
 use rvt::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
 use rvt::partition_type_parameters::{
     DOOR_ROUGH_HEIGHT_PARAMETER, DOOR_ROUGH_WIDTH_PARAMETER, WINDOW_HEIGHT_PARAMETER,
@@ -45,6 +53,40 @@ fn type_of(element: &DecodedElement) -> Option<u32> {
     })
 }
 
+fn det3(a: [[f64; 3]; 3]) -> f64 {
+    a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1])
+        - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
+        + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0])
+}
+
+/// The extents along `axes` (X, Y and Z, in model coordinates) of the box
+/// whose model-axis box is `size`, or `None` where the axes leave them
+/// undetermined (|det| under 0.1, as RE-106) or one is not positive.
+fn along_axes(axes: [[f64; 3]; 3], size: [f64; 3]) -> Option<[f64; 3]> {
+    let matrix = |replace: Option<usize>| {
+        let mut a = [[0.0; 3]; 3];
+        for (row, line) in a.iter_mut().enumerate() {
+            for (col, cell) in line.iter_mut().enumerate() {
+                *cell = if Some(col) == replace {
+                    size[row]
+                } else {
+                    axes[col][row].abs()
+                };
+            }
+        }
+        a
+    };
+    let det = det3(matrix(None));
+    if !det.is_finite() || det.abs() < 0.1 {
+        return None;
+    }
+    let extents = [0, 1, 2].map(|col| det3(matrix(Some(col))) / det);
+    extents
+        .iter()
+        .all(|e| e.is_finite() && *e > 0.0)
+        .then_some(extents)
+}
+
 fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
@@ -58,6 +100,8 @@ fn main() -> rvt::Result<()> {
         .collect();
     let types: BTreeSet<u32> = elements.iter().filter_map(|(_, e)| type_of(e)).collect();
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
+    let ids: BTreeSet<u32> = elements.iter().filter_map(|(_, e)| e.id).collect();
+    let transforms = scan_instance_transforms(&mut rf, version, &ids)?;
 
     let streams = rf.partition_stream_names();
     let mut family_width: BTreeSet<i64> = BTreeSet::new();
@@ -118,6 +162,16 @@ fn main() -> rvt::Result<()> {
     for (class, element) in &elements {
         let type_id = type_of(element);
         let candidate = |parameter: i64| type_id.and_then(|t| value(t, parameter));
+        let size = [
+            float(element, "m_bboxWidth"),
+            float(element, "m_bboxDepth"),
+            float(element, "m_bboxHeight"),
+        ];
+        let transform = element.id.and_then(|id| transforms.get(&id));
+        let oriented = match (transform, size) {
+            (Some(transform), [Some(w), Some(d), Some(h)]) => along_axes(transform.axes, [w, d, h]),
+            _ => None,
+        };
         println!(
             "{}",
             json!({
@@ -132,11 +186,10 @@ fn main() -> rvt::Result<()> {
                 "rough_height": candidate(DOOR_ROUGH_HEIGHT_PARAMETER),
                 "family_width": type_id.and_then(|t| named(t, &family_width)),
                 "family_height": type_id.and_then(|t| named(t, &family_height)),
-                "box": [
-                    float(element, "m_bboxWidth"),
-                    float(element, "m_bboxDepth"),
-                    float(element, "m_bboxHeight"),
-                ],
+                "box": size,
+                "axes": transform.map(|t| t.axes),
+                "upright": transform.map(|t| t.is_upright()),
+                "oriented": oriented,
             })
         );
     }
