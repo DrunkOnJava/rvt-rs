@@ -232,7 +232,13 @@ jobs:
           FAMILY_DIR: ${{ (inputs.families || github.event_name == 'pull_request') && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ inputs.samples && format('{0}/_samples', github.workspace) || '' }}
         run: |
+          # The runner's CPU and memory use every 10 s, so a run shows how much
+          # of the machine it used.
+          vmstat -n -t 10 > "$RUNNER_TEMP/vmstat.log" &
+          sampler=$!
           tools/ci/measure-reference-models.sh measured/target/ci models results
+          kill "$sampler"
+          cp "$RUNNER_TEMP/vmstat.log" results/vmstat.log
           cp measured-commit.txt results/commit.txt
           # The runner's CPU, so the compare job can say which machines the
           # wall times came from.
