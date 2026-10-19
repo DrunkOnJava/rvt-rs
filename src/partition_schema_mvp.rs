@@ -4555,7 +4555,7 @@ fn attach_wall_type_functions(
     };
     let ids: BTreeSet<u64> = walls
         .iter()
-        .filter(|element| !has_function(*element))
+        .filter(|element| !has_function(element))
         .filter_map(|element| element.id.map(u64::from))
         .collect();
     if ids.is_empty() {
