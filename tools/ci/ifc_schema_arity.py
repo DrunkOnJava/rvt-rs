@@ -207,9 +207,9 @@ def check_arity(ifc_path: Path, schema_name: str) -> Counter:
     return seen
 
 
-def check_predefined_types(ifc_path: Path) -> Counter:
+def check_predefined_types(ifc_path: Path, model=None) -> Counter:
     """Assert mapped `PredefinedType` values survived to the file."""
-    model = ifcopenshell.open(str(ifc_path))
+    model = model if model is not None else ifcopenshell.open(str(ifc_path))
     populated: Counter = Counter()
     failures: list[str] = []
     for ifc_class in sorted(PREDEFINED_TYPE_REQUIRED):
@@ -238,13 +238,13 @@ def check_predefined_types(ifc_path: Path) -> Counter:
     return populated
 
 
-def check_witness_predefined_types(ifc_path: Path) -> Counter:
+def check_witness_predefined_types(ifc_path: Path, model=None) -> Counter:
     """Assert each written `PredefinedType` is the witness's own value.
 
     Only meaningful on the recorded artifact — a synthetic fixture has
     no authoring witness to agree with — so callers opt in.
     """
-    model = ifcopenshell.open(str(ifc_path))
+    model = model if model is not None else ifcopenshell.open(str(ifc_path))
     agreed: Counter = Counter()
     failures: list[str] = []
     for ifc_class, expected in sorted(WITNESS_PREDEFINED_TYPES.items()):
@@ -318,7 +318,7 @@ def _swept_solids(product):
                 yield shape, item
 
 
-def check_placement_composition(ifc_path: Path) -> tuple[int, int]:
+def check_placement_composition(ifc_path: Path, model=None) -> tuple[int, int]:
     """Assert `ObjectPlacement × Position` is not a doubled translation.
 
     Two parts. The structural invariant runs on every product in the
@@ -329,7 +329,7 @@ def check_placement_composition(ifc_path: Path) -> tuple[int, int]:
     then composes the two matrices for real and checks that a known
     profile point lands where it is supposed to.
     """
-    model = ifcopenshell.open(str(ifc_path))
+    model = model if model is not None else ifcopenshell.open(str(ifc_path))
     failures: list[str] = []
     inspected = 0
     probed = 0
@@ -383,9 +383,10 @@ def validate(ifc_path: Path, witness_agreement: bool = False) -> None:
     model = ifcopenshell.open(str(ifc_path))
     schema_name = model.schema
     seen = check_arity(ifc_path, schema_name)
-    populated = check_predefined_types(ifc_path)
-    inspected, probed = check_placement_composition(ifc_path)
-    agreed = check_witness_predefined_types(ifc_path) if witness_agreement else Counter()
+    # The file is parsed once here and shared by the checks that read it.
+    populated = check_predefined_types(ifc_path, model)
+    inspected, probed = check_placement_composition(ifc_path, model)
+    agreed = check_witness_predefined_types(ifc_path, model) if witness_agreement else Counter()
     print(f"IFC schema conformance passed: {ifc_path}")
     print(f"  schema: {schema_name}")
     print(f"  instances checked: {sum(seen.values())} across {len(seen)} entity type(s)")
