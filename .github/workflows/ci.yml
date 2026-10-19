@@ -402,6 +402,15 @@ jobs:
           # version, since IfcOpenShell is one of the witnesses below; 0.9
           # is held until Measure's scorers work under it (#773).
           python -m pip install -r tools/ci/requirements-ifc.txt
+      # #817: the IFC4 property set table is generated from buildingSMART's
+      # definitions (pinned by commit and sha256) and IfcOpenShell's IFC4
+      # schema; the committed file must be the generator's output.
+      - name: The IFC4 property set table is the generator's output
+        run: |
+          rustup component add rustfmt
+          python tools/ci/gen_standard_property_sets.py > /tmp/standard_property_sets_table.rs
+          rustfmt --edition 2024 /tmp/standard_property_sets_table.rs
+          diff -u src/ifc/standard_property_sets/table.rs /tmp/standard_property_sets_table.rs
       # C9: what the exporter writes now for the three tier-1 projects
       # (architectural 2024, MEP 2024, structural 2023; synthetic files
       # made by gen-fixture, in the repository), validated against the IFC4

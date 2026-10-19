@@ -1729,6 +1729,9 @@ fn named_parameter_properties(decoded: &DecodedElement) -> Vec<(String, Property
             (Some(Kind::Count), InstanceField::Integer { value, .. }) => {
                 PropertyValue::CountValue(*value)
             }
+            (Some(Kind::Integer), InstanceField::Integer { value, .. }) => {
+                PropertyValue::Integer(*value)
+            }
             (Some(Kind::Length), InstanceField::Float { value, .. }) => {
                 PropertyValue::LengthFeet(*value)
             }
@@ -1804,13 +1807,17 @@ fn add_named_parameter_sets(
         }
     }
     for (element, properties) in pending {
-        let Some(entities::IfcEntity::BuildingElement { ifc_type, .. }) = entities.get(element)
+        let Some(entities::IfcEntity::BuildingElement {
+            ifc_type,
+            predefined_type,
+            ..
+        }) = entities.get(element)
         else {
             continue;
         };
-        let ifc_type = ifc_type.clone();
+        let (ifc_type, predefined_type) = (ifc_type.clone(), predefined_type.clone());
         for (set, property) in properties {
-            if !sps::applies_to(&set, &ifc_type) {
+            if !sps::applies_to(&set, &ifc_type, predefined_type.as_deref()) {
                 continue;
             }
             match held.get(&(element, set.clone())) {
