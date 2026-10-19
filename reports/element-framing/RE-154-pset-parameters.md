@@ -2,13 +2,13 @@
 
 **Date:** 2026-10-03
 **Issues:** #35; backlog item B21
-**Artefacts:** the four RE1 models (Revit 2025) with Revit's own IFC4 exports, and Core Interior (2024). Measured on GitHub's hosted runners with the Measure workflow, run 37133239742.
+**Artefacts:** the four RE1 models (Revit 2025) with Revit's own IFC2X3 exports (Coordination View 2.0; first recorded here as IFC4), and Core Interior (2024). Measured on GitHub's hosted runners with the Measure workflow, run 37133239742.
 **Probe:** `examples/probe_re154_pset_parameters.rs`.
 **Status:** mixed. Reference is the type name; FireRating is on the type, under an id one file cannot pick; the other text values are not stored text entries.
 
 ## 1. The question
 
-Revit's IFC4 export writes standard property sets on the RE1 models' elements: `Pset_WallCommon`, `Pset_DoorCommon`, `Pset_DistributionFlowElementCommon`, `Pset_QuantityTakeOff` and others. Their text values (`IfcLabel`, `IfcText`, `IfcIdentifier`) come from parameters. Which ones does the file store, and where?
+Revit's IFC2X3 export writes standard property sets on the RE1 models' elements: `Pset_WallCommon`, `Pset_DoorCommon`, `Pset_DistributionFlowElementCommon`, `Pset_QuantityTakeOff` and others. The last two are IFC2X3 sets that IFC4 does not have: Revit's IFC4 export of the BIM4LCA office writes the type name in `Pset_EnvironmentalImpactIndicators` and in the entity's own sets instead, and so does rvt-rs's IFC4 export since 2026-10-19 (#822). Their text values (`IfcLabel`, `IfcText`, `IfcIdentifier`) come from parameters. Which ones does the file store, and where?
 
 ## 2. Method
 
@@ -39,4 +39,4 @@ From Revit's export it takes every element with a numeric `Tag`, its type's `Tag
 
 ## 4. What this changes
 
-`Reference` can be written from the type name rvt-rs already reads: on each element's `Pset_<Entity>Common`, and on `Pset_QuantityTakeOff`, as Revit does. That is the next B21 slice. FireRating waits for an oracle that tells its id apart.
+`Reference` can be written from the type name rvt-rs already reads: on each element's `Pset_<Entity>Common`, and on `Pset_QuantityTakeOff`, as Revit's IFC2X3 export does (in IFC4, on every set that applies to the entity and declares `Reference`, #822). That is the next B21 slice. FireRating waits for an oracle that tells its id apart.
