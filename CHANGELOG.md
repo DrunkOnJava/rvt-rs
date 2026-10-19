@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Each element's `IsExternal`, as Revit's exporter sets it (RE-193).**
+  Revit's export reads a Yes/No parameter named for the property set first
+  (`Pset_WallCommon.IsExternal` on a wall), then calculates the value from a
+  parameter named `IsExternal`, the type's Function, a roof's category, and
+  otherwise writes not external. rvt-rs now does the same for walls, curtain
+  walls, doors, windows, slabs, roofs, columns, beams, coverings, railings,
+  ramps, stairs, proxies and spaces, with a wall's Function from its type's
+  native record (RE-185). On the BIM4LCA office, as built, the `IsExternal`
+  values equal to Revit's go from 266 to 2,110 and those that differ from 29
+  to none; on the reference and R2025 models from 13 to 245, none differing.
+  Curtain mullions and panels get no value, nor do windows whose type's
+  Function is not read: Revit's export does not follow their curtain wall or
+  host wall.
 - **Revit 2024 Areas export as `IfcSpace` (#763, RE-191).** An Area's
   partition record carries no bounding-box marker, so the element-record
   scan never read one. A placed Area now exports as `IfcSpace .SPACE.` under
