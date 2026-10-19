@@ -137,11 +137,18 @@ name, so check that `MyClass` has none yet
 
 Production decoding (`walker::iter_elements`) uses a typed decoder only
 for a class listed in `elements::MVP_TYPED_CLASSES`, so add `MyClass`
-there too. Production then decodes each schema instance of it with your
-decoder, marked `provenance.decoder == "MyClassDecoder"`, and skips one
-the decoder rejects rather than decoding it generically (fail closed):
-Step 5's check is what keeps that from dropping real instances. A class
-in that list is also advertised as typed, so the same change:
+there too. Production then decodes with your decoder each `Global/Latest`
+candidate of the class that `scan_candidates` scores at
+`walker::PRODUCTION_ELEMENT_MIN_SCORE` (80) or above, marked
+`provenance.decoder == "MyClassDecoder"`, and skips one the decoder
+rejects rather than decoding it generically (fail closed). An instance
+scored below 80 never reaches your decoder: `iter_elements`'s doc notes
+that the threshold suits the `ADocument` entry point and that most
+simple classes score below it. Step 5's check shows both as missing
+ElementIds; when the cause is the score, the fix is candidate discovery
+or framing for the class, which is format work (see
+[CONTRIBUTING.md](../CONTRIBUTING.md#reverse-engineering-findings)), not the decoder. A class in that
+list is also advertised as typed, so the same change:
 
 - adds its arm to `typed_json::mvp_typed_view`, or the CLI and Python
   give it `typed: null`;
@@ -180,11 +187,12 @@ steps:
    each beside them, never a hard-coded path. Skip a missing file, but
    fail on one when `RVT_REQUIRE_CORPUS` is set, as CI sets it. Require
    an instance only where the oracle has one, and every instance it has:
-   compare the set of decoded ElementIds with the oracle's, since
-   production skips an instance the decoder rejects. Check that the instances
-   decoded from the schema (`record_kind` `schema_instance`) came from
-   your decoder, not the generic one: `iter_elements` also returns
-   partition records of some classes, which other decoders read. Then
+   compare the ElementIds of every `MyClass` element `iter_elements`
+   returns with the oracle's, since production skips an instance the
+   decoder rejects or never scores. `iter_elements` also returns
+   partition records of some classes, which other decoders read, so
+   check only the instances decoded from the schema (`record_kind`
+   `schema_instance`) for your decoder, not the generic one. Then
    check the typed view the CLI and Python expose,
    `typed_json::mvp_typed_view`, field by field against the oracle's
    value for the same element: the wire fields alone do not show a wrong
@@ -211,17 +219,20 @@ steps:
                continue;
            }
            let mut rf = rvt::RevitFile::open(&path).unwrap();
-           let from_schema: Vec<_> = rvt::walker::iter_elements(&mut rf)
+           let elements: Vec<_> = rvt::walker::iter_elements(&mut rf)
                .unwrap()
                .filter(|e| e.class == "MyClass")
-               .filter(|e| e.provenance.record_kind.as_deref() == Some("schema_instance"))
                .collect();
-           // Every instance the oracle holds, not only some: production skips
-           // an instance the decoder rejects, so a missing id is a dropped row.
-           let decoded: std::collections::BTreeSet<u32> =
-               from_schema.iter().filter_map(|e| e.id).collect();
-           assert_eq!(decoded, oracle_myclass_ids(year), "{year}: MyClass ElementIds");
-           for e in &from_schema {
+           // Every instance the oracle holds, from either carrier: production
+           // skips an instance the decoder rejects or never scores, so a
+           // missing id is a dropped row.
+           let ids: std::collections::BTreeSet<u32> =
+               elements.iter().filter_map(|e| e.id).collect();
+           assert_eq!(ids, oracle_myclass_ids(year), "{year}: MyClass ElementIds");
+           let from_schema = elements
+               .iter()
+               .filter(|e| e.provenance.record_kind.as_deref() == Some("schema_instance"));
+           for e in from_schema {
                assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
                let typed = rvt::elements::typed_json::mvp_typed_view(e)
                    .unwrap_or_else(|| panic!("{year}: MyClass has no typed view"));
