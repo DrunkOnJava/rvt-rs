@@ -4696,11 +4696,13 @@ fn attach_is_external(
             .flat_map(|elements| elements.iter())
             .flat_map(|element| element.id.into_iter().chain(type_of(element)))
             .collect();
+        let ids: Vec<i64> = parameters.iter().map(|(_, id)| i64::from(*id)).collect();
+        let mut found = prp::scan_integer_parameters(rf, revit_version, &owners, &ids);
         let values: Vec<(String, BTreeMap<u32, u32>)> = parameters
             .into_iter()
             .map(|(name, id)| {
-                let found = prp::scan_integer_parameter(rf, revit_version, &owners, i64::from(id));
-                (name, found)
+                let values = found.remove(&i64::from(id)).unwrap_or_default();
+                (name, values)
             })
             .collect();
         for element in groups.iter_mut().flat_map(|elements| elements.iter_mut()) {

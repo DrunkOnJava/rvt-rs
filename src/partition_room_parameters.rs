@@ -498,6 +498,67 @@ pub fn scan_integer_parameter(
     found.into_values()
 }
 
+/// The ElementId of the data object among `objects` (a stream's
+/// [`data_objects`], in offset order) whose payload holds the byte at `at`:
+/// the one [`enclosing_data_object`] finds, without its backward search.
+fn data_object_owner(objects: &[(usize, DataObject)], at: usize) -> Option<u32> {
+    let before = objects.partition_point(|(start, _)| start + DATA_OBJECT_HEADER <= at);
+    objects[..before]
+        .iter()
+        .rev()
+        .take_while(|(start, _)| at - start <= DATA_OBJECT_SEARCH)
+        .find(|(_, object)| object.end > at)
+        .map(|(_, object)| object.element_id)
+}
+
+/// [`scan_integer_parameter`] for each of `parameters` at once: each entry's
+/// owner is taken from the stream's data objects, memoised on the handle
+/// ([`RevitFile::partition_data_objects`], B80), instead of searching back
+/// from every entry. The latest partition's copy is taken, and an element
+/// whose entries there disagree gets nothing (#800).
+pub fn scan_integer_parameters(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: &BTreeSet<u32>,
+    parameters: &[i64],
+) -> BTreeMap<i64, BTreeMap<u32, u32>> {
+    if revit_version < 2024 || elements.is_empty() || parameters.is_empty() {
+        return BTreeMap::new();
+    }
+    let mut found: BTreeMap<i64, LatestCopy<u32>> = parameters
+        .iter()
+        .map(|&parameter| (parameter, LatestCopy::default()))
+        .collect();
+    for stream in rf.partition_stream_names() {
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.partition_data_objects(&stream),
+        ) else {
+            continue;
+        };
+        let partition = partition_number(&stream);
+        let buf = inflated.bytes();
+        for (parameter, latest) in found.iter_mut() {
+            let tag = parameter.to_le_bytes();
+            for hit in memchr::memmem::find_iter(buf, &tag) {
+                let Some(value) = read_u32(buf, hit + tag.len()) else {
+                    continue;
+                };
+                let Some(element) =
+                    data_object_owner(&objects, hit).filter(|id| elements.contains(id))
+                else {
+                    continue;
+                };
+                latest.offer(element, partition, value);
+            }
+        }
+    }
+    found
+        .into_iter()
+        .map(|(parameter, latest)| (parameter, latest.into_values()))
+        .collect()
+}
+
 /// Prefix of the first string of a project or shared parameter's definition:
 /// its group's ForgeTypeId (RE-156).
 pub const PARAMETER_GROUP_PREFIX: &str = "autodesk.parameter.group:";
