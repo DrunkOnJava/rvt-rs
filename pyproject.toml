@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rvt"
-description = "Apache-2.0 clean-room Python bindings for reading Autodesk Revit files (.rvt, .rfa, .rte, .rft) without Revit: metadata, previews and the embedded schema of 2016-2026 files, and typed elements with their geometry from Revit 2023 to 2025 projects (2026 experimental), exported as IFC4 or CSV schedules."
+description = "Apache-2.0 clean-room Python bindings for reading Autodesk Revit files (.rvt, .rfa, .rte, .rft) without Revit: metadata, previews and the embedded schema of 2016-2026 files, and typed elements with their geometry from Revit 2023 to 2025 projects (2015 to 2022, 2026 and 2027 experimental), exported as IFC4 or CSV schedules."
 authors = [{ name = "Griffin Long", email = "151978260+DrunkOnJava@users.noreply.github.com" }]
 license = { text = "Apache-2.0" }
 readme = "README.md"
