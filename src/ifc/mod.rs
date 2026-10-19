@@ -2134,7 +2134,10 @@ fn attach_family_instance_ports(
                 element,
                 id,
                 index,
-                predefined_type: crate::native_connectors::port_type_of_domain(domain)
+                predefined_type: Some(
+                    crate::native_connectors::port_type_of_domain(domain).to_string(),
+                ),
+                flow_direction: crate::native_connectors::port_flow_direction_of_domain(domain)
                     .map(str::to_string),
             });
         }

@@ -187,12 +187,14 @@ pub enum IfcEntity {
     /// each connector of a family instance's symbol, whether or not anything
     /// is connected to them. `predefined_type` is the port's IFC4
     /// `PredefinedType` (`PIPE`, `DUCT`, `CABLE`), from its connector's
-    /// domain or its duct or pipe (#828).
+    /// domain or its duct or pipe (#828), and `flow_direction` its
+    /// `FlowDirection` where the domain gives one (RE-197).
     Port {
         element: usize,
         id: u32,
         index: u32,
         predefined_type: Option<String>,
+        flow_direction: Option<String>,
     },
     /// An MEP system (RE-162, #528): the Revit system element `id`, named
     /// `name`, grouping the building elements at `members` (indices into

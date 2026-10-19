@@ -2753,8 +2753,10 @@ impl StepWriter {
         }
 
         // RE-138 (#528): the joins of ducts and pipes. A connector is an
-        // `IfcDistributionPort` named after its element and index, with no
-        // flow direction (the file's lists carry none), nested in its element
+        // `IfcDistributionPort` named after its element and index, with
+        // `SOURCEANDSINK` where its connector's domain gives it no direction
+        // and `NOTDEFINED` where the direction is the connector's, which is
+        // not read (RE-197), nested in its element
         // by one `IfcRelNests` per element, as Revit's IFC4 export nests them
         // (B83, B84): IFC4 keeps `IfcRelConnectsPortToElement` for a dynamic
         // connection and restricts it to distribution elements. A join is an
@@ -2762,24 +2764,35 @@ impl StepWriter {
         // join it is in.
         let mut ports: HashMap<(u32, u32), usize> = HashMap::new();
         let mut nested: BTreeMap<u32, (usize, Vec<usize>)> = BTreeMap::new();
-        // #828: each connector's port type, `$` where none is read.
-        let port_types: HashMap<(u32, u32), String> = model
+        // #828: each connector's flow direction, `.NOTDEFINED.` where none
+        // is read (RE-197), and port type, `$` where none is read.
+        let port_attributes: HashMap<(u32, u32), String> = model
             .entities
             .iter()
             .filter_map(|entity| match entity {
                 super::entities::IfcEntity::Port {
                     id,
                     index,
-                    predefined_type: Some(kind),
+                    predefined_type,
+                    flow_direction,
                     ..
-                } => Some(((*id, *index), format!(".{kind}."))),
+                } => Some((
+                    (*id, *index),
+                    format!(
+                        ".{}.,{}",
+                        flow_direction.as_deref().unwrap_or("NOTDEFINED"),
+                        predefined_type
+                            .as_ref()
+                            .map_or("$".to_string(), |kind| format!(".{kind}."))
+                    ),
+                )),
                 _ => None,
             })
             .collect();
-        let port_type = |id: u32, index: u32| {
-            port_types
+        let port_attribute = |id: u32, index: u32| {
+            port_attributes
                 .get(&(id, index))
-                .map_or("$", String::as_str)
+                .map_or(".NOTDEFINED.,$", String::as_str)
                 .to_string()
         };
         for entity in &model.entities {
@@ -2812,9 +2825,9 @@ impl StepWriter {
                 self.emit_entity(
                     port,
                     format!(
-                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,{},$)",
+                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,{},$)",
                         gid(&["port", &id_text, &index_text]),
-                        port_type(id, index),
+                        port_attribute(id, index),
                     ),
                 );
                 nested
@@ -2863,9 +2876,9 @@ impl StepWriter {
             self.emit_entity(
                 port,
                 format!(
-                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,{},$)",
+                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,{},$)",
                     gid(&["port", &id_text, &index_text]),
-                    port_type(*id, *index),
+                    port_attribute(*id, *index),
                 ),
             );
             nested

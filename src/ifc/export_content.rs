@@ -1132,6 +1132,7 @@ pub fn append_typed_production_elements(
                 id,
                 index,
                 predefined_type: Some(kind.to_string()),
+                flow_direction: None,
             });
         }
     }
