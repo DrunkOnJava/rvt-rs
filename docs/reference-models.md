@@ -94,6 +94,20 @@ concrete office, as built and at building permit, against Revit's exports of
 both with `-f nordic=true`
 ([`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv), #763).
 
+## Revit 2025 models made for one feature each, fetched for a run
+
+A contributor, puzzbobb, made 23 small Revit 2025 projects. Each isolates
+one feature: roofs of one and two slopes, hips and an L-shaped hip, slope
+arrows, rafter cuts and a fascia, a roof by extrusion, rooms with a door
+and windows, stairs with and without risers, monolithic and spiral, and
+wall joins. All but one come with Revit's own IFC4 Reference View export.
+He released the `.rvt` and `.ifc` files under Apache-2.0 on #356. Measure
+fetches the archive by its pinned hash
+([`research/r2025-models.tsv`](../research/r2025-models.tsv),
+`tools/ci/fetch-r2025-models.sh`) and, with `-f r2025=true`, scores each
+model against its export like the reference models. They are never stored
+in this repository.
+
 ## Compare like with like
 
 The reference exports were made with different settings, and several

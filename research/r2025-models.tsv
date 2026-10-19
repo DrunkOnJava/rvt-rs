@@ -1,0 +1,8 @@
+# puzzbobb's R2025_Models.zip (#356): 23 Revit 2025 projects each made to isolate a feature
+# (roofs, slope arrows, rooms, doors and windows, stairs, wall joins), with Revit's own IFC4
+# Reference View export of all but 07_1Slope_ArrowDefined_2Cut50mmFascia. Their author made
+# them and released the .rvt and .ifc files under Apache-2.0 on #356 (2026-10-05). Fetched for
+# a Measure run (`-f r2025=true`) by tools/ci/fetch-r2025-models.sh and never committed. The
+# hash is the one the author posted; hash and size measured 2026-10-18.
+# kind	url	sha256	bytes
+archive	https://github.com/user-attachments/files/33065191/R2025_Models.zip	8673d803fb0b9b6aa20d08448eeed16eb34222566bfaf7a2dc761c064dc30d6a	25563111

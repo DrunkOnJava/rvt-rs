@@ -6,8 +6,9 @@
 #   tools/ci/measure-reference-models.sh BIN_DIR MODELS_DIR OUT_DIR
 #
 # BIN_DIR holds the rvt-ifc, rvt-gltf and rvt-info to measure; MODELS_DIR is
-# where tools/fetch-reference-models.sh put the models. For each model this
-# writes OUT_DIR/<model>/:
+# where tools/fetch-reference-models.sh put the models, with the R2025 models
+# in its r2025/ folder when tools/ci/fetch-r2025-models.sh fetched them. For
+# each model this writes OUT_DIR/<model>/:
 #   - model.ifc, when KEEP_IFC is set: the exported IFC itself;
 #   - ifc.sha256: the exported IFC's hash without its FILE_NAME and
 #     IFCOWNERHISTORY lines, which carry the export time, so two builds
@@ -53,6 +54,18 @@ re1-plumbing|RE1-Plumbing.rvt|RE1-Plumbing.ifc
 nordic-office-as-built|ARK_NordicLCA_Office_Concrete_As-Built.rvt|ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc
 nordic-office-permit|ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt|ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
 "
+# puzzbobb's Revit 2025 models (research/r2025-models.tsv), in MODELS_DIR/r2025
+# only with `-f r2025=true`, each scored against Revit's export beside it.
+if [ -d "$MODELS/r2025" ]; then
+  for model in "$MODELS"/r2025/*.rvt; do
+    [ -f "$model" ] || continue
+    stem=$(basename "$model" .rvt)
+    export_ifc="r2025/$stem.ifc"
+    [ -f "$MODELS/$export_ifc" ] || export_ifc="-"
+    MODELS_LIST="$MODELS_LIST
+r2025-$stem|r2025/$stem.rvt|$export_ifc"
+  done
+fi
 # Scorers taking <rvt-rs.ifc> <revit-export.ifc>, and <model.glb> <revit-export.ifc>.
 IFC_SCORERS="class_sets_vs_ifc aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc storeys_vs_ifc
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc
@@ -81,7 +94,8 @@ info() { # file dir
 
 while IFS='|' read -r name rvt ref; do
   [ -n "$name" ] || continue
-  # The BIM4LCA office models are fetched only with `-f nordic=true`.
+  # The BIM4LCA office models are fetched only with `-f nordic=true`, and the
+  # R2025 models only with `-f r2025=true`.
   if [ ! -f "$MODELS/$rvt" ]; then
     echo "skipping $name: $rvt absent"
     continue
