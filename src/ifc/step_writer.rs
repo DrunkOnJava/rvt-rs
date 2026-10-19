@@ -2127,10 +2127,26 @@ impl StepWriter {
                 // An `IfcSpace` is named by its room number and described
                 // by its room name, as Revit's own exporter writes it
                 // (RE-117): `Name` the number, `LongName` the name. A room
-                // with no number keeps the `Room-<ElementId>` Name, and one
-                // with no name has no LongName.
+                // with a name and no number is named `<name>:<ElementId>`,
+                // the name Revit's exporter falls back to (RE-196); one with
+                // neither keeps the `Room-<ElementId>` Name, and one with no
+                // name has no LongName.
+                let room_name = property_set.as_ref().and_then(|set| {
+                    set.properties.iter().find_map(|p| match &p.value {
+                        super::entities::PropertyValue::Text(text)
+                            if p.name == super::export_content::ROOM_NAME_PROPERTY
+                                && !text.trim().is_empty() =>
+                        {
+                            Some(text.as_str())
+                        }
+                        _ => None,
+                    })
+                });
+                let unnumbered = room_name.zip(type_guid.as_deref()).map(|(room_name, tag)| {
+                    quoted_or_dollar(&escape(&format!("{room_name}:{tag}")))
+                });
                 let name_quoted = is_space
-                    .then(|| room_text(super::export_content::ROOM_NUMBER_PROPERTY))
+                    .then(|| room_text(super::export_content::ROOM_NUMBER_PROPERTY).or(unnumbered))
                     .flatten()
                     .unwrap_or_else(|| quoted_or_dollar(&escape(name)));
                 let long_name_quoted = room_text(super::export_content::ROOM_NAME_PROPERTY)
@@ -3188,8 +3204,9 @@ impl StepWriter {
 
         // B78: each room is typed by an `IfcSpaceType` of its own, as Revit's
         // export types all 116 of Core Interior's: named `<name> <number>:
-        // <ElementId>`, its Tag the room's ElementId, and its GlobalId the
-        // room's as a sub-element (`InstanceAsType`).
+        // <ElementId>`, or `<name>:<ElementId>` for a room with no number
+        // (RE-196), its Tag the room's ElementId, and its GlobalId the room's
+        // as a sub-element (`InstanceAsType`).
         for (entity_idx, entity) in model.entities.iter().enumerate() {
             let super::entities::IfcEntity::BuildingElement {
                 ifc_type,
@@ -3218,12 +3235,15 @@ impl StepWriter {
                     })
                 })
             };
-            let (Some(number), Some(room_name), Some(space_gid)) = (
-                room_text(super::export_content::ROOM_NUMBER_PROPERTY),
+            let (Some(room_name), Some(space_gid)) = (
                 room_text(super::export_content::ROOM_NAME_PROPERTY),
                 el_id_to_gid.get(&el_id),
             ) else {
                 continue;
+            };
+            let display = match room_text(super::export_content::ROOM_NUMBER_PROPERTY) {
+                Some(number) => format!("{room_name} {number}"),
+                None => room_name,
             };
             let type_gid =
                 crate::revit_global_ids::sub_element_global_id(space_gid, super::INSTANCE_AS_TYPE)
@@ -3234,7 +3254,7 @@ impl StepWriter {
                 type_el_id,
                 format!(
                     "IFCSPACETYPE('{type_gid}',#{owner_hist},'{}',$,$,$,$,'{}',$,.NOTDEFINED.,$)",
-                    escape(&format!("{room_name} {number}:{tag}")),
+                    escape(&format!("{display}:{tag}")),
                     escape(tag),
                 ),
             );
