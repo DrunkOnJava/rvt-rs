@@ -8,11 +8,13 @@
 use rvt::{RevitFile, compression, formats, streams, walker};
 
 fn main() {
+    let projects = std::env::var("RVT_PROJECT_CORPUS_DIR")
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     let paths = [
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/Revit_IFC5_Einhoven.rvt",
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt",
+        format!("{projects}/Revit_IFC5_Einhoven.rvt"),
+        format!("{projects}/2024_Core_Interior.rvt"),
     ];
-    for path in paths {
+    for path in &paths {
         let Ok(mut rf) = RevitFile::open(path) else {
             println!("{path}: open failed");
             continue;

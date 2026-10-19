@@ -12,7 +12,7 @@ const EXPECTED_FRAGMENTS: &[&str] = &[
 
 fn main() {
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     println!("RE-15-06 name probe — corpus dir: {project_dir}");
     for file in FILES {
         let path = format!("{project_dir}/{file}");

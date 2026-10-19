@@ -119,7 +119,7 @@ fn scan_closed_polylines(buf: &[u8], nmin: usize, nmax: usize) -> Vec<LoopCandid
 
 fn main() {
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     println!("RE-15-07 slab-profile probe — corpus dir: {project_dir}");
     for spec in SPECS {
         let mut rf = match RevitFile::open(format!("{project_dir}/{}", spec.file)) {
