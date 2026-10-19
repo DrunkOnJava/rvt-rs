@@ -28,6 +28,7 @@ Needs IfcOpenShell (tested with 0.8.5) and NumPy.
 import collections
 import os
 import sys
+import time
 
 import ifcopenshell
 import ifcopenshell.geom
@@ -68,8 +69,10 @@ def boxes(f, frame, elements, settings=SETTINGS):
 
 def doors(path, with_hosts, cls):
     """Filler Tag -> (door box, host wall box or None), in internal feet."""
+    t0 = time.perf_counter()
     f = ifcopenshell.open(path)
     frame = site_frame(f)
+    print(f"research: {os.path.basename(path)} open {time.perf_counter() - t0:.1f} s", file=sys.stderr)
     host = {}
     if with_hosts:
         voids = {r.RelatedOpeningElement.id(): r.RelatingBuildingElement for r in f.by_type("IfcRelVoidsElement")}
@@ -78,10 +81,14 @@ def doors(path, with_hosts, cls):
             if wall is not None:
                 host[rel.RelatedBuildingElement.id()] = wall
     tagged = [door for door in f.by_type(cls) if door.Tag]
+    t0 = time.perf_counter()
     door_boxes = boxes(f, frame, tagged)
+    print(f"research: {os.path.basename(path)} {len(tagged)} doors {time.perf_counter() - t0:.1f} s", file=sys.stderr)
     # Each host wall is meshed once, however many doors it hosts.
     walls = {host[door.id()].id(): host[door.id()] for door in tagged if door.id() in host}
+    t0 = time.perf_counter()
     wall_boxes = boxes(f, frame, list(walls.values()), WALL_SETTINGS)
+    print(f"research: {os.path.basename(path)} {len(walls)} walls {time.perf_counter() - t0:.1f} s", file=sys.stderr)
     out = {}
     for door in tagged:
         b = door_boxes.get(door.id())
@@ -109,7 +116,9 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
+    t0 = time.perf_counter()
     ours, ref = doors(args[0], True, cls), doors(args[1], False, cls)
+    print(f"research: both files {time.perf_counter() - t0:.1f} s", file=sys.stderr)
     counts, placement, rows = collections.Counter(), collections.Counter(), []
     for tag, (b, wall) in sorted(ours.items()):
         if tag not in ref:
@@ -151,4 +160,7 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    started = time.perf_counter()
+    status = main(sys.argv)
+    print(f"research: main {time.perf_counter() - started:.1f} s", file=sys.stderr)
+    sys.exit(status)

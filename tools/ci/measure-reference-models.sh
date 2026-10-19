@@ -103,7 +103,7 @@ score() { # name args...
   local out="$1"; shift
   # Research: the door scorer runs under cProfile, its profile beside its output.
   if [ "$(basename "$out" .txt)" = door_bodies_vs_ifc ]; then
-    timed "$(dirname "$out")" "$(basename "$out" .txt)" timeout 1200 python -m cProfile -o "${out%.txt}.prof" "$@" > "$out" 2>&1
+    timed "$(dirname "$out")" "$(basename "$out" .txt)" timeout 1200 python "$@" > "$out" 2>&1
   else
     timed "$(dirname "$out")" "$(basename "$out" .txt)" timeout 1200 python "$@" > "$out" 2>&1
   fi
