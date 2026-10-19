@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # A hotfix branch is cut from a release tag (RELEASE.md, "Hotfix
+    # process"), so no pull request into main tests what it releases.
+    branches: [main, "hotfix/**"]
     # Docs-only changes don't need to spin up the Windows wheel
     # matrix. Keep the fast Ubuntu jobs (fmt / clippy / doc / pii)
     # for any commit that actually touches code, including tests
