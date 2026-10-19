@@ -14,7 +14,7 @@ fn read_f64(buf: &[u8], off: usize) -> Option<f64> {
 
 fn probe_thickness() {
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     let mut rf = RevitFile::open(format!("{project_dir}/Revit_IFC5_Einhoven.rvt")).expect("open");
     let concat: Vec<u8> = compression::inflate_all_chunks(&rf.read_stream("Partitions/5").unwrap())
         .into_iter()
@@ -53,7 +53,7 @@ fn probe_thickness() {
 
 fn probe_stride60() {
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     let mut rf = RevitFile::open(format!("{project_dir}/2024_Core_Interior.rvt")).expect("open");
     let concat: Vec<u8> =
         compression::inflate_all_chunks(&rf.read_stream("Partitions/46").unwrap())

@@ -28,13 +28,16 @@ use std::collections::BTreeMap;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
+    let families = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").into()
+    });
     let targets: Vec<String> = if args.is_empty() {
         vec![
             format!("{project_dir}/Revit_IFC5_Einhoven.rvt"),
             format!("{project_dir}/2024_Core_Interior.rvt"),
-            "../../samples/racbasicsamplefamily-2024.rfa".to_string(),
-            "../../samples/racbasicsamplefamily-2026.rfa".to_string(),
+            format!("{families}/racbasicsamplefamily-2024.rfa"),
+            format!("{families}/racbasicsamplefamily-2026.rfa"),
         ]
     } else {
         args

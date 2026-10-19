@@ -43,7 +43,10 @@ fn dump_hex_at(bytes: &[u8], offset: usize, len: usize, label: &str) {
 fn main() -> anyhow::Result<()> {
     let sample_dir = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "samples/_phiag/examples/Autodesk".into());
+        .or_else(|| std::env::var("RVT_SAMPLES_DIR").ok())
+        .unwrap_or_else(|| {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").into()
+        });
     for year in [2016, 2020, 2024, 2026] {
         for filename in [
             format!("racbasicsamplefamily-{year}.rfa"),

@@ -10,7 +10,7 @@
 //! (WRT-10.3 downstream).
 //!
 //! Resolves paths via `RVT_SAMPLES_DIR` (default
-//! `../../samples`).
+//! `_corpus/examples/Autodesk`).
 
 use std::fs::File;
 use std::io::Read;
@@ -58,7 +58,9 @@ fn parse_header(buf: &[u8]) -> Option<CfbHeader> {
 }
 
 fn main() {
-    let dir = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| "../../samples".into());
+    let dir = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").into()
+    });
     let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
         .map(|it| {
             it.flatten()

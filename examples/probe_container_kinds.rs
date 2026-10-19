@@ -10,7 +10,8 @@
 //! knows where to look.
 //!
 //! Resolves paths via `RVT_SAMPLES_DIR` (family corpus) +
-//! `RVT_PROJECT_CORPUS_DIR` (project corpus, optional).
+//! `RVT_PROJECT_CORPUS_DIR` (project corpus), each with its `_corpus/` or
+//! `_project_corpus/` default.
 
 use rvt::{RevitFile, compression, formats, streams};
 use std::collections::BTreeMap;
@@ -19,7 +20,9 @@ fn main() {
     let mut paths: Vec<String> = Vec::new();
 
     // Family corpus via RVT_SAMPLES_DIR or default relative path.
-    let family_dir = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| "../../samples".into());
+    let family_dir = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").into()
+    });
     if let Ok(entries) = std::fs::read_dir(&family_dir) {
         for e in entries.flatten() {
             let p = e.path();
@@ -29,14 +32,14 @@ fn main() {
         }
     }
 
-    // Project corpus, if set.
-    if let Ok(proj) = std::env::var("RVT_PROJECT_CORPUS_DIR") {
-        if let Ok(entries) = std::fs::read_dir(&proj) {
-            for e in entries.flatten() {
-                let p = e.path();
-                if p.extension().is_some_and(|x| x == "rvt") {
-                    paths.push(p.to_string_lossy().into_owned());
-                }
+    // Project corpus, if present.
+    let proj = std::env::var("RVT_PROJECT_CORPUS_DIR")
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
+    if let Ok(entries) = std::fs::read_dir(&proj) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().is_some_and(|x| x == "rvt") {
+                paths.push(p.to_string_lossy().into_owned());
             }
         }
     }

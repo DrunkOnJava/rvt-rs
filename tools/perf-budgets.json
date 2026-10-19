@@ -16,8 +16,6 @@
       "env": "RVT_PERF_SMALL_FILE",
       "iterations": 3,
       "default_paths": [
-        "../../samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa",
-        "../../samples/racbasicsamplefamily-2024.rfa",
         "_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"
       ],
       "budgets": {
@@ -34,7 +32,6 @@
       "env": "RVT_PERF_MEDIUM_FILE",
       "iterations": 2,
       "default_paths": [
-        "/private/tmp/rvt-corpus-probe/magnetar/Revit/2024_Core_Interior.rvt",
         "_project_corpus/Revit/2024_Core_Interior.rvt"
       ],
       "budgets": {

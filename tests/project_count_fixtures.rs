@@ -39,7 +39,7 @@ const REQUIRED_CATEGORIES: &[&str] = &[
 fn tier2_project_dir() -> PathBuf {
     std::env::var("RVT_PROJECT_CORPUS_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/private/tmp/rvt-corpus-probe/magnetar/Revit"))
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("_project_corpus/Revit"))
 }
 
 fn tier2_corpus_dir_is_explicit() -> bool {

@@ -4,7 +4,7 @@
 //! — to establish how rvt-rs scales with file size.
 //!
 //! Corpus path is resolved via `RVT_PROJECT_CORPUS_DIR` (defaults
-//! to `/private/tmp/rvt-corpus-probe/magnetar/Revit`). If neither
+//! to `_project_corpus/Revit`). If neither
 //! project file is present, each sub-benchmark short-circuits with
 //! an `eprintln!` so `cargo bench` stays green on machines without
 //! the corpus. The files themselves are MIT-licensed via
@@ -29,7 +29,7 @@ use std::path::PathBuf;
 fn project_dir() -> PathBuf {
     std::env::var("RVT_PROJECT_CORPUS_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/private/tmp/rvt-corpus-probe/magnetar/Revit"))
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("_project_corpus/Revit"))
 }
 
 fn corpus_files() -> Vec<(&'static str, PathBuf)> {

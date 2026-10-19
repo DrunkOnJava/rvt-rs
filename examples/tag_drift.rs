@@ -58,7 +58,10 @@ fn extract_tagged_classes(bytes: &[u8]) -> Vec<(String, u16)> {
 fn main() -> anyhow::Result<()> {
     let sample_dir = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "samples/_phiag/examples/Autodesk".to_string());
+        .or_else(|| std::env::var("RVT_SAMPLES_DIR").ok())
+        .unwrap_or_else(|| {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").to_string()
+        });
     let out_csv = std::env::args().nth(2);
 
     let mut per_release: Vec<(String, Vec<(String, u16)>)> = Vec::new();

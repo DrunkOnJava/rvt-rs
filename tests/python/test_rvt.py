@@ -6,8 +6,7 @@ and the sample corpus is reachable. The corpus path resolution
 mirrors the Rust integration-test `tests/common/mod.rs` behaviour:
 
 - if `RVT_SAMPLES_DIR` is set in the environment, use that
-- otherwise fall back to `../../samples/` relative to this file's
-  parent directory (the crate root).
+- otherwise fall back to `_corpus/examples/Autodesk` under the crate root.
 
 Tests that would require the corpus skip gracefully when it's
 missing, so running `pytest` on a fresh clone without the corpus
@@ -29,10 +28,9 @@ def samples_dir() -> pathlib.Path:
     env = os.environ.get("RVT_SAMPLES_DIR")
     if env:
         return pathlib.Path(env)
-    # This file is at <crate>/tests/python/test_rvt.py; ../../samples
-    # relative to <crate> ends up two levels up.
-    here = pathlib.Path(__file__).resolve()
-    return here.parent.parent.parent.parent / "samples"
+    # This file is at <crate>/tests/python/test_rvt.py.
+    crate = pathlib.Path(__file__).resolve().parent.parent.parent
+    return crate / "_corpus" / "examples" / "Autodesk"
 
 
 def sample_for_year(year: int) -> pathlib.Path:

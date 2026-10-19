@@ -6,8 +6,9 @@
 //!
 //!   - `RVT_SAMPLES_DIR` env var (used by CI when it checks out
 //!     `phi-ag/rvt` into `_corpus/examples/Autodesk`), or
-//!   - the default `../../samples/` path relative to the crate
-//!     manifest (used by the local `rvt-recon-*` workspace layout).
+//!   - the default `_corpus/examples/Autodesk` under the crate root, where
+//!     `tools/check-local.sh` looks and `git clone https://github.com/phi-ag/rvt _corpus`
+//!     puts the files.
 
 #![allow(dead_code)]
 
@@ -18,7 +19,7 @@ pub fn samples_dir() -> PathBuf {
         return PathBuf::from(env_dir);
     }
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.push("../../samples");
+    p.push("_corpus/examples/Autodesk");
     p
 }
 

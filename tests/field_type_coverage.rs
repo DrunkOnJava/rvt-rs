@@ -12,8 +12,7 @@
 //! Corpus source is Autodesk-owned `rac_basic_sample_family` data that
 //! rvt-rs does not redistribute (see `SECURITY.md`). Test therefore
 //! requires the caller to provide the samples via either:
-//!   - Default path `../../samples/` relative to the crate manifest
-//!     (layout used by the local `rvt-recon-*` workspace), or
+//!   - Default path `_corpus/examples/Autodesk` under the crate root, or
 //!   - `RVT_SAMPLES_DIR` env var pointing to a directory that contains
 //!     the 11 `.rfa` files (used by CI when it checks out phi-ag/rvt).
 //!
@@ -116,12 +115,11 @@ fn field_type_coverage_across_corpus() {
                  │ SKIP: field_type_coverage — corpus not available.\n  \
                  │ Missing release(s): {:?}\n  \
                  │ Samples dir: {}\n  \
-                 │ To run this test locally, fetch the phi-ag/rvt corpus:\n  \
-                 │   git clone https://github.com/phi-ag/rvt.git ../../samples/_phiag\n  \
-                 │ then copy or symlink the .rfa files from\n  \
-                 │   ../../samples/_phiag/examples/Autodesk/*.rfa\n  \
-                 │ into ../../samples/. CI sets RVT_SAMPLES_DIR directly and runs\n  \
-                 │ with RVT_REQUIRE_CORPUS=1 to hard-fail if any file is missing.\n  \
+                 │ To run this test locally, fetch the phi-ag/rvt corpus into the\n  \
+                 │ default location, from the crate root:\n  \
+                 │   git clone https://github.com/phi-ag/rvt.git _corpus\n  \
+                 │ CI sets RVT_SAMPLES_DIR directly and runs with\n  \
+                 │ RVT_REQUIRE_CORPUS=1 to hard-fail if any file is missing.\n  \
                  └─────────────────────────────────────────────────────────────────\n",
                 missing,
                 samples_dir().display()
