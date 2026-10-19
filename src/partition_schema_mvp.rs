@@ -4549,10 +4549,10 @@ pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 /// from the type's native record ([`crate::native_wall_types`], RE-185).
 /// Nothing on a release not measured, or where the native records are not
 /// read.
-fn attach_wall_type_functions(
+fn attach_wall_type_functions<'a>(
     rf: &mut RevitFile,
     revit_version: u32,
-    walls: impl IntoIterator<Item = &mut DecodedElement>,
+    walls: impl IntoIterator<Item = &'a mut DecodedElement>,
 ) {
     if !WALL_TYPE_FUNCTION_REVIT_VERSIONS.contains(&revit_version) {
         return;
