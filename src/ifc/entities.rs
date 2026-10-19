@@ -1362,7 +1362,8 @@ impl ForgeUnit {
 
 /// A named collection of typed property values attached to a
 /// BuildingElement. Emits as IfcPropertySet → IfcPropertySingleValue
-/// → IfcRelDefinesByProperties in the STEP writer.
+/// → IfcRelDefinesByProperties in the STEP writer; a set named `Qto_` as
+/// an IfcElementQuantity of [`PropertyValue::quantity`]s (#822).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PropertySet {
     /// Property-set name. Convention: "Pset_WallCommon",
@@ -1554,6 +1555,30 @@ impl PropertyValue {
                     .join(",")
             ),
         }
+    }
+
+    /// The IFC4 simple quantity this value is written as in a quantity set
+    /// (a [`PropertySet`] named `Qto_`, #822) and its value as written:
+    /// lengths as `IfcQuantityLength` in metres, areas, volumes, counts,
+    /// masses and times likewise. `None` for a value that is not a quantity.
+    pub fn quantity(&self) -> Option<(&'static str, String)> {
+        Some(match self {
+            PropertyValue::LengthFeet(ft) | PropertyValue::PositiveLengthFeet(ft) => {
+                ("IFCQUANTITYLENGTH", format!("{:.6}", ft * 0.3048))
+            }
+            PropertyValue::AreaSquareFeet(sqft) => {
+                ("IFCQUANTITYAREA", format!("{:.6}", sqft * 0.09290304))
+            }
+            PropertyValue::VolumeCubicFeet(cuft) => {
+                ("IFCQUANTITYVOLUME", format!("{:.6}", cuft * 0.028316846592))
+            }
+            PropertyValue::CountValue(n) => ("IFCQUANTITYCOUNT", format!("{n}")),
+            PropertyValue::MassPounds(lb) => {
+                ("IFCQUANTITYWEIGHT", format!("{:.6}", lb * 0.45359237))
+            }
+            PropertyValue::TimeSeconds(seconds) => ("IFCQUANTITYTIME", format!("{seconds:.6}")),
+            _ => return None,
+        })
     }
 }
 

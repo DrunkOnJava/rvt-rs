@@ -337,6 +337,9 @@ impl StepWriter {
         pset: &PropertySet,
         set_gid: &str,
     ) -> usize {
+        if pset.name.starts_with("Qto_") {
+            return self.emit_element_quantity(owner_hist, pset, set_gid);
+        }
         let mut prop_ids: Vec<usize> = Vec::with_capacity(pset.properties.len());
         for prop in &pset.properties {
             let p_id = self.id();
@@ -360,6 +363,39 @@ impl StepWriter {
         self.emit_entity(
             set_id,
             format!("IFCPROPERTYSET('{set_gid}',#{owner_hist},'{set_name}',$,({refs}))"),
+        );
+        set_id
+    }
+
+    /// A `Qto_` set as IFC4's `IfcElementQuantity` (#822): each value that is
+    /// a quantity ([`super::entities::PropertyValue::quantity`]) as its simple
+    /// quantity, any other left out.
+    fn emit_element_quantity(
+        &mut self,
+        owner_hist: usize,
+        pset: &PropertySet,
+        set_gid: &str,
+    ) -> usize {
+        let mut quantity_ids: Vec<usize> = Vec::with_capacity(pset.properties.len());
+        for prop in &pset.properties {
+            let Some((entity, value)) = prop.value.quantity() else {
+                continue;
+            };
+            let q_id = self.id();
+            let name_esc = escape(&prop.name);
+            self.emit_entity(q_id, format!("{entity}('{name_esc}',$,$,{value},$)"));
+            quantity_ids.push(q_id);
+        }
+        let refs = quantity_ids
+            .iter()
+            .map(|id| format!("#{id}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let set_id = self.id();
+        let set_name = escape(&pset.name);
+        self.emit_entity(
+            set_id,
+            format!("IFCELEMENTQUANTITY('{set_gid}',#{owner_hist},'{set_name}',$,$,({refs}))"),
         );
         set_id
     }

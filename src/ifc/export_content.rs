@@ -911,9 +911,9 @@ pub fn append_typed_production_elements(
                 set,
             });
         }
-        // A pipe's or duct's length along its axis, which Revit's export gives
-        // in both flow-segment sets: a pipe's between its ends (RE-131), a
-        // duct's the dimension of its box its section leaves (RE-134).
+        // A pipe's or duct's length along its axis: a pipe's between its
+        // ends (RE-131), a duct's the dimension of its box its section leaves
+        // (RE-134).
         let segment_length = match decoded.class.as_str() {
             "Pipe" => {
                 crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields).map(|pipe| {
@@ -972,50 +972,51 @@ pub fn append_typed_production_elements(
             "Pipe" => pipe_invert_height(&decoded.fields),
             _ => None,
         };
-        if let Some(length) = segment_length {
-            for name in ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"] {
-                let mut properties = vec![Property {
-                    name: "Length".into(),
-                    value: PropertyValue::PositiveLengthFeet(length),
-                }];
-                if let (Some(height), "Pset_FlowSegmentPipeSegment") = (invert, name) {
-                    properties.push(Property {
+        // #822: the length in IFC4's base quantities of the segment, where
+        // Revit's IFC4 export writes it (IFC2X3's flow-segment sets held it
+        // as a property), and a pipe's invert in Pset_PipeSegmentOccurrence.
+        let segment_sets = match decoded.class.as_str() {
+            "Pipe" => Some((
+                "Qto_PipeSegmentBaseQuantities",
+                invert.map(|height| PropertySet {
+                    name: "Pset_PipeSegmentOccurrence".into(),
+                    properties: vec![Property {
                         name: INVERT_ELEVATION_PROPERTY.into(),
                         value: PropertyValue::LengthFeet(height),
-                    });
-                }
+                    }],
+                }),
+            )),
+            "Duct" => Some(("Qto_DuctSegmentBaseQuantities", None)),
+            _ => None,
+        };
+        if let Some((quantities, occurrence)) = segment_sets {
+            let quantities = segment_length.map(|length| PropertySet {
+                name: quantities.into(),
+                properties: vec![Property {
+                    name: "Length".into(),
+                    value: PropertyValue::PositiveLengthFeet(length),
+                }],
+            });
+            for set in quantities.into_iter().chain(occurrence) {
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: entity_index,
-                    set: PropertySet {
-                        name: name.into(),
-                        properties,
-                    },
+                    set,
                 });
             }
         }
-        // A duct's Pset_DuctSegmentTypeCommon: its length, as on every RE1
-        // Mechanical duct, and its type's shape (B43), each where it is known.
-        if decoded.class == "Duct" {
-            let properties: Vec<Property> = segment_length
-                .map(|length| Property {
-                    name: "Length".into(),
-                    value: PropertyValue::PositiveLengthFeet(length),
-                })
-                .into_iter()
-                .chain(duct_shape.map(|shape| Property {
-                    name: "Shape".into(),
-                    value: PropertyValue::Enumerated(vec![shape]),
-                }))
-                .collect();
-            if !properties.is_empty() {
-                entities.push(entities::IfcEntity::ElementPropertySet {
-                    element: entity_index,
-                    set: PropertySet {
-                        name: "Pset_DuctSegmentTypeCommon".into(),
-                        properties,
-                    },
-                });
-            }
+        // A duct's Pset_DuctSegmentTypeCommon: its type's shape (B43), where
+        // it is known.
+        if let Some(shape) = duct_shape.filter(|_| decoded.class == "Duct") {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set: PropertySet {
+                    name: "Pset_DuctSegmentTypeCommon".into(),
+                    properties: vec![Property {
+                        name: "Shape".into(),
+                        value: PropertyValue::Enumerated(vec![shape]),
+                    }],
+                },
+            });
         }
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
@@ -1907,7 +1908,7 @@ fn add_piece_sets(
     }
 }
 
-/// The property of `Pset_FlowSegmentPipeSegment` holding a pipe's invert.
+/// The property of `Pset_PipeSegmentOccurrence` holding a pipe's invert.
 const INVERT_ELEVATION_PROPERTY: &str = "InvertElevation";
 /// How far a pipe's two ends may differ, feet, along an axis it is taken to
 /// lie across.
@@ -1958,7 +1959,7 @@ pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], s
         let entities::IfcEntity::ElementPropertySet { element, set } = entity else {
             continue;
         };
-        if set.name != "Pset_FlowSegmentPipeSegment" {
+        if set.name != "Pset_PipeSegmentOccurrence" {
             continue;
         }
         let elevation = elevations.get(*element).copied().unwrap_or(0.0);

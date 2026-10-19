@@ -1,10 +1,13 @@
-//! #35: a duct's `Pset_DuctSegmentTypeCommon.Length` is Revit's.
+//! #35, #822: a duct's `Pset_DuctSegmentTypeCommon.Length` is Revit's.
 //!
-//! Revit's IFC4 export of the RE1 Mechanical model gives every duct
-//! `Pset_DuctSegmentTypeCommon` with `Length` (`IfcPositiveLengthMeasure`),
-//! the same length as its flow-segment sets. For every duct rvt-rs writes
-//! with Revit's `Tag`, it must be in rvt-rs's export, within 0.1 mm of
-//! Revit's, each file's values read in its own length unit.
+//! Revit's IFC2X3 export (Coordination View 2.0) of the RE1 Mechanical model
+//! gives every duct `Pset_DuctSegmentTypeCommon` with `Length`
+//! (`IfcPositiveLengthMeasure`), the same length as its flow-segment sets.
+//! IFC4's `Pset_DuctSegmentTypeCommon` has no `Length`: rvt-rs's IFC4 export
+//! writes it in the duct's base quantities ([`QUANTITIES`], an
+//! `IfcElementQuantity`). For every duct rvt-rs writes with Revit's `Tag`, it
+//! must be there, within 0.1 mm of Revit's, each file's values read in its
+//! own length unit.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Mechanical.rvt` with
 //! `RE1-Mechanical.ifc`. Skips what is absent.
@@ -15,6 +18,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 const SETS: [&str; 1] = ["Pset_DuctSegmentTypeCommon"];
+/// The IFC4 quantity set holding a duct's `Length`, under whose name both
+/// files' lengths are compared.
+const QUANTITIES: &str = "Qto_DuctSegmentBaseQuantities";
 const TOLERANCE_METRES: f64 = 1e-4;
 
 /// `#id -> (entity, args)` for every line of a STEP file.
@@ -119,19 +125,33 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
         };
         let sf = split_args(set_args);
         let set = sf.get(2).map(|n| n.trim().trim_matches('\'')).unwrap_or("");
-        if set_entity != "IFCPROPERTYSET" || !SETS.contains(&set) {
-            continue;
-        }
-        let length = list(sf.get(4).map(String::as_str).unwrap_or(""))
-            .iter()
-            .filter_map(|p| ents.get(p))
-            .find_map(|(_, a)| {
-                let pf = split_args(a);
-                (pf.first()?.trim() == "'Length'").then_some(())?;
-                let value = pf.get(2)?.trim();
-                let number = value.split_once('(')?.1.trim_end_matches(')');
-                number.parse::<f64>().ok()
-            });
+        let length = match set_entity.as_str() {
+            "IFCPROPERTYSET" if SETS.contains(&set) => {
+                list(sf.get(4).map(String::as_str).unwrap_or(""))
+                    .iter()
+                    .filter_map(|p| ents.get(p))
+                    .find_map(|(_, a)| {
+                        let pf = split_args(a);
+                        (pf.first()?.trim() == "'Length'").then_some(())?;
+                        let value = pf.get(2)?.trim();
+                        let number = value.split_once('(')?.1.trim_end_matches(')');
+                        number.parse::<f64>().ok()
+                    })
+            }
+            // `IfcQuantityLength(Name, Description, Unit, LengthValue, ..)`.
+            "IFCELEMENTQUANTITY" if set == QUANTITIES => {
+                list(sf.get(5).map(String::as_str).unwrap_or(""))
+                    .iter()
+                    .filter_map(|q| ents.get(q))
+                    .find_map(|(e, a)| {
+                        let qf = split_args(a);
+                        (e == "IFCQUANTITYLENGTH" && qf.first()?.trim() == "'Length'")
+                            .then_some(())?;
+                        qf.get(3)?.trim().parse::<f64>().ok()
+                    })
+            }
+            _ => continue,
+        };
         let Some(length) = length else {
             continue;
         };
@@ -139,7 +159,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
             if let Some(tag) = tags.get(&object) {
                 out.entry(tag.clone())
                     .or_default()
-                    .insert(set.to_string(), length * scale);
+                    .insert(QUANTITIES.to_string(), length * scale);
             }
         }
     }
@@ -178,15 +198,15 @@ fn re1_duct_segment_type_common_length_is_revits() {
     let ours = lengths(&step, "IFCDUCTSEGMENT");
     let mut off: Vec<(String, f64, Option<f64>)> = Vec::new();
     for tag in &ducts {
-        let revit = theirs[tag][SETS[0]];
-        let mine = ours.get(tag).and_then(|sets| sets.get(SETS[0])).copied();
+        let revit = theirs[tag][QUANTITIES];
+        let mine = ours.get(tag).and_then(|sets| sets.get(QUANTITIES)).copied();
         if mine.is_none_or(|m| (m - revit).abs() > TOLERANCE_METRES) {
             off.push((tag.clone(), revit, mine));
         }
     }
     assert!(
         off.is_empty(),
-        "{} of the {} ducts both exports hold lack Revit's Pset_DuctSegmentTypeCommon.Length (tag, Revit's m, rvt-rs's m); first: {:?}",
+        "{} of the {} ducts both exports hold lack Revit's Pset_DuctSegmentTypeCommon.Length in {QUANTITIES} (tag, Revit's m, rvt-rs's m); first: {:?}",
         off.len(),
         ducts.len(),
         off.iter().take(5).collect::<Vec<_>>()

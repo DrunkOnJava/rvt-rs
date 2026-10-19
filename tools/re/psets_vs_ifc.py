@@ -100,6 +100,17 @@ IFC4_TYPE_SETS = {
     "IfcElectricAppliance": "Pset_ElectricApplianceTypeCommon",
     "IfcAlarm": "Pset_AlarmTypeCommon",
 }
+# IFC2X3's flow-segment sets (#822): IFC4 has none. A pipe's invert is in
+# Pset_PipeSegmentOccurrence; a segment's length, and IFC2X3's
+# Pset_DuctSegmentTypeCommon.Length, is in IFC4's base quantities, an
+# IfcElementQuantity this scorer does not read, so those lengths are counted
+# apart rather than scored.
+IFC2X3_INVERT = ("Pset_FlowSegmentPipeSegment", "InvertElevation")
+IFC2X3_LENGTHS = {
+    ("Pset_FlowSegmentPipeSegment", "Length"),
+    ("Pset_FlowSegmentDuctSegment", "Length"),
+    ("Pset_DuctSegmentTypeCommon", "Length"),
+}
 
 
 def properties(path):
@@ -132,6 +143,10 @@ def properties(path):
                     name = "Pset_SpaceCoveringRequirements"
                 if ifc2x3 and name == IFC2X3_QUANTITY_TAKE_OFF and prop.Name == "Reference":
                     name = "Pset_EnvironmentalImpactIndicators"
+                if ifc2x3 and (name, prop.Name) == IFC2X3_INVERT:
+                    name = "Pset_PipeSegmentOccurrence"
+                if ifc2x3 and (name, prop.Name) in IFC2X3_LENGTHS:
+                    name = "quantities:" + name
                 if prop.is_a("IfcPropertySingleValue"):
                     out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
                 elif prop.is_a("IfcPropertyEnumeratedValue"):
@@ -174,8 +189,12 @@ def main(argv):
         }
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     worst = []
+    as_quantities = 0
     for (key, pset, prop), value in sorted(theirs.items()):
         if key not in our_objects:
+            continue
+        if pset.startswith("quantities:"):
+            as_quantities += 1
             continue
         row = rows[(pset, prop)]
         row[0] += 1
@@ -196,6 +215,8 @@ def main(argv):
     )
     for (pset, prop), (n, equal, different, missing) in sorted(rows.items()):
         print(f"  {pset}.{prop}: {n}, equal {equal}, different {different}, missing {missing}")
+    if as_quantities:
+        print(f"IFC2X3 lengths IFC4 holds as quantities, not scored here: {as_quantities}")
     only = collections.defaultdict(lambda: [0, 0])
     for key, pset, prop in ours:
         if (key, pset, prop) not in theirs:

@@ -1,11 +1,14 @@
-//! RE-157 (B26, #35): a pipe's `InvertElevation` is Revit's.
+//! RE-157 (B26, #35, #822): a pipe's `InvertElevation` is Revit's.
 //!
-//! Revit's IFC4 export of the RE1 Mechanical and Plumbing models gives every
-//! pipe `Pset_FlowSegmentPipeSegment.InvertElevation` (`IfcLengthMeasure`):
-//! the height above its storey of a horizontal pipe's inside bottom, or of a
-//! vertical pipe's lower end (69 pipes). For every pipe rvt-rs writes with
-//! Revit's `Tag`, it must be in rvt-rs's export, within 0.1 mm of Revit's,
-//! each file's values read in its own length unit.
+//! Revit's IFC2X3 export (Coordination View 2.0) of the RE1 Mechanical and
+//! Plumbing models gives every pipe
+//! `Pset_FlowSegmentPipeSegment.InvertElevation` (`IfcLengthMeasure`): the
+//! height above its storey of a horizontal pipe's inside bottom, or of a
+//! vertical pipe's lower end (69 pipes). rvt-rs writes IFC4, which has no
+//! flow-segment sets: the invert is in `Pset_PipeSegmentOccurrence`, as
+//! Revit's IFC4 export of the BIM4LCA office writes it ([`SETS`]). For every
+//! pipe rvt-rs writes with Revit's `Tag`, it must be in rvt-rs's export,
+//! within 0.1 mm of Revit's, each file's values read in its own length unit.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Mechanical.rvt` and
 //! `RE1-Plumbing.rvt` with their `RE1-*.ifc` exports. Skips what is absent.
@@ -15,7 +18,9 @@ use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-const SETS: [&str; 1] = ["Pset_FlowSegmentPipeSegment"];
+/// The IFC2X3 set holding a pipe's invert in Revit's export, and the IFC4
+/// set holding it in rvt-rs's, under whose name both are compared.
+const SETS: [&str; 2] = ["Pset_FlowSegmentPipeSegment", "Pset_PipeSegmentOccurrence"];
 const PROPERTY: &str = "'InvertElevation'";
 const TOLERANCE_METRES: f64 = 1e-4;
 
@@ -141,7 +146,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
             if let Some(tag) = tags.get(&object) {
                 out.entry(tag.clone())
                     .or_default()
-                    .insert(set.to_string(), length * scale);
+                    .insert(SETS[1].to_string(), length * scale);
             }
         }
     }

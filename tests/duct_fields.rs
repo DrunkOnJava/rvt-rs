@@ -6,9 +6,10 @@
 //! `Pset_FlowSegmentPipeSegment.Length` (its length along its axis), and
 //! `Pset_DistributionFlowElementCommon.Reference` and
 //! `Pset_QuantityTakeOff.Reference` (its type's name). rvt-rs writes IFC4,
-//! which has neither `Reference` set: the type's name is in
+//! which has none of these sets: the length is in the duct's base quantities
+//! ([`QUANTITIES`], an `IfcElementQuantity`) and the type's name in
 //! `Pset_DuctSegmentTypeCommon` and `Pset_EnvironmentalImpactIndicators`, as
-//! Revit's IFC4 export writes it ([`REFERENCE_SETS`]). For every duct rvt-rs
+//! Revit's IFC4 export writes them ([`REFERENCE_SETS`]). For every duct rvt-rs
 //! writes with Revit's `Tag`, each of those must be in rvt-rs's export: the
 //! lengths within 0.1 mm of Revit's (each file read in its own length unit),
 //! the references as Revit writes them.
@@ -21,7 +22,10 @@ use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// The IFC2X3 sets holding a duct's `Length` in Revit's export.
 const LENGTH_SETS: [&str; 2] = ["Pset_FlowSegmentDuctSegment", "Pset_FlowSegmentPipeSegment"];
+/// The IFC4 quantity set holding it in rvt-rs's.
+const QUANTITIES: &str = "Qto_DuctSegmentBaseQuantities";
 /// Each IFC2X3 set holding a duct's `Reference` in Revit's export, with the
 /// IFC4 set holding it in rvt-rs's.
 const REFERENCE_SETS: [(&str, &str); 2] = [
@@ -142,22 +146,26 @@ fn ducts(step: &str, entity: &str) -> BTreeMap<String, Duct> {
         else {
             continue;
         };
-        if set_entity != "IFCPROPERTYSET" {
+        // A quantity set's quantities are `IfcQuantityLength(Name,
+        // Description, Unit, LengthValue, ..)`, the value a bare number.
+        let quantities = set_entity == "IFCELEMENTQUANTITY";
+        if set_entity != "IFCPROPERTYSET" && !quantities {
             continue;
         }
+        let (members, value_at) = if quantities { (5, 3) } else { (4, 2) };
         let sf = split_args(set_args);
         let set = sf
             .get(2)
             .map(|n| n.trim().trim_matches('\'').to_string())
             .unwrap_or_default();
-        let props: Vec<(String, String)> = list(sf.get(4).map(String::as_str).unwrap_or(""))
+        let props: Vec<(String, String)> = list(sf.get(members).map(String::as_str).unwrap_or(""))
             .iter()
             .filter_map(|p| ents.get(p))
             .filter_map(|(_, a)| {
                 let pf = split_args(a);
                 Some((
                     pf.first()?.trim().trim_matches('\'').to_string(),
-                    pf.get(2)?.trim().to_string(),
+                    pf.get(value_at)?.trim().to_string(),
                 ))
             })
             .collect();
@@ -166,10 +174,12 @@ fn ducts(step: &str, entity: &str) -> BTreeMap<String, Duct> {
                 continue;
             };
             for (name, value) in &props {
-                if name == "Length" && LENGTH_SETS.contains(&set.as_str()) {
+                if name == "Length" && (LENGTH_SETS.contains(&set.as_str()) || set == QUANTITIES) {
                     let number = value
                         .split_once('(')
-                        .and_then(|(_, n)| n.trim_end_matches(')').parse::<f64>().ok());
+                        .map_or(value.as_str(), |(_, n)| n.trim_end_matches(')'))
+                        .parse::<f64>()
+                        .ok();
                     if let Some(number) = number {
                         duct.lengths.insert(set.clone(), number * scale);
                     }
@@ -222,10 +232,10 @@ fn re1_mechanical_duct_lengths_and_references_are_revits() {
             continue;
         };
         for (set, length) in &revit.lengths {
-            match mine.lengths.get(set) {
+            match mine.lengths.get(QUANTITIES) {
                 Some(m) if (m - length).abs() <= TOLERANCE_METRES => {}
                 other => off.push(format!(
-                    "{tag} {set}.Length: Revit {length} m, rvt-rs {other:?}"
+                    "{tag} {set}.Length: Revit {length} m, rvt-rs {QUANTITIES} {other:?}"
                 )),
             }
         }
