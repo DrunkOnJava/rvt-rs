@@ -161,17 +161,18 @@ def main(argv):
     for pset, obj, entity, predefined, object_type in held:
         name = pset.Name
         definition = defined.get(name)
+        # A set related to several objects is one set: it and its properties
+        # are counted once; its misapplications once per object.
+        first = pset.id() not in checked
+        checked.add(pset.id())
         if definition is None:
-            unknown_set[name] += 1
+            unknown_set[name] += first
             continue
         applies, properties = definition
         if entity is not None and not applies_to(applies, schema, entity, predefined, object_type):
             misapplied[(name, entity)] += 1
-        # A set related to several objects is one set: its properties are
-        # counted once.
-        if pset.id() in checked:
+        if not first:
             continue
-        checked.add(pset.id())
         for prop in pset.HasProperties or ():
             declared = properties.get(prop.Name)
             if declared is None:
