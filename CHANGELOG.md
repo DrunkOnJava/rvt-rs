@@ -8,6 +8,10 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The crate's and the wheel's descriptions name the experimental releases.**
+  crates.io and PyPI showed 0.6.0's as reading typed elements from Revit
+  2023 to 2025 projects with 2026 experimental; 2015 to 2022 and 2027 are
+  experimental too since 0.6.0 (RE-179 to RE-181).
 - **CI runs the real-file, CLI, contract and hardening checks on 32-bit
   i686 with overflow checks on (#836).** A sum or product of lengths read
   from a file that cannot overflow a 64-bit `usize` can still wrap on a
