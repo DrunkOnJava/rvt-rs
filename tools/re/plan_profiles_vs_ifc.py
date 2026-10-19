@@ -66,6 +66,7 @@ def tops(path, classes):
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out = {}
+    pieces = collections.Counter()
     for cls in classes:
         try:
             elements = f.by_type(cls)
@@ -101,13 +102,20 @@ def tops(path, classes):
                 for tri in zip(a[up], b[up], c[up])
             ]
             surface = shapely.union_all(triangles) if triangles else Polygon()
+            pieces[tag] += 1
             # A sketch of several pieces is several elements with one Tag.
             if tag in out:
                 held_area, held_points, _, held_surface = out[tag]
                 area, points = held_area + area, np.vstack([held_points, points])
                 surface = shapely.union_all([held_surface, surface])
             out[tag] = (area, points, element.is_a(), surface)
-    return out
+    return out, pieces
+
+
+def shape_of(surface):
+    """(polygons, holes) of a top surface."""
+    polygons = list(getattr(surface, "geoms", [surface])) if not surface.is_empty else []
+    return len(polygons), sum(len(p.interiors) for p in polygons if hasattr(p, "interiors"))
 
 
 def spread(p, q):
@@ -126,8 +134,8 @@ def outline_spread(p, q_surface, q, p_surface):
 
 def main(argv):
     args = argv[1:]
-    classes = ["IfcSlab", "IfcShadingDevice"]
-    listing = 0
+    classes = ["IfcSlab", "IfcShadingDevice", "IfcCovering", "IfcRoof"]
+    listing = 200
     if "--class" in args:
         i = args.index("--class")
         classes = args[i + 1].split(",")
@@ -144,7 +152,7 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    ours, revit = tops(args[0], classes), tops(args[1], classes)
+    (ours, our_pieces), (revit, revit_pieces) = tops(args[0], classes), tops(args[1], classes)
     if by_centroid and revit:
         paired = {}
         for held in ours.values():
@@ -166,20 +174,27 @@ def main(argv):
                     area,
                     o_area,
                     outline_spread(o_points, surface, points, o_surface),
+                    our_pieces[tag],
+                    revit_pieces[tag],
+                    shape_of(o_surface),
+                    shape_of(surface),
                 )
             )
     print(f"elements of {','.join(classes)} in both: {len(rows)}")
     counts = collections.Counter()
-    for rel, dist, _, cls, _, _, edge in rows:
+    for rel, dist, _, cls, _, _, edge, *_ in rows:
         counts[(cls, "area within 0.1%" if rel <= 1e-3 else "area off")] += 1
         counts[(cls, "vertices within 0.01 ft" if dist <= 0.01 else "vertices off")] += 1
         counts[(cls, "outline within 0.01 ft" if edge <= 0.01 else "outline off")] += 1
     for (cls, what), count in sorted(counts.items()):
         print(f"  {cls} {what}: {count}")
-    for rel, dist, tag, cls, area, o_area, edge in sorted(rows, reverse=True)[:listing]:
+    split = [row for row in rows if row[7] != row[8]]
+    print(f"  elements whose piece count differs: {len(split)}")
+    for rel, dist, tag, cls, area, o_area, edge, op, rp, oshape, rshape in sorted(rows, reverse=True)[:listing]:
         print(
             f"  {tag} {cls}: area {o_area:.2f} vs {area:.2f} ft2 ({rel:.2%}),"
-            f" vertices {dist:.3f} ft, outline {edge:.3f} ft"
+            f" vertices {dist:.3f} ft, outline {edge:.3f} ft,"
+            f" pieces {op} vs {rp}, polygons/holes {oshape[0]}/{oshape[1]} vs {rshape[0]}/{rshape[1]}"
         )
     return 0
 
