@@ -8,7 +8,7 @@ Width and Height (-1001301, -1001300), Rough Width and Rough Height
 scorer joins those rows to Revit's own export by `Tag` (the ElementId) and
 counts, per class, how many of Revit's `OverallWidth` and `OverallHeight`
 each candidate pair equals, within 0.001 ft. The probe also prints the
-element's record box along its own axes (RE-192, #810), which gives two more
+element's record box along its own axes (RE-195, #810), which gives two more
 candidates: the box along X and Z, and along X and Y. Each candidate's width
 and height are also counted apart, and the types whose instances Revit gives
 more than one size are counted, since Revit's exporter takes both from the
@@ -145,7 +145,7 @@ def score_export(ours_path, revit_path, listing):
 
     It also compares each export's own opening for the door or window (the
     opening it fills, along its X and Z), since Revit's sizes are its
-    opening's (RE-194)."""
+    opening's (RE-195)."""
     our_cuts, revit_cuts = {}, {}
     ours, revit = revit_sizes(ours_path, our_cuts), revit_sizes(revit_path, revit_cuts)
     cut_tally = collections.Counter()
