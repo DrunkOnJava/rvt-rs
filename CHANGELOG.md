@@ -160,6 +160,20 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A pipe's or duct's length and a pipe's invert are where IFC4 puts them
+  (#822).** RE-131, RE-134 and RE-157 wrote them in IFC2X3's
+  `Pset_FlowSegmentPipeSegment` and `Pset_FlowSegmentDuctSegment` (and a
+  duct's length also in `Pset_DuctSegmentTypeCommon`), as Revit's IFC2X3
+  exports of the RE1 models do. IFC4 has neither flow-segment set, and its
+  `Pset_DuctSegmentTypeCommon` has no `Length`. The length is now in the
+  segment's base quantities, `Qto_PipeSegmentBaseQuantities` or
+  `Qto_DuctSegmentBaseQuantities`, as an `IfcElementQuantity`, and a pipe's
+  invert in `Pset_PipeSegmentOccurrence`, where Revit's IFC4 export of the
+  BIM4LCA office writes them. A `PropertySet` named `Qto_` is now written as
+  an `IfcElementQuantity` of IFC4 simple quantities. A building-element
+  proxy's Serial Number is no longer also written in
+  `Pset_PrecastConcreteElementGeneral`, which in IFC4 has no `SerialNumber`;
+  `Pset_ManufacturerOccurrence` holds it.
 - **An element's `Reference` is in IFC4's property sets, not IFC2X3's
   (#822).** RE-154 wrote the type's name in `Pset_QuantityTakeOff` on every
   element with a type and in `Pset_DistributionFlowElementCommon` on MEP
