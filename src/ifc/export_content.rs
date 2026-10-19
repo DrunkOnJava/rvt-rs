@@ -237,9 +237,10 @@ fn identity_property_set(mut set: PropertySet, decoded: &DecodedElement) -> Prop
     set
 }
 
-/// An Area's ElementId, number and name (#763), in the set a room's are
-/// written in, so the writer names its `IfcSpace` as it names a room's:
-/// `Name` the number and `LongName` the name, as Revit's export does.
+/// An Area's ElementId, number, name and Level (#763), in the set a room's
+/// are written in, so the writer names its `IfcSpace` as it names a room's
+/// (`Name` the number and `LongName` the name, as Revit's export does) and
+/// `ifc::apply_record_level_reference_storeys` puts it in its Level's storey.
 fn area_property_set(decoded: &DecodedElement) -> PropertySet {
     let text = |wanted: &str| {
         decoded
@@ -269,6 +270,29 @@ fn area_property_set(decoded: &DecodedElement) -> PropertySet {
         properties.push(Property {
             name: ROOM_NAME_PROPERTY.into(),
             value: PropertyValue::Text(name),
+        });
+    }
+    let level = decoded
+        .fields
+        .iter()
+        .find_map(|(field, value)| match value {
+            InstanceField::ElementId { id, .. }
+                if field == crate::element_record_level_refs::LEVEL_REFERENCE_FIELD =>
+            {
+                Some(*id)
+            }
+            _ => None,
+        });
+    if let Some(id) = level {
+        properties.push(Property {
+            name: crate::element_record_level_refs::LEVEL_ELEMENT_ID_PROPERTY.into(),
+            value: PropertyValue::Integer(i64::from(id)),
+        });
+        properties.push(Property {
+            name: "LevelBindSource".into(),
+            value: PropertyValue::Text(
+                crate::element_record_level_refs::LEVEL_REFERENCE_SOURCE.into(),
+            ),
         });
     }
     PropertySet {
