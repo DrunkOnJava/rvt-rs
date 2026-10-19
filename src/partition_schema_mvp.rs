@@ -636,6 +636,21 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- The parameters named for a standard set's other properties (RE-194) ---
+    attach_named_parameters(
+        rf,
+        revit_version,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.rooms,
+            &mut out.areas,
+            &mut out.products,
+        ],
+    );
     Ok(out)
 }
 
@@ -4742,6 +4757,87 @@ fn attach_is_external(
             element
                 .fields
                 .push((IS_EXTERNAL_FIELD.into(), InstanceField::Bool(external)));
+        }
+    }
+}
+
+/// Give each element of `groups` the values of the project or shared
+/// parameters named `<property set>.<property>` for a property of a standard
+/// set ([`crate::ifc::standard_property_sets`]) that its own data object holds
+/// (RE-194), each as a field [`NAMED_PARAMETER_FIELD_PREFIX`]`<name>`: a
+/// Yes/No's 0 or 1 as a boolean, an integer, a text of one or more
+/// characters, a positive length in feet, or a length or thermal
+/// transmittance as stored. The latest partition's copy decides, so a text
+/// emptied there gets nothing, though an older copy holds one: on the
+/// BIM4LCA office at building permit 74 columns' `FireRating`. `IsExternal`
+/// is [`attach_is_external`]'s. Of the models measured, only the BIM4LCA
+/// office defines such parameters.
+fn attach_named_parameters(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 8],
+) {
+    use crate::ifc::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
+    use crate::partition_room_parameters::{self as prp, EntryKind, EntryValue};
+    let parameters: Vec<(String, i64, Kind)> = prp::find_parameter_definitions(rf, revit_version)
+        .into_iter()
+        .filter_map(|(name, id)| {
+            let (set, property) = name.split_once('.')?;
+            let kind = sps::property_kind(set, property)
+                .filter(|_| property != IS_EXTERNAL_PARAMETER_NAME)?;
+            Some((name, i64::from(id), kind))
+        })
+        .collect();
+    if parameters.is_empty() {
+        return;
+    }
+    let entry_kind = |kind: Kind| match kind {
+        Kind::Boolean | Kind::Count => EntryKind::Word,
+        Kind::Identifier | Kind::Label | Kind::Text => EntryKind::Text,
+        Kind::Length | Kind::PositiveLength | Kind::ThermalTransmittance => EntryKind::Real,
+    };
+    let wanted: Vec<(i64, EntryKind)> = parameters
+        .iter()
+        .map(|(_, id, kind)| (*id, entry_kind(*kind)))
+        .collect();
+    let owners: BTreeSet<u32> = groups
+        .iter()
+        .flat_map(|elements| elements.iter())
+        .filter_map(|element| element.id)
+        .collect();
+    let found = prp::scan_parameter_entries(rf, revit_version, &owners, &wanted);
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(id) = element.id else {
+            continue;
+        };
+        for (name, parameter, kind) in &parameters {
+            let Some(value) = found.get(parameter).and_then(|values| values.get(&id)) else {
+                continue;
+            };
+            let field = match (kind, value) {
+                (Kind::Boolean, EntryValue::Word(word @ (0 | 1))) => {
+                    InstanceField::Bool(*word == 1)
+                }
+                (Kind::Count, EntryValue::Word(count)) => InstanceField::Integer {
+                    value: i64::from(*count),
+                    signed: false,
+                    size: 4,
+                },
+                (_, EntryValue::Text(text)) if !text.is_empty() => {
+                    InstanceField::String(text.clone())
+                }
+                (Kind::PositiveLength, EntryValue::Real(length)) if *length <= 0.0 => continue,
+                (_, EntryValue::Real(value)) if *value == 0.0 || value.is_normal() => {
+                    InstanceField::Float {
+                        value: *value,
+                        size: 8,
+                    }
+                }
+                _ => continue,
+            };
+            element
+                .fields
+                .push((format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}"), field));
         }
     }
 }

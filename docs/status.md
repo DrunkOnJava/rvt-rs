@@ -56,7 +56,8 @@ rvt-rs opens every Revit file from 2016 to 2026 and reads its metadata,
 previews and embedded schema. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
-GlobalId and `IsExternal` (RE-193), and a body that is exact where the element's
+GlobalId, `IsExternal` (RE-193) and the parameters named for a standard
+property set's property (RE-194), and a body that is exact where the element's
 data is decoded and its bounding box where it is not. It writes that as IFC4,
 glTF, plan SVG and CSV, from the CLIs, Python and the zero-upload browser
 viewer. On Revit 2023 projects it reads each element's ElementId, category

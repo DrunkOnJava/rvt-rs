@@ -1486,6 +1486,10 @@ pub enum PropertyValue {
     /// Mass in pounds (writer converts to kilograms).
     /// Maps to `IfcMassMeasure`. (IFC-32)
     MassPounds(f64),
+    /// A thermal transmittance in W/(m²·K), as Revit stores it. Maps to
+    /// `IfcThermalTransmittanceMeasure`, which standard property sets such
+    /// as `Pset_WallCommon` declare (RE-194).
+    ThermalTransmittance(f64),
     /// A list of values: the writer emits an `IfcPropertyListValue`, as
     /// standard property sets declare for values given once per port, such as
     /// `Pset_PipeFittingTypeCommon.NominalDiameter` (B44).
@@ -1543,6 +1547,9 @@ impl PropertyValue {
                 // 1 lb = 0.45359237 kg (exact, international avoirdupois pound).
                 let kg = lb * 0.45359237;
                 format!("IFCMASSMEASURE({kg:.6})")
+            }
+            PropertyValue::ThermalTransmittance(u) => {
+                format!("IFCTHERMALTRANSMITTANCEMEASURE({u:.6})")
             }
             PropertyValue::List(items) => format!(
                 "({})",

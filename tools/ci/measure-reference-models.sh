@@ -13,6 +13,8 @@
 #   - ifc.sha256: the exported IFC's hash without its FILE_NAME and
 #     IFCOWNERHISTORY lines, which carry the export time, so two builds
 #     that write the same model hash the same;
+#   - schema.txt: the IFC4 schema's findings on the export (C9), its
+#     attribute counts and IfcOpenShell's validation up to 120 MB;
 #   - witness-<artifact>.json: the rvt-rs observation committed under
 #     research/witness/<artifact>/observations/rvt-rs.json;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
@@ -93,6 +95,23 @@ info() { # file dir
   echo "exit $?" > "$2/info.exit"
 }
 
+# C9: the IFC4 schema's view of dir/model.ifc in dir/schema.txt: attribute
+# counts always, IfcOpenShell's full validation up to max_bytes, otherwise
+# marked as skipped.
+schema() { # dir max_bytes
+  {
+    echo "arity:"
+    timeout 600 python "$(dirname "$0")/ifc_schema_arity.py" "$1/model.ifc" 2>&1 \
+      | grep -v '^IFC schema conformance passed\|^  instances checked' || true
+    if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
+      echo "validate:"
+      timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" 2>&1
+    else
+      echo "validate: skipped, over $(( $2 / 1048576 )) MB"
+    fi
+  } > "$1/schema.txt"
+}
+
 while IFS='|' read -r name rvt ref; do
   [ -n "$name" ] || continue
   # The BIM4LCA office models are fetched only with `-f nordic=true`, and the
@@ -112,6 +131,9 @@ while IFS='|' read -r name rvt ref; do
   echo "exit $?" >> "$dir/rvt-gltf.log"
   info "$MODELS/$rvt" "$dir"
   grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+  # A writer path only these models reach, such as the office files'
+  # thermal transmittance unit (RE-194), is checked here.
+  [ -s "$dir/model.ifc" ] && schema "$dir" 125829120
   # The witness observations committed for this model (research/witness/),
   # regenerated so a change to its IFC can commit them from the results.
   for artifact in $(witness_artifacts "$name"); do
@@ -180,17 +202,7 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
     # export; IfcOpenShell's full validation on exports up to 30 MB, the
     # rest marked as skipped.
     if [ -s "$dir/model.ifc" ]; then
-      {
-        echo "arity:"
-        timeout 600 python "$(dirname "$0")/ifc_schema_arity.py" "$dir/model.ifc" 2>&1 \
-          | grep -v '^IFC schema conformance passed\|^  instances checked' || true
-        if [ "$(stat -c %s "$dir/model.ifc")" -le 31457280 ]; then
-          echo "validate:"
-          timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$dir/model.ifc" 2>&1
-        else
-          echo "validate: skipped, over 30 MB"
-        fi
-      } > "$dir/schema.txt"
+      schema "$dir" 31457280
       grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
     fi
     [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"

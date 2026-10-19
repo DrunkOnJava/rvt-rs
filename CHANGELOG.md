@@ -8,6 +8,21 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Parameters named for a standard property set's property are written in
+  that set (RE-194).** Revit's exporter reads a project or shared parameter
+  named `<set>.<property>`, such as `Pset_WallCommon.FireRating` or
+  `Pset_WindowCommon.ThermalTransmittance`, before anything else for that
+  property. rvt-rs now reads each such parameter of an IFC4 set's property
+  from the element and writes it there, where IFC4 applies the set to the
+  entity written. Booleans, labels and text, counts, lengths and thermal
+  transmittance are read; a thermal transmittance is written as
+  `IfcThermalTransmittanceMeasure`, with its unit declared. The parameter's
+  value replaces rvt-rs's own. On the BIM4LCA office, as built, property
+  values equal to Revit's go from 14,531 to 18,374. The 7 stair riser values
+  that differed are now Revit's, and 55 `OccupancyNumber` values differ only
+  in type: IFC4's `IfcCountMeasure` against the export's `IfcInteger`. What
+  that export takes from its user-defined property set file, such as a
+  glazing set on walls, is not written.
 - **Each element's `IsExternal`, as Revit's exporter sets it (RE-193).**
   Revit's export reads a Yes/No parameter named for the property set first
   (`Pset_WallCommon.IsExternal` on a wall), then calculates the value from a
@@ -110,6 +125,11 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A stair's `IsExternal` joins its `Pset_StairCommon` (RE-194).** RE-193
+  wrote it in a second set of that name, beside the riser and tread
+  dimensions RE-47 writes, where Revit's export writes one set. On Autodesk's
+  2024 sample projects 34 stairs now carry one set fewer, with the same
+  values.
 - **An element's "Export to IFC As" of `IfcStair` or `IfcDoor` is honoured
   (#792).** On both BIM4LCA office files two generic models carry their own
   `IfcStair` and a curtain panel its own `IfcDoor` with `DOOR`, and Revit's
@@ -200,6 +220,16 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **RE-194: where a parameter named for a property set's property keeps its
+  value, and where Revit's export writes it.** A Yes/No or integer is the
+  `u32` after the parameter's ElementId in the element's own data object, a
+  text the `u32 n · UTF-16` after it, and a number the `f64` just before it.
+  Revit's export of the BIM4LCA office writes every such value on the element
+  itself, never only on its type. Probe `probe_re194_pset_parameters`,
+  scorer `pset_parameters_vs_ifc`. `psets_vs_ifc` now also counts the values
+  only rvt-rs writes, by set and property, and Measure gives each reference
+  model's export the schema check a sample's gets, up to 120 MB: the office
+  files' thermal transmittance unit is a writer path nothing else reaches.
 - **Measure hashes each sample's IFC export.** A sample's export was checked
   for schema findings and then dropped, so a change that moved only its
   names or properties showed nowhere in a run. Each sample now gets the

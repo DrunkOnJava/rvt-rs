@@ -336,6 +336,9 @@ pub fn append_typed_production_elements(
     // RE-84: doors and windows whose type draws no geometry.
     let mut without_geometry: std::collections::BTreeSet<usize> = Default::default();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
+    // RE-194: each element's parameters named for a standard set's property,
+    // written once the entity it is written as is final.
+    let mut pending_named: Vec<(usize, Vec<(String, Property)>)> = Vec::new();
     // RE-138: the joins of ducts and pipes, by entity index and ElementId.
     let mut pending_joins: Vec<(usize, u32, crate::partition_schema_mvp::ConnectorJoins)> =
         Vec::new();
@@ -747,6 +750,7 @@ pub fn append_typed_production_elements(
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded, &ifc_type);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
+        let named = named_parameter_properties(&decoded);
         // RE-151: the name of the openings of a floor's tagged voids.
         // B55: the openings a wall's edited elevation profile cuts, in the
         // wall's plane relative to its placement.
@@ -1020,10 +1024,10 @@ pub fn append_typed_production_elements(
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
         for set in reference_sets.into_iter().chain(serial_sets) {
-            entities.push(entities::IfcEntity::ElementPropertySet {
-                element: entity_index,
-                set,
-            });
+            add_element_set(entities, entity_index, set);
+        }
+        if !named.is_empty() {
+            pending_named.push((entity_index, named));
         }
     }
 
@@ -1159,6 +1163,7 @@ pub fn append_typed_production_elements(
             }
         }
     }
+    add_named_parameter_sets(entities, pending_named);
 
     out
 }
@@ -1685,6 +1690,141 @@ fn add_covering_finish(sets: &mut [PropertySet], ifc_type: &str, decoded: &Decod
             name: "Finish".into(),
             value: PropertyValue::Text(finish),
         });
+    }
+}
+
+/// The values of the parameters named `<property set>.<property>` an element
+/// carries (RE-194), by set: the properties [`super::standard_property_sets`]
+/// lists, each as the IFC4 type it declares. `IsExternal` is
+/// [`add_is_external`]'s.
+fn named_parameter_properties(decoded: &DecodedElement) -> Vec<(String, Property)> {
+    use super::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
+    use crate::partition_schema_mvp as mvp;
+    let mut properties = Vec::new();
+    for (field, value) in &decoded.fields {
+        let Some((set, property)) = field
+            .strip_prefix(mvp::NAMED_PARAMETER_FIELD_PREFIX)
+            .and_then(|name| name.split_once('.'))
+        else {
+            continue;
+        };
+        if property == mvp::IS_EXTERNAL_PARAMETER_NAME {
+            continue;
+        }
+        let value = match (sps::property_kind(set, property), value) {
+            (Some(Kind::Boolean), InstanceField::Bool(flag)) => PropertyValue::Boolean(*flag),
+            (Some(Kind::Identifier), InstanceField::String(text)) => {
+                PropertyValue::Identifier(text.clone())
+            }
+            (Some(Kind::Label), InstanceField::String(text)) => PropertyValue::Label(text.clone()),
+            (Some(Kind::Text), InstanceField::String(text)) => PropertyValue::Text(text.clone()),
+            (Some(Kind::Count), InstanceField::Integer { value, .. }) => {
+                PropertyValue::CountValue(*value)
+            }
+            (Some(Kind::Length), InstanceField::Float { value, .. }) => {
+                PropertyValue::LengthFeet(*value)
+            }
+            (Some(Kind::PositiveLength), InstanceField::Float { value, .. }) => {
+                PropertyValue::PositiveLengthFeet(*value)
+            }
+            (Some(Kind::ThermalTransmittance), InstanceField::Float { value, .. }) => {
+                PropertyValue::ThermalTransmittance(*value)
+            }
+            _ => continue,
+        };
+        properties.push((
+            set.to_string(),
+            Property {
+                name: property.into(),
+                value,
+            },
+        ));
+    }
+    properties
+}
+
+/// Put `property` in `set`, replacing a property of the same name there.
+fn set_property(set: &mut PropertySet, property: Property) {
+    match set
+        .properties
+        .iter_mut()
+        .find(|existing| existing.name == property.name)
+    {
+        Some(existing) => *existing = property,
+        None => set.properties.push(property),
+    }
+}
+
+/// Give the element at `element` among `entities` the set `set`: merged into
+/// the set of the same name already given to it, each property replacing one
+/// of the same name there, else as a set of its own.
+fn add_element_set(entities: &mut Vec<entities::IfcEntity>, element: usize, set: PropertySet) {
+    let held = entities
+        .iter_mut()
+        .skip(element)
+        .find_map(|entity| match entity {
+            entities::IfcEntity::ElementPropertySet {
+                element: owner,
+                set: held,
+            } if *owner == element && held.name == set.name => Some(held),
+            _ => None,
+        });
+    let Some(held) = held else {
+        entities.push(entities::IfcEntity::ElementPropertySet { element, set });
+        return;
+    };
+    for property in set.properties {
+        set_property(held, property);
+    }
+}
+
+/// Write each element's parameters named for a standard set's property
+/// (RE-194, [`named_parameter_properties`]) as Revit's exporter does: in
+/// each set that applies to the entity the element is finally written as,
+/// so a door or window written as its opening alone (RE-84) gets none, and
+/// in its set of the same name where it has one, each value replacing
+/// rvt-rs's own.
+fn add_named_parameter_sets(
+    entities: &mut Vec<entities::IfcEntity>,
+    pending: Vec<(usize, Vec<(String, Property)>)>,
+) {
+    use super::standard_property_sets as sps;
+    let mut held: BTreeMap<(usize, String), usize> = BTreeMap::new();
+    for (index, entity) in entities.iter().enumerate() {
+        if let entities::IfcEntity::ElementPropertySet { element, set } = entity {
+            held.entry((*element, set.name.clone())).or_insert(index);
+        }
+    }
+    for (element, properties) in pending {
+        let Some(entities::IfcEntity::BuildingElement { ifc_type, .. }) = entities.get(element)
+        else {
+            continue;
+        };
+        let ifc_type = ifc_type.clone();
+        for (set, property) in properties {
+            if !sps::applies_to(&set, &ifc_type) {
+                continue;
+            }
+            match held.get(&(element, set.clone())) {
+                Some(&index) => {
+                    if let Some(entities::IfcEntity::ElementPropertySet { set: held_set, .. }) =
+                        entities.get_mut(index)
+                    {
+                        set_property(held_set, property);
+                    }
+                }
+                None => {
+                    held.insert((element, set.clone()), entities.len());
+                    entities.push(entities::IfcEntity::ElementPropertySet {
+                        element,
+                        set: PropertySet {
+                            name: set,
+                            properties: vec![property],
+                        },
+                    });
+                }
+            }
+        }
     }
 }
 
