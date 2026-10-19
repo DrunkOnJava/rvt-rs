@@ -146,26 +146,55 @@ each case.
 Corpus tests verify it works on bytes Revit actually writes — the real test of whether your synth matches
 reality.
 
-Add to `tests/elements.rs` (create if not present):
+Every `tests/*.rs` file is a module of one test binary, `integration`
+(C6), and CI runs only the files `tools/ci/test-targets.txt` classes as
+real-file, CLI, contract or hardening checks. So a new check takes three
+steps:
 
-```rust
-#[test]
-#[cfg_attr(not(feature = "corpus"), ignore)]
-fn myclass_decodes_on_2024_sample() {
-    let path = "_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa";
-    let mut rf = rvt::RevitFile::open(path).unwrap();
-    let formats = rf.read_stream("Formats/Latest").unwrap();
-    let formats_d = rvt::compression::inflate_at(&formats, 0).unwrap();
-    let schema = rvt::formats::parse_schema(&formats_d).unwrap();
-    let myclass = schema.classes.iter().find(|c| c.name == "MyClass")
-        .expect("MyClass present in 2024 schema");
+1. Write `tests/myclass_corpus.rs`. Resolve the corpus through
+   `tests/common` (`RVT_SAMPLES_DIR` for the family corpus), never a
+   hard-coded path, and skip a missing file:
 
-    // ... walk to the MyClass instance in Global/Latest (Layer 5a
-    // is still under development for non-ADocument classes — for
-    // now, just confirm the schema class has sane fields)
-    assert!(!myclass.fields.is_empty());
-}
-```
+   ```rust
+   mod common;
+
+   use common::{ALL_YEARS, sample_for_year};
+
+   #[test]
+   fn myclass_is_in_every_releases_schema() {
+       for year in ALL_YEARS {
+           let path = sample_for_year(year);
+           if !path.exists() {
+               eprintln!("skipping {year}: sample not present (set RVT_SAMPLES_DIR)");
+               continue;
+           }
+           let mut rf = rvt::RevitFile::open(&path).unwrap();
+           let schema = rf.schema().unwrap();
+           let myclass = schema
+               .classes
+               .iter()
+               .find(|c| c.name == "MyClass")
+               .unwrap_or_else(|| panic!("{year}: MyClass not in the schema"));
+           assert!(!myclass.fields.is_empty(), "{year}");
+       }
+   }
+   ```
+
+2. Add it to `tests/integration/main.rs`, in name order:
+
+   ```rust
+   #[path = "../myclass_corpus.rs"]
+   mod myclass_corpus;
+   ```
+
+3. Class it `real` in `tools/ci/test-targets.txt`. A file the manifest
+   does not class fails `tools/ci/verify-real-files.sh`, so a new check
+   cannot go unrun.
+
+CI fetches the family corpus and sets `RVT_REQUIRE_CORPUS=1`, which
+turns a missing release into a failure there. Locally,
+`RVT_SAMPLES_DIR=<corpus>/examples/Autodesk cargo test --profile ci --test integration myclass_corpus`
+runs it.
 
 ### Step 6 — Document in `CHANGELOG.md`
 

@@ -9,13 +9,17 @@ VW1-01 through VW1-24 have shipped; the viewer is live at
 <https://drunkonjava.github.io/rvt-rs/> and the workflow below is
 `.github/workflows/deploy-viewer.yml` as built, not as proposed.
 Read the recipe as the reason each piece is shaped the way it is.
-Two later changes are not reflected in the snippets: the deploy
+Three later changes are not reflected in the snippets. The bindings
+moved from `src/wasm.rs`, behind a `wasm` feature, to their own crate,
+[`rvt-wasm`](../rvt-wasm/src/lib.rs), built with
+`wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt`,
+and `rvt` builds as a plain `rlib` (C6, #724). The deploy
 workflow additionally checks out `magnetar-io/revit-test-datasets`
 with LFS into `_project_corpus/` and stages the two hash-verified
 real-project demos from it (#257), and the workflow-level concurrency
-group is proposed to become per-ref — leaving only the deploy job on
-the shared `pages` group, so two queued pull-request builds stop
-cancelling each other
+group became per-ref, leaving only the deploy job on the shared
+`pages` group, so two queued pull-request builds no longer cancel
+each other
 ([#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
 2026-09-19).
 
