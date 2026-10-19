@@ -24,6 +24,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_LIMIT_BYTES = 10 * 1024**3
+# A research or Measure branch with no pull request is kept while its work is
+# live; one whose last commit is older than this is stale (docs/maintaining.md).
+BRANCH_STALE_DAYS = 14
 # Directories with a lockfile that Dependabot deliberately does not update, and why
 # (docs/maintaining.md says the same).
 UNWATCHED = {"/tools/ci/witness-ifc-lite": "its third-party witness is pinned to an exact version on purpose"}
@@ -104,7 +107,7 @@ def milestones(repo):
     return problems
 
 
-@check("no remote branch but main and open pull requests' heads")
+@check(f"no remote branch but main, open pull requests' heads and branches active in the last {BRANCH_STALE_DAYS} days")
 def branches(repo):
     open_heads = {p["head"]["ref"] for p in pages(f"repos/{repo}/pulls?state=open&per_page=100")}
     problems = []
@@ -112,7 +115,9 @@ def branches(repo):
         if b["name"] == "main" or b["name"] in open_heads:
             continue
         commit = gh(f"repos/{repo}/commits/{b['commit']['sha']}")
-        problems.append(f"{b['name']} ({age_days(commit['commit']['committer']['date'])} days old)")
+        age = age_days(commit["commit"]["committer"]["date"])
+        if age > BRANCH_STALE_DAYS:
+            problems.append(f"{b['name']} ({age} days old)")
     return problems
 
 
