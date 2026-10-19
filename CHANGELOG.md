@@ -10,8 +10,10 @@ All notable changes will be documented here. This project follows
 
 rvt-rs writes IFC4, and 0.6.0 makes its property sets IFC4's. 0.5 took some
 of them from Revit's exports of the RE1 models, which are IFC2X3; every
-standard property set rvt-rs now writes passes buildingSMART's IFC4
-definitions on all 89 exports Measure checks (#822, #826). More of what
+standard property set rvt-rs now writes matches buildingSMART's published
+IFC4 property set definitions on all 89 exports Measure checks, by rvt-rs's
+own check of them (#822, #826). buildingSMART's Validation Service has not
+been run on them, and quantity sets are not checked. More of what
 Revit's exporter writes is written: parameters named for any IFC4 property
 set's property (RE-194, #817), every element's `IsExternal` (RE-193), a
 type's Fire Rating, a door's overall size, Revit 2024 Areas as spaces
