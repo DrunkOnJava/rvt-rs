@@ -33,16 +33,20 @@ RELATIVE = 1e-6
 
 
 def revit_values(path):
-    """(Tag -> {(set, property): value}, GlobalId -> the same), the unit scale."""
+    """(Tag -> {(set, property): (value, entity, where)}, GlobalId -> the same), the unit
+    scale. `where` is "occurrence" for a set on the element itself and "type" for one
+    its type object carries."""
     model = ifcopenshell.open(path)
     scale = ifcopenshell.util.unit.calculate_unit_scale(model)
     by_tag, by_global_id = {}, {}
     for product in model.by_type("IfcProduct"):
         values = {}
+        own = ifcopenshell.util.element.get_psets(product, psets_only=True, should_inherit=False)
         for set_name, properties in ifcopenshell.util.element.get_psets(product, psets_only=True).items():
+            where = "occurrence" if set_name in own else "type"
             for key, value in properties.items():
                 if key != "id" and value is not None:
-                    values[(set_name, key)] = value
+                    values[(set_name, key)] = (value, product.is_a(), where)
         if not values:
             continue
         tag = getattr(product, "Tag", None) if product.is_a("IfcElement") else None
@@ -92,6 +96,7 @@ def main():
     by_tag, by_global_id, scale = revit_values(reference)
     print(f"parameters named Pset_*: {len(parameters)}; elements carrying one: {len(rows)}")
     tally = collections.defaultdict(collections.Counter)
+    placement = collections.defaultdict(collections.Counter)
     examples = collections.defaultdict(list)
     for row in rows:
         revit = by_tag.get(str(row["id"])) or by_global_id.get(row.get("global_id") or "")
@@ -103,7 +108,7 @@ def main():
             if (set_name, prop) not in revit:
                 tally[name]["Revit writes no such property on it"] += 1
                 continue
-            value = revit[(set_name, prop)]
+            value, entity, where = revit[(set_name, prop)]
             how = matches(value, reading, scale)
             if how is None:
                 tally[name]["different"] += 1
@@ -111,9 +116,11 @@ def main():
                     examples[name].append((row["id"], row["class"], value, reading))
             else:
                 tally[name][f"equal as {how}"] += 1
+                placement[name][(entity, where)] += 1
     for name in sorted(tally):
         counts = ", ".join(f"{label} {n}" for label, n in sorted(tally[name].items()))
-        print(f"  {name}: {counts}")
+        where = ", ".join(f"{entity} {at} {n}" for (entity, at), n in sorted(placement[name].items()))
+        print(f"  {name}: {counts}" + (f" [Revit writes the equal ones on: {where}]" if where else ""))
         if listing:
             for element, cls, value, reading in examples[name]:
                 print(f"      {element} {cls}: Revit {value!r}; read {reading}")
