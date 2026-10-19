@@ -129,6 +129,19 @@ All notable changes will be documented here. This project follows
 - **`ifc::entities::PropertySet::name_sets` is removed, and `storey_sets`
   takes no name (#822).** The two sets `name_sets` built are IFC2X3's, and a
   storey's sets no longer include them.
+- **Measure checks each export's standard property sets against IFC4's
+  definitions (#822).** `tools/ci/ifc4_property_sets.py` counts, for every
+  `Pset_` set an export relates to an object or a type, what buildingSMART's
+  IFC4 definitions (the list its validation service checks rule PSE001
+  against, pinned by #817's generator) do not allow: sets IFC4 does not
+  define, properties a set does not have, sets on entities IFC4 does not
+  apply them to, and values of another kind or type. Measure appends it to
+  every export's `schema.txt`. On the 89 measured exports of `main` before
+  #822's fixes it found IFC2X3's `Pset_QuantityTakeOff`,
+  `Pset_DistributionFlowElementCommon`, `Pset_ProductRequirements` and
+  flow-segment sets, `Pset_AirSideSystemInformation` on storeys, and IFC2X3's
+  `NominalDiameter`, `Length` and `SerialNumber` in three IFC4 sets that do
+  not have them, and no value of another type.
 - **CI and Measure run IfcOpenShell 0.9.0.post1 (#773).** Five of Measure's
   scorers let go of an IFC file while they still used its elements, which
   IfcOpenShell 0.9 does not allow (`room_names_vs_ifc` crashed under 0.9.0);
