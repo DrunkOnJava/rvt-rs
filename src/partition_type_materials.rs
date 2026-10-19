@@ -255,8 +255,9 @@ fn opens_unset_map(buf: &[u8], start: usize, end: usize, materials: &BTreeSet<u3
     let mut at = start;
     while at + 4 <= end {
         let count = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes")) as usize;
-        let map_end = at + 4 + count * 12;
-        if (1..=MAX_ENTRIES).contains(&count) && map_end <= end {
+        // The count is checked before it sizes the map: on a 32-bit target a
+        // count read from arbitrary bytes would overflow `count * 12` (#836).
+        if (1..=MAX_ENTRIES).contains(&count) && at + 4 + count * 12 <= end {
             let mut keys = Vec::with_capacity(count);
             let (mut unset, mut material) = (0usize, 0usize);
             for entry in 0..count {

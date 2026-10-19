@@ -350,9 +350,12 @@ pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
     let mut p = 0;
     while p + DATA_OBJECT_HEADER <= buf.len() {
         let size = u32_at(p + 12) as usize;
-        let end = p + DATA_OBJECT_HEADER + size;
-        let plausible =
-            u32_at(p + 4) == 0 && size >= 4 && end <= buf.len() && u32_at(end - 4) as usize == size;
+        // On a 32-bit target a size read from arbitrary bytes can carry the
+        // end past `usize::MAX` (#836); such an object cannot be in `buf`.
+        let end = (p + DATA_OBJECT_HEADER).checked_add(size);
+        let plausible = end.is_some_and(|end| {
+            u32_at(p + 4) == 0 && size >= 4 && end <= buf.len() && u32_at(end - 4) as usize == size
+        });
         match plausible.then(|| verified_data_object(buf, p)).flatten() {
             Some(object) => {
                 out.push((p, object));
