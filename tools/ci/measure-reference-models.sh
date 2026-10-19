@@ -20,7 +20,8 @@
 #     research/witness/<artifact>/observations/rvt-rs.json;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
 #     ending with its exit status;
-#   - timings.log: each step's wall time in milliseconds, and the item's;
+#   - timings.log: each step's wall time in milliseconds, and the item's
+#     after its export (the export's is in rvt-ifc.log);
 #   - info.json and info.exit: `rvt-info --redact --json` on it (the identity,
 #     the document's Atom entry, the streams) and its exit status. The Atom
 #     entry goes through the PartAtom parser, from the model's
@@ -43,7 +44,8 @@
 # into probe-pair.txt, ending with its exit status: the cross-release
 # comparisons of #740 and #742.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
-# MEASURE_JOBS items run at once, by default one per CPU.
+# Every export runs first, alone, one at a time; then MEASURE_JOBS items run
+# at once, by default one per CPU.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
 SCORERS="$(dirname "$0")/../re"
@@ -133,6 +135,22 @@ schema() { # dir max_bytes
   } > "$1/schema.txt"
 }
 
+# Each export runs alone, before the items start, so its wall time in
+# rvt-ifc.log is taken as it always was: the summary compares those times
+# across commits, and items running beside an export would move its time
+# by up to about 2x.
+model_dir() { echo "$OUT/$1"; }
+sample_dir() { echo "$OUT/sample-$(basename "$1" .rvt)"; }
+export_ifc() { # file dir
+  local started
+  mkdir -p "$2"
+  started=$(date +%s%N)
+  # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+  "$BIN/rvt-ifc" "$1" -o "$2/model.ifc" --diagnostics "$2/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$2/rvt-ifc.log" 2>&1
+  echo "exit $?" >> "$2/rvt-ifc.log"
+  echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$2/rvt-ifc.log"
+}
+
 # Each item ends with its group in the log, written at once as items run
 # together, and its wall time in its timings.log.
 finished() { # dir name started
@@ -142,14 +160,9 @@ finished() { # dir name started
 }
 
 measure_model() { # name rvt ref
-  local name="$1" rvt="$2" ref="$3" dir started item_started artifact s
+  local name="$1" rvt="$2" ref="$3" dir item_started artifact s
   item_started=$(date +%s%N)
-  dir="$OUT/$name"; mkdir -p "$dir"
-  # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
-  started=$(date +%s%N)
-  "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
-  echo "exit $?" >> "$dir/rvt-ifc.log"
-  echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/rvt-ifc.log"
+  dir=$(model_dir "$name"); mkdir -p "$dir"
   timed "$dir" rvt-gltf "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
   echo "exit $?" >> "$dir/rvt-gltf.log"
   timed "$dir" rvt-info info "$MODELS/$rvt" "$dir"
@@ -213,15 +226,10 @@ pair_key() {
   echo "${name%sampleproject}"
 }
 measure_sample() { # sample
-  local sample="$1" dir started item_started copy
+  local sample="$1" dir item_started copy
   item_started=$(date +%s%N)
-  dir="$OUT/sample-$(basename "$sample" .rvt)"; mkdir -p "$dir"
+  dir=$(sample_dir "$sample"); mkdir -p "$dir"
   timed "$dir" rvt-info info "$sample" "$dir"
-  # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
-  started=$(date +%s%N)
-  "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
-  echo "exit $?" >> "$dir/rvt-ifc.log"
-  echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/rvt-ifc.log"
   # C9: the IFC4 schema's view of the export, so a writer path only the
   # samples reach (I-shape profiles and profile set usages on the
   # structural samples) is checked somewhere. Attribute counts on every
@@ -247,9 +255,9 @@ measure_sample() { # sample
   finished "$dir" "$(basename "$sample")" "$item_started"
 }
 
-# Every item runs in its own folder, MEASURE_JOBS at once (by default one per
-# CPU), the longest first: the models scored against Revit's export, then the
-# rest, each by file size.
+# Every export runs first, alone; then every item runs in its own folder,
+# MEASURE_JOBS at once (by default one per CPU), the longest first: the
+# models scored against Revit's export, then the rest, each by file size.
 JOBS="${MEASURE_JOBS:-$(nproc)}"
 spawn() { # command...: run it once fewer than JOBS items are running
   while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
@@ -290,8 +298,15 @@ if [ -d "${SAMPLE_DIR:-}" ]; then
 $(stat -c %s "$sample")|measure_sample|$sample||"
   done
 fi
+items=$(printf '%s\n' "$items" | sort -t'|' -k1,1nr)
+while IFS='|' read -r _ run first second _; do
+  case "$run" in
+    measure_model) export_ifc "$MODELS/$second" "$(model_dir "$first")" ;;
+    measure_sample) export_ifc "$first" "$(sample_dir "$first")" ;;
+  esac
+done <<< "$items"
 while IFS='|' read -r _ run first second third; do
   [ -n "$run" ] || continue
   spawn "$run" "$first" "$second" "$third"
-done <<< "$(printf '%s\n' "$items" | sort -t'|' -k1,1nr)"
+done <<< "$items"
 wait
