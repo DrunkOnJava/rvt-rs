@@ -1003,9 +1003,11 @@ impl StepWriter {
     /// pounds on the way out and writes angles in radians, so these are
     /// the units a reader must apply. `model.units`, Revit's display units
     /// (IFC-40), describe the source model and stay out of it; the export
-    /// diagnostics report them.
-    fn emit_unit_assignment(&mut self) -> Vec<usize> {
-        [
+    /// diagnostics report them. A model with a thermal transmittance also
+    /// gets kelvin and W/(m²·K), the derived unit its values are in (RE-194),
+    /// as Revit's export declares it.
+    fn emit_unit_assignment(&mut self, model: &IfcModel) -> Vec<usize> {
+        let mut units: Vec<usize> = [
             ("LENGTHUNIT", "$", "METRE"),
             ("AREAUNIT", "$", "SQUARE_METRE"),
             ("VOLUMEUNIT", "$", "CUBIC_METRE"),
@@ -1019,7 +1021,47 @@ impl StepWriter {
             self.emit_entity(id, format!("IFCSIUNIT(*,.{unit_type}.,{prefix},.{name}.)"));
             id
         })
-        .collect()
+        .collect();
+        let thermal = model.entities.iter().any(|entity| {
+            matches!(
+                entity,
+                super::entities::IfcEntity::ElementPropertySet { set, .. }
+                    if set.properties.iter().any(|property| matches!(
+                        property.value,
+                        super::entities::PropertyValue::ThermalTransmittance(_)
+                    ))
+            )
+        });
+        if thermal {
+            let (kilogram, second) = (units[4], units[5]);
+            let kelvin = self.id();
+            self.emit_entity(
+                kelvin,
+                "IFCSIUNIT(*,.THERMODYNAMICTEMPERATUREUNIT.,$,.KELVIN.)",
+            );
+            let elements: Vec<usize> = [(kilogram, 1), (kelvin, -1), (second, -3)]
+                .into_iter()
+                .map(|(unit, exponent)| {
+                    let id = self.id();
+                    self.emit_entity(id, format!("IFCDERIVEDUNITELEMENT(#{unit},{exponent})"));
+                    id
+                })
+                .collect();
+            let derived = self.id();
+            self.emit_entity(
+                derived,
+                format!(
+                    "IFCDERIVEDUNIT(({}),.THERMALTRANSMITTANCEUNIT.,$)",
+                    elements
+                        .iter()
+                        .map(|id| format!("#{id}"))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+            );
+            units.extend([kelvin, derived]);
+        }
+        units
     }
 
     fn emit_header(&mut self, model: &IfcModel) {
@@ -1077,7 +1119,7 @@ impl StepWriter {
         );
 
         // Unit assignment (IFC-40, #403).
-        let unit_entity_ids = self.emit_unit_assignment();
+        let unit_entity_ids = self.emit_unit_assignment(model);
         let unit_assignment = self.id();
         let unit_refs = unit_entity_ids
             .iter()

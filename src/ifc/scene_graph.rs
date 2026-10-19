@@ -734,6 +734,7 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
         PropertyValue::CountValue(c) => c.to_string(),
         PropertyValue::TimeSeconds(t) => format!("{t:.1} s"),
         PropertyValue::MassPounds(m) => format!("{m:.2} lb"),
+        PropertyValue::ThermalTransmittance(u) => format!("{u:.3} W/(m²·K)"),
         PropertyValue::List(items) => items
             .iter()
             .map(format_property_value)
@@ -760,6 +761,7 @@ fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
         PropertyValue::CountValue(_) => "count",
         PropertyValue::TimeSeconds(_) => "time",
         PropertyValue::MassPounds(_) => "mass",
+        PropertyValue::ThermalTransmittance(_) => "thermal_transmittance",
         PropertyValue::List(_) => "list",
         PropertyValue::Enumerated(_) => "text",
     }

@@ -511,24 +511,96 @@ fn data_object_owner(objects: &[(usize, DataObject)], at: usize) -> Option<u32> 
         .map(|(_, object)| object.element_id)
 }
 
-/// [`scan_integer_parameter`] for each of `parameters` at once: each entry's
-/// owner is taken from the stream's data objects, memoised on the handle
-/// ([`RevitFile::partition_data_objects`], B80), instead of searching back
-/// from every entry. The latest partition's copy is taken, and an element
-/// whose entries there disagree gets nothing (#800).
+/// [`scan_integer_parameter`] for each of `parameters` at once
+/// ([`scan_parameter_entries`] with [`EntryKind::Word`]).
 pub fn scan_integer_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
     elements: &BTreeSet<u32>,
     parameters: &[i64],
 ) -> BTreeMap<i64, BTreeMap<u32, u32>> {
+    let wanted: Vec<(i64, EntryKind)> = parameters
+        .iter()
+        .map(|&parameter| (parameter, EntryKind::Word))
+        .collect();
+    scan_parameter_entries(rf, revit_version, elements, &wanted)
+        .into_iter()
+        .map(|(parameter, values)| {
+            let words = values
+                .into_iter()
+                .filter_map(|(element, value)| match value {
+                    EntryValue::Word(word) => Some((element, word)),
+                    _ => None,
+                })
+                .collect();
+            (parameter, words)
+        })
+        .collect()
+}
+
+/// How a parameter's value is stored after (or before) its key in an
+/// element's own data object, on Revit 2024 and later (RE-194).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryKind {
+    /// `parameter (i64) · u32 value`: a Yes/No or integer parameter (RE-158).
+    Word,
+    /// `parameter (i64) · u32 n · UTF-16 × n`: a text parameter of 1 to 256
+    /// characters (RE-156).
+    Text,
+    /// `f64 value · parameter (i64)`: a number, a length in feet or another
+    /// quantity in its SI unit, immediately before its key (RE-194).
+    Real,
+}
+
+/// A parameter's value as [`EntryKind`] reads it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EntryValue {
+    /// [`EntryKind::Word`].
+    Word(u32),
+    /// [`EntryKind::Text`].
+    Text(String),
+    /// [`EntryKind::Real`], a finite number.
+    Real(f64),
+}
+
+fn read_entry(buf: &[u8], hit: usize, kind: EntryKind) -> Option<EntryValue> {
+    match kind {
+        EntryKind::Word => read_u32(buf, hit + 8).map(EntryValue::Word),
+        EntryKind::Text => utf16_entry(buf, hit + 8, 256).map(EntryValue::Text),
+        EntryKind::Real => {
+            let bits = read_u64(buf, hit.checked_sub(8)?)?;
+            Some(f64::from_bits(bits))
+                .filter(|value| value.is_finite())
+                .map(EntryValue::Real)
+        }
+    }
+}
+
+/// Each element of `elements`' value of each of `parameters`, a project or
+/// shared parameter's ElementId (or a BuiltInParameter) with how its value is
+/// stored, by parameter and ElementId, on Revit 2024 and later: the entry with
+/// the parameter's key in the element's own data object (RE-153), the
+/// innermost one holding it among the stream's data objects, memoised on the
+/// handle ([`RevitFile::partition_data_objects`], B80). Only the payloads of
+/// the elements' own objects are searched. The latest partition's copy is
+/// taken, and an element whose entries there disagree gets nothing (#800).
+pub fn scan_parameter_entries(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: &BTreeSet<u32>,
+    parameters: &[(i64, EntryKind)],
+) -> BTreeMap<i64, BTreeMap<u32, EntryValue>> {
     if revit_version < 2024 || elements.is_empty() || parameters.is_empty() {
         return BTreeMap::new();
     }
-    let mut found: BTreeMap<i64, LatestCopy<u32>> = parameters
+    let keys: Vec<[u8; 8]> = parameters
         .iter()
-        .map(|&parameter| (parameter, LatestCopy::default()))
+        .map(|(parameter, _)| parameter.to_le_bytes())
         .collect();
+    let finders: Vec<memchr::memmem::Finder<'_>> =
+        keys.iter().map(memchr::memmem::Finder::new).collect();
+    let mut found: Vec<LatestCopy<EntryValue>> =
+        parameters.iter().map(|_| LatestCopy::default()).collect();
     for stream in rf.partition_stream_names() {
         let (Ok(inflated), Ok(objects)) = (
             rf.inflated_partition(&stream),
@@ -538,24 +610,36 @@ pub fn scan_integer_parameters(
         };
         let partition = partition_number(&stream);
         let buf = inflated.bytes();
-        for (parameter, latest) in found.iter_mut() {
-            let tag = parameter.to_le_bytes();
-            for hit in memchr::memmem::find_iter(buf, &tag) {
-                let Some(value) = read_u32(buf, hit + tag.len()) else {
-                    continue;
-                };
-                let Some(element) =
-                    data_object_owner(&objects, hit).filter(|id| elements.contains(id))
-                else {
-                    continue;
-                };
-                latest.offer(element, partition, value);
+        for (start, object) in objects.iter() {
+            if !elements.contains(&object.element_id) {
+                continue;
+            }
+            let payload_start = start + DATA_OBJECT_HEADER;
+            let Some(payload) = buf.get(payload_start..object.end) else {
+                continue;
+            };
+            for ((finder, (_, kind)), latest) in
+                finders.iter().zip(parameters).zip(found.iter_mut())
+            {
+                for hit in finder.find_iter(payload) {
+                    let at = payload_start + hit;
+                    if data_object_owner(&objects, at) != Some(object.element_id) {
+                        continue;
+                    }
+                    if *kind == EntryKind::Real && hit < 8 {
+                        continue;
+                    }
+                    if let Some(value) = read_entry(buf, at, *kind) {
+                        latest.offer(object.element_id, partition, value);
+                    }
+                }
             }
         }
     }
-    found
-        .into_iter()
-        .map(|(parameter, latest)| (parameter, latest.into_values()))
+    parameters
+        .iter()
+        .zip(found)
+        .map(|((parameter, _), latest)| (*parameter, latest.into_values()))
         .collect()
 }
 

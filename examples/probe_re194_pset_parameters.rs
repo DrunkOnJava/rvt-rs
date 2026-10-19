@@ -1,13 +1,23 @@
 //! RE-194: the values of a project's parameters named `<property set>.<property>`.
 //!
+//! FACT: on the BIM4LCA office (Revit 2024), the value of each parameter
+//! named for a property set's property sits in the element's own data object
+//! beside the parameter's ElementId: a Yes/No or integer as the `u32` after
+//! it, a text as `u32 n · UTF-16 × n` after it, a number as the `f64`
+//! immediately before it (a length in feet, a thermal transmittance in
+//! W/(m²·K)). Wherever Revit's export writes such a property on an element
+//! carrying the parameter, its value is that one, and it is on the element
+//! itself, not on its type. Verify with the Measure workflow, `-f nordic=true
+//! -f probe=probe_re194_pset_parameters -f probe_scorer=pset_parameters_vs_ifc`.
+//!
 //! Revit's IFC exporter reads a parameter named for a property set's property
 //! (`Pset_WallCommon.FireRating`) on an element before anything else, as RE-193
 //! measured for `IsExternal` (revit-ifc's pset definitions, CLEANROOM.md
-//! source 5). The BIM4LCA office defines 63 such parameters. The probe finds
-//! every project and shared parameter whose name starts with `Pset_`
-//! (RE-156's definitions), and prints one JSON line per element of the
-//! partition decode with each such parameter's entry in the element's own
-//! data object (RE-153), read every way a value has been seen stored:
+//! source 5). The BIM4LCA office defines such parameters for fifteen property
+//! sets. The probe finds every project and shared parameter whose name starts
+//! with `Pset_` (RE-156's definitions), and prints one JSON line per element
+//! of the partition decode with each such parameter's entry in the element's
+//! own data object (RE-153), read every way a value has been seen stored:
 //!
 //! - `int`: the `u32` after the key, as a Yes/No or integer entry (RE-158);
 //! - `text`: `u32 n · UTF-16 × n` after the key (RE-156);

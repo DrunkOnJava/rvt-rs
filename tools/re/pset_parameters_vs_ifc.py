@@ -49,7 +49,10 @@ def revit_values(path):
                     values[(set_name, key)] = (value, product.is_a(), where)
         if not values:
             continue
-        tag = getattr(product, "Tag", None) if product.is_a("IfcElement") else None
+        # A door's or window's opening carries the door's Tag; the door is the
+        # element the parameter is on.
+        element = product.is_a("IfcElement") and not product.is_a("IfcFeatureElementSubtraction")
+        tag = getattr(product, "Tag", None) if element else None
         if tag:
             by_tag[str(tag)] = values
         by_global_id[product.GlobalId] = values

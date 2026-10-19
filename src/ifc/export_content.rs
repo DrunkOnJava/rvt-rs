@@ -1018,12 +1018,20 @@ pub fn append_typed_production_elements(
             }
         }
         // RE-154: the common property sets' Reference, the type's name;
-        // RE-156: the shared parameter Serial Number.
-        for set in reference_sets.into_iter().chain(serial_sets) {
-            entities.push(entities::IfcEntity::ElementPropertySet {
-                element: entity_index,
-                set,
-            });
+        // RE-156: the shared parameter Serial Number; RE-194: the parameters
+        // named for a standard set's property, last, as Revit's exporter
+        // reads them before anything else.
+        let named_sets = if opening_only {
+            Vec::new()
+        } else {
+            named_parameter_sets(&decoded, &ifc_type)
+        };
+        for set in reference_sets
+            .into_iter()
+            .chain(serial_sets)
+            .chain(named_sets)
+        {
+            add_element_set(entities, entity_index, set);
         }
     }
 
@@ -1685,6 +1693,91 @@ fn add_covering_finish(sets: &mut [PropertySet], ifc_type: &str, decoded: &Decod
             name: "Finish".into(),
             value: PropertyValue::Text(finish),
         });
+    }
+}
+
+/// The sets of the parameters named `<property set>.<property>` an element
+/// carries (RE-194), as Revit's exporter writes them on the element itself:
+/// each standard set that applies to `ifc_type`, with the properties of it
+/// listed in [`super::standard_property_sets`], each as the IFC4 type it
+/// declares. `IsExternal` is [`add_is_external`]'s.
+fn named_parameter_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<PropertySet> {
+    use super::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
+    use crate::partition_schema_mvp as mvp;
+    let mut sets: Vec<PropertySet> = Vec::new();
+    for (field, value) in &decoded.fields {
+        let Some((set, property)) = field
+            .strip_prefix(mvp::NAMED_PARAMETER_FIELD_PREFIX)
+            .and_then(|name| name.split_once('.'))
+        else {
+            continue;
+        };
+        if property == mvp::IS_EXTERNAL_PARAMETER_NAME || !sps::applies_to(set, ifc_type) {
+            continue;
+        }
+        let value = match (sps::property_kind(set, property), value) {
+            (Some(Kind::Boolean), InstanceField::Bool(flag)) => PropertyValue::Boolean(*flag),
+            (Some(Kind::Identifier), InstanceField::String(text)) => {
+                PropertyValue::Identifier(text.clone())
+            }
+            (Some(Kind::Label), InstanceField::String(text)) => PropertyValue::Label(text.clone()),
+            (Some(Kind::Text), InstanceField::String(text)) => PropertyValue::Text(text.clone()),
+            (Some(Kind::Count), InstanceField::Integer { value, .. }) => {
+                PropertyValue::CountValue(*value)
+            }
+            (Some(Kind::Length), InstanceField::Float { value, .. }) => {
+                PropertyValue::LengthFeet(*value)
+            }
+            (Some(Kind::PositiveLength), InstanceField::Float { value, .. }) => {
+                PropertyValue::PositiveLengthFeet(*value)
+            }
+            (Some(Kind::ThermalTransmittance), InstanceField::Float { value, .. }) => {
+                PropertyValue::ThermalTransmittance(*value)
+            }
+            _ => continue,
+        };
+        let property = Property {
+            name: property.into(),
+            value,
+        };
+        match sets.iter_mut().find(|held| held.name == set) {
+            Some(held) => held.properties.push(property),
+            None => sets.push(PropertySet {
+                name: set.into(),
+                properties: vec![property],
+            }),
+        }
+    }
+    sets
+}
+
+/// Give the element at `element` among `entities` the set `set`: merged into
+/// the set of the same name already given to it, each property replacing one
+/// of the same name there, else as a set of its own.
+fn add_element_set(entities: &mut Vec<entities::IfcEntity>, element: usize, set: PropertySet) {
+    let held = entities
+        .iter_mut()
+        .skip(element)
+        .find_map(|entity| match entity {
+            entities::IfcEntity::ElementPropertySet {
+                element: owner,
+                set: held,
+            } if *owner == element && held.name == set.name => Some(held),
+            _ => None,
+        });
+    let Some(held) = held else {
+        entities.push(entities::IfcEntity::ElementPropertySet { element, set });
+        return;
+    };
+    for property in set.properties {
+        match held
+            .properties
+            .iter_mut()
+            .find(|existing| existing.name == property.name)
+        {
+            Some(existing) => *existing = property,
+            None => held.properties.push(property),
+        }
     }
 }
 
