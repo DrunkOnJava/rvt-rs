@@ -38,11 +38,17 @@ from opening_boxes_vs_ifc import site_frame  # noqa: E402
 
 SETTINGS = ifcopenshell.geom.settings()
 SETTINGS.set("use-world-coords", True)
+# A host wall's box is taken before its openings are cut out of it: only the
+# wall's extent across and along is read, and cutting a wall's openings is
+# most of the time meshing it takes.
+WALL_SETTINGS = ifcopenshell.geom.settings()
+WALL_SETTINGS.set("use-world-coords", True)
+WALL_SETTINGS.set("disable-opening-subtractions", True)
 
 
-def box(frame, element):
+def box(frame, element, settings=SETTINGS):
     try:
-        shape = ifcopenshell.geom.create_shape(SETTINGS, element)
+        shape = ifcopenshell.geom.create_shape(settings, element)
     except Exception:
         return None
     verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
@@ -74,7 +80,7 @@ def doors(path, with_hosts, cls):
             continue
         wall = host.get(door.id())
         if wall is not None and wall.id() not in walls:
-            walls[wall.id()] = box(frame, wall)
+            walls[wall.id()] = box(frame, wall, WALL_SETTINGS)
         out[door.Tag] = (b, walls[wall.id()] if wall is not None else None)
     return out
 
