@@ -4,7 +4,8 @@
 `examples/probe_re194_pset_parameters.rs` prints, per element, the entry of
 each project or shared parameter whose name starts with `Pset_` in the
 element's own data object, read as an integer (`int`), as text (`text`) and as
-an `f64` after the key (`after`) or before an `ff` x 8 run (`before`). Revit's
+an `f64` after the key (`after`), before an `ff` x 8 run (`before`) or just
+before the key (`just_before`). Revit's
 exporter writes such a parameter as the property it names (`Pset_WallCommon.
 FireRating` on a wall), before anything else (RE-193). This pairs each element
 with Revit's of the same Tag, else GlobalId, and counts per parameter which
@@ -62,7 +63,7 @@ def matches(revit, reading, scale):
     if isinstance(revit, str):
         return "text" if reading.get("text") == revit else None
     if isinstance(revit, (int, float)):
-        for key in ("after", "before"):
+        for key in ("after", "before", "just_before"):
             value = reading.get(key)
             if value is None:
                 continue

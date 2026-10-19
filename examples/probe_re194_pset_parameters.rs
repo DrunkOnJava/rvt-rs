@@ -13,7 +13,8 @@
 //! - `text`: `u32 n · UTF-16 × n` after the key (RE-156);
 //! - `after`: the `f64` after the key;
 //! - `before`: the `f64` 16 bytes before the key where `ff` × 8 sits between,
-//!   as a type's lengths are stored (RE-77).
+//!   as a type's lengths are stored (RE-77);
+//! - `just_before`: the `f64` immediately before the key.
 //!
 //! Where an element's copies in several partitions hold an entry, the latest
 //! partition's is printed (#800). A first line names the parameters.
@@ -76,6 +77,7 @@ fn readings(payload: &[u8], hit: usize) -> Value {
         "text": text_at(payload, hit + 8),
         "after": f64_at(payload, hit + 8),
         "before": before,
+        "just_before": hit.checked_sub(8).and_then(|at| f64_at(payload, at)),
     })
 }
 
