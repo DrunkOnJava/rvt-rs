@@ -1,10 +1,14 @@
-//! B44 (#35): a pipe fitting's `Pset_PipeFittingTypeCommon.NominalDiameter`.
+//! B44 (#35, #822): a pipe fitting's nominal diameter is Revit's.
 //!
-//! Revit's export of RE1 Plumbing gives each of its 42 pipe fittings a
-//! `NominalDiameter`, an `IfcPropertyListValue` of one
-//! `IfcPositiveLengthMeasure` (10 to 50 mm). For every element Revit's export
-//! gives one, rvt-rs must write the same list on the element of the same `Tag`,
-//! each length within a relative 1e-5.
+//! Revit's IFC2X3 export (Coordination View 2.0) of RE1 Plumbing gives each of
+//! its 42 pipe fittings `Pset_PipeFittingTypeCommon.NominalDiameter`
+//! ([`REVIT_SET`]), an `IfcPropertyListValue` of one
+//! `IfcPositiveLengthMeasure` (10 to 50 mm). IFC4's `Pset_PipeFittingTypeCommon`
+//! has no `NominalDiameter`, and Revit's IFC4 Reference View export writes none
+//! of the port sets that hold one, so rvt-rs writes it as one length in its own
+//! set ([`SET`]). For every element Revit's export gives one, rvt-rs must write
+//! the same length on the element of the same `Tag`, within a relative 1e-5,
+//! and none in [`REVIT_SET`].
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Plumbing.rvt` and
 //! `RE1-Mechanical.rvt` with their `RE1-*.ifc` exports. Skips what is absent.
@@ -83,9 +87,15 @@ fn metres_per_unit(ents: &BTreeMap<u64, (String, String)>) -> f64 {
         .unwrap_or(1.0)
 }
 
-/// Each element's `Tag` and its `Pset_PipeFittingTypeCommon.NominalDiameter`
-/// list, in metres; `None` where the property is not a list of lengths.
-fn nominal_diameters(step: &str) -> BTreeMap<String, Option<Vec<f64>>> {
+/// The IFC2X3 set holding a fitting's `NominalDiameter` in Revit's export.
+const REVIT_SET: &str = "Pset_PipeFittingTypeCommon";
+/// rvt-rs's own set holding it in its IFC4 export.
+const SET: &str = "RvtElementRecordGeometry";
+
+/// Each element's `Tag` and its `NominalDiameter` in `set`, in metres: a
+/// list's lengths, or a single length as a list of one; `None` where the
+/// property is neither.
+fn nominal_diameters(step: &str, set: &str) -> BTreeMap<String, Option<Vec<f64>>> {
     let ents = entities(step);
     let scale = metres_per_unit(&ents);
     let mut out = BTreeMap::new();
@@ -103,7 +113,7 @@ fn nominal_diameters(step: &str) -> BTreeMap<String, Option<Vec<f64>>> {
         };
         let sf = split_args(set_args);
         if set_entity != "IFCPROPERTYSET"
-            || sf.get(2).map(|n| n.trim()) != Some("'Pset_PipeFittingTypeCommon'")
+            || sf.get(2).map(|n| n.trim().trim_matches('\'')) != Some(set)
         {
             continue;
         }
@@ -117,20 +127,28 @@ fn nominal_diameters(step: &str) -> BTreeMap<String, Option<Vec<f64>>> {
         else {
             continue;
         };
-        let values = (property_entity == "IFCPROPERTYLISTVALUE").then(|| {
-            let list = split_args(property_args)
-                .get(2)
-                .cloned()
-                .unwrap_or_default();
-            split_args(list.trim().trim_start_matches('(').trim_end_matches(')'))
-                .iter()
-                .filter_map(|item| {
-                    let inner = item.trim().strip_prefix("IFCPOSITIVELENGTHMEASURE(")?;
-                    inner.trim_end_matches(')').parse::<f64>().ok()
-                })
+        let length = |item: &str| {
+            let inner = item.trim().strip_prefix("IFCPOSITIVELENGTHMEASURE(")?;
+            inner
+                .trim_end_matches(')')
+                .parse::<f64>()
+                .ok()
                 .map(|v| v * scale)
-                .collect::<Vec<f64>>()
-        });
+        };
+        let value = split_args(property_args)
+            .get(2)
+            .cloned()
+            .unwrap_or_default();
+        let values = match property_entity.as_str() {
+            "IFCPROPERTYLISTVALUE" => Some(
+                split_args(value.trim().trim_start_matches('(').trim_end_matches(')'))
+                    .iter()
+                    .filter_map(|item| length(item.as_str()))
+                    .collect::<Vec<f64>>(),
+            ),
+            "IFCPROPERTYSINGLEVALUE" => length(&value).map(|v| vec![v]),
+            _ => None,
+        };
         for object in references(f.get(4).map(String::as_str).unwrap_or("")) {
             let Some((_, oa)) = ents.get(&object) else {
                 continue;
@@ -162,13 +180,22 @@ fn re1_fitting_nominal_diameters_are_revits() {
             eprintln!("skipping RE1 {model}: model or reference export absent");
             continue;
         }
-        let theirs =
-            nominal_diameters(&std::fs::read_to_string(&reference).expect("reference IFC"));
+        let theirs = nominal_diameters(
+            &std::fs::read_to_string(&reference).expect("reference IFC"),
+            REVIT_SET,
+        );
         let mut rf = RevitFile::open(&rvt).expect("open");
         let result = RvtDocExporter
             .export_with_diagnostics(&mut rf)
             .expect("export");
-        let ours = nominal_diameters(&write_step(&result.model));
+        let step = write_step(&result.model);
+        let ours = nominal_diameters(&step, SET);
+        let legacy = nominal_diameters(&step, REVIT_SET).len();
+        if legacy > 0 {
+            failures.push(format!(
+                "RE1 {model}: rvt-rs writes {legacy} fittings' NominalDiameter in {REVIT_SET}, which IFC4 gives none"
+            ));
+        }
         let mut wrong = Vec::new();
         for (tag, revit) in &theirs {
             let Some(revit) = revit else {
