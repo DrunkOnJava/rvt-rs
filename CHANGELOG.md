@@ -26,6 +26,21 @@ All notable changes will be documented here. This project follows
   count read from arbitrary bytes by 12 before checking it against its
   64-entry limit; the count is now checked first.
 
+### Removed
+
+- **`ifc::pset_validate` and `docs/ifc/pset-mapping-examples.yaml` (#831).**
+  The module classified property set names against a hand-written list of
+  seven sets, so it called every other IFC4 set rvt-rs writes, such as
+  `Pset_SpaceCommon` and `Pset_EnvironmentalImpactIndicators`, unknown, and
+  both still said typed doors were unsupported (RE-19), though doors are
+  typed from their element records' `BuiltInCategory` and exported as
+  `IfcDoor`. Nothing in the crate, its binaries, the Python bindings or the
+  viewer called it. The exporter takes the IFC4 sets it writes from
+  `ifc::standard_property_sets` (#821), and Measure checks every export's
+  standard sets against buildingSMART's definitions (#826). The module was
+  public, so code that used it stops compiling, and the next release is a
+  minor one.
+
 ## [0.6.0] — 2026-10-19
 
 rvt-rs writes IFC4, and 0.6.0 makes its property sets IFC4's. 0.5 took some

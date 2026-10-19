@@ -114,7 +114,6 @@ pub mod from_decoded;
 pub mod gltf;
 pub mod measure;
 pub mod pbr;
-pub mod pset_validate;
 pub mod saved_meshes;
 pub mod scene_graph;
 pub mod schedule_csv;
