@@ -747,6 +747,11 @@ pub fn append_typed_production_elements(
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded, &ifc_type);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
+        let named_sets = if opening_only {
+            Vec::new()
+        } else {
+            named_parameter_sets(&decoded, &ifc_type)
+        };
         // RE-151: the name of the openings of a floor's tagged voids.
         // B55: the openings a wall's edited elevation profile cuts, in the
         // wall's plane relative to its placement.
@@ -1021,11 +1026,6 @@ pub fn append_typed_production_elements(
         // RE-156: the shared parameter Serial Number; RE-194: the parameters
         // named for a standard set's property, last, as Revit's exporter
         // reads them before anything else.
-        let named_sets = if opening_only {
-            Vec::new()
-        } else {
-            named_parameter_sets(&decoded, &ifc_type)
-        };
         for set in reference_sets
             .into_iter()
             .chain(serial_sets)
