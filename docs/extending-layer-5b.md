@@ -247,9 +247,12 @@ steps:
                .collect();
            // Every instance the oracle holds, from either carrier: production
            // skips an instance the decoder rejects or never scores, so a
-           // missing id is a dropped row.
-           let ids: std::collections::BTreeSet<u32> =
-               elements.iter().filter_map(|e| e.id).collect();
+           // missing id is a dropped row. Production also yields a candidate
+           // whose ElementId it cannot resolve, so a row without one fails.
+           let ids: std::collections::BTreeSet<u32> = elements
+               .iter()
+               .map(|e| e.id.unwrap_or_else(|| panic!("{year}: a MyClass row without an ElementId")))
+               .collect();
            assert_eq!(ids, oracle_myclass_ids(year), "{year}: MyClass ElementIds");
            for e in &elements {
                if e.provenance.record_kind.as_deref() == Some("schema_instance") {
