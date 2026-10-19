@@ -40,15 +40,15 @@ fn main() {
         let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR").unwrap_or_else(|_| {
             concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into()
         });
+        let families = std::env::var("RVT_SAMPLES_DIR").unwrap_or_else(|_| {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").into()
+        });
         vec![
             PathBuf::from(format!("{project_dir}/Revit_IFC5_Einhoven.rvt")),
             PathBuf::from(format!("{project_dir}/2024_Core_Interior.rvt")),
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("_corpus/examples/Autodesk/rac_basic_sample_family-2016.rfa"),
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"),
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("_corpus/examples/Autodesk/racbasicsamplefamily-2026.rfa"),
+            PathBuf::from(format!("{families}/rac_basic_sample_family-2016.rfa")),
+            PathBuf::from(format!("{families}/racbasicsamplefamily-2024.rfa")),
+            PathBuf::from(format!("{families}/racbasicsamplefamily-2026.rfa")),
         ]
     } else {
         args.into_iter().map(PathBuf::from).collect()
