@@ -125,6 +125,13 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **Each piece of an element written in pieces carries the element's
+  property sets (#816).** An element whose sketch has separate loops is one
+  entity per piece (#331), and every set it gets after its body went on the
+  first piece only, among them `Reference`, `IsExternal`, `Serial Number`,
+  the level and stair sets and the parameters named for a standard set.
+  Revit's export gives each piece all of them, as its export of Snowdon
+  Towers' architectural model shows on its 19 elements in pieces.
 - **A room with no number is named, typed and referred to as Revit's export
   does it (RE-196).** A room's number and name were read only as two
   non-empty texts, so a room with no number got neither: its space was
