@@ -1844,12 +1844,13 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
     }
 }
 
-/// A room's `Pset_SpaceCommon` (RE-153), as Revit's export writes it:
-/// `Reference` (`IfcIdentifier`) its name and number, and `FloorCovering`
-/// (`IfcLabel`) its Floor Finish. `None` when neither was read.
+/// A room's or an Area's `Pset_SpaceCommon` (RE-153, #763), as Revit's
+/// export writes it: `Reference` (`IfcIdentifier`) its name and number, and
+/// a room's `FloorCovering` (`IfcLabel`) its Floor Finish. `None` when
+/// neither was read.
 fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     use crate::partition_schema_mvp as mvp;
-    if decoded.class != "Room" {
+    if decoded.class != "Room" && decoded.class != "Area" {
         return None;
     }
     let text = |wanted: &str| {
