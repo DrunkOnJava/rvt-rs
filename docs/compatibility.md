@@ -15,7 +15,7 @@ Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file pe
 
 | Revit release | `BasicFileInfo` year | `Partitions/NN` marker | OLE + schema + metadata | Schema-directed walker (ADocument) |
 |---|---|---|---|---|
-| 2015 | 2015 | none in the corpus | yes, on the sample projects | not measured |
+| 2015 | 2015 | none in the corpus | partial: the container, streams, schema and `BasicFileInfo` on the sample projects; PartAtom and the preview are not measured | not measured |
 | 2016 | 2016 | Partitions/58 | full | partial |
 | 2017 | 2017 | Partitions/60 | full | partial |
 | 2018 | 2018 | Partitions/61 | full | partial |
@@ -27,7 +27,7 @@ Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file pe
 | 2024 | 2024 | Partitions/67 | full | full |
 | 2025 | 2025 | Partitions/68 | full | full |
 | 2026 | 2026 | Partitions/69 | full | full |
-| 2027 | 2027 | none in the corpus | yes, on the sample projects | not measured |
+| 2027 | 2027 | none in the corpus | partial: the container, streams, schema and `BasicFileInfo` on the sample projects; PartAtom and the preview are not measured | not measured |
 
 Column definitions:
 

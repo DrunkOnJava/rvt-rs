@@ -21,11 +21,12 @@ apart:
    2024 and 2025 project files, and Revit 2023 ones with their bounding boxes
    only (RE-81). Experimentally, Revit 2026 ones, measured so on one project
    (RE-124), and Revit 2015 to 2022 and 2027 ones, which have no Revit export
-   to compare and are measured against the same sample projects saved by a
-   neighbouring release instead: a 2027 project's ElementIds and classes are
-   its 2026 copy's, and on 2015 to 2022 every ElementId shared with the copy
-   keeps its class, with the copy's building elements class for class where
-   Autodesk did not edit the model between releases (the table below).
+   to compare and are measured against the same sample projects saved by
+   Revit 2019 (for 2015 to 2018), 2023 (for 2019 to 2022) and 2026 (for 2027)
+   instead: a 2027 project's ElementIds and classes are its 2026 copy's, and
+   on 2015 to 2022 every ElementId shared with the copy keeps its class, with
+   the copy's building elements class for class where Autodesk did not edit
+   the model between releases (the table below).
 3. **Geometry.** An element's body. Exact where the element's data is decoded
    (the table below), otherwise its bounding box, and the export diagnostics
    say which.
@@ -106,7 +107,7 @@ Revit leaves them out.
 ## Not supported
 
 - Converting an arbitrary Revit model to IFC with Revit-grade fidelity.
-- Element records of releases other than 2015 to 2027 (2015 to 2022, 2026 and 2027 are experimental: 2026 measured on one project, RE-124, and, on `main`, 2027 against the 2026 copies of Autodesk's sample projects, with no Revit 2027 export, RE-181, 2019 to 2022 against their 2023 copies, with no Revit export of those releases, RE-180, and 2016 to 2018 against their 2019 copies, RE-181, with 2015 read on three of Autodesk's Revit 2015 templates). On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
+- Element records of releases other than 2015 to 2027. Of those, 2015 to 2022, 2026 and 2027 are experimental: 2026 is measured on one project against Revit's export (RE-124), and since 0.6.0 2027 against the 2026 copies of Autodesk's sample projects (RE-179), 2019 to 2022 against their 2023 copies (RE-180), and 2015 to 2018 against their 2019 copies (RE-181), none with a Revit export of its own release. On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
 - Door/Window typing from the opening-index rows (RE-19) and Level ElementIds

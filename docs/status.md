@@ -76,10 +76,11 @@ colour (RE-116). On Revit 2026 projects, experimentally since 0.5.0, it reads
 typed elements, storeys, rooms, doors and windows, type names and layer sets,
 measured on one project against Revit's own export (RE-124). On projects
 saved by Revit 2015 to 2022 and by Revit 2027, experimentally since 0.6.0, it
-exports their elements, measured against the same models saved by the next or
-the previous release rather than against a Revit export of them (RE-179 to
-RE-181). Every other recovery claim is measured against Revit's own IFC export of the
-same file; the measured tables are in the
+exports their elements, measured against the same sample projects saved by
+Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
+2026 (for 2027, RE-179) rather than against a Revit export of them. Every
+other recovery claim is measured against the oracle its report names, Revit's
+own IFC export of the same file wherever one exists; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md).
