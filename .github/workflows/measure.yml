@@ -341,6 +341,21 @@ jobs:
           (cd base && git log -1 --format='%H %s' > ../base-commit.txt && cargo build --profile ci --bin rvt-ifc)
       - name: Fetch the reference models
         run: tools/fetch-reference-models.sh models
+      # The office models land beside the reference models, so they are timed
+      # with them. The host being down is NOT MEASURED, as for the other jobs.
+      - name: Fetch the BIM4LCA office models
+        if: inputs.nordic
+        shell: bash
+        run: |
+          set +e
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ;;
+            *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
+          esac
       - name: Fetch Autodesk's sample projects
         if: inputs.samples
         env:
