@@ -21,7 +21,10 @@ fn decompress(path: &PathBuf) -> anyhow::Result<Vec<u8>> {
 fn main() -> anyhow::Result<()> {
     let sample_dir = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "samples/_phiag/examples/Autodesk".to_string());
+        .or_else(|| std::env::var("RVT_SAMPLES_DIR").ok())
+        .unwrap_or_else(|| {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/_corpus/examples/Autodesk").to_string()
+        });
 
     let mut per_release: Vec<(String, Vec<u8>)> = Vec::new();
     for v in 2016..=2026 {
