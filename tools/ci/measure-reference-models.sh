@@ -194,9 +194,11 @@ measure_model() { # name rvt ref
 
 family_dir() { echo "$OUT/family-$(basename "$1" .rfa)"; }
 measure_family() { # family
-  local dir
+  local dir item_started
+  item_started=$(date +%s%N)
   dir=$(family_dir "$1"); mkdir -p "$dir"
-  info "$1" "$dir"
+  timed "$dir" rvt-info info "$1" "$dir"
+  finished "$dir" "$(basename "$1")" "$item_started"
 }
 
 # Autodesk's sample projects (research/autodesk-sample-projects.tsv), one per
