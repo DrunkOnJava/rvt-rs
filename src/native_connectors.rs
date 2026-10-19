@@ -43,8 +43,10 @@ fn element_id(value: &serde_json::Value) -> Option<u64> {
 
 /// The IFC4 `PredefinedType` of a port on a connector of Revit's `domain`
 /// (#828): HVAC `DUCT`, electrical `CABLE`, piping `PIPE`, as Revit's IFC4
-/// export types the ports of the BIM4LCA office, and `NOTDEFINED` for any
-/// other, as Revit's exporter does (revit-ifc `ConnectorExporter`).
+/// export types the ports of the BIM4LCA office, and `NOTDEFINED` for an
+/// undefined domain, as Revit's exporter types it (revit-ifc
+/// `ConnectorExporter`; a cable tray or conduit connector, which it types
+/// `CABLECARRIER`, has no port, RE-169).
 pub fn port_type_of_domain(domain: i64) -> &'static str {
     match domain {
         1 => "DUCT",
@@ -57,9 +59,10 @@ pub fn port_type_of_domain(domain: i64) -> &'static str {
 /// The IFC4 `FlowDirection` of a port on a connector of Revit's `domain`
 /// (RE-197): `SOURCEANDSINK` for every domain but HVAC and piping, which
 /// alone give a connector a direction in Revit's exporter (revit-ifc
-/// `ConnectorExporter`), as on every electrical port of the RE1 models and
-/// the BIM4LCA office. `None` for HVAC and piping: their connector's
-/// direction is the family's, which rvt-rs does not read.
+/// `ConnectorExporter`); measured on electrical connectors, every port of
+/// which is `SOURCEANDSINK` in Revit's exports of the RE1 models and the
+/// BIM4LCA office. `None` for HVAC and piping: their connector's direction
+/// is the family's, which rvt-rs does not read.
 pub fn port_flow_direction_of_domain(domain: i64) -> Option<&'static str> {
     match domain {
         1 | 3 => None,
