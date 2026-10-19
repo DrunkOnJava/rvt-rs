@@ -1579,12 +1579,59 @@ fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<
     .collect()
 }
 
-/// Add `IsExternal` (`IfcBoolean`) to a door's `Pset_DoorCommon` or a
-/// slab's `Pset_SlabCommon` among `sets`, from its type's Function, 0
-/// interior or 1 exterior (RE-158), starting the set when the element has
-/// none (no type name for its `Reference`). Nothing for another Function,
-/// which RE1 does not show, when the type's Function was not read, or for a
-/// door written as its opening alone (RE-84).
+/// The common property set Revit's export writes `IsExternal` in on an
+/// element exported as `ifc_type` (RE-193).
+fn is_external_set(ifc_type: &str) -> Option<&'static str> {
+    Some(match ifc_type {
+        "IFCWALL" | "IFCWALLSTANDARDCASE" => "Pset_WallCommon",
+        "IFCCURTAINWALL" => "Pset_CurtainWallCommon",
+        "IFCDOOR" => "Pset_DoorCommon",
+        "IFCWINDOW" => "Pset_WindowCommon",
+        "IFCSLAB" => "Pset_SlabCommon",
+        "IFCROOF" => "Pset_RoofCommon",
+        "IFCCOLUMN" => "Pset_ColumnCommon",
+        "IFCBEAM" => "Pset_BeamCommon",
+        "IFCMEMBER" => "Pset_MemberCommon",
+        "IFCPLATE" => "Pset_PlateCommon",
+        "IFCCOVERING" => "Pset_CoveringCommon",
+        "IFCRAILING" => "Pset_RailingCommon",
+        "IFCRAMP" => "Pset_RampCommon",
+        "IFCSTAIR" => "Pset_StairCommon",
+        "IFCBUILDINGELEMENTPROXY" => "Pset_BuildingElementProxyCommon",
+        "IFCSPACE" => "Pset_SpaceCommon",
+        _ => return None,
+    })
+}
+
+/// An element's `IsExternal` in its common property set `set` (RE-193): the
+/// Yes/No parameter named `<set>.IsExternal` on the element, which revit-ifc's
+/// property set entry reads before anything else (`PropertySetEntry
+/// ("Pset_WallCommon.IsExternal", "IsExternal")` in its pset definitions,
+/// CLEANROOM.md source 5), else the value Revit's exporter calculates
+/// ([`crate::partition_schema_mvp::IS_EXTERNAL_FIELD`]). `None` where neither
+/// is read.
+fn is_external_value(decoded: &DecodedElement, set: &str) -> Option<bool> {
+    use crate::partition_schema_mvp as mvp;
+    let flag = |wanted: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Bool(flag) if name == wanted => Some(*flag),
+            _ => None,
+        })
+    };
+    flag(&format!(
+        "{}{set}.{}",
+        mvp::NAMED_PARAMETER_FIELD_PREFIX,
+        mvp::IS_EXTERNAL_PARAMETER_NAME
+    ))
+    .or_else(|| flag(mvp::IS_EXTERNAL_FIELD))
+}
+
+/// Add `IsExternal` (`IfcBoolean`) to the common property set of the entity
+/// an element is exported as, among `sets` ([`is_external_value`], RE-193),
+/// starting the set when the element has none (no type name for its
+/// `Reference`). Nothing where no value is read, for a door written as its
+/// opening alone (RE-84), or for a space, whose set
+/// [`space_common_property_set`] writes.
 fn add_is_external(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -1594,23 +1641,11 @@ fn add_is_external(
     if opening_only {
         return;
     }
-    let common = match ifc_type {
-        "IFCDOOR" => "Pset_DoorCommon",
-        "IFCSLAB" => "Pset_SlabCommon",
-        _ => return,
+    let Some(common) = is_external_set(ifc_type).filter(|set| *set != "Pset_SpaceCommon") else {
+        return;
     };
-    let function = decoded.fields.iter().find_map(|(name, value)| match value {
-        InstanceField::Integer { value, .. }
-            if name == crate::partition_schema_mvp::TYPE_FUNCTION_FIELD =>
-        {
-            Some(*value)
-        }
-        _ => None,
-    });
-    let external = match function {
-        Some(0) => false,
-        Some(1) => true,
-        _ => return,
+    let Some(external) = is_external_value(decoded, common) else {
+        return;
     };
     let property = Property {
         name: "IsExternal".into(),
@@ -1869,9 +1904,9 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
 }
 
 /// A room's or an Area's `Pset_SpaceCommon` (RE-153, #763), as Revit's
-/// export writes it: `Reference` (`IfcIdentifier`) its name and number, and
-/// a room's `FloorCovering` (`IfcLabel`) its Floor Finish. `None` when
-/// neither was read.
+/// export writes it: `Reference` (`IfcIdentifier`) its name and number, a
+/// room's `FloorCovering` (`IfcLabel`) its Floor Finish, and `IsExternal`
+/// (RE-193). `None` when none was read.
 fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     use crate::partition_schema_mvp as mvp;
     if decoded.class != "Room" && decoded.class != "Area" {
@@ -1899,6 +1934,12 @@ fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
         properties.push(Property {
             name: "FloorCovering".into(),
             value: PropertyValue::Label(finish),
+        });
+    }
+    if let Some(external) = is_external_value(decoded, "Pset_SpaceCommon") {
+        properties.push(Property {
+            name: "IsExternal".into(),
+            value: PropertyValue::Boolean(external),
         });
     }
     (!properties.is_empty()).then(|| PropertySet {
