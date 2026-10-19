@@ -109,6 +109,10 @@ on:
     paths:
       - .github/workflows/measure.yml
       - tools/ci/measure-reference-models.sh
+      # #822: the IFC4 property set check schema() runs, and the pinned
+      # definitions it imports.
+      - tools/ci/ifc4_property_sets.py
+      - tools/ci/gen_standard_property_sets.py
 
 permissions:
   contents: read

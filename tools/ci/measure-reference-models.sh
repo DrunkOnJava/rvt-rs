@@ -14,7 +14,8 @@
 #     IFCOWNERHISTORY lines, which carry the export time, so two builds
 #     that write the same model hash the same;
 #   - schema.txt: the IFC4 schema's findings on the export (C9), its
-#     attribute counts and IfcOpenShell's validation up to 120 MB;
+#     attribute counts and IfcOpenShell's validation up to 120 MB, and its
+#     standard property sets against IFC4's definitions (#822);
 #   - witness-<artifact>.json: the rvt-rs observation committed under
 #     research/witness/<artifact>/observations/rvt-rs.json;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
@@ -97,7 +98,9 @@ info() { # file dir
 
 # C9: the IFC4 schema's view of dir/model.ifc in dir/schema.txt: attribute
 # counts always, IfcOpenShell's full validation up to max_bytes, otherwise
-# marked as skipped.
+# marked as skipped, and the standard property sets against IFC4's
+# definitions, fetched once into PSET_DEFINITIONS (#822).
+PSET_DEFINITIONS="${RUNNER_TEMP:-/tmp}/ifc4-pset-definitions.csv"
 schema() { # dir max_bytes
   {
     echo "arity:"
@@ -109,6 +112,9 @@ schema() { # dir max_bytes
     else
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
+    echo "property sets:"
+    timeout 1200 python "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
+      --definitions "$PSET_DEFINITIONS" 2>&1
   } > "$1/schema.txt"
 }
 
