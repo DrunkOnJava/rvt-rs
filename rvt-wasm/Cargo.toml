@@ -1,6 +1,6 @@
 [package]
 name = "rvt-wasm"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.87"
 license = "Apache-2.0"
