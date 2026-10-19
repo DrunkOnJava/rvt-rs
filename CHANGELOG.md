@@ -224,6 +224,11 @@ fixes a panic in the browser viewer (#835). Thank you.
 
 ### Fixed
 
+- **`rvt-inspect` and `rvt-corpus doctor` take Revit 2015 and 2027 files
+  (#838).** Both reported such a file as an unsupported version before
+  looking at its export, though rvt-rs now reads its element records,
+  experimentally (RE-179, RE-181), as it reads 2019 to 2022, which both
+  already took. Their range is now 2015 to 2027.
 - **The browser viewer no longer panics on a string field whose length is
   corrupt (#835).** On wasm32, where `usize` is 32 bits, a UTF-16 string
   field's end, `4 + 2 × length`, could wrap past its bounds check when the
