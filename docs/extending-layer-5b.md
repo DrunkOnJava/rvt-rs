@@ -26,11 +26,14 @@ programmer plus access to the `phi-ag/rvt` corpus via `_corpus/`
 Adding a decoder for `MyClass` touches these files:
 
 ```
-src/elements/mod.rs          # register the decoder, and route production through it
-src/elements/my_class.rs     # decoder impl + typed view
-tests/myclass_corpus.rs      # the corpus check (Step 5), with its line in
-tests/integration/main.rs    #   the one test binary
-tools/ci/test-targets.txt    #   and its class in the CI manifest
+src/elements/my_class.rs                    # decoder impl + typed view
+src/elements/mod.rs                         # register the decoder, and route production through it
+src/elements/typed_json.rs                  # its typed JSON for the CLI and Python
+tests/python/test_decoded_api.py            # the MVP class list it pins
+docs/schemas/decoded-elements.schema.json   # the typed projection's class list
+tests/myclass_corpus.rs                     # the corpus check (Step 5), with its line in
+tests/integration/main.rs                   #   the one test binary
+tools/ci/test-targets.txt                   #   and its class in the CI manifest
 ```
 
 ### Step 1 — Check the schema
@@ -133,11 +136,18 @@ name, so check that `MyClass` has none yet
 (`grep -rn '"MyClass"' src/elements/`).
 
 Production decoding (`walker::iter_elements`) uses a typed decoder only
-for a class listed in `elements::MVP_TYPED_CLASSES`. There an instance
-the decoder rejects is skipped rather than decoded generically (fail
-closed), and a decoded one carries `provenance.decoder ==
-"MyClassDecoder"`. Add `MyClass` to that list once Step 5's check passes
-on real files; until then the generic decoder reads it.
+for a class listed in `elements::MVP_TYPED_CLASSES`, so add `MyClass`
+there too. Production then decodes each schema instance of it with your
+decoder, marked `provenance.decoder == "MyClassDecoder"`, and skips one
+the decoder rejects rather than decoding it generically (fail closed):
+Step 5's check is what keeps that from dropping real instances. A class
+in that list is also advertised as typed, so the same change:
+
+- adds its arm to `typed_json::mvp_typed_view`, or the CLI and Python
+  give it `typed: null`;
+- adds it to the list `tests/python/test_decoded_api.py` pins and to
+  the typed projection's class list in
+  `docs/schemas/decoded-elements.schema.json`.
 
 ### Step 4 — Write down how it can fail
 
@@ -160,13 +170,18 @@ Every `tests/*.rs` file is a module of one test binary, `integration`
 real-file, CLI, contract or hardening checks. So a new check takes three
 steps:
 
-1. Write `tests/myclass_corpus.rs`. Resolve the corpus through
-   `tests/common` (`RVT_SAMPLES_DIR` for the family corpus), never a
-   hard-coded path. Skip a missing release, but fail on one when
-   `RVT_REQUIRE_CORPUS` is set, as CI sets it. Check that the typed
-   decoder, not the generic one, decoded each instance, and that the
-   fields it reads equal what an oracle gives for the same file:
-   Revit's own IFC export of it, or a value its report measured.
+1. Write `tests/myclass_corpus.rs`. Use the files whose oracle holds
+   `MyClass`: the family corpus (`tests/common`, `RVT_SAMPLES_DIR`), or
+   project files from `RVT_PROJECT_CORPUS_DIR` with Revit's export of
+   each beside them, never a hard-coded path. Skip a missing file, but
+   fail on one when `RVT_REQUIRE_CORPUS` is set, as CI sets it. Require
+   an instance only where the oracle has one. Check that the instances
+   decoded from the schema (`record_kind` `schema_instance`) came from
+   your decoder, not the generic one: `iter_elements` also returns
+   partition records of some classes, which other decoders read. And check that the fields it reads equal
+   the oracle's for the same element.
+
+   The example covers a class every family release holds:
 
    ```rust
    mod common;
@@ -187,12 +202,13 @@ steps:
                continue;
            }
            let mut rf = rvt::RevitFile::open(&path).unwrap();
-           let decoded: Vec<_> = rvt::walker::iter_elements(&mut rf)
+           let from_schema: Vec<_> = rvt::walker::iter_elements(&mut rf)
                .unwrap()
                .filter(|e| e.class == "MyClass")
+               .filter(|e| e.provenance.record_kind.as_deref() == Some("schema_instance"))
                .collect();
-           assert!(!decoded.is_empty(), "{year}: no MyClass decoded");
-           for e in &decoded {
+           assert!(!from_schema.is_empty(), "{year}: no MyClass decoded");
+           for e in &from_schema {
                assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
                // Each field the decoder reads, against the oracle's value
                // for this element (by its ElementId, `e.id`).
@@ -204,6 +220,11 @@ steps:
        );
    }
    ```
+
+   For a class only project files hold, loop over those files instead,
+   resolving each as `tests/elem_table_corpus.rs`'s `project_file`
+   does: it skips an absent file, and fails when `RVT_PROJECT_CORPUS_DIR`
+   is set but the file is not there.
 
 2. Add it to `tests/integration/main.rs`, in name order:
 
