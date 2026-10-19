@@ -64,6 +64,8 @@ def doors(path, with_hosts, cls):
             if wall is not None:
                 host[rel.RelatedBuildingElement.id()] = wall
     out = {}
+    # A wall hosting several doors is meshed once, openings and all.
+    walls = {}
     for door in f.by_type(cls):
         if not door.Tag:
             continue
@@ -71,7 +73,9 @@ def doors(path, with_hosts, cls):
         if b is None:
             continue
         wall = host.get(door.id())
-        out[door.Tag] = (b, box(frame, wall) if wall is not None else None)
+        if wall is not None and wall.id() not in walls:
+            walls[wall.id()] = box(frame, wall)
+        out[door.Tag] = (b, walls[wall.id()] if wall is not None else None)
     return out
 
 
