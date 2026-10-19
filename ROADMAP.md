@@ -71,6 +71,14 @@ the four levels a file can reach are in the
 - **0.5.1, 2026-10-18.** An export is named by the model's file name rather
   than the path it was saved at, which could carry the author's account and
   folder names (#782), and the README names the release it ships in.
+- **0.6.0, 2026-10-19.** The standard property sets are IFC4's: those 0.5
+  took from Revit's IFC2X3 exports moved to where IFC4 and Revit's own IFC4
+  export put them, checked against buildingSMART's published IFC4 property
+  set definitions on every measured export. Exports carry parameters named
+  for a standard set's property, each element's `IsExternal`, type Fire
+  Ratings, door sizes, Revit 2024 Areas as spaces, and port types and
+  directions; Revit 2015 to 2022 and 2027 projects export their elements,
+  experimentally.
 
 ### 0.5.x: IFC geometry, remaining slices
 

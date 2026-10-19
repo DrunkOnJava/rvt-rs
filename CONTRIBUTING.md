@@ -152,7 +152,8 @@ per-area starting points are in
 - **Decoder research.** A byte probe under `examples/` plus a dated evidence
   table for one class or partition pattern (decoder issue form; the reports
   under `reports/element-framing/` show the shape). Typed extraction works on Revit 2023 to 2025 projects, and
-  experimentally on 2026 projects on `main`, and not yet on 2022 and earlier; [`ROADMAP.md`](ROADMAP.md) says what is partial and the
+  experimentally on 2015 to 2022, 2026 and 2027 projects (since 0.5.0 for 2026,
+  0.6.0 for the rest), and not yet on 2014 and earlier; [`ROADMAP.md`](ROADMAP.md) says what is partial and the
   reports under `reports/element-framing/` record the known negatives (RE-19,
   RE-20, RE-121 and others), so check before spending days on one.
 - **Tests that prevent false-positive decode claims**, viewer accessibility,

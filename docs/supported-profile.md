@@ -4,7 +4,7 @@ What rvt-rs can be trusted with today, in the terms a BIM user would check.
 The evidence behind every line is in [`support-matrix.json`](support-matrix.json)
 (`rvt-capabilities --matrix -f text` prints it) and in the measured tables of the
 [README](../README.md#what-rvt-rs-reads-from-real-projects). This page
-describes `main`; the latest release is v0.5.1, and what has landed since
+describes `main`; the latest release is v0.6.0, and what has landed since
 is under `[Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Four levels of "it works"
@@ -13,11 +13,13 @@ A Revit file can succeed at one level and not the next, so rvt-rs keeps them
 apart:
 
 1. **Opened.** The OLE container, its streams, metadata, previews and schema
-   read. Every Revit release from 2016 to 2026.
+   read. Every Revit release from 2015 to 2027: 2016 to 2026 across the
+   family corpus, and 2015 and 2027 on Autodesk's sample projects.
 2. **Elements identified.** Each element is found with its Revit ElementId and
    category, and the set equals the one Revit's own IFC export holds. Revit
    2024 and 2025 project files, and Revit 2023 ones with their bounding boxes
-   only (RE-81).
+   only (RE-81); experimentally, Revit 2015 to 2022, 2026 and 2027 ones (the
+   table below).
 3. **Geometry.** An element's body. Exact where the element's data is decoded
    (the table below), otherwise its bounding box, and the export diagnostics
    say which.
@@ -31,9 +33,9 @@ apart:
 | Revit 2024 and 2025 project (`.rvt`) | yes | yes, measured on Core Interior, the four RE1 models, Snowdon Towers, Projeto1 and `teste_export_2025` | see below | see below |
 | Revit 2026 project | yes | experimental (since 0.5.0): measured on one 2026 project against Revit's own IFC4X3 export, 113 of its 115 elements and none outside it (RE-124) | the element's bounding box, walls cut back at their joins | Revit's GlobalIds, storeys, rooms with Revit's numbers and names, doors and windows in their hosts, family and type names, layer sets |
 | Revit 2023 project | yes | yes, measured on two 2023 projects against Revit's IFC4 exports (RE-81); components nested in doors and windows are left out | the element's bounding box; rooms their outline (RE-102) | ElementId, category, door and window host walls (RE-85), Levels as storeys with each element on the one its record names (RE-107), and family instances' family and type names (RE-109) |
-| Revit 2027 project | yes | experimental, on `main`: the same elements as the 2026 copies of Autodesk's five sample projects (RE-179); no Revit 2027 export is measured | as on 2026 | as on 2026 |
-| Revit 2019 to 2022 project | yes | experimental, on `main`: 2023's records and readers with each release's schema tags; the same elements as the 2023 copies of Autodesk's sample projects (RE-180); no Revit export of a 2019 to 2022 file is measured | as on 2023 | as on 2023 |
-| Revit 2015 to 2018 project | yes | experimental, on `main`: 2019's records and readers with each release's schema tags; the same elements as the 2019 copies of Autodesk's 2016 to 2018 sample projects, and the same ElementIds and classes on five of its six 2015 ones (RE-181); no Revit export of a 2015 to 2018 file is measured | as on 2019 | as on 2019 |
+| Revit 2027 project | yes | experimental (since 0.6.0): the same elements as the 2026 copies of Autodesk's five sample projects (RE-179); no Revit 2027 export is measured | as on 2026 | as on 2026 |
+| Revit 2019 to 2022 project | yes | experimental (since 0.6.0): 2023's records and readers with each release's schema tags; the same elements as the 2023 copies of Autodesk's sample projects (RE-180); no Revit export of a 2019 to 2022 file is measured | as on 2023 | as on 2023 |
+| Revit 2015 to 2018 project | yes | experimental (since 0.6.0): 2019's records and readers with each release's schema tags; the same elements as the 2019 copies of Autodesk's 2016 to 2018 sample projects, and the same ElementIds and classes on five of its six 2015 ones (RE-181); no Revit export of a 2015 to 2018 file is measured | as on 2019 | as on 2019 |
 | Revit 2014 and earlier project | yes | no | none | metadata |
 | Family (`.rfa`) or template (`.rte`, `.rft`) | yes | family metadata and OmniClass only | none | none |
 
