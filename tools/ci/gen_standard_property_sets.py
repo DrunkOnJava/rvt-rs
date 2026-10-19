@@ -30,6 +30,8 @@ import csv
 import hashlib
 import io
 import sys
+import time
+import urllib.error
 import urllib.request
 
 import ifcopenshell.ifcopenshell_wrapper as wrapper
@@ -58,7 +60,17 @@ def source_text(path):
         data = open(path, "rb").read()
     else:
         url = f"https://raw.githubusercontent.com/{SOURCE_REPOSITORY}/{SOURCE_COMMIT}/{SOURCE_PATH}"
-        data = urllib.request.urlopen(url, timeout=120).read()
+        # A transient network failure is retried, so it does not fail CI;
+        # the pinned sha256 still decides what is read.
+        for attempt in range(1, 4):
+            try:
+                data = urllib.request.urlopen(url, timeout=120).read()
+                break
+            except (urllib.error.URLError, TimeoutError) as error:
+                if attempt == 3:
+                    raise
+                print(f"retrying {url} after: {error}", file=sys.stderr)
+                time.sleep(15 * attempt)
     digest = hashlib.sha256(data).hexdigest()
     if digest != SOURCE_SHA256:
         sys.exit(f"error: {SOURCE_PATH} has sha256 {digest}, pinned {SOURCE_SHA256}")
