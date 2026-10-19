@@ -59,6 +59,10 @@ pub struct TypedProductionAppend {
     /// flipped, by ElementId (B72): read in every quality mode, as the flip
     /// is part of the type's GlobalId (B74).
     pub element_flips: BTreeMap<u32, bool>,
+    /// The `Pset_PipeSegmentOccurrence` sets whose `InvertElevation` is a
+    /// pipe's invert worked out in model height, by index in the entities,
+    /// for `pipe_inverts_above_storeys` (RE-157).
+    pub computed_inverts: Vec<usize>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -758,7 +762,7 @@ pub fn append_typed_production_elements(
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
-        let mut serial_sets = serial_number_property_sets(&decoded, &ifc_type);
+        let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
         let named = named_parameter_properties(&decoded);
         // RE-151: the name of the openings of a floor's tagged voids.
@@ -911,9 +915,9 @@ pub fn append_typed_production_elements(
                 set,
             });
         }
-        // A pipe's or duct's length along its axis, which Revit's export gives
-        // in both flow-segment sets: a pipe's between its ends (RE-131), a
-        // duct's the dimension of its box its section leaves (RE-134).
+        // A pipe's or duct's length along its axis: a pipe's between its
+        // ends (RE-131), a duct's the dimension of its box its section leaves
+        // (RE-134).
         let segment_length = match decoded.class.as_str() {
             "Pipe" => {
                 crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields).map(|pipe| {
@@ -967,55 +971,69 @@ pub fn append_typed_production_elements(
         });
         // RE-157: a pipe's invert, here in model height; the storey's
         // elevation comes off once storeys are bound
-        // (`pipe_inverts_above_storeys`).
+        // (`pipe_inverts_above_storeys`). A pipe whose parameter named for
+        // the property gives it (RE-194) has that, as it is.
+        let explicit_invert = named.iter().any(|(set, property)| {
+            set == "Pset_PipeSegmentOccurrence" && property.name == INVERT_ELEVATION_PROPERTY
+        });
         let invert = match decoded.class.as_str() {
-            "Pipe" => pipe_invert_height(&decoded.fields),
+            "Pipe" if !explicit_invert => pipe_invert_height(&decoded.fields),
             _ => None,
         };
-        if let Some(length) = segment_length {
-            for name in ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"] {
-                let mut properties = vec![Property {
-                    name: "Length".into(),
-                    value: PropertyValue::PositiveLengthFeet(length),
-                }];
-                if let (Some(height), "Pset_FlowSegmentPipeSegment") = (invert, name) {
-                    properties.push(Property {
+        // #822: the length in IFC4's base quantities of the segment, where
+        // Revit's IFC4 export writes it (IFC2X3's flow-segment sets held it
+        // as a property), and a pipe's invert in Pset_PipeSegmentOccurrence,
+        // on an element written as a pipe or duct segment only, not one its
+        // Export to IFC As writes as another entity.
+        let segment_sets = match effective.ifc_type {
+            "IFCPIPESEGMENT" => Some((
+                "Qto_PipeSegmentBaseQuantities",
+                invert.map(|height| PropertySet {
+                    name: "Pset_PipeSegmentOccurrence".into(),
+                    properties: vec![Property {
                         name: INVERT_ELEVATION_PROPERTY.into(),
                         value: PropertyValue::LengthFeet(height),
-                    });
-                }
+                    }],
+                }),
+            )),
+            "IFCDUCTSEGMENT" => Some(("Qto_DuctSegmentBaseQuantities", None)),
+            _ => None,
+        };
+        if let Some((quantities, occurrence)) = segment_sets {
+            let quantities = segment_length.map(|length| PropertySet {
+                name: quantities.into(),
+                properties: vec![Property {
+                    name: "Length".into(),
+                    value: PropertyValue::PositiveLengthFeet(length),
+                }],
+            });
+            if let Some(set) = quantities {
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: entity_index,
-                    set: PropertySet {
-                        name: name.into(),
-                        properties,
-                    },
+                    set,
+                });
+            }
+            if let Some(set) = occurrence {
+                out.computed_inverts.push(entities.len());
+                entities.push(entities::IfcEntity::ElementPropertySet {
+                    element: entity_index,
+                    set,
                 });
             }
         }
-        // A duct's Pset_DuctSegmentTypeCommon: its length, as on every RE1
-        // Mechanical duct, and its type's shape (B43), each where it is known.
-        if decoded.class == "Duct" {
-            let properties: Vec<Property> = segment_length
-                .map(|length| Property {
-                    name: "Length".into(),
-                    value: PropertyValue::PositiveLengthFeet(length),
-                })
-                .into_iter()
-                .chain(duct_shape.map(|shape| Property {
-                    name: "Shape".into(),
-                    value: PropertyValue::Enumerated(vec![shape]),
-                }))
-                .collect();
-            if !properties.is_empty() {
-                entities.push(entities::IfcEntity::ElementPropertySet {
-                    element: entity_index,
-                    set: PropertySet {
-                        name: "Pset_DuctSegmentTypeCommon".into(),
-                        properties,
-                    },
-                });
-            }
+        // A duct's Pset_DuctSegmentTypeCommon: its type's shape (B43), where
+        // it is known and the duct is written as a duct segment.
+        if let Some(shape) = duct_shape.filter(|_| effective.ifc_type == "IFCDUCTSEGMENT") {
+            entities.push(entities::IfcEntity::ElementPropertySet {
+                element: entity_index,
+                set: PropertySet {
+                    name: "Pset_DuctSegmentTypeCommon".into(),
+                    properties: vec![Property {
+                        name: "Shape".into(),
+                        value: PropertyValue::Enumerated(vec![shape]),
+                    }],
+                },
+            });
         }
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
@@ -1493,10 +1511,6 @@ fn reference_property_sets(
         .collect()
 }
 
-/// The sets Revit's export gives an element's shared parameter `Serial
-/// Number` in (RE-156): `Pset_ManufacturerOccurrence`, and on a
-/// building-element proxy also `Pset_PrecastConcreteElementGeneral`, each
-/// with `SerialNumber` (`IfcIdentifier`). Empty when the element has none.
 /// The set Revit's own IFC export writes an element's Category, family and
 /// type in, and its type object's Category and Family Name (spike 257).
 pub const REVIT_OTHER_SET: &str = "Other";
@@ -1558,7 +1572,13 @@ fn revit_parameter_property_sets(decoded: &DecodedElement) -> Vec<PropertySet> {
     sets
 }
 
-fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<PropertySet> {
+/// The set Revit's export gives an element's shared parameter `Serial
+/// Number` in (RE-156): `Pset_ManufacturerOccurrence.SerialNumber`
+/// (`IfcIdentifier`), where IFC4 declares it. Revit's IFC2X3 export of the
+/// RE1 models also gives a building-element proxy
+/// `Pset_PrecastConcreteElementGeneral.SerialNumber`, which IFC4's set does
+/// not have (#822). Empty when the element has none.
+fn serial_number_property_sets(decoded: &DecodedElement) -> Vec<PropertySet> {
     use crate::partition_schema_mvp as mvp;
     let serial = decoded
         .fields
@@ -1570,21 +1590,13 @@ fn serial_number_property_sets(decoded: &DecodedElement, ifc_type: &str) -> Vec<
     let Some(serial) = serial.filter(|text| !text.is_empty()) else {
         return Vec::new();
     };
-    let proxy = ifc_type == "IFCBUILDINGELEMENTPROXY";
-    [
-        "Pset_ManufacturerOccurrence",
-        "Pset_PrecastConcreteElementGeneral",
-    ]
-    .into_iter()
-    .filter(|set| proxy || *set == "Pset_ManufacturerOccurrence")
-    .map(|set| PropertySet {
-        name: set.into(),
+    vec![PropertySet {
+        name: "Pset_ManufacturerOccurrence".into(),
         properties: vec![Property {
             name: "SerialNumber".into(),
             value: PropertyValue::Identifier(serial.clone()),
         }],
-    })
-    .collect()
+    }]
 }
 
 /// The common property set Revit's export writes `IsExternal` in on an
@@ -1907,7 +1919,7 @@ fn add_piece_sets(
     }
 }
 
-/// The property of `Pset_FlowSegmentPipeSegment` holding a pipe's invert.
+/// The property of `Pset_PipeSegmentOccurrence` holding a pipe's invert.
 const INVERT_ELEVATION_PROPERTY: &str = "InvertElevation";
 /// How far a pipe's two ends may differ, feet, along an axis it is taken to
 /// lie across.
@@ -1938,10 +1950,15 @@ fn pipe_invert_height(fields: &[(String, InstanceField)]) -> Option<f64> {
     Some(start[2] - inner / 2.0)
 }
 
-/// Take each pipe's storey elevation off its `InvertElevation`, which
-/// Revit's export gives above the pipe's storey (RE-157). A pipe on no storey
-/// keeps its height above the model's zero.
-pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], storeys: &[Storey]) {
+/// Take each pipe's storey elevation off the `InvertElevation` worked out in
+/// model height, in the sets `computed` lists, which Revit's export gives
+/// above the pipe's storey (RE-157). A pipe on no storey keeps its height
+/// above the model's zero.
+pub(super) fn pipe_inverts_above_storeys(
+    entities: &mut [entities::IfcEntity],
+    storeys: &[Storey],
+    computed: &[usize],
+) {
     let elevations: Vec<f64> = entities
         .iter()
         .map(|entity| match entity {
@@ -1954,13 +1971,12 @@ pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], s
             _ => 0.0,
         })
         .collect();
-    for entity in entities.iter_mut() {
-        let entities::IfcEntity::ElementPropertySet { element, set } = entity else {
+    for &index in computed {
+        let Some(entities::IfcEntity::ElementPropertySet { element, set }) =
+            entities.get_mut(index)
+        else {
             continue;
         };
-        if set.name != "Pset_FlowSegmentPipeSegment" {
-            continue;
-        }
         let elevation = elevations.get(*element).copied().unwrap_or(0.0);
         for property in &mut set.properties {
             if let (INVERT_ELEVATION_PROPERTY, PropertyValue::LengthFeet(height)) =

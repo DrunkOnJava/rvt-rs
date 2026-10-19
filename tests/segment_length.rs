@@ -1,11 +1,15 @@
-//! #35: a pipe's `Length` in its flow-segment property sets is Revit's.
+//! #35, #822: a pipe's `Length` is Revit's.
 //!
-//! Revit's IFC4 export of the RE1 Mechanical and Plumbing models gives every
-//! pipe `Pset_FlowSegmentPipeSegment.Length` and
+//! Revit's IFC2X3 export (Coordination View 2.0) of the RE1 Mechanical and
+//! Plumbing models gives every pipe `Pset_FlowSegmentPipeSegment.Length` and
 //! `Pset_FlowSegmentDuctSegment.Length`, its length between its two ends
-//! (`IfcPositiveLengthMeasure`). For every pipe rvt-rs writes with Revit's
-//! `Tag`, both must be in rvt-rs's export, within 0.1 mm of Revit's, each
-//! file's values read in its own length unit.
+//! (`IfcPositiveLengthMeasure`). rvt-rs writes IFC4, which has no flow-segment
+//! sets: the length is in the pipe's base quantities ([`QUANTITIES`], an
+//! `IfcElementQuantity`), as Revit's IFC4 export of the BIM4LCA office writes
+//! it. For every pipe rvt-rs writes with Revit's `Tag`, each of Revit's
+//! lengths, read from its IFC2X3 sets only, must be rvt-rs's, read from its
+//! IFC4 quantities only, within 0.1 mm, each file's values read in its own
+//! length unit; rvt-rs writes no length in IFC2X3's sets.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Mechanical.rvt` and
 //! `RE1-Plumbing.rvt` with their `RE1-*.ifc` exports. Skips what is absent.
@@ -15,7 +19,10 @@ use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// The IFC2X3 sets holding a pipe's `Length` in Revit's export.
 const SETS: [&str; 2] = ["Pset_FlowSegmentPipeSegment", "Pset_FlowSegmentDuctSegment"];
+/// The IFC4 quantity set holding it in rvt-rs's.
+const QUANTITIES: &str = "Qto_PipeSegmentBaseQuantities";
 const TOLERANCE_METRES: f64 = 1e-4;
 
 /// `#id -> (entity, args)` for every line of a STEP file.
@@ -93,8 +100,10 @@ fn metres_per_unit(ents: &BTreeMap<u64, (String, String)>) -> f64 {
         .unwrap_or(1.0)
 }
 
-/// Pipe `Tag` -> set -> `Length` in metres, for each element of `entity`.
-fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> {
+/// Pipe `Tag` -> each `Length` in metres, for each element of `entity`: in a
+/// set of [`SETS`] in an IFC2X3 file (`ifc2x3`), in [`QUANTITIES`] in an IFC4
+/// one.
+fn lengths(step: &str, entity: &str, ifc2x3: bool) -> BTreeMap<String, Vec<f64>> {
     let ents = entities(step);
     let scale = metres_per_unit(&ents);
     let mut tags: BTreeMap<u64, String> = BTreeMap::new();
@@ -105,7 +114,7 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
             }
         }
     }
-    let mut out: BTreeMap<String, BTreeMap<String, f64>> = BTreeMap::new();
+    let mut out: BTreeMap<String, Vec<f64>> = BTreeMap::new();
     for (e, args) in ents.values() {
         if e != "IFCRELDEFINESBYPROPERTIES" {
             continue;
@@ -120,27 +129,39 @@ fn lengths(step: &str, entity: &str) -> BTreeMap<String, BTreeMap<String, f64>> 
         };
         let sf = split_args(set_args);
         let set = sf.get(2).map(|n| n.trim().trim_matches('\'')).unwrap_or("");
-        if set_entity != "IFCPROPERTYSET" || !SETS.contains(&set) {
-            continue;
-        }
-        let length = list(sf.get(4).map(String::as_str).unwrap_or(""))
-            .iter()
-            .filter_map(|p| ents.get(p))
-            .find_map(|(_, a)| {
-                let pf = split_args(a);
-                (pf.first()?.trim() == "'Length'").then_some(())?;
-                let value = pf.get(2)?.trim();
-                let number = value.split_once('(')?.1.trim_end_matches(')');
-                number.parse::<f64>().ok()
-            });
+        let length = match set_entity.as_str() {
+            "IFCPROPERTYSET" if ifc2x3 && SETS.contains(&set) => {
+                list(sf.get(4).map(String::as_str).unwrap_or(""))
+                    .iter()
+                    .filter_map(|p| ents.get(p))
+                    .find_map(|(_, a)| {
+                        let pf = split_args(a);
+                        (pf.first()?.trim() == "'Length'").then_some(())?;
+                        let value = pf.get(2)?.trim();
+                        let number = value.split_once('(')?.1.trim_end_matches(')');
+                        number.parse::<f64>().ok()
+                    })
+            }
+            // `IfcQuantityLength(Name, Description, Unit, LengthValue, ..)`.
+            "IFCELEMENTQUANTITY" if !ifc2x3 && set == QUANTITIES => {
+                list(sf.get(5).map(String::as_str).unwrap_or(""))
+                    .iter()
+                    .filter_map(|q| ents.get(q))
+                    .find_map(|(e, a)| {
+                        let qf = split_args(a);
+                        (e == "IFCQUANTITYLENGTH" && qf.first()?.trim() == "'Length'")
+                            .then_some(())?;
+                        qf.get(3)?.trim().parse::<f64>().ok()
+                    })
+            }
+            _ => continue,
+        };
         let Some(length) = length else {
             continue;
         };
         for object in list(f.get(4).map(String::as_str).unwrap_or("")) {
             if let Some(tag) = tags.get(&object) {
-                out.entry(tag.clone())
-                    .or_default()
-                    .insert(set.to_string(), length * scale);
+                out.entry(tag.clone()).or_default().push(length * scale);
             }
         }
     }
@@ -163,6 +184,7 @@ fn re1_pipe_lengths_are_revits() {
         let theirs = lengths(
             &std::fs::read_to_string(&reference_ifc).expect("reference IFC"),
             "IFCFLOWSEGMENT",
+            true,
         );
         let mut rf = RevitFile::open(&rvt).expect("open");
         let result = RvtDocExporter
@@ -180,22 +202,27 @@ fn re1_pipe_lengths_are_revits() {
             !pipes.is_empty(),
             "RE1 {model}: no pipe rvt-rs writes is in Revit's export"
         );
-        let ours = lengths(&step, "IFCPIPESEGMENT");
-        let mut off: Vec<(String, String, f64, Option<f64>)> = Vec::new();
+        let ours = lengths(&step, "IFCPIPESEGMENT", false);
+        let mut off: Vec<(String, f64, Option<f64>)> = Vec::new();
         for tag in &pipes {
-            for (set, revit) in &theirs[tag] {
-                let mine = ours.get(tag).and_then(|sets| sets.get(set)).copied();
+            let mine = ours.get(tag).and_then(|lengths| lengths.first()).copied();
+            for revit in &theirs[tag] {
                 if mine.is_none_or(|m| (m - revit).abs() > TOLERANCE_METRES) {
-                    off.push((tag.clone(), set.clone(), *revit, mine));
+                    off.push((tag.clone(), *revit, mine));
                 }
             }
         }
         assert!(
             off.is_empty(),
-            "RE1 {model}: {} of the flow-segment Lengths of the {} pipes both exports hold are not Revit's (tag, set, Revit's m, rvt-rs's m); first: {:?}",
+            "RE1 {model}: {} of the Lengths of the {} pipes both exports hold are not Revit's (tag, Revit's m, rvt-rs's m in {QUANTITIES}); first: {:?}",
             off.len(),
             pipes.len(),
             off.iter().take(5).collect::<Vec<_>>()
+        );
+        let legacy = lengths(&step, "IFCPIPESEGMENT", true).len();
+        assert_eq!(
+            legacy, 0,
+            "RE1 {model}: rvt-rs writes {legacy} pipes' Length in IFC2X3's flow-segment sets"
         );
     }
 }

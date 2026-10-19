@@ -2,13 +2,13 @@
 
 **Date:** 2026-10-03
 **Issues:** #35, #96; backlog item B26
-**Artefacts:** RE1 Mechanical and RE1 Plumbing (Revit 2025, MIT) with Revit's own IFC4 exports. Measured on GitHub's hosted runners with the Measure workflow, run 37142956936.
+**Artefacts:** RE1 Mechanical and RE1 Plumbing (Revit 2025, MIT) with Revit's own IFC2X3 exports (Coordination View 2.0; first recorded here as IFC4). Measured on GitHub's hosted runners with the Measure workflow, run 37142956936.
 **Probe:** `examples/probe_re157_pipe_inner_diameter.rs`.
 **Status:** positive.
 
 ## 1. The question
 
-Revit's export gives every pipe `Pset_FlowSegmentPipeSegment.InvertElevation` (69 values on RE1, all missing from rvt-rs's export). On the RE1 exports it is:
+Revit's IFC2X3 export gives every pipe `Pset_FlowSegmentPipeSegment.InvertElevation` (69 values on RE1, all missing from rvt-rs's export). IFC4 has no flow-segment sets: its `Pset_PipeSegmentOccurrence` holds the invert, where Revit's IFC4 export of the BIM4LCA office writes it and rvt-rs's IFC4 export does since 2026-10-19 (#822). On the RE1 exports it is:
 
 - for a horizontal pipe (46), the height of its axis above its storey less half its inner diameter: pipe 443719's axis is at 2,850 mm and its invert 2,844.67 mm, with an outer radius of 6.35 mm;
 - for a vertical pipe (23), the height of its lower end: pipe 443895 starts at 415.884 mm and its invert is 415.884 mm.
