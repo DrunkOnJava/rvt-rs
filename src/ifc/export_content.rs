@@ -158,6 +158,8 @@ pub(crate) fn is_distribution_element(ifc_type: &str) -> bool {
                 | "IFCPIPEFITTING"
                 | "IFCAIRTERMINAL"
                 | "IFCSANITARYTERMINAL"
+                | "IFCWASTETERMINAL"
+                | "IFCFIRESUPPRESSIONTERMINAL"
                 | "IFCLIGHTFIXTURE"
                 | "IFCELECTRICAPPLIANCE"
                 | "IFCALARM"
@@ -1390,6 +1392,8 @@ fn reference_property_sets(ifc_type: &str, type_name: &str) -> Vec<PropertySet> 
         | "IFCPIPEFITTING"
         | "IFCAIRTERMINAL"
         | "IFCSANITARYTERMINAL"
+        | "IFCWASTETERMINAL"
+        | "IFCFIRESUPPRESSIONTERMINAL"
         | "IFCLIGHTFIXTURE"
         | "IFCELECTRICAPPLIANCE" => &[("Pset_DistributionFlowElementCommon", true)],
         // IfcFurnishingElement and IfcDistributionControlElement in Revit's.
@@ -1649,11 +1653,18 @@ pub(super) fn pipe_inverts_above_storeys(entities: &mut [entities::IfcEntity], s
 
 /// The entities a room's space contains in Revit's export (B63): on RE1
 /// Architecture its furniture, sanitary terminals and equipment written as
-/// proxies, and no wall, door, slab, covering or curtain wall.
-const ROOM_CONTENT_TYPES: [&str; 3] = [
+/// proxies, and no wall, door, slab, covering or curtain wall. On the
+/// BIM4LCA office (#792) Revit's export also puts its waste, fire
+/// suppression and air terminals and electric appliances in their rooms'
+/// spaces.
+const ROOM_CONTENT_TYPES: [&str; 7] = [
     "IFCFURNITURE",
     "IFCSANITARYTERMINAL",
     "IFCBUILDINGELEMENTPROXY",
+    "IFCWASTETERMINAL",
+    "IFCFIRESUPPRESSIONTERMINAL",
+    "IFCAIRTERMINAL",
+    "IFCELECTRICAPPLIANCE",
 ];
 
 /// A closed plan loop, model feet.

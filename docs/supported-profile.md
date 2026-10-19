@@ -65,7 +65,9 @@ material names and layer thicknesses, family instances' materials (RE-82), the I
 object of each element's type (RE-110), Revit's GlobalId (other entities get one
 derived from the document and their own identity, stable between exports,
 #400), stair riser and tread dimensions, and Revit's "Export to IFC As"
-override, applied where it names `IfcShadingDevice`, `IfcSlab` or `IfcCovering`
+override, applied where it names `IfcShadingDevice`, `IfcSlab`, `IfcCovering`,
+`IfcWasteTerminal`, `IfcFireSuppressionTerminal`, `IfcSanitaryTerminal`,
+`IfcAirTerminal` or `IfcElectricAppliance` (RE-190)
 and Revit's exporter acts on it (not on a 2024 file's curtain walls, RE-188),
 with the values not applied listed in the diagnostics. Not read: most instance and type parameters (#35, #155) and phases
 (#328), so an element Revit's export leaves out because of its phase can still
