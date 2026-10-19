@@ -317,12 +317,12 @@ fn doctor_file(path: &Path) -> DoctorFileReport {
 
     let revit_version = rf.basic_file_info().ok().map(|bfi| bfi.version);
     if let Some(version) = revit_version {
-        if !(2016..=2026).contains(&version) {
+        if !(2015..=2027).contains(&version) {
             return doctor_failure(
                 display_path,
                 "unsupported_version",
                 Some(version),
-                format!("Revit {version} is outside the verified 2016-2026 corpus range"),
+                format!("Revit {version} is outside the 2015 to 2027 releases rvt-rs reads"),
             );
         }
     }

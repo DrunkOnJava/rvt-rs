@@ -164,7 +164,9 @@ fn build_report(
     let diagnostics = export_result.diagnostics;
     let warnings = diagnostics.warnings.clone();
     let input_path = display_path(path, redact);
-    let supported_revit_version = matches!(summary.version, 2016..=2026);
+    // The releases rvt-rs reads, 2015 to 2022 and 2027 experimentally (RE-179
+    // to RE-181).
+    let supported_revit_version = matches!(summary.version, 2015..=2027);
     let decoded = DecodedHealth {
         class_name_count: summary.class_name_count,
         production_elements: diagnostics.decoded.production_walker_elements,
@@ -215,7 +217,7 @@ fn classify_failure_mode(
         return failure_mode(
             "unsupported_revit_version",
             "Unsupported Revit version",
-            "This file opened, but its Revit version is outside the verified support range.",
+            "This file opened, but its Revit version is outside the 2015 to 2027 releases rvt-rs reads.",
             "warning",
         );
     }

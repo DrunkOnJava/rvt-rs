@@ -298,7 +298,7 @@ The most important status words are:
 | Scaffold-only export | IFC can be written as a framework, but no validated building elements were decoded. |
 | Partial decode | Some data was recovered, but warnings, unsupported features, or missing geometry remain. |
 | Supported file, unsupported model layout | The file opened, but rvt-rs did not recover validated model elements from this layout. |
-| Unsupported Revit version | The file opened, but its version is outside the verified support range. |
+| Unsupported Revit version | The file opened, but its version is outside the 2015 to 2027 releases rvt-rs reads. |
 | Corrupt or unreadable file | The input could not be opened as a readable Revit OLE/CFB container. |
 | Parser bug, please report | The file opened, but diagnostics could not classify export readiness. |
 

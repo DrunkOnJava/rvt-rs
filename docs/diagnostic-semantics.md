@@ -79,7 +79,7 @@ classification in its file-status panel.
 | Kind | Meaning |
 |---|---|
 | `supported_profile` | The decoded output meets the current export profile. |
-| `unsupported_revit_version` | The file opened, but its Revit version is outside the verified support range. |
+| `unsupported_revit_version` | The file opened, but its Revit version is outside the 2015 to 2027 releases rvt-rs reads. |
 | `unsupported_model_layout` | The container/version is acceptable, but model records did not meet the production confidence bar. |
 | `corrupt_file` | The input could not be opened as a readable Revit OLE/CFB container. |
 | `partial_decode` | Some model data was recovered, but warnings, unsupported features, or missing geometry remain. |
