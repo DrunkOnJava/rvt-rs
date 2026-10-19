@@ -29,7 +29,8 @@ same, and Revit 2015 to 2022, 2026 and 2027 projects are experimental. Every
 recovery claim is measured against the oracle its report names: Revit's own
 IFC export of the same model wherever one exists, and for 2015 to 2018, 2019
 to 2022 and 2027, which have none, the same sample projects saved by Revit
-2019, 2023 and 2026. What is not decoded
+2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
+What is not decoded
 (most parameters, family geometry, hip and gable roofs, opening profiles,
 phase filtering) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
@@ -42,7 +43,7 @@ the four levels a file can reach are in the
 | Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2026; 2015 and 2027 project files open on Autodesk's sample projects, where PartAtom and previews are not measured. | Maintain compatibility and bounds checks against hostile input. |
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
-| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same sample projects saved by Revit 2019, 2023 and 2026 (RE-181, RE-180, RE-179). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2015 to 2022 or 2027 project to measure against (#421), parameters (0.7.0), held-out models (#408). |
+| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same sample projects saved by Revit 2019, 2023 and 2026 (RE-181, RE-180, RE-179), but 2015's `rst_basic`, another model. Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2015 to 2022 or 2027 project to measure against (#421), parameters (0.7.0), held-out models (#408). |
 | IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.6.x milestone (below). |
 | Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.7.0). |
 | Python and CLI | Partial | The `rvt` wheel on PyPI and prebuilt CLI archives on GitHub Releases, sharing the core's honesty bounds. | Stabilize JSON schemas and the one-shot inspect workflow. |
@@ -79,7 +80,8 @@ the four levels a file can reach are in the
   took from Revit's IFC2X3 exports moved to where IFC4 and Revit's own IFC4
   export put them, checked against buildingSMART's published IFC4 property
   set definitions on every measured export. Exports carry parameters named
-  for a standard set's property, each element's `IsExternal`, type Fire
+  for a standard set's property, `IsExternal` (on every class but curtain
+  mullions and panels), type Fire
   Ratings, door sizes, Revit 2024 Areas as spaces, and port types, with
   electrical ports' direction (HVAC and piping directions are not read yet,
   #834); Revit 2015 to 2022 and 2027 projects export their elements,
@@ -109,7 +111,8 @@ diagnostics) verified end to end on the reference pack. 0.5.0 shipped the
 first of it: the levels, category, family, type and phase that Revit's export
 writes (RE-172, RE-177), more of the common property sets, and the record's
 reference slots (#228). 0.6.0 shipped more: parameters named for a standard
-set's property (RE-194), each element's `IsExternal` (RE-193), type Fire
+set's property (RE-194), `IsExternal` on every class but curtain mullions
+and panels (RE-193), type Fire
 Ratings, door sizes (#759) and port types (RE-197). The parameter store
 itself is open.
 
