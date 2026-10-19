@@ -7,11 +7,14 @@
 //! ("Pset_WallCommon.FireRating", "FireRating")` in revit-ifc's property set
 //! definitions, CLEANROOM.md source 5). Which entities a set applies to, and
 //! each property's value type, are IFC4's property set definitions
-//! (buildingSMART IFC4 ADD2 TC1), as revit-ifc's IFC4 definitions give them,
-//! for the sets of the entities rvt-rs writes. A set applies to its entity
-//! and that entity's subtypes. Only the properties of the kinds RE-194 reads
-//! from a parameter are listed: booleans, text, counts, lengths and thermal
-//! transmittance.
+//! (buildingSMART IFC4 ADD2 TC1), as revit-ifc's IFC4 definitions give them.
+//! A set applies to its entity and that entity's subtypes. Listed are the
+//! common set of each entity rvt-rs writes, `Pset_DoorWindowGlazingType`, and
+//! a space's `Pset_SpaceCoveringRequirements` and
+//! `Pset_SpaceOccupancyRequirements`. A parameter named for another IFC4
+//! set, such as `Pset_SpaceFireSafetyRequirements`, is not written (#817).
+//! Only the properties of the kinds RE-194 reads from a parameter are
+//! listed: booleans, text, counts, lengths and thermal transmittance.
 
 /// The value type IFC4 declares for a standard property.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,8 +54,8 @@ pub struct StandardPropertySet {
     pub properties: &'static [(&'static str, StandardPropertyKind)],
 }
 
-/// The IFC4 property sets of the entities rvt-rs writes, with the properties
-/// a parameter's value can be written as.
+/// The IFC4 property sets a parameter's value can be written in (the module's
+/// list), with the properties it can be written as.
 pub const STANDARD_PROPERTY_SETS: &[StandardPropertySet] = &[
     StandardPropertySet {
         name: "Pset_BeamCommon",

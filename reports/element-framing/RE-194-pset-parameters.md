@@ -4,7 +4,7 @@
 **Issues:** #35; follows RE-193 (`IsExternal`), RE-156 (project and shared parameter definitions), RE-158 (Yes/No and integer entries) and RE-47 (stair dimensions).
 **Artefacts:** the BIM4LCA office, as built and at building permit, with Revit's own IFC export of each (`research/bim4lca-measure.tsv`); the reference models; Autodesk's sample projects (`research/autodesk-sample-projects.tsv`).
 **Probe and scorer:** `examples/probe_re194_pset_parameters.rs` and `tools/re/pset_parameters_vs_ifc.py`, measured in runs [39195062180](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39195062180), [39196264528](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39196264528), [39202359909](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39202359909) and [39211032010](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39211032010).
-**Status:** positive for booleans, text, counts, lengths and thermal transmittance in the IFC4 property sets of the entities rvt-rs writes. What Revit's export of the office takes from its user-defined property set file is not reproduced (§6).
+**Status:** positive for booleans, text, counts, lengths and thermal transmittance in the common set of each entity rvt-rs writes, the glazing set, and a space's covering and occupancy sets. What Revit's export of the office takes from its user-defined property set file is not reproduced (§6).
 
 ## 1. Before
 
@@ -63,7 +63,7 @@ The Reference View certifies neither the glazing set nor the occupancy set (§2)
 
 ## 5. What changes
 
-- `ifc::standard_property_sets` lists the IFC4 property sets of the entities rvt-rs writes. For each set it gives the entities it applies to, with their subtypes, and its properties of the kinds read here: boolean, identifier, label, text, count, length, positive length and thermal transmittance.
+- `ifc::standard_property_sets` lists IFC4's property sets for these parameters: the common set of each entity rvt-rs writes, `Pset_DoorWindowGlazingType`, and a space's `Pset_SpaceCoveringRequirements` and `Pset_SpaceOccupancyRequirements`. For each set it gives the entities it applies to, with their subtypes, and its properties of the kinds read here: boolean, identifier, label, text, count, length, positive length and thermal transmittance. A parameter named for another IFC4 set is not written (#817).
 - `partition_room_parameters::scan_parameter_entries` reads each parameter's value by how it is stored (`EntryKind`). It searches only the payloads of the elements' own data objects, an entry being its innermost object's. `scan_integer_parameters` (RE-193) is now a call to it.
 - `partition_schema_mvp::attach_named_parameters` gives each element a field for each such parameter it carries. A Yes/No is taken only as 0 or 1, a positive length only above 0, and any number only when finite and not subnormal. An empty text is the latest copy's value too: it hides an older copy's text and gives nothing. `IsExternal` stays RE-193's.
 - The export writes each value in its set on the element, when the set applies to the entity the element is written as, as the IFC4 type of the property. The value replaces rvt-rs's own, as Revit's exporter reads the parameter first: a stair's `RiserHeight` from the parameter instead of RE-47's record. The sets are given once the entity an element is written as is final: a door or window written as its opening alone (RE-84) gets none, and one left a door because its host is not found keeps them.
@@ -75,6 +75,7 @@ The Reference View certifies neither the glazing set nor the occupancy set (§2)
 - **What the office's user-defined file adds** (§4): the glazing set on walls, curtain walls and coverings, and the covering properties in `Pset_SpaceCommon`. `OccupancyNumber` is written as the `IfcCountMeasure` IFC4 declares, which the scorer counts as different from the export's `IfcInteger`. `IsWired`, a stored 0 on every door and window, is written there as No; the export writes none (§4).
 - **Values Revit takes from elsewhere when an element carries no such parameter.** On the as-built file Revit's export writes these on elements whose own data object holds no entry for the parameter: `FireRating` on 26 walls and 2 doors, `LoadBearing` on 2 walls and a column, and `NumberOfTreads` on a stair. They come from the exporter's next sources: a built-in parameter, the type, or a calculator. None is written here.
 - **Other kinds of values:** plane angles, areas, ratios and enumerations (`Status`) are not read.
+- **Other IFC4 sets** the entities rvt-rs writes take, such as `Pset_SpaceFireSafetyRequirements` or `Pset_ConcreteElementGeneral`, are not listed, so a parameter named for one is not written (#817). The office defines none.
 - **A parameter on a type** named for a set never occurs in these files and is not read.
 - **Releases.** The parameter definitions are read from Revit 2024 on (RE-156); only Revit 2024 files define such parameters among those measured.
 
