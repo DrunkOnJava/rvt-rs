@@ -57,7 +57,6 @@ milestone is for.
 
 | Issue | Remainder |
 |---|---|
-| [#836](https://github.com/DrunkOnJava/rvt-rs/issues/836) | 32-bit targets: arithmetic on file-derived lengths can wrap past a bounds check (wasm32, found by #835) |
 | [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's description, system classification and HVAC or piping direction are not read (#828 follow-up) |
 | [#831](https://github.com/DrunkOnJava/rvt-rs/issues/831) | pset_validate's allow-list predates the IFC4 set table: it calls IFC4's own sets unknown |
 | [#827](https://github.com/DrunkOnJava/rvt-rs/issues/827) | from_decoded's property set builders put Revit fields in IFC4 standard sets (Pset_WallCommon.BaseOffset, Pset_WindowCommon.SillHeight, ...) |
