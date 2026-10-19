@@ -297,6 +297,15 @@
       "user_impact": "Walls, curtain walls, doors, windows, slabs, roofs, columns, beams, coverings, railings, stairs, ramps, proxies and spaces say whether they are external, as in Revit's own export, which energy and code-checking tools read."
     },
     {
+      "id": "ifc-named-pset-parameters",
+      "area": "properties",
+      "name": "Parameters named for a standard property set's property, in that set (RE-194)",
+      "status": "partial",
+      "evidence": "ifc::standard_property_sets (IFC4 sets, their entities and property kinds); partition_room_parameters::scan_parameter_entries (EntryKind); partition_schema_mvp::attach_named_parameters (NAMED_PARAMETER_FIELD_PREFIX); ifc::export_content named_parameter_sets / add_element_set; ifc::entities PropertyValue::ThermalTransmittance; examples/probe_re194_pset_parameters.rs; tools/re/pset_parameters_vs_ifc.py; reports/element-framing/RE-194-pset-parameters.md",
+      "notes": "Revit's exporter (revit-ifc IFC_v24.3.40, read and cited) reads a parameter named <set>.<property> on the element before anything else for that property, and writes a common set where its IFC4 definition applies it to the element's entity. rvt-rs reads each such parameter of a property listed in standard_property_sets from the element's own data object, by how it is stored: a Yes/No or integer as the u32 after its key, a text as u32 n · UTF-16 after it, a number as the f64 just before it (a length in feet, a thermal transmittance in W/(m²·K)). Booleans, identifiers, labels, text, counts, lengths and thermal transmittance are read; angles, areas, ratios, enumerations and a type's parameters are not. Each is written in its set on the element, where the set applies to the entity written, as the type IFC4 declares, replacing rvt-rs's own value. Measured on the BIM4LCA office, the only model measured that defines such parameters: every value Revit's export writes from them is on the element itself; as built, property values equal to Revit's go from 14,531 to 18,374 and at building permit from 14,501 to 18,373, and the 7 stair values that differed are now Revit's; 55 OccupancyNumber values differ in type only (IFC4's IfcCountMeasure, the export's IfcInteger). That export, IFC4 Reference View, also used a user-defined property set file: its glazing set on 846 walls, curtain walls and coverings, its Pset_SpaceCommon covering texts and the absence of IsWired come from it and are not reproduced, and rvt-rs writes IsWired (No) on the doors and windows that carry it. Revit 2024 files only, among those measured.",
+      "user_impact": "Fire and acoustic ratings, load bearing, U-values, glazing, handicap access and stair dimensions that a Revit model keeps in parameters named for IFC properties reach the IFC in their standard sets, as in Revit's own export."
+    },
+    {
       "id": "family-instance-transforms",
       "area": "elements",
       "name": "Family instances' transforms, and turned instances drawn turned (RE-87)",
