@@ -110,7 +110,7 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    (ours, our_objects), (theirs, _) = properties(args[0]), properties(args[1])
+    (ours, our_objects), (theirs, their_objects) = properties(args[0]), properties(args[1])
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     worst = []
     for (key, pset, prop), value in sorted(theirs.items()):
@@ -135,6 +135,13 @@ def main(argv):
     )
     for (pset, prop), (n, equal, different, missing) in sorted(rows.items()):
         print(f"  {pset}.{prop}: {n}, equal {equal}, different {different}, missing {missing}")
+    only = collections.defaultdict(lambda: [0, 0])
+    for key, pset, prop in ours:
+        if (key, pset, prop) not in theirs:
+            only[(pset, prop)][0 if key in their_objects else 1] += 1
+    print("rvt-rs values Revit does not write, on objects Revit writes and on others:")
+    for (pset, prop), (written, other) in sorted(only.items()):
+        print(f"  {pset}.{prop}: {written}, {other}")
     for line in worst:
         print(line)
     return 0
