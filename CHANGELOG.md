@@ -15,6 +15,13 @@ All notable changes will be documented here. This project follows
   wasm32, where the browser viewer runs, and every other CI job builds for
   64 bits. In the new job, which `CI passed` requires, such a wrap panics in
   the fuzz regressions and the family-corpus checks instead.
+- **The one-pass data-object scan checks the end it computes (#836).**
+  `partition_room_parameters::data_objects` tries a header at every offset
+  of a partition and added the size it reads there to the offset unchecked.
+  On a 32-bit target a size near 4 GiB from arbitrary bytes wrapped the end
+  around, and a wrapped end below 4 made its next read panic, which in the
+  browser viewer aborts the export. The i686 job found it on every family
+  release. A 64-bit build cannot overflow there, so its output is unchanged.
 
 ## [0.6.0] — 2026-10-19
 
