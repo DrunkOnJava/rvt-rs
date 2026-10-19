@@ -227,7 +227,9 @@ All notable changes will be documented here. This project follows
   Revit's export of the BIM4LCA office writes every such value on the element
   itself, never only on its type. Probe `probe_re194_pset_parameters`,
   scorer `pset_parameters_vs_ifc`. `psets_vs_ifc` now also counts the values
-  only rvt-rs writes, by set and property.
+  only rvt-rs writes, by set and property, and Measure gives each reference
+  model's export the schema check a sample's gets, up to 120 MB: the office
+  files' thermal transmittance unit is a writer path nothing else reaches.
 - **Measure hashes each sample's IFC export.** A sample's export was checked
   for schema findings and then dropped, so a change that moved only its
   names or properties showed nowhere in a run. Each sample now gets the

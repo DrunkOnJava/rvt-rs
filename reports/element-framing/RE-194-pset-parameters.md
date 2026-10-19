@@ -80,7 +80,7 @@ The Reference View certifies neither the glazing set nor the occupancy set (§2)
 
 ## 7. Results
 
-Measure A/B against `main` (8087e60): the office files and the reference models in runs [39211032010](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39211032010) and, at this change's last commit, [39216007512](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39216007512); Autodesk's samples in run SAMPLES_RUN. All property values against Revit's export (`psets_vs_ifc.py`), the same in both runs:
+Measure A/B against `main` (8087e60): the office files and the reference models in runs [39211032010](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39211032010) and, at this change's last commit, [39216007512](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39216007512); Autodesk's samples in run [39218285551](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39218285551). All property values against Revit's export (`psets_vs_ifc.py`), the same in both runs:
 
 | | main | RE-194 |
 |---|---:|---:|
@@ -98,6 +98,7 @@ Measure A/B against `main` (8087e60): the office files and the reference models 
 
   A commit of this change also wrote 80 texts at permit that Revit's export does not have: `FireRating` on 74 columns, and an acoustic or fire rating on 6 walls. Each was an older partition's copy of a text the latest copy holds empty. An empty text now counts as the latest copy's value, and nothing is written for it (run [39216007512](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39216007512); the values equal to Revit's are unchanged).
 - **The reference models' exports are byte-identical.** Core Interior, Einhoven and the four RE1 models define no such parameters.
+- **Schema.** The office files are the only exports with a thermal transmittance and its unit. Both pass IfcOpenShell's validation with no finding, and the attribute-count check, as on `main` (run [39219085980](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39219085980), where Measure now validates the reference models' exports).
 - **Samples.** Of 64 hashed exports, 60 are identical. The other four are Revit 2024 samples (rac_advanced, rac_basic, rst_basic and Snowdon Towers' architectural model), where 5, 2, 1 and 26 stairs carry one `Pset_StairCommon` instead of two (§5). Their property values are unchanged.
 - **Time.** On one runner, the reference models' exports take 1.00 to 1.03 times as long (run 39211032010's timing job). The office files are not in that comparison. On the A/B's separate runners the as-built export took 13.6 s against `main`'s 13.3 s, and the permit export 14.6 s against 14.4 s (run 39216007512; 2 to 5 % longer across both runs).
 
