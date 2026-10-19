@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-19
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -17,17 +17,19 @@ need to inspect, validate, and exchange Revit files without installing Revit or
 uploading private models to a third-party service.
 
 It is not a production Revit-to-IFC converter yet, and the matrix says so
-(`converter-grade-rvt-ifc` is unsupported). It opens every Revit file from 2016
-to 2026 and reads its metadata, previews and embedded schema. On Revit 2024 and
+(`converter-grade-rvt-ifc` is unsupported). It opens every Revit file from 2015
+to 2027 and reads its metadata, previews and embedded schema. On Revit 2024 and
 2025 project files it reads the building: each element's ElementId, category,
 name, type, storey, materials, layers and GlobalId, and a body that is exact
 where the element's data is decoded and its bounding box where it is not. It
 writes that as IFC4, glTF, plan SVG and CSV from the CLIs, Python and the
 zero-upload browser viewer. Revit 2023 projects get a narrower version of the
-same, and Revit 2026 is experimental. Every recovery claim is measured against
-Revit's own IFC export of the same model. What is not decoded (most parameters,
-family geometry, hip and gable roofs, opening profiles, phase filtering, other
-releases' element records) is listed in [`docs/status.md`](docs/status.md), and
+same, and Revit 2015 to 2022, 2026 and 2027 projects are experimental. Every
+recovery claim is measured against Revit's own IFC export of the same model,
+except on 2015 to 2022 and 2027, which have none and are measured against the
+same projects saved by the next or the previous release. What is not decoded
+(most parameters, family geometry, hip and gable roofs, opening profiles,
+phase filtering) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
 
@@ -35,12 +37,12 @@ the four levels a file can reach are in the
 
 | Area | Status | Current state | Next decision point |
 |---|---|---|---|
-| Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2026. | Maintain compatibility and bounds checks against hostile input. |
+| Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2015 to 2027. | Maintain compatibility and bounds checks against hostile input. |
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
-| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial, 2026 is experimental (one local model). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | Element records of other releases (#421), parameters (0.6.0), held-out models (#408). |
+| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same projects saved by the next or the previous release (RE-179 to RE-181). Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | The record marker from the schema (#421), parameters (0.7.0), held-out models (#408). |
 | IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.6.x milestone (below). |
-| Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.6.0). |
+| Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.7.0). |
 | Python and CLI | Partial | The `rvt` wheel on PyPI and prebuilt CLI archives on GitHub Releases, sharing the core's honesty bounds. | Stabilize JSON schemas and the one-shot inspect workflow. |
 | Write path | Partial | Stream-level patching only. Field-level semantic writes are unsupported and gated by [ADR-002](docs/decisions/ADR-002-semantic-write-api-gate.md). | Stay gated until openability can be proven. |
 

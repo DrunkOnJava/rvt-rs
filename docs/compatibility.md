@@ -11,10 +11,11 @@ Scope sources:
 
 ## 1. Format versions supported
 
-Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file per Revit release 2016 through 2026, exercised by [`tests/samples.rs`](../tests/samples.rs) via `ALL_YEARS = [2016..=2026]` in [`tests/common/mod.rs`](../tests/common/mod.rs).
+Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file per Revit release 2016 through 2026, exercised by [`tests/samples.rs`](../tests/samples.rs) via `ALL_YEARS = [2016..=2026]` in [`tests/common/mod.rs`](../tests/common/mod.rs). Revit 2015 and 2027 have no file in it; they are read from Autodesk's sample projects (six 2015 and five 2027, pinned in [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv) and read by Measure).
 
 | Revit release | `BasicFileInfo` year | `Partitions/NN` marker | OLE + schema + metadata | Schema-directed walker (ADocument) |
 |---|---|---|---|---|
+| 2015 | 2015 | none in the corpus | yes, on the sample projects | not measured |
 | 2016 | 2016 | Partitions/58 | full | partial |
 | 2017 | 2017 | Partitions/60 | full | partial |
 | 2018 | 2018 | Partitions/61 | full | partial |
@@ -26,13 +27,14 @@ Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file pe
 | 2024 | 2024 | Partitions/67 | full | full |
 | 2025 | 2025 | Partitions/68 | full | full |
 | 2026 | 2026 | Partitions/69 | full | full |
+| 2027 | 2027 | none in the corpus | yes, on the sample projects | not measured |
 
 Column definitions:
 
 - **OLE + schema + metadata**: opens the CFB container, reads all 13 invariant streams, decompresses `Formats/Latest`, parses the whole page-stripped class schema (4,126 classes and 11,562 fields on the 2024 sample, all but 9 to 12 fields per release type-classified, #410), extracts `BasicFileInfo` (version / build / GUID / path / locale), parses `PartAtom` XML, extracts the `RevitPreview4.0` PNG thumbnail, decodes `Contents`, and decodes the 167-byte `Global/PartitionTable` invariant. This row is `full` for every supported release.
 - **Schema-directed walker**: `walker::read_adocument` locates the `ADocument` entry point in `Global/Latest` and walks all declared fields. Reliable on Revit 2024–2026. Returns `Ok(None)` on 2016–2023 when the entry-point detector can't find a high-confidence offset (see `walker.rs` §366–370 and `docs/rvt-phase4c-session-2026-04-19.md`). This is also the bridge the Layer-5b per-class decoders depend on at runtime against real files.
 
-Before 2016 and after 2026: unverified. The schema parser and compression path are likely to still work on near-future releases because the truncated-gzip and `Formats/Latest` framing have not changed in a decade, but no corpus entry exists outside `[2016, 2026]`, so nothing is claimed.
+On the 2015 and 2027 sample projects `rvt-info` reads every file, and their elements export experimentally ([`docs/status.md`](status.md), RE-179, RE-181); the family-corpus columns are not measured on them. Before 2015 and after 2027: unverified. The schema parser and compression path are likely to still work on near-future releases because the truncated-gzip and `Formats/Latest` framing have not changed in a decade, but no file outside `[2015, 2027]` is measured, so nothing is claimed.
 
 ## 2. File type support
 

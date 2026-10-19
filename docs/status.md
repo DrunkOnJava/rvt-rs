@@ -77,7 +77,7 @@ measured on one project against Revit's own export (RE-124). On projects
 saved by Revit 2015 to 2022 and by Revit 2027, experimentally since 0.6.0, it
 exports their elements, measured against the same models saved by the next or
 the previous release rather than against a Revit export of them (RE-179 to
-RE-181). Every recovery claim is measured against Revit's own IFC export of the
+RE-181). Every other recovery claim is measured against Revit's own IFC export of the
 same file; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)

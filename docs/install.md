@@ -20,8 +20,9 @@ version (Trusted Publishing), and docs.rs built it. The PyPI wheel, installed
 in a clean environment, and the macOS arm64 archive, which matched
 `SHA256SUMS` and whose build attestation names the release workflow at the
 tag, each converted Core Interior, Einhoven and RE1 Architecture into the
-same IFC as Measure's export of the same code, byte for byte but the version
-in the header, with the same diagnostics. The container image runs on
+same IFC as Measure's export of the same code, line for line once the export
+time (`FILE_NAME`, `IFCOWNERHISTORY`) and the version are set aside, with the
+same diagnostics. The container image runs on
 `linux/amd64` and `linux/arm64` and converted RE1 Architecture into the same
 IFC as the archive, and the deployed viewer reports 0.6.0. The publish
 workflow also installed each wheel and opened a model on all seven wheel
