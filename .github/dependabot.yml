@@ -39,7 +39,7 @@ updates:
       prefix: build
       include: scope
     cooldown:
-      default-days: 3
+      default-days: 7
       semver-major-days: 7
   - package-ecosystem: github-actions
     # The workflows, and the composite actions under .github/actions, which pin
@@ -63,7 +63,7 @@ updates:
     # No semver cooldowns for this ecosystem: Dependabot accepts only
     # default-days here.
     cooldown:
-      default-days: 3
+      default-days: 7
   - package-ecosystem: npm
     directory: /viewer
     schedule:
@@ -81,7 +81,7 @@ updates:
       prefix: build
       include: scope
     cooldown:
-      default-days: 3
+      default-days: 7
       semver-major-days: 7
   - package-ecosystem: docker
     # The release container image's base, pinned by digest in docker/Dockerfile.
@@ -97,12 +97,13 @@ updates:
     # No semver cooldowns for this ecosystem: Dependabot accepts only
     # default-days here.
     cooldown:
-      default-days: 3
+      default-days: 7
   - package-ecosystem: pip
-    # The Python packages CI installs, pinned in tools/ci/requirements-*.txt.
+    # The Python packages CI installs: tools/ci/requirements-*.in name them,
+    # and requirements-*.txt pin them and their dependencies with hashes.
     directory: /tools/ci
     # IfcOpenShell is a witness and Measure's scorers run on it: an update
-    # lands as tools/ci/requirements-ifc.txt says (#773).
+    # lands as tools/ci/requirements-ifc.in says (#773).
     schedule:
       interval: weekly
     groups:
@@ -117,4 +118,4 @@ updates:
       prefix: build
       include: scope
     cooldown:
-      default-days: 3
+      default-days: 7

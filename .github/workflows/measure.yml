@@ -159,7 +159,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install IfcOpenShell
-        run: python -m pip install -r tools/ci/requirements-ifc.txt
+        run: python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
       - name: Build
         working-directory: measured
         run: |

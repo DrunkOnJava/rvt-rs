@@ -445,12 +445,12 @@ jobs:
           shared-key: ci-release
       - name: Install IfcOpenShell (prebuilt wheel)
         run: |
-          python -m pip install --upgrade pip
           # ifcopenshell ships prebuilt wheels on PyPI for Linux, macOS
           # and Windows x64. tools/ci/requirements-ifc.txt pins an exact
-          # version, since IfcOpenShell is one of the witnesses below; 0.9
-          # is held until Measure's scorers work under it (#773).
-          python -m pip install -r tools/ci/requirements-ifc.txt
+          # version and every dependency, with their hashes, since
+          # IfcOpenShell is one of the witnesses below; an update lands as
+          # tools/ci/requirements-ifc.in says.
+          python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
       # #817: the IFC4 property set table is generated from buildingSMART's
       # definitions (pinned by commit and sha256) and IfcOpenShell's IFC4
       # schema; the committed file must be the generator's output.
@@ -814,7 +814,6 @@ jobs:
       - name: Install the built wheel
         shell: bash
         run: |
-          python3 -m pip install --upgrade pip
           python3 -m pip install --force-reinstall dist/*.whl
       - name: Wheel smoke on Revit files
         shell: bash
@@ -827,7 +826,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install -r tools/ci/requirements-test.txt
+          python3 -m pip install --require-hashes -r tools/ci/requirements-test.txt
           if [ -d _corpus/examples/Autodesk ]; then
             export RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk"
           fi
@@ -1030,7 +1029,7 @@ jobs:
       # changes the schema.
       - name: Validate .cursor/environment.json against the Cursor schema
         run: |
-          python -m pip install -r tools/ci/requirements-test.txt
+          python -m pip install --require-hashes -r tools/ci/requirements-test.txt
           python - <<'PY'
           import json
           import jsonschema
