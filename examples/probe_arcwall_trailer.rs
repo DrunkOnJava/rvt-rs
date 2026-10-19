@@ -20,7 +20,7 @@
 //!
 //! Run:
 //!
-//!     RVT_PROJECT_CORPUS_DIR=/private/tmp/rvt-corpus-probe/magnetar/Revit \
+//!     RVT_PROJECT_CORPUS_DIR=_project_corpus/Revit \
 //!         cargo run --release --example probe_arcwall_trailer
 //!
 //! Output: raw trailer hex per record, then three summary tables.
@@ -39,7 +39,7 @@ const ARC_WALL_VARIANT_STANDARD: u16 = 0x07fa;
 
 fn main() {
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     let file = "Revit_IFC5_Einhoven.rvt";
     let partition = "Partitions/5";
 

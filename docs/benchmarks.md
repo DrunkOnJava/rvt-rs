@@ -183,8 +183,8 @@ cargo build --release
 ./tools/bench.sh
 ```
 
-The script expects the phi-ag corpus at
-`../../samples/_phiag/examples/Autodesk/`. Override with
+The script expects the phi-ag corpus at `_corpus/examples/Autodesk/`
+(`git clone https://github.com/phi-ag/rvt _corpus`). Override with
 `RVT_SAMPLES_DIR=/path/to/samples ./tools/bench.sh`.
 
 ### Criterion (library-level)

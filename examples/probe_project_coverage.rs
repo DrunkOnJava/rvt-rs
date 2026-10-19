@@ -7,13 +7,13 @@
 //! Validates the "100% classified" claim across project files (was
 //! originally measured on family files only). Path resolves via
 //! `RVT_PROJECT_CORPUS_DIR` (default
-//! `/private/tmp/rvt-corpus-probe/magnetar/Revit`).
+//! `_project_corpus/Revit`).
 
 use rvt::{RevitFile, compression, formats, streams};
 
 fn main() {
     let project_dir = std::env::var("RVT_PROJECT_CORPUS_DIR")
-        .unwrap_or_else(|_| "/private/tmp/rvt-corpus-probe/magnetar/Revit".into());
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/_project_corpus/Revit").into());
     let p2023 = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
     let p2024 = format!("{project_dir}/2024_Core_Interior.rvt");
     let files = [p2023.as_str(), p2024.as_str()];

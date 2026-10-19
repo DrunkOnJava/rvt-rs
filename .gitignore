@@ -139,6 +139,8 @@ viewer/dist/
 viewer/public/demos/*
 !viewer/public/demos/.gitkeep
 
+# The corpora tests and probes read by default (CONTRIBUTING.md): never committed.
+_corpus/
 _corpus_candidates/
 _project_corpus/
 
