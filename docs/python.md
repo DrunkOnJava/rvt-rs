@@ -363,8 +363,9 @@ export_diagnostics_json(self) -> str
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`, the same
 exporter `rvt-ifc` runs. On Revit 2023, 2024 and 2025 projects it writes
 typed elements with bodies, storeys, types and materials (on
-`2024_Core_Interior.rvt`, 992 elements, every one with a body); on other
-releases and on family files, the spatial scaffold. What each release
+`2024_Core_Interior.rvt`, 970 elements, every one with a body), and on Revit
+2015 to 2022, 2026 and 2027 projects, experimentally, their elements; on
+family files, the spatial scaffold. What each release
 recovers is in [`status.md`](status.md). Raises `ValueError` if the file
 can't be parsed far enough to build a model.
 
