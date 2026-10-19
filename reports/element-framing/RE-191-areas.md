@@ -3,7 +3,7 @@
 **Date:** 2026-10-18
 **Issues:** #763; follows RE-21 (the instance words), RE-35 (the partition record chain), RE-40 (design options), RE-117 (room number and name entries) and RE-145 / #800 (the latest copy).
 **Artefacts:** the BIM4LCA office, concrete structure, as built and at building permit, with Revit's own IFC export of each (`research/bim4lca-measure.tsv`, CC BY-SA 4.0, read by byte range for a Measure run and never stored); the six reference models; Autodesk's sample projects.
-**Probe and scorers:** `examples/probe_re191_area_records.rs` with its scorer `tools/re/area_spaces_vs_ifc.py`, measured in runs 39175563031 and 39177901496 as `probe_area_records`, its name on the research branch; `tools/re/room_names_vs_ifc.py`, which now also compares each space's storey.
+**Probe and scorers:** `examples/probe_re191_area_records.rs` with its scorer `tools/re/area_spaces_vs_ifc.py`, measured in runs 39175563031 and 39177901496 as `probe_area_records`, its name on the research branch, and under its own name in run 39184524243 with the same counts; `tools/re/room_names_vs_ifc.py`, which now also compares each space's storey.
 **Status:** positive on both office files. All of Revit's 30 area spaces are written with Revit's GlobalId, number, name, storey and space type, and without a body (run 39182294745).
 
 ## 1. Before
@@ -61,7 +61,7 @@ It has no body. Revit 2024 only, the one release measured.
 
 ## 5. Results
 
-Measure A/B against `main` (086b05b), run 39182294745. Both office files give the same counts:
+Measure A/B against `main` (086b05b), run 39182294745, and again after rebasing onto `main` at 0267a24, runs 39184656764 and 39184658338, with the same counts. Both office files give the same counts:
 
 | | before | after |
 |---|---:|---:|
@@ -72,7 +72,7 @@ Measure A/B against `main` (086b05b), run 39182294745. Both office files give th
 | `Pset_SpaceCommon.Reference` equal to Revit's | 191 | 211 |
 
 - **Storeys.** `room_names_vs_ifc` now compares each paired space's storey. On `main` it gives the rooms 234 of 234 on both office files, 116 of 116 on Core Interior and 11 of 11 on RE1 Architecture. An earlier commit of this change wrote the Areas in no storey, until the Area's record set carried its Level.
-- **No extra values.** rvt-rs writes no property value Revit does not write, unchanged from `main`.
+- **No extra values.** The Areas add no property value Revit does not write: the values rvt-rs writes and Revit's export lacks stay at 12,640 on the as-built file and 12,638 on the permit file, as on `main`. The values equal to Revit's rise by 20 on each, the area spaces' `Pset_SpaceCommon.Reference`.
 - **Reference models.** The six export byte-identically: none has an Area.
 - **Samples.** Run 39182297020 hashes each export. Of 64, two change: `IfcSpace` goes from 91 to 116 on Autodesk's 2024 `rac_advanced` and from 0 to 1 on its 2024 `rst_basic`. There is no Revit export of either to compare with.
 
