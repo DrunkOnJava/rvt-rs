@@ -176,6 +176,12 @@ docs.rs blocking adoption), or a published README that claims more than
 was measured, which crates.io and PyPI keep showing until the next
 version replaces it.
 
+An embargoed security fix is the exception to working in public: a
+pushed branch and its pull request publish the fix before the release.
+Prepare and review it in its GitHub security advisory's temporary
+private fork ([`SECURITY.md`](SECURITY.md)), and push the branch here,
+where CI and Measure run, only when it is ready to release.
+
 1. **Branch from the latest release tag.** `git checkout -b
    hotfix/vX.Y.(Z+1) vX.Y.Z`. GitHub runs a push's workflows from the
    pushed branch, and a tag before v0.6.1 has a `ci.yml` without the
@@ -194,21 +200,28 @@ version replaces it.
    `main` gets (`ci.yml` runs on `hotfix/**` pushes). The new version
    changes both Core Interior witness observations and their verdicts
    (step 8): take them from that run's `octetproof-core-interior`
-   artifact, check that only `witness_version` and the verdict hashes
-   differ, commit them and push again, and that run must pass too.
-   Measure the branch against the release it patches, with the corpora
-   the fix touches:
+   artifact and check that every difference is `witness_version`, a
+   verdict hash, or one the fix explains and the changelog states, then
+   commit them and push again; that run must pass too. Measure the
+   branch against the release it patches, with the corpora the fix
+   touches:
    `gh workflow run measure.yml --ref hotfix/vX.Y.(Z+1) -f base=vX.Y.Z`.
-   The branch has no pull request, so nothing reviews its text, which
-   crates.io and PyPI then show for good: push a branch at `vX.Y.Z`
-   (`review/vX.Y.Z-base`) and open a review-only pull request of the
-   hotfix branch into it, answer the review, then close it unmerged and
-   delete that base after the tag. Skip nothing else in steps 1 to 3
-   above.
-5. **Tag the branch and push the tag.** Steps 9 to 12 above, with the
-   branch's head in place of `origin/main`:
-   `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" origin/hotfix/vX.Y.(Z+1)`.
-6. **Bring `main` up to it** through a pull request, as merging the
+   Skip nothing else in steps 1 to 3 above.
+5. **Review it.** The branch has no pull request, so nothing has
+   reviewed its text, which crates.io and PyPI then show for good: push
+   a branch at `vX.Y.Z` (`review/vX.Y.Z-base`) and open a review-only
+   pull request of the hotfix branch into it. A commit that answers the
+   review needs step 4 again on the new head: CI runs on any push that
+   changes more than the paths `ci.yml` ignores (Markdown, `docs/`,
+   `CITATION.cff` and a few others), a push of only those runs none, and
+   a change to code needs Measure again. Then close the pull request
+   unmerged.
+6. **Tag the reviewed head and push the tag.** Steps 9 to 12 above,
+   with that head in place of `origin/main`, once its code and witness
+   files are the ones CI and Measure passed:
+   `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" <its SHA>`. Then delete
+   `review/vX.Y.Z-base`.
+7. **Bring `main` up to it** through a pull request, as merging the
    branch back would: the fix if `main` lacks it, the new `CHANGELOG.md`
    section (its entries moved out of `[Unreleased]`), the version files
    and the README's release section. `main` exports differently from the
