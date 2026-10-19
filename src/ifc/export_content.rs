@@ -937,30 +937,6 @@ pub fn append_typed_production_elements(
             }),
             _ => None,
         };
-        // RE-165 (B44): a pipe fitting's nominal size, the one diameter its
-        // connectors give, as Revit's export writes it: a list of one length.
-        let fitting_diameter = decoded.fields.iter().find_map(|(name, value)| match value {
-            InstanceField::Float { value, .. }
-                if name == crate::partition_schema_mvp::FITTING_NOMINAL_DIAMETER_FIELD =>
-            {
-                Some(*value)
-            }
-            _ => None,
-        });
-        if let Some(diameter) = fitting_diameter {
-            entities.push(entities::IfcEntity::ElementPropertySet {
-                element: entity_index,
-                set: PropertySet {
-                    name: "Pset_PipeFittingTypeCommon".into(),
-                    properties: vec![Property {
-                        name: "NominalDiameter".into(),
-                        value: PropertyValue::List(vec![PropertyValue::PositiveLengthFeet(
-                            diameter,
-                        )]),
-                    }],
-                },
-            });
-        }
         let duct_shape = decoded.fields.iter().find_map(|(name, value)| match value {
             InstanceField::String(shape)
                 if name == crate::partition_schema_mvp::DUCT_SHAPE_FIELD =>
@@ -3599,6 +3575,25 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 value,
             });
         }
+    }
+    // RE-165 (B44): a pipe fitting reports its nominal size, the one diameter
+    // its connectors give. Revit's IFC2X3 export writes it in
+    // Pset_PipeFittingTypeCommon, which in IFC4 has no NominalDiameter, and
+    // its IFC4 Reference View export writes none of the port sets that hold
+    // one (#822).
+    let fitting_diameter = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. }
+            if name == crate::partition_schema_mvp::FITTING_NOMINAL_DIAMETER_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    });
+    if let Some(diameter) = fitting_diameter {
+        properties.push(Property {
+            name: "NominalDiameter".into(),
+            value: PropertyValue::PositiveLengthFeet(diameter),
+        });
     }
     // RE-187: a door reports its type's Width and Height.
     if let Some(size) = crate::partition_schema_mvp::door_type_size_from_fields(&decoded.fields) {

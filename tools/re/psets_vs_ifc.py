@@ -116,6 +116,11 @@ IFC2X3_LENGTHS = {
 # Pset_ManufacturerOccurrence, which IFC4 keeps and which is scored; counted
 # apart.
 IFC2X3_TWICE = {("Pset_PrecastConcreteElementGeneral", "SerialNumber")}
+# IFC2X3's Pset_PipeFittingTypeCommon.NominalDiameter (#822): IFC4's set has
+# none, and Revit's IFC4 Reference View export writes no port set holding one,
+# so rvt-rs writes it in its own set, which this scorer does not read; counted
+# apart.
+IFC2X3_OWN_SET = {("Pset_PipeFittingTypeCommon", "NominalDiameter")}
 
 
 def properties(path):
@@ -154,6 +159,8 @@ def properties(path):
                     name = "quantities:" + name
                 if ifc2x3 and (name, prop.Name) in IFC2X3_TWICE:
                     name = "twice:" + name
+                if ifc2x3 and (name, prop.Name) in IFC2X3_OWN_SET:
+                    name = "own:" + name
                 if prop.is_a("IfcPropertySingleValue"):
                     out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
                 elif prop.is_a("IfcPropertyEnumeratedValue"):
@@ -198,6 +205,7 @@ def main(argv):
     worst = []
     as_quantities = 0
     twice = 0
+    in_own_set = 0
     for (key, pset, prop), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
@@ -206,6 +214,9 @@ def main(argv):
             continue
         if pset.startswith("twice:"):
             twice += 1
+            continue
+        if pset.startswith("own:"):
+            in_own_set += 1
             continue
         row = rows[(pset, prop)]
         row[0] += 1
@@ -230,6 +241,8 @@ def main(argv):
         print(f"IFC2X3 lengths IFC4 holds as quantities, not scored here: {as_quantities}")
     if twice:
         print(f"IFC2X3 values also in an IFC4 set and scored there, not scored here: {twice}")
+    if in_own_set:
+        print(f"IFC2X3 values no IFC4 set Revit's export writes holds, in rvt-rs's own set, not scored here: {in_own_set}")
     only = collections.defaultdict(lambda: [0, 0])
     for key, pset, prop in ours:
         if (key, pset, prop) not in theirs:

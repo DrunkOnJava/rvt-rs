@@ -1478,8 +1478,7 @@ pub enum PropertyValue {
     /// as `Pset_WallCommon` declare (RE-194).
     ThermalTransmittance(f64),
     /// A list of values: the writer emits an `IfcPropertyListValue`, as
-    /// standard property sets declare for values given once per port, such as
-    /// `Pset_PipeFittingTypeCommon.NominalDiameter` (B44).
+    /// standard property sets declare for some properties.
     List(Vec<PropertyValue>),
     /// Values of an enumeration, as labels: the writer emits an
     /// `IfcPropertyEnumeratedValue`, as Revit's export writes

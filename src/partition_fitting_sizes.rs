@@ -16,8 +16,10 @@
 //! radius and then a diameter twice it: the nominal size and the body's
 //! outside sizes, which are larger.
 //!
-//! On RE1 Plumbing (Revit 2025, MIT) Revit's own export writes each of the 42
-//! fittings' `Pset_PipeFittingTypeCommon.NominalDiameter` (10 to 50 mm): on
+//! On RE1 Plumbing (Revit 2025, MIT) Revit's own IFC2X3 export writes each of
+//! the 42 fittings' `Pset_PipeFittingTypeCommon.NominalDiameter` (10 to 50 mm),
+//! which rvt-rs's IFC4 export gives in its own `RvtElementRecordGeometry` set
+//! as IFC4's `Pset_PipeFittingTypeCommon` has no such property (#822): on
 //! the fittings with connector records, the one diameter they all give; on
 //! the cap, which holds none, the smallest of its pairs. So a fitting's
 //! nominal diameter is its connectors' one diameter, or, where it holds no

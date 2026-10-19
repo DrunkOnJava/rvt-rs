@@ -177,6 +177,14 @@ All notable changes will be documented here. This project follows
   building-element proxy's Serial Number is no longer also written in
   `Pset_PrecastConcreteElementGeneral`, which in IFC4 has no `SerialNumber`;
   `Pset_ManufacturerOccurrence` holds it.
+- **A pipe fitting's nominal diameter is no longer written in
+  `Pset_PipeFittingTypeCommon` (#822).** RE-165 wrote it there as Revit's
+  IFC2X3 exports of the RE1 models do, a list of one length. IFC4's
+  `Pset_PipeFittingTypeCommon` has no `NominalDiameter`, and Revit's IFC4
+  Reference View export writes none of the port sets that hold one: revit-ifc
+  certifies none of them for that view, and its export of the BIM4LCA office
+  writes no property set on any of its 67 ports. The measured value is now in
+  rvt-rs's own `RvtElementRecordGeometry` set, as one length.
 - **An element's `Reference` is in IFC4's property sets, not IFC2X3's
   (#822).** RE-154 wrote the type's name in `Pset_QuantityTakeOff` on every
   element with a type and in `Pset_DistributionFlowElementCommon` on MEP
