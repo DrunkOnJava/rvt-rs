@@ -2762,6 +2762,26 @@ impl StepWriter {
         // join it is in.
         let mut ports: HashMap<(u32, u32), usize> = HashMap::new();
         let mut nested: BTreeMap<u32, (usize, Vec<usize>)> = BTreeMap::new();
+        // #828: each connector's port type, `$` where none is read.
+        let port_types: HashMap<(u32, u32), String> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::Port {
+                    id,
+                    index,
+                    predefined_type: Some(kind),
+                    ..
+                } => Some(((*id, *index), format!(".{kind}."))),
+                _ => None,
+            })
+            .collect();
+        let port_type = |id: u32, index: u32| {
+            port_types
+                .get(&(id, index))
+                .map_or("$", String::as_str)
+                .to_string()
+        };
         for entity in &model.entities {
             let super::entities::IfcEntity::PortConnection {
                 a,
@@ -2792,8 +2812,9 @@ impl StepWriter {
                 self.emit_entity(
                     port,
                     format!(
-                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,$,$)",
+                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,{},$)",
                         gid(&["port", &id_text, &index_text]),
+                        port_type(id, index),
                     ),
                 );
                 nested
@@ -2824,7 +2845,10 @@ impl StepWriter {
 
         // B54: a duct's or pipe's connector no join has given a port.
         for entity in &model.entities {
-            let super::entities::IfcEntity::Port { element, id, index } = entity else {
+            let super::entities::IfcEntity::Port {
+                element, id, index, ..
+            } = entity
+            else {
                 continue;
             };
             if ports.contains_key(&(*id, *index)) {
@@ -2839,8 +2863,9 @@ impl StepWriter {
             self.emit_entity(
                 port,
                 format!(
-                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,$,$)",
+                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,.NOTDEFINED.,{},$)",
                     gid(&["port", &id_text, &index_text]),
+                    port_type(*id, *index),
                 ),
             );
             nested

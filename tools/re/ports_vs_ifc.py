@@ -24,6 +24,7 @@ Usage:
 """
 
 import argparse
+import collections
 import json
 import re
 
@@ -42,14 +43,22 @@ def port_schema_findings(path):
     return findings, [f for f in findings if PORT_ENTITY.search(json.dumps(f, default=str))]
 
 
+# The port attributes compared (#828); an IFC2X3 port has FlowDirection only.
+PORT_ATTRIBUTES = ("FlowDirection", "PredefinedType", "SystemType")
+
+
 def read(path):
-    """Ports, connections as unordered pairs, and the ElementIds that are ducts or pipes."""
+    """Ports, connections as unordered pairs, the ElementIds that are ducts or
+    pipes, which element each port is tied to, and each port's
+    PORT_ATTRIBUTES by (ElementId, connector index)."""
     model = ifcopenshell.open(path)
     ports = {}
+    attributes = {}
     for port in model.by_type("IfcDistributionPort"):
         match = PORT_NAME.match(port.Name or "")
         if match:
             ports[port.id()] = (int(match.group(1)), int(match.group(2)))
+            attributes[ports[port.id()]] = tuple(getattr(port, name, None) for name in PORT_ATTRIBUTES)
     connections = set()
     for rel in model.by_type("IfcRelConnectsPorts"):
         a, b = ports.get(rel.RelatingPort.id()), ports.get(rel.RelatedPort.id())
@@ -66,7 +75,7 @@ def read(path):
         for part in rel.RelatedObjects:
             if part.is_a("IfcDistributionPort"):
                 tied[part.id()] = tag(rel.RelatingObject)
-    return ports, connections, segments, tied
+    return ports, connections, segments, tied, attributes
 
 
 def main():
@@ -76,8 +85,8 @@ def main():
     parser.add_argument("--list", action="store_true", help="list the connections not matched")
     args = parser.parse_args()
 
-    ports, connections, segments, tied = read(args.rvt_rs_ifc)
-    revit_ports, revit_connections, revit_segments, _ = read(args.revit_ifc)
+    ports, connections, segments, tied, attributes = read(args.rvt_rs_ifc)
+    revit_ports, revit_connections, revit_segments, _, revit_attributes = read(args.revit_ifc)
 
     def involves(connection, segment_ids):
         return any(element in segment_ids for element, _ in connection)
@@ -109,6 +118,14 @@ def main():
             print("  schema:", json.dumps(finding, default=str)[:400])
     except Exception as error:  # the validator is a measurement, not the score
         print(f"schema validation unavailable: {type(error).__name__}: {error}")
+    both = sorted(set(attributes) & set(revit_attributes))
+    print(f"ports in both exports: {len(both)}")
+    for i, name in enumerate(PORT_ATTRIBUTES):
+        pairs = collections.Counter((revit_attributes[key][i], attributes[key][i]) for key in both)
+        equal = sum(n for (theirs, ours), n in pairs.items() if theirs == ours)
+        print(f"  {name}: {equal} equal of {len(both)}")
+        for (theirs, ours), n in sorted(pairs.items(), key=lambda kv: -kv[1]):
+            print(f"    Revit {theirs}, rvt-rs {ours}: {n}")
     if args.list:
         for pair in sorted(missed_all, key=sorted):
             print("  not written:", sorted(pair))

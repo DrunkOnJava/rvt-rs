@@ -185,8 +185,15 @@ pub enum IfcEntity {
     /// its `IfcDistributionPort`, tied to the element, where no join has.
     /// Revit's export writes connectors 0 and 1 of every duct and pipe, and
     /// each connector of a family instance's symbol, whether or not anything
-    /// is connected to them.
-    Port { element: usize, id: u32, index: u32 },
+    /// is connected to them. `predefined_type` is the port's IFC4
+    /// `PredefinedType` (`PIPE`, `DUCT`, `CABLE`), from its connector's
+    /// domain or its duct or pipe (#828).
+    Port {
+        element: usize,
+        id: u32,
+        index: u32,
+        predefined_type: Option<String>,
+    },
     /// An MEP system (RE-162, #528): the Revit system element `id`, named
     /// `name`, grouping the building elements at `members` (indices into
     /// `IfcModel::entities`). The writer emits an `IfcSystem` with an

@@ -352,7 +352,7 @@ pub fn append_typed_production_elements(
     let mut pending_joins: Vec<(usize, u32, crate::partition_schema_mvp::ConnectorJoins)> =
         Vec::new();
     // B54: each duct and pipe, by entity index and ElementId.
-    let mut curve_ends: Vec<(usize, u32)> = Vec::new();
+    let mut curve_ends: Vec<(usize, u32, &'static str)> = Vec::new();
     // RE-162: each MEP system's name and members, by its ElementId.
     let mut pending_systems: std::collections::BTreeMap<u32, (Option<String>, Vec<usize>)> =
         Default::default();
@@ -731,8 +731,11 @@ pub fn append_typed_production_elements(
             if !joins.is_empty() {
                 pending_joins.push((entity_index, id, joins));
             }
-            if matches!(decoded.class.as_str(), "Duct" | "Pipe") {
-                curve_ends.push((entity_index, id));
+            // #828: a duct's ports are DUCT ports, a pipe's PIPE ports.
+            match decoded.class.as_str() {
+                "Duct" => curve_ends.push((entity_index, id, "DUCT")),
+                "Pipe" => curve_ends.push((entity_index, id, "PIPE")),
+                _ => {}
             }
         }
         // RE-162: the MEP systems the element is a member of.
@@ -1107,9 +1110,9 @@ pub fn append_typed_production_elements(
             connections.insert(ends);
         }
     }
-    let curve_ends: Vec<(usize, u32)> = curve_ends
+    let curve_ends: Vec<(usize, u32, &'static str)> = curve_ends
         .into_iter()
-        .filter(|(element, _)| is_distribution(*element))
+        .filter(|(element, _, _)| is_distribution(*element))
         .collect();
     for [(a, a_id, a_index), (b, b_id, b_index)] in connections {
         entities.push(entities::IfcEntity::PortConnection {
@@ -1122,9 +1125,14 @@ pub fn append_typed_production_elements(
         });
     }
     // B54: both ends of every duct and pipe, joined or not.
-    for (element, id) in curve_ends {
+    for (element, id, kind) in curve_ends {
         for index in 0..2 {
-            entities.push(entities::IfcEntity::Port { element, id, index });
+            entities.push(entities::IfcEntity::Port {
+                element,
+                id,
+                index,
+                predefined_type: Some(kind.to_string()),
+            });
         }
     }
     for (id, (name, members)) in pending_systems {
