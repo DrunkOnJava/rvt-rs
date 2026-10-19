@@ -122,7 +122,7 @@ schema() { # dir max_bytes
       | grep -v '^IFC schema conformance passed\|^  instances checked' || true
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
       echo "validate:"
-      timed "$1" schema-validate timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" 2>&1
+      timed "$1" schema-validate timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl" 2>&1
     else
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
@@ -170,11 +170,17 @@ measure_model() { # name rvt ref
     if [ -f "$dir/probe.txt" ] && [ -n "${PROBE_SCORER:-}" ] && [ -f "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" ]; then
       score "$dir/probe_score.txt" "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" "$dir/probe.txt" "$MODELS/$ref" --list
     fi
-    for s in $IFC_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"; done
+    for s in $IFC_SCORERS; do
+      # ports_vs_ifc reads the findings the schema step's validation wrote,
+      # rather than validating the export again.
+      extra=()
+      [ "$s" = ports_vs_ifc ] && [ -f "$dir/validation.jsonl" ] && extra=(--validation "$dir/validation.jsonl")
+      score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref" "${extra[@]}"
+    done
     for s in $GLB_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"; done
   fi
   # The bulky outputs stay out of the uploaded results.
-  rm -f "$dir/model.glb"
+  rm -f "$dir/model.glb" "$dir/validation.jsonl"
   [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
   finished "$dir" "$name" "$item_started"
 }
@@ -225,6 +231,7 @@ measure_sample() { # sample
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
   fi
   [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
+  rm -f "$dir/validation.jsonl"
   if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
     timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
     echo "exit $?" >> "$dir/probe.txt"
