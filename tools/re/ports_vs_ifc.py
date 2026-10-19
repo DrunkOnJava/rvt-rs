@@ -6,15 +6,19 @@ Research tool for `reports/element-framing/RE-138-connector-pairs.md`. Revit
 writes each connector as an `IfcDistributionPort` named
 `<In or Out>Port_<ElementId>_<index>`, ties it to its element with an
 `IfcRelConnectsPortToElement`, and each join with an `IfcRelConnectsPorts`.
-rvt-rs writes the same entities, named `Port_<ElementId>_<index>` with no flow
-direction, and nests a proxy's ports in it with an `IfcRelNests`, as IFC4 ties
-a port to a distribution element only (B83). Both are read as unordered pairs of (ElementId, connector index),
-and the connections that involve a duct or pipe (an `IfcFlowSegment`) are
-compared:
+rvt-rs writes the same entities, named `Port_<ElementId>_<index>`, and nests a
+proxy's ports in it with an `IfcRelNests`, as IFC4 ties a port to a
+distribution element only (B83). Both are read as unordered pairs of
+(ElementId, connector index), and the connections that involve a duct or pipe
+(an `IfcFlowSegment`) are compared:
 
 - how many of Revit's reproduce;
 - how many rvt-rs writes that Revit's export does not hold;
-- whether each of rvt-rs's ports is tied to the element its name says.
+- whether each of rvt-rs's ports is tied to the element its name says;
+- the `FlowDirection`, `PredefinedType` and `SystemType` of the ports both
+  exports hold, those the schema of Revit's export gives a port (#828): an
+  IFC2X3 port, as in Revit's exports of the RE1 models, has `FlowDirection`
+  only.
 
 Needs IfcOpenShell (`pip install ifcopenshell`).
 
@@ -49,9 +53,14 @@ PORT_ATTRIBUTES = ("FlowDirection", "PredefinedType", "SystemType")
 
 def read(path):
     """Ports, connections as unordered pairs, the ElementIds that are ducts or
-    pipes, which element each port is tied to, and each port's
-    PORT_ATTRIBUTES by (ElementId, connector index)."""
+    pipes, which element each port is tied to, each port's PORT_ATTRIBUTES by
+    (ElementId, connector index), and those of PORT_ATTRIBUTES the file's
+    schema gives a port."""
     model = ifcopenshell.open(path)
+    declaration = ifcopenshell.ifcopenshell_wrapper.schema_by_name(model.schema).declaration_by_name(
+        "IfcDistributionPort"
+    )
+    names = {attribute.name() for attribute in declaration.all_attributes()}
     ports = {}
     attributes = {}
     for port in model.by_type("IfcDistributionPort"):
@@ -75,7 +84,7 @@ def read(path):
         for part in rel.RelatedObjects:
             if part.is_a("IfcDistributionPort"):
                 tied[part.id()] = tag(rel.RelatingObject)
-    return ports, connections, segments, tied, attributes
+    return ports, connections, segments, tied, attributes, {name for name in PORT_ATTRIBUTES if name in names}
 
 
 def main():
@@ -85,8 +94,8 @@ def main():
     parser.add_argument("--list", action="store_true", help="list the connections not matched")
     args = parser.parse_args()
 
-    ports, connections, segments, tied, attributes = read(args.rvt_rs_ifc)
-    revit_ports, revit_connections, revit_segments, _, revit_attributes = read(args.revit_ifc)
+    ports, connections, segments, tied, attributes, _ = read(args.rvt_rs_ifc)
+    revit_ports, revit_connections, revit_segments, _, revit_attributes, compared = read(args.revit_ifc)
 
     def involves(connection, segment_ids):
         return any(element in segment_ids for element, _ in connection)
@@ -121,6 +130,9 @@ def main():
     both = sorted(set(attributes) & set(revit_attributes))
     print(f"ports in both exports: {len(both)}")
     for i, name in enumerate(PORT_ATTRIBUTES):
+        if name not in compared:
+            print(f"  {name}: not compared, the schema of Revit's export gives a port none")
+            continue
         pairs = collections.Counter((revit_attributes[key][i], attributes[key][i]) for key in both)
         equal = sum(n for (theirs, ours), n in pairs.items() if theirs == ours)
         print(f"  {name}: {equal} equal of {len(both)}")
