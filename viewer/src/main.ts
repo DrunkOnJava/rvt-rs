@@ -2483,11 +2483,12 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
   const diagnosticCandidates = decoded.diagnostic_proxy_candidates ?? 0;
   const level = confidence.level ?? 'unknown';
 
-  if (typeof revitVersion === 'number' && (revitVersion < 2016 || revitVersion > 2026)) {
+  // The releases rvt-rs reads, 2015 to 2022 and 2027 experimentally, as rvt-inspect has it.
+  if (typeof revitVersion === 'number' && (revitVersion < 2015 || revitVersion > 2027)) {
     return {
       kind: 'warn',
       title: 'Unsupported Revit version',
-      summary: 'outside the verified support range',
+      summary: 'outside the 2015 to 2027 releases rvt-rs reads',
     };
   }
   if (level === 'unknown') {
