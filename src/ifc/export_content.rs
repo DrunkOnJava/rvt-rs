@@ -341,6 +341,9 @@ pub fn append_typed_production_elements(
     let mut pending_named: Vec<(usize, Vec<(String, Property)>)> = Vec::new();
     // #331, #816: each element written in pieces, and its further pieces.
     let mut pieces_of: Vec<(usize, std::ops::Range<usize>)> = Vec::new();
+    // #822: the sets holding `Reference` for each entity and predefined type
+    // written, worked out once.
+    let mut reference_kinds: ReferenceKinds = Default::default();
     // RE-138: the joins of ducts and pipes, by entity index and ElementId.
     let mut pending_joins: Vec<(usize, u32, crate::partition_schema_mvp::ConnectorJoins)> =
         Vec::new();
@@ -746,7 +749,12 @@ pub fn append_typed_production_elements(
         }
 
         let mut reference_sets = reference_type
-            .map(|type_name| reference_property_sets(&ifc_type, predefined_type, &type_name))
+            .map(|type_name| {
+                let kinds = reference_kinds
+                    .entry((ifc_type.clone(), predefined_type))
+                    .or_insert_with(|| reference_set_kinds(&ifc_type, predefined_type));
+                reference_property_sets(kinds, &type_name)
+            })
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
@@ -1419,35 +1427,63 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     })
 }
 
+/// The sets holding `Reference` of each entity and predefined type written
+/// ([`reference_set_kinds`]).
+type ReferenceKinds = std::collections::BTreeMap<
+    (String, Option<&'static str>),
+    Vec<(
+        &'static str,
+        super::standard_property_sets::StandardPropertyKind,
+    )>,
+>;
+
 /// The property sets whose `Reference` an element written as `ifc_type`, with
-/// the predefined type `predefined_type`, gets (RE-154, #822), each holding
-/// its type's name: every IFC4 standard set that applies to the entity and
-/// declares `Reference`, as the type it declares (`IfcLabel` in the
-/// reinforcement sets). Revit's IFC4 export gives the BIM4LCA office's
-/// elements exactly these sets, but for those revit-ifc matches by a prefix
-/// of the entity's name, such as `Pset_StairFlightCommon` on a stair. None
-/// for a space, whose `Reference` is [`space_common_property_set`]'s.
-fn reference_property_sets(
+/// the predefined type `predefined_type`, gets (RE-154, #822), each with the
+/// type it declares `Reference` as: every IFC4 standard set that applies to
+/// the entity and declares `Reference` (`IfcLabel` in the reinforcement
+/// sets). Revit's IFC4 export gives the BIM4LCA office's elements exactly
+/// these sets, but for those revit-ifc matches by a prefix of the entity's
+/// name, such as `Pset_StairFlightCommon` on a stair. None for a space,
+/// whose `Reference` is [`space_common_property_set`]'s.
+fn reference_set_kinds(
     ifc_type: &str,
     predefined_type: Option<&str>,
-    type_name: &str,
-) -> Vec<PropertySet> {
-    use super::standard_property_sets::{STANDARD_PROPERTY_SETS, StandardPropertyKind as Kind};
+) -> Vec<(
+    &'static str,
+    super::standard_property_sets::StandardPropertyKind,
+)> {
+    use super::standard_property_sets::STANDARD_PROPERTY_SETS;
     if ifc_type == "IFCSPACE" {
         return Vec::new();
     }
     STANDARD_PROPERTY_SETS
         .iter()
         .filter(|set| set.applies_to(ifc_type, predefined_type))
-        .filter_map(|set| {
-            let value = match set.property_kind("Reference")? {
+        .filter_map(|set| Some((set.name, set.property_kind("Reference")?)))
+        .collect()
+}
+
+/// The sets `kinds` ([`reference_set_kinds`]), each holding `type_name` as
+/// its `Reference`.
+fn reference_property_sets(
+    kinds: &[(
+        &'static str,
+        super::standard_property_sets::StandardPropertyKind,
+    )],
+    type_name: &str,
+) -> Vec<PropertySet> {
+    use super::standard_property_sets::StandardPropertyKind as Kind;
+    kinds
+        .iter()
+        .filter_map(|(name, kind)| {
+            let value = match kind {
                 Kind::Identifier => PropertyValue::Identifier(type_name.to_string()),
                 Kind::Label => PropertyValue::Label(type_name.to_string()),
                 Kind::Text => PropertyValue::Text(type_name.to_string()),
                 _ => return None,
             };
             Some(PropertySet {
-                name: set.name.into(),
+                name: (*name).into(),
                 properties: vec![Property {
                     name: "Reference".into(),
                     value,
