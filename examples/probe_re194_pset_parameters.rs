@@ -27,7 +27,9 @@
 //! - `just_before`: the `f64` immediately before the key.
 //!
 //! Where an element's copies in several partitions hold an entry, the latest
-//! partition's is printed (#800). A first line names the parameters.
+//! partition's is printed (#800), and none where that partition's entries
+//! disagree, as the export takes them. A first line names the parameters, a
+//! second counts, per parameter, the elements left out that way.
 //! `tools/re/pset_parameters_vs_ifc.py` pairs the lines with Revit's export
 //! and counts, per parameter, which reading equals the value Revit writes.
 //!
@@ -109,8 +111,10 @@ fn main() -> rvt::Result<()> {
         json!({ "parameters": names.values().collect::<Vec<_>>() })
     );
 
-    // (element, parameter name) -> (partition, readings), the latest partition's.
-    let mut found: BTreeMap<(u32, String), (u32, Value)> = BTreeMap::new();
+    // (element, parameter name) -> (partition, readings), the latest
+    // partition's, or None where that partition's entries disagree, as
+    // `scan_parameter_entries` takes them.
+    let mut found: BTreeMap<(u32, String), (u32, Option<Value>)> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let (Ok(inflated), Ok(objects)) = (
             rf.inflated_partition(&stream),
@@ -131,9 +135,17 @@ fn main() -> rvt::Result<()> {
                 let tag = parameter.to_le_bytes();
                 for hit in memchr::memmem::find_iter(payload, &tag) {
                     let key = (object.element_id, name.clone());
-                    let newer = found.get(&key).is_none_or(|(held, _)| *held < partition);
-                    if newer {
-                        found.insert(key, (partition, readings(payload, hit)));
+                    let value = readings(payload, hit);
+                    match found.get_mut(&key) {
+                        Some((held, _)) if *held > partition => {}
+                        Some((held, reading)) if *held == partition => {
+                            if reading.as_ref() != Some(&value) {
+                                *reading = None;
+                            }
+                        }
+                        _ => {
+                            found.insert(key, (partition, Some(value)));
+                        }
                     }
                 }
             }
@@ -141,9 +153,16 @@ fn main() -> rvt::Result<()> {
     }
 
     let mut by_element: BTreeMap<u32, BTreeMap<String, Value>> = BTreeMap::new();
+    let mut conflicting: BTreeMap<String, usize> = BTreeMap::new();
     for ((element, name), (_, value)) in found {
-        by_element.entry(element).or_default().insert(name, value);
+        match value {
+            Some(value) => {
+                by_element.entry(element).or_default().insert(name, value);
+            }
+            None => *conflicting.entry(name).or_default() += 1,
+        }
     }
+    println!("{}", json!({ "conflicting": conflicting }));
     for element in &elements {
         let Some(id) = element.id else {
             continue;

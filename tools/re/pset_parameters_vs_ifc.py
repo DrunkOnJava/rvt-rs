@@ -104,7 +104,7 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     listing = "--list" in sys.argv
     probe, reference = args
-    rows, parameters = [], []
+    rows, parameters, conflicting = [], [], {}
     for line in open(probe, encoding="utf-8", errors="replace"):
         line = line.strip()
         if not line.startswith("{"):
@@ -112,10 +112,15 @@ def main():
         row = json.loads(line)
         if "parameters" in row:
             parameters = row["parameters"]
+        elif "conflicting" in row:
+            conflicting = row["conflicting"]
         elif row.get("id") is not None:
             rows.append(row)
     by_tag, by_global_id, scale = revit_values(reference)
-    print(f"parameters named Pset_*: {len(parameters)}; elements carrying one: {len(rows)}")
+    print(
+        f"parameters named Pset_*: {len(parameters)}; elements carrying one: {len(rows)}; "
+        f"entries left out, their latest copies disagreeing: {sum(conflicting.values())}"
+    )
     tally = collections.defaultdict(collections.Counter)
     placement = collections.defaultdict(collections.Counter)
     examples = collections.defaultdict(list)
