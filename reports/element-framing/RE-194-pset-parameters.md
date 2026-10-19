@@ -27,7 +27,7 @@ The probe lists each project and shared parameter whose name starts with `Pset_`
 - a text as `u32 n · UTF-16 × n` after it (RE-156);
 - a number as the `f64` immediately before it: a length in feet (a stair's `RiserHeight`), a thermal transmittance in W/(m²·K) as Revit's export writes it.
 
-The entry is on the element, never on its type. Where an element's copies in several partitions hold one, the latest partition's is taken (#800). Of the models measured, only the office defines such parameters.
+The probe reads the element's own entry, and that is where Revit's export takes the value from (§4). Where an element's copies in several partitions hold one, the latest partition's is taken (#800). Of the models measured, only the office defines such parameters.
 
 On the as-built file (run [39211032010](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39211032010)), each reading equals Revit's value wherever Revit's export writes the property on the element carrying the parameter:
 
@@ -73,7 +73,7 @@ The Reference View certifies neither the glazing set nor the occupancy set (§2)
 ## 6. What is not written
 
 - **What the office's user-defined file adds** (§4): the glazing set on walls, curtain walls and coverings, and the covering properties in `Pset_SpaceCommon`. `OccupancyNumber` is written as the `IfcCountMeasure` IFC4 declares, which the scorer counts as different from the export's `IfcInteger`. `IsWired`, a stored 0 on every door and window, is written there as No; the export writes none (§4).
-- **Values Revit takes from elsewhere when the parameter is empty or absent.** On the as-built file Revit's export writes `FireRating` on 26 walls and 2 doors whose parameter is empty. It writes `LoadBearing` on 2 walls and a column, and `NumberOfTreads` on a stair, that carry none. Those come from the exporter's next sources: a built-in parameter, the type, or a calculator. None is written here.
+- **Values Revit takes from elsewhere when an element carries no such parameter.** On the as-built file Revit's export writes these on elements whose own data object holds no entry for the parameter: `FireRating` on 26 walls and 2 doors, `LoadBearing` on 2 walls and a column, and `NumberOfTreads` on a stair. They come from the exporter's next sources: a built-in parameter, the type, or a calculator. None is written here.
 - **Other kinds of values:** plane angles, areas, ratios and enumerations (`Status`) are not read.
 - **A parameter on a type** named for a set never occurs in these files and is not read.
 - **Releases.** The parameter definitions are read from Revit 2024 on (RE-156); only Revit 2024 files define such parameters among those measured.
