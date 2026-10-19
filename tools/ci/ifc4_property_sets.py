@@ -55,8 +55,12 @@ def definitions(path):
     else:
         text = pinned.source_text(None)
         if path:
-            with open(path, "wb") as out:
+            # Written whole, then renamed into place, so a reader running at
+            # the same time never sees part of it.
+            partial = f"{path}.{os.getpid()}"
+            with open(partial, "wb") as out:
                 out.write(text.encode("utf-8"))
+            os.replace(partial, path)
     csv.field_size_limit(sys.maxsize)
     out = {}
     for row in csv.DictReader(io.StringIO(text)):

@@ -20,6 +20,7 @@
 #     research/witness/<artifact>/observations/rvt-rs.json;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
 #     ending with its exit status;
+#   - timings.log: each step's wall time in milliseconds, and the item's;
 #   - info.json and info.exit: `rvt-info --redact --json` on it (the identity,
 #     the document's Atom entry, the streams) and its exit status. The Atom
 #     entry goes through the PartAtom parser, from the model's
@@ -42,6 +43,7 @@
 # into probe-pair.txt, ending with its exit status: the cross-release
 # comparisons of #740 and #742.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
+# MEASURE_JOBS items run at once, by default one per CPU.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
 SCORERS="$(dirname "$0")/../re"
@@ -130,16 +132,18 @@ schema() { # dir max_bytes
   } > "$1/schema.txt"
 }
 
-while IFS='|' read -r name rvt ref; do
-  [ -n "$name" ] || continue
-  # The BIM4LCA office models are fetched only with `-f nordic=true`, and the
-  # R2025 models only with `-f r2025=true`.
-  if [ ! -f "$MODELS/$rvt" ]; then
-    echo "skipping $name: $rvt absent"
-    continue
-  fi
+# Each item ends with its group in the log, written at once as items run
+# together, and its wall time in its timings.log.
+finished() { # dir name started
+  local ms=$(( ($(date +%s%N) - $3) / 1000000 ))
+  echo "item $ms" >> "$1/timings.log"
+  printf '::group::%s\n%s ms\n::endgroup::\n' "$2" "$ms"
+}
+
+measure_model() { # name rvt ref
+  local name="$1" rvt="$2" ref="$3" dir started item_started artifact s
+  item_started=$(date +%s%N)
   dir="$OUT/$name"; mkdir -p "$dir"
-  echo "::group::$name"
   # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
   started=$(date +%s%N)
   "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
@@ -172,20 +176,18 @@ while IFS='|' read -r name rvt ref; do
   # The bulky outputs stay out of the uploaded results.
   rm -f "$dir/model.glb"
   [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
-  echo "::endgroup::"
-done <<< "$MODELS_LIST"
+  finished "$dir" "$name" "$item_started"
+}
 
-if [ -d "${FAMILY_DIR:-}" ]; then
-  for family in "$FAMILY_DIR"/*.rfa; do
-    [ -f "$family" ] || continue
-    dir="$OUT/family-$(basename "$family" .rfa)"; mkdir -p "$dir"
-    info "$family" "$dir"
-    if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
-      timeout 1200 "$BIN/examples/$PROBE" "$family" > "$dir/probe.txt" 2>&1
-      echo "exit $?" >> "$dir/probe.txt"
-    fi
-  done
-fi
+measure_family() { # family
+  local family="$1" dir
+  dir="$OUT/family-$(basename "$family" .rfa)"; mkdir -p "$dir"
+  info "$family" "$dir"
+  if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
+    timeout 1200 "$BIN/examples/$PROBE" "$family" > "$dir/probe.txt" 2>&1
+    echo "exit $?" >> "$dir/probe.txt"
+  fi
+}
 
 # Autodesk's sample projects (research/autodesk-sample-projects.tsv), one per
 # release and model: each gets OUT_DIR/sample-<year>-<file>/ with info.json and
@@ -203,38 +205,85 @@ pair_key() {
   name=${name//_/}
   echo "${name%sampleproject}"
 }
+measure_sample() { # sample
+  local sample="$1" dir started item_started copy
+  item_started=$(date +%s%N)
+  dir="$OUT/sample-$(basename "$sample" .rvt)"; mkdir -p "$dir"
+  timed "$dir" rvt-info info "$sample" "$dir"
+  # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+  started=$(date +%s%N)
+  "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
+  echo "exit $?" >> "$dir/rvt-ifc.log"
+  echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/rvt-ifc.log"
+  # C9: the IFC4 schema's view of the export, so a writer path only the
+  # samples reach (I-shape profiles and profile set usages on the
+  # structural samples) is checked somewhere. Attribute counts on every
+  # export; IfcOpenShell's full validation on exports up to 30 MB, the
+  # rest marked as skipped.
+  if [ -s "$dir/model.ifc" ]; then
+    schema "$dir" 31457280
+    grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+  fi
+  [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
+  if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
+    timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
+    echo "exit $?" >> "$dir/probe.txt"
+    if [ -n "${PROBE_PAIR_RELEASE:-}" ] && [ "$(basename "$sample" | cut -c1-4)" != "$PROBE_PAIR_RELEASE" ]; then
+      for copy in "$SAMPLE_DIR/$PROBE_PAIR_RELEASE"-*.rvt; do
+        [ -f "$copy" ] && [ "$(pair_key "$copy")" = "$(pair_key "$sample")" ] || continue
+        timeout 1200 "$BIN/examples/$PROBE" "$sample" "$copy" > "$dir/probe-pair.txt" 2>&1
+        echo "exit $?" >> "$dir/probe-pair.txt"
+      done
+    fi
+  fi
+  finished "$dir" "$(basename "$sample")" "$item_started"
+}
+
+# Every item runs in its own folder, MEASURE_JOBS at once (by default one per
+# CPU), the longest first: the models scored against Revit's export, then the
+# rest, each by file size.
+JOBS="${MEASURE_JOBS:-$(nproc)}"
+spawn() { # command...: run it once fewer than JOBS items are running
+  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
+    wait -n
+  done
+  "$@" &
+}
+
+# The definitions are fetched once here, before the items read them at once.
+python -c 'import sys; sys.path.insert(0, sys.argv[1]); import ifc4_property_sets; ifc4_property_sets.definitions(sys.argv[2])' \
+  "$(dirname "$0")" "$PSET_DEFINITIONS"
+
+items=""
+while IFS='|' read -r name rvt ref; do
+  [ -n "$name" ] || continue
+  # The BIM4LCA office models are fetched only with `-f nordic=true`, and the
+  # R2025 models only with `-f r2025=true`.
+  if [ ! -f "$MODELS/$rvt" ]; then
+    echo "skipping $name: $rvt absent"
+    continue
+  fi
+  rank=$(stat -c %s "$MODELS/$rvt")
+  [ "$ref" = "-" ] || rank=$(( rank + 1000000000000 ))
+  items="$items
+$rank|measure_model|$name|$rvt|$ref"
+done <<< "$MODELS_LIST"
+if [ -d "${FAMILY_DIR:-}" ]; then
+  for family in "$FAMILY_DIR"/*.rfa; do
+    [ -f "$family" ] || continue
+    items="$items
+$(stat -c %s "$family")|measure_family|$family||"
+  done
+fi
 if [ -d "${SAMPLE_DIR:-}" ]; then
   for sample in "$SAMPLE_DIR"/*.rvt; do
     [ -f "$sample" ] || continue
-    dir="$OUT/sample-$(basename "$sample" .rvt)"; mkdir -p "$dir"
-    echo "::group::$(basename "$sample")"
-    timed "$dir" rvt-info info "$sample" "$dir"
-    # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
-    started=$(date +%s%N)
-    "$BIN/rvt-ifc" "$sample" -o "$dir/model.ifc" --diagnostics "$dir/diagnostics.json" ${RVT_IFC_FLAGS:-} > "$dir/rvt-ifc.log" 2>&1
-    echo "exit $?" >> "$dir/rvt-ifc.log"
-    echo "milliseconds $(( ($(date +%s%N) - started) / 1000000 ))" >> "$dir/rvt-ifc.log"
-    # C9: the IFC4 schema's view of the export, so a writer path only the
-    # samples reach (I-shape profiles and profile set usages on the
-    # structural samples) is checked somewhere. Attribute counts on every
-    # export; IfcOpenShell's full validation on exports up to 30 MB, the
-    # rest marked as skipped.
-    if [ -s "$dir/model.ifc" ]; then
-      schema "$dir" 31457280
-      grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
-    fi
-    [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
-    if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
-      timeout 1200 "$BIN/examples/$PROBE" "$sample" --records > "$dir/probe.txt" 2>&1
-      echo "exit $?" >> "$dir/probe.txt"
-      if [ -n "${PROBE_PAIR_RELEASE:-}" ] && [ "$(basename "$sample" | cut -c1-4)" != "$PROBE_PAIR_RELEASE" ]; then
-        for copy in "$SAMPLE_DIR/$PROBE_PAIR_RELEASE"-*.rvt; do
-          [ -f "$copy" ] && [ "$(pair_key "$copy")" = "$(pair_key "$sample")" ] || continue
-          timeout 1200 "$BIN/examples/$PROBE" "$sample" "$copy" > "$dir/probe-pair.txt" 2>&1
-          echo "exit $?" >> "$dir/probe-pair.txt"
-        done
-      fi
-    fi
-    echo "::endgroup::"
+    items="$items
+$(stat -c %s "$sample")|measure_sample|$sample||"
   done
 fi
+while IFS='|' read -r _ run first second third; do
+  [ -n "$run" ] || continue
+  spawn "$run" "$first" "$second" "$third"
+done <<< "$(printf '%s\n' "$items" | sort -t'|' -k1,1nr)"
+wait
