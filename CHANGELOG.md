@@ -6,6 +6,16 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **CI runs the real-file, CLI, contract and hardening checks on 32-bit
+  i686 with overflow checks on (#836).** A sum or product of lengths read
+  from a file that cannot overflow a 64-bit `usize` can still wrap on a
+  32-bit target and pass a bounds check it should fail: #835 found one on
+  wasm32, where the browser viewer runs, and every other CI job builds for
+  64 bits. In the new job, which `CI passed` requires, such a wrap panics in
+  the fuzz regressions and the family-corpus checks instead.
+
 ## [0.6.0] — 2026-10-19
 
 rvt-rs writes IFC4, and 0.6.0 makes its property sets IFC4's. 0.5 took some
