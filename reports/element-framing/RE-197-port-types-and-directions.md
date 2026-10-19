@@ -44,7 +44,8 @@ RE-169 reads each FamilySymbol's connectors from its family's `ConnectorDataCell
 ## 4. What changes
 
 - A family instance's port takes its connector's domain as its `PredefinedType` (`native_connectors::port_type_of_domain`): `DUCT`, `CABLE` or `PIPE`, and `NOTDEFINED` for an undefined domain. A cable tray or conduit connector has no port (RE-169). A duct's or pipe's two ports are `DUCT` or `PIPE`.
-- A connector of any domain but HVAC and piping is `SOURCEANDSINK` (`native_connectors::port_flow_direction_of_domain`). An HVAC or piping connector's port, and a duct's or pipe's, keeps `NOTDEFINED`.
+- A connector of any domain but HVAC and piping is `SOURCEANDSINK` (`native_connectors::port_flow_direction_of_domain`). An HVAC or piping connector's port, and a duct's or pipe's, keeps `NOTDEFINED`. An electrical connector whose description sets `Flow=Source` or `Flow=Sink` is exported with that direction by Revit; the description is not read (#834), so such a port would be written `SOURCEANDSINK`. None of the 98 electrical ports measured has one.
+- The writer writes a port's direction and type only as values of IFC4's `IfcFlowDirectionEnum` and `IfcDistributionPortTypeEnum` (`USERDEFINED` aside, which needs an `ObjectType`), `NOTDEFINED` and `$` otherwise.
 - `SystemType` stays unset: the connector's system classification is not read.
 - No port property set is written. Revit's IFC4 Reference View export of the office writes none on any of its 67 ports, and revit-ifc certifies `Pset_DistributionPortCommon` but none of the typed port sets (`Pset_DistributionPortTypePipe`, `…Duct`, `…Cable`) for the IFC4 Reference View or Design Transfer View (`IFCCertifiedEntitiesAndPSets.json`).
 - `ports_vs_ifc` compares `FlowDirection`, `PredefinedType` and `SystemType` on the ports both exports hold, those the schema of Revit's export gives a port.

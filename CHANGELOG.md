@@ -18,12 +18,16 @@ All notable changes will be documented here. This project follows
   Electrical's ports are `SOURCEANDSINK`, as in Revit's export, and no port
   takes a direction Revit's export does not give it. The direction rule is
   measured on electrical connectors only; for others outside HVAC and piping
-  it rests on revit-ifc's rule. An HVAC or piping connector's direction, a
+  it rests on revit-ifc's rule. An electrical connector whose description
+  sets `Flow=Source` or `Flow=Sink` is exported with that direction by Revit;
+  rvt-rs does not read the description (#834), so it writes such a port
+  `SOURCEANDSINK`. An HVAC or piping connector's direction, a
   duct's or pipe's included, is the family's and is not read, so it stays
   `NOTDEFINED` (the office's 24 pipe ends are `SOURCEANDSINK` in Revit's
   export); `SystemType` is not written. `ifc::entities::IfcEntity::Port` gains
-  `predefined_type` and `flow_direction`, and `tools/re/ports_vs_ifc.py`
-  compares the three attributes on the ports both exports hold.
+  `predefined_type` and `flow_direction`, which the writer writes only as a
+  value of IFC4's enumeration, and `tools/re/ports_vs_ifc.py` compares the
+  three attributes on the ports both exports hold.
 - **A type's Fire Rating fills an element's IFC4 `FireRating` (RE-77,
   RE-194).** Revit's exporter reads a parameter named for the property
   (`Pset_WallCommon.FireRating`) first and the type's Fire Rating after it.

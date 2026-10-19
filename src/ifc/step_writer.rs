@@ -114,6 +114,19 @@ fn element_tail_for(ifc_upper: &str) -> ElementTail {
     }
 }
 
+/// IFC4's `IfcFlowDirectionEnum`, the values a port's `FlowDirection` is
+/// written with (#828).
+const PORT_FLOW_DIRECTIONS: [&str; 4] = ["SOURCE", "SINK", "SOURCEANDSINK", "NOTDEFINED"];
+/// IFC4's `IfcDistributionPortTypeEnum` but `USERDEFINED`, which needs an
+/// `ObjectType` a port is written without: the values a port's
+/// `PredefinedType` is written with (#828).
+const PORT_TYPES: [&str; 5] = ["CABLE", "CABLECARRIER", "DUCT", "PIPE", "NOTDEFINED"];
+
+/// `raw` as a token of `allowed`, an IFC4 enumeration, or `None`.
+fn step_enum_of(raw: &str, allowed: &[&str]) -> Option<String> {
+    step_enum_token(raw).filter(|token| allowed.contains(&token.as_str()))
+}
+
 /// Accept a `PredefinedType` token only when it is a well-formed STEP
 /// enumeration name: uppercase ASCII letters, digits and underscores,
 /// starting with a letter.
@@ -2780,9 +2793,13 @@ impl StepWriter {
                     (*id, *index),
                     format!(
                         ".{}.,{}",
-                        flow_direction.as_deref().unwrap_or("NOTDEFINED"),
+                        flow_direction
+                            .as_deref()
+                            .and_then(|flow| step_enum_of(flow, &PORT_FLOW_DIRECTIONS))
+                            .unwrap_or_else(|| "NOTDEFINED".into()),
                         predefined_type
-                            .as_ref()
+                            .as_deref()
+                            .and_then(|kind| step_enum_of(kind, &PORT_TYPES))
                             .map_or("$".to_string(), |kind| format!(".{kind}."))
                     ),
                 )),

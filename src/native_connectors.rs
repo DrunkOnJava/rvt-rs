@@ -62,7 +62,10 @@ pub fn port_type_of_domain(domain: i64) -> &'static str {
 /// `ConnectorExporter`); measured on electrical connectors, every port of
 /// which is `SOURCEANDSINK` in Revit's exports of the RE1 models and the
 /// BIM4LCA office. `None` for HVAC and piping: their connector's direction
-/// is the family's, which rvt-rs does not read.
+/// is the family's, which rvt-rs does not read. An electrical connector whose
+/// description sets `Flow=Source` or `Flow=Sink` is exported with that
+/// direction by Revit; rvt-rs does not read the description (#834), so such
+/// a port is written `SOURCEANDSINK`.
 pub fn port_flow_direction_of_domain(domain: i64) -> Option<&'static str> {
     match domain {
         1 | 3 => None,
