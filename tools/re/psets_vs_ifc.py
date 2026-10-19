@@ -69,8 +69,16 @@ def same(a, b):
 
 
 # IFC2X3's Pset_SpaceCommon holds a space's coverings; IFC4 moved them to
-# Pset_SpaceCoveringRequirements, where an IFC4 export writes them.
-IFC2X3_SPACE_COVERINGS = {"FloorCovering", "WallCovering", "CeilingCovering", "SkirtingBoard"}
+# Pset_SpaceCoveringRequirements, where an IFC4 export writes them
+# (buildingSMART's IFC2X3 and IFC4 property set definitions).
+IFC2X3_SPACE_COVERINGS = {
+    "FloorCovering",
+    "WallCovering",
+    "CeilingCovering",
+    "SkirtingBoard",
+    "ConcealedFlooring",
+    "ConcealedCeiling",
+}
 
 
 def properties(path):

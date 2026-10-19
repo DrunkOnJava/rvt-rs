@@ -7,8 +7,8 @@
 //! `Pset_SpaceCommon` has no covering properties: it writes `FloorCovering`
 //! in `Pset_SpaceCoveringRequirements`, where IFC4 puts it, and its
 //! `Pset_SpaceCommon` has the `IsExternal` IFC2X3's lacks (RE-193). Every
-//! space rvt-rs writes must carry, across those two sets and without
-//! `IsExternal`, the properties of Revit's set, property for property and
+//! space rvt-rs writes must carry, without `IsExternal`, the properties of
+//! Revit's set, each in the set IFC4 puts it in, property for property and
 //! value type for value type, matched by the space's `Name` (its number).
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-Architecture.rvt` with
@@ -19,8 +19,20 @@ use rvt::ifc::{RvtDocExporter, write_step};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-/// A property set's properties: name -> value as written.
+/// A space's properties: `<set>.<property>` -> value as written.
 type Props = BTreeMap<String, String>;
+
+/// The properties of IFC2X3's `Pset_SpaceCommon` that IFC4 moved to
+/// `Pset_SpaceCoveringRequirements` (buildingSMART's IFC2X3 and IFC4 property
+/// set definitions).
+const IFC2X3_SPACE_COVERINGS: [&str; 6] = [
+    "FloorCovering",
+    "WallCovering",
+    "CeilingCovering",
+    "SkirtingBoard",
+    "ConcealedFlooring",
+    "ConcealedCeiling",
+];
 
 /// `#id -> (entity, args)` for every line of a STEP file.
 fn entities(step: &str) -> BTreeMap<u64, (String, String)> {
@@ -75,12 +87,12 @@ fn reference(field: &str) -> Option<u64> {
     field.trim().strip_prefix('#')?.parse().ok()
 }
 
-/// Space `Name` -> property -> its value as written (`IFCLABEL('Wood')`), for
-/// each space, across its sets named in `sets`.
-fn space_sets(step: &str, sets: &[&str]) -> BTreeMap<String, BTreeMap<String, String>> {
+/// Space `Name` -> `<set>.<property>` -> its value as written
+/// (`IFCLABEL('Wood')`), for each space, across its sets named in `sets`.
+fn space_sets(step: &str, sets: &[&str]) -> BTreeMap<String, Props> {
     let ents = entities(step);
     let unquote = |raw: &str| raw.trim().trim_matches('\'').to_string();
-    let mut out: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    let mut out: BTreeMap<String, Props> = BTreeMap::new();
     for (entity, args) in ents.values() {
         if entity != "IFCRELDEFINESBYPROPERTIES" {
             continue;
@@ -94,23 +106,22 @@ fn space_sets(step: &str, sets: &[&str]) -> BTreeMap<String, BTreeMap<String, St
             continue;
         };
         let set_fields = split_args(set_args);
-        if set_entity != "IFCPROPERTYSET"
-            || !set_fields
-                .get(2)
-                .is_some_and(|f| sets.contains(&unquote(f).as_str()))
-        {
+        let set_name = set_fields.get(2).map(|f| unquote(f)).unwrap_or_default();
+        if set_entity != "IFCPROPERTYSET" || !sets.contains(&set_name.as_str()) {
             continue;
         }
         let list = set_fields.get(4).map(String::as_str).unwrap_or("");
-        let props: BTreeMap<String, String> =
-            split_args(list.trim_start_matches('(').trim_end_matches(')'))
-                .iter()
-                .filter_map(|f| ents.get(&reference(f)?))
-                .filter_map(|(_, a)| {
-                    let p = split_args(a);
-                    Some((unquote(p.first()?), p.get(2)?.trim().to_string()))
-                })
-                .collect();
+        let props: Props = split_args(list.trim_start_matches('(').trim_end_matches(')'))
+            .iter()
+            .filter_map(|f| ents.get(&reference(f)?))
+            .filter_map(|(_, a)| {
+                let p = split_args(a);
+                Some((
+                    format!("{set_name}.{}", unquote(p.first()?)),
+                    p.get(2)?.trim().to_string(),
+                ))
+            })
+            .collect();
         for object in split_args(objects.trim_start_matches('(').trim_end_matches(')')) {
             let Some((e, a)) = reference(&object).and_then(|id| ents.get(&id)) else {
                 continue;
@@ -137,10 +148,24 @@ fn re1_architecture_space_common_is_revits() {
         eprintln!("skipping: no RE1 Architecture model and reference export");
         return;
     }
-    let theirs = space_sets(
+    let theirs: BTreeMap<String, Props> = space_sets(
         &std::fs::read_to_string(&reference_ifc).expect("reference IFC"),
         &["Pset_SpaceCommon"],
-    );
+    )
+    .into_iter()
+    .map(|(space, props)| {
+        let props: Props = props
+            .into_iter()
+            .map(|(key, value)| match key.strip_prefix("Pset_SpaceCommon.") {
+                Some(property) if IFC2X3_SPACE_COVERINGS.contains(&property) => {
+                    (format!("Pset_SpaceCoveringRequirements.{property}"), value)
+                }
+                _ => (key, value),
+            })
+            .collect();
+        (space, props)
+    })
+    .collect();
     assert_eq!(theirs.len(), 11, "Revit's spaces with Pset_SpaceCommon");
     let mut rf = RevitFile::open(&rvt).expect("open");
     let result = RvtDocExporter
@@ -152,7 +177,7 @@ fn re1_architecture_space_common_is_revits() {
     )
     .into_iter()
     .map(|(space, mut props)| {
-        props.remove("IsExternal");
+        props.remove("Pset_SpaceCommon.IsExternal");
         (space, props)
     })
     .collect();
@@ -163,7 +188,7 @@ fn re1_architecture_space_common_is_revits() {
         .collect();
     assert!(
         differing.is_empty(),
-        "{} of Revit's {} Pset_SpaceCommon sets differ in rvt-rs's export (space, Revit's, rvt-rs's): {differing:?}",
+        "{} of Revit's {} spaces' Pset_SpaceCommon properties differ in rvt-rs's export, each in its IFC4 set (space, Revit's, rvt-rs's): {differing:?}",
         differing.len(),
         theirs.len()
     );
@@ -173,6 +198,6 @@ fn re1_architecture_space_common_is_revits() {
         .collect();
     assert!(
         extra.is_empty(),
-        "Pset_SpaceCommon on spaces Revit gives none: {extra:?}"
+        "Pset_SpaceCommon or Pset_SpaceCoveringRequirements on spaces Revit gives no Pset_SpaceCommon: {extra:?}"
     );
 }
