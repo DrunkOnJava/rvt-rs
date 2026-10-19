@@ -22,6 +22,9 @@ All notable changes will be documented here. This project follows
   around, and a wrapped end below 4 made its next read panic, which in the
   browser viewer aborts the export. The i686 job found it on every family
   release. A 64-bit build cannot overflow there, so its output is unchanged.
+  The job then found `partition_type_materials`' map reader multiplying a
+  count read from arbitrary bytes by 12 before checking it against its
+  64-entry limit; the count is now checked first.
 
 ## [0.6.0] — 2026-10-19
 
