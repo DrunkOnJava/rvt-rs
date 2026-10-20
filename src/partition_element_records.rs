@@ -249,6 +249,9 @@ pub const OST_ELECTRICAL_FIXTURES: i64 = -2_001_060;
 pub const OST_ELECTRICAL_EQUIPMENT: i64 = -2_001_040;
 /// Autodesk `BuiltInCategory.OST_MechanicalEquipment`.
 pub const OST_MECHANICAL_EQUIPMENT: i64 = -2_001_140;
+/// Autodesk `BuiltInCategory.OST_Mass`: mass instances, which Revit's export
+/// writes only where their "Export to IFC As" names an entity (#864).
+pub const OST_MASS: i64 = -2_003_400;
 
 /// Device categories whose shared nested components are element records of
 /// their own that Revit's export leaves out (#96): a switch or receptacle
@@ -384,7 +387,7 @@ pub const OST_EDGE_SLAB: i64 = -2_001_392;
 /// RE-39 adds stairs with their runs, landings and stringers, and roofs.
 /// RE-40 adds slab edges, once elements in non-primary design options are
 /// left out: all 59 exported on Snowdon Towers are Revit's.
-pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 38] = [
+pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 39] = [
     (OST_FURNITURE, "Furniture"),
     (OST_CASEWORK, "Casework"),
     (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
@@ -423,6 +426,7 @@ pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 38] = [
     (OST_ELECTRICAL_FIXTURES, "ElectricalFixture"),
     (OST_ELECTRICAL_EQUIPMENT, "ElectricalEquipment"),
     (OST_MECHANICAL_EQUIPMENT, "MechanicalEquipment"),
+    (OST_MASS, "Mass"),
 ];
 
 /// Smallest bounding-box extent, in feet, a placed instance needs on every
@@ -1358,7 +1362,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// The categories the exporter recovers instances of, with the class name
 /// each is decoded as: the architectural core plus
 /// [`PRODUCT_RECORD_CATEGORIES`].
-pub const RECOVERED_CATEGORIES: [(i64, &str); 45] = [
+pub const RECOVERED_CATEGORIES: [(i64, &str); 46] = [
     (OST_WALLS, "Wall"),
     (OST_DOORS, "Door"),
     (OST_WINDOWS, "Window"),
@@ -1404,6 +1408,7 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 45] = [
     (OST_ELECTRICAL_FIXTURES, "ElectricalFixture"),
     (OST_ELECTRICAL_EQUIPMENT, "ElectricalEquipment"),
     (OST_MECHANICAL_EQUIPMENT, "MechanicalEquipment"),
+    (OST_MASS, "Mass"),
 ];
 
 /// Placed-instance frames in `buf`, per category, that carry the bbox

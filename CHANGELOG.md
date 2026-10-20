@@ -20,6 +20,14 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A mass whose "Export to IFC As" names an entity is written as it (#864).**
+  rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
+  carry `IfcSpace`, and Revit's export writes them as `IfcSpace`. They now
+  are, as the 42 family instances of #763 are, and both office files' 308
+  `IfcSpace` pair with Revit's by GlobalId. A mass with no such value is
+  still not written, as Revit's exporter does not write the mass category
+  by default.
+
 - **A family instance whose "Export to IFC As" is `IfcSpace` is an
   `IfcSpace` (#763).** The BIM4LCA office's 42 `Turning Free Space`
   instances carry `IfcSpace` with `USERDEFINED` as their own predefined
