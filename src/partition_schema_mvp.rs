@@ -5385,7 +5385,7 @@ fn attach_duct_end_keys(rf: &mut RevitFile, revit_version: u32, products: &mut [
     if !ppa::supports_revit_version(revit_version) {
         return;
     }
-    let mut ends: BTreeMap<String, Vec<(u32, [[f64; 3]; 2])>> = BTreeMap::new();
+    let mut ends = ppa::CurveEnds::new();
     for element in products
         .iter_mut()
         .filter(|element| element.class == "Duct")
