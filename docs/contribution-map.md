@@ -60,7 +60,6 @@ milestone is for.
 |---|---|
 | [#847](https://github.com/DrunkOnJava/rvt-rs/issues/847) | IfcDistributionPort has no placement: Revit's export places each port at its connector |
 | [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's description, system classification and HVAC or piping direction are not read (#828 follow-up) |
-| [#827](https://github.com/DrunkOnJava/rvt-rs/issues/827) | from_decoded's property set builders put Revit fields in IFC4 standard sets (Pset_WallCommon.BaseOffset, Pset_WindowCommon.SillHeight, ...) |
 | [#824](https://github.com/DrunkOnJava/rvt-rs/issues/824) | BIM4LCA office: 31 of 63 slabs' top surfaces differ from Revit's (8 at twice the area, 20 at +0.35%, holes missing) |
 | [#823](https://github.com/DrunkOnJava/rvt-rs/issues/823) | BIM4LCA office: 19 ceilings written as separate pieces where Revit's export writes one IfcCovering each |
 | [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office doors: Revit's OverallWidth is the door's own extent, 10 mm over its type's Width; 0 of 268 written as Revit's |

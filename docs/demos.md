@@ -252,8 +252,8 @@ What the fixture contains:
 | `IfcMaterial` | 2 | Concrete (0xAAAAAA), Glass – Tinted (0xDDAA88, 60% transp.) |
 | `IfcSurfaceStyle` | 2 | One per material, diffuse colour + rendering params |
 | `IfcRelAssociatesMaterial` | 2 | Concrete → 7 elements, glass → 2 windows |
-| `IfcPropertySet` | 2 | `Pset_WallCommon` (5 props) + `Pset_WindowCommon` (2 props) |
-| `IfcRelDefinesByProperties` | 2 | Binds each property set to its element |
+| `IfcPropertySet` | 6 | `Pset_BuildingStoreyCommon` on each storey, `Pset_BuildingCommon`, `RvtWall` (5 props) and `RvtWindow` (2 props): IFC4's `Pset_WallCommon` and `Pset_WindowCommon` declare none of the wall's and window's values (#827) |
+| `IfcRelDefinesByProperties` | 6 | Binds each property set to its object |
 | `IfcRelContainedInSpatialStructure` | 2 | 9 elements on Ground + 1 on Second |
 | `IfcRelAggregates` | 3 | Project → Site, Site → Building, Building → 3 storeys |
 
@@ -264,7 +264,7 @@ opening-chain + a property set):
 ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');
-FILE_NAME('Synthetic Test Project.ifc','2026-09-27T19:31:21',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.1.x','rvt-rs STEP writer','');
+FILE_NAME('Synthetic Test Project.ifc','2026-10-20T03:35:22',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.6.1','rvt-rs STEP writer','');
 FILE_SCHEMA(('IFC4'));
 ENDSEC;
 DATA;
@@ -272,20 +272,20 @@ DATA;
 #18=IFCPROJECT('2DidPPITwEWgzLwN9h$v59',#5,'Synthetic Test Project','End-to-end rvt-rs pipeline smoke test',$,$,$,(#17),#12);
 #24=IFCBUILDINGSTOREY('0ltZd43IADNhrlf$bL6ubE',#5,'Ground Floor',$,$,#23,$,'Ground Floor',.ELEMENT.,0.000000);
 #26=IFCBUILDINGSTOREY('0lbLN7pIw6BuvMw4oqhcdl',#5,'Second Floor',$,$,#25,$,'Second Floor',.ELEMENT.,3.048000);
-#32=IFCMATERIAL('Concrete',$,$);
-#38=IFCMATERIAL('Glass - Tinted',$,$);
-#51=IFCRECTANGLEPROFILEDEF(.AREA.,$,#50,6.096000,0.203200);
-#52=IFCEXTRUDEDAREASOLID(#51,#16,#14,3.048000);
-#53=IFCSHAPEREPRESENTATION(#17,'Body','SweptSolid',(#52));
-#54=IFCPRODUCTDEFINITIONSHAPE($,$,(#53));
-#55=IFCWALL('3xlhuehGY479OIzuhukk6g',#5,'North Wall',$,$,#47,#54,'W-N-001',.NOTDEFINED.);
-#115=IFCDOOR('1UrhkCDyE2zQ7NtI3QeiHF',#5,'Front Entry Door',$,$,#107,#114,'DOOR-001',$,$,.DOOR.,$,$);
-#124=IFCOPENINGELEMENT('2AJs5dPAE0FvFGouvwp3Vn',#5,'Opening for Front Entry Door',$,$,#123,#122,'DOOR-001',.OPENING.);
-#133=IFCRELVOIDSELEMENT('1B$ATe42Q2qu6cp8BLVgI$',#5,$,$,#67,#124);
-#134=IFCRELFILLSELEMENT('0eAjMcQvI1j9WLKGmmjafA',#5,$,$,#124,#115);
-#140=IFCPROPERTYSET('3GcBm_E1I2VOad3eTJ7twk',#5,'Pset_WallCommon',$,(#135,#136,#137,#138,#139));
-#141=IFCRELDEFINESBYPROPERTIES('3zJZfydZY1EASjcyMWrA8y',#5,$,$,(#55),#140);
-#148=IFCRELCONTAINEDINSPATIALSTRUCTURE('2nQIPsGEU2LRIyF4X3hMhW',#5,$,$,(#55,#67,#91,#103,#115,#126,#128,#130),#24);
+#45=IFCMATERIAL('Concrete',$,$);
+#51=IFCMATERIAL('Glass - Tinted',$,$);
+#64=IFCRECTANGLEPROFILEDEF(.AREA.,$,#63,6.096000,0.203200);
+#65=IFCEXTRUDEDAREASOLID(#64,#16,#14,3.048000);
+#66=IFCSHAPEREPRESENTATION(#17,'Body','SweptSolid',(#65));
+#67=IFCPRODUCTDEFINITIONSHAPE($,$,(#66));
+#68=IFCWALL('3xlhuehGY479OIzuhukk6g',#5,'North Wall',$,$,#60,#67,'W-N-001',.NOTDEFINED.);
+#128=IFCDOOR('1UrhkCDyE2zQ7NtI3QeiHF',#5,'Front Entry Door',$,$,#120,#127,'DOOR-001',$,$,.DOOR.,$,$);
+#137=IFCOPENINGELEMENT('2AJs5dPAE0FvFGouvwp3Vn',#5,'Opening for Front Entry Door',$,$,#136,#135,'DOOR-001',.OPENING.);
+#146=IFCRELVOIDSELEMENT('1B$ATe42Q2qu6cp8BLVgI$',#5,$,$,#80,#137);
+#147=IFCRELFILLSELEMENT('0eAjMcQvI1j9WLKGmmjafA',#5,$,$,#137,#128);
+#153=IFCPROPERTYSET('0NWcqATUcFPhNb7lDclogt',#5,'RvtWall',$,(#148,#149,#150,#151,#152));
+#154=IFCRELDEFINESBYPROPERTIES('3XQFc66jg7_xbAwXMkpuD2',#5,$,$,(#68),#153);
+#161=IFCRELCONTAINEDINSPATIALSTRUCTURE('2nQIPsGEU2LRIyF4X3hMhW',#5,$,$,(#68,#80,#104,#116,#128,#139,#141,#143),#24);
 ENDSEC;
 END-ISO-10303-21;
 ```

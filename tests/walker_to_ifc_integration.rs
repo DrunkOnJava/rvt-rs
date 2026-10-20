@@ -352,7 +352,7 @@ fn diagnostic_ifc_export_includes_hostobjattr_proxies_with_provenance() -> Resul
             ..
         } if ifc_type == "IFCBUILDINGELEMENTPROXY"
             && name.starts_with("HostObjAttr-")
-            && property_set.name == "Pset_RvtRsDiagnosticCandidate" =>
+            && property_set.name == "RvtRsDiagnosticCandidate" =>
         {
             Some(property_set)
         }
@@ -388,7 +388,7 @@ fn diagnostic_ifc_export_includes_hostobjattr_proxies_with_provenance() -> Resul
         "diagnostic STEP output should emit proxy constructors"
     );
     assert!(
-        step.contains("Pset_RvtRsDiagnosticCandidate"),
+        step.contains("RvtRsDiagnosticCandidate"),
         "diagnostic STEP output should preserve provenance property set"
     );
 

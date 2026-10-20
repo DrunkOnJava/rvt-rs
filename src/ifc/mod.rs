@@ -891,7 +891,7 @@ impl RvtDocExporter {
 ///
 /// This exporter starts from the same conservative model as
 /// [`RvtDocExporter`], then appends low-confidence schema-scan hits as
-/// `IFCBUILDINGELEMENTPROXY` elements with `Pset_RvtRsDiagnosticCandidate`
+/// `IFCBUILDINGELEMENTPROXY` elements with `RvtRsDiagnosticCandidate`
 /// provenance. It is intended for reverse-engineering and issue
 /// attachments, not for normal model exchange.
 pub struct DiagnosticRvtDocExporter;
@@ -3043,7 +3043,7 @@ fn diagnostic_candidate_property_set(
     }
 
     entities::PropertySet {
-        name: "Pset_RvtRsDiagnosticCandidate".into(),
+        name: "RvtRsDiagnosticCandidate".into(),
         properties,
     }
 }
@@ -3727,7 +3727,7 @@ fn count_diagnostic_proxy_elements(model: &IfcModel) -> usize {
                 entities::IfcEntity::BuildingElement {
                     property_set: Some(property_set),
                     ..
-                } if property_set.name == "Pset_RvtRsDiagnosticCandidate"
+                } if property_set.name == "RvtRsDiagnosticCandidate"
             )
         })
         .count()

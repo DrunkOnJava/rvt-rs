@@ -58,10 +58,12 @@ pub struct ElementInput<'a> {
     /// Which material the element associates with. Index into
     /// `BuilderOptions.materials`. `None` = no material emitted.
     pub material_index: Option<usize>,
-    /// Optional property set to emit for this element. Populated
-    /// typically from the decoded typed view (Wall/Floor/Door/…) —
-    /// see the `*_property_set` helpers below.
-    pub property_set: Option<PropertySet>,
+    /// Property sets to emit for this element, typically from the
+    /// decoded typed view (Wall/Door/Window/…) through the
+    /// `*_property_set` helpers below. The first is written as the
+    /// element's own set, each further one as an
+    /// [`IfcEntity::ElementPropertySet`] of it.
+    pub property_sets: Vec<PropertySet>,
     /// Element origin in feet `[x, y, z]`. Typically sourced from
     /// the decoded typed view's `location` field. When `Some`, the
     /// writer emits a unique placement for this element; when
@@ -370,15 +372,16 @@ pub fn floor_extrusion_from_boundary(
 }
 
 /// Build a `Qto_SlabBaseQuantities`-style [`PropertySet`] (GEO-28)
-/// from a decoded floor boundary + thickness. Populates GrossArea,
-/// Perimeter, Depth, and GrossVolume. Empty boundaries yield an
-/// empty property set (no bogus zero-valued quantities).
+/// from a decoded floor boundary + thickness. Populates GrossArea and
+/// Perimeter, and Depth and GrossVolume only where the floor type
+/// gives a thickness. Empty boundaries yield an empty property set (no
+/// bogus zero-valued quantities).
 pub fn floor_base_quantities(
     boundary: &[(f64, f64)],
     floor_type: Option<&crate::elements::floor::FloorType>,
 ) -> PropertySet {
     let mut props = Vec::new();
-    let thickness = floor_type.and_then(|ft| ft.thickness_feet).unwrap_or(1.0);
+    let thickness = floor_type.and_then(|ft| ft.thickness_feet);
     if boundary.len() >= 3 {
         let area = polygon_area_sqft(boundary);
         let perim = polygon_perimeter_feet(boundary);
@@ -390,14 +393,16 @@ pub fn floor_base_quantities(
             name: "Perimeter".into(),
             value: PropertyValue::LengthFeet(perim),
         });
-        props.push(Property {
-            name: "Depth".into(),
-            value: PropertyValue::LengthFeet(thickness),
-        });
-        props.push(Property {
-            name: "GrossVolume".into(),
-            value: PropertyValue::VolumeCubicFeet(area * thickness),
-        });
+        if let Some(thickness) = thickness {
+            props.push(Property {
+                name: "Depth".into(),
+                value: PropertyValue::LengthFeet(thickness),
+            });
+            props.push(Property {
+                name: "GrossVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(area * thickness),
+            });
+        }
     }
     PropertySet {
         name: "Qto_SlabBaseQuantities".into(),
@@ -803,68 +808,59 @@ pub fn window_placement_z_feet(host_level_elevation_feet: f64, sill_height_feet:
     host_level_elevation_feet + sill_height_feet.max(0.0)
 }
 
-/// Build a `Pset_WindowCommon`-style property set from a decoded
-/// [`Window`] **plus its typed dimensions** (GEO-31). Includes
-/// everything that [`window_property_set`] already emits, plus
-/// OverallWidth / OverallHeight / Depth (inch-equivalents) when
-/// the caller has them. Fields are skipped when zero or negative.
+/// [`window_property_set`] plus the window's OverallWidth /
+/// OverallHeight / Depth when the caller has them (GEO-31), in the
+/// same `RvtWindow` set: IFC4 makes the first two attributes of
+/// `IfcWindow`, not properties of `Pset_WindowCommon`. Values that are
+/// zero or negative are skipped.
 pub fn window_dimensions_property_set(
     window: &Window,
     width_feet: f64,
     height_feet: f64,
     depth_feet: f64,
-) -> PropertySet {
-    let mut pset = window_property_set(window);
-    if width_feet > 0.0 {
-        pset.properties.push(Property {
-            name: "OverallWidth".into(),
-            value: PropertyValue::LengthFeet(width_feet),
-        });
-    }
-    if height_feet > 0.0 {
-        pset.properties.push(Property {
-            name: "OverallHeight".into(),
-            value: PropertyValue::LengthFeet(height_feet),
-        });
-    }
-    if depth_feet > 0.0 {
-        pset.properties.push(Property {
-            name: "Depth".into(),
-            value: PropertyValue::LengthFeet(depth_feet),
-        });
-    }
-    pset
+) -> Vec<PropertySet> {
+    let mut properties = window_properties(window);
+    properties.extend(dimension_properties(width_feet, height_feet, depth_feet));
+    non_empty_sets([("RvtWindow", properties)])
 }
 
-/// Build a `Pset_DoorCommon`-style property set from a decoded
-/// [`Door`] plus typed dimensions (GEO-30). Analogous to
-/// [`window_dimensions_property_set`].
+/// [`door_property_set`] plus the door's dimensions (GEO-30), as
+/// [`window_dimensions_property_set`] does for a window.
 pub fn door_dimensions_property_set(
     door: &Door,
     width_feet: f64,
     height_feet: f64,
     depth_feet: f64,
-) -> PropertySet {
-    let mut pset = door_property_set(door);
-    if width_feet > 0.0 {
-        pset.properties.push(Property {
-            name: "OverallWidth".into(),
-            value: PropertyValue::LengthFeet(width_feet),
-        });
-    }
-    if height_feet > 0.0 {
-        pset.properties.push(Property {
-            name: "OverallHeight".into(),
-            value: PropertyValue::LengthFeet(height_feet),
-        });
-    }
-    if depth_feet > 0.0 {
-        pset.properties.push(Property {
-            name: "Depth".into(),
-            value: PropertyValue::LengthFeet(depth_feet),
-        });
-    }
-    pset
+) -> Vec<PropertySet> {
+    let mut properties = door_properties(door);
+    properties.extend(dimension_properties(width_feet, height_feet, depth_feet));
+    non_empty_sets([("RvtDoor", properties)])
+}
+
+fn dimension_properties(width_feet: f64, height_feet: f64, depth_feet: f64) -> Vec<Property> {
+    [
+        ("OverallWidth", width_feet),
+        ("OverallHeight", height_feet),
+        ("Depth", depth_feet),
+    ]
+    .into_iter()
+    .filter(|(_, value)| *value > 0.0)
+    .map(|(name, value)| Property {
+        name: name.into(),
+        value: PropertyValue::LengthFeet(value),
+    })
+    .collect()
+}
+
+/// The named sets that hold at least one property, in order.
+fn non_empty_sets<const N: usize>(sets: [(&str, Vec<Property>); N]) -> Vec<PropertySet> {
+    sets.into_iter()
+        .filter(|(_, properties)| !properties.is_empty())
+        .map(|(name, properties)| PropertySet {
+            name: name.into(),
+            properties,
+        })
+        .collect()
 }
 
 /// Build a rectangular `Extrusion` for a ceiling. Thickness from
@@ -993,12 +989,11 @@ pub fn column_arbitrary_profile_extrusion(
     Extrusion::arbitrary_closed(profile_points, height_feet.max(0.1))
 }
 
-/// Build a `Pset_ColumnCommon`-style property set (GEO-33) from a
-/// decoded column. Surfaces IsExternal (always false for
-/// architectural columns, true for structural — best-effort guess
-/// since Revit doesn't mark exterior explicitly), Slope (zero for
-/// plumb columns), plus base/top offsets when present.
-pub fn column_property_set(column: &crate::elements::structural::Column) -> PropertySet {
+/// The property sets of a decoded column (GEO-33): `Pset_ColumnCommon`
+/// with LoadBearing, and rvt-rs's `RvtColumn` with the base and top
+/// offsets and the rotation, which IFC4's set does not declare. A set
+/// with nothing read is left out.
+pub fn column_property_set(column: &crate::elements::structural::Column) -> Vec<PropertySet> {
     let mut props = Vec::new();
     if let Some(v) = column.base_offset_feet {
         props.push(Property {
@@ -1018,16 +1013,14 @@ pub fn column_property_set(column: &crate::elements::structural::Column) -> Prop
             value: PropertyValue::AngleRadians(v),
         });
     }
+    let mut standard = Vec::new();
     if let Some(v) = column.is_structural {
-        props.push(Property {
+        standard.push(Property {
             name: "LoadBearing".into(),
             value: PropertyValue::Boolean(v),
         });
     }
-    PropertySet {
-        name: "Pset_ColumnCommon".into(),
-        properties: props,
-    }
+    non_empty_sets([("Pset_ColumnCommon", standard), ("RvtColumn", props)])
 }
 
 // ---- GEO-34: Beam geometry (profile + curve path) ----
@@ -1145,11 +1138,12 @@ pub fn beam_rectangular_extrusion(width_feet: f64, depth_feet: f64, length_feet:
     }
 }
 
-/// Build a `Pset_BeamCommon`-style property set (GEO-34) from a
-/// decoded beam. Surfaces start/end level offsets,
-/// cross-section-rotation, and a `Span` computed from the 3D
-/// length when both endpoints are present.
-pub fn beam_property_set(beam: &crate::elements::structural::Beam) -> PropertySet {
+/// The property sets of a decoded beam (GEO-34): `Pset_BeamCommon` with
+/// a `Span` computed from the 3D length when both endpoints are present
+/// and it is positive, and rvt-rs's `RvtBeam` with the start and end
+/// level offsets and the cross-section rotation, which IFC4's set does
+/// not declare. A set with nothing read is left out.
+pub fn beam_property_set(beam: &crate::elements::structural::Beam) -> Vec<PropertySet> {
     let mut props = Vec::new();
     if let Some(v) = beam.start_level_offset_feet {
         props.push(Property {
@@ -1169,22 +1163,24 @@ pub fn beam_property_set(beam: &crate::elements::structural::Beam) -> PropertySe
             value: PropertyValue::AngleRadians(v),
         });
     }
+    let mut standard = Vec::new();
     if let (Some(s), Some(e)) = (beam.start, beam.end) {
-        props.push(Property {
-            name: "Span".into(),
-            value: PropertyValue::LengthFeet(beam_length_3d_feet(s, e)),
-        });
+        let span = beam_length_3d_feet(s, e);
+        if span > 0.0 {
+            standard.push(Property {
+                name: "Span".into(),
+                value: PropertyValue::PositiveLengthFeet(span),
+            });
+        }
     }
-    PropertySet {
-        name: "Pset_BeamCommon".into(),
-        properties: props,
-    }
+    non_empty_sets([("Pset_BeamCommon", standard), ("RvtBeam", props)])
 }
 
-/// Build a `Pset_WallCommon`-style property set from a decoded
-/// [`Wall`]. Fields that are `None` are skipped — property sets
-/// only carry what we actually decoded.
-pub fn wall_property_set(wall: &Wall) -> PropertySet {
+/// The property sets of a decoded [`Wall`]: rvt-rs's `RvtWall` with its
+/// offsets, unconnected height, structural usage and location line,
+/// none of which IFC4's `Pset_WallCommon` declares. Fields that are
+/// `None` are skipped, and a set with nothing read is left out.
+pub fn wall_property_set(wall: &Wall) -> Vec<PropertySet> {
     let mut props = Vec::new();
     if let Some(v) = wall.base_offset_feet {
         props.push(Property {
@@ -1216,15 +1212,17 @@ pub fn wall_property_set(wall: &Wall) -> PropertySet {
             value: PropertyValue::Text(format!("{line:?}")),
         });
     }
-    PropertySet {
-        name: "Pset_WallCommon".into(),
-        properties: props,
-    }
+    non_empty_sets([("RvtWall", props)])
 }
 
-/// Build a `Pset_DoorCommon`-style property set from a decoded
-/// [`Door`].
-pub fn door_property_set(door: &Door) -> PropertySet {
+/// The property sets of a decoded [`Door`]: rvt-rs's `RvtDoor` with its
+/// rotation and flips, which IFC4's `Pset_DoorCommon` does not declare.
+/// A set with nothing read is left out.
+pub fn door_property_set(door: &Door) -> Vec<PropertySet> {
+    non_empty_sets([("RvtDoor", door_properties(door))])
+}
+
+fn door_properties(door: &Door) -> Vec<Property> {
     let mut props = Vec::new();
     if let Some(v) = door.rotation_radians {
         props.push(Property {
@@ -1244,15 +1242,17 @@ pub fn door_property_set(door: &Door) -> PropertySet {
             value: PropertyValue::Boolean(v),
         });
     }
-    PropertySet {
-        name: "Pset_DoorCommon".into(),
-        properties: props,
-    }
+    props
 }
 
-/// Build a `Pset_WindowCommon`-style property set from a decoded
-/// [`Window`].
-pub fn window_property_set(window: &Window) -> PropertySet {
+/// The property sets of a decoded [`Window`]: rvt-rs's `RvtWindow` with
+/// its sill height and rotation, which IFC4's `Pset_WindowCommon` does
+/// not declare. A set with nothing read is left out.
+pub fn window_property_set(window: &Window) -> Vec<PropertySet> {
+    non_empty_sets([("RvtWindow", window_properties(window))])
+}
+
+fn window_properties(window: &Window) -> Vec<Property> {
     let mut props = Vec::new();
     if let Some(v) = window.sill_height_feet {
         props.push(Property {
@@ -1266,44 +1266,41 @@ pub fn window_property_set(window: &Window) -> PropertySet {
             value: PropertyValue::AngleRadians(v),
         });
     }
-    PropertySet {
-        name: "Pset_WindowCommon".into(),
-        properties: props,
-    }
+    props
 }
 
-/// Build a `Pset_StairCommon`-style property set from a decoded
-/// [`Stair`]. Includes riser/tread counts + calibrated dimensions.
-pub fn stair_property_set(stair: &Stair) -> PropertySet {
-    let mut props = Vec::new();
+/// The property sets of a decoded [`Stair`]: `Pset_StairCommon` with
+/// its riser count, riser height and tread length under IFC4's names
+/// and measure types (lengths only where positive), and rvt-rs's
+/// `RvtStair` with the total rise, which IFC4's set does not declare.
+/// A set with nothing read is left out.
+pub fn stair_property_set(stair: &Stair) -> Vec<PropertySet> {
+    let mut standard = Vec::new();
     if let Some(v) = stair.actual_riser_count {
-        props.push(Property {
-            name: "NumberOfRisers".into(),
-            value: PropertyValue::Integer(v as i64),
+        standard.push(Property {
+            name: "NumberOfRiser".into(),
+            value: PropertyValue::CountValue(i64::from(v)),
         });
     }
-    if let Some(v) = stair.actual_tread_depth_feet {
-        props.push(Property {
-            name: "TreadDepth".into(),
-            value: PropertyValue::LengthFeet(v),
-        });
+    for (name, value) in [
+        ("RiserHeight", stair.actual_riser_height_feet),
+        ("TreadLength", stair.actual_tread_depth_feet),
+    ] {
+        if let Some(v) = value.filter(|v| *v > 0.0) {
+            standard.push(Property {
+                name: name.into(),
+                value: PropertyValue::PositiveLengthFeet(v),
+            });
+        }
     }
-    if let Some(v) = stair.actual_riser_height_feet {
-        props.push(Property {
-            name: "RiserHeight".into(),
-            value: PropertyValue::LengthFeet(v),
-        });
-    }
+    let mut own = Vec::new();
     if let Some(total) = stair.total_rise_feet() {
-        props.push(Property {
+        own.push(Property {
             name: "TotalRise".into(),
             value: PropertyValue::LengthFeet(total),
         });
     }
-    PropertySet {
-        name: "Pset_StairCommon".into(),
-        properties: props,
-    }
+    non_empty_sets([("Pset_StairCommon", standard), ("RvtStair", own)])
 }
 
 /// Derive [`MaterialInfo`] entries from a slice of decoded Revit
@@ -1344,7 +1341,11 @@ pub fn storeys_from_levels(levels: &[Level]) -> Vec<Storey> {
 /// than losing it.
 pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> IfcModel {
     let mut entities: Vec<IfcEntity> = Vec::with_capacity(inputs.len());
-    for input in inputs {
+    let mut further_sets = Vec::new();
+    for (element, input) in inputs.iter().enumerate() {
+        let mut sets = input.property_sets.iter().cloned();
+        let property_set = sets.next();
+        further_sets.extend(sets.map(|set| IfcEntity::ElementPropertySet { element, set }));
         let mapping = super::category_map::lookup(&input.decoded.class);
         let ifc_type = mapping
             .map(|m| m.ifc_type)
@@ -1356,7 +1357,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             predefined_type: mapping.and_then(|m| m.predefined_type).map(str::to_string),
             storey_index: input.storey_index,
             material_index: input.material_index,
-            property_set: input.property_set.clone(),
+            property_set,
             location_feet: input.location_feet,
             rotation_radians: input.rotation_radians,
             extrusion: input.extrusion.clone(),
@@ -1367,6 +1368,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
             representation_map_index: input.representation_map_index,
         });
     }
+    entities.extend(further_sets);
     let project_name = options.project_name.or_else(|| {
         inputs
             .first()
