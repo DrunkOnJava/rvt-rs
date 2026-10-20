@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A family instance whose "Export to IFC As" is `IfcSpace` is an
+  `IfcSpace` (#763).** The BIM4LCA office's 42 `Turning Free Space`
+  instances carry `IfcSpace` with `USERDEFINED` as their own predefined
+  type, and Revit's export writes them as `IfcSpace .USERDEFINED.`, typed by
+  an `IfcSpaceType` named after the family type, with `Pset_SpaceCommon`'s
+  `Reference` that type's name. rvt-rs wrote them as proxies contained in
+  the room around them. They are now spaces, each typed by an
+  `IfcSpaceType` and holding no furniture of its own. A room, area or
+  space keeps its own mapping. One difference from Revit's export
+  remains: Revit's places these spaces in no spatial structure, which
+  IFC4 rule `IfcSpatialStructureElement.WR41` does not allow, so rvt-rs
+  aggregates each under its storey, as it does rooms.
+
 - **A ceiling of separate loops is one `IfcCovering` (#823).** An element
   whose sketch has separate loops was written as one entity per piece,
   named `<name>:2`, `<name>:3` and so on (#331), as Revit's export writes
@@ -30,6 +43,15 @@ All notable changes will be documented here. This project follows
   `elements::decode_typed_with_limits`. On the 76 files
   Measure reads, no candidate of the seven classes reaches the production
   score, so no export changes (Measure run 39364060825).
+
+- **`walker::iter_elements` yields no `Global/Latest` row without an
+  ElementId (#852).** Its documentation said a candidate with no ElementId
+  is yielded only by the diagnostic path, but the production threshold
+  yielded one too, undeduplicated and joined to nothing. It is now left
+  out unless the caller asks for a score below
+  `PRODUCTION_ELEMENT_MIN_SCORE`. On the 76 files Measure reads, every
+  production row comes from a partition record and the schema path yields
+  none, so no export changes (Measure run 39367864281).
 
 ### Changed
 

@@ -481,6 +481,12 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// `IfcDoor .DOOR.`. Every element of Revit's export of either file that
 /// carries one of the two values as its own is that entity there (16 and
 /// 268), as the other elements carrying `IfcStair` or `IfcDoor` already were.
+///
+/// #763 adds `IfcSpace`, which 42 `Turning Free Space` family instances of
+/// each office file carry, with `USERDEFINED` as their own predefined type,
+/// and which Revit writes as `IfcSpace .USERDEFINED.` typed by an
+/// `IfcSpaceType` named after the family type ([`space_predefined_type_for`]).
+/// A Room, Area or Space is a space already and keeps its own mapping.
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
     Mapping {
         revit_class: "IfcShadingDevice",
@@ -532,7 +538,36 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCDOOR",
         predefined_type: Some("DOOR"),
     },
+    Mapping {
+        revit_class: "IfcSpace",
+        ifc_type: "IFCSPACE",
+        predefined_type: Some("NOTDEFINED"),
+    },
 ];
+
+/// The IFC4 `IfcSpaceTypeEnum` enumerator `value` names, for an element
+/// written as `IfcSpace` through its own "Export to IFC As" value (#763):
+/// Revit writes the 42 `Turning Free Space` instances of the office files,
+/// whose own predefined type is `USERDEFINED`, as `IfcSpace .USERDEFINED.`.
+/// Rooms are not looked up here: their own value is not measured against
+/// Revit's export, so they keep [`Mapping::predefined_type`]. `None` for a
+/// value that is not an enumerator.
+pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
+    const SPACE_TYPES: &[&str] = &[
+        "SPACE",
+        "PARKING",
+        "GFA",
+        "INTERNAL",
+        "EXTERNAL",
+        "USERDEFINED",
+        "NOTDEFINED",
+    ];
+    let value = value.trim();
+    SPACE_TYPES
+        .iter()
+        .copied()
+        .find(|enumerator| enumerator.eq_ignore_ascii_case(value))
+}
 
 /// IFC4 `PredefinedType` enumerators of the entities an export override
 /// can name, as the IFC4 schema lists them (`IfcSlabTypeEnum`,
