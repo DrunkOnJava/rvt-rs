@@ -21,8 +21,6 @@ All notable changes will be documented here. This project follows
   IFC4 rule `IfcSpatialStructureElement.WR41` does not allow, so rvt-rs
   aggregates each under its storey, as it does rooms.
 
-### Fixed
-
 - **A ceiling of separate loops is one `IfcCovering` (#823).** An element
   whose sketch has separate loops was written as one entity per piece,
   named `<name>:2`, `<name>:3` and so on (#331), as Revit's export writes
