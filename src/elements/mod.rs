@@ -201,6 +201,22 @@ pub fn decode_typed(
     decoder.decode(bytes, schema, index)
 }
 
+/// [`decode_typed`] under the caller's walker caps (#852).
+pub fn decode_typed_with_limits(
+    bytes: &[u8],
+    schema: &formats::ClassEntry,
+    index: &HandleIndex,
+    limits: crate::walker::WalkerLimits,
+) -> Result<DecodedElement> {
+    let decoder = decoder_for_class(&schema.name).ok_or_else(|| {
+        crate::Error::BasicFileInfo(format!(
+            "no typed decoder registered for class {}",
+            schema.name
+        ))
+    })?;
+    decoder.decode_with_limits(bytes, schema, index, limits)
+}
+
 /// Prefer a typed MVP decoder for `class_name`, else generic
 /// [`crate::walker::decode_instance_with_limits`].
 ///
@@ -235,12 +251,8 @@ pub fn decode_instance_prefer_typed_with_limits(
 ) -> Option<DecodedElement> {
     use typed_json::is_mvp_typed_class;
     if is_mvp_typed_class(&schema.name) {
-        // The same per-record cap the generic path applies.
-        let end = start
-            .checked_add(limits.max_per_record_decode_bytes)
-            .map_or(bytes.len(), |n| n.min(bytes.len()));
-        let slice = bytes.get(start..end)?;
-        match decode_typed(slice, schema, &HandleIndex::new()) {
+        let slice = bytes.get(start..)?;
+        match decode_typed_with_limits(slice, schema, &HandleIndex::new(), limits) {
             Ok(decoded) if !typed_instance_is_complete(&decoded) => None,
             Ok(mut decoded) => {
                 // Typed decoders walk from offset 0 of `slice`; remap

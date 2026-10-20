@@ -1,23 +1,28 @@
-//! #852 (probe): what the schema path's typed decoders return on real
-//! files.
+//! #852 (probe): what the schema path's typed decoders get on real files,
+//! and every production row the schema path yields.
 //!
 //! `elements::decode_instance_prefer_typed_with_limits` sends every
 //! `Global/Latest` candidate of a class in `elements::MVP_TYPED_CLASSES`
-//! to that class's registered decoder, and each decoder rejects only a
-//! wrong schema name. This prints, for each of those classes, the fields
-//! the file's schema declares, the candidates `walker::scan_candidates`
-//! finds at `PRODUCTION_ELEMENT_MIN_SCORE`, and every row
-//! `walker::iter_elements` yields from them: its ElementId, offset, score
-//! and each field's decoded kind (`Bytes` where the walk could not read
-//! the field as its schema type). A required-field check for a class can
-//! then be chosen from the rows of real instances, not guessed.
+//! to that class's registered decoder. For each of those classes this
+//! prints the fields the file's schema declares, the candidates
+//! `walker::scan_candidates` finds at `PRODUCTION_ELEMENT_MIN_SCORE`, and
+//! each candidate decoded directly by its typed decoder: its offset,
+//! score, each field's decoded kind (`Bytes` where the walk could not read
+//! the field as its schema type) and whether production accepts it.
+//!
+//! It then counts every row `walker::iter_elements` yields from the
+//! schema path (`record_kind` `schema_instance`, typed or generic) by
+//! class, with and without an ElementId, and every row's `source_stream`,
+//! so a row is counted whatever stream name it carries.
+//!
+//! It exits 1 when any file could not be read.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_typed_schema_rows -- FILE.rvt [...]
 
-use rvt::walker::{self, InstanceField};
+use rvt::walker::{self, HandleIndex, InstanceField, WalkerLimits};
 use rvt::{RevitFile, compression, elements, formats, streams};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 fn kind(value: &InstanceField) -> String {
     match value {
@@ -28,7 +33,9 @@ fn kind(value: &InstanceField) -> String {
         InstanceField::Float { value, size } => format!("F{}({value})", size * 8),
         InstanceField::Bool(b) => format!("Bool({b})"),
         InstanceField::Guid(_) => "Guid".into(),
-        InstanceField::String(s) => format!("String({:?})", s.chars().take(40).collect::<String>()),
+        InstanceField::String(s) => {
+            format!("String({:?})", s.chars().take(40).collect::<String>())
+        }
         InstanceField::Vector(v) => format!("Vector[{}]", v.len()),
         InstanceField::Bytes(b) => format!("Bytes[{}]", b.len()),
     }
@@ -61,68 +68,67 @@ fn probe(path: &str) -> rvt::Result<()> {
         }
     }
 
+    let limits = WalkerLimits::default();
     let candidates = walker::scan_candidates(&schema, &data, walker::PRODUCTION_ELEMENT_MIN_SCORE);
-    let mut score_at: HashMap<usize, i64> = HashMap::new();
-    let mut candidates_by_class: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut candidates_by_class: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
     for c in &candidates {
-        if let Some(class) = elements::MVP_TYPED_CLASSES
+        let Some(class) = elements::MVP_TYPED_CLASSES
             .iter()
             .find(|k| **k == c.class_name)
-        {
-            *candidates_by_class.entry(*class).or_default() += 1;
-            score_at.insert(c.offset, c.score);
-        }
-    }
-    for class in elements::MVP_TYPED_CLASSES {
+        else {
+            continue;
+        };
+        let Some(cls) = schema.classes.iter().find(|k| k.name == c.class_name) else {
+            continue;
+        };
+        let accepted =
+            elements::decode_instance_prefer_typed_with_limits(&data, c.offset, cls, limits)
+                .is_some();
+        let entry = candidates_by_class.entry(*class).or_default();
+        entry.0 += 1;
+        entry.1 += usize::from(accepted);
+        let decoded = data.get(c.offset..).and_then(|slice| {
+            elements::decode_typed_with_limits(slice, cls, &HandleIndex::new(), limits).ok()
+        });
+        let fields: Vec<String> = decoded
+            .iter()
+            .flat_map(|d| d.fields.iter())
+            .map(|(name, value)| format!("{name}={}", kind(value)))
+            .collect();
         println!(
-            "candidates {class} {}",
-            candidates_by_class.get(class).copied().unwrap_or(0)
+            "candidate {} offset=0x{:x} score={} accepted={accepted} decoded={} [{}]",
+            c.class_name,
+            c.offset,
+            c.score,
+            decoded.is_some(),
+            fields.join(" | "),
         );
     }
+    for class in elements::MVP_TYPED_CLASSES {
+        let (found, accepted) = candidates_by_class.get(class).copied().unwrap_or_default();
+        println!("candidates {class} {found} accepted={accepted}");
+    }
 
-    let mut rows_by_class: BTreeMap<String, (usize, usize, usize)> = BTreeMap::new();
+    // Every production row, typed or generic, by where it says it is from.
+    let mut streams_seen: BTreeMap<String, usize> = BTreeMap::new();
     let mut schema_rows: BTreeMap<String, (usize, usize, String)> = BTreeMap::new();
     for e in walker::iter_elements(&mut rf)? {
-        if e.provenance.source_stream.as_deref() != Some(streams::GLOBAL_LATEST) {
+        let stream = e.provenance.source_stream.clone().unwrap_or_default();
+        *streams_seen.entry(stream.clone()).or_default() += 1;
+        if e.provenance.record_kind.as_deref() != Some("schema_instance") {
             continue;
         }
         let entry = schema_rows.entry(e.class.clone()).or_default();
         entry.0 += 1;
         entry.1 += usize::from(e.id.is_some());
-        entry.2 = e.provenance.decoder.clone().unwrap_or_default();
-        if !elements::MVP_TYPED_CLASSES.contains(&e.class.as_str()) {
-            continue;
-        }
-        let offset = e.provenance.source_offset.unwrap_or(usize::MAX);
-        let bytes_fields = e
-            .fields
-            .iter()
-            .filter(|(_, v)| matches!(v, InstanceField::Bytes(_)))
-            .count();
-        let entry = rows_by_class.entry(e.class.clone()).or_default();
-        entry.0 += 1;
-        entry.1 += usize::from(e.id.is_some());
-        entry.2 += usize::from(bytes_fields > 0);
-        let fields: Vec<String> = e
-            .fields
-            .iter()
-            .map(|(name, value)| format!("{name}={}", kind(value)))
-            .collect();
-        println!(
-            "row {} id={} offset=0x{offset:x} score={} decoder={} bytes_fields={bytes_fields} len={} [{}]",
-            e.class,
-            e.id.map_or("-".into(), |id| id.to_string()),
-            score_at.get(&offset).map_or("?".into(), |s| s.to_string()),
-            e.provenance.decoder.as_deref().unwrap_or("-"),
-            e.byte_range.len(),
-            fields.join(" | "),
+        entry.2 = format!(
+            "{}@{stream}",
+            e.provenance.decoder.as_deref().unwrap_or("-")
         );
     }
-    for (class, (rows, with_id, with_bytes)) in &rows_by_class {
-        println!("summary {class} rows={rows} with_id={with_id} with_bytes_field={with_bytes}");
+    for (stream, rows) in &streams_seen {
+        println!("source_stream {stream:?} rows={rows}");
     }
-    // Every production row from Global/Latest, typed or generic: how many
-    // carry no ElementId (#852's comment).
     for (class, (rows, with_id, decoder)) in &schema_rows {
         println!("schema_row {class} rows={rows} with_id={with_id} decoder={decoder}");
     }
@@ -143,10 +149,15 @@ fn main() {
         eprintln!("usage: probe_typed_schema_rows FILE.rvt [...]");
         std::process::exit(2);
     }
+    let mut failed = false;
     for path in &paths {
         println!("file {}", path.rsplit('/').next().unwrap_or(path));
         if let Err(e) = probe(path) {
             println!("error {e}");
+            failed = true;
         }
+    }
+    if failed {
+        std::process::exit(1);
     }
 }

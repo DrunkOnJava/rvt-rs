@@ -34,7 +34,17 @@ impl ElementDecoder for LevelDecoder {
         &self,
         bytes: &[u8],
         schema: &formats::ClassEntry,
+        index: &HandleIndex,
+    ) -> Result<DecodedElement> {
+        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
+    }
+
+    fn decode_with_limits(
+        &self,
+        bytes: &[u8],
+        schema: &formats::ClassEntry,
         _index: &HandleIndex,
+        limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Level" {
             return Err(Error::BasicFileInfo(format!(
@@ -46,7 +56,7 @@ impl ElementDecoder for LevelDecoder {
         // InstanceField values. This handles the byte-level walk +
         // short-input safety. We then pattern-match into typed
         // values where we recognise the field names + shapes.
-        let decoded = crate::walker::decode_instance(bytes, 0, schema);
+        let decoded = crate::walker::decode_instance_with_limits(bytes, 0, schema, limits);
         Ok(decoded)
     }
 }

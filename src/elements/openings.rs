@@ -56,7 +56,17 @@ impl ElementDecoder for DoorDecoder {
         &self,
         bytes: &[u8],
         schema: &formats::ClassEntry,
+        index: &HandleIndex,
+    ) -> Result<DecodedElement> {
+        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
+    }
+
+    fn decode_with_limits(
+        &self,
+        bytes: &[u8],
+        schema: &formats::ClassEntry,
         _index: &HandleIndex,
+        limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Door" {
             return Err(Error::BasicFileInfo(format!(
@@ -64,7 +74,9 @@ impl ElementDecoder for DoorDecoder {
                 schema.name
             )));
         }
-        Ok(crate::walker::decode_instance(bytes, 0, schema))
+        Ok(crate::walker::decode_instance_with_limits(
+            bytes, 0, schema, limits,
+        ))
     }
 }
 
@@ -80,7 +92,17 @@ impl ElementDecoder for WindowDecoder {
         &self,
         bytes: &[u8],
         schema: &formats::ClassEntry,
+        index: &HandleIndex,
+    ) -> Result<DecodedElement> {
+        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
+    }
+
+    fn decode_with_limits(
+        &self,
+        bytes: &[u8],
+        schema: &formats::ClassEntry,
         _index: &HandleIndex,
+        limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Window" {
             return Err(Error::BasicFileInfo(format!(
@@ -88,7 +110,9 @@ impl ElementDecoder for WindowDecoder {
                 schema.name
             )));
         }
-        Ok(crate::walker::decode_instance(bytes, 0, schema))
+        Ok(crate::walker::decode_instance_with_limits(
+            bytes, 0, schema, limits,
+        ))
     }
 }
 
