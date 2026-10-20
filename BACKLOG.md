@@ -63,7 +63,7 @@ evidence that put each item here. Statuses: `open`, `committed`,
   - The viewer's Playwright suite (3 specs, 999 lines) runs on PRs that touch `src/**` or `viewer/**` (`deploy-viewer.yml`). It is not a required check.
   - The Python wheel gets an end-to-end smoke on a tier-1 file and a 2024 family (`ci.yml:681`).
   - CI takes about 5 to 6 minutes, and Measure about 4 to 5. Both are fast enough to iterate on, so no speed-up item.
-  - No flaky test is known; Bugbot never runs (usage limit).
+  - No flaky test is known. Merges no longer wait on Codex or Cursor Bugbot reviews (2026-10-19): `CI passed` is the merge gate.
 - **Unit suites.** None is run in CI, so none blocks a merge.
   - 1,205 inline `#[test]`s in 99 `src` files (about 27,700 lines of test modules).
   - 14 `unit`-class `tests/*.rs` targets (4,371 lines).

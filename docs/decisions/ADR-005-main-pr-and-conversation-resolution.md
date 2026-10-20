@@ -8,6 +8,12 @@ applied it, and the live ruleset matches
 [`.github/rulesets/main-protection.json`](../../.github/rulesets/main-protection.json),
 which also limits merges to squash.
 
+Amended 2026-10-19: Codex and Cursor Bugbot reviews are no longer part
+of landing a pull request, so a merge waits only on `CI passed`. Thread
+resolution stays required: it still holds a merge on a maintainer's or
+contributor's review thread and on a code-scanning finding, and a bot
+thread that does appear is answered and resolved, not waited on.
+
 ## Context
 
 Audit of ruleset `main-protection` (id `15270879`) found signatures, linear
