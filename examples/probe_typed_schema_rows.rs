@@ -81,10 +81,16 @@ fn probe(path: &str) -> rvt::Result<()> {
     }
 
     let mut rows_by_class: BTreeMap<String, (usize, usize, usize)> = BTreeMap::new();
+    let mut schema_rows: BTreeMap<String, (usize, usize, String)> = BTreeMap::new();
     for e in walker::iter_elements(&mut rf)? {
-        if e.provenance.source_stream.as_deref() != Some(streams::GLOBAL_LATEST)
-            || !elements::MVP_TYPED_CLASSES.contains(&e.class.as_str())
-        {
+        if e.provenance.source_stream.as_deref() != Some(streams::GLOBAL_LATEST) {
+            continue;
+        }
+        let entry = schema_rows.entry(e.class.clone()).or_default();
+        entry.0 += 1;
+        entry.1 += usize::from(e.id.is_some());
+        entry.2 = e.provenance.decoder.clone().unwrap_or_default();
+        if !elements::MVP_TYPED_CLASSES.contains(&e.class.as_str()) {
             continue;
         }
         let offset = e.provenance.source_offset.unwrap_or(usize::MAX);
@@ -115,6 +121,16 @@ fn probe(path: &str) -> rvt::Result<()> {
     for (class, (rows, with_id, with_bytes)) in &rows_by_class {
         println!("summary {class} rows={rows} with_id={with_id} with_bytes_field={with_bytes}");
     }
+    // Every production row from Global/Latest, typed or generic: how many
+    // carry no ElementId (#852's comment).
+    for (class, (rows, with_id, decoder)) in &schema_rows {
+        println!("schema_row {class} rows={rows} with_id={with_id} decoder={decoder}");
+    }
+    println!(
+        "schema_rows total={} without_id={}",
+        schema_rows.values().map(|r| r.0).sum::<usize>(),
+        schema_rows.values().map(|r| r.0 - r.1).sum::<usize>()
+    );
     Ok(())
 }
 
