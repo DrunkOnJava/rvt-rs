@@ -335,6 +335,16 @@ pub fn strip_building_element_geometry(entities: &mut [entities::IfcEntity]) {
             *solid_shape = None;
             *representation_map_index = None;
         }
+        // #847: a port's point and axis are geometry too.
+        if let entities::IfcEntity::Port {
+            location_feet,
+            direction,
+            ..
+        } = entity
+        {
+            *location_feet = None;
+            *direction = None;
+        }
     }
 }
 
