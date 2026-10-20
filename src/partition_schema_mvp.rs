@@ -5251,7 +5251,7 @@ fn attach_pipe_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [Deco
         ));
     }
     // #847: the keys at each end say which of the pipe's connectors it is.
-    let mut ends: BTreeMap<String, Vec<(u32, [[f64; 3]; 2])>> = BTreeMap::new();
+    let mut ends = ppa::CurveEnds::new();
     for element in products.iter().filter(|element| element.class == "Pipe") {
         if let (Some(id), Some(stream), Some(body)) = (
             element.id,

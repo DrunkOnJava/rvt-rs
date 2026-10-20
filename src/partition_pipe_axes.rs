@@ -284,6 +284,13 @@ fn connector_points(buf: &[u8], boxes: &[(u32, [f64; 6])]) -> Vec<Vec<[f64; 3]>>
 /// element connected there) and the connector's index on it (RE-131).
 pub type EntryKey = (u64, u32);
 
+/// Two-ended elements by the partition stream their records are in: each
+/// one's ElementId and its two ends, model feet (#847).
+pub type CurveEnds = BTreeMap<String, Vec<(u32, [[f64; 3]; 2])>>;
+
+/// The ends that fall in one cell: ElementId, which end, and the point.
+type EndCell = Vec<(u32, usize, [f64; 3])>;
+
 /// The keys of the connector entries at each end of each pipe (#847), by
 /// ElementId: `[start, end]`, for the pipes of `pipes` (their ends, by the
 /// partition stream their records are in). An entry is at an end when its
@@ -297,7 +304,7 @@ pub type EntryKey = (u64, u32);
 pub fn scan_pipe_end_keys(
     rf: &mut RevitFile,
     revit_version: u32,
-    pipes: &BTreeMap<String, Vec<(u32, [[f64; 3]; 2])>>,
+    pipes: &CurveEnds,
 ) -> Result<BTreeMap<u32, [Vec<EntryKey>; 2]>> {
     let mut out: BTreeMap<u32, [Vec<EntryKey>; 2]> = BTreeMap::new();
     if !supports_revit_version(revit_version) {
@@ -308,7 +315,7 @@ pub fn scan_pipe_end_keys(
             continue;
         };
         let buf = inflated.bytes();
-        let mut grid: HashMap<[i64; 3], Vec<(u32, usize, [f64; 3])>> = HashMap::new();
+        let mut grid: HashMap<[i64; 3], EndCell> = HashMap::new();
         for (id, points) in ends {
             for (slot, point) in points.iter().enumerate() {
                 let key = [cell(point[0]), cell(point[1]), cell(point[2])];
