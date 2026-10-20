@@ -18,6 +18,17 @@ All notable changes will be documented here. This project follows
   their pieces. The pieces stay in the `IfcModel` (`IfcModel::body_pieces`
   names them), so the glTF export and the viewer still draw them.
 
+- **The schema path's typed decoders fail closed (#852).** A `Global/Latest`
+  candidate of the seven `MVP_TYPED_CLASSES` became a `schema_typed` row,
+  at confidence 0.9, whatever its bytes held: each decoder rejected only a
+  wrong schema name. It is now skipped when a declared field did not read
+  as its schema type or its class's typed view reads nothing from it. The
+  typed path also takes the caller's `WalkerLimits`, through a new
+  `ElementDecoder::decode_with_limits` (its default decodes the bytes cut
+  to the cap) and `elements::decode_typed_with_limits`. On the 76 files
+  Measure reads, no candidate of the seven classes reaches the production
+  score, so no export changes (Measure run 39364060825).
+
 ### Changed
 
 - **`from_decoded`'s property set builders write a standard set's name
