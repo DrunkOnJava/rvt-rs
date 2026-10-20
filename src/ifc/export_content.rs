@@ -514,8 +514,10 @@ pub fn append_typed_production_elements(
         // mapping, so an unknown override can never invent a type.
         let effective = ifc_export_override(&decoded).unwrap_or(mapping);
         let ifc_type = effective.ifc_type.to_string();
+        let family_space = space_by_export_value(&decoded);
         // RE-45: the element's own or its type's IFC predefined type, when
-        // it is an enumerator of the entity it exports as.
+        // it is an enumerator of the entity it exports as; a family instance
+        // written as a space through its value takes its own (#763).
         let predefined_type = decoded
             .fields
             .iter()
@@ -523,7 +525,11 @@ pub fn append_typed_production_elements(
                 InstanceField::String(text)
                     if name == crate::partition_schema_mvp::IFC_PREDEFINED_TYPE_FIELD =>
                 {
-                    category_map::predefined_type_for(effective.ifc_type, text)
+                    category_map::predefined_type_for(effective.ifc_type, text).or_else(|| {
+                        family_space
+                            .then(|| category_map::space_predefined_type_for(text))
+                            .flatten()
+                    })
                 }
                 _ => None,
             })
@@ -2051,28 +2057,6 @@ fn space_plan_outline(
 /// its storey.
 pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
     use crate::element_record_plan_profiles::inside;
-    let mut spaces = Vec::new();
-    for (index, entity) in entities.iter().enumerate() {
-        let entities::IfcEntity::BuildingElement {
-            ifc_type,
-            storey_index: Some(storey),
-            location_feet: Some(location),
-            rotation_radians,
-            extrusion: Some(extrusion),
-            ..
-        } = entity
-        else {
-            continue;
-        };
-        if ifc_type != "IFCSPACE" {
-            continue;
-        }
-        if let Some((outer, voids)) =
-            space_plan_outline(location, rotation_radians.unwrap_or(0.0), extrusion)
-        {
-            spaces.push((index, *storey, outer, voids));
-        }
-    }
     let is_family_instance = |set: &Option<PropertySet>| {
         set.as_ref().is_some_and(|set| {
             set.properties.iter().any(|p| {
@@ -2081,6 +2065,31 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             })
         })
     };
+    let mut spaces = Vec::new();
+    for (index, entity) in entities.iter().enumerate() {
+        let entities::IfcEntity::BuildingElement {
+            ifc_type,
+            storey_index: Some(storey),
+            location_feet: Some(location),
+            rotation_radians,
+            extrusion: Some(extrusion),
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        // #763: a family instance written as a space holds nothing; the
+        // furniture around it stays in its room.
+        if ifc_type != "IFCSPACE" || is_family_instance(property_set) {
+            continue;
+        }
+        if let Some((outer, voids)) =
+            space_plan_outline(location, rotation_radians.unwrap_or(0.0), extrusion)
+        {
+            spaces.push((index, *storey, outer, voids));
+        }
+    }
     let mut contents: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (index, entity) in entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
@@ -2148,7 +2157,8 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
 /// [`space_covering_property_set`].
 fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     use crate::partition_schema_mvp as mvp;
-    if decoded.class != "Room" && decoded.class != "Area" {
+    let family_space = space_by_export_value(decoded);
+    if decoded.class != "Room" && decoded.class != "Area" && !family_space {
         return None;
     }
     let text = |wanted: &str| {
@@ -2163,7 +2173,16 @@ fn space_common_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
             })
     };
     let mut properties = Vec::new();
-    if let Some(name) = text("m_name") {
+    if family_space {
+        // #763: a family instance written as a space is referred to by its
+        // type's name, as Revit's export writes it.
+        if let Some((_, type_name)) = family_and_type(decoded) {
+            properties.push(Property {
+                name: "Reference".into(),
+                value: PropertyValue::Identifier(type_name),
+            });
+        }
+    } else if let Some(name) = text("m_name") {
         // A room with no number is referred to by its name alone (RE-196).
         let reference = match text(mvp::ROOM_NUMBER_FIELD) {
             Some(number) => format!("{name} {number}"),
@@ -2242,6 +2261,18 @@ fn ifc_export_override(decoded: &DecodedElement) -> Option<&'static category_map
             }
             _ => None,
         })
+        // #763: a room, area or space is a space already; it keeps its own
+        // mapping and predefined type.
+        .filter(|target| {
+            target.ifc_type != "IFCSPACE"
+                || category_map::lookup(&decoded.class).is_none_or(|own| own.ifc_type != "IFCSPACE")
+        })
+}
+
+/// Whether the element is written as `IfcSpace` through its own "Export to
+/// IFC As" value (#763), a family instance rather than a room.
+fn space_by_export_value(decoded: &DecodedElement) -> bool {
+    ifc_export_override(decoded).is_some_and(|target| target.ifc_type == "IFCSPACE")
 }
 
 /// The "Export to IFC As" value of an element the export writes as another

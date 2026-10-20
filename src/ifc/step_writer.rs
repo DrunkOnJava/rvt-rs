@@ -165,6 +165,8 @@ fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String,
     let tail = match ifc_upper {
         "IFCDOOR" | "IFCWINDOW" => format!("{pt},.NOTDEFINED.,$,$"),
         "IFCFURNITURE" => format!(".NOTDEFINED.,{pt}"),
+        // #763: a family instance written as a space; `LongName` follows.
+        "IFCSPACE" => format!("{pt},$"),
         "IFCWALL"
         | "IFCSLAB"
         | "IFCBEAM"
@@ -233,6 +235,7 @@ fn revit_ifc_type_entity_name(step_name: &str) -> Option<&'static str> {
         "IFCWASTETERMINALTYPE" => "IfcWasteTerminalType",
         "IFCFIRESUPPRESSIONTERMINALTYPE" => "IfcFireSuppressionTerminalType",
         "IFCTRANSPORTELEMENTTYPE" => "IfcTransportElementType",
+        "IFCSPACETYPE" => "IfcSpaceType",
         _ => return None,
     })
 }
@@ -3234,8 +3237,14 @@ impl StepWriter {
                 }
                 None => type_groups.push(TypeGroup {
                     type_id: *type_id,
+                    // #763: Revit names a family instance's `IfcSpaceType`
+                    // after its type alone.
+                    name: if entity_name == "IFCSPACETYPE" {
+                        type_name.clone()
+                    } else {
+                        format!("{family}:{type_name}")
+                    },
                     entity: entity_name,
-                    name: format!("{family}:{type_name}"),
                     category: categories.get(&entity_idx).cloned(),
                     family,
                     type_name,
