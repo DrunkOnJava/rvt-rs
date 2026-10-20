@@ -65,6 +65,18 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **A family instance takes the materials its own parameters name (#355).**
+  Where a family type's geometry-material map holds no material, #580
+  gave its columns and products `<Unnamed>`. Where the instance's own
+  material parameters (`FamilyInstance.m_pInstParams`) name materials,
+  Revit's export gives it those instead, and now so does rvt-rs (RE-200).
+  On the R2025 models 12 to 17, the 9 window trims and muntins of each now
+  have Revit's material set: all 13 elements rvt-rs gives materials have
+  Revit's set, 4 before.
+  Locally on Snowdon Towers, 232 more elements have Revit's set and none
+  fewer. Core Interior, the RE1 models and the other R2025 models export
+  as before.
+
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**
   rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
   carry `IfcSpace`, and Revit's export writes them as `IfcSpace`. They now
