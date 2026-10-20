@@ -201,13 +201,33 @@ pub fn decode_typed(
     decoder.decode(bytes, schema, index)
 }
 
+/// [`decode_typed`] under the caller's walker caps (#852).
+pub fn decode_typed_with_limits(
+    bytes: &[u8],
+    schema: &formats::ClassEntry,
+    index: &HandleIndex,
+    limits: crate::walker::WalkerLimits,
+) -> Result<DecodedElement> {
+    let decoder = decoder_for_class(&schema.name).ok_or_else(|| {
+        crate::Error::BasicFileInfo(format!(
+            "no typed decoder registered for class {}",
+            schema.name
+        ))
+    })?;
+    decoder.decode_with_limits(bytes, schema, index, limits)
+}
+
 /// Prefer a typed MVP decoder for `class_name`, else generic
 /// [`crate::walker::decode_instance_with_limits`].
 ///
-/// When `class_name` is in [`MVP_TYPED_CLASSES`] and the registered
-/// decoder rejects (wrong schema / empty), returns `None` — callers
-/// must not invent a typed success via the generic fallback.
-/// Non-MVP classes always use the generic decoder.
+/// When `class_name` is in [`MVP_TYPED_CLASSES`], returns `None` when
+/// the registered decoder rejects (wrong schema), when any declared
+/// field did not read as its schema type (the walk returns
+/// [`crate::walker::InstanceField::Bytes`] for a short read or a type
+/// it cannot read), or when the class's typed view
+/// ([`typed_json::mvp_typed_view`]) reads nothing from the instance —
+/// callers must not invent a typed success via the generic fallback
+/// (#852). Non-MVP classes always use the generic decoder.
 pub fn decode_instance_prefer_typed(
     bytes: &[u8],
     start: usize,
@@ -221,8 +241,8 @@ pub fn decode_instance_prefer_typed(
     )
 }
 
-/// Same as [`decode_instance_prefer_typed`] with explicit walker caps
-/// on the generic (non-MVP) path.
+/// Same as [`decode_instance_prefer_typed`] with explicit walker caps,
+/// applied to the typed and the generic path alike.
 pub fn decode_instance_prefer_typed_with_limits(
     bytes: &[u8],
     start: usize,
@@ -232,7 +252,8 @@ pub fn decode_instance_prefer_typed_with_limits(
     use typed_json::is_mvp_typed_class;
     if is_mvp_typed_class(&schema.name) {
         let slice = bytes.get(start..)?;
-        match decode_typed(slice, schema, &HandleIndex::new()) {
+        match decode_typed_with_limits(slice, schema, &HandleIndex::new(), limits) {
+            Ok(decoded) if !typed_instance_is_complete(&decoded) => None,
             Ok(mut decoded) => {
                 // Typed decoders walk from offset 0 of `slice`; remap
                 // byte_range into the parent buffer coordinate space.
@@ -253,4 +274,18 @@ pub fn decode_instance_prefer_typed_with_limits(
             bytes, start, schema, limits,
         ))
     }
+}
+
+/// Whether a typed decode read every declared field as its schema type
+/// and its class's typed view read something from it (#852).
+fn typed_instance_is_complete(decoded: &DecodedElement) -> bool {
+    let fields_read = !decoded
+        .fields
+        .iter()
+        .any(|(_, value)| matches!(value, crate::walker::InstanceField::Bytes(_)));
+    let view_read = typed_json::mvp_typed_view(decoded).is_some_and(|view| {
+        view.as_object()
+            .is_some_and(|values| values.values().any(|value| !value.is_null()))
+    });
+    fields_read && view_read
 }

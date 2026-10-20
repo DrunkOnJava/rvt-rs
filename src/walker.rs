@@ -138,6 +138,21 @@ pub trait ElementDecoder: Sync + Send {
         schema: &formats::ClassEntry,
         index: &HandleIndex,
     ) -> Result<DecodedElement>;
+
+    /// [`Self::decode`] under the caller's walker caps (#852). The default
+    /// decodes `bytes` cut to `limits.max_per_record_decode_bytes`; a
+    /// decoder that walks the generic decoder overrides it to pass
+    /// `limits` on, so a cap above the default applies too.
+    fn decode_with_limits(
+        &self,
+        bytes: &[u8],
+        schema: &formats::ClassEntry,
+        index: &HandleIndex,
+        limits: WalkerLimits,
+    ) -> Result<DecodedElement> {
+        let end = limits.max_per_record_decode_bytes.min(bytes.len());
+        self.decode(&bytes[..end], schema, index)
+    }
 }
 
 /// Mirror of [`ElementDecoder`] for the write path (WRT-03). A per-

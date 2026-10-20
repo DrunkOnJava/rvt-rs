@@ -87,7 +87,17 @@ impl ElementDecoder for RoofDecoder {
         &self,
         bytes: &[u8],
         schema: &formats::ClassEntry,
+        index: &HandleIndex,
+    ) -> Result<DecodedElement> {
+        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
+    }
+
+    fn decode_with_limits(
+        &self,
+        bytes: &[u8],
+        schema: &formats::ClassEntry,
         _index: &HandleIndex,
+        limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Roof" {
             return Err(Error::BasicFileInfo(format!(
@@ -95,7 +105,9 @@ impl ElementDecoder for RoofDecoder {
                 schema.name
             )));
         }
-        Ok(crate::walker::decode_instance(bytes, 0, schema))
+        Ok(crate::walker::decode_instance_with_limits(
+            bytes, 0, schema, limits,
+        ))
     }
 }
 
@@ -111,7 +123,17 @@ impl ElementDecoder for RoofTypeDecoder {
         &self,
         bytes: &[u8],
         schema: &formats::ClassEntry,
+        index: &HandleIndex,
+    ) -> Result<DecodedElement> {
+        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
+    }
+
+    fn decode_with_limits(
+        &self,
+        bytes: &[u8],
+        schema: &formats::ClassEntry,
         _index: &HandleIndex,
+        limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "RoofType" {
             return Err(Error::BasicFileInfo(format!(
@@ -119,7 +141,9 @@ impl ElementDecoder for RoofTypeDecoder {
                 schema.name
             )));
         }
-        Ok(crate::walker::decode_instance(bytes, 0, schema))
+        Ok(crate::walker::decode_instance_with_limits(
+            bytes, 0, schema, limits,
+        ))
     }
 }
 
