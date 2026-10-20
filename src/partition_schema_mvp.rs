@@ -592,10 +592,14 @@ pub fn recover_partition_schema_mvp(
     }
 
     // --- Family instances whose type draws with no material (RE-149, #355) ---
+    // An instance whose own material parameters name its materials takes
+    // them instead (RE-200).
     let unset_types = crate::partition_type_materials::unset_material_types(rf, revit_version);
     if !unset_types.is_empty() {
+        let instance_materials =
+            instance_parameter_material_names(rf, revit_version, &unset_types, &out);
         for elements in [&mut out.columns, &mut out.products] {
-            attach_unnamed_materials(&unset_types, elements);
+            attach_unnamed_materials(&unset_types, &instance_materials, elements);
         }
         attach_joined_wall_materials(&mut out.columns, &out.walls);
     }
@@ -2146,12 +2150,70 @@ fn attach_type_materials(materials: &BTreeMap<u32, Vec<String>>, elements: &mut 
     }
 }
 
+/// The material names the instance parameters of each column and product
+/// whose type is one of `unset_types` give it, by the instance's ElementId
+/// ([`crate::native_instance_materials`], RE-200). Empty where the native
+/// record path or the material names are not read.
+fn instance_parameter_material_names(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    unset_types: &BTreeSet<u32>,
+    out: &PartitionSchemaMvp,
+) -> BTreeMap<u32, Vec<String>> {
+    let instances: BTreeSet<u64> = out
+        .columns
+        .iter()
+        .chain(&out.products)
+        .filter(|element| {
+            element.fields.iter().any(|(name, value)| {
+                matches!(value, InstanceField::ElementId { id, .. }
+                    if name == TYPE_ID_FIELD && unset_types.contains(id))
+            })
+        })
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if instances.is_empty() {
+        return BTreeMap::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
+    else {
+        return BTreeMap::new();
+    };
+    let materials: BTreeSet<u32> = names.keys().copied().collect();
+    let Ok(found) =
+        crate::native_instance_materials::instance_parameter_materials(rf, &instances, &materials)
+    else {
+        return BTreeMap::new();
+    };
+    found
+        .into_iter()
+        .filter_map(|(instance, ids)| {
+            let instance = u32::try_from(instance).ok()?;
+            let resolved: Vec<String> =
+                ids.iter().filter_map(|id| names.get(id).cloned()).collect();
+            // Every value named, or none taken: a set missing a material
+            // would be a wrong set, where `<Unnamed>` is Revit's fallback.
+            (resolved.len() == ids.len()).then_some((instance, resolved))
+        })
+        .collect()
+}
+
 /// Give each element whose type draws its geometry with no material of its
-/// own, and that has no type material yet, the material Revit's export
-/// writes for such geometry, [`crate::partition_type_materials::UNNAMED_MATERIAL`]
-/// (RE-149). Doors, windows, walls and slabs are left alone: a door or
-/// window type without a material map is written as its opening (RE-84).
-fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [DecodedElement]) {
+/// own, and that has no type material yet, the materials its own material
+/// parameters name (`instance_materials`, RE-200), or else the material
+/// Revit's export writes for such geometry,
+/// [`crate::partition_type_materials::UNNAMED_MATERIAL`] (RE-149). Doors,
+/// windows, walls and slabs are left alone: a door or window type without a
+/// material map is written as its opening (RE-84).
+fn attach_unnamed_materials(
+    unset_types: &BTreeSet<u32>,
+    instance_materials: &BTreeMap<u32, Vec<String>>,
+    elements: &mut [DecodedElement],
+) {
     for element in elements.iter_mut() {
         if element
             .fields
@@ -2172,10 +2234,16 @@ fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [Decoded
             element
                 .fields
                 .retain(|(name, _)| name != TYPE_WITHOUT_GEOMETRY_FIELD);
-            element.fields.push((
-                TYPE_MATERIAL_FIELD.into(),
-                InstanceField::String(crate::partition_type_materials::UNNAMED_MATERIAL.into()),
-            ));
+            let names = element
+                .id
+                .and_then(|id| instance_materials.get(&id))
+                .cloned()
+                .unwrap_or_else(|| vec![crate::partition_type_materials::UNNAMED_MATERIAL.into()]);
+            for name in names {
+                element
+                    .fields
+                    .push((TYPE_MATERIAL_FIELD.into(), InstanceField::String(name)));
+            }
         }
     }
 }

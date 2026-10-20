@@ -175,6 +175,7 @@ pub mod native_es_catalog;
 pub mod native_extensible_storage;
 pub mod native_graphics_traversal;
 pub mod native_index;
+pub mod native_instance_materials;
 pub mod native_metadata;
 pub mod native_parameter_definitions;
 pub mod native_parameters;
