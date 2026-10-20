@@ -304,6 +304,14 @@ fn synthetic_project_emits_valid_ifc4() {
 
     let model = build_ifc_model(&inputs, opts);
     let step = write_step(&model);
+    if std::env::var("DUMP_IFC").is_ok() {
+        std::fs::write(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/synthetic-project.ifc"),
+            &step,
+        )
+        .expect("write ifc");
+    }
 
     // --- Structural validation (minimal IFC4 conformance) ---
     assert!(step.starts_with("ISO-10303-21;\n"), "missing header");
