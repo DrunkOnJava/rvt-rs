@@ -7,10 +7,11 @@ internal feet through each export's own site placement. For each element of
 the given classes whose Tag is in both files, it compares the upward-facing
 faces of the two bodies:
 
-- plan area: the area of the element's top surface, its upward faces at
-  its highest level, projected on plan (Revit writes a layered floor, roof
-  or ceiling as one solid per layer, stacked, each with the element's
-  outline, so every upward face would count each layer);
+- plan area: the area of the element's top surface, the plan union of its
+  upward faces (Revit writes a layered floor, roof or ceiling as one solid
+  per layer, stacked, each with the element's outline, so a sum would count
+  each layer; the union counts the outline once, and keeps a sloped top
+  whole, where its highest faces alone are a part of it, #824);
 - vertices: the largest distance from a vertex of one file's upward faces
   to the nearest vertex of the other's, both ways, in plan;
 - outline: the largest distance from a vertex of one file's top surface to
@@ -91,10 +92,6 @@ def tops(path, classes):
             normal = np.cross(b - a, c - a)
             length = np.linalg.norm(normal, axis=1)
             up = (length > 1e-12) & (normal[:, 2] > 0.9 * length)
-            centre_z = (a[:, 2] + b[:, 2] + c[:, 2]) / 3.0
-            if up.any():
-                up &= centre_z >= centre_z[up].max() - 1e-3
-            area = float(0.5 * normal[up, 2].sum())
             points = v[np.unique(faces[up].ravel())][:, :2]
             triangles = [
                 Polygon([tuple(p[:2]) for p in tri]).buffer(1e-7)
@@ -103,10 +100,10 @@ def tops(path, classes):
             surface = shapely.union_all(triangles) if triangles else Polygon()
             # A sketch of several pieces is several elements with one Tag.
             if tag in out:
-                held_area, held_points, _, held_surface = out[tag]
-                area, points = held_area + area, np.vstack([held_points, points])
+                _, held_points, _, held_surface = out[tag]
+                points = np.vstack([held_points, points])
                 surface = shapely.union_all([held_surface, surface])
-            out[tag] = (area, points, element.is_a(), surface)
+            out[tag] = (float(surface.area), points, element.is_a(), surface)
     return out
 
 
