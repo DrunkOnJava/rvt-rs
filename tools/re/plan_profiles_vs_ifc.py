@@ -67,6 +67,7 @@ def tops(path, classes):
     settings.set("use-world-coords", True)
     out = {}
     pieces = collections.Counter()
+    items = collections.Counter()
     for cls in classes:
         try:
             elements = f.by_type(cls)
@@ -103,13 +104,18 @@ def tops(path, classes):
             ]
             surface = shapely.union_all(triangles) if triangles else Polygon()
             pieces[tag] += 1
+            items[tag] += sum(
+                len(rep.Items)
+                for rep in element.Representation.Representations
+                if rep.RepresentationIdentifier == "Body"
+            )
             # A sketch of several pieces is several elements with one Tag.
             if tag in out:
                 held_area, held_points, _, held_surface = out[tag]
                 area, points = held_area + area, np.vstack([held_points, points])
                 surface = shapely.union_all([held_surface, surface])
             out[tag] = (area, points, element.is_a(), surface)
-    return out, pieces
+    return out, pieces, items
 
 
 def shape_of(surface):
@@ -152,7 +158,10 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    (ours, our_pieces), (revit, revit_pieces) = tops(args[0], classes), tops(args[1], classes)
+    (ours, our_pieces, our_items), (revit, revit_pieces, revit_items) = (
+        tops(args[0], classes),
+        tops(args[1], classes),
+    )
     if by_centroid and revit:
         paired = {}
         for held in ours.values():
@@ -178,6 +187,10 @@ def main(argv):
                     revit_pieces[tag],
                     shape_of(o_surface),
                     shape_of(surface),
+                    o_surface.area,
+                    surface.area,
+                    our_items[tag],
+                    revit_items[tag],
                 )
             )
     print(f"elements of {','.join(classes)} in both: {len(rows)}")
@@ -190,11 +203,14 @@ def main(argv):
         print(f"  {cls} {what}: {count}")
     split = [row for row in rows if row[7] != row[8]]
     print(f"  elements whose piece count differs: {len(split)}")
-    for rel, dist, tag, cls, area, o_area, edge, op, rp, oshape, rshape in sorted(rows, reverse=True)[:listing]:
+    for row in sorted(rows, reverse=True)[:listing]:
+        rel, dist, tag, cls, area, o_area, edge, op, rp, oshape, rshape, ou, ru, oi, ri = row
         print(
             f"  {tag} {cls}: area {o_area:.2f} vs {area:.2f} ft2 ({rel:.2%}),"
+            f" union {ou:.2f} vs {ru:.2f} ft2,"
             f" vertices {dist:.3f} ft, outline {edge:.3f} ft,"
-            f" pieces {op} vs {rp}, polygons/holes {oshape[0]}/{oshape[1]} vs {rshape[0]}/{rshape[1]}"
+            f" pieces {op} vs {rp}, body items {oi} vs {ri},"
+            f" polygons/holes {oshape[0]}/{oshape[1]} vs {rshape[0]}/{rshape[1]}"
         )
     return 0
 
