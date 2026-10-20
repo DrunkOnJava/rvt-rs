@@ -69,6 +69,15 @@ fn main() -> rvt::Result<()> {
                 let near = (0..3).all(|axis| (point[axis] - end[axis]).abs() <= SAME_POINT_FEET);
                 if near {
                     keys[slot].push(format!("{element}:{index}"));
+                    // #834: the 64 bytes after the point, to look for a flow
+                    // direction.
+                    let after: String = buf
+                        .get(at + 28..(at + 92).min(buf.len()))
+                        .unwrap_or(&[])
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect();
+                    println!("entry {id} {slot} {element}:{index} {after}");
                 }
             }
         }
