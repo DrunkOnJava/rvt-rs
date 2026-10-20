@@ -767,7 +767,22 @@ pub fn append_typed_production_elements(
             }
             // #828: a duct's ports are DUCT ports, a pipe's PIPE ports.
             match decoded.class.as_str() {
-                "Duct" => curve_ends.push((entity_index, id, "DUCT")),
+                "Duct" => {
+                    curve_ends.push((entity_index, id, "DUCT"));
+                    if let Some(ends) =
+                        crate::partition_schema_mvp::duct_ends_from_fields(&decoded.fields)
+                    {
+                        pipe_ends.insert(
+                            entity_index,
+                            (
+                                ends,
+                                crate::partition_schema_mvp::duct_end_keys_from_fields(
+                                    &decoded.fields,
+                                ),
+                            ),
+                        );
+                    }
+                }
                 "Pipe" => {
                     curve_ends.push((entity_index, id, "PIPE"));
                     if let Some(body) =
