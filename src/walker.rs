@@ -1377,20 +1377,24 @@ pub fn read_adocument_lossy_with_limits(
 /// entities. Pipeline:
 ///   1. Read + decompress `Formats/Latest` → [`crate::formats::SchemaTable`].
 ///   2. Read + decompress `Global/Latest` → raw bytes.
-///   3. Run [`scan_candidates`] with `min_score = 0` — every offset
-///      where `trial_walk` produced a non-degenerate score. The
-///      `80` threshold is calibrated for the 16-field ADocument
-///      entry-point detector and filters out simple element
-///      classes whose `walk_score` is structurally bounded (most
-///      have fewer than 3 trailing ElementIds, which caps the
-///      score below the ADocument band).
+///   3. Run [`scan_candidates`] with [`PRODUCTION_ELEMENT_MIN_SCORE`]
+///      (80). That threshold is calibrated for the 16-field ADocument
+///      entry-point detector and filters out simple element classes
+///      whose `walk_score` is structurally bounded (most have fewer
+///      than 3 trailing ElementIds, which caps the score below the
+///      ADocument band). On the 76 files Measure reads (the family
+///      corpus 2014 to 2026, the reference models and Autodesk's
+///      sample projects 2015 to 2027) it yields no production row
+///      (#852, Measure run 39365578939): real elements come from the
+///      `Partitions/*` merges below.
 ///   4. For each candidate, run [`decode_instance`] to produce a
 ///      typed `DecodedElement`, then extract the self-id via
 ///      [`find_self_id_field`].
 ///   5. Dedup: first-seen (highest-score) wins — if two candidates
 ///      claim the same `ElementId`, only the higher-score offset
-///      survives. Scoreless / id-zero candidates are still yielded
-///      only by the explicit diagnostic path.
+///      survives. A candidate with no ElementId (or id zero) is
+///      yielded only by the explicit diagnostic path, a `min_score`
+///      below [`PRODUCTION_ELEMENT_MIN_SCORE`] (#852).
 ///
 /// Returns a materialised `Vec<DecodedElement>::into_iter()` rather
 /// than a lazy iterator — each element requires upfront schema +
@@ -1525,6 +1529,10 @@ pub fn iter_elements_with_control(
                 continue;
             }
             decoded.id = Some(id);
+        } else if min_score >= PRODUCTION_ELEMENT_MIN_SCORE {
+            // #852: a production row needs an ElementId; one without is
+            // for diagnostic probes only.
+            continue;
         }
 
         out.push(decoded);
