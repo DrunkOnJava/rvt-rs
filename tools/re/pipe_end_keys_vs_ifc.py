@@ -97,6 +97,28 @@ def main():
             ends["not read"] += 1
         if args.list or "self, other index" in kinds or "joined, not connected" in kinds:
             listed.append(f"  {pipe} {which} (Revit's index {k}): " + " ".join(f"{e}:{i}" for e, i in keys))
+    # #834: the words after each entry's point, against the In/Out name of
+    # the port Revit's export gives that entry's element and connector.
+    names = {}
+    for port in model.by_type("IfcDistributionPort"):
+        match = PORT_NAME.match(port.Name or "")
+        if match:
+            side = (port.Name or "").split("Port_")[0] or "-"
+            names[(int(match.group(1)), int(match.group(2)))] = side
+    words = collections.Counter()
+    for line in open(args.probe, encoding="utf-8", errors="replace"):
+        parts = line.split()
+        if len(parts) < 5 or parts[0] != "entry":
+            continue
+        element, index = (int(v) for v in parts[3].split(":"))
+        raw = bytes.fromhex(parts[4])
+        if len(raw) < 12:
+            continue
+        a, b, c = (int.from_bytes(raw[i : i + 4], "little", signed=True) for i in (0, 4, 8))
+        own = "self" if element == int(parts[1]) else "joined"
+        words[(own, names.get((element, index), "no port"), a, b, c)] += 1
+    for (own, side, a, b, c), n in sorted(words.items()):
+        print(f"  words after the point: {own} entry, Revit {side} port: {a} {b} {c} x{n}")
     print("ends: " + ", ".join(f"{k} {v}" for k, v in ends.most_common()))
     print("keys: " + ", ".join(f"{k} {v}" for k, v in outcomes.most_common()))
     for line in listed[:60]:
