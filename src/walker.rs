@@ -1385,7 +1385,7 @@ pub fn read_adocument_lossy_with_limits(
 ///      ADocument band). On the 76 files Measure reads (the family
 ///      corpus 2014 to 2026, the reference models and Autodesk's
 ///      sample projects 2015 to 2027) it yields no production row
-///      (#852, Measure run 39365578939): real elements come from the
+///      (#852, Measure run 39367864281): real elements come from the
 ///      `Partitions/*` merges below.
 ///   4. For each candidate, run [`decode_instance`] to produce a
 ///      typed `DecodedElement`, then extract the self-id via

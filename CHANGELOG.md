@@ -36,9 +36,9 @@ All notable changes will be documented here. This project follows
   is yielded only by the diagnostic path, but the production threshold
   yielded one too, undeduplicated and joined to nothing. It is now left
   out unless the caller asks for a score below
-  `PRODUCTION_ELEMENT_MIN_SCORE`. On the 76 files Measure reads, the schema
-  path yields no production row at all, so no export changes (Measure run
-  39365578939).
+  `PRODUCTION_ELEMENT_MIN_SCORE`. On the 76 files Measure reads, every
+  production row comes from a partition record and the schema path yields
+  none, so no export changes (Measure run 39367864281).
 
 ### Changed
 
