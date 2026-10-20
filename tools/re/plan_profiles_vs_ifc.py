@@ -191,6 +191,8 @@ def main(argv):
                     surface.area,
                     our_items[tag],
                     revit_items[tag],
+                    o_surface,
+                    surface,
                 )
             )
     print(f"elements of {','.join(classes)} in both: {len(rows)}")
@@ -204,7 +206,7 @@ def main(argv):
     split = [row for row in rows if row[7] != row[8]]
     print(f"  elements whose piece count differs: {len(split)}")
     for row in sorted(rows, reverse=True)[:listing]:
-        rel, dist, tag, cls, area, o_area, edge, op, rp, oshape, rshape, ou, ru, oi, ri = row
+        rel, dist, tag, cls, area, o_area, edge, op, rp, oshape, rshape, ou, ru, oi, ri, osurf, rsurf = row
         print(
             f"  {tag} {cls}: area {o_area:.2f} vs {area:.2f} ft2 ({rel:.2%}),"
             f" union {ou:.2f} vs {ru:.2f} ft2,"
@@ -212,6 +214,10 @@ def main(argv):
             f" pieces {op} vs {rp}, body items {oi} vs {ri},"
             f" polygons/holes {oshape[0]}/{oshape[1]} vs {rshape[0]}/{rshape[1]}"
         )
+        if rel > 1e-3:
+            # #824: both outlines, model feet, for the slabs whose area is off.
+            for who, surf in (("rvt-rs", osurf), ("revit", rsurf)):
+                print(f"    {who} {shapely.set_precision(surf, 0.001).wkt[:1500]}")
     return 0
 
 
