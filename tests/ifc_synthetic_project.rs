@@ -305,6 +305,17 @@ fn synthetic_project_emits_valid_ifc4() {
     let model = build_ifc_model(&inputs, opts);
     let step = write_step(&model);
 
+    // --- Optional: dump to a fixture file when asked, before any check ---
+    if std::env::var("DUMP_IFC").is_ok() {
+        let out_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures");
+        std::fs::create_dir_all(&out_dir).expect("fixtures dir");
+        let out_path = out_dir.join("synthetic-project.ifc");
+        std::fs::write(&out_path, &step).expect("write ifc");
+        eprintln!("wrote {}", out_path.display());
+    }
+
     // --- Structural validation (minimal IFC4 conformance) ---
     assert!(step.starts_with("ISO-10303-21;\n"), "missing header");
     assert!(step.ends_with("END-ISO-10303-21;\n"), "missing terminator");
@@ -410,19 +421,21 @@ fn synthetic_project_emits_valid_ifc4() {
     // North Window carries RvtWindow (SillHeight, Rotation
     // = 2 properties). IFC4's Pset_WallCommon and Pset_WindowCommon
     // declare none of them (#827). Each produces one IFCPROPERTYSET +
-    // IFCRELDEFINESBYPROPERTIES.
+    // IFCRELDEFINESBYPROPERTIES, beside the writer's own
+    // Pset_BuildingStoreyCommon on each of the three storeys and
+    // Pset_BuildingCommon on the building.
     assert!(step.contains("'RvtWall'"), "missing RvtWall");
     assert!(step.contains("'RvtWindow'"), "missing RvtWindow");
     assert!(step.contains("'BaseOffset'"), "BaseOffset property");
     assert!(step.contains("'SillHeight'"), "SillHeight property");
     assert_eq!(
         step.matches("IFCPROPERTYSET(").count(),
-        2,
-        "expect 2 property sets"
+        6,
+        "expect 6 property sets"
     );
     assert_eq!(
         step.matches("IFCRELDEFINESBYPROPERTIES(").count(),
-        2,
+        6,
         "one rel per property set"
     );
     // SillHeight = 2.5 ft → 0.762 m, IfcLengthMeasure.
@@ -513,17 +526,6 @@ fn synthetic_project_emits_valid_ifc4() {
         step.contains(",3.048000,0.203200)"),
         "E/W wall profile dims missing (10' × 8\")"
     );
-
-    // --- Optional: dump to a fixture file when asked ---
-    if std::env::var("DUMP_IFC").is_ok() {
-        let out_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests")
-            .join("fixtures");
-        std::fs::create_dir_all(&out_dir).expect("fixtures dir");
-        let out_path = out_dir.join("synthetic-project.ifc");
-        std::fs::write(&out_path, &step).expect("write ifc");
-        eprintln!("wrote {}", out_path.display());
-    }
 }
 
 #[test]
