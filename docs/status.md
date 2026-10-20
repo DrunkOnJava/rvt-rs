@@ -762,10 +762,14 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.6.0** (2026-10-19) is the latest release: crates.io and docs.rs,
+- **v0.6.1** (2026-10-19) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
-  Windows, the container image, and the deployed viewer, each checked from
-  its published artifacts ([`install.md`](install.md)). It carries
+  Windows, and the container image, each checked from its published
+  artifacts ([`install.md`](install.md)). It is 0.6.0 with an export panic
+  on 32-bit targets fixed (#836) and a README whose support table says
+  what is measured, built from 0.6.0 because `main` holds a breaking change
+  for the next minor release (#841).
+- **v0.6.0** (2026-10-19) is the release before. It carries
   everything under `[0.6.0]` in [`CHANGELOG.md`](../CHANGELOG.md): IFC4's
   own property sets where 0.5 wrote some of IFC2X3's, more of the values
   Revit's exporter writes (parameters named for a standard set's property,
@@ -773,9 +777,8 @@ prints it from any installed build.
   types), and the elements of Revit 2015 to 2022 and 2027 projects, as
   experimental. Its "Upgrading from 0.5" section lists the changes a 0.5
   user will notice.
-- **v0.5.1** (2026-10-18) is the release before: 0.5.0 with exports named
-  by the model's file name rather than the path it was saved at (#782).
-- `main` is ahead of v0.6.0 by what is under `[Unreleased]`.
+- `main` has everything v0.6.1 has, and is ahead of it by what is under
+  `[Unreleased]`.
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
 task backlog.

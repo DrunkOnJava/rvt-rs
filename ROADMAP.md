@@ -87,6 +87,9 @@ the four levels a file can reach are in the
   electrical ports' direction (HVAC and piping directions are not read yet,
   #834); Revit 2015 to 2022 and 2027 projects export their elements,
   experimentally.
+- **0.6.1, 2026-10-19.** 0.6.0 with an export panic on 32-bit targets fixed
+  (#836) and a README whose support table says what is measured, built
+  from 0.6.0 because `main` holds a breaking change (#841).
 
 ### 0.6.x: IFC geometry, remaining slices
 
