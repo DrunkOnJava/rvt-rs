@@ -133,6 +133,42 @@ def main():
             placed["placed elsewhere"] += 1
             listed.append(f"  {tag}_{index}: rvt-rs's port {math.dist(own[0], point):.4f} ft from Revit's")
     print("rvt-rs's ports on those pipes: " + ", ".join(f"{k} {v}" for k, v in placed.most_common()))
+    # #869: where Revit's export places a port joined to a flow segment's
+    # port, against that segment port.
+    model = ifcopenshell.open(args.reference)
+    scale = unit.calculate_unit_scale(model) / FT
+
+    def place(port):
+        matrix = placement.get_local_placement(port.ObjectPlacement)
+        return [float(v) * scale for v in matrix[:3, 3]], [float(matrix[i][2]) for i in range(3)]
+
+    def owner(port):
+        for rel in getattr(port, "ContainedIn", None) or []:
+            return rel.RelatedElement
+        for rel in getattr(port, "Nests", None) or []:
+            return rel.RelatingObject
+        return None
+
+    joins = collections.Counter()
+    for rel in model.by_type("IfcRelConnectsPorts"):
+        pair = [rel.RelatingPort, rel.RelatedPort]
+        owners = [owner(p) for p in pair]
+        kinds = ["segment" if o is not None and o.is_a("IfcFlowSegment") else "other" for o in owners]
+        if kinds.count("segment") != 1 or not all(p.ObjectPlacement for p in pair):
+            continue
+        seg, other = (pair[0], pair[1]) if kinds[0] == "segment" else (pair[1], pair[0])
+        (sp, sz), (op, oz) = place(seg), place(other)
+        cos = sum(sz[i] * oz[i] for i in range(3))
+        joins[
+            (
+                "at the segment port" if math.dist(sp, op) <= TOLERANCE_FT else f"{math.dist(sp, op):.3f} ft away",
+                "opposite axis" if cos < -0.99 else "same axis" if cos > 0.99 else "other axis",
+            )
+        ] += 1
+    print(
+        "Revit's ports joined to a segment's port: "
+        + ", ".join(f"{a}, {b} {n}" for (a, b), n in joins.most_common(8))
+    )
     for line in listed[:60]:
         print(line)
 
