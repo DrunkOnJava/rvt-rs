@@ -299,6 +299,38 @@ impl StepWriter {
     /// shared `solid_position` and the body's `depth_m`, or, for a cut with
     /// its own height (RE-93), a placement that far above the element's and
     /// that height.
+    /// A port's `IfcLocalPlacement` at `point_feet` (model feet), in the
+    /// frame of its element's placement `parent`, which sits at
+    /// `element_location` turned by `rotation` about Z (#847).
+    fn port_placement(
+        &mut self,
+        parent: usize,
+        element_location: Option<[f64; 3]>,
+        rotation: Option<f64>,
+        point_feet: [f64; 3],
+    ) -> usize {
+        let [ox, oy, oz] = element_location.unwrap_or([0.0; 3]);
+        let (dx, dy, dz) = (point_feet[0] - ox, point_feet[1] - oy, point_feet[2] - oz);
+        let angle = rotation.unwrap_or(0.0);
+        let (c, s) = (angle.cos(), angle.sin());
+        let local = [c * dx + s * dy, -s * dx + c * dy, dz];
+        let point = self.id();
+        self.emit_entity(
+            point,
+            format!(
+                "IFCCARTESIANPOINT(({:.6},{:.6},{:.6}))",
+                local[0] * 0.3048,
+                local[1] * 0.3048,
+                local[2] * 0.3048
+            ),
+        );
+        let axis = self.id();
+        self.emit_entity(axis, format!("IFCAXIS2PLACEMENT3D(#{point},$,$)"));
+        let placement = self.id();
+        self.emit_entity(placement, format!("IFCLOCALPLACEMENT(#{parent},#{axis})"));
+        placement
+    }
+
     fn opening_solid_position(
         &mut self,
         solid_position: usize,
@@ -2875,6 +2907,34 @@ impl StepWriter {
                 .map_or(".NOTDEFINED.,$", String::as_str)
                 .to_string()
         };
+        // #847: where each connector is, by its element, when it is read.
+        let port_points: HashMap<(u32, u32), (usize, [f64; 3])> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::Port {
+                    element,
+                    id,
+                    index,
+                    location_feet: Some(point),
+                    ..
+                } => Some(((*id, *index), (*element, *point))),
+                _ => None,
+            })
+            .collect();
+        let element_frames: HashMap<usize, (Option<[f64; 3]>, Option<f64>)> = model
+            .entities
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entity)| match entity {
+                super::entities::IfcEntity::BuildingElement {
+                    location_feet,
+                    rotation_radians,
+                    ..
+                } => Some((index, (*location_feet, *rotation_radians))),
+                _ => None,
+            })
+            .collect();
         for entity in &model.entities {
             let super::entities::IfcEntity::PortConnection {
                 a,
@@ -2900,12 +2960,21 @@ impl StepWriter {
                     port_ids[slot] = port;
                     continue;
                 }
+                let placement = port_points
+                    .get(&(id, index))
+                    .and_then(|(owner, point)| {
+                        let parent = entity_index_to_placement.get(*owner).copied().flatten()?;
+                        let (location, rotation) =
+                            element_frames.get(owner).copied().unwrap_or((None, None));
+                        Some(self.port_placement(parent, location, rotation, *point))
+                    })
+                    .map_or("$".to_string(), |placement| format!("#{placement}"));
                 let (id_text, index_text) = (id.to_string(), index.to_string());
                 let port = self.id();
                 self.emit_entity(
                     port,
                     format!(
-                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,{},$)",
+                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,{placement},$,{},$)",
                         gid(&["port", &id_text, &index_text]),
                         port_attribute(id, index),
                     ),
@@ -2951,12 +3020,21 @@ impl StepWriter {
             else {
                 continue;
             };
+            let placement = port_points
+                .get(&(*id, *index))
+                .and_then(|(owner, point)| {
+                    let parent = entity_index_to_placement.get(*owner).copied().flatten()?;
+                    let (location, rotation) =
+                        element_frames.get(owner).copied().unwrap_or((None, None));
+                    Some(self.port_placement(parent, location, rotation, *point))
+                })
+                .map_or("$".to_string(), |placement| format!("#{placement}"));
             let (id_text, index_text) = (id.to_string(), index.to_string());
             let port = self.id();
             self.emit_entity(
                 port,
                 format!(
-                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,$,$,{},$)",
+                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,{placement},$,{},$)",
                     gid(&["port", &id_text, &index_text]),
                     port_attribute(*id, *index),
                 ),

@@ -363,6 +363,8 @@ pub fn append_typed_production_elements(
         Vec::new();
     // B54: each duct and pipe, by entity index and ElementId.
     let mut curve_ends: Vec<(usize, u32, &'static str)> = Vec::new();
+    // #847: each pipe's two ends and the connector entry keys at each.
+    let mut pipe_ends: BTreeMap<usize, PipeEnds> = BTreeMap::new();
     // RE-162: each MEP system's name and members, by its ElementId.
     let mut pending_systems: std::collections::BTreeMap<u32, (Option<String>, Vec<usize>)> =
         Default::default();
@@ -750,7 +752,22 @@ pub fn append_typed_production_elements(
             // #828: a duct's ports are DUCT ports, a pipe's PIPE ports.
             match decoded.class.as_str() {
                 "Duct" => curve_ends.push((entity_index, id, "DUCT")),
-                "Pipe" => curve_ends.push((entity_index, id, "PIPE")),
+                "Pipe" => {
+                    curve_ends.push((entity_index, id, "PIPE"));
+                    if let Some(body) =
+                        crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields)
+                    {
+                        pipe_ends.insert(
+                            entity_index,
+                            (
+                                [body.start, body.end],
+                                crate::partition_schema_mvp::pipe_end_keys_from_fields(
+                                    &decoded.fields,
+                                ),
+                            ),
+                        );
+                    }
+                }
                 _ => {}
             }
         }
@@ -1121,6 +1138,20 @@ pub fn append_typed_production_elements(
             )
     };
     let mut connections: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
+    // #847: each connector's joins, read from either side's list.
+    let mut joined: HashMap<(u32, u32), Vec<(u32, u32)>> = HashMap::new();
+    for (_, id, joins) in &pending_joins {
+        for &(index, other_id, other_index) in joins {
+            joined
+                .entry((*id, index))
+                .or_default()
+                .push((other_id, other_index));
+            joined
+                .entry((other_id, other_index))
+                .or_default()
+                .push((*id, index));
+        }
+    }
     for (entity, id, joins) in pending_joins {
         for (index, other_id, other_index) in joins {
             let Some(&other) = out.id_to_entity.get(&other_id) else {
@@ -1157,6 +1188,9 @@ pub fn append_typed_production_elements(
                 index,
                 predefined_type: Some(kind.to_string()),
                 flow_direction: None,
+                location_feet: pipe_ends
+                    .get(&element)
+                    .and_then(|ends| pipe_port_point(id, index, ends, &joined)),
             });
         }
     }
@@ -1925,6 +1959,47 @@ fn add_piece_sets(
                 });
             }
         }
+    }
+}
+
+/// A pipe's two ends, model feet, and the connector entry keys at each
+/// (#847).
+type PipeEnds = (
+    [[f64; 3]; 2],
+    [Vec<crate::partition_pipe_axes::EntryKey>; 2],
+);
+
+/// The end of pipe `id` that is its connector `index` (#847): the one end
+/// whose connector entry keys name that connector, either the pipe itself
+/// with `index` or the element and connector `joined` says the pipe's
+/// `index` is joined to (RE-138). On the RE1 models every end with a port in
+/// Revit's export is named this way (Measure run 39370306743). `None` where
+/// no end, or both, name it.
+fn pipe_port_point(
+    id: u32,
+    index: u32,
+    (points, keys): &PipeEnds,
+    joined: &HashMap<(u32, u32), Vec<(u32, u32)>>,
+) -> Option<[f64; 3]> {
+    let own = u64::from(id);
+    let partners = joined.get(&(id, index));
+    let names = |keys: &[crate::partition_pipe_axes::EntryKey]| {
+        keys.iter().any(|&(element, key_index)| {
+            if element == own {
+                key_index == index
+            } else {
+                partners.is_some_and(|partners| {
+                    partners.iter().any(|&(other, other_index)| {
+                        u64::from(other) == element && other_index == key_index
+                    })
+                })
+            }
+        })
+    };
+    match [names(&keys[0]), names(&keys[1])] {
+        [true, false] => Some(points[0]),
+        [false, true] => Some(points[1]),
+        _ => None,
     }
 }
 
