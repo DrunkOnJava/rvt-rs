@@ -8,6 +8,26 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **`from_decoded`'s property set builders write a standard set's name
+  only for the properties IFC4 declares in it (#827).** `wall_property_set`
+  put Revit's base and top offsets, unconnected height, structural usage
+  and location line in `Pset_WallCommon`, and its door, window, column,
+  beam and stair siblings did the same, though IFC reserves the `Pset_`
+  prefix and each standard set's properties for buildingSMART's
+  definitions. Each builder now returns a `Vec<PropertySet>`: IFC4's set
+  with what it declares (`Pset_StairCommon.NumberOfRiser`, `RiserHeight`
+  and `TreadLength`, `Pset_BeamCommon.Span`, `Pset_ColumnCommon.LoadBearing`,
+  with the measure types IFC4 gives them), and a set of rvt-rs's naming
+  (`RvtWall`, `RvtDoor`, `RvtWindow`, `RvtStair`, `RvtBeam`, `RvtColumn`)
+  with the rest. `ElementInput::property_set` became `property_sets`; the
+  first set is the element's own and each further one is written as an
+  `IfcEntity::ElementPropertySet`. `floor_base_quantities` no longer writes
+  a `Depth` and `GrossVolume` from a thickness of 1 ft where the floor type
+  gives none, and the diagnostic exporter's `Pset_RvtRsDiagnosticCandidate`
+  is now `RvtRsDiagnosticCandidate`. `RvtDocExporter`'s exports do not use
+  these builders and do not change. The builders and `ElementInput` are
+  public, so code that calls them needs the new types.
+
 - **The crate's and the wheel's descriptions name the experimental releases.**
   crates.io and PyPI show 0.6.0's and 0.6.1's as reading typed elements from
   Revit 2023 to 2025 projects with 2026 experimental; 2015 to 2022 and 2027 are

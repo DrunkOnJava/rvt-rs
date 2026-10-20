@@ -91,7 +91,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("W-N-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
-            property_set: Some(wall_property_set(&wall_north)),
+            property_sets: wall_property_set(&wall_north),
             // Building footprint is 20 ft × 10 ft. Walls sit on the
             // edges; their placement origins are the near-corner of
             // each wall segment.
@@ -111,7 +111,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("W-S-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
-            property_set: None,
+            property_sets: Vec::new(),
             location_feet: Some([0.0, 0.0, 0.0]),
             rotation_radians: Some(0.0),
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 20.0)),
@@ -127,7 +127,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("W-E-001".into()),
             material_index: Some(0),
             storey_index: Some(1),
-            property_set: None,
+            property_sets: Vec::new(),
             // East wall on the second floor — 10 ft up, 20 ft east.
             // Rotated 90° so it runs +Y.
             location_feet: Some([20.0, 0.0, 10.0]),
@@ -147,7 +147,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("W-W-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
-            property_set: None,
+            property_sets: Vec::new(),
             location_feet: Some([0.0, 0.0, 0.0]),
             rotation_radians: Some(std::f64::consts::FRAC_PI_2),
             extrusion: Some(wall_extrusion(&wall_north, Some(&wall_type), 10.0)),
@@ -163,7 +163,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("SLAB-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
-            property_set: None,
+            property_sets: Vec::new(),
             // Slab footprint: 20 ft × 10 ft × 1 ft thick, lying flat
             // at z = -1 ft (top of slab coincides with storey origin).
             location_feet: Some([0.0, 0.0, -1.0]),
@@ -181,7 +181,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("DOOR-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
-            property_set: None,
+            property_sets: Vec::new(),
             // Door sits mid-way along the south wall (10 ft east).
             // 3 ft wide × 8" thick × 7 ft tall.
             location_feet: Some([10.0, 0.0, 0.0]),
@@ -208,7 +208,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("WIN-N-001".into()),
             material_index: Some(1),
             storey_index: Some(0),
-            property_set: Some(window_property_set(&win_sample)),
+            property_sets: window_property_set(&win_sample),
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
@@ -224,7 +224,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("WIN-S-001".into()),
             material_index: Some(1),
             storey_index: Some(0),
-            property_set: None,
+            property_sets: Vec::new(),
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
@@ -240,7 +240,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: Some("STAIR-001".into()),
             material_index: Some(0),
             storey_index: Some(0),
-            property_set: None,
+            property_sets: Vec::new(),
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
@@ -256,7 +256,7 @@ fn synthetic_project_emits_valid_ifc4() {
             guid: None,
             storey_index: None,
             material_index: None,
-            property_set: None,
+            property_sets: Vec::new(),
             location_feet: None,
             rotation_radians: None,
             extrusion: None,
@@ -405,19 +405,14 @@ fn synthetic_project_emits_valid_ifc4() {
     assert!(step.contains("Glass - Tinted"), "glass material name");
 
     // --- Property sets attached to wall + window ---
-    // North Wall carries Pset_WallCommon (BaseOffset, TopOffset,
+    // North Wall carries RvtWall (BaseOffset, TopOffset,
     // UnconnectedHeight, StructuralUsage, LocationLine = 5 properties).
-    // North Window carries Pset_WindowCommon (SillHeight, Rotation
-    // = 2 properties). Each produces one IFCPROPERTYSET +
+    // North Window carries RvtWindow (SillHeight, Rotation
+    // = 2 properties). IFC4's Pset_WallCommon and Pset_WindowCommon
+    // declare none of them (#827). Each produces one IFCPROPERTYSET +
     // IFCRELDEFINESBYPROPERTIES.
-    assert!(
-        step.contains("'Pset_WallCommon'"),
-        "missing Pset_WallCommon"
-    );
-    assert!(
-        step.contains("'Pset_WindowCommon'"),
-        "missing Pset_WindowCommon"
-    );
+    assert!(step.contains("'RvtWall'"), "missing RvtWall");
+    assert!(step.contains("'RvtWindow'"), "missing RvtWindow");
     assert!(step.contains("'BaseOffset'"), "BaseOffset property");
     assert!(step.contains("'SillHeight'"), "SillHeight property");
     assert_eq!(
@@ -541,7 +536,7 @@ fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
         guid: Some("W-1".into()),
         storey_index: None,
         material_index: None,
-        property_set: None,
+        property_sets: Vec::new(),
         location_feet: None,
         rotation_radians: None,
         extrusion: None,
