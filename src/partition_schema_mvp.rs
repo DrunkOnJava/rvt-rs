@@ -405,6 +405,8 @@ pub fn recover_partition_schema_mvp(
     attach_pipe_type_names(rf, &mut out.products);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
     attach_curve_fields(rf, revit_version, &mut out.products);
+    // --- Which connector each end of a duct is (#847) ---
+    attach_duct_end_keys(rf, revit_version, &mut out.products);
     // --- Pipe fittings' nominal sizes, from their connectors (RE-165) ---
     attach_fitting_nominal_diameters(rf, revit_version, &mut out.products);
     // --- The shared parameter Serial Number (RE-156) ---
@@ -4496,6 +4498,15 @@ pub const PIPE_RADIUS_FIELD: &str = "m_pipe_radius";
 /// Fields holding the keys of the connector entries at a pipe's first and
 /// second end (#847), each a vector of `[element, connector index]` pairs.
 pub const PIPE_END_KEYS_FIELDS: [&str; 2] = ["m_pipe_start_keys", "m_pipe_end_keys"];
+/// Fields holding a duct's two ends, model feet: the centres of the faces of
+/// its record box across its length (#847, RE-134).
+pub const DUCT_ENDS_FIELDS: [[&str; 3]; 2] = [
+    ["m_duct_start_x", "m_duct_start_y", "m_duct_start_z"],
+    ["m_duct_end_x", "m_duct_end_y", "m_duct_end_z"],
+];
+/// Fields holding the keys of the connector entries at a duct's two ends
+/// (#847), as [`PIPE_END_KEYS_FIELDS`] for a pipe.
+pub const DUCT_END_KEYS_FIELDS: [&str; 2] = ["m_duct_start_keys", "m_duct_end_keys"];
 /// Fields holding a duct's or pipe's `m_dWidthOrDiameter` and `m_dHeight`,
 /// feet (RE-134).
 pub const CURVE_SIZE_FIELDS: [&str; 2] = ["m_curve_width", "m_curve_height"];
@@ -5274,34 +5285,44 @@ fn attach_pipe_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [Deco
             continue;
         };
         for (name, keys) in PIPE_END_KEYS_FIELDS.iter().zip(end_keys) {
-            let pairs = keys
-                .iter()
-                .map(|(element, index)| {
-                    InstanceField::Vector(vec![
-                        InstanceField::Integer {
-                            value: i64::try_from(*element).unwrap_or(i64::MAX),
-                            signed: true,
-                            size: 8,
-                        },
-                        InstanceField::Integer {
-                            value: i64::from(*index),
-                            signed: false,
-                            size: 4,
-                        },
-                    ])
-                })
-                .collect();
-            element
-                .fields
-                .push(((*name).into(), InstanceField::Vector(pairs)));
+            element.fields.push(((*name).into(), end_keys_field(keys)));
         }
     }
+}
+
+/// A duct's two ends ([`DUCT_ENDS_FIELDS`], #847), where its box gave them.
+pub fn duct_ends_from_fields(fields: &[(String, InstanceField)]) -> Option<[[f64; 3]; 2]> {
+    let field = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let point = |names: [&str; 3]| Some([field(names[0])?, field(names[1])?, field(names[2])?]);
+    Some([point(DUCT_ENDS_FIELDS[0])?, point(DUCT_ENDS_FIELDS[1])?])
+}
+
+/// The keys of the connector entries at a duct's two ends
+/// ([`DUCT_END_KEYS_FIELDS`], #847).
+pub fn duct_end_keys_from_fields(
+    fields: &[(String, InstanceField)],
+) -> [Vec<crate::partition_pipe_axes::EntryKey>; 2] {
+    end_keys_from_fields(fields, DUCT_END_KEYS_FIELDS)
 }
 
 /// The keys of the connector entries at a pipe's first and second end
 /// ([`PIPE_END_KEYS_FIELDS`], #847).
 pub fn pipe_end_keys_from_fields(
     fields: &[(String, InstanceField)],
+) -> [Vec<crate::partition_pipe_axes::EntryKey>; 2] {
+    end_keys_from_fields(fields, PIPE_END_KEYS_FIELDS)
+}
+
+/// A vector-of-pairs keys field ([`PIPE_END_KEYS_FIELDS`]) for each of
+/// `names`.
+fn end_keys_from_fields(
+    fields: &[(String, InstanceField)],
+    names: [&str; 2],
 ) -> [Vec<crate::partition_pipe_axes::EntryKey>; 2] {
     let keys = |wanted: &str| {
         fields
@@ -5329,7 +5350,97 @@ pub fn pipe_end_keys_from_fields(
             })
             .unwrap_or_default()
     };
-    [keys(PIPE_END_KEYS_FIELDS[0]), keys(PIPE_END_KEYS_FIELDS[1])]
+    [keys(names[0]), keys(names[1])]
+}
+
+/// The keys field values for `keys` ([`PIPE_END_KEYS_FIELDS`]).
+fn end_keys_field(keys: &[crate::partition_pipe_axes::EntryKey]) -> InstanceField {
+    InstanceField::Vector(
+        keys.iter()
+            .map(|(element, index)| {
+                InstanceField::Vector(vec![
+                    InstanceField::Integer {
+                        value: i64::try_from(*element).unwrap_or(i64::MAX),
+                        signed: true,
+                        size: 8,
+                    },
+                    InstanceField::Integer {
+                        value: i64::from(*index),
+                        signed: false,
+                        size: 4,
+                    },
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// Give each duct along one of the model's axes its two ends, the centres of
+/// its record box's faces across its length (RE-134), and the keys of the
+/// connector entries there (#847), which say which of its connectors each
+/// end is, as for a pipe. A duct whose box leaves no single length axis is
+/// given neither.
+fn attach_duct_end_keys(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_pipe_axes as ppa;
+    if !ppa::supports_revit_version(revit_version) {
+        return;
+    }
+    let mut ends = ppa::CurveEnds::new();
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "Duct")
+    {
+        let (Some(id), Some(bbox), Some((width, height)), Some(stream)) = (
+            element.id,
+            element_record_bbox(element),
+            curve_size_from_fields(&element.fields),
+            element_source_stream(element),
+        ) else {
+            continue;
+        };
+        let dims = [bbox[3] - bbox[0], bbox[4] - bbox[1], bbox[5] - bbox[2]];
+        let near = |a: f64, b: f64| (a - b).abs() <= CURVE_BOX_TOLERANCE_FEET;
+        let axes: Vec<usize> = (0..3)
+            .filter(|&axis| {
+                let (a, b) = (dims[(axis + 1) % 3], dims[(axis + 2) % 3]);
+                (near(a, width) && near(b, height)) || (near(a, height) && near(b, width))
+            })
+            .collect();
+        let [axis] = axes.as_slice() else {
+            continue;
+        };
+        let centre = [
+            (bbox[0] + bbox[3]) / 2.0,
+            (bbox[1] + bbox[4]) / 2.0,
+            (bbox[2] + bbox[5]) / 2.0,
+        ];
+        let mut start = centre;
+        let mut end = centre;
+        start[*axis] = bbox[*axis];
+        end[*axis] = bbox[*axis + 3];
+        for (names, point) in DUCT_ENDS_FIELDS.iter().zip([start, end]) {
+            for (name, value) in names.iter().zip(point) {
+                element
+                    .fields
+                    .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
+        }
+        ends.entry(stream).or_default().push((id, [start, end]));
+    }
+    let Ok(keys) = ppa::scan_pipe_end_keys(rf, revit_version, &ends) else {
+        return;
+    };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "Duct")
+    {
+        let Some(end_keys) = element.id.and_then(|id| keys.get(&id)) else {
+            continue;
+        };
+        for (name, keys) in DUCT_END_KEYS_FIELDS.iter().zip(end_keys) {
+            element.fields.push(((*name).into(), end_keys_field(keys)));
+        }
+    }
 }
 
 /// The field naming the element joined at connector `connector` of a duct,

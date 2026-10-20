@@ -15,8 +15,11 @@ All notable changes will be documented here. This project follows
   it for a `SINK` port, as Revit's export writes them. On the RE1 Plumbing
   model all 124 of the ports Revit writes on pipes are within 0.01 ft of
   Revit's. Their axes agree except on Revit's 57 `In` ports, whose flow
-  direction rvt-rs does not read (#834). Duct and family-instance ports keep
-  no placement, and the no-geometry modes write none.
+  direction rvt-rs does not read (#834). A duct along one of the model's axes
+  has its ports placed the same way, at the centres of its box's faces across
+  its length: on RE1 Mechanical all 62 of the ports Revit writes on ducts and
+  pipes are within 0.01 ft of Revit's. Family-instance ports keep no
+  placement, and the no-geometry modes write none.
 
 ### Fixed
 
