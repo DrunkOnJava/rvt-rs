@@ -84,6 +84,7 @@ def main():
     theirs = ports(args.reference)
     counts = collections.Counter()
     directions = collections.Counter()
+    by_side = collections.Counter()
     sides = collections.Counter()
     listed = []
     for (tag, index), (point, axis, side) in sorted(theirs.items()):
@@ -103,7 +104,9 @@ def main():
             outward = [end[i] - other[i] for i in range(3)]
             norm = math.sqrt(sum(v * v for v in outward)) or 1.0
             cos = sum(axis[i] * outward[i] / norm for i in range(3))
-            directions["outward" if cos > 0.99 else "inward" if cos < -0.99 else "across"] += 1
+            direction = "outward" if cos > 0.99 else "inward" if cos < -0.99 else "across"
+            directions[direction] += 1
+            by_side[(side, direction)] += 1
         if args.list or at == "neither end":
             listed.append(f"  {tag}_{index}: {at}, {min(d_first, d_second):.4f} ft from the nearer end")
     pipes = len({tag for tag, _ in theirs if tag in axes})
@@ -112,6 +115,7 @@ def main():
         print(f"  index {index}: {at} {n}")
     print("  port Z axis against the pipe at that end: " + ", ".join(f"{k} {v}" for k, v in directions.most_common()))
     print("  In/Out by index: " + ", ".join(f"{i} {s} {n}" for (i, s), n in sorted(sides.items())))
+    print("  Z axis by In/Out: " + ", ".join(f"{s} {d} {n}" for (s, d), n in sorted(by_side.items())))
     for line in listed[:60]:
         print(line)
 
