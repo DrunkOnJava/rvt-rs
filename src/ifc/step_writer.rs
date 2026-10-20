@@ -330,27 +330,36 @@ impl StepWriter {
                 local[2] * 0.3048
             ),
         );
-        let z_axis = direction.map(|[x, y, z]| {
+        // The Z axis along `direction`, and a reference direction across
+        // it: up for a port that does not point up or down, else +X. Nothing
+        // read gives the port's X axis, and IFC's default (+X) leaves none
+        // for a Z axis along -X.
+        let axes = direction.map(|[x, y, z]| {
             let local = [c * x + s * y, -s * x + c * y, z];
-            let id = self.id();
+            let z_id = self.id();
             self.emit_entity(
-                id,
+                z_id,
                 format!(
                     "IFCDIRECTION(({:.6},{:.6},{:.6}))",
                     local[0], local[1], local[2]
                 ),
             );
-            id
+            let reference = if local[2].abs() < 0.9 {
+                "IFCDIRECTION((0.,0.,1.))"
+            } else {
+                "IFCDIRECTION((1.,0.,0.))"
+            };
+            let x_id = self.id();
+            self.emit_entity(x_id, reference);
+            (z_id, x_id)
         });
-        // The reference direction is left to its default: across the Z
-        // axis, as nothing read gives the port's X axis.
         let axis = self.id();
         self.emit_entity(
             axis,
-            format!(
-                "IFCAXIS2PLACEMENT3D(#{point},{},$)",
-                z_axis.map_or("$".to_string(), |id| format!("#{id}"))
-            ),
+            match axes {
+                Some((z_id, x_id)) => format!("IFCAXIS2PLACEMENT3D(#{point},#{z_id},#{x_id})"),
+                None => format!("IFCAXIS2PLACEMENT3D(#{point},$,$)"),
+            },
         );
         let placement = self.id();
         self.emit_entity(placement, format!("IFCLOCALPLACEMENT(#{parent},#{axis})"));
