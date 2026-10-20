@@ -23,12 +23,17 @@ programmer plus access to the `phi-ag/rvt` corpus via `_corpus/`
 
 ## The three-file change
 
-Adding a decoder for `MyClass` touches exactly three files:
+Adding a decoder for `MyClass` touches these files:
 
 ```
-src/elements/mod.rs         # register the decoder
-src/elements/my_class.rs    # decoder impl + typed view + tests
-tests/elements.rs           # integration test against corpus
+src/elements/my_class.rs                    # decoder impl + typed view
+src/elements/mod.rs                         # register the decoder, and route production through it
+src/elements/typed_json.rs                  # its typed JSON for the CLI and Python
+tests/python/test_decoded_api.py            # the MVP class list it pins
+docs/schemas/decoded-elements.schema.json   # the typed projection's class list
+tests/myclass_corpus.rs                     # the corpus check (Step 5), with its line in
+tests/integration/main.rs                   #   the one test binary
+tools/ci/test-targets.txt                   #   and its class in the CI manifest
 ```
 
 ### Step 1 — Check the schema
@@ -84,7 +89,19 @@ impl ElementDecoder for MyClassDecoder {
                 "MyClassDecoder received wrong schema: {}", schema.name
             )));
         }
-        Ok(crate::walker::decode_instance(bytes, 0, schema))
+        let decoded = crate::walker::decode_instance(bytes, 0, schema);
+        // decode_instance never fails: a short or unsupported read leaves a
+        // field as Bytes. Reject an instance without the fields MyClass needs.
+        // Normalised as from_decoded normalises it, so each release's
+        // spelling of the field (m_name, m_Name, ...) counts.
+        let has_name = decoded.fields.iter().any(|(n, v)| {
+            crate::elements::level::normalise_field_name(n) == "name"
+                && matches!(v, InstanceField::String(_))
+        });
+        if !has_name {
+            return Err(Error::BasicFileInfo("MyClass without its name string".into()));
+        }
+        Ok(decoded)
     }
 }
 
@@ -111,6 +128,14 @@ impl MyClass {
 }
 ```
 
+`decode` is where failing closed happens: production skips an instance
+the decoder rejects, and `decode_instance` itself rejects nothing, so a
+decoder that only checks the schema name marks every same-class candidate
+typed, a truncated one or a false hit included. Before registering it,
+make `decode` return an `Error` for an instance missing a field `MyClass`
+needs, or holding one as `Bytes` or in a type the schema does not give it,
+and for any other check Step 4 lists.
+
 ### Step 3 — Register in the dispatch table
 
 ```rust
@@ -126,9 +151,34 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
 }
 ```
 
-The `decoder_class_names_are_unique` test in `src/elements/mod.rs`
-will fail at build time if you accidentally register two decoders
-for the same class — a useful tripwire.
+`decoder_for_class` takes the first decoder registered for a class
+name, so check that `MyClass` has none yet
+(`grep -rn '"MyClass"' src/elements/`).
+
+Production decoding (`walker::iter_elements`) uses a typed decoder only
+for a class listed in `elements::MVP_TYPED_CLASSES`, so add `MyClass`
+there too. Production then decodes with your decoder each `Global/Latest`
+candidate of the class that `scan_candidates` scores at
+`walker::PRODUCTION_ELEMENT_MIN_SCORE` (80) or above, marked
+`provenance.decoder == "MyClassDecoder"`, and skips one the decoder
+rejects rather than decoding it generically (fail closed). An instance
+scored below 80 never reaches your decoder: `iter_elements`'s doc notes
+that the threshold suits the `ADocument` entry point and that most
+simple classes score below it. Step 5's check shows both as missing
+ElementIds; when the cause is the score, the fix is candidate discovery
+or framing for the class, which is format work (see
+[CONTRIBUTING.md](../CONTRIBUTING.md#reverse-engineering-findings)), not the decoder. A class in that
+list is also advertised as typed, so the same change:
+
+- adds its arm to `typed_json::mvp_typed_view`, or the CLI and Python
+  give it `typed: null`;
+- adds it wherever the typed classes are listed: the module doc of
+  `src/elements/mod.rs`, the doc comment in `rvt-py/src/lib.rs`, the
+  stub `python/rvt/__init__.pyi`, `docs/python.md`, the description in
+  `docs/schemas/decoded-elements.schema.json`, the list
+  `tests/python/test_decoded_api.py` pins, and the README's count of
+  them. `git grep -n -E 'Level.{1,6}Wall.{1,6}Floor' -- . ':!CHANGELOG.md' ':!reports'`
+  finds them, and any later copy.
 
 ### Step 4 — Write down how it can fail
 
@@ -146,26 +196,111 @@ each case.
 Corpus tests verify it works on bytes Revit actually writes — the real test of whether your synth matches
 reality.
 
-Add to `tests/elements.rs` (create if not present):
+Every `tests/*.rs` file is a module of one test binary, `integration`
+(C6), and CI runs only the files `tools/ci/test-targets.txt` classes as
+real-file, CLI, contract or hardening checks. So a new check takes three
+steps:
 
-```rust
-#[test]
-#[cfg_attr(not(feature = "corpus"), ignore)]
-fn myclass_decodes_on_2024_sample() {
-    let path = "_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa";
-    let mut rf = rvt::RevitFile::open(path).unwrap();
-    let formats = rf.read_stream("Formats/Latest").unwrap();
-    let formats_d = rvt::compression::inflate_at(&formats, 0).unwrap();
-    let schema = rvt::formats::parse_schema(&formats_d).unwrap();
-    let myclass = schema.classes.iter().find(|c| c.name == "MyClass")
-        .expect("MyClass present in 2024 schema");
+1. Write `tests/myclass_corpus.rs`. Use the files whose oracle holds
+   `MyClass`: the family corpus (`tests/common`, `RVT_SAMPLES_DIR`), or
+   project files from `RVT_PROJECT_CORPUS_DIR` with Revit's export of
+   each beside them, never a hard-coded path. Skip a missing file, but
+   fail on one when `RVT_REQUIRE_CORPUS` is set, as CI sets it. Require
+   an instance only where the oracle has one, and every instance it has:
+   compare the ElementIds of every `MyClass` element `iter_elements`
+   returns with the oracle's, since production skips an instance the
+   decoder rejects or never scores. `iter_elements` also returns
+   partition records of some classes, which other decoders read, so
+   check only the instances decoded from the schema (`record_kind`
+   `schema_instance`) for your decoder, not the generic one, and that
+   the corpus holds some: partition rows alone can make up a release's
+   id set. Then check the typed view the CLI and Python expose,
+   `typed_json::mvp_typed_view`, for every row of either carrier, field
+   by field against the oracle's value for the same element: the wire
+   fields alone do not show a wrong mapping in `MyClass::from_decoded`.
 
-    // ... walk to the MyClass instance in Global/Latest (Layer 5a
-    // is still under development for non-ADocument classes — for
-    // now, just confirm the schema class has sane fields)
-    assert!(!myclass.fields.is_empty());
-}
-```
+   The example covers a class every family release holds:
+
+   ```rust
+   mod common;
+
+   use common::{ALL_YEARS, sample_for_year};
+
+   fn require_family_corpus() -> bool {
+       std::env::var("RVT_REQUIRE_CORPUS").is_ok_and(|v| v == "1" || v == "true")
+   }
+
+   #[test]
+   fn myclass_decodes_on_every_release() {
+       let mut missing = Vec::new();
+       let mut schema_rows = 0;
+       for year in ALL_YEARS {
+           let path = sample_for_year(year);
+           if !path.exists() {
+               missing.push(year);
+               continue;
+           }
+           let mut rf = rvt::RevitFile::open(&path).unwrap();
+           let elements: Vec<_> = rvt::walker::iter_elements(&mut rf)
+               .unwrap()
+               .filter(|e| e.class == "MyClass")
+               .collect();
+           // Every instance the oracle holds, from either carrier: production
+           // skips an instance the decoder rejects or never scores, so a
+           // missing id is a dropped row. Production also yields a candidate
+           // whose ElementId it cannot resolve, so a row without one fails.
+           let ids: std::collections::BTreeSet<u32> = elements
+               .iter()
+               .map(|e| e.id.unwrap_or_else(|| panic!("{year}: a MyClass row without an ElementId")))
+               .collect();
+           assert_eq!(ids, oracle_myclass_ids(year), "{year}: MyClass ElementIds");
+           for e in &elements {
+               if e.provenance.record_kind.as_deref() == Some("schema_instance") {
+                   assert_eq!(e.provenance.decoder.as_deref(), Some("MyClassDecoder"), "{year}");
+                   schema_rows += 1;
+               }
+               // Every carrier's row: the CLI and Python show this view of each.
+               let typed = rvt::elements::typed_json::mvp_typed_view(e)
+                   .unwrap_or_else(|| panic!("{year}: MyClass has no typed view"));
+               // Each field of `typed`, against the oracle's value for this
+               // element (by its ElementId, `e.id`). `oracle_myclass_ids` and the
+               // field values come from Revit's export of the same file.
+               let _ = typed;
+           }
+       }
+       assert!(
+           missing.is_empty() || !require_family_corpus(),
+           "RVT_REQUIRE_CORPUS is set and releases {missing:?} are missing"
+       );
+       // Partition rows alone can make up a release's id set: across the
+       // corpus the decoder must have read some, or its checks passed on none.
+       assert!(
+           schema_rows > 0 || missing.len() == ALL_YEARS.len(),
+           "no MyClass instance came from the schema"
+       );
+   }
+   ```
+
+   For a class only project files hold, loop over those files instead,
+   resolving each as `tests/elem_table_corpus.rs`'s `project_file`
+   does: it skips an absent file, and fails when `RVT_PROJECT_CORPUS_DIR`
+   is set but the file is not there.
+
+2. Add it to `tests/integration/main.rs`, in name order:
+
+   ```rust
+   #[path = "../myclass_corpus.rs"]
+   mod myclass_corpus;
+   ```
+
+3. Class it `real` in `tools/ci/test-targets.txt`. A file the manifest
+   does not class fails `tools/ci/verify-real-files.sh`, so a new check
+   cannot go unrun.
+
+CI fetches the family corpus and sets `RVT_REQUIRE_CORPUS=1`, so the
+check above fails there on a missing release. Locally,
+`RVT_SAMPLES_DIR=<corpus>/examples/Autodesk cargo test --profile ci --test integration myclass_corpus`
+runs it.
 
 ### Step 6 — Document in `CHANGELOG.md`
 
@@ -176,10 +311,8 @@ Add to the `[Unreleased]` section:
 - **`elements::my_class::MyClassDecoder`** — Layer 5b decoder for
   Revit's `MyClass` (description). Produces
   `elements::my_class::MyClass { name, foo, ... }` as the typed
-  view; generic `DecodedElement` via `decode_instance` is the
-  underlying primitive. Covers N fields. Unit-tested with
-  synthesized bytes; corpus integration test pending live walker
-  integration (tracked in L5B-01..02).
+  view. Covers N fields, measured on <files> against <oracle>
+  (<counts>, RE-NN); `tests/myclass_corpus.rs` checks it.
 ```
 
 ### Step 7 — Commit + PR
@@ -187,7 +320,7 @@ Add to the `[Unreleased]` section:
 - `cargo fmt --all`
 - `cargo clippy --all-targets -- -D warnings`
 - `tools/check-local.sh` (fmt, clippy, rustdoc, build, real-file checks)
-- Commit message: `feat(walker): Layer 5b MyClass decoder (#NNN)`
+- Commit message: `feat(elements): a MyClass decoder (#NNN) (RE-NN)`
   — reference the GitHub issue (CLASS-xx / M3-xx in `TODO.md`)
 - Open PR referencing the issue
 
