@@ -161,10 +161,16 @@ there too. Production then decodes with your decoder each `Global/Latest`
 candidate of the class that `scan_candidates` scores at
 `walker::PRODUCTION_ELEMENT_MIN_SCORE` (80) or above, marked
 `provenance.decoder == "MyClassDecoder"`, and skips one the decoder
-rejects rather than decoding it generically (fail closed). An instance
-scored below 80 never reaches your decoder: `iter_elements`'s doc notes
-that the threshold suits the `ADocument` entry point and that most
-simple classes score below it. Step 5's check shows both as missing
+rejects rather than decoding it generically (fail closed). It also
+skips one with a declared field that did not read as its schema type
+(the walk returns `InstanceField::Bytes` for that) and one from which
+`typed_json::mvp_typed_view` reads nothing (#852). An instance scored
+below 80 never reaches your decoder: `iter_elements`'s doc notes that
+the threshold suits the `ADocument` entry point and that most simple
+classes score below it. On the 76 files Measure reads (the family
+corpus, the reference models and Autodesk's sample projects of 2015 to
+2027), no candidate of the seven classes listed today scores 80
+(run [39364060825](https://github.com/DrunkOnJava/rvt-rs/actions/runs/39364060825)). Step 5's check shows both as missing
 ElementIds; when the cause is the score, the fix is candidate discovery
 or framing for the class, which is format work (see
 [CONTRIBUTING.md](../CONTRIBUTING.md#reverse-engineering-findings)), not the decoder. A class in that
