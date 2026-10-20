@@ -25,7 +25,9 @@ All notable changes will be documented here. This project follows
   as its schema type or its class's typed view reads nothing from it. The
   typed path also takes the caller's `WalkerLimits`, through a new
   `ElementDecoder::decode_with_limits` (its default decodes the bytes cut
-  to the cap) and `elements::decode_typed_with_limits`. On the 76 files
+  to the cap), which every registered decoder implements by passing the
+  limits to `decode_instance_with_limits`, and
+  `elements::decode_typed_with_limits`. On the 76 files
   Measure reads, no candidate of the seven classes reaches the production
   score, so no export changes (Measure run 39364060825).
 

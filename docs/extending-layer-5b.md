@@ -82,15 +82,26 @@ impl ElementDecoder for MyClassDecoder {
         &self,
         bytes: &[u8],
         schema: &formats::ClassEntry,
+        index: &HandleIndex,
+    ) -> Result<DecodedElement> {
+        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
+    }
+
+    // The caller's caps, passed on so a raised one applies too (#852).
+    fn decode_with_limits(
+        &self,
+        bytes: &[u8],
+        schema: &formats::ClassEntry,
         _index: &HandleIndex,
+        limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "MyClass" {
             return Err(Error::BasicFileInfo(format!(
                 "MyClassDecoder received wrong schema: {}", schema.name
             )));
         }
-        let decoded = crate::walker::decode_instance(bytes, 0, schema);
-        // decode_instance never fails: a short or unsupported read leaves a
+        let decoded = crate::walker::decode_instance_with_limits(bytes, 0, schema, limits);
+        // The walk never fails: a short or unsupported read leaves a
         // field as Bytes. Reject an instance without the fields MyClass needs.
         // Normalised as from_decoded normalises it, so each release's
         // spelling of the field (m_name, m_Name, ...) counts.
