@@ -82,6 +82,7 @@ def main():
     args = ap.parse_args()
     axes = pipe_axes(args.ours)
     theirs = ports(args.reference)
+    mine = ports(args.ours)
     counts = collections.Counter()
     directions = collections.Counter()
     by_side = collections.Counter()
@@ -116,6 +117,20 @@ def main():
     print("  port Z axis against the pipe at that end: " + ", ".join(f"{k} {v}" for k, v in directions.most_common()))
     print("  In/Out by index: " + ", ".join(f"{i} {s} {n}" for (i, s), n in sorted(sides.items())))
     print("  Z axis by In/Out: " + ", ".join(f"{s} {d} {n}" for (s, d), n in sorted(by_side.items())))
+    # #847: rvt-rs's own placement of the same ports.
+    placed = collections.Counter()
+    for (tag, index), (point, _, _) in sorted(theirs.items()):
+        if tag not in axes:
+            continue
+        own = mine.get((tag, index))
+        if own is None:
+            placed["not placed by rvt-rs"] += 1
+        elif math.dist(own[0], point) <= TOLERANCE_FT:
+            placed[f"placed within {TOLERANCE_FT} ft of Revit's"] += 1
+        else:
+            placed["placed elsewhere"] += 1
+            listed.append(f"  {tag}_{index}: rvt-rs's port {math.dist(own[0], point):.4f} ft from Revit's")
+    print("rvt-rs's ports on those pipes: " + ", ".join(f"{k} {v}" for k, v in placed.most_common()))
     for line in listed[:60]:
         print(line)
 
