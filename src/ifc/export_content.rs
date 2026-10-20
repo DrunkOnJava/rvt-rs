@@ -335,6 +335,16 @@ pub fn strip_building_element_geometry(entities: &mut [entities::IfcEntity]) {
             *solid_shape = None;
             *representation_map_index = None;
         }
+        // #847: a port's point and axis are geometry too.
+        if let entities::IfcEntity::Port {
+            location_feet,
+            direction,
+            ..
+        } = entity
+        {
+            *location_feet = None;
+            *direction = None;
+        }
     }
 }
 
@@ -363,6 +373,8 @@ pub fn append_typed_production_elements(
         Vec::new();
     // B54: each duct and pipe, by entity index and ElementId.
     let mut curve_ends: Vec<(usize, u32, &'static str)> = Vec::new();
+    // #847: each pipe's two ends and the connector entry keys at each.
+    let mut pipe_ends: BTreeMap<usize, PipeEnds> = BTreeMap::new();
     // RE-162: each MEP system's name and members, by its ElementId.
     let mut pending_systems: std::collections::BTreeMap<u32, (Option<String>, Vec<usize>)> =
         Default::default();
@@ -756,7 +768,22 @@ pub fn append_typed_production_elements(
             // #828: a duct's ports are DUCT ports, a pipe's PIPE ports.
             match decoded.class.as_str() {
                 "Duct" => curve_ends.push((entity_index, id, "DUCT")),
-                "Pipe" => curve_ends.push((entity_index, id, "PIPE")),
+                "Pipe" => {
+                    curve_ends.push((entity_index, id, "PIPE"));
+                    if let Some(body) =
+                        crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields)
+                    {
+                        pipe_ends.insert(
+                            entity_index,
+                            (
+                                [body.start, body.end],
+                                crate::partition_schema_mvp::pipe_end_keys_from_fields(
+                                    &decoded.fields,
+                                ),
+                            ),
+                        );
+                    }
+                }
                 _ => {}
             }
         }
@@ -1127,6 +1154,20 @@ pub fn append_typed_production_elements(
             )
     };
     let mut connections: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
+    // #847: each connector's joins, read from either side's list.
+    let mut joined: HashMap<(u32, u32), Vec<(u32, u32)>> = HashMap::new();
+    for (_, id, joins) in &pending_joins {
+        for &(index, other_id, other_index) in joins {
+            joined
+                .entry((*id, index))
+                .or_default()
+                .push((other_id, other_index));
+            joined
+                .entry((other_id, other_index))
+                .or_default()
+                .push((*id, index));
+        }
+    }
     for (entity, id, joins) in pending_joins {
         for (index, other_id, other_index) in joins {
             let Some(&other) = out.id_to_entity.get(&other_id) else {
@@ -1157,12 +1198,17 @@ pub fn append_typed_production_elements(
     // B54: both ends of every duct and pipe, joined or not.
     for (element, id, kind) in curve_ends {
         for index in 0..2 {
+            let place = pipe_ends
+                .get(&element)
+                .and_then(|ends| pipe_port_point(id, index, ends, &joined));
             entities.push(entities::IfcEntity::Port {
                 element,
                 id,
                 index,
                 predefined_type: Some(kind.to_string()),
                 flow_direction: None,
+                location_feet: place.map(|(point, _)| point),
+                direction: place.map(|(_, outward)| outward),
             });
         }
     }
@@ -1932,6 +1978,51 @@ fn add_piece_sets(
             }
         }
     }
+}
+
+/// A pipe's two ends, model feet, and the connector entry keys at each
+/// (#847).
+type PipeEnds = (
+    [[f64; 3]; 2],
+    [Vec<crate::partition_pipe_axes::EntryKey>; 2],
+);
+
+/// The end of pipe `id` that is its connector `index` (#847), and the unit
+/// vector out of the pipe there: the one end whose connector entry keys name
+/// that connector, either the pipe itself with `index` or the element and
+/// connector `joined` says the pipe's `index` is joined to (RE-138). On the
+/// RE1 models every end with a port in Revit's export is named this way
+/// (Measure run 39370306743), and a port with no flow direction points out
+/// of its pipe (19 of 19). `None` where no end, or both, name it.
+fn pipe_port_point(
+    id: u32,
+    index: u32,
+    (points, keys): &PipeEnds,
+    joined: &HashMap<(u32, u32), Vec<(u32, u32)>>,
+) -> Option<([f64; 3], [f64; 3])> {
+    let own = u64::from(id);
+    let partners = joined.get(&(id, index));
+    let names = |keys: &[crate::partition_pipe_axes::EntryKey]| {
+        keys.iter().any(|&(element, key_index)| {
+            if element == own {
+                key_index == index
+            } else {
+                partners.is_some_and(|partners| {
+                    partners.iter().any(|&(other, other_index)| {
+                        u64::from(other) == element && other_index == key_index
+                    })
+                })
+            }
+        })
+    };
+    let (end, other) = match [names(&keys[0]), names(&keys[1])] {
+        [true, false] => (points[0], points[1]),
+        [false, true] => (points[1], points[0]),
+        _ => return None,
+    };
+    let out = [end[0] - other[0], end[1] - other[1], end[2] - other[2]];
+    let length = (out[0] * out[0] + out[1] * out[1] + out[2] * out[2]).sqrt();
+    (length > 0.0).then(|| (end, [out[0] / length, out[1] / length, out[2] / length]))
 }
 
 /// The property of `Pset_PipeSegmentOccurrence` holding a pipe's invert.

@@ -6,6 +6,18 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **A pipe's ports are placed (#847).** Each `IfcDistributionPort` of a
+  pipe is placed at the end of the pipe its connector entry keys name: the
+  pipe itself with that connector's index, or the element and connector it
+  is joined to (RE-131, RE-138). Its Z axis points out of the pipe, or into
+  it for a `SINK` port, as Revit's export writes them. On the RE1 Plumbing
+  model all 124 of the ports Revit writes on pipes are within 0.01 ft of
+  Revit's. Their axes agree except on Revit's 57 `In` ports, whose flow
+  direction rvt-rs does not read (#834). Duct and family-instance ports keep
+  no placement, and the no-geometry modes write none.
+
 ### Fixed
 
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**

@@ -189,12 +189,24 @@ pub enum IfcEntity {
     /// `PredefinedType` (`PIPE`, `DUCT`, `CABLE`), from its connector's
     /// domain or its duct or pipe (#828), and `flow_direction` its
     /// `FlowDirection` where the domain gives one (RE-197).
+    ///
+    /// `location_feet` is the connector's point, model feet, where it is
+    /// read (#847): a pipe's end whose connector entry keys name this
+    /// connector. The writer places the port there, in its element's
+    /// frame; a port without one has no placement. `direction` is the unit
+    /// vector, model axes, its placement's Z axis points along: out of the
+    /// pipe at that end, or into it for a port whose flow is `SINK`, as
+    /// Revit's export writes them.
     Port {
         element: usize,
         id: u32,
         index: u32,
         predefined_type: Option<String>,
         flow_direction: Option<String>,
+        #[serde(default)]
+        location_feet: Option<[f64; 3]>,
+        #[serde(default)]
+        direction: Option<[f64; 3]>,
     },
     /// An MEP system (RE-162, #528): the Revit system element `id`, named
     /// `name`, grouping the building elements at `members` (indices into

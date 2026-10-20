@@ -280,6 +280,106 @@ fn connector_points(buf: &[u8], boxes: &[(u32, [f64; 6])]) -> Vec<Vec<[f64; 3]>>
     found
 }
 
+/// A connector entry's key: the element at that end (the pipe itself, or the
+/// element connected there) and the connector's index on it (RE-131).
+pub type EntryKey = (u64, u32);
+
+/// Two-ended elements by the partition stream their records are in: each
+/// one's ElementId and its two ends, model feet (#847).
+pub type CurveEnds = BTreeMap<String, Vec<(u32, [[f64; 3]; 2])>>;
+
+/// The ends that fall in one cell: ElementId, which end, and the point.
+type EndCell = Vec<(u32, usize, [f64; 3])>;
+
+/// The keys of the connector entries at each end of each pipe (#847), by
+/// ElementId: `[start, end]`, for the pipes of `pipes` (their ends, by the
+/// partition stream their records are in). An entry is at an end when its
+/// point is that end to 0.0001 ft on every axis.
+///
+/// On the RE1 models (Measure run 39370306743) every end with a port in
+/// Revit's export is named by its keys: an entry keyed by the pipe itself
+/// holds the connector Revit places there (57 of 57 keys), and one keyed by
+/// another element holds the connector Revit's export joins the pipe's port
+/// there to (168 of 168).
+pub fn scan_pipe_end_keys(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    pipes: &CurveEnds,
+) -> Result<BTreeMap<u32, [Vec<EntryKey>; 2]>> {
+    let mut out: BTreeMap<u32, [Vec<EntryKey>; 2]> = BTreeMap::new();
+    if !supports_revit_version(revit_version) {
+        return Ok(out);
+    }
+    for (stream, ends) in pipes {
+        let Ok(inflated) = rf.inflated_partition(stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        let mut grid: HashMap<[i64; 3], EndCell> = HashMap::new();
+        for (id, points) in ends {
+            for (slot, point) in points.iter().enumerate() {
+                let key = [cell(point[0]), cell(point[1]), cell(point[2])];
+                grid.entry(key).or_default().push((*id, slot, *point));
+            }
+        }
+        for at in memchr::memmem::find_iter(buf, ENTRY_MARKER.as_slice()) {
+            let Some(point) = entry_point(buf, at) else {
+                continue;
+            };
+            // The cells the point could share with an end, 0.0001 ft either
+            // way on each axis.
+            let mut cells: Vec<[i64; 3]> = Vec::with_capacity(8);
+            for dx in [-SAME_POINT_FEET, SAME_POINT_FEET] {
+                for dy in [-SAME_POINT_FEET, SAME_POINT_FEET] {
+                    for dz in [-SAME_POINT_FEET, SAME_POINT_FEET] {
+                        let key = [
+                            cell(point[0] + dx),
+                            cell(point[1] + dy),
+                            cell(point[2] + dz),
+                        ];
+                        if !cells.contains(&key) {
+                            cells.push(key);
+                        }
+                    }
+                }
+            }
+            let candidates: Vec<&(u32, usize, [f64; 3])> = cells
+                .iter()
+                .filter_map(|key| grid.get(key))
+                .flatten()
+                .collect();
+            if candidates.is_empty() {
+                continue;
+            }
+            let Some(element) = at
+                .checked_sub(12)
+                .and_then(|from| buf.get(from..from.checked_add(8)?))
+                .and_then(|bytes| bytes.try_into().ok())
+                .map(u64::from_le_bytes)
+            else {
+                continue;
+            };
+            let Some(index) = at
+                .checked_sub(4)
+                .and_then(|from| buf.get(from..at))
+                .and_then(|bytes| bytes.try_into().ok())
+                .map(u32::from_le_bytes)
+            else {
+                continue;
+            };
+            for &&(id, slot, end) in &candidates {
+                if (0..3).all(|axis| (point[axis] - end[axis]).abs() <= SAME_POINT_FEET) {
+                    let keys = &mut out.entry(id).or_default()[slot];
+                    if !keys.contains(&(element, index)) {
+                        keys.push((element, index));
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// The cylinder of each pipe, by ElementId, for the pipes of `pipes` (their
 /// record boxes, by the partition stream their records are in).
 ///
