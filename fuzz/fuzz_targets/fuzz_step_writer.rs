@@ -383,6 +383,7 @@ fuzz_target!(|input: FuzzInput| {
             element_type_ids: Default::default(),
         material_constituent_sets: Vec::new(),
         opening_cuts: Default::default(),
+        body_pieces: Default::default(),
     };
 
     let opts = StepOptions {

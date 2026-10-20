@@ -6,6 +6,18 @@ All notable changes will be documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A ceiling of separate loops is one `IfcCovering` (#823).** An element
+  whose sketch has separate loops was written as one entity per piece,
+  named `<name>:2`, `<name>:3` and so on (#331), as Revit's export writes
+  floors. Revit's export writes a ceiling as one `IfcCovering` whose body
+  holds every piece, as on the BIM4LCA office's compound ceilings (Measure
+  run 39240535083). A ceiling's pieces are now further items of its
+  `Body` representation, one `IfcExtrudedAreaSolid` each. Floors keep
+  their pieces. The pieces stay in the `IfcModel` (`IfcModel::body_pieces`
+  names them), so the glTF export and the viewer still draw them.
+
 ### Changed
 
 - **`from_decoded`'s property set builders write a standard set's name
