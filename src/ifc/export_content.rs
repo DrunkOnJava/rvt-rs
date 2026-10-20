@@ -512,6 +512,12 @@ pub fn append_typed_production_elements(
         // entity type (#212, RE-22). Only values `category_map`
         // recognises are honoured; anything else keeps the class
         // mapping, so an unknown override can never invent a type.
+        // #864: Revit's export writes a mass only where its own "Export to
+        // IFC As" names an entity, as the BIM4LCA office's two VOLUME masses
+        // name IfcSpace.
+        if decoded.class == "Mass" && ifc_export_override(&decoded).is_none() {
+            continue;
+        }
         let effective = ifc_export_override(&decoded).unwrap_or(mapping);
         let ifc_type = effective.ifc_type.to_string();
         let family_space = space_by_export_value(&decoded);
