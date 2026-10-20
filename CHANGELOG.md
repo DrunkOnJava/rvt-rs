@@ -31,6 +31,15 @@ All notable changes will be documented here. This project follows
   Measure reads, no candidate of the seven classes reaches the production
   score, so no export changes (Measure run 39364060825).
 
+- **`walker::iter_elements` yields no `Global/Latest` row without an
+  ElementId (#852).** Its documentation said a candidate with no ElementId
+  is yielded only by the diagnostic path, but the production threshold
+  yielded one too, undeduplicated and joined to nothing. It is now left
+  out unless the caller asks for a score below
+  `PRODUCTION_ELEMENT_MIN_SCORE`. On the 76 files Measure reads, every
+  production row comes from a partition record and the schema path yields
+  none, so no export changes (Measure run 39367864281).
+
 ### Changed
 
 - **`from_decoded`'s property set builders write a standard set's name
