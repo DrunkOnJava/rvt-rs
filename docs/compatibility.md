@@ -11,10 +11,11 @@ Scope sources:
 
 ## 1. Format versions supported
 
-Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file per Revit release 2016 through 2026, exercised by [`tests/samples.rs`](../tests/samples.rs) via `ALL_YEARS = [2016..=2026]` in [`tests/common/mod.rs`](../tests/common/mod.rs).
+Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file per Revit release 2016 through 2026, exercised by [`tests/samples.rs`](../tests/samples.rs) via `ALL_YEARS = [2016..=2026]` in [`tests/common/mod.rs`](../tests/common/mod.rs). Revit 2015 and 2027 have no file in it; they are read from Autodesk's sample projects (six 2015 and five 2027, pinned in [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv) and read by Measure).
 
 | Revit release | `BasicFileInfo` year | `Partitions/NN` marker | OLE + schema + metadata | Schema-directed walker (ADocument) |
 |---|---|---|---|---|
+| 2015 | 2015 | none in the corpus | partial: the container, streams, schema and `BasicFileInfo` on the sample projects; PartAtom and the preview are not measured | not measured |
 | 2016 | 2016 | Partitions/58 | full | partial |
 | 2017 | 2017 | Partitions/60 | full | partial |
 | 2018 | 2018 | Partitions/61 | full | partial |
@@ -26,13 +27,14 @@ Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file pe
 | 2024 | 2024 | Partitions/67 | full | full |
 | 2025 | 2025 | Partitions/68 | full | full |
 | 2026 | 2026 | Partitions/69 | full | full |
+| 2027 | 2027 | none in the corpus | partial: the container, streams, schema and `BasicFileInfo` on the sample projects; PartAtom and the preview are not measured | not measured |
 
 Column definitions:
 
-- **OLE + schema + metadata**: opens the CFB container, reads all 13 invariant streams, decompresses `Formats/Latest`, parses the whole page-stripped class schema (4,126 classes and 11,562 fields on the 2024 sample, all but 9 to 12 fields per release type-classified, #410), extracts `BasicFileInfo` (version / build / GUID / path / locale), parses `PartAtom` XML, extracts the `RevitPreview4.0` PNG thumbnail, decodes `Contents`, and decodes the 167-byte `Global/PartitionTable` invariant. This row is `full` for every supported release.
+- **OLE + schema + metadata**: opens the CFB container, reads all 13 invariant streams, decompresses `Formats/Latest`, parses the whole page-stripped class schema (4,126 classes and 11,562 fields on the 2024 sample, all but 9 to 12 fields per release type-classified, #410), extracts `BasicFileInfo` (version / build / GUID / path / locale), parses `PartAtom` XML, extracts the `RevitPreview4.0` PNG thumbnail, decodes `Contents`, and decodes the 167-byte `Global/PartitionTable` invariant. This column is `full` on every release from 2016 to 2026; on 2015 and 2027 it is partial, as their rows say.
 - **Schema-directed walker**: `walker::read_adocument` locates the `ADocument` entry point in `Global/Latest` and walks all declared fields. Reliable on Revit 2024–2026. Returns `Ok(None)` on 2016–2023 when the entry-point detector can't find a high-confidence offset (see `walker.rs` §366–370 and `docs/rvt-phase4c-session-2026-04-19.md`). This is also the bridge the Layer-5b per-class decoders depend on at runtime against real files.
 
-Before 2016 and after 2026: unverified. The schema parser and compression path are likely to still work on near-future releases because the truncated-gzip and `Formats/Latest` framing have not changed in a decade, but no corpus entry exists outside `[2016, 2026]`, so nothing is claimed.
+On the 2015 and 2027 sample projects `rvt-info` reads every file, and their elements export experimentally ([`docs/status.md`](status.md), RE-179, RE-181); the family-corpus columns are not measured on them. Before 2015, only a 2014 family is measured (see the limitations below), and after 2027 nothing is. The schema parser and compression path are likely to still work on near-future releases because the truncated-gzip and `Formats/Latest` framing have not changed in a decade, but nothing is claimed outside `[2015, 2027]` beyond that 2014 family.
 
 ## 2. File type support
 
@@ -197,9 +199,9 @@ Notes:
 
 ## 5. Known limitations
 
-- **Real-project typed element extraction is unsolved.** The 81 registered decoders and the IFC category map do not mean arbitrary `.rvt` projects yield typed Walls/Floors/Doors/Levels. Default IFC export from real projects is scaffold / diagnostics, plus a narrow version-gated ArcWall research path documented in [`docs/status.md`](status.md).
+- **Typed elements come from the partition element records only.** Revit 2023 to 2025 projects export typed elements from their element records, measured against Revit's own exports, and 2015 to 2022, 2026 and 2027 ones do experimentally ([`docs/status.md`](status.md)). The 81 registered schema decoders are verified only on synthesized bytes, and schema-field walls and opening-index doors and windows stay unsupported (RE-19).
 - **No semantic write path for Revit files**. Stream-level patching ([`writer::write_with_patches`](../src/writer.rs)) can replace the bytes of a named stream, re-compress with truncated gzip, and re-embed into a byte-preserving sibling file (13/13 streams identical on the 2024 sample round-trip). Field-level semantic writes (edit a specific Wall's unconnected height and round-trip back to a Revit-openable `.rvt`) are not implemented.
-- **No format versions before Revit 2016**. Earlier Revit releases used a different compression + schema framing that this library has not been probed against. No claim is made about 2015-or-earlier.
+- **No format versions before Revit 2015**. Revit 2015 is read from Autodesk's six 2015 sample projects, and their elements export experimentally (RE-181). Of Revit 2014, a public family file (Stertil, pinned in `research/public-families.tsv`) opens and its schema and ElemTable read (RE-147); RE-181 also measured a 2014 project whose origin is not documented, so it backs no claim. Nothing more is claimed for 2014, and nothing for earlier releases.
 - **No IFC2X3 or IFC4.3 export**. The STEP writer targets IFC4 only. The category map is structured to make a future IFC2X3 / IFC4.3 swap a table replacement, but it has not been swapped.
 - **No encrypted or password-protected files**. Revit's "Protected" models use a wrapper format this library does not attempt to strip. CFB open will succeed on the outer container but inner streams will be gibberish.
 - **No linked-model resolution**. `.rvt` projects can carry references to external `.rvt` / `.rfa` / `.rcp` / `.dwg` / `.ifc` files; this library reads the host file's CFB streams but does not follow or resolve links. Any linked-model metadata is exposed only as raw bytes on whichever stream carries it (`TransmissionData` on project files).

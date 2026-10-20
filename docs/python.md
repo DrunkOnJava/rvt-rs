@@ -1,4 +1,4 @@
-# rvt-rs — Python bindings (v0.5.1)
+# rvt-rs — Python bindings (v0.6.1)
 
 `rvt` is a Python package built on top of the Rust `rvt` crate. It
 exposes the file reader, metadata, schema introspection, the
@@ -25,12 +25,12 @@ For all installation paths, including release smoke tests, see
 pip install rvt
 ```
 
-**PyPI `rvt` 0.5.1 is the current release.** Wheels target Python ≥ 3.8
+**PyPI `rvt` 0.6.1 is the current release.** Wheels target Python ≥ 3.8
 via pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
 every supported Python minor. The matching Rust crate is on crates.io
 (`cargo add rvt`); platforms and the other install channels are in
 [`install.md`](install.md). This page describes `main`, which can be ahead
-of the latest release: what has landed since 0.5.1 is under `[Unreleased]`
+of the latest release: what has landed since 0.6.1 is under `[Unreleased]`
 in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ### From source
@@ -94,7 +94,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.5.1).
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.6.1).
 
 ### Module-level
 
@@ -363,8 +363,9 @@ export_diagnostics_json(self) -> str
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`, the same
 exporter `rvt-ifc` runs. On Revit 2023, 2024 and 2025 projects it writes
 typed elements with bodies, storeys, types and materials (on
-`2024_Core_Interior.rvt`, 992 elements, every one with a body); on other
-releases and on family files, the spatial scaffold. What each release
+`2024_Core_Interior.rvt`, 970 elements, every one with a body), and on Revit
+2015 to 2022, 2026 and 2027 projects, experimentally, their elements; on
+family files, the spatial scaffold. What each release
 recovers is in [`status.md`](status.md). Raises `ValueError` if the file
 can't be parsed far enough to build a model.
 
@@ -474,15 +475,16 @@ only caps applied are the constructor-level ones. Issue #152 /
 
 ## Version support
 
-The Python bindings inherit the Rust core's version support
-matrix verbatim:
+The Python bindings have the Rust core's version support:
 
 | Revit release | Open + metadata + schema | Walker (ADocument) | IFC4 document export |
 |---|---|---|---|
-| 2016 – 2022 | yes | `None` (entry-point detector: partial) | spatial scaffold |
+| 2015 | partial: the sample projects open and their schema and `BasicFileInfo` read; `PartAtom` and the preview are not measured | not measured | typed elements from element records, experimental |
+| 2016 – 2022 | yes | `None` (entry-point detector: partial) | typed elements from element records, experimental |
 | 2023 | yes | `None` (entry-point detector: partial) | typed elements from element records |
 | 2024 – 2025 | yes | full | typed elements with measured geometry |
-| 2026 | yes | full | spatial scaffold |
+| 2026 | yes | full | typed elements from element records, experimental |
+| 2027 | partial: the sample projects open and their schema and `BasicFileInfo` read; `PartAtom` and the preview are not measured | not measured | typed elements from element records, experimental |
 
 Full matrix and per-column definitions are in
 [`docs/compatibility.md`](./compatibility.md). Expanding the generic

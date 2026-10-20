@@ -53,7 +53,9 @@ Coordination mirror: [Discussion #112 notes](disc-112-coordination.md).
 ## User-Facing Summary
 
 rvt-rs opens every Revit file from 2016 to 2026 and reads its metadata,
-previews and embedded schema. On Revit 2024 and 2025 project files it reads
+previews and embedded schema. Revit 2015 and 2027 files open too, measured
+on Autodesk's six 2015 and five 2027 sample projects, where previews and
+PartAtom are not measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
 GlobalId, `IsExternal` (RE-193) and the parameters named for a standard
@@ -73,16 +75,22 @@ family instances' family and type names, with their IFC type objects
 floors' material layer sets (RE-114, RE-115), with each material's shading
 colour (RE-116). On Revit 2026 projects, experimentally since 0.5.0, it reads
 typed elements, storeys, rooms, doors and windows, type names and layer sets,
-measured on one project against Revit's own export (RE-124). Every recovery claim is measured against Revit's own IFC export of the
-same file; the measured tables are in the
+measured on one project against Revit's own export (RE-124). On projects
+saved by Revit 2015 to 2022 and by Revit 2027, experimentally since 0.6.0, it
+exports their elements, measured against the same sample projects saved by
+Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
+2026 (for 2027, RE-179) rather than against a Revit export of them; 2015's
+`rst_basic` is another model than its 2019 copy, so it is not measured. Every
+other recovery claim is measured against the oracle its report names, Revit's
+own IFC export of the same file wherever one exists; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md).
 
-It is not a converter for arbitrary models: element records of other releases,
-most parameters, family geometry (except the experimental `--saved-meshes`
-option, which draws a Revit 2024, 2025 or 2026 family instance from the mesh
-Revit saved for its display, RE-78, B77), hip and gable roofs, the boundaries of
+It is not a converter for arbitrary models: most parameters, family
+geometry (except the experimental `--saved-meshes` option, which draws a
+Revit 2024, 2025 or 2026 family instance from the mesh Revit saved for its
+display, RE-78, B77), hip and gable roofs, the boundaries of
 rooms whose stored solid does not close, opening profiles and phase
 filtering are not decoded, and rvt-rs does not edit
 Revit model data.
@@ -754,22 +762,23 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.5.1** (2026-10-18) is the latest release: crates.io and docs.rs,
+- **v0.6.1** (2026-10-19) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
-  Windows, the container image, and the deployed viewer, each checked from
-  its published artifacts ([`install.md`](install.md)). It is 0.5.0 with
-  exports named by the model's file name rather than the path it was saved
-  at (#782) and a README that names the release it ships in.
-- **v0.5.0** (2026-10-18) carries everything under `[0.5.0]` in
-  [`CHANGELOG.md`](../CHANGELOG.md): Revit 2026 projects' typed elements
-  (experimental), MEP ports, connections and systems, pipes drawn as Revit
-  draws them, each element's levels, category, family, type and phase,
-  rooms aggregated into their storeys, and Autodesk's Snowdon Towers samples
-  exporting again. Its "Upgrading from 0.4" section lists the changes a 0.4
-  user will notice. It is the first release with outside contributors'
-  pull requests.
-- **v0.4.0** (2026-09-28) is the release before.
-- `main` is ahead of v0.5.1 by what is under `[Unreleased]`.
+  Windows, and the container image, each checked from its published
+  artifacts ([`install.md`](install.md)). It is 0.6.0 with an export panic
+  on 32-bit targets fixed (#836) and a README whose support table says
+  what is measured, built from 0.6.0 because `main` holds a breaking change
+  for the next minor release (#841).
+- **v0.6.0** (2026-10-19) is the release before. It carries
+  everything under `[0.6.0]` in [`CHANGELOG.md`](../CHANGELOG.md): IFC4's
+  own property sets where 0.5 wrote some of IFC2X3's, more of the values
+  Revit's exporter writes (parameters named for a standard set's property,
+  `IsExternal`, Fire Rating, door sizes, Revit 2024 Areas as spaces, port
+  types), and the elements of Revit 2015 to 2022 and 2027 projects, as
+  experimental. Its "Upgrading from 0.5" section lists the changes a 0.5
+  user will notice.
+- `main` has everything v0.6.1 has, and is ahead of it by what is under
+  `[Unreleased]`.
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
 task backlog.
