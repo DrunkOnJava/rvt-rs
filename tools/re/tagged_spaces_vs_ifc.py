@@ -98,6 +98,32 @@ def main():
         product = by_tag.get(space.Name.split(":")[2])
         written["not written" if product is None else f"{product.is_a()} {relation(product)}"] += 1
     print("rvt-rs writes the same Tags as: " + ", ".join(f"{v} {n}" for v, n in written.most_common()))
+    # #763: for each space rvt-rs also writes as an IfcSpace, which values agree.
+    def type_of(space):
+        space_type = ifcopenshell.util.element.get_type(space)
+        return None if space_type is None else (space_type.is_a(), space_type.Name, space_type.PredefinedType)
+
+    def common(space, key):
+        return ifcopenshell.util.element.get_psets(space).get("Pset_SpaceCommon", {}).get(key)
+
+    agree = collections.defaultdict(collections.Counter)
+    for space in spaces:
+        product = by_tag.get(space.Name.split(":")[2])
+        if product is None or not product.is_a("IfcSpace"):
+            continue
+        for field, theirs, mine in (
+            ("Name", space.Name, product.Name),
+            ("LongName", space.LongName, product.LongName),
+            ("ObjectType", space.ObjectType, product.ObjectType),
+            ("PredefinedType", space.PredefinedType, product.PredefinedType),
+            ("type object", type_of(space), type_of(product)),
+            ("Pset_SpaceCommon.Reference", common(space, "Reference"), common(product, "Reference")),
+            ("Pset_SpaceCommon.IsExternal", common(space, "IsExternal"), common(product, "IsExternal")),
+            ("relation", relation(space), relation(product)),
+        ):
+            agree[field]["equal" if theirs == mine else f"differs ({str(theirs)[:40]} vs {str(mine)[:40]})"] += 1
+    for field, counts in agree.items():
+        print(f"  {field}: " + ", ".join(f"{v} {n}" for v, n in counts.most_common(4)))
 
 
 main()
