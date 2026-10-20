@@ -200,6 +200,13 @@ pub struct IfcModel {
     /// entry gets an opening the shape of its own body.
     #[serde(default)]
     pub opening_cuts: std::collections::BTreeMap<usize, entities::OpeningCut>,
+    /// Further pieces of an element of separate loops that the STEP writer
+    /// puts in their element's body, one item per piece, rather than
+    /// writing each as an element of its own (#823), by index into
+    /// `entities`: the element, then its pieces. The pieces stay in
+    /// `entities`, so the glTF export and the viewer still draw them.
+    #[serde(default)]
+    pub body_pieces: std::collections::BTreeMap<usize, Vec<usize>>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -805,6 +812,7 @@ impl Exporter for PlaceholderExporter {
             element_type_ids: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
+            body_pieces: Default::default(),
         })
     }
 }
@@ -1051,6 +1059,7 @@ fn export_rvt_doc(
         element_original_symbols,
         element_flips,
         computed_inverts,
+        body_pieces,
     ) = append_production_walker_elements(
         rf,
         &mut entities,
@@ -1222,6 +1231,7 @@ fn export_rvt_doc(
         element_type_ids,
         material_constituent_sets,
         opening_cuts,
+        body_pieces,
     })
 }
 
@@ -2798,6 +2808,7 @@ type WalkerElementData = (
     std::collections::BTreeMap<u32, u32>,
     std::collections::BTreeMap<u32, bool>,
     Vec<usize>,
+    std::collections::BTreeMap<usize, Vec<usize>>,
 );
 
 fn append_production_walker_elements(
@@ -2831,6 +2842,7 @@ fn append_production_walker_elements(
             append.element_original_symbols,
             append.element_flips,
             append.computed_inverts,
+            append.body_pieces,
         );
     }
     Default::default()

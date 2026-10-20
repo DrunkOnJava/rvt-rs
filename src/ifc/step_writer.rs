@@ -1927,8 +1927,43 @@ impl StepWriter {
             *occurrence += 1;
             element_gids[entity_idx] = Some(element_gid);
         }
+        // #823: the further pieces of an element of separate loops that are
+        // written as items of its body: where the element and the piece are
+        // both plain extrusions, or neither has geometry. Any other piece is
+        // written as an element of its own.
+        let plain_body = |index: usize| match model.entities.get(index) {
+            Some(super::entities::IfcEntity::BuildingElement {
+                extrusion,
+                solid_shape: None,
+                representation_map_index: None,
+                ..
+            }) => Some(extrusion.as_ref()),
+            _ => None,
+        };
+        let mut piece_bodies: BTreeMap<usize, Vec<&Extrusion>> = BTreeMap::new();
+        let mut folded_pieces: std::collections::BTreeSet<usize> = Default::default();
+        for (owner, pieces) in &model.body_pieces {
+            let Some(owner_body) = plain_body(*owner) else {
+                continue;
+            };
+            for piece in pieces {
+                match (owner_body, plain_body(*piece)) {
+                    (Some(_), Some(Some(body))) => {
+                        piece_bodies.entry(*owner).or_default().push(body);
+                        folded_pieces.insert(*piece);
+                    }
+                    (None, Some(None)) => {
+                        folded_pieces.insert(*piece);
+                    }
+                    _ => {}
+                }
+            }
+        }
         let mut el_id_to_gid: HashMap<usize, &str> = HashMap::new();
         for (entity_idx, entity) in model.entities.iter().enumerate() {
+            if folded_pieces.contains(&entity_idx) {
+                continue;
+            }
             if let super::entities::IfcEntity::BuildingElement {
                 ifc_type,
                 name,
@@ -2144,6 +2179,30 @@ impl StepWriter {
                             "IFCEXTRUDEDAREASOLID(#{profile_id},#{position},#{z_axis},{depth:.6})"
                         ),
                     );
+                    // #823: each further piece written in this element's
+                    // body, a solid of its own in the same frame.
+                    let mut items = vec![format!("#{solid_id}")];
+                    for piece in piece_bodies.get(&entity_idx).into_iter().flatten() {
+                        let origin = self.id();
+                        self.emit_entity(origin, "IFCCARTESIANPOINT((0.000000,0.000000))");
+                        let x_axis = self.id();
+                        self.emit_entity(x_axis, "IFCDIRECTION((1.,0.))");
+                        let placement = self.id();
+                        self.emit_entity(
+                            placement,
+                            format!("IFCAXIS2PLACEMENT2D(#{origin},#{x_axis})"),
+                        );
+                        let piece_profile = self.emit_profile_def(piece, placement);
+                        let piece_solid = self.id();
+                        self.emit_entity(
+                            piece_solid,
+                            format!(
+                                "IFCEXTRUDEDAREASOLID(#{piece_profile},#{solid_position},#{z_axis},{:.6})",
+                                piece.height_feet * 0.3048
+                            ),
+                        );
+                        items.push(format!("#{piece_solid}"));
+                    }
                     // The representation groups the solid inside the
                     // project's 3D geometric context (#geom_ctx) with
                     // the IFC4-standard identifier + type for a
@@ -2152,7 +2211,8 @@ impl StepWriter {
                     self.emit_entity(
                         rep_id,
                         format!(
-                            "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','SweptSolid',(#{solid_id}))"
+                            "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','SweptSolid',({}))",
+                            items.join(",")
                         ),
                     );
                     let prod_shape_id = self.id();

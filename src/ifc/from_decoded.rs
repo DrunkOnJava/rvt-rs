@@ -1392,6 +1392,7 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
         element_type_ids: Default::default(),
         material_constituent_sets: Vec::new(),
         opening_cuts: Default::default(),
+        body_pieces: Default::default(),
     }
 }
 

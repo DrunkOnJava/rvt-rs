@@ -63,6 +63,10 @@ pub struct TypedProductionAppend {
     /// pipe's invert worked out in model height, by index in the entities,
     /// for `pipe_inverts_above_storeys` (RE-157).
     pub computed_inverts: Vec<usize>,
+    /// The further pieces written inside their element's body rather than
+    /// as elements of their own (#823), by index in the entities
+    /// ([`super::IfcModel::body_pieces`]).
+    pub body_pieces: BTreeMap<usize, Vec<usize>>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -120,6 +124,12 @@ fn family_and_type(decoded: &DecodedElement) -> Option<(String, String)> {
 /// Decoded classes whose record bounding-box `z` extent is the
 /// element's own thickness rather than an envelope height (#212).
 pub const SLAB_THICKNESS_CLASSES: &[&str] = &["Floor", "BuildingPad"];
+
+/// Classes whose sketch of separate loops Revit's export writes as one
+/// element with a body item per piece, where it writes a floor as one
+/// element per piece (#823, #331): the BIM4LCA office's compound ceilings
+/// (Measure run 39240535083).
+pub const PIECES_IN_BODY_CLASSES: &[&str] = &["Ceiling"];
 
 /// Value of the `ThicknessSource` property on a record-backed plate.
 pub const RECORD_BBOX_THICKNESS_SOURCE: &str = "partition_element_record_bbox_z_extent";
@@ -827,6 +837,10 @@ pub fn append_typed_production_elements(
             }
         });
         let level_set = level_parameter_property_set(&decoded, &ifc_type);
+        // #823: Revit's export writes a ceiling of separate loops as one
+        // covering whose body holds every piece, where it splits a floor.
+        let pieces_in_body =
+            PIECES_IN_BODY_CLASSES.contains(&decoded.class.as_str()) && solid_shape.is_none();
         entities.push(entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -861,6 +875,10 @@ pub fn append_typed_production_elements(
                         *extrusion = Some(body);
                     }
                     entities.push(piece);
+                }
+                if pieces_in_body {
+                    out.body_pieces
+                        .insert(entity_index, (start..entities.len()).collect());
                 }
                 pieces_of.push((entity_index, start..entities.len()));
             }
