@@ -119,7 +119,7 @@ def main():
     print("  Z axis by In/Out: " + ", ".join(f"{s} {d} {n}" for (s, d), n in sorted(by_side.items())))
     # #847: rvt-rs's own placement of the same ports.
     placed = collections.Counter()
-    for (tag, index), (point, _, _) in sorted(theirs.items()):
+    for (tag, index), (point, axis, side) in sorted(theirs.items()):
         if tag not in axes:
             continue
         own = mine.get((tag, index))
@@ -127,6 +127,8 @@ def main():
             placed["not placed by rvt-rs"] += 1
         elif math.dist(own[0], point) <= TOLERANCE_FT:
             placed[f"placed within {TOLERANCE_FT} ft of Revit's"] += 1
+            cos = sum(own[1][i] * axis[i] for i in range(3))
+            placed[f"Z axis {'as' if cos > 0.99 else 'opposite to' if cos < -0.99 else 'across'} Revit's ({side})"] += 1
         else:
             placed["placed elsewhere"] += 1
             listed.append(f"  {tag}_{index}: rvt-rs's port {math.dist(own[0], point):.4f} ft from Revit's")

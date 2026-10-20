@@ -1182,15 +1182,17 @@ pub fn append_typed_production_elements(
     // B54: both ends of every duct and pipe, joined or not.
     for (element, id, kind) in curve_ends {
         for index in 0..2 {
+            let place = pipe_ends
+                .get(&element)
+                .and_then(|ends| pipe_port_point(id, index, ends, &joined));
             entities.push(entities::IfcEntity::Port {
                 element,
                 id,
                 index,
                 predefined_type: Some(kind.to_string()),
                 flow_direction: None,
-                location_feet: pipe_ends
-                    .get(&element)
-                    .and_then(|ends| pipe_port_point(id, index, ends, &joined)),
+                location_feet: place.map(|(point, _)| point),
+                direction: place.map(|(_, outward)| outward),
             });
         }
     }
@@ -1969,18 +1971,19 @@ type PipeEnds = (
     [Vec<crate::partition_pipe_axes::EntryKey>; 2],
 );
 
-/// The end of pipe `id` that is its connector `index` (#847): the one end
-/// whose connector entry keys name that connector, either the pipe itself
-/// with `index` or the element and connector `joined` says the pipe's
-/// `index` is joined to (RE-138). On the RE1 models every end with a port in
-/// Revit's export is named this way (Measure run 39370306743). `None` where
-/// no end, or both, name it.
+/// The end of pipe `id` that is its connector `index` (#847), and the unit
+/// vector out of the pipe there: the one end whose connector entry keys name
+/// that connector, either the pipe itself with `index` or the element and
+/// connector `joined` says the pipe's `index` is joined to (RE-138). On the
+/// RE1 models every end with a port in Revit's export is named this way
+/// (Measure run 39370306743), and a port with no flow direction points out
+/// of its pipe (19 of 19). `None` where no end, or both, name it.
 fn pipe_port_point(
     id: u32,
     index: u32,
     (points, keys): &PipeEnds,
     joined: &HashMap<(u32, u32), Vec<(u32, u32)>>,
-) -> Option<[f64; 3]> {
+) -> Option<([f64; 3], [f64; 3])> {
     let own = u64::from(id);
     let partners = joined.get(&(id, index));
     let names = |keys: &[crate::partition_pipe_axes::EntryKey]| {
@@ -1996,11 +1999,14 @@ fn pipe_port_point(
             }
         })
     };
-    match [names(&keys[0]), names(&keys[1])] {
-        [true, false] => Some(points[0]),
-        [false, true] => Some(points[1]),
-        _ => None,
-    }
+    let (end, other) = match [names(&keys[0]), names(&keys[1])] {
+        [true, false] => (points[0], points[1]),
+        [false, true] => (points[1], points[0]),
+        _ => return None,
+    };
+    let out = [end[0] - other[0], end[1] - other[1], end[2] - other[2]];
+    let length = (out[0] * out[0] + out[1] * out[1] + out[2] * out[2]).sqrt();
+    (length > 0.0).then(|| (end, [out[0] / length, out[1] / length, out[2] / length]))
 }
 
 /// The property of `Pset_PipeSegmentOccurrence` holding a pipe's invert.

@@ -2149,6 +2149,7 @@ fn attach_family_instance_ports(
                 flow_direction: crate::native_connectors::port_flow_direction_of_domain(domain)
                     .map(str::to_string),
                 location_feet: None,
+                direction: None,
             });
         }
     }
