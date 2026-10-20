@@ -86,8 +86,8 @@ artifact and is git-ignored (`*.so`). Do not commit it.
 
 ### Viewer (WASM + Vite)
 
-Rebuild the WASM package whenever the Rust `wasm` surface (`src/wasm.rs`)
-changes, then use the viewer's pnpm scripts (pnpm at the version `packageManager` pins in `viewer/package.json`):
+Rebuild the WASM package whenever the bindings (`rvt-wasm/src/lib.rs`) or the
+library code they reach change, then use the viewer's pnpm scripts (pnpm at the version `packageManager` pins in `viewer/package.json`):
 
 ```bash
 # From the repo root — build WASM into viewer/pkg/
