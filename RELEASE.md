@@ -207,20 +207,18 @@ where CI and Measure run, only when it is ready to release.
    touches:
    `gh workflow run measure.yml --ref hotfix/vX.Y.(Z+1) -f base=vX.Y.Z`.
    Skip nothing else in steps 1 to 3 above.
-5. **Review it.** The branch has no pull request, so nothing has
-   reviewed its text, which crates.io and PyPI then show for good: push
-   a branch at `vX.Y.Z` (`review/vX.Y.Z-base`) and open a review-only
-   pull request of the hotfix branch into it. A commit that answers the
-   review needs step 4 again on the new head: CI runs on any push that
-   changes more than the paths `ci.yml` ignores (Markdown, `docs/`,
-   `CITATION.cff` and a few others), a push of only those runs none, and
-   a change to code needs Measure again. Then close the pull request
-   unmerged.
+5. **Review it.** The branch has no pull request, and crates.io and
+   PyPI show its README and changelog for good: read its whole diff
+   against the tag (`git diff vX.Y.Z hotfix/vX.Y.(Z+1)`) before tagging.
+   A commit that fixes what the reading finds needs step 4 again on the
+   new head: CI runs on any push that changes more than the paths
+   `ci.yml` ignores (Markdown, `docs/`, `CITATION.cff` and a few others),
+   a push of only those runs none, and a change to code needs Measure
+   again.
 6. **Tag the reviewed head and push the tag.** Steps 9 to 12 above,
    with that head in place of `origin/main`, once its code and witness
    files are the ones CI and Measure passed:
-   `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" <its SHA>`. Then delete
-   `review/vX.Y.Z-base`.
+   `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" <its SHA>`.
 7. **Bring `main` up to it** through a pull request, as merging the
    branch back would: the fix if `main` lacks it, the new `CHANGELOG.md`
    section (its entries moved out of `[Unreleased]`), the version files
