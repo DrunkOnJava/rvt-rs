@@ -12,9 +12,16 @@
 //! (directly, or through a material list, constituent set, layer set or
 //! layer set usage).
 //!
+//! Revit's export of `12_Rooms_Door_Windows.rvt` (puzzbobb's R2025 models,
+//! #356) gives its three window trims of each kind and three muntin patterns
+//! the materials their instance parameters name, "Wood - Stained", "Clad -
+//! White" or both (RE-200): their types' geometry-material maps hold no
+//! material, so `<Unnamed>` would be wrong on all nine.
+//!
 //! Runs against `RVT_PROJECT_CORPUS_DIR` (the model) and
-//! `../IFC Exports/2024_Core_Interior_slim.ifc` (Revit's export). Skips what
-//! is absent.
+//! `../IFC Exports/2024_Core_Interior_slim.ifc` (Revit's export), and
+//! `RVT_PROJECT_CORPUS_DIR/r2025/` (the R2025 models and Revit's exports, as
+//! `tools/ci/fetch-r2025-models.sh` lays them out). Skips what is absent.
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
@@ -172,5 +179,42 @@ fn core_interior_columns_take_revits_materials() {
         256,
         "every column has Revit's material set; {} have none from rvt-rs, first differing: {wrong:?}",
         theirs.keys().filter(|t| !ours.contains_key(*t)).count()
+    );
+}
+
+#[test]
+fn r2025_window_trims_take_their_instance_materials() {
+    let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR").map(PathBuf::from) else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
+        return;
+    };
+    let rvt = dir.join("r2025/12_Rooms_Door_Windows.rvt");
+    let reference = dir.join("r2025/12_Rooms_Door_Windows.ifc");
+    if !rvt.exists() || !reference.exists() {
+        eprintln!("skipping: no R2025 model 12 and reference export");
+        return;
+    }
+    let mut rf = RevitFile::open(&rvt).expect("open");
+    let result = RvtDocExporter
+        .export_with_diagnostics(&mut rf)
+        .expect("export");
+    let ours = materials_by_tag(&write_step(&result.model), "IFCBUILDINGELEMENTPROXY");
+    let theirs = materials_by_tag(
+        &std::fs::read_to_string(&reference).expect("reference IFC"),
+        "IFCBUILDINGELEMENTPROXY",
+    );
+    assert_eq!(
+        theirs.len(),
+        9,
+        "Revit's export relates 9 trims and muntins"
+    );
+    let differing: Vec<_> = theirs
+        .iter()
+        .filter(|(tag, names)| ours.get(*tag) != Some(*names))
+        .map(|(tag, names)| (tag.clone(), ours.get(tag).cloned(), names.clone()))
+        .collect();
+    assert!(
+        differing.is_empty(),
+        "every trim and muntin has Revit's material set; differing (tag, rvt-rs, Revit): {differing:?}"
     );
 }
