@@ -14,9 +14,17 @@
 //! the "Glass" of Revit's export, as a material followed a tag on Snowdon
 //! Towers' panel types (RE-72). A value that is not one of the file's
 //! materials is not read as one.
+//!
+//! The value is the type's `m_renderStyleId` (RE-201, #355), and an optional
+//! field before it moves it: on Snowdon Towers (2025) 10 of the 13 exported
+//! mullion types hold it at +133, and the scan misses them. Read by name from
+//! the type's native record, it is Revit's material on all 17 exported
+//! mullion and panel types there, 1,773 of 1,773 members and plates. The
+//! native read is taken first; the offsets fill only the types it does not
+//! read.
 
 use crate::partition_room_parameters::verified_data_object;
-use crate::{Result, RevitFile};
+use crate::{Result, RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The type classes read, with the offset of the material from an object's
@@ -29,18 +37,70 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     (2024..=2027).contains(&revit_version)
 }
 
-/// Each mullion and panel type's material, by the type's ElementId: the
-/// ElementId among `materials` that its data object holds at +135 (a
-/// mullion type) or +139 (a panel type).
+/// Each mullion and panel type's material, by the type's ElementId: its
+/// native record's `m_renderStyleId` where that is one of `materials`, and
+/// otherwise the ElementId among `materials` that its data object holds at
+/// +135 (a mullion type) or +139 (a panel type).
 pub fn scan_curtain_type_materials(
     rf: &mut RevitFile,
     revit_version: u32,
     materials: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, u32>> {
-    let mut out = BTreeMap::new();
     if !supports_revit_version(revit_version) || materials.is_empty() {
-        return Ok(out);
+        return Ok(BTreeMap::new());
     }
+    let mut out = native_render_styles(rf, materials).unwrap_or_default();
+    for (type_id, material) in scan_offsets(rf, materials)? {
+        out.entry(type_id).or_insert(material);
+    }
+    Ok(out)
+}
+
+/// Each mullion and panel type's `m_renderStyleId`, by the type's ElementId,
+/// where it is one of `materials`. Errs where the native record path does not
+/// read the file's release.
+fn native_render_styles(
+    rf: &mut RevitFile,
+    materials: &BTreeSet<u32>,
+) -> anyhow::Result<BTreeMap<u32, u32>> {
+    let mut out = BTreeMap::new();
+    let options = native_document::Options {
+        selected_classes: MATERIAL_AT
+            .iter()
+            .map(|(name, _)| name.to_string())
+            .collect(),
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let Some(root) = record
+            .graph
+            .as_ref()
+            .and_then(|graph| graph.objects.first())
+        else {
+            return Ok(());
+        };
+        if !MATERIAL_AT.iter().any(|(name, _)| root.class_name == *name) {
+            return Ok(());
+        }
+        let material = root
+            .fields
+            .get("m_renderStyleId")
+            .and_then(|id| crate::native_metadata::identifier(id).ok())
+            .and_then(|id| u32::try_from(id).ok());
+        let type_id = u32::try_from(record.identity.element_id).ok();
+        let material = material.filter(|material| materials.contains(material));
+        if let (Some(type_id), Some(material)) = (type_id, material) {
+            out.insert(type_id, material);
+        }
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+/// Each mullion and panel type's material at +135 or +139 of its data
+/// object, by the type's ElementId.
+fn scan_offsets(rf: &mut RevitFile, materials: &BTreeSet<u32>) -> Result<BTreeMap<u32, u32>> {
+    let mut out = BTreeMap::new();
     let classes = rf.schema_classes()?;
     let tags: Vec<(u32, usize)> = MATERIAL_AT
         .iter()

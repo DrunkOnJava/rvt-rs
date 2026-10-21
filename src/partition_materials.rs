@@ -424,10 +424,22 @@ pub fn scan_material_names(
             }
         }
     }
-    let names: BTreeMap<u32, String> = found
+    let mut names: BTreeMap<u32, String> = found
         .into_iter()
         .filter_map(|(id, name)| name.map(|n| (id, n)))
         .collect();
+    // The material's own `Material.m_name`, where its native record is read
+    // (RE-203): the scan takes another string for one of Snowdon Towers'
+    // 220 materials ("1/4\" Head" for "Bronze, Architectural") and agrees
+    // on the other 514 materials of Snowdon Towers, Core Interior, RE1 and
+    // the R2025 models measured.
+    if let Ok(native) = native_material_names(rf, &names.keys().copied().collect()) {
+        for (id, name) in native {
+            if let Some(held) = names.get_mut(&id) {
+                *held = name;
+            }
+        }
+    }
     let mut uses: BTreeMap<&str, usize> = BTreeMap::new();
     for name in names.values() {
         *uses.entry(name.as_str()).or_default() += 1;
@@ -441,6 +453,41 @@ pub fn scan_material_names(
         .into_iter()
         .filter(|(_, name)| !shared.contains(name))
         .collect())
+}
+
+/// Each of `ids` that is a material's ElementId, with its native record's
+/// `Material.m_name`. Errs where the native record path does not read the
+/// file's release.
+fn native_material_names(
+    rf: &mut RevitFile,
+    ids: &BTreeSet<u32>,
+) -> anyhow::Result<BTreeMap<u32, String>> {
+    let mut out = BTreeMap::new();
+    if ids.is_empty() {
+        return Ok(out);
+    }
+    let options = crate::native_document::Options {
+        selected_ids: ids.iter().map(|id| u64::from(*id)).collect(),
+        ..crate::native_document::Options::default()
+    };
+    crate::native_document::extract_graphs(rf, &options, |record| {
+        let name = record.graph.as_ref().and_then(|graph| {
+            graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "Material")?
+                .fields
+                .get("m_name")?
+                .as_str()
+                .map(str::to_string)
+        });
+        let name = name.filter(|name| !name.is_empty());
+        if let (Ok(id), Some(name)) = (u32::try_from(record.identity.element_id), name) {
+            out.insert(id, name);
+        }
+        Ok(())
+    })?;
+    Ok(out)
 }
 
 /// Releases a category's material (RE-91) is read on. Measured on Revit
