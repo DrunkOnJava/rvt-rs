@@ -74,6 +74,7 @@ Do not expose sshd or an assistant app server as a public forwarded port.
 | Claude Code terminal | `claude` in the remote checkout | Sign in to the intended subscription independently. Never set an API key as an automatic fallback. |
 | VS Code desktop | Codespaces extension → Connect to Codespace; or `gh codespace code -c YOUR_RVT_CODESPACE` | GitHub sign-in is separate from either assistant. The Rust/Python/Claude extensions are recommended in the container. |
 | Browser | Open the machine from GitHub Codespaces | Browser VS Code is also available; it does not transfer local Chrome sign-ins or native desktop apps. |
+| JupyterLab | Codespaces → Open in JupyterLab, or `gh codespace jupyter -c YOUR_RVT_CODESPACE` | Uses the hash-locked project `.venv`; select `rvt-rs (Python 3.12)`. The VS Code Jupyter extension alone does not install this server. |
 
 Codex's **Work in → Cloud** uses OpenAI's environment service. This Codespace
 is an **SSH remote project**. Verify the remote host and checkout in a chat
@@ -94,7 +95,7 @@ committing them. Use repository-scoped Codespaces secrets only when needed.
 cd /workspaces/rvt-rs
 cargo build --locked --profile ci
 bash .devcontainer/resume.sh
-bash .devcontainer/verify.sh /workspaces/.rvt-rs-evidence/manual-check
+bash .devcontainer/verify.sh
 tools/ci/verify-real-files.sh --profile ci
 cd viewer
 CI=1 pnpm exec playwright test --config playwright.config.ts --workers=1
@@ -107,10 +108,49 @@ Use `gh codespace ports forward 5173:5173 -c YOUR_RVT_CODESPACE` for local
 access without making it public. Stop the foreground server with Ctrl-C.
 The smoke script saves `viewer-smoke.png`, `browser.json`, the exact source
 SHA, CLI output, IFC and diagnostics. Open the screenshot for visual review.
+Each smoke invocation chooses a new evidence directory. An explicit directory
+is also accepted, but an existing `verify.log` is never overwritten.
 Synthetic fixtures prove parser/scaffold paths, not real Revit geometry.
 External corpora are opt-in; follow [corpus intake](corpus-intake.md) and
 [corpus sources](corpus-sources.md). Do not copy private oracle material.
 Linux Codespaces cannot supply Revit-hosted Windows oracle execution.
+
+The account's default editor can route a Codespaces link to JupyterLab.
+Use **Open in Visual Studio Code** for the browser editor instead; changing
+that account-wide preference also affects your other Codespaces. JupyterLab
+is installed by `.devcontainer/notebooks.sh` during first-create. To add it
+to a machine created before this setup, run that script once. The registered
+kernel uses the same `.venv` as the editable Rust/Python binding. Open
+[`codespaces.ipynb`](codespaces.ipynb) for a synthetic-file example. Notebook
+port 8888 stays private; GitHub manages the JupyterLab entry connection.
+
+VS Code reads shared repository settings from `.vscode/settings.json`.
+**Terminal → Run Task** exposes these workflows:
+
+| Task | Result |
+| --- | --- |
+| `rvt: build` | Native tools in `target/ci`; default build shortcut |
+| `rvt: clippy`, `rvt: format check` | Explicit compiler/lint and formatting checks |
+| `rvt: Python binding` | Rebuild the editable extension in `.venv` |
+| `rvt: WASM`, `viewer: build` | WASM, then the typechecked static viewer |
+| `viewer: dev` | Vite on private forwarded port 5173; stop with Terminate Task |
+| `rvt: smoke` | Build all three components, then save CLI/Python/browser evidence |
+| `rvt: verify real files` | Repository integration/CLI/contract checks; unit targets excluded |
+| `viewer: browser checks` | Existing headless browser suite with one worker |
+
+Run and Debug offers `Debug rvt-inspect`, which builds a separate native debug
+binary with line information and prompts for a remote fixture path. `Python:
+current file` uses the selected `.venv` interpreter. Generated output is
+excluded from file watching/search, Rust formatting is enabled on save, and
+automatic compiler checks and Python unit-test discovery are disabled to keep
+the two-core machine responsive. Manual check tasks remain available.
+
+GitHub Codespaces ownership, Git push credentials, editor Accounts, Settings
+Sync, Copilot chat, Codex and Claude are separate connections. Inspect the
+editor's Accounts menu to identify its GitHub session. A chat `Sign In`
+button can refer to Copilot rather than repository access. Sign in to an
+existing account through the normal OAuth flow if needed; this setup does not
+enable Settings Sync, purchase a Copilot plan or change any assistant provider.
 
 For native release artifacts, explicitly use `cargo build --locked --release`.
 For release WASM, run the usual wasm-pack command with `--release`. Do not

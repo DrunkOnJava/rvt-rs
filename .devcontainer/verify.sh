@@ -2,11 +2,20 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
-evidence="${1:?Usage: bash .devcontainer/verify.sh ABSOLUTE_EVIDENCE_DIRECTORY}"
+evidence="${1:-${RVT_EVIDENCE_ROOT:-/workspaces/.rvt-rs-evidence}/$(basename "$root")/verify-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 [[ "$evidence" = /* ]] || { echo 'Evidence directory must be absolute' >&2; exit 1; }
+test ! -e "$evidence/verify.log" || { echo "Evidence already exists: $evidence; choose a new directory" >&2; exit 1; }
 mkdir -p "$evidence"
+printf 'Verification evidence: %s\n' "$evidence"
+exec 3>&1
 exec >"$evidence/verify.log" 2>&1
+trap 'printf "Verification failed; read %s/verify.log\n" "$evidence" >&3' ERR
 git rev-parse HEAD >"$evidence/source-sha.txt"
+{
+  rustc --version; cargo --version; python3 --version; node --version
+  npm --version; pnpm --version; wasm-pack --version; gh --version
+  codex --version; claude --version
+} >"$evidence/versions.txt"
 bash .devcontainer/resume.sh
 cargo fmt --all -- --check
 bash tools/ci/verify-real-files.sh --check-only
@@ -27,3 +36,4 @@ PY
 node viewer/scripts/audit-wasm-imports.mjs
 node .devcontainer/browser-smoke.mjs "$evidence"
 printf 'CLI, Python binding, WASM privacy audit and browser smoke passed.\n'
+printf 'Verification passed. Evidence: %s\n' "$evidence" >&3

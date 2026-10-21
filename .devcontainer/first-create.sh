@@ -9,6 +9,7 @@ if ! script --quiet --return --command 'bash .cursor/install.sh' "$evidence/boot
   printf 'Bootstrap failed. Read %s/bootstrap.log\n' "$evidence" >&2
   exit 1
 fi
+bash .devcontainer/notebooks.sh >"$evidence/notebook-setup.log" 2>&1
 script --quiet --return --command \
   'cd viewer && pnpm exec playwright install --with-deps chromium' "$evidence/browser-install.log"
 bash .devcontainer/verify.sh "$evidence"

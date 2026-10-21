@@ -1,0 +1,30 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+  "python.testing.pytestEnabled": false,
+  "python.testing.unittestEnabled": false,
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.cargo.buildScripts.enable": false,
+  "rust-analyzer.cargo.allTargets": false,
+  "rust-analyzer.cargo.extraEnv": { "CARGO_BUILD_JOBS": "2" },
+  "rust-analyzer.checkOnSave": false,
+  "rust-analyzer.lens.run.enable": false,
+  "rust-analyzer.lens.debug.enable": false,
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true
+  },
+  "files.watcherExclude": {
+    "**/target/**": true,
+    "**/.venv/**": true,
+    "**/node_modules/**": true,
+    "**/viewer/pkg/**": true,
+    "**/viewer/dist/**": true
+  },
+  "search.exclude": {
+    "**/target": true,
+    "**/.venv": true,
+    "**/node_modules": true,
+    "viewer/pkg": true,
+    "viewer/dist": true
+  }
+}
