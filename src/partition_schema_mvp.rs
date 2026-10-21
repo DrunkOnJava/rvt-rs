@@ -2214,30 +2214,31 @@ fn refine_type_materials(
         return partly_unset;
     };
     // A family whose geometry with no material is all hidden or void has
-    // no `<Unnamed>` in Revit's export (RE-204).
-    let families: BTreeSet<u64> = found
-        .values()
-        .filter(|found| found.unset)
-        .filter_map(|found| found.family)
-        .collect();
-    let visible_unset =
-        crate::native_family_forms::visible_unset_forms(rf, &families).unwrap_or_default();
+    // no `<Unnamed>` in Revit's export (RE-204), and a material only its
+    // hidden forms have is not exported (RE-205).
+    let families: BTreeSet<u64> = found.values().filter_map(|found| found.family).collect();
+    let forms = crate::native_family_forms::family_forms(rf, &families).unwrap_or_default();
     for (type_id, found) in found {
         let Ok(type_id) = u32::try_from(type_id) else {
             continue;
         };
-        let ids = &found.materials;
+        let family = found.family.and_then(|family| forms.get(&family));
+        let ids: Vec<u32> = found
+            .materials
+            .iter()
+            .copied()
+            .filter(|id| !family.is_some_and(|family| family.hidden_only.contains(id)))
+            .collect();
+        if ids.is_empty() {
+            continue;
+        }
         let resolved: Vec<String> = ids.iter().filter_map(|id| names.get(id).cloned()).collect();
         if resolved.len() != ids.len() {
             continue;
         }
         let scanned = type_materials.entry(type_id).or_default();
         let same: BTreeSet<&String> = scanned.iter().collect();
-        let shown = found
-            .family
-            .and_then(|family| visible_unset.get(&family))
-            .copied()
-            .unwrap_or(true);
+        let shown = family.and_then(|family| family.shows_unset).unwrap_or(true);
         if found.unset && shown {
             partly_unset.insert(type_id);
         }
@@ -2465,28 +2466,68 @@ fn set_type_materials(element: &mut DecodedElement, names: Vec<String>) {
     }
 }
 
-/// A column with only `<Unnamed>` takes the layer of the wall it was first
-/// joined to on the side the column stands (RE-202, #355): the exterior
-/// layer where its box centre is on the wall's exterior side, the interior
-/// layer otherwise ([`crate::native_column_joins`]). Revit's export gives
-/// 106 of Snowdon Towers' 108 off-centre columns that layer. A column whose
-/// first join is not a straight wall, or whose layer on that side has no
-/// named material, is left alone.
+/// A column with only `<Unnamed>` takes a layer of the wall it was first
+/// joined to (RE-202, #355; [`crate::native_column_joins`]): the first join
+/// among the walls that overlap it ([`COLUMN_JOINED_WALL_FIELD`]) where any
+/// do, so that a foundation wall below it is passed over (RE-205). Its
+/// exterior layer where the column stands out past both of the wall's faces
+/// or its box centre is on the wall's exterior side, the interior layer
+/// otherwise. Revit's export gives all 108 of Snowdon Towers' off-centre
+/// columns that layer. A column whose wall is not straight, or whose layer
+/// on that side has no named material, is left alone.
+///
+/// [`COLUMN_JOINED_WALL_FIELD`]: crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD
 fn attach_first_join_materials(
     rf: &mut RevitFile,
     columns: &mut [DecodedElement],
     walls: &[DecodedElement],
 ) {
+    use crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD;
+    use crate::element_record_wall_joins::WALL_THICKNESS_FIELD;
     use crate::native_column_joins as joins;
+    let float = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
     let ids: BTreeSet<u64> = columns
         .iter()
         .filter(|column| has_unnamed_material_only(column))
         .filter_map(|column| column.id.map(u64::from))
         .collect();
-    let Ok(first) = joins::first_joins(rf, &ids) else {
+    let Ok(joined) = joins::joins(rf, &ids) else {
         return;
     };
-    let wall_layers: BTreeMap<u64, Vec<Option<String>>> = walls
+    let first: BTreeMap<u64, u64> = columns
+        .iter()
+        .filter_map(|column| {
+            let id = u64::from(column.id?);
+            let order = joined.get(&id)?;
+            let overlapping: BTreeSet<u64> = column
+                .fields
+                .iter()
+                .filter_map(|(name, value)| match value {
+                    InstanceField::ElementId { id, .. } if name == COLUMN_JOINED_WALL_FIELD => {
+                        Some(u64::from(*id))
+                    }
+                    _ => None,
+                })
+                .collect();
+            let wall = order
+                .iter()
+                .find(|wall| overlapping.contains(wall))
+                .or_else(|| order.first())?;
+            Some((id, *wall))
+        })
+        .collect();
+    // Each wall's layers, thickness and centreline point (RE-54).
+    struct WallData {
+        layers: Vec<Option<String>>,
+        thickness: Option<f64>,
+        axis: Option<[f64; 2]>,
+    }
+    let wall_data: BTreeMap<u64, WallData> = walls
         .iter()
         .filter_map(|wall| {
             let id = u64::from(wall.id?);
@@ -2499,35 +2540,48 @@ fn attach_first_join_materials(
                 .find_map(|(name, value)| (name == WALL_LAYERS_FIELD).then_some(value))
                 .and_then(layer_bands_from_field)?;
             let names: Vec<Option<String>> = bands.into_iter().map(|band| band.name).collect();
-            (!names.is_empty()).then_some((id, names))
+            let [ax, ay] = WALL_AXIS_START_FIELDS.map(|name| float(wall, name));
+            let axis = ax.zip(ay).map(|(x, y)| [x, y]);
+            (!names.is_empty()).then_some((
+                id,
+                WallData {
+                    layers: names,
+                    thickness: float(wall, WALL_THICKNESS_FIELD),
+                    axis,
+                },
+            ))
         })
         .collect();
-    let Ok(sides) = joins::wall_sides(rf, &wall_layers.keys().copied().collect()) else {
+    let Ok(sides) = joins::wall_sides(rf, &wall_data.keys().copied().collect()) else {
         return;
     };
     for column in columns.iter_mut() {
         let Some(id) = column.id.map(u64::from) else {
             continue;
         };
-        if !ids.contains(&id) {
-            continue;
-        }
-        let float = |wanted: &str| {
-            column.fields.iter().find_map(|(name, value)| match value {
-                InstanceField::Float { value, .. } if name == wanted => Some(*value),
-                _ => None,
-            })
-        };
-        let (Some(x), Some(y)) = (float("m_locationX"), float("m_locationY")) else {
-            continue;
-        };
         let Some(wall) = first.get(&id) else {
             continue;
         };
-        let (Some(layers), Some(side)) = (wall_layers.get(wall), sides.get(wall)) else {
+        let (Some(x), Some(y)) = (float(column, "m_locationX"), float(column, "m_locationY"))
+        else {
             continue;
         };
-        let layer = if side.is_exterior([x, y]) {
+        let (Some(data), Some(side)) = (wall_data.get(wall), sides.get(wall)) else {
+            continue;
+        };
+        let (layers, thickness, axis) = (&data.layers, data.thickness, data.axis);
+        // How far the column's box reaches each way across the wall.
+        let reach = match (float(column, "m_bboxWidth"), float(column, "m_bboxDepth")) {
+            (Some(width), Some(depth)) => {
+                (side.exterior[0].abs() * width + side.exterior[1].abs() * depth) / 2.0
+            }
+            _ => 0.0,
+        };
+        let centre = side.offset([x, y], axis.unwrap_or(side.origin));
+        let past_both = thickness.is_some_and(|thickness| {
+            axis.is_some() && centre - reach < -thickness / 2.0 && centre + reach > thickness / 2.0
+        });
+        let layer = if past_both || side.is_exterior([x, y]) {
             layers.first()
         } else {
             layers.last()

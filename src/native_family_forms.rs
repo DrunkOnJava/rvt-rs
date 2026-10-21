@@ -19,6 +19,8 @@
 //! materials, it nests an instance, and Revit writes `<Unnamed>`. One that
 //! nests none shows none: RE1 Electrical's "284621-FirePanel", whose 93
 //! free-form solids and model text all have a material.
+//!
+//! A material only hidden forms have is left out of the export too (RE-205).
 
 use crate::{RevitFile, compression, native_document, native_parameters, native_segments};
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,17 +43,27 @@ const VISIBLE_PARAMETER: i64 = -1_006_205;
 /// The channels element records are on.
 const CHANNELS: [u64; 3] = [101, 102, 103];
 
-/// Whether each of `families` shows model geometry with no material, by
-/// the family's ElementId: true where a visible solid form has none; false
-/// where every such form is hidden or void, or where it has none and nests
-/// no family instance and every form decodes. A family whose document is
-/// not found, or that has no such form but nests an instance or holds a
-/// form that does not decode, is left out. Errs where the file's partitions or
-/// schema are not read.
-pub fn visible_unset_forms(
+/// What a family's own document shows of its forms' materials.
+#[derive(Clone, Debug, Default)]
+pub struct FamilyForms {
+    /// Whether it shows model geometry with no material: true where a
+    /// visible solid form has none; false where every such form is hidden
+    /// or void, or where it has none and nests no family instance and every
+    /// form decodes; `None` otherwise.
+    pub shows_unset: Option<bool>,
+    /// The materials only its hidden forms have: Revit's export leaves them
+    /// out (RE-205: Snowdon Towers' "Refrig_Base_wDrawers" maps a hidden
+    /// clearance extrusion to "Clearance").
+    pub hidden_only: BTreeSet<u32>,
+}
+
+/// [`FamilyForms`] of each of `families`, by the family's ElementId. A family
+/// whose document is not found, or holds no form that decodes, is left out.
+/// Errs where the file's partitions or schema are not read.
+pub fn family_forms(
     rf: &mut RevitFile,
     families: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, bool>> {
+) -> anyhow::Result<BTreeMap<u64, FamilyForms>> {
     let mut out = BTreeMap::new();
     if families.is_empty() {
         return Ok(out);
@@ -117,6 +129,9 @@ pub fn visible_unset_forms(
         visible_unset: bool,
         unset: bool,
         unread: bool,
+        forms: usize,
+        visible: BTreeSet<u32>,
+        hidden: BTreeSet<u32>,
     }
     let mut seen: BTreeMap<u64, Seen> = BTreeMap::new();
     for name in &names {
@@ -151,12 +166,12 @@ pub fn visible_unset_forms(
                 let Some(form) = graph.objects.first() else {
                     continue;
                 };
-                let unset = form
+                let material = form
                     .fields
                     .get("m_materialId")
                     .and_then(|id| id.pointer("/m_id/m_id64"))
-                    .and_then(serde_json::Value::as_i64)
-                    == Some(-1);
+                    .and_then(serde_json::Value::as_i64);
+                let unset = material == Some(-1);
                 let cutting = form
                     .fields
                     .get("m_cutting")
@@ -175,20 +190,43 @@ pub fn visible_unset_forms(
                             == Some(VISIBLE_PARAMETER)
                             && entry.get("m_value").and_then(serde_json::Value::as_i64) == Some(0)
                     });
+                state.forms += 1;
                 if unset && !cutting {
                     state.unset = true;
                     state.visible_unset |= !hidden;
+                }
+                if let Some(material) = material.and_then(|id| u32::try_from(id).ok())
+                    && !cutting
+                {
+                    if hidden {
+                        state.hidden.insert(material);
+                    } else {
+                        state.visible.insert(material);
+                    }
                 }
             }
             Ok(())
         })?;
     }
     for (family, state) in seen {
-        if state.visible_unset {
-            out.insert(family, true);
-        } else if state.unset || !state.unread {
-            out.insert(family, false);
+        if state.forms == 0 {
+            continue;
         }
+        let shows_unset = if state.visible_unset {
+            Some(true)
+        } else if state.unset || !state.unread {
+            Some(false)
+        } else {
+            None
+        };
+        let hidden_only = state.hidden.difference(&state.visible).copied().collect();
+        out.insert(
+            family,
+            FamilyForms {
+                shows_unset,
+                hidden_only,
+            },
+        );
     }
     Ok(out)
 }

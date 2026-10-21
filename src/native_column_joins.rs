@@ -34,20 +34,24 @@ pub struct WallSide {
 impl WallSide {
     /// Whether `point` lies on the wall's exterior side.
     pub fn is_exterior(&self, point: [f64; 2]) -> bool {
-        (point[0] - self.origin[0]) * self.exterior[0]
-            + (point[1] - self.origin[1]) * self.exterior[1]
-            > 0.0
+        self.offset(point, self.origin) > 0.0
+    }
+
+    /// How far `point` lies toward the exterior from a line through
+    /// `through` parallel to the wall.
+    pub fn offset(&self, point: [f64; 2], through: [f64; 2]) -> f64 {
+        (point[0] - through[0]) * self.exterior[0] + (point[1] - through[1]) * self.exterior[1]
     }
 }
 
-/// The element each of `columns` was first joined to (its `CutPairGStep`
-/// with the lowest `m_id`), by the column's ElementId. A column with no join
-/// is left out. Errs where the native record path does not read the file's
-/// release.
-pub fn first_joins(
+/// The elements each of `columns` is joined to, in the order the joins were
+/// made (its `CutPairGStep` objects by `m_id`), by the column's ElementId. A
+/// column with no join is left out. Errs where the native record path does
+/// not read the file's release.
+pub fn joins(
     rf: &mut RevitFile,
     columns: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, u64>> {
+) -> anyhow::Result<BTreeMap<u64, Vec<u64>>> {
     let mut out = BTreeMap::new();
     if columns.is_empty() {
         return Ok(out);
@@ -60,7 +64,7 @@ pub fn first_joins(
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
-        let first = graph
+        let mut steps: Vec<(i64, u64)> = graph
             .objects
             .iter()
             .filter(|object| object.class_name == "CutPairGStep")
@@ -68,9 +72,13 @@ pub fn first_joins(
                 let step = object.fields.get("m_id")?.as_i64()?;
                 Some((step, element_id(object.fields.get("m_otherId")?)?))
             })
-            .min();
-        if let Some((_, other)) = first {
-            out.insert(record.identity.element_id, other);
+            .collect();
+        steps.sort_unstable();
+        if !steps.is_empty() {
+            out.insert(
+                record.identity.element_id,
+                steps.into_iter().map(|(_, other)| other).collect(),
+            );
         }
         Ok(())
     })?;
