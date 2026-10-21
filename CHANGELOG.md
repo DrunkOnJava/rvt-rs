@@ -136,6 +136,19 @@ All notable changes will be documented here. This project follows
   public, so code that used it stops compiling, and the next release is a
   minor one.
 
+### Research
+
+- **Revit 2015 is scored against Revit 2015's own export (RE-198, #421).**
+  BIMcollab's example structural model, a Revit 2015 project, comes with
+  Revit 2015's IFC2X3 export of it. Measure fetches both by hash with
+  `-f bimcollab=true` and never stores them. It is the first 2015 to 2022
+  file scored against an export of its own release, and it was measured
+  before any fix, so it is held out. All 241 of the export's elements come
+  out under Revit's ElementId, in Revit's class or its IFC4 equivalent, with
+  wall faces and layer sets as Revit's. Three air terminals Revit's export leaves out are written, 16
+  footings sit on no storey (#879), and none of Revit's GlobalIds is rebuilt
+  on 2015 (#878). 2015 stays experimental.
+
 ## [0.6.1] — 2026-10-19
 
 A patch release of 0.6.0. On a 32-bit target, such as the WebAssembly the

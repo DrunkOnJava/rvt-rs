@@ -1,0 +1,14 @@
+# BIMcollab's example project (KUBUS BV), public downloads linked from BIMcollab's help center
+# ("Example projects and templates", helpcenter.bimcollab.com/en/articles/325099). Its structural model,
+# 02_BIMcollab_Example_STR.rvt, is a Revit Architecture 2015 project (BasicFileInfo build 20141119_0715),
+# and 02_BIMcollab_Example_STR_optimized.ifc is Revit 2015's own IFC2X3 Coordination View 2.0 export
+# of it (IfcApplication "Autodesk Revit Architecture 2015 (ENU)", version 2015, 2014-10-08), later passed
+# through Solibri's IFC Optimizer. No redistribution licence is stated, so both are fetched for a Measure
+# run (`-f bimcollab=true`) by tools/ci/fetch-bimcollab.sh and never committed. STE1200 gave the .rvt's
+# provenance and sha256 (Discussion #112); the rest was measured 2026-10-21. The archives are checked
+# through their members only: BIMcollab repacks them (bc-example-project_2025.zip).
+# kind	name	url, or archive:path (outer!inner for a zip in the archive)	sha256	bytes
+archive	str	https://download.bimcollab.com/support/ZOOM/02_BIMcollab_Example_STR.zip	ce9485a419cd606a3c461fb3049beea56ce771fa9720e6537371adc17e052c09	91508698
+archive	ifc	https://download.bimcollab.com/support/bc-example-project_2025.zip	28058bc6ce0e1d9df15b9d76ad0bf8cbdf4f27f82a45e6545a9585c41e9e9811	9861006
+member	02_BIMcollab_Example_STR.rvt	str:02_BIMcollab_Example_STR.rvt	8cd1f122e751c33ea69e6f16c23ed4cd572ded3d0d04dfab50aaf0973e38e193	13979648
+member	02_BIMcollab_Example_STR_optimized.ifc	ifc:01_Design/02_BIMcollab_Example_STR.ifczip!02_BIMcollab_Example_STR_optimized.ifc	1d0d047a5519a2ea143b9d07625dcc94bd3a1c3b01cb86607b16d850f0a5081d	455050
