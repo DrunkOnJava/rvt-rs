@@ -109,6 +109,8 @@ pub fn extract_at_detail(
         |r| resolver.ingest(&r),
     )?);
     // Elements mesh independently: spread them over the cores, keeping order.
+    // The browser build (wasm32-unknown-unknown) has no threads, so there, as
+    // on a single core, they mesh one after the other.
     let roots: Vec<u64> = roots.into_iter().collect();
     let build = |id: u64| -> Result<SavedElement> {
         let r = &records[&id];
@@ -163,34 +165,48 @@ pub fn extract_at_detail(
             meshes,
         })
     };
-    let next = std::sync::atomic::AtomicUsize::new(0);
-    let workers = std::thread::available_parallelism().map_or(1, |n| n.get());
-    let mut built: Vec<(usize, Result<SavedElement>)> = std::thread::scope(|scope| {
-        let handles: Vec<_> = (0..workers)
-            .map(|_| {
-                scope.spawn(|| {
-                    let mut out = Vec::new();
-                    loop {
-                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        let Some(&id) = roots.get(i) else { break };
-                        out.push((i, build(id)));
-                    }
-                    out
+    let workers = if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
+        1
+    } else {
+        std::thread::available_parallelism().map_or(1, |n| n.get())
+    };
+    let elements = if workers == 1 {
+        roots
+            .iter()
+            .map(|&id| build(id))
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let mut built: Vec<(usize, Result<SavedElement>)> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..workers)
+                .map(|_| {
+                    scope.spawn(|| {
+                        let mut out = Vec::new();
+                        loop {
+                            let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            let Some(&id) = roots.get(i) else { break };
+                            out.push((i, build(id)));
+                        }
+                        out
+                    })
                 })
-            })
-            .collect();
-        handles
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().expect("saved mesh worker panicked"))
+                .collect()
+        });
+        built.sort_by_key(|(i, _)| *i);
+        built
             .into_iter()
-            .flat_map(|h| h.join().expect("saved mesh worker panicked"))
-            .collect()
-    });
-    built.sort_by_key(|(i, _)| *i);
-    let elements = built
-        .into_iter()
-        .map(|(_, e)| e)
-        .collect::<Result<Vec<_>>>()?;
-    // Freeing the decoded graphs takes seconds on large models: do it aside.
-    std::thread::spawn(move || drop(records));
+            .map(|(_, e)| e)
+            .collect::<Result<Vec<_>>>()?
+    };
+    // Freeing the decoded graphs takes seconds on large models: do it aside
+    // where there are threads.
+    if workers > 1 {
+        std::thread::spawn(move || drop(records));
+    }
     Ok(SavedScene {
         source_sha256: None,
         format: "rvt-native-saved-scene-v1",
