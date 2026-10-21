@@ -29,6 +29,9 @@ CACHE_LIMIT_BYTES = 10 * 1024**3
 BRANCH_STALE_DAYS = 14
 # Directories with a lockfile that Dependabot deliberately does not update, and why
 # (docs/maintaining.md says the same).
+# The 1.0 release decision; every open issue under the 1.0.0 milestone serves one of
+# its requirements (docs/maintaining.md, housekeeping item 8).
+RELEASE_CRITERIA = ROOT / "docs" / "release-1.0-criteria.md"
 UNWATCHED = {"/tools/ci/witness-ifc-lite": "its third-party witness is pinned to an exact version on purpose"}
 results = []
 
@@ -104,6 +107,21 @@ def milestones(repo):
             problems.append(f"closed milestone {m['title']!r} has {m['open_issues']} open issues")
         if m["state"] == "open" and m["open_issues"] == 0 and m["closed_issues"]:
             problems.append(f"open milestone {m['title']!r} has no open issues: close it if its release shipped")
+    return problems
+
+
+@check("every open issue under the 1.0.0 milestone serves a requirement of docs/release-1.0-criteria.md")
+def release_criteria(repo):
+    cited = {int(n) for n in re.findall(r"(?:#|/issues/)(\d+)", RELEASE_CRITERIA.read_text())}
+    problems = []
+    for m in pages(f"repos/{repo}/milestones?state=open&per_page=100"):
+        if not m["title"].startswith("1.0.0"):
+            continue
+        for issue in pages(f"repos/{repo}/issues?milestone={m['number']}&state=open&per_page=100"):
+            if "pull_request" in issue:
+                problems.append(f"pull request #{issue['number']} is in {m['title']!r}: milestones hold issues")
+            elif issue["number"] not in cited:
+                problems.append(f"#{issue['number']} is in {m['title']!r}, but no requirement cites it")
     return problems
 
 
@@ -355,6 +373,7 @@ def main():
     args = ap.parse_args()
     issue_labels(args.repo)
     milestones(args.repo)
+    release_criteria(args.repo)
     branches(args.repo)
     caches(args.repo)
     main_green(args.repo)
