@@ -229,15 +229,16 @@ pub fn arrow_heights(data: &[u8]) -> Option<ArrowHeights> {
             [1, 0, 0, 0] => true,
             _ => return None,
         };
-        let angle = f64_at(data, at.checked_sub(0x08)?)?;
+        let base = at.checked_sub(0x28)?;
+        let angle = f64_at(data, base + 0x20)?;
         if !(angle.is_finite() && angle > 0.0 && angle < std::f64::consts::FRAC_PI_2) {
             return None;
         }
-        let levels = [f64_at(data, at - 0x18)?, f64_at(data, at - 0x10)?];
+        let levels = [f64_at(data, base + 0x10)?, f64_at(data, base + 0x18)?];
         if levels != [0.0, 0.0] {
             return None;
         }
-        let (tail_feet, head_feet) = (f64_at(data, at - 0x28)?, f64_at(data, at - 0x20)?);
+        let (tail_feet, head_feet) = (f64_at(data, base)?, f64_at(data, base + 0x08)?);
         (tail_feet.is_finite() && head_feet.is_finite() && (by_angle || head_feet != tail_feet))
             .then_some(ArrowHeights {
                 tail_feet,

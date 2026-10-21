@@ -617,6 +617,11 @@ const ENVELOPE_SPLIT_EPS: f64 = 1e-9;
 /// defining edges.
 pub const MAX_ENVELOPE_PLANES: usize = 32;
 
+/// Most pieces [`envelope_slab_mesh`] cuts the plan into, and most side
+/// segments it draws: past either it draws nothing, which bounds the work
+/// and memory a hostile sketch can ask for.
+pub const MAX_ENVELOPE_PIECES: usize = 1 << 16;
+
 /// The point where the segment `p`–`q` crosses the line `f = 0`, from the
 /// values `fp` and `fq` of `f` at its ends. The ends are taken in a fixed
 /// order, so two triangles sharing the segment get the same point.
@@ -663,8 +668,9 @@ fn clip_convex(poly: &[Point2], line: PlanPlane, keep_positive: bool) -> Vec<Poi
 /// edges' planes, which converge at a hip and part at a valley. The plan is
 /// cut along every line where two of the planes it compares meet, or a
 /// domain ends, so top and underside are flat on each piece. `None` for no
-/// plane, more than [`MAX_ENVELOPE_PLANES`], a point no plane covers, or a
-/// top below the underside anywhere.
+/// plane, more than [`MAX_ENVELOPE_PLANES`], more than
+/// [`MAX_ENVELOPE_PIECES`] pieces or sides, a point no plane covers, or a top
+/// below the underside anywhere.
 pub fn envelope_slab_mesh(
     outer: &[Point2],
     holes: &[Ring],
@@ -739,6 +745,9 @@ pub fn envelope_slab_mesh(
             })
             .filter(|poly| poly.len() >= 3 && signed_area(poly).abs() > 1e-12)
             .collect();
+        if pieces.len() > MAX_ENVELOPE_PIECES {
+            return None;
+        }
     }
     let mut mesh = Mesh::default();
     let push = |mesh: &mut Mesh, points: [[f64; 3]; 3]| {
@@ -761,6 +770,7 @@ pub fn envelope_slab_mesh(
         }
     }
     // The sides, each ring edge cut where a line crosses it.
+    let mut sides = 0usize;
     for ring in &section.rings {
         for i in 0..ring.len() {
             let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
@@ -775,6 +785,10 @@ pub fn envelope_slab_mesh(
             }
             cuts.sort_by(f64::total_cmp);
             cuts.dedup_by(|x, y| (*x - *y).abs() <= 1e-12);
+            sides += cuts.len() - 1;
+            if sides > MAX_ENVELOPE_PIECES {
+                return None;
+            }
             let at = |t: f64| (a.0 + t * (b.0 - a.0), a.1 + t * (b.1 - a.1));
             for pair in cuts.windows(2) {
                 let (p, q) = (at(pair[0]), at(pair[1]));
