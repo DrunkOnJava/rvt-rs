@@ -157,95 +157,105 @@ fn read_documents(
     for name in streams {
         let stored = rf.read_stream(name)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
-        native_segments::walk(&prepared, registry, 256 * 1024 * 1024, |source, bytes| {
-            let Some(family) = source.content_key.and_then(|key| blocks.get(&key)) else {
-                return Ok(());
-            };
-            if !CHANNELS.contains(&source.channel) {
-                return Ok(());
-            }
-            let Ok(records) = native_document::group_records(source, bytes, version) else {
-                return Ok(());
-            };
-            let document = documents.entry(*family).or_default();
-            for (id, _, start, end) in records {
-                let body = &bytes[start..end];
-                let Some(class) = body.get(..2).map(|b| u16::from_le_bytes([b[0], b[1]])) else {
-                    continue;
+        let inflated = rf.inflated_partition(name).ok();
+        native_segments::walk_inflated(
+            &prepared,
+            inflated.as_deref(),
+            registry,
+            256 * 1024 * 1024,
+            |source, bytes| {
+                let Some(family) = source.content_key.and_then(|key| blocks.get(&key)) else {
+                    return Ok(());
                 };
-                let is_form = form_tags.contains(&class);
-                if !is_form && !other_tags.contains(&class) {
-                    continue;
+                if !CHANNELS.contains(&source.channel) {
+                    return Ok(());
                 }
-                let Ok(graph) = native_parameters::decode_graph(body, registry) else {
-                    if is_form || Some(class) == instance_tag {
-                        document.unread = true;
+                let Ok(records) = native_document::group_records(source, bytes, version) else {
+                    return Ok(());
+                };
+                let document = documents.entry(*family).or_default();
+                for (id, _, start, end) in records {
+                    let body = &bytes[start..end];
+                    let Some(class) = body.get(..2).map(|b| u16::from_le_bytes([b[0], b[1]]))
+                    else {
+                        continue;
+                    };
+                    let is_form = form_tags.contains(&class);
+                    if !is_form && !other_tags.contains(&class) {
+                        continue;
                     }
-                    continue;
-                };
-                let Some(root) = graph.objects.first() else {
-                    continue;
-                };
-                if is_form {
-                    let bound = graph
-                        .objects
-                        .iter()
-                        .filter(|object| object.class_name == "FamilyParametrizedElemParamsCell")
-                        .filter_map(|object| object.fields.get("m_paramDrivenData")?.as_array())
-                        .flatten()
-                        .find(|entry| {
-                            element_id(entry.get("m_elemPropId")) == Some(VISIBLE_PARAMETER)
-                        })
-                        .and_then(|entry| element_id(entry.get("m_famParamId")))
-                        .and_then(|id| u64::try_from(id).ok());
-                    document.forms.push(Form {
-                        material: element_id(root.fields.get("m_materialId")),
-                        cutting: root
-                            .fields
-                            .get("m_cutting")
-                            .and_then(serde_json::Value::as_bool)
-                            .unwrap_or(false),
-                        visible: stored_visible(&graph),
-                        bound,
-                    });
-                    continue;
-                }
-                match root.class_name.as_str() {
-                    "FamilyInstance" => {
-                        let Some(symbol) = element_id(root.fields.get("m_masterSymbolId"))
-                            .and_then(|id| u64::try_from(id).ok())
-                        else {
+                    let Ok(graph) = native_parameters::decode_graph(body, registry) else {
+                        if is_form || Some(class) == instance_tag {
                             document.unread = true;
-                            continue;
-                        };
-                        document.nested.push(Nested {
-                            symbol,
-                            visible: stored_visible(&graph) != Some(0),
-                            params: family_params(&graph),
-                        });
-                    }
-                    "FamilySymbol" => {
-                        if let Some(family) = element_id(root.fields.get("m_familyId"))
-                            .and_then(|id| u64::try_from(id).ok())
-                        {
-                            document.symbols.insert(id, (family, family_params(&graph)));
                         }
-                    }
-                    "ParamElemFamily" => {
-                        if let Some(caption) = graph
+                        continue;
+                    };
+                    let Some(root) = graph.objects.first() else {
+                        continue;
+                    };
+                    if is_form {
+                        let bound = graph
                             .objects
                             .iter()
-                            .find_map(|object| object.fields.get("m_caption")?.as_str())
-                        {
-                            document.captions.insert(id, caption.to_string());
-                        }
+                            .filter(|object| {
+                                object.class_name == "FamilyParametrizedElemParamsCell"
+                            })
+                            .filter_map(|object| object.fields.get("m_paramDrivenData")?.as_array())
+                            .flatten()
+                            .find(|entry| {
+                                element_id(entry.get("m_elemPropId")) == Some(VISIBLE_PARAMETER)
+                            })
+                            .and_then(|entry| element_id(entry.get("m_famParamId")))
+                            .and_then(|id| u64::try_from(id).ok());
+                        document.forms.push(Form {
+                            material: element_id(root.fields.get("m_materialId")),
+                            cutting: root
+                                .fields
+                                .get("m_cutting")
+                                .and_then(serde_json::Value::as_bool)
+                                .unwrap_or(false),
+                            visible: stored_visible(&graph),
+                            bound,
+                        });
+                        continue;
                     }
-                    "Family" => document.families.push((id, body.to_vec())),
-                    _ => {}
+                    match root.class_name.as_str() {
+                        "FamilyInstance" => {
+                            let Some(symbol) = element_id(root.fields.get("m_masterSymbolId"))
+                                .and_then(|id| u64::try_from(id).ok())
+                            else {
+                                document.unread = true;
+                                continue;
+                            };
+                            document.nested.push(Nested {
+                                symbol,
+                                visible: stored_visible(&graph) != Some(0),
+                                params: family_params(&graph),
+                            });
+                        }
+                        "FamilySymbol" => {
+                            if let Some(family) = element_id(root.fields.get("m_familyId"))
+                                .and_then(|id| u64::try_from(id).ok())
+                            {
+                                document.symbols.insert(id, (family, family_params(&graph)));
+                            }
+                        }
+                        "ParamElemFamily" => {
+                            if let Some(caption) = graph
+                                .objects
+                                .iter()
+                                .find_map(|object| object.fields.get("m_caption")?.as_str())
+                            {
+                                document.captions.insert(id, caption.to_string());
+                            }
+                        }
+                        "Family" => document.families.push((id, body.to_vec())),
+                        _ => {}
+                    }
                 }
-            }
-            Ok(())
-        })?;
+                Ok(())
+            },
+        )?;
     }
     Ok(documents)
 }
@@ -299,24 +309,31 @@ pub fn family_forms(
     for name in &streams {
         let stored = rf.read_stream(name)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
-        native_segments::walk(&prepared, &registry, 256 * 1024 * 1024, |source, bytes| {
-            if let Some(key) = source.content_key {
-                keys.insert(key);
-                return Ok(());
-            }
-            if !CHANNELS.contains(&source.channel) {
-                return Ok(());
-            }
-            let Ok(records) = native_document::group_records(source, bytes, version) else {
-                return Ok(());
-            };
-            for (id, _, start, end) in records {
-                if families.contains(&id) {
-                    bodies.push((id, bytes[start..end].to_vec()));
+        let inflated = rf.inflated_partition(name).ok();
+        native_segments::walk_inflated(
+            &prepared,
+            inflated.as_deref(),
+            &registry,
+            256 * 1024 * 1024,
+            |source, bytes| {
+                if let Some(key) = source.content_key {
+                    keys.insert(key);
+                    return Ok(());
                 }
-            }
-            Ok(())
-        })?;
+                if !CHANNELS.contains(&source.channel) {
+                    return Ok(());
+                }
+                let Ok(records) = native_document::group_records(source, bytes, version) else {
+                    return Ok(());
+                };
+                for (id, _, start, end) in records {
+                    if families.contains(&id) {
+                        bodies.push((id, bytes[start..end].to_vec()));
+                    }
+                }
+                Ok(())
+            },
+        )?;
     }
     let blocks = blocks_of(&bodies, families, &keys);
     if blocks.is_empty() {

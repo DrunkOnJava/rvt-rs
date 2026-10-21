@@ -115,6 +115,14 @@ pub struct RevitFile {
     /// Memoised native extraction preamble (B82): each native consumer read
     /// the schema, the element index and the increments again.
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
+    /// Memoised material names (RE-58, RE-203), by release and the hash of
+    /// the declared ids they were read for: half a dozen material steps of
+    /// an export each asked for them.
+    material_names:
+        std::collections::HashMap<(u32, u64), Arc<std::collections::BTreeMap<u32, String>>>,
+    /// Memoised materials each category's graphics styles name (RE-206).
+    category_style_materials:
+        Option<Arc<std::collections::BTreeMap<i64, std::collections::BTreeSet<u32>>>>,
 }
 
 /// A partition stream's data objects, each at its offset (RE-153).
@@ -256,6 +264,8 @@ impl RevitFile {
             walk: None,
             data_objects: std::collections::HashMap::new(),
             native_preamble: None,
+            material_names: std::collections::HashMap::new(),
+            category_style_materials: None,
         })
     }
 
@@ -326,6 +336,38 @@ impl RevitFile {
             Arc::new(crate::partition_element_records::compute_second_prologue_ids(self));
         self.second_prologue_ids = Some(Arc::clone(&computed));
         computed
+    }
+
+    /// The memoised material names for `key` (RE-203).
+    pub(crate) fn cached_material_names(
+        &self,
+        key: (u32, u64),
+    ) -> Option<Arc<std::collections::BTreeMap<u32, String>>> {
+        self.material_names.get(&key).cloned()
+    }
+
+    /// Memoise the material names for `key` (RE-203).
+    pub(crate) fn cache_material_names(
+        &mut self,
+        key: (u32, u64),
+        names: Arc<std::collections::BTreeMap<u32, String>>,
+    ) {
+        self.material_names.insert(key, names);
+    }
+
+    /// The memoised materials each category's graphics styles name (RE-206).
+    pub(crate) fn cached_category_style_materials(
+        &self,
+    ) -> Option<Arc<std::collections::BTreeMap<i64, std::collections::BTreeSet<u32>>>> {
+        self.category_style_materials.clone()
+    }
+
+    /// Memoise the materials each category's graphics styles name (RE-206).
+    pub(crate) fn cache_category_style_materials(
+        &mut self,
+        materials: Arc<std::collections::BTreeMap<i64, std::collections::BTreeSet<u32>>>,
+    ) {
+        self.category_style_materials = Some(materials);
     }
 
     /// Family and type names from the partition name entries, with each

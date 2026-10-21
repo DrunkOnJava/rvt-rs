@@ -383,6 +383,24 @@ pub fn scan_material_names(
     revit_version: u32,
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, String>> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    declared.hash(&mut hasher);
+    let key = (revit_version, hasher.finish());
+    if let Some(cached) = rf.cached_material_names(key) {
+        return Ok((*cached).clone());
+    }
+    let names = scan_material_names_uncached(rf, revit_version, declared)?;
+    rf.cache_material_names(key, std::sync::Arc::new(names.clone()));
+    Ok(names)
+}
+
+/// [`scan_material_names`], read afresh.
+fn scan_material_names_uncached(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, String>> {
     let (Some(tag), Some(_)) = (
         material_object_tag(revit_version),
         material_name_frame_tag(revit_version),
@@ -554,11 +572,29 @@ pub fn scan_category_material(
 /// that take their category's material. Errs where the native record path
 /// does not read the file's release.
 pub fn native_category_material(rf: &mut RevitFile, category: i64) -> anyhow::Result<Option<u32>> {
+    let styles = match rf.cached_category_style_materials() {
+        Some(cached) => cached,
+        None => {
+            let read = std::sync::Arc::new(category_style_materials(rf)?);
+            rf.cache_category_style_materials(std::sync::Arc::clone(&read));
+            read
+        }
+    };
+    let mut values = styles.get(&category).into_iter().flatten();
+    Ok(match (values.next(), values.next()) {
+        (Some(material), None) => Some(*material),
+        _ => None,
+    })
+}
+
+/// The materials each category's graphics styles name, by the category's
+/// ElementId (RE-206).
+fn category_style_materials(rf: &mut RevitFile) -> anyhow::Result<BTreeMap<i64, BTreeSet<u32>>> {
     let options = crate::native_document::Options {
         selected_classes: BTreeSet::from(["GStyleElem".to_string()]),
         ..crate::native_document::Options::default()
     };
-    let mut found: BTreeSet<u32> = BTreeSet::new();
+    let mut out: BTreeMap<i64, BTreeSet<u32>> = BTreeMap::new();
     crate::native_document::extract_graphs(rf, &options, |record| {
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
@@ -568,26 +604,23 @@ pub fn native_category_material(rf: &mut RevitFile, category: i64) -> anyhow::Re
                 .and_then(|v| v.pointer("/m_id/m_id64"))
                 .and_then(serde_json::Value::as_i64)
         };
-        let Some(root) = graph.objects.first() else {
+        let Some(category) = graph
+            .objects
+            .first()
+            .and_then(|root| id(root.fields.get("m_categoryId")))
+        else {
             return Ok(());
         };
-        if id(root.fields.get("m_categoryId")) != Some(category) {
-            return Ok(());
-        }
         for object in graph.objects.iter().filter(|o| o.class_name == "GStyle") {
             if let Some(material) =
                 id(object.fields.get("m_materialElemId")).and_then(|m| u32::try_from(m).ok())
             {
-                found.insert(material);
+                out.entry(category).or_default().insert(material);
             }
         }
         Ok(())
     })?;
-    let mut values = found.into_iter();
-    Ok(match (values.next(), values.next()) {
-        (Some(material), None) => Some(material),
-        _ => None,
-    })
+    Ok(out)
 }
 
 /// [`scan_category_material`]'s object-styles entry alone. `None` on a
