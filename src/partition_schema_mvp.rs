@@ -2172,7 +2172,8 @@ fn attach_type_materials(materials: &BTreeMap<u32, Vec<String>>, elements: &mut 
 /// where that names any and every one is named, for the types of columns,
 /// doors, windows and products. The scanned order is kept where the two
 /// name the same set. Returns the replaced types that also map geometry to
-/// no material, whose instances take their own material parameters' or
+/// no material that their family shows ([`crate::native_family_forms`]),
+/// whose instances take their own material parameters' or
 /// `<Unnamed>` for it ([`attach_partly_unset_materials`]). Left as scanned
 /// where the native record path or the material names are not read.
 fn refine_type_materials(
@@ -2212,6 +2213,15 @@ fn refine_type_materials(
     let Ok(found) = crate::native_type_materials::geometry_materials(rf, &types, &materials) else {
         return partly_unset;
     };
+    // A family whose geometry with no material is all hidden or void has
+    // no `<Unnamed>` in Revit's export (RE-204).
+    let families: BTreeSet<u64> = found
+        .values()
+        .filter(|found| found.unset)
+        .filter_map(|found| found.family)
+        .collect();
+    let visible_unset =
+        crate::native_family_forms::visible_unset_forms(rf, &families).unwrap_or_default();
     for (type_id, found) in found {
         let Ok(type_id) = u32::try_from(type_id) else {
             continue;
@@ -2223,7 +2233,12 @@ fn refine_type_materials(
         }
         let scanned = type_materials.entry(type_id).or_default();
         let same: BTreeSet<&String> = scanned.iter().collect();
-        if found.unset {
+        let shown = found
+            .family
+            .and_then(|family| visible_unset.get(&family))
+            .copied()
+            .unwrap_or(true);
+        if found.unset && shown {
             partly_unset.insert(type_id);
         }
         if found.unset || same != resolved.iter().collect::<BTreeSet<_>>() {

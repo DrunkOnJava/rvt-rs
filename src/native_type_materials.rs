@@ -21,6 +21,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct GeometryMaterials {
     pub materials: Vec<u32>,
     pub unset: bool,
+    /// The type's family (`m_familyId`).
+    pub family: Option<u64>,
 }
 
 /// The materials each of `types` maps its geometry to, by the type's
@@ -42,16 +44,29 @@ pub fn geometry_materials(
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {
-        let Some(map) = record
+        let Some(root) = record
             .graph
             .as_ref()
             .and_then(|graph| graph.objects.first())
-            .and_then(|root| root.fields.get("m_geomTag2MaterialId"))
+        else {
+            return Ok(());
+        };
+        let Some(map) = root
+            .fields
+            .get("m_geomTag2MaterialId")
             .and_then(serde_json::Value::as_array)
         else {
             return Ok(());
         };
-        let mut found = GeometryMaterials::default();
+        let mut found = GeometryMaterials {
+            family: root
+                .fields
+                .get("m_familyId")
+                .and_then(|id| id.pointer("/m_id/m_id64"))
+                .and_then(serde_json::Value::as_i64)
+                .and_then(|id| u64::try_from(id).ok()),
+            ..GeometryMaterials::default()
+        };
         for entry in map {
             let Some(id) = entry
                 .pointer("/second/m_id/m_id64")
