@@ -423,9 +423,11 @@ pub fn rafter_cut_from_value(value: i64) -> Option<RafterCut> {
 }
 
 /// Each of `roofs` that is a `ProfileRoof` (a footprint roof) with a known
-/// [`RAFTER_CUT_PARAMETER`], read from its native record. Empty where the
-/// native record path does not read the file, or on a release this value is
-/// not measured on (2025 only).
+/// [`RAFTER_CUT_PARAMETER`], read from its native record's object graph,
+/// which needs no parameter definitions
+/// ([`crate::native_document::extract_graphs`]). Empty where the native
+/// record path does not read the file, or on a release this value is not
+/// measured on (2025 only).
 pub fn scan_rafter_cuts(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -440,7 +442,7 @@ pub fn scan_rafter_cuts(
         ..crate::native_document::Options::default()
     };
     let id64 = |value: &serde_json::Value| value.get("m_id")?.get("m_id64")?.as_i64();
-    let _ = crate::native_document::extract(rf, &options, |record| {
+    let _ = crate::native_document::extract_graphs(rf, &options, |record| {
         if record.class_name.as_deref() != Some("ProfileRoof") {
             return Ok(());
         }

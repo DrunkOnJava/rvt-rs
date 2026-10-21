@@ -6,7 +6,8 @@
 //! it: the f64 at −0x18, the i64 at +0x20, the u32s at +0x28 and +0x2c, the
 //! four flag bytes at +0x30, the f64 at +0x3b, and what
 //! `partition_roof_slopes::edge_slope_in` makes of the block. It also prints the
-//! line's bounded line record (RE-49) when one is found.
+//! line's bounded line record (RE-49) when one is found, the slope arrows'
+//! heights, and each roof's rafter cut and fascia depth (read on 2025 only).
 //!
 //! Usage: probe_re199_roof_edge_slopes <model.rvt>
 
@@ -75,6 +76,19 @@ fn main() -> anyhow::Result<()> {
     let ids: BTreeSet<u32> = owned.keys().copied().collect();
     let bounded = rvt::partition_beam_axes::scan_sketch_bounded_lines(&mut rf, version, &ids)?;
     println!("release {version}: roofs {roofs:?}");
+    let roof_ids: BTreeSet<u32> = roofs.keys().copied().collect();
+    println!(
+        "slope arrows: {:?}",
+        rvt::partition_roof_slopes::scan_arrow_heights(&mut rf, version, &ids)?
+    );
+    println!(
+        "rafter cuts: {:?}",
+        rvt::partition_roof_slopes::scan_rafter_cuts(&mut rf, version, &roof_ids)
+    );
+    println!(
+        "fascia depths: {:?}",
+        rvt::partition_roof_slopes::scan_fascia_depths(&mut rf, version, &roof_ids)?
+    );
     let mut seen: BTreeSet<(u32, Vec<u8>)> = BTreeSet::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
