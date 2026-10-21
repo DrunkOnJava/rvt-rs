@@ -1,6 +1,7 @@
 //! Current native saved-graphics extraction with explicit shared-symbol closure.
 use crate::{
     RevitFile,
+    control::{Stage, WalkerControl},
     native_document::{self, Options, Record, Summary},
     native_saved_mesh::{self, GraphicsMeshes},
 };
@@ -48,10 +49,23 @@ pub fn extract_at_detail(
     options: &Options,
     detail_level: i64,
 ) -> Result<SavedScene> {
+    extract_at_detail_with_control(file, options, detail_level, &WalkerControl::default())
+}
+/// Same as [`extract_at_detail`], reporting [`Stage::SavedGraphics`] and
+/// [`Stage::SavedMeshes`] through `control` and stopping with
+/// [`crate::Error::Cancelled`] when its token is cancelled.
+pub fn extract_at_detail_with_control(
+    file: &mut RevitFile,
+    options: &Options,
+    detail_level: i64,
+    control: &WalkerControl,
+) -> Result<SavedScene> {
     ensure!(
         (1..=3).contains(&detail_level),
         "detail level must be 1, 2 or 3"
     );
+    control.check()?;
+    control.report(Stage::SavedGraphics, 0, None);
     let mut opts = options.clone();
     opts.channels = BTreeSet::from([103]);
     let mut records = BTreeMap::<u64, Record>::new();
@@ -89,6 +103,7 @@ pub fn extract_at_detail(
             break;
         }
         ensure!(depth < 128, "shared graphics closure depth budget");
+        control.check()?;
         attempted.extend(&wanted);
         opts.selected_ids = wanted;
         summaries.push(native_document::extract_graphs(file, &opts, |r| {
@@ -99,6 +114,7 @@ pub fn extract_at_detail(
             Ok(())
         })?);
     }
+    control.check()?;
     let mut resolver = crate::native_saved_materials::Resolver::default_viewport_profile();
     let mut material_options = options.clone();
     material_options.channels = BTreeSet::from([102]);
@@ -108,11 +124,14 @@ pub fn extract_at_detail(
         &material_options,
         |r| resolver.ingest(&r),
     )?);
+    control.report(Stage::SavedGraphics, 1, Some(1));
     // Elements mesh independently: spread them over the cores, keeping order.
     // The browser build (wasm32-unknown-unknown) has no threads, so there, as
     // on a single core, they mesh one after the other.
     let roots: Vec<u64> = roots.into_iter().collect();
-    let build = |id: u64| -> Result<SavedElement> {
+    let total = roots.len() as u64;
+    control.report(Stage::SavedMeshes, 0, Some(total));
+    let mesh = |id: u64| -> Result<SavedElement> {
         let r = &records[&id];
         let mut meshes = match &r.graph {
             Some(g) => native_saved_mesh::graphics_with_resolver_at_detail(
@@ -164,6 +183,16 @@ pub fn extract_at_detail(
             status: saved_element_status(&meshes).into(),
             meshes,
         })
+    };
+    // Counted under a lock so the reports stay in order across workers.
+    let done = std::sync::Mutex::new(0u64);
+    let build = |id: u64| -> Result<SavedElement> {
+        control.check()?;
+        let element = mesh(id);
+        let mut done = done.lock().unwrap_or_else(|e| e.into_inner());
+        *done += 1;
+        control.report(Stage::SavedMeshes, *done, Some(total));
+        element
     };
     let workers = if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
         1
